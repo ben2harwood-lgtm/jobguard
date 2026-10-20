@@ -2,12 +2,12 @@ import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { closeWorkFixture,createWorkFixture,type WorkFixture } from "./job-work-state-fixtures.js";
-import { seedWorkPractice,commandCounts,commandOn,runWorkCommand,waitForJobLock,workCommand } from "./job-work-state-command-fixtures.js";
+import { seedWorkPractice,commandCounts,commandOn,runWorkCommand,waitForJobLock,workCommand,importWorkJob } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C real database races and rollback",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
- it("revocation while waiting is rechecked before command and replay",async()=>{
+ it.each(["direct","imported"] as const)("%s job revocation while waiting is rechecked before command and replay",async ownership=>{
   for(const replay of [false,true]){
-   const p=await seedWorkPractice(f),input=workCommand();if(replay)await runWorkCommand(f.runtime,p,input);
+   const seeded=await seedWorkPractice(f),p=ownership==="imported"?await importWorkJob(f,seeded):seeded,input=workCommand();if(replay)await runWorkCommand(f.runtime,p,input);
    const before=await commandCounts(f,p),blocker=await f.admin.connect(),runner=await f.runtime.connect();
    try{
     await blocker.query("BEGIN");await blocker.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[p.auth.context.tenantId,p.jobId]);
@@ -16,6 +16,26 @@ describe("CH-4-C real database races and rollback",()=>{
     const pending=commandOn(runner,p,input).then(value=>({value,error:null}),error=>({value:null,error: error as Error}));
     await waitForJobLock(f,pid);await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[p.auth.digest]);
     await blocker.query("COMMIT");expect((await pending).error?.message).toContain("WORK_STATE_FORBIDDEN");
+   }finally{await blocker.query("ROLLBACK");await runner.query("ROLLBACK");blocker.release();runner.release()}
+   expect(await commandCounts(f,p)).toEqual(before);
+  }
+ });
+ it.each(["predecessor","successor","identity","audit"] as const)("link authority is rechecked after the %s wait, with rollback and replay refusal",async phase=>{
+  const {linkPair,runLink}=await import("./job-work-state-command-fixtures.js");
+  for(const replay of phase==="audit" ? [false] : [false,true]){
+   const {p,successor,input}=await linkPair(f);if(replay)await runLink(f.runtime,p,input);
+   const before=await commandCounts(f,p),blocker=await f.admin.connect(),runner=await f.runtime.connect();
+   try{
+    await blocker.query("BEGIN");
+    if(phase==="identity")await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||$1::text||':'||$2::text,0))",[p.auth.context.tenantId,input.commandId]);
+    else if(phase==="audit")await blocker.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id=$1 FOR UPDATE",[p.auth.context.tenantId]);
+    else await blocker.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[p.auth.context.tenantId,phase==="successor"?successor:p.jobId]);
+    await runner.query("BEGIN");await runner.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
+    const pid=(await runner.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    const pending=runner.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb)",[p.auth.context.tenantId,p.jobId,p.auth.digest,JSON.stringify(input)]).then(()=>null,error=>error as Error);
+    await waitForJobLock(f,pid);
+    await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[p.auth.digest]);
+    await blocker.query("COMMIT");expect((await pending)?.message).toBe("WORK_STATE_FORBIDDEN");
    }finally{await blocker.query("ROLLBACK");await runner.query("ROLLBACK");blocker.release();runner.release()}
    expect(await commandCounts(f,p)).toEqual(before);
   }

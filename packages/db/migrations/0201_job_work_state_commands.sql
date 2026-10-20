@@ -51,6 +51,11 @@ BEGIN
   actor:=digest::uuid;
  ELSE
   SELECT a.membership_id INTO actor FROM app.authenticate_practice_session(digest,t) a;
+  IF NOT EXISTS(WITH RECURSIVE owned(id) AS(
+   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
+   UNION SELECT job.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
+    JOIN app.job job ON job.tenant_id=e.tenant_id AND job.id::text=e.subject_ref AND job.provenance='imported' AND job.practice_session_digest IS NULL
+  ) SELECT 1 FROM owned WHERE id=j) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  END IF;
  IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.job x JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(x.tenant_id,x.id) WHERE x.tenant_id=t AND x.id=j AND c.job_track='small_builder' AND c.environment='synthetic_demo')
  THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -67,16 +72,46 @@ BEGIN
  PERFORM app.ch4_require_command_owner(t,j,digest);
  SELECT coalesce(jsonb_agg(jsonb_build_object('version',version,'id',id,'jobId',job_id,'sequence',sequence,'kind',kind,'factAt',to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'recordedAt',to_char(recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'sourceReceiptId',source_receipt_id,'commandId',command_id,'predecessorId',predecessor_id,'closeReason',close_reason,'closeNote',close_note) ORDER BY fact_at,id),'[]') INTO events FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j;
  SELECT jsonb_build_object('id',id,'lockedAt',to_char(locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) INTO lock FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'predecessorJobId',l.predecessor_job_id,'successorJobId',l.successor_job_id,'linkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) ORDER BY l.linked_at,l.id),'[]') INTO links FROM app.job_link l JOIN app.job predecessor ON predecessor.tenant_id=t AND predecessor.id=l.predecessor_job_id JOIN app.job successor ON successor.tenant_id=t AND successor.id=l.successor_job_id WHERE l.tenant_id=t AND (l.predecessor_job_id=j OR l.successor_job_id=j);
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'predecessorJobId',l.predecessor_job_id,'successorJobId',l.successor_job_id,'linkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) ORDER BY l.linked_at,l.id),'[]') INTO links FROM app.job_link l JOIN app.job predecessor ON predecessor.tenant_id=t AND predecessor.id=l.predecessor_job_id JOIN app.job successor ON successor.tenant_id=t AND successor.id=l.successor_job_id WHERE l.tenant_id=t AND (l.predecessor_job_id=j OR l.successor_job_id=j)
+  AND (digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' OR (predecessor.practice_session_digest=digest AND successor.practice_session_digest=digest));
  RETURN jsonb_build_object('version','job-work-state-read.v1','jobId',j,'events',events,'links',links,'lock',lock,'environment','synthetic_demo','realExternalActions',0);
 END $$;
 CREATE OR REPLACE FUNCTION app.ch4_storage_integrity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE latest app.job_work_state_event; p app.job_party_binding; s app.job_party_binding; old_context text:=current_setting('app.tenant_id',true);
+DECLARE envelope jsonb; authority text; latest app.job_work_state_event; p app.job_party_binding; s app.job_party_binding; old_context text:=current_setting('app.tenant_id',true);
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(old_context,'')::uuid THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF TG_TABLE_NAME='job_link' THEN
   PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id IN(NEW.predecessor_job_id,NEW.successor_job_id) ORDER BY id FOR UPDATE;
   PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text,145));
+  -- A GUC alone grants nothing: bind the exact envelope to the checked command's
+  -- receipt, identity and DB transaction before using its authority at storage.
+  envelope:=nullif(current_setting('app.ch4_link_envelope',true),'')::jsonb;
+  authority:=envelope->>'sessionDigest';
+  IF envelope IS NULL THEN
+   -- Preserve the predecessor storage rule for labelled direct fixtures. Runtime
+   -- still has no INSERT grant; only checked commands can use owner authority.
+   IF (SELECT practice_session_digest FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.predecessor_job_id)
+    IS DISTINCT FROM (SELECT practice_session_digest FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.successor_job_id)
+   THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  ELSE
+  IF app.final_lock_hash(envelope) IS DISTINCT FROM NEW.request_hash
+   OR envelope->>'jobId' IS DISTINCT FROM NEW.predecessor_job_id::text
+   OR envelope->>'actor' IS DISTINCT FROM NEW.actor_membership_id::text
+   OR envelope->'input'->>'action' IS DISTINCT FROM 'link'
+   OR envelope->'input'->>'commandId' IS DISTINCT FROM NEW.command_id::text
+   OR envelope->'input'->>'successorJobId' IS DISTINCT FROM NEW.successor_job_id::text
+   OR envelope->'input'->>'predecessorBindingId' IS DISTINCT FROM NEW.predecessor_binding_id::text
+   OR envelope->'input'->>'successorBindingId' IS DISTINCT FROM NEW.successor_binding_id::text
+   OR NOT EXISTS(SELECT 1 FROM app.command_receipt r JOIN app.watchdog_command_identity i
+    ON (i.tenant_id,i.command_id,i.request_hash,i.command_type)=(r.tenant_id,r.command_id,r.request_hash,r.command_type)
+    WHERE r.tenant_id=NEW.tenant_id AND r.command_id=NEW.command_id AND r.request_hash=NEW.request_hash
+     AND r.actor_membership_id=NEW.actor_membership_id AND r.status='processing' AND r.command_type='WorkState.link'
+     AND i.job_id=NEW.predecessor_job_id AND i.claimed_xact=pg_current_xact_id())
+  THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  IF app.ch4_require_command_owner(NEW.tenant_id,NEW.predecessor_job_id,authority) IS DISTINCT FROM NEW.actor_membership_id
+   OR app.ch4_require_command_owner(NEW.tenant_id,NEW.successor_job_id,authority) IS DISTINCT FROM NEW.actor_membership_id
+  THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  END IF;
   IF (SELECT count(*) FROM app.job_commercial_track WHERE tenant_id=NEW.tenant_id AND job_id IN(NEW.predecessor_job_id,NEW.successor_job_id) AND job_track='small_builder' AND environment='synthetic_demo')<>2 THEN RAISE EXCEPTION 'INVALID_JOB_LINK'; END IF;
   SELECT * INTO p FROM app.job_party_binding WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.predecessor_job_id,NEW.predecessor_binding_id);
   SELECT * INTO s FROM app.job_party_binding WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.successor_job_id,NEW.successor_binding_id);
@@ -96,8 +131,8 @@ BEGIN
    END IF;
   END IF;
  END IF;
- -- Command facts use current tenant-owner authority, not the job creator's
- -- practice session. Source facts and photo purposes keep their existing gates.
+ -- Command entrypoints recheck bound job authority. Source facts and photo
+ -- purposes keep their existing gates.
  IF TG_TABLE_NAME='job_work_state_event' THEN
   IF NEW.source_receipt_id IS NULL THEN
    PERFORM app.final_lock_require_owner(NEW.tenant_id,NEW.actor_membership_id);
@@ -162,6 +197,7 @@ CREATE FUNCTION app.ch4_work_state_command(t uuid,j uuid,digest text,input jsonb
 DECLARE actor uuid; action text; cid uuid; successor uuid; expected bigint; seq bigint; revision bigint;
  request_digest text; prior app.command_receipt; latest app.job_work_state_event; marker app.job_work_state_event;
  p app.job_party_binding; s app.job_party_binding; fact_id uuid:=gen_random_uuid(); audit_id uuid:=gen_random_uuid();
+ old_link_envelope text:=current_setting('app.ch4_link_envelope',true);
  at_time timestamptz; event_kind text; predecessor uuid; command_result jsonb; allowed text[];
 BEGIN
  -- One checked action per transaction: a second action must not acquire a
@@ -274,8 +310,10 @@ BEGIN
  VALUES(t,cid,j,'WorkState.'||action,request_digest);
  at_time:=clock_timestamp();
  IF action='link' THEN
+  PERFORM set_config('app.ch4_link_envelope',jsonb_build_object('jobId',j,'actor',actor,'sessionDigest',digest,'input',input)::text,true);
   INSERT INTO app.job_link(tenant_id,id,predecessor_job_id,successor_job_id,predecessor_binding_id,successor_binding_id,customer_id,site_id,paying_party_id,command_id,actor_membership_id,linked_at,request_hash,audit_event_id)
   VALUES(t,fact_id,j,successor,p.id,s.id,p.customer_id,p.site_id,p.paying_party_id,cid,actor,at_time,request_digest,audit_id);
+  PERFORM set_config('app.ch4_link_envelope',coalesce(old_link_envelope,''),true);
  ELSE
   INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
   VALUES(t,j,fact_id,seq+1,event_kind,at_time,actor,cid,predecessor,CASE WHEN action='close' THEN input->>'reason' END,CASE WHEN action='close' THEN input->>'note' END,request_digest,audit_id);

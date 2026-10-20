@@ -105,3 +105,28 @@ CH4 call metadata and the replaced guard's pending digest). No shared inventory
 was edited in place. PostgreSQL must capture changed definitions; no fabricated
 hash or bulk baseline refresh is supplied. Forward-fix/rollout policy above is
 unchanged. Two exact-head independent Claude checks and green CI remain due.
+
+## v5-r3 — practice isolation repair
+
+Both actual independent verdicts at head 73a0e755 require S1 repair; the earlier
+c1 description of practice authority is superseded. The UUID membership path
+remains a trusted server owner boundary. Practice digests additionally require
+the merged reader's recursive owned-job closure, including imported lineage,
+at every existing authority recheck for target and both link endpoints. Command
+link projections use the merged GET direct-digest endpoint filter for practice;
+normal owner projections remain tenant-authorized.
+
+Storage receives a transient transaction-local exact command envelope. Its hash,
+actor, endpoint/binding IDs and command ID must match the processing receipt and
+identity claimed in this DB transaction before it rechecks both endpoints with
+the bound authority. The setting is restored after the insert. A setting without
+that binding grants nothing. Direct fixture storage without an envelope retains
+the predecessor digest-equality rule; runtime INSERT remains denied. No schema,
+ACL or migration-number changes; 0201 and all r2 structural repairs are retained.
+
+Actual PostgreSQL execution remains CI-only. Fresh install/0201-only upgrade,
+all old suites and new isolation/lineage/replay/lock-wait cases are required.
+No data backfill occurs. Forward-fix/rollback guidance above remains in force.
+Proposed own trigger-call catalogue metadata is in
+`/private/tmp/SHARED-CH-4-C-v5-r3.patch`; root applies it serially. Actual current
+catalogue hashes remain a CI capture hold, never inferred from SQL source.

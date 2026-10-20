@@ -29,7 +29,7 @@ export class JobWorkStateApplication {
    if(!membership || membership.role!=="owner")throw new JobWorkStateError("WORK_STATE_FORBIDDEN");
    return this.repository.command(context,jobId,membership.id,raw);
   }
-  const auth=await this.access.session();
+  const auth=await this.access.job(jobId);
   return this.repository.command(auth.context,jobId,auth.digest,raw);
  }
 

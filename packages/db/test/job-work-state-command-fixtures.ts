@@ -41,11 +41,12 @@ export async function waitForJobLock(f:WorkFixture,pid:number) {
  }
  throw new Error(`backend ${pid} did not reach lock wait`);
 }
-/** Same-session ordinary generated successor; only party binding setup is a labelled fixture. */
-export async function linkPair(f:WorkFixture,preLive=false){
+/** Ordinary generated successor; optional foreign-session owner exercises refusal
+ * with valid common party bindings. Only party setup is a labelled fixture. */
+export async function linkPair(f:WorkFixture,preLive=false,successorOwner?:WorkPractice){
  const seeded=await seedWorkPractice(f),t=seeded.auth.context.tenantId;
  const p=preLive?{...seeded,jobId:(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' ORDER BY id LIMIT 1",[t,seeded.auth.digest])).rows[0].id as string}:seeded;
- const successor=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND id<>$3 ORDER BY id LIMIT 1",[t,p.auth.digest,p.jobId])).rows[0].id as string;
+ const successor=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND id<>$3 ORDER BY id LIMIT 1",[t,successorOwner?.auth.digest??p.auth.digest,p.jobId])).rows[0].id as string;
  const source=(await f.admin.query("SELECT b.* FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2",[t,p.jobId])).rows[0];
  const binding=randomUUID();await workTenant(f.admin,t,async db=>{
   await db.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) SELECT $1,$2,$3,coalesce(max(revision),0)+1,$4,$5,$6,$7,$8,$9,'backfilled_synthetic_fixture' FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$3",[t,binding,successor,source.customer_id,source.customer_revision_id,source.paying_party_id,source.paying_party_revision_id,source.site_id,source.site_revision_id]);
@@ -56,3 +57,26 @@ export async function linkPair(f:WorkFixture,preLive=false){
  return {p,successor,input};
 }
 export async function runLink(pool:Pool,p:WorkPractice,input:unknown,jobId=p.jobId){return workTenant(pool,p.auth.context.tenantId,async db=>jobWorkStateReadV1.parse((await db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result",[p.auth.context.tenantId,jobId,p.auth.digest,JSON.stringify(input)])).rows[0].result))}
+
+/** Real synthetic adoption command; source lineage is the existing immutable audit contract. */
+export async function importWorkJob(f:WorkFixture,p:WorkPractice,sourceJobId=p.jobId){
+ const {AdoptInFlightJobMutation,UserCommandDispatcher}=await import("../src/index.js");
+ const t=p.auth.context.tenantId,jobId=randomUUID(),baselineHash="b".repeat(64);
+ const binding=(await f.admin.query("SELECT b.* FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2",[t,sourceJobId])).rows[0]!;
+ const mutation=new AdoptInFlightJobMutation(t,"synthetic_candidate",{
+  version:"adopt-job.v1",jobId,baselineId:randomUUID(),title:"Fictional inherited work job",lifecyclePoint:"live",
+  provenance:"imported",lineageStrength:"builder_attested_weaker",baselineHash,baselineDescription:"Fictional baseline",
+  acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation",attestedByMembershipId:p.auth.membershipId,
+  attestedAt:new Date(0),importTermsVersion:"synthetic_import_terms_candidate.v1",feePolicyVersion:"reference_fee_policy_v1",mode:"synthetic_candidate",
+  parties:{customerRevisionId:binding.customer_revision_id as string,siteRevisionId:binding.site_revision_id as string},
+ });
+ await new UserCommandDispatcher(f.runtime).dispatch(p.auth.context,{
+  version:"command.v1",commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${jobId}`,
+  actorMembershipId:p.auth.membershipId,subjectType:"job",subjectRef:jobId,
+  action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:baselineHash,aggregateRevision:0,amountPence:100000,
+   currency:"GBP",policyVersion:"synthetic_import_terms_candidate.v1",expiresAt:new Date(Date.now()+300000)},
+ },{mutate:mutation.mutate.bind(mutation),auditEvents:(result,cmd)=>mutation.auditEvents(result,cmd).map(event=>({
+  ...event,payload:{...event.payload,references:{...event.payload.references,sourceJobId}},
+ }))});
+ return {...p,jobId};
+}

@@ -193,18 +193,13 @@ IDEMPOTENCY_CONFLICT, including mapped work-state conflicts.
 
 ## c1 (rulings 124/126)
 
-Supersedes the command-only practice ownership restriction above. The five
-commands accept any active owner membership in the job's tenant. The server
-supplies the authenticated membership ID through the existing verified-context
-boundary; it is not a field in the request body. SQL reuses
-`final_lock_require_owner`, rejecting revoked, expired and non-owner memberships
-before execution and replay and after waits/audit. A practice digest continues to
-resolve its persisted active owner, without requiring creator-session ownership.
-The synthetic small-builder feature gate remains; this does not release real data.
-The private command response projection uses tenant-owned endpoints. The merged
-practice GET reader and its isolation guarantees are unchanged. Link storage no
-longer requires matching practice digests; party, tenant, lock and cycle checks
-remain. Resume remains HELD and the 409 response contract is unchanged.
+Normal owner commands accept a server-authenticated membership UUID in the job's
+tenant. SQL reuses `final_lock_require_owner`, rejecting revoked, expired and
+non-owner memberships before execution/replay and after waits/audit. The c1
+interpretation that a practice digest could use the shared membership to command
+another visitor's job was an authorization defect, superseded by v5-r3 below.
+Ruling 126 does not grant cross-session practice authority. Resume remains HELD
+and the 409 response contract is unchanged.
 
 Normal identity callers can use `command` with identity credentials, which verifies session, CSRF,
 origin and membership with the existing identity bridge. Transport wiring is
@@ -240,3 +235,32 @@ modern watchdog bookkeeping. Other kinds/jobs conflict; ambiguous legacy owners
 still have no winner. Exact stored command replay retains its original result
 and current authority checks. Legacy reads are isolated in a private read-only
 helper without changing lock acquisition order or authorizing any new writes.
+
+## v5-r3 — restore practice job authority (20 October 2026)
+
+Actual independent A and B verdicts at `73a0e755c82f7a308ec02b0bd84a27e36f785611`
+both require S1 repair. No policy relaxation or cross-session authority is granted.
+The normal membership-UUID path above is preserved. For practice digests, every
+command requires the same recursive job-owned closure as `ch4_read_work_facts`:
+direct session ownership, plus imported jobs with null direct digest and immutable
+`job.imported_baseline_attested` source lineage. This applies to the target and
+both link endpoints at all existing pre-lock, post-job-lock, post-identity-lock,
+replay and post-audit checks. The application checks `PracticeAccess.job(jobId)`;
+the repository live precheck uses the same owned-job SQL before its SHARE lock.
+
+Practice command responses filter links exactly like the merged GET reader:
+both endpoints must carry the caller's direct digest. Imported jobs can be
+commanded through lineage, but links involving them remain omitted from practice
+responses. Normal owner responses retain tenant-authorized links. A new successor
+must still be an ordinary independently created job; import authority does not
+waive that rule. A sibling session cannot see close notes through commands/replay.
+
+Link storage rechecks both endpoints with the command's authority. The transient
+transaction-local envelope is the exact existing hashed command object, verified
+against the processing receipt, identity, actor, endpoint/binding IDs and current
+DB transaction before it is used; the caller-set setting alone grants nothing.
+The command restores the previous setting after insertion. Direct storage without
+an envelope retains the predecessor practice-digest equality check and runtime
+still has no INSERT grant. This permits the trusted normal-owner command without
+restoring a blanket equality rule that would forbid its legitimate links.
+No new migration, grant, table, access exception or money effect is introduced.

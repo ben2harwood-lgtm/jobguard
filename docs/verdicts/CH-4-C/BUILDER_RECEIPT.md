@@ -763,3 +763,146 @@ Intended commit message: `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns commi
 ## Coordinator serial integration — 20 October 2026
 
 Actual coordinator: Codex JobGuard coordinator (legacy dispatch script trailer naming a Claude session is stale). Builder committed r2 at d031ca54. Applied the builder-proposed exact additive SERIOUS-B5 signature row and own helper routine record, plus corrected CH4 command static-call references. The existing guard_watchdog_input recorded definition digest is preserved; the proposed replacement with null was NOT applied. Its definition changes in0201, so the old digest remains historical/stale and actual PostgreSQL catalogue capture is still required before technical acceptance. No pin/assertion was removed to obtain a pass. No PostgreSQL/browser execution or independent Claude verdict is claimed.
+
+
+## v5-r3 — actual independent A AND B S1 repair (20 October 2026)
+
+Builder run only; uncommitted working tree based on exact
+`73a0e755c82f7a308ec02b0bd84a27e36f785611`, branch `codex/sandbox/ch-4-c`;
+frozen observed `origin/main` is `dc5721230fd8aedbf2d9d0457789074b66b48765`.
+No commit/push/merge/acceptance or Claude run was performed. Both complete actual
+REPAIR verdicts were read from:
+
+- `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch-4-c-opus-A-73a0e755.md`
+- `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch-4-c-opus-B-73a0e755.md`
+
+Also read AGENTS in full, the applicable BUILD_PLAN CH-4/C1–C8/counting contracts,
+the job-work-state contract and migration note, Ben's answers at
+`/Users/benharwood/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261017.md`,
+and the approved main-checkout speed-v5 milestone/deferrals at
+`/Users/benharwood/Claude/Projects/my-new-project/docs/dispatch/2026-10-20-speed-v5-milestone-and-deferrals.md`.
+No new delegation or other-piece editing occurred.
+
+### Repair and preserved boundaries
+
+For a practice DIGEST, `ch4_require_command_owner` additionally requires the
+merged reader's recursive owned-job closure, including null-digest imported jobs
+with immutable source lineage. All existing target/both-link-endpoint rechecks
+remain in place before locks, after job locks, after command identity waits,
+before stored replay, and after audit. Normal server-supplied membership UUID
+owner authority remains intact. No shared-owner practice-session exception exists.
+The application uses job-bound access; repository finish/cancel prechecks use the
+existing `practiceOwnedJobsSql` closure before the live SHARE guard.
+
+The command response filters practice links exactly as GET: both endpoints must
+carry that digest directly. Imported target history remains accessible through
+lineage; imported endpoint links remain omitted from practice responses. Normal
+owner responses retain tenant-authorized endpoints. No cross-session close note
+can be returned through a practice command/replay on another visitor's job.
+
+Link storage verifies the exact transient command envelope against the existing
+request hash, processing receipt, actor, endpoint/binding IDs and transaction's
+identity claim, then rechecks both endpoints with that authority. The setting is
+restored after insertion. A caller-set GUC alone cannot grant authority; direct
+storage without it retains the predecessor digest equality rule, and runtime
+still has no INSERT grant. A normal-owner command can legitimately link jobs
+with different practice digests. No new migration/schema/grant/role or money
+path; 0201 remains. Original source gates, r2 guards, serializers and audit order
+are retained.
+
+The expressly issued sibling-session success assertion was replaced by refusal
+and unchanged commandCounts (receipt/event/link/audit/money/outbox). This restores
+the original access requirement. Other old assertions remain. Added PostgreSQL
+cases cover actual owned command success; foreign/sibling command refusal; exact
+common-party sibling link refusal on both endpoints; normal-owner cross-session
+link success; practice projection filtering; session/job replay substitution;
+real synthetic adoption and recursive lineage; imported predecessor link;
+direct storage/forged-envelope/runtime bypass; revocation after predecessor,
+successor, identity and audit waits, plus direct/imported command replay waits.
+Application units verify bound-job refusal before repository execution.
+
+Existing exhaustive watchdog, legacy, lock observer, link one-winner, money,
+grants/catalogue and 0201-only upgrade tests are unchanged. No observer/global
+harness/assertion weakening, skips, timeouts or worker bypasses were introduced.
+The lane adds only the existing permitted application test path. The optional
+repository unit-test path does not exist and was not added under another name.
+
+### Actual commands and evidence limits
+
+Node `v24.17.0`; installed TypeScript `5.8.3`; Vitest `4.1.11`. No package
+install/download. Used installed script bodies because prior receipts establish
+the pnpm-launcher stall; pnpm itself was not retried in this round. All compiler,
+unit and build commands below used
+`HEAVY_SLOTS=2 ~/.local/bin/heavy-slot <ch4c-r3-label> <command>`.
+No more than two commands were in flight, and each Vitest invocation names at
+most three files with `--maxWorkers=2`. Wrapper sysctl/sysmon/pgrep sandbox
+warnings preceded successful exits and were not hidden or bypassed.
+
+Initial `df -h .`: 43 GiB available; `df -k .` later recorded 45,171,944 KiB.
+Heavy tests/builds were held conservatively below 45 GiB while source work and
+no-emit source compilation continued. Before unit runs, disk recovered to
+47,202,160 KiB (just over 45 GiB); subsequent pre-command readings were
+47,204,024 / 47,205,664 / 47,205,988 / 47,205,876 KiB. Heavy checks then resumed.
+Latest observed 47,211,148 KiB: **disk-floor hold cleared at that observation**.
+No files or data were deleted to free space. Recheck the floor for subsequent work.
+
+| Actual executed command | Exit/result |
+| --- | --- |
+| `git rev-parse HEAD`, `git branch --show-current`, `git rev-parse origin/main` | 0; exact head/branch/base above |
+| `python3 /private/tmp/jg-ch4c-r3-source-check.py --old` | 1 as expected: source predicates fail at old head for missing practice closure/projection/storage binding; membership path passes. Deterministic source-only failing-first evidence, not an executed authorization test. |
+| `python3 /private/tmp/jg-ch4c-r3-source-check.py` | 0: source predicates pass; unaffected r2 routine bodies byte-identical; all existing successor recheck calls preserved. Not PostgreSQL parsing or execution. |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` | 0; affected DB typecheck/configured package lint |
+| `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` | 0; affected API typecheck/configured package lint, including application test source |
+| `./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/job-work-state-command-fixtures.ts packages/db/test/job-work-state-commands.integration.test.ts packages/db/test/job-work-state-commands-boundaries.integration.test.ts packages/db/test/job-work-state-commands-races.integration.test.ts packages/db/test/job-work-state-commands-upgrade.integration.test.ts` | 0; repeated after final test additions, 0. Strict PostgreSQL-test source compilation only. |
+| API cwd: `./node_modules/.bin/vitest run src/job-work-state.application.test.ts src/job-work-state-commands.test.ts src/job-work-state.isolation.test.ts --maxWorkers=2` | 0; 3 files, 24 tests. Scripted/source units, not HTTP/PostgreSQL execution. |
+| core cwd: `./node_modules/.bin/vitest run src/job-work-state-commands.test.ts src/job-work-state.test.ts src/watchdog.test.ts --maxWorkers=2` | 0; 3 files, 24 tests |
+| DB cwd: `./node_modules/.bin/vitest run src/tenant-context.test.ts src/proof-replacement.test.ts src/evidence-finalization-race.test.ts --maxWorkers=2` | 0; 3 files, 25 tests. Mocked boundary units, not PostgreSQL execution. |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json` | 0; affected DB build |
+| API cwd: `./node_modules/.bin/nest build` | 0; affected API build |
+| API cwd: `node --import tsx src/generate-openapi.ts --check` | 0; existing generated API unchanged |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0, repeated; core purity/lane/money boundaries pass. Seven existing computed-import warnings remain. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0, repeated; main-range lane check |
+| `git apply --check /private/tmp/SHARED-CH-4-C-v5-r3.patch` | 0; proposal applies, NOT applied |
+| `git diff --check` | 0, repeated |
+
+No clean install, broad root test, whole-repository build or all-suite pass is
+claimed. No unit failing-first run was performed before the repair because of
+the initial disk hold; only the explicitly labelled source comparison above is
+failing-first evidence. PostgreSQL/migration/catalogue/race/browser/Playwright
+suites were **NOT RUN locally**, per issuance. No live provider, real data,
+model/prompt or eval change.
+
+### Dispatcher handoff and holds
+
+**Shared serial integration HOLD:** apply
+`/private/tmp/SHARED-CH-4-C-v5-r3.patch` with rationale
+`/private/tmp/SHARED-CH-4-C-v5-r3.md`. It adds only this piece's storage-trigger
+static call metadata for existing functions. No shared catalogue was edited;
+recorded historical hashes are not fabricated/refreshed. Actual PostgreSQL
+catalogue extraction is still needed. Earlier r2 coordinator integration at
+73a0e755 remains intact; the older r2 pending-patch text is historical.
+
+**Explicit review-context request:** include these actual pinned files in BOTH
+fresh full-head packets (all source-inspected in this checkout):
+`apps/api/src/practice-access.ts`, `apps/api/src/app.module.ts`,
+`apps/api/src/main.ts`, `packages/db/src/migrate.ts`. Also include the existing
+`packages/db/src/practice-session.ts` so reviewers can inspect digest hashing
+and owned-job SQL. PracticeAccess uses persisted authentication/job authorization;
+practice-session derives a SHA-256 digest from a validated UUID token. AppModule
+registers JobWorkStateExceptionFilter as APP_FILTER and the work-state controller;
+main boots AppModule. These are source observations, not HTTP/runtime proof.
+The migration runner discovers numbered migrations and records each atomically;
+this repair creates no number. No shared file was edited to supply this context.
+
+CI must run every existing required PostgreSQL/catalogue/upgrade/watchdog/legacy/
+lock-order/replay/LP0/tenancy/SERIOUS-B5 suite plus the new cases. Old-head CI
+attempt 2, regardless of result, does not prove this uncommitted diff. Fresh CI
+and **two fresh independent full-head Claude verdicts after dispatcher commit**
+are required. Builder never self-accepts. Separate acceptance and Ben's merge
+remain outstanding. Normal HTTP transport, capacity B/resume, T-01 timer and all
+production gates remain held. A/B fix-later findings are recorded in the ledger;
+they do not authorize broader source/policy changes. Prior shared-harness strict
+compile debt was not widened into this repair; own five-file strict check passes.
+
+Intended conventional commit message written to
+`/private/tmp/jg-msg-ch-4-c.txt`. Dispatcher owns commit; root owns feature push.

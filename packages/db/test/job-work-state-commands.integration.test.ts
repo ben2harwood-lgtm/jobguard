@@ -3,7 +3,7 @@ import { claimCommandIdentity,withTenant } from "../src/index.js";
 import { Pool } from "pg";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { closeWorkFixture,createWorkFixture,seedWorkJob,workTenant,boundaryLock,type WorkFixture } from "./job-work-state-fixtures.js";
-import { seedWorkPractice,commandCounts,runWorkCommand,workCommand,practiceWorkJob,linkPair,runLink } from "./job-work-state-command-fixtures.js";
+import { seedWorkPractice,commandCounts,runWorkCommand,workCommand,practiceWorkJob,linkPair,runLink,importWorkJob } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("active-owner success; same-ID replay; fresh connection persistence; no money/outbox effects",async()=>{
@@ -83,19 +83,52 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   const results=await Promise.all([runWorkCommand(f.runtime,p,input),runWorkCommand(f.runtime,p,input)]);expect(results[0]).toEqual(results[1]);
   const after=await commandCounts(f,p);expect(after.command_receipt).toBe(before.command_receipt!+1);expect(after.job_work_state_event).toBe(before.job_work_state_event!+1);
  });
- it("same-tenant practice owners can command sibling jobs; unknown jobs and forged input cannot authorize",async()=>{
+ it("sibling-session commands and replays are forbidden without any receipt, event or audit",async()=>{
   const p=await seedWorkPractice(f),other=await seedWorkPractice(f);
-  expect((await runWorkCommand(f.runtime,p,workCommand(),other.jobId)).events.at(-1)?.kind).toBe("finished_on_site");
-  expect((await runWorkCommand(f.runtime,p,workCommand(),p.jobId,other.auth.digest)).events.at(-1)?.kind).toBe("finished_on_site");
+  const input=workCommand("close",{reason:"other",note:"Fictional private close note"});
+  await runWorkCommand(f.runtime,p,input);
   const before=await commandCounts(f,p);
+  for(const body of [workCommand(),input]){
+   await expect(runWorkCommand(f.runtime,p,body,other.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+   await expect(runWorkCommand(f.runtime,p,body,p.jobId,other.auth.digest)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  }
   await expect(runWorkCommand(f.runtime,p,workCommand(),randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
   await expect(runWorkCommand(f.runtime,p,workCommand("finish",{actorMembershipId:p.auth.membershipId}))).rejects.toThrow("INVALID_WORK_STATE_INPUT");
   expect(await commandCounts(f,p)).toEqual(before);
+ });
+ it("recursive imported lineage is owned only by its source session for commands and replay",async()=>{
+  const p=await seedWorkPractice(f),other=await seedWorkPractice(f),imported=await importWorkJob(f,p),nested=await importWorkJob(f,p,imported.jobId);
+  const {JobWorkStateRepository}=await import("../src/job-work-state-repository.js"),repo=new JobWorkStateRepository(f.runtime);
+  for(const target of [imported,nested]){
+   const input=workCommand(),first=await repo.command(target.auth.context,target.jobId,target.auth.digest,input);
+   expect(first.events.at(-1)?.kind).toBe("finished_on_site");
+   expect(await runWorkCommand(f.runtime,target,input)).toEqual(first);
+   const before=await commandCounts(f,p);
+   for(const body of [input,workCommand("close",{expectedRevision:1,reason:"other",note:"Foreign import"})]){
+    await expect(runWorkCommand(f.runtime,other,body,target.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+    await expect(repo.command(other.auth.context,target.jobId,other.auth.digest,body)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+   }
+   expect(await commandCounts(f,p)).toEqual(before);
+  }
+ });
+ it("an imported predecessor uses inherited authority; its links keep the merged GET visibility rule",async()=>{
+  const pair=await linkPair(f),imported=await importWorkJob(f,pair.p),other=await seedWorkPractice(f);
+  await boundaryLock(f,await practiceWorkJob(f,imported));
+  const binding=(await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",[imported.auth.context.tenantId,imported.jobId])).rows[0].binding_id as string;
+  const input={...pair.input,commandId:randomUUID(),predecessorBindingId:binding},before=await commandCounts(f,imported);
+  await expect(runLink(f.runtime,other,input,imported.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  expect(await commandCounts(f,imported)).toEqual(before);
+  // Imported endpoints are authorized through lineage but are omitted from the
+  // practice link projection, exactly like the existing GET reader.
+  expect((await runLink(f.runtime,imported,input)).links).toEqual([]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.job_link WHERE tenant_id=$1 AND predecessor_job_id=$2",[imported.auth.context.tenantId,imported.jobId])).rows[0].n).toBe(1);
  });
  it("normal owner in a random tenant succeeds; foreign, revoked, expired and non-owner memberships cannot append or replay",async()=>{
   const job=await seedWorkJob(f),other=await seedWorkJob(f),input=workCommand();
   const run=(actor=job.actorId,body=input)=>workTenant(f.runtime,job.tenantId,async db=>(await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[job.tenantId,job.jobId,actor,JSON.stringify(body)])).rows[0].result);
   const first=await run();expect(first.events.at(-1).kind).toBe("finished_on_site");expect(await run()).toEqual(first);
+  const {JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
+  expect(await new JobWorkStateRepository(f.runtime).command(job.context,job.jobId,job.actorId,input)).toEqual(first);
   await expect(run(other.actorId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
   for(const change of ["role='admin'","role='finance'","revoked_at=clock_timestamp()","expires_at=clock_timestamp()-interval '1 second'"]){
    await f.admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[job.tenantId,job.actorId]);
@@ -120,12 +153,33 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   for(const table of ["synthetic_obligation","journal","recovery_fee_journal","action_outbox"])expect(after[table]).toBe(before[table]);
   expect((await f.admin.query("SELECT row_to_json(j) row FROM app.job j WHERE tenant_id=$1 ORDER BY id",[p.auth.context.tenantId])).rows).toEqual(jobs);
  });
- it("link still refuses mismatched bindings for a same-tenant sibling session",async()=>{
-  const p=await seedWorkPractice(f),other=await seedWorkPractice(f),before=await commandCounts(f,p);
-  const {workTenant}=await import("./job-work-state-fixtures.js");
-  const input={version:"job-link-command.v1",action:"link",commandId:randomUUID(),expectedRevision:0,successorJobId:other.jobId,predecessorBindingId:randomUUID(),successorBindingId:randomUUID()};
-  await expect(workTenant(f.runtime,p.auth.context.tenantId,db=>db.query("SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb)",[p.auth.context.tenantId,p.jobId,p.auth.digest,JSON.stringify(input)]))).rejects.toThrow("INVALID_WORK_STATE_INPUT");
+ it("same-session link replay refuses substituted sessions and endpoint jobs without writes",async()=>{
+  const {p,input}=await linkPair(f),other=await seedWorkPractice(f);
+  const result=await runLink(f.runtime,p,input),before=await commandCounts(f,p);
+  expect(result.links).toHaveLength(1);
+  await expect(runLink(f.runtime,other,input,p.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  await expect(runLink(f.runtime,p,{...input,successorJobId:other.jobId})).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  expect(await runLink(f.runtime,p,input)).toEqual(result);
   expect(await commandCounts(f,p)).toEqual(before);
+ });
+ it("both link endpoints require the practice session even with exact common party bindings",async()=>{
+  const pair=await linkPair(f),other=await seedWorkPractice(f),before=await commandCounts(f,pair.p);
+  // Valid bindings and predecessor lock: refusal is authority, not bad UUIDs.
+  await expect(runLink(f.runtime,other,pair.input,pair.p.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  const cross=await linkPair(f,false,other);
+  const counts=await commandCounts(f,cross.p);
+  await expect(runLink(f.runtime,cross.p,cross.input)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  await expect(runLink(f.runtime,other,cross.input,cross.p.jobId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  expect(await commandCounts(f,cross.p)).toEqual(counts);
+  // The trusted normal-owner path may link these same endpoints.
+  const normal={...cross.p,auth:{...cross.p.auth,digest:cross.p.auth.membershipId}};
+  expect((await runLink(f.runtime,normal,cross.input)).links).toHaveLength(1);
+  const repo=new (await import("../src/job-work-state-repository.js")).JobWorkStateRepository(f.runtime);
+  const closed=await repo.command(cross.p.auth.context,cross.p.jobId,cross.p.auth.digest,workCommand("close",{expectedRevision:1,reason:"other",note:"Own close"}));
+  expect(closed.links).toEqual([]);
+  expect((await repo.read(cross.p.auth.context,cross.p.jobId,cross.p.auth.digest)).links).toEqual([]);
+  expect(before.job_link).toBe(counts.job_link);
+
  });
  it("SQL refuses contractor and pilot tracks even with a current practice owner",async()=>{
   for(const field of ["job_track","environment"]){

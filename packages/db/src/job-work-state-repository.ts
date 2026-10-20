@@ -3,6 +3,7 @@ import { z } from "zod";
 import { jobWorkStateReadV1, jobWorkStateMutationV1, JobWorkStateError } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
 
+import { practiceOwnedJobsSql } from "./practice-session.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 
 export const workStateReadV1 = jobWorkStateReadV1;
@@ -42,9 +43,12 @@ export class JobWorkStateRepository {
      // SQL repeats these checks after waits and before returning a stored replay.
      const actor=z.string().uuid().safeParse(digest).success ? digest :
       (await db.$client.query<{membership_id:string}>("SELECT membership_id FROM app.authenticate_practice_session($1,$2)",[digest,context.tenantId])).rows[0]?.membership_id;
+     const membershipAuthority=z.string().uuid().safeParse(digest).success;
      const owner=actor && (await db.$client.query<{allowed:boolean}>(
-      "SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.job_commercial_track c ON c.tenant_id=m.tenant_id WHERE m.tenant_id=$1 AND m.id=$2 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) AND c.job_id=$3 AND c.job_track='small_builder' AND c.environment='synthetic_demo') allowed",
-      [context.tenantId,actor,jobId])).rows[0]?.allowed;
+      (membershipAuthority ? "" : practiceOwnedJobsSql())+
+      " SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.job_commercial_track c ON c.tenant_id=m.tenant_id WHERE m.tenant_id=$1 AND m.id=$4 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) AND c.job_id=$2 AND c.job_track='small_builder' AND c.environment='synthetic_demo'"+
+      (membershipAuthority ? " AND $3::text IS NOT NULL" : " AND c.job_id IN(SELECT id FROM practice_owned_job)")+") allowed",
+      [context.tenantId,jobId,digest,actor])).rows[0]?.allowed;
      if(!owner)throw new JobWorkStateError("WORK_STATE_FORBIDDEN");
      await precheck(db);
     }

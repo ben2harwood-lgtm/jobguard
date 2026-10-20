@@ -24,6 +24,21 @@ describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
   }
   expect(await commandCounts(f,p)).toEqual(before);expect((await f.admin.query("SELECT count(*)::int n FROM app.watchdog_command_identity WHERE tenant_id=$1",[t])).rows).toEqual(identities);
  });
+ it("storage rejects cross-session endpoints and runtime cannot forge a command envelope",async()=>{
+  const {linkPair}=await import("./job-work-state-command-fixtures.js"),other=await seedWorkPractice(f),{p,input}=await linkPair(f,false,other);
+  const before=await commandCounts(f,p),t=p.auth.context.tenantId;
+  const party=(await f.admin.query("SELECT * FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2",[t,input.predecessorBindingId])).rows[0]!;
+  const insert=(pool:typeof f.admin,envelope?:string)=>workTenant(pool,t,async db=>{
+   if(envelope)await db.query("SELECT set_config('app.ch4_link_envelope',$1,true)",[envelope]);
+   await db.query("INSERT INTO app.job_link(tenant_id,id,predecessor_job_id,successor_job_id,predecessor_binding_id,successor_binding_id,customer_id,site_id,paying_party_id,command_id,actor_membership_id,request_hash,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+    [t,randomUUID(),p.jobId,input.successorJobId,input.predecessorBindingId,input.successorBindingId,party.customer_id,party.site_id,party.paying_party_id,input.commandId,p.auth.membershipId,"a".repeat(64),randomUUID()]);
+  });
+  await expect(insert(f.admin)).rejects.toMatchObject({message:"WORK_STATE_FORBIDDEN",code:"42501"});
+  const forged=JSON.stringify({jobId:p.jobId,actor:p.auth.membershipId,sessionDigest:p.auth.membershipId,input});
+  await expect(insert(f.admin,forged)).rejects.toMatchObject({message:"WORK_STATE_FORBIDDEN",code:"42501"});
+  await expect(insert(f.runtime,forged)).rejects.toMatchObject({code:"42501"});
+  expect(await commandCounts(f,p)).toEqual(before);
+ });
  it("immutable successful replay survives lock; locked reopening does not unlock or alter commercial status",async()=>{
   const p=await seedWorkPractice(f),input=workCommand(),result=await runWorkCommand(f.runtime,p,input);await boundaryLock(f,await practiceWorkJob(f,p));
   expect(await runWorkCommand(f.runtime,p,input)).toEqual(result);

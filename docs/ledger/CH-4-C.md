@@ -40,17 +40,13 @@ facts are still recorded; they are not themselves an implemented place or bill.
 No guessed money rule, retrospective restoration, trial reset or fee policy was
 introduced. All other settled owner/closed-result commands continue independently.
 
-## Shared-checker conflicts retained for dispatch
+## Earlier shared-checker conflicts — historical, superseded
 
-The exact own-file allowlist entry conflicts with
-`tools/agent-lane-boundary-lint.mjs:63`; ruling 107 action-qualified keys/SQL guards
-conflict with `apps/api/src/watchdog-registry.test.ts:373,386–390` and the Nest
-key-equality assertion; required POST conflicts with the historical no-writes
-assertion at `apps/api/src/job-work-state.http.test.ts:44`. Before these assertions
-are unchanged; after the required exact lane/registry/POST additions remain in
-place. Their source files are outside the builder allowlist. See receipt for
-executed failures and the separate unrun shared DB observer assumptions. None
-was bypassed by hiding routes, changing classifications or weakening assertions.
+Rulings 114 and the r2 structural CI repair addressed the earlier exact
+lane/registry/POST assertions and legacy-query observer structure. They remain
+intact in this round. The coordinator integration at head 73a0e755 applied the
+own helper catalogue rows and call metadata; earlier pending-patch descriptions
+are historical. Current acceptance holds are listed in v5-r3 below.
 
 ## CI ROUND v5-r1 — 20 October 2026
 
@@ -92,3 +88,35 @@ Receipt records allowed local checks and the unchanged shared harness strict
 TypeScript error. Database/migration/browser suites NOT RUN locally. Green CI,
 two independent exact-head Claude checks and separate acceptance remain due.
 Capacity, timer, normal-session transport and all production gates stay held.
+
+## v5-r3 — A and B S1 repair, 20 October 2026
+
+Starting head `73a0e755c82f7a308ec02b0bd84a27e36f785611`, frozen main
+`dc5721230fd8aedbf2d9d0457789074b66b48765`. Read both actual complete verdicts
+at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch-4-c-opus-A-73a0e755.md`
+and `v5-ch-4-c-opus-B-73a0e755.md`. Both are REPAIR, not acceptance.
+
+S1 source repair: recursive practice-owned closure at every existing SQL recheck;
+job-bound application/repository checks; merged GET link filter for practice
+responses; hash/receipt/transaction-bound endpoint storage checks. Normal
+server-membership owner authority, 0201 and every r2 structural repair remain.
+Only the expressly authorized sibling-session success expectation is replaced
+with exact forbidden/no-write assertions. Added owned success, recursive real
+adoption, endpoint/refused replay substitution, normal-owner cross-session link,
+filtered response, direct storage/runtime bypass and job/identity/audit wait
+revocation cases. Existing watchdog, legacy, observer, one-winner, money, grants
+and upgrade assertions are untouched.
+
+Source typechecking/lint evidence and exact disk numbers are in the receipt.
+The initial 43 GiB disk-floor hold cleared to just over 45 GiB before heavy
+checks resumed: 73 focused unit tests and DB/API builds passed. PostgreSQL and
+browser suites remain CI-only. Old-head rerun results prove nothing about this
+uncommitted repair. Root serially applies only the proposed trigger call-metadata
+patch, captures actual PostgreSQL catalogue definitions, commits and requests two
+fresh independent full-head verdicts. No new reviews or acceptance were performed.
+
+Fix-later A/B findings remain recorded: typed 409 subcodes; shared routine-grant
+classification and actual definition hashes; shadow-worker lock-order coverage;
+legacy identity algebra edge; legacy invoice debt; shared harness diagnostic.
+None expands this bounded security repair or grants an exception. Timer/capacity,
+normal HTTP transport and production release gates remain held.

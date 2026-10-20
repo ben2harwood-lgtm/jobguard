@@ -38,6 +38,7 @@
         "packages/db/test/job-work-state-catalog.integration.test.ts",
         "packages/db/test/watchdog-command-harness.ts",
         "apps/api/src/job-work-state.application.ts",
+        "apps/api/src/job-work-state.application.test.ts",
         "apps/api/src/job-work-state.contracts.ts",
         "apps/api/src/job-work-state.controller.ts",
         "apps/api/src/job-work-state.errors.ts",
