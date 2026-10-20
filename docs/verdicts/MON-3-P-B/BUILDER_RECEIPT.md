@@ -49,3 +49,57 @@ Final verification:
 - Final `git diff --check`: exit 0. Intended conventional commit message is `/private/tmp/jg-msg-mon-3-p-b.txt`; builder has not committed or pushed.
 
 Final disposition: bounded disabled source delivered with READ-ORDER, SHARED/LP-0, CI and RANGE holds in the ledger. Actual successful first/second admission is unreachable and unverified pending C. This receipt does not accept B or close MON-3.
+
+## Coordinator serial integration — 20 October
+
+Actual coordinator: Codex JobGuard coordinator. Applied the builder proposed additive shared export, own-table tenancy, own-object SERIOUS-B5 and own ACL/path LP-0 additions serially after builder completion. Lane lists those exact five integration paths. No predecessor assertion, protection digest or grant was weakened. Actual migrated protection-record extraction remains held for GitHub CI; no local PostgreSQL or browser execution. Deterministic postintegration checks follow; this is not independent review or acceptance.
+
+Postintegration checks: `LANE_BASE_REF=origin/main node tools/lint.mjs` PASS; slot-wrapped DB `tsc --noEmit` PASS; slot-wrapped LP0 comparator unit suite 26/26 PASS (two workers); actual integrated inventory parser and own path completeness PASS. Two coordinator parser probes initially failed due to a wrong relative path and omitted fileExists callback; corrected invocation passed. PostgreSQL remains NOT RUN; these are source/static evidence only.
+
+The required external instruction files were subsequently read in full by Sol medium builder-support. The following source-authority reconciliation clears the missing-file-read hold only; it is not an independent review. C must add authoritative new/non-imported/never-reopened target eligibility and positive/negative command tests; the unreachable body is not complete admission awaiting removal of one RAISE. All C, actual catalogue extraction, CI, independent verdict and acceptance holds remain.
+
+# MON-3-P-B source-authority reconciliation
+
+20 October 2026. Author: Codex/Sol medium, acting as builder-authority reconciliation support. This is source reconciliation only, not an independent model verdict, technical acceptance, database execution evidence or permission to activate admission.
+
+## Inputs actually read
+
+Both required external sources were read from their actual absolute paths, in full (using overlapping reads where output was bounded):
+
+- `/Users/benharwood/.local/share/full-steam/jg-orders/MON-3-P-A-issued.txt`
+- `/Users/benharwood/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261017.md`
+
+Compared them with the current files in `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3-p-b`: the persistence contract, migration0206, core prerequisites, repositories, disabled mutation, and builder receipt. No feature file or receipt was edited. No tests, PostgreSQL, browser, Claude, Git writes, provider calls or acceptance action were performed. The CLI/root may still be finalizing other files concurrently; this note addresses the source observed during this read.
+
+## Reconciliation result
+
+No conflict with Ben's decided money/access rules was found in the currently reachable B behavior. The required-source availability hold can be replaced by this actual source read and the specific remaining holds below. This does NOT close MON-3 or certify complete B/C acceptance.
+
+The issued document is an A-only execution order; its wider draft supplies the parent requirements and explicit B/C split. It is not a blanket authorization for B to enable the full trial. Its lines145-147 specifically require B admission to remain disabled until C supplies end/conversion guarantees. Ben answers lines6-7 retain made-up data and all live gates; lines12-21 specify London timing, owner authority, calendar/maximum rules; lines40-41 require verified identity and a new, non-imported, never-reopened job; lines66-68 give the dependency order and both-key requirement.
+
+## Requirement mapping
+
+1. Verified business and conservative identity: issued order lines64-70 and Ben answers40-41. Migration0206 lines3-13 stores migration-owned fictional verification independently of a card, with source/version/time and normalized business keys. Lines153-157 of the disabled body require stored verification and either company identity or phone plus completed card. Core prerequisites lines11-16 only return prerequisites/awaiting_c, never permission. No browser verification endpoint or real verification claim is introduced.
+
+2. Durable simulated setup and completion: issued order lines70-74. Migration0206 lines14-36 binds attempt/result to verification and actor, restricts completion to opaque reference/fingerprint, and gives non-completed states neither value. Lines88-111 check owner/session before receipt replay and atomically write attempt/receipt/audit. Lines113-134 bind the fixture result to the stored attempt, derive values server-side and conflict on changed replay. Lines176-186 leave fixture completion without runtime EXECUTE and deny direct runtime business-table access. Contract lines9-15 describes these limits accurately. Unknown remains a nonqualifying terminal fixture fact; it cannot silently become card-on-file or a retry of a real action.
+
+3. Owner and current authorization: issued order line86 and Ben answers21/40-41. Migration0206 lines65-75 resolves persisted company/session authority, locks, re-resolves and requires owner. The upstream `mon1_company_actor` explicitly refuses the shared-practice tenant and checks SSO-aware active membership (0184 lines63-81); B does not grant admins approval authority or cross-company browsing. The bounded mutation hook rechecks actor before dispatcher receipt replay. Actual database behavior still requires CI.
+
+4. First/second activation and atomic key claims: issued order lines66-86. Migration0206 lines143-145 unconditionally refuses BEFORE admission writes, including under migration ownership. The unreachable body lines155-174 inspects completed same-business results, counts distinct prior activations, enforces the second-card prerequisite, calls unchanged exact-authorized v3 activation and inserts A's snapshot in the same transaction. A's original trigger derives all available keys; no copied single-key selection, helper runtime grant or key release is introduced. Existing practice activation does not select this mutation. TypeScript repository and mutation also reject unexpected SQL success. Therefore no positive activation, exemption, successful admission audit or successful atomic key-claim journey has been demonstrated or enabled.
+
+5. C guarantees: issued order lines76-88 and145-147; Ben answers12-13/18-21/30/40-41. B persists no authoritative deadline, elapsed-day billing timestamp, end, conversion or statement. The contract lines19-29 expressly retains C's London clock/end/conversion and Final Check duties. This is consistent with the split; the existing elapsed-24-hour preview must remain non-authoritative.
+
+## Explicit remaining holds and source caveat
+
+- C must implement and prove the London 90-day policy with original database precision, DST/gap/overlap/leap/exact-boundary semantics; earliest own lock/own close/deadline/successful distinct second activation; no restoration after reopen; source identities and delayed/replayed facts; and subscription proration/corrections through MON-2A-P with original anchors/monthly maximum, annual off and no fee offset.
+- C must implement actual lock/reveal/illustration parity, preserve fee qualification and exports, never card-gate lock/close, and use completed Final Check results only while the job is open.
+- The unreachable admission body is NOT a complete eligibility implementation merely waiting for one RAISE to be removed. In particular,0206 lines149-174 do not explicitly inspect target job provenance or close/reopen history; they delegate accepted-quote checks to v3 and include a broad legacy-activation hold. Ben's explicit new/non-imported/never-reopened rule still needs an authoritative eligibility check plus positive/negative command-level tests before activation. Do not describe LIVE-01 as fully proved from denial-only tests. This is a held completion requirement, not an active bypass while the unconditional stop remains.
+- C must finish exact successful result/receipt/audit composition and older-facade/direct-SQL protection before enabling any path. Current denial on all admission attempts must not be described as successful first/second activation implementation evidence.
+- Shared catalogue/privilege integration, actual migrated protection records, PostgreSQL installation/upgrades/races/authorization and mandatory regression execution remain unproved here. No guessed LP-0 hash or synthetic acceptance is supplied by this note.
+- Identity replacement/merge without a retained verified key, support reset, new access powers, new money/calendar terms, real services/data/spending and all release gates remain stopped. Both-key storage does not settle identity replacement.
+
+## Receipt incorporation
+
+Root may append an accurate statement that the two required source documents were subsequently read and reconciled by Codex builder-support, with this note attached. Preserve the original unavailable-at-builder-time chronology, remaining C/catalogue/test holds, missing failing-first execution, and independent exact-commit review/acceptance requirements. Do not label this note an independent review or PASS.
+
+Done: source-authority read and bounded reconciliation. Not done: implementation change, runtime/database verification, C completion, verdict or acceptance. Decisions Ben needs now: None for this disabled source reconciliation. Next action: root incorporates this note after CLI completion, retaining all holds and the explicit eligibility completion requirement above.

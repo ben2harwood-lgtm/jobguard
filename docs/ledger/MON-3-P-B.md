@@ -26,3 +26,7 @@ Item-specific holds:
 - **C:** `0206` always raises `FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C`. Removing it requires C's issued London deadline/end/conversion and full transaction/replay/audit proof; neither a config flag nor operations/admin action can enable B.
 
 No backfill, provider activation, network action, real data, payment, ledger posting, identity replacement/support override, legacy conversion, UI, routing or OpenAPI change. No operational alert added. Installation failures roll back; installed facts are preserved with additive forward fixes. No new package install/download requested; the first pnpm wrapper attempted automatic version verification and failed, then the already cached pinned pnpm was used. No global configuration changed. Builder receipt contains actual commands/results and scope of checks. Independent exact-commit cross-model verdicts and separate acceptance remain mandatory.
+
+## Coordinator update after builder completion
+
+READ-ORDER reconciled by actual full external-source read and Sol builder-support note appended in receipt. SHARED patch applied serially for exact own objects; postcommit-range lint, DB typecheck, LP0 comparator26 tests and own inventory/path schema PASS. Actual LP0 migrated protection extraction and database CI remain held. C explicitly owns authoritative new/non-imported/never-reopened eligibility, successful admission/audit/receipt and timing/end/conversion, not merely removal of the hard stop. No independent verdict, acceptance, merge, push or activation is recorded for this local candidate.

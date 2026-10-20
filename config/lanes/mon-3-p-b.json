@@ -30,7 +30,12 @@
         "docs/contracts/free-first-job-persistence-v1.md",
         "docs/contracts/free-first-job-v1.md",
         "docs/ledger/MON-3-P-B.md",
-        "docs/verdicts/MON-3-P-B/BUILDER_RECEIPT.md"
+        "docs/verdicts/MON-3-P-B/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
       ]
     }
   }
