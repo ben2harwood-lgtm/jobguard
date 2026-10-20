@@ -906,3 +906,7 @@ compile debt was not widened into this repair; own five-file strict check passes
 
 Intended conventional commit message written to
 `/private/tmp/jg-msg-ch-4-c.txt`. Dispatcher owns commit; root owns feature push.
+
+## Coordinator serial r3 metadata integration
+
+Applied only the proposed own ch4_storage_integrity static-call metadata line after builder completion. Preserved every historical digest and permission; real migrated catalogue extraction remains held. Root postintegration range/static lint and diff checks precede feature push. This is deterministic coordination evidence, not independent review or acceptance.
