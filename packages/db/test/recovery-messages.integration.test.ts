@@ -126,9 +126,10 @@ async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessa
   return { membershipId: membership, actorRef: `membership:${membership}` };
 }
 /** Runs a test in a brand-new tenant, for changes (such as invalidating a proof) that must not leak into other tests. */
-async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
+async function inIsolatedWorld<T>(run: () => Promise<T>, world: 'current_pursuit' | 'legacy_supplier_landing' = 'current_pursuit'): Promise<T> {
   const saved = { fixture, context, actor };
-  fixture = await seedPursuitFixture();
+  // The v1 landing protocol needs its own v1 activation/cap; only the six legacy supplier tests opt in.
+  fixture = world === 'legacy_supplier_landing' ? await seedEvidencePackFixture(admin) : await seedPursuitFixture();
   context = testTenantContext(fixture.tenantId);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
@@ -1549,7 +1550,7 @@ describe('a message states the one current case figures, approved landings inclu
   it('previews the amount and revision recovery_case_current shows after an approved landing', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
-      const { caseId } = await attached();
+      const { caseId } = await attached('merchant_overcharge');
       await land(caseId, 12000);
       const figures = await currentOf(caseId);
       expect(figures).toEqual({ revision: OPENED, claim: 32000, landed: 12000, manual: 0, approvedLanded: 12000, writtenOff: 0, outstanding: 20000 });
@@ -1557,16 +1558,17 @@ describe('a message states the one current case figures, approved landings inclu
       expect(ready.readiness).toMatchObject({ eligible: true, caseRevision: figures.revision, outstandingPence: figures.outstanding });
       const view = (await repo.preview(context, caseId, previewCommand(ready), actor)).latest!;
       expect(view.message).toMatchObject({ amountPence: figures.outstanding, caseRevision: figures.revision });
-      expect(view.message.body).toBe(customerBody.replace('£320.00', '£200.00'));
+      expect(view.message).toMatchObject({ caseType: 'merchant_overcharge', recipient: 'practice-supplier@example.invalid', sourceRefs: [fixture.rateId, fixture.supplierInvoiceId, fixture.supplierDeliveryId] });
+      expect(view.message.body).toBe(supplierBody.replace('£320.00', '£200.00'));
       const stored = (await admin.query('SELECT amount_pence,case_revision FROM app.recovery_message WHERE id=$1', [view.id])).rows[0];
       expect({ amount: Number(stored.amount_pence), revision: stored.case_revision }).toEqual({ amount: figures.outstanding, revision: figures.revision });
-    });
+    }, 'legacy_supplier_landing');
   });
 
   it('counts money recorded by hand and the same money approved as one amount, never their sum', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
-      const caseId = await newCase();
+      const caseId = await newCase('merchant_overcharge');
       const assembled = await byHand(caseId, OPENED, { eventType: 'assemble_evidence' });
       const landed = await byHand(caseId, assembled.revision, { eventType: 'record_landing', amountPence: 12000 });
       await packAndApprove(caseId);
@@ -1584,25 +1586,25 @@ describe('a message states the one current case figures, approved landings inclu
       expect(ready.latest).toMatchObject({ id: first.id, changedSinceReview: true });
       const second = (await repo.preview(context, caseId, previewCommand(ready), actor)).latest!;
       expect(second.message).toMatchObject({ amountPence: 12000, caseRevision: figures.revision });
-      expect(second.message.body).toBe(customerBody.replace('£320.00', '£120.00'));
-    });
+      expect(second.message.body).toBe(supplierBody.replace('£320.00', '£120.00'));
+    }, 'legacy_supplier_landing');
   });
 
   it('gives the snapshot the same revision and outstanding as recovery_case_current for every case shape', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
-      const opened = await newCase();
+      const opened = await newCase('merchant_overcharge');
       expect(await snapshotOf(opened)).toEqual({ revision: OPENED, outstanding: 32000 });
-      const handed = await newCase();
+      const handed = await newCase('merchant_overcharge');
       const partly = await byHand(handed, (await byHand(handed, OPENED, { eventType: 'assemble_evidence' })).revision, { eventType: 'record_landing', amountPence: 5000 });
       const writtenOff = await byHand(handed, partly.revision, { eventType: 'write_off' });
       expect(await snapshotOf(handed)).toEqual({ revision: writtenOff.revision, outstanding: 0 });
-      const approvedOnly = await newCase();
+      const approvedOnly = await newCase('merchant_overcharge');
       await land(approvedOnly, 7000);
-      const mixed = await newCase();
+      const mixed = await newCase('merchant_overcharge');
       await byHand(mixed, (await byHand(mixed, OPENED, { eventType: 'assemble_evidence' })).revision, { eventType: 'record_landing', amountPence: 3000 });
       await land(mixed, 9000);
-      const amended = await newCase();
+      const amended = await newCase('merchant_overcharge');
       await amend(amended, 40000);
       for (const caseId of [opened, handed, approvedOnly, mixed, amended]) {
         const figures = await currentOf(caseId);
@@ -1610,7 +1612,7 @@ describe('a message states the one current case figures, approved landings inclu
       }
       expect(await currentOf(approvedOnly)).toMatchObject({ landed: 7000, outstanding: 25000 });
       expect(await currentOf(mixed)).toMatchObject({ landed: 9000, manual: 3000, approvedLanded: 9000, outstanding: 23000 });
-    });
+    }, 'legacy_supplier_landing');
   });
 
   it('keeps a case with no workbench history out of messages, as before', async () => {
@@ -1628,7 +1630,7 @@ describe('a message states the one current case figures, approved landings inclu
   it('refuses to deliver a message previewed and approved before an approved landing, and sinks nothing', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
-      const { caseId, view } = await approved();
+      const { caseId, view } = await approved('merchant_overcharge');
       expect(view.message.amountPence).toBe(32000);
       await land(caseId, 12000);
       // The landing does not move the case revision, only the money outstanding; the saved message must still see that it changed.
@@ -1638,14 +1640,14 @@ describe('a message states the one current case figures, approved landings inclu
       expect(await sinkCount(view.id)).toBe(0);
       expect(await outboxStatus(view.approval!.outboxActionId)).toBe('cancelled');
       expect((await viewOf(caseId)).status).toBe('blocked');
-    });
+    }, 'legacy_supplier_landing');
   });
 
   it('refuses the shared executor and a raw sink row after an approved landing, whatever the caller', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
-      const direct = await approved();
-      const raw = await approved();
+      const direct = await approved('merchant_overcharge');
+      const raw = await approved('merchant_overcharge');
       await land(direct.caseId, 12000);
       await land(raw.caseId, 4000);
       await executorWith(practiceAdapter()).execute(context, direct.view.approval!.outboxActionId);
@@ -1655,14 +1657,14 @@ describe('a message states the one current case figures, approved landings inclu
       await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [raw.view.approval!.outboxActionId]);
       expect(await code(() => rawSink(raw.caseId, raw.view))).toBe('23514');
       expect(await sinkCount(raw.view.id)).toBe(0);
-    });
+    }, 'legacy_supplier_landing');
   });
 
   it('serializes a delivery and the approved-landing routine on the one case lock, in both orders', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
       // Order 1: the landing routine holds the case lock, so a delivery that started meanwhile waits for it and then sees the landing.
-      const first = await approved();
+      const first = await approved('merchant_overcharge');
       const landing = await runtime.connect();
       try {
         await landing.query('BEGIN'); await landing.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
@@ -1676,7 +1678,7 @@ describe('a message states the one current case figures, approved landings inclu
       expect(await outboxStatus(first.view.approval!.outboxActionId)).toBe('retryable');
       expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [first.caseId])).toBe(1);
       // Order 2: a delivery transaction holds the case lock at the sink, so the landing routine waits and lands only after the delivery committed.
-      const second = await approved();
+      const second = await approved('merchant_overcharge');
       await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [second.view.approval!.outboxActionId]);
       const command = await landingCommand(second.caseId, 12000);
       const sink = await runtime.connect();
@@ -1694,7 +1696,7 @@ describe('a message states the one current case figures, approved landings inclu
       } finally { await sink.query('ROLLBACK').catch(() => undefined); sink.release(); }
       expect(await sinkCount(second.view.id)).toBe(1);
       expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [second.caseId])).toBe(1);
-    });
+    }, 'legacy_supplier_landing');
   });
 });
 
