@@ -12,7 +12,7 @@ it("fresh install and repeat migration succeed",async()=>{
 it("only the named reader gains runtime execute",async()=>{
  expect(await catalogue(c.admin)).toEqual(prior);
  const rows=(await c.admin.query(`SELECT pg_get_function_identity_arguments(p.oid) args,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
- (SELECT array_agg(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END ORDER BY a.grantee) FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE') executors
+ (SELECT array_agg(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END ORDER BY a.grantee)::text[] FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE') executors
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname='mon8_retained_contractor_workspace'`)).rows;
  expect(rows).toHaveLength(1);expect(rows[0]).toMatchObject({args:"s uuid, q jsonb",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true});expect(rows[0].executors.sort()).toEqual(["jobguard_migration","jobguard_runtime"]);
 });

@@ -1,4 +1,4 @@
-# 0194 — retained contractor workspace
+# 0200 — retained contractor workspace
 
 Exact addition: `app.mon8_retained_contractor_workspace(s uuid, q jsonb) RETURNS jsonb`. No existing object is replaced. Owner `jobguard_migration`; SECURITY DEFINER, VOLATILE, fixed `search_path=pg_catalog`; EXECUTE only owner/runtime, PUBLIC and infrastructure revoked. No table privileges change.
 

@@ -213,7 +213,7 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
-async function with0194Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const additions=after.routines.filter(r=>r.nspname==="app" && r.proname==="mon8_retained_contractor_workspace" && r.args==="s uuid, q jsonb");
  expect(additions).toHaveLength(1);
@@ -239,7 +239,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await with0194Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
+ const expected = await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

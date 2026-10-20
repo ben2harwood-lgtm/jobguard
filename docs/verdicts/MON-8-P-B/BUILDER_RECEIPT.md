@@ -90,3 +90,33 @@ Keep all six exact ENT-3a replay/refusal test titles unchanged in that final sui
 - No different-model verdict or separate acceptance is fabricated. Dispatcher commits and pushes; a different model must review the exact resulting commit and a separate actor accept. Founder owns merge/release.
 
 Commit message handoff: `/private/tmp/jg-msg-mon-8-p-b.txt`. No Git writes performed.
+
+## CI ROUND v5-r1 — 20 October 2026
+
+Dispatcher-issued repair for PR #299, starting clean at `6ebd9f922204e65d61adbc102f0e21d37490ecf2`, branch `codex/sandbox/mon-8-p-b`; local `origin/main` is `dc5721230fd8aedbf2d9d0457789074b66b48765`. Read AGENTS.md, own lane, this receipt, BUILD_PLAN.md MON-8 and applicable retained-read contract before editing. Dispatcher reports two independent Opus passes for the starting commit; those are not verdicts on this uncommitted repair. No self-acceptance, commit, push, migration execution or release.
+
+Renumbered the own migration and note from `0199_contractor_retained_workspace` to dispatcher-reserved `0200_contractor_retained_workspace`. This supersedes the historical 0194 number above. SQL migration bytes are unchanged. Updated fixture `own`, migration-note heading, ledger and serious-b5 additive catalogue helper name. Own lane allows the new paths and retains the deleted 0199 paths because lane checking inspects both sides of a rename. No other 0199 allocation was used. Source inspection found directory-based migration discovery, with no current retained-reader filename reference in a shared ordering list or contract requiring an edit.
+
+For CI run `39322683718`, cast the EXECUTE ACL aggregate to `text[]`, allowing node-postgres to decode a JS array. The entire upgrade test is byte-for-byte its predecessor plus this SQL cast; all assertions, including `executors.sort()`, remain identical. No authorization behavior or function definition changed. Scope is only the issued fixes and their references; no STOP item needed.
+
+Installed dependencies reused, no downloads or install. Node `v24.17.0`, pnpm `10.28.1` through existing `PATH=/private/tmp/jg-r1-pnpm-bin:$PATH` for every successful pnpm invocation below. The default pnpm launcher stalled during `pnpm --version` and was interrupted (130); the existing pinned launcher then returned 10.28.1. Initial read tried a nonexistent root BUILDER_RECEIPT.md (exit 1), then read the actual lane-designated receipt. Ancillary process listing was sandbox-refused; no verification result inferred from it.
+
+| Actual command | Result |
+|---|---|
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `LANE_BASE_REF=origin/main TURBO_CONCURRENCY=2 pnpm lint` | PASS, exit 0; all boundary checks and 7 package tasks; 4 cached, 3 executed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0, including migration ordering against dc572123 |
+| `pnpm --filter @jobguard/db exec vitest run --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=2` | PASS, exit 0; 69 files, 615 tests; free-port requires prohibited localhost binding and is NOT RUN |
+| `pnpm --filter @jobguard/api typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/api build` | PASS, exit 0 |
+| `pnpm --filter @jobguard/api exec vitest run src/contractor/contractor-retained-read.application.test.ts src/contractor/contractor.projection.test.ts src/contractor/contractor.application.test.ts src/contractor/contractor-practice-session.application.test.ts src/contractor/practice-worker-switch.application.test.ts --maxWorkers=2` | PASS, exit 0; 5 files, 69 tests |
+| `pnpm openapi:check` | BLOCKED, exit 1; tsx CLI IPC socket `listen EPERM` |
+| `node --import tsx src/generate-openapi.ts --check` (cwd apps/api), first attempt | FAIL, exit 1; preexisting compiled core lacked `EnterpriseLivePromptPersistenceError` export |
+| `pnpm turbo run build --filter='@jobguard/api^...' --concurrency=2` | PASS, exit 0; refreshed dependency build outputs, 5 successful tasks, 3 cached |
+| `node --import tsx src/generate-openapi.ts --check` (cwd apps/api), after dependency build | PASS, exit 0; same OpenAPI comparison without CLI IPC socket |
+| Python comparison using read-only `git show HEAD:<path>` | PASS; migration SQL unchanged and upgrade test differs only by SQL aggregate cast; assertions unchanged |
+| `git diff --check` | PASS, exit 0 |
+
+PostgreSQL suites (`pnpm test:db`, `pnpm test:migrations`, retained-reader integration/upgrade and serious-b5 upgrade), full `pnpm test`, and browser suites: NOT RUN locally by dispatcher instruction. Required GitHub CI `checks` after dispatcher push must prove real PostgreSQL behavior, including the failing ACL test, fresh/upgrade ordering and migration coexistence with reserved CH-7-REST-B 0199. No fixture/unit result substitutes for those checks. AI evaluation: NOT RUN, no AI change. No clean-install claim. Turbo shared-cache logs include other worktree paths and nonfatal sandbox cache I/O warnings; cached tasks are explicitly counted.
+
+Only assigned lane files and the explicitly permitted renumbering references changed. No backfill, external action, policy, production gate or operational alert changed. Existing transactional installation/forward-fix guidance applies. Commit message written to `/private/tmp/jg-msg-mon-8-p-b.txt`; dispatcher owns commit/push, exact-resulting-commit review and acceptance.
