@@ -9,7 +9,8 @@ import { proofBefore, proofColumns, proofDifferences as keyedDifferences, rolled
 type KeyedProof = Awaited<ReturnType<typeof proofBefore>>;
 type Facts = Map<string, bigint>;
 type UnkeyedProof = { names: string[]; typed: Record<string,string>; facts: Facts };
-type Proof = { keyed: KeyedProof; unkeyed: Record<string,UnkeyedProof>; tables: string[] };
+type Structure = { names: string[]; typed: Record<string,string>; key: string[] };
+type Proof = { keyed: KeyedProof; emptyKeyed: Record<string,Structure>; unkeyed: Record<string,UnkeyedProof>; tables: string[]; counts: Record<string,bigint> };
 const preserved = { rows: [], types: [] };
 const authoritySpine = ["control_plane.tenant", "identity.identity_user", "app.account", "app.membership", "control_plane.contractor_practice_session", "app.commercial_track_assignment", "app.extra_origin"];
 const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
@@ -47,6 +48,33 @@ function factDifferences(before: Facts, current: Facts, exact=false): string[] {
  if(exact) for(const [bytes,count] of current) if(!before.has(bytes)) differences.push(`${bytes}: 0 -> ${count}`);
  return differences;
 }
+async function primaryKey(db: PoolClient, table: string): Promise<string[]> {
+ return (await db.query(`SELECT a.attname::text AS name FROM pg_index i
+  JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
+  WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`,[tableIdent(table)])).rows.map(row=>row.name as string);
+}
+// Complete, disjoint partition; row preservation is claimed only for nonempty data proofs.
+// Empty keyed predecessors have structural evidence, never vacuous populated-row evidence.
+function assertPartition(proof: Proof) {
+ const represented=[...Object.keys(proof.keyed),...Object.keys(proof.emptyKeyed),...Object.keys(proof.unkeyed)];
+ expect(represented.sort(),"complete pairwise-disjoint predecessor partition").toEqual([...proof.tables].sort());
+ expect(Object.keys(proof.counts).sort(),"count for every discovered predecessor").toEqual([...proof.tables].sort());
+ expect(Object.keys(proof.unkeyed),"STOP: unexpected unkeyed predecessor").toEqual([requestTable]);
+ for(const [table,was] of Object.entries(proof.keyed)) {
+  expect(proof.counts[table],`${table}: populated data proof`).toBeGreaterThan(0n);
+  expect(BigInt(Object.keys(was.rows).length),`${table}: every original row`).toBe(proof.counts[table]);
+ }
+ for(const [table,was] of Object.entries(proof.emptyKeyed)) {
+  expect(proof.counts[table],`${table}: genuinely empty structural baseline`).toBe(0n);
+  expect(was.key.length,`${table}: actual primary-key shape`).toBeGreaterThan(0);
+ }
+ for(const [table,was] of Object.entries(proof.unkeyed))
+  expect([...was.facts.values()].reduce((sum,n)=>sum+n,0n),`${table}: every observable fact`).toBe(proof.counts[table]);
+ for(const table of authoritySpine) {
+  expect(proof.keyed[table],`${table}: seeded authority spine must remain a data proof`).toBeDefined();
+  expect(proof.counts[table],`${table}: seeded authority spine`).toBeGreaterThan(0n);
+ }
+}
 async function capture(db: Pool | PoolClient): Promise<Proof> {
  return rendered(db,async client=>{
   const discovered=(await client.query(`SELECT schemaname,tablename,EXISTS(
@@ -56,18 +84,21 @@ async function capture(db: Pool | PoolClient): Promise<Proof> {
   const unkeyedTables=discovered.filter(t=>!t.keyed).map(t=>`${t.schemaname}.${t.tablename}`);
   // Explicit inspected exception only; every unexpected unkeyed table remains a STOP.
   expect(unkeyedTables,"STOP: unexpected unkeyed predecessor").toEqual([requestTable]);
-  const keyed=await proofBefore(client,discovered.filter(t=>t.keyed).map(t=>`${t.schemaname}.${t.tablename}`));
+  const counts: Record<string,bigint>={};
+  for(const table of tables) counts[table]=BigInt((await client.query(`SELECT count(*)::text n FROM ${tableIdent(table)}`)).rows[0]!.n as string);
+  const keyedTables=discovered.filter(t=>t.keyed).map(t=>`${t.schemaname}.${t.tablename}`);
+  const keyed=await proofBefore(client,keyedTables.filter(table=>counts[table]!>0n));
+  const emptyKeyed: Record<string,Structure>={};
+  for(const table of keyedTables.filter(table=>counts[table]===0n)) {
+   const columns=await proofColumns(client,table);
+   emptyKeyed[table]={names:columns.map(column=>column.name),typed:Object.fromEntries(columns.map(column=>[column.name,column.type])),key:await primaryKey(client,table)};
+  }
   const columns=await proofColumns(client,requestTable);
   const names=columns.map(column=>column.name);
   const facts=await factRows(client,requestTable,names);
   const unkeyed: Record<string,UnkeyedProof>={ [requestTable]: {names,typed:Object.fromEntries(columns.map(column=>[column.name,column.type])),facts} };
-  expect([...Object.keys(keyed),...Object.keys(unkeyed)].sort()).toEqual([...tables].sort());
-  for(const table of tables) {
-   const count=BigInt((await client.query(`SELECT count(*)::text n FROM ${tableIdent(table)}`)).rows[0]!.n as string);
-   const captured=keyed[table] ? BigInt(Object.keys(keyed[table].rows).length) : [...unkeyed[table]!.facts.values()].reduce((sum,n)=>sum+n,0n);
-   expect(captured,`${table}: every original row, including honestly empty tables`).toBe(count);
-  }
-  for(const table of authoritySpine) expect(Object.keys(keyed[table]!.rows).length,`${table}: seeded authority spine`).toBeGreaterThan(0);
+  const proof: Proof={keyed,emptyKeyed,unkeyed,tables,counts};
+  assertPartition(proof);
   const seeded=[...facts].filter(([bytes])=>requestSeeds.some(digest=>bytes.includes(digest)));
   expect(seeded).toHaveLength(2);
   expect(seeded.map(([,count])=>count).sort()).toEqual([1n,2n]);
@@ -75,13 +106,19 @@ async function capture(db: Pool | PoolClient): Promise<Proof> {
   expect(seeded.find(([bytes])=>bytes.includes(requestSeeds[1]!))?.[1]).toBe(1n);
   expect(seeded.reduce((sum,[,count])=>sum+count,0n)).toBe(3n);
   for(const [bytes] of seeded) expect(bytes).toContain("2001-02-03T04:05:06.123456+00:00");
-  return {keyed,unkeyed,tables};
+  return proof;
  });
 }
 async function proofDifferences(db: Pool | PoolClient, proof: Proof, exact=false) {
  return rendered(db,async client=>{
   const result=await keyedDifferences(client,proof.keyed);
-  expect([...Object.keys(proof.keyed),...Object.keys(proof.unkeyed)].sort()).toEqual([...proof.tables].sort());
+  assertPartition(proof);
+  for(const [table,was] of Object.entries(proof.emptyKeyed)) {
+   const now=new Map((await proofColumns(client,table)).map(column=>[column.name,column.type]));
+   for(const name of was.names) if(now.get(name)!==was.typed[name]) result.types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name)??"(gone)"}`);
+   const key=await primaryKey(client,table);
+   if(JSON.stringify(key)!==JSON.stringify(was.key)) result.types.push(`${table}: primary key ${JSON.stringify(was.key)} -> ${JSON.stringify(key)}`);
+  }
   for(const [table,was] of Object.entries(proof.unkeyed)) {
    const now=new Map((await proofColumns(client,table)).map(column=>[column.name,column.type]));
    for(const name of was.names) if(now.get(name)!==was.typed[name]) result.types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name)??"(gone)"}`);
@@ -247,4 +284,40 @@ it("request-window successor additions pass while own-step facts and catalogue s
  });
  expect(await proofDifferences(c.admin,proof,true)).toEqual(preserved);
  expect(await snapshot(c.admin)).toEqual(before);expect(await predecessorCatalogue(c.admin)).toEqual(prior);
+});
+
+it("empty keyed predecessors have structural evidence while partition and spine guards fail closed",async()=>{
+ await rolledBack(c.admin,async db=>{
+  const table="app.mon8_empty_scratch";
+  await db.query("CREATE TABLE app.mon8_empty_scratch(id integer PRIMARY KEY, note varchar(200))");
+  const proof=await capture(db);
+  expect(proof.counts[table]).toBe(0n);
+  expect(proof.keyed[table]).toBeUndefined();
+  expect(proof.emptyKeyed[table]).toEqual({names:["id","note"],typed:{id:"integer",note:"character varying(200)"},key:["id"]});
+  // Removing an empty predecessor is still an incomplete proof, not an exclusion rule.
+  const omitted={...proof,emptyKeyed:{...proof.emptyKeyed}};
+  Reflect.deleteProperty(omitted.emptyKeyed,table);
+  expect(()=>assertPartition(omitted)).toThrow("complete pairwise-disjoint predecessor partition");
+  const overlapping={...proof,emptyKeyed:{...proof.emptyKeyed,"app.account":proof.keyed["app.account"]!}};
+  expect(()=>assertPartition(overlapping)).toThrow("complete pairwise-disjoint predecessor partition");
+  // Model a broken fixture with zero account rows: otherwise internally complete classification
+  // must still fail the fixed populated-spine guard. No actual fixture rows are deleted.
+  const account=proof.keyed["app.account"]!;
+  const lost={...proof,keyed:{...proof.keyed},counts:{...proof.counts,"app.account":0n},emptyKeyed:{...proof.emptyKeyed,"app.account":{names:account.names,typed:account.typed,key:account.key}}};
+  Reflect.deleteProperty(lost.keyed,"app.account");
+  expect(()=>assertPartition(lost)).toThrow("seeded authority spine must remain a data proof");
+  const incompleteRows={...proof,keyed:{...proof.keyed,"app.account":{...account,rows:{}}}};
+  expect(()=>assertPartition(incompleteRows)).toThrow("every original row");
+  await db.query("SAVEPOINT empty_type_control");
+  await db.query("ALTER TABLE app.mon8_empty_scratch ALTER COLUMN note TYPE varchar(201)");
+  expect((await proofDifferences(db,proof)).types).toEqual([`${table}: note character varying(200) -> character varying(201)`]);
+  await db.query("ROLLBACK TO SAVEPOINT empty_type_control");
+  await db.query("SAVEPOINT empty_key_control");
+  await db.query("ALTER TABLE app.mon8_empty_scratch DROP CONSTRAINT mon8_empty_scratch_pkey");
+  expect((await proofDifferences(db,proof)).types).toEqual([`${table}: primary key ["id"] -> []`]);
+  await db.query("ROLLBACK TO SAVEPOINT empty_key_control");
+  await db.query("INSERT INTO app.mon8_empty_scratch VALUES(1,'Fictional later row')");
+  await db.query("ALTER TABLE app.mon8_empty_scratch ADD COLUMN later_note text");
+  expect(await proofDifferences(db,proof)).toEqual(preserved);
+ });
 });
