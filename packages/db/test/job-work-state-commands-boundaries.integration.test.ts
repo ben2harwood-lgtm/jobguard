@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
-import { insertPhoto,boundaryLock,closeWorkFixture,createWorkFixture,seedWorkPractice,workTenant,type WorkFixture } from "./job-work-state-fixtures.js";
-import { commandCounts,practiceWorkJob,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
+import { insertPhoto,boundaryLock,closeWorkFixture,createWorkFixture,workTenant,type WorkFixture } from "./job-work-state-fixtures.js";
+import { seedWorkPractice,commandCounts,practiceWorkJob,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("unavailable capacity admission fails closed for resume and unlocked reopen",async()=>{

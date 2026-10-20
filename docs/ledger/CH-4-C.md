@@ -1,19 +1,19 @@
 # CH-4-C — Sub-order A implementation ledger
 
 Issued 18 October 2026. Synthetic only. Source implementation is not technical
-acceptance. Migration 0191; no commits/pushes by builder. RED: two Claude checks
+acceptance. Migration 0201; no commits/pushes by builder. RED: two Claude checks
 at exact dispatcher commit, then separate acceptance.
 
 | Hold/acceptance | Disposition and evidence |
 | --- | --- |
-| Q-01 / closed check and result use | 0191 replaces final-check admission, reveal and lock-bound invoice guard; history/replay and must-surface disclosure preserved. PostgreSQL NOT RUN. |
+| Q-01 / closed check and result use | 0201 replaces final-check admission, reveal and lock-bound invoice guard; history/replay and must-surface disclosure preserved. PostgreSQL NOT RUN. |
 | Q-02 | Coordinator ruling 107 implemented in watchdog registry and action-qualified transport identities; shared static-check incompatibilities are recorded in receipt, not hidden by reclassification. |
 | Q-03 / post-lock intake | No snagging admission. Existing image guard preserved; 0164 source guard replaced for diary/message/original locking and post-lock refusal. C owns executable intake. |
 | Q-04 / timing | Shared versioned London calendar dates, day31 and original microseconds; STOP T-01 below for unresolved financial instant conventions. |
 | Q-05 / history | Cancellation references marker and appends; pure preservation helper never rewrites past stops. No retrospective billing or interval restoration. |
 | Q-06 / commands | Exact owner/session SQL, strict schema, tenant-wide identity, expected revision, durable snapshot replay, events/link/audit and Nest/Next POST. PostgreSQL proofs written, NOT RUN. |
 | Q-07 / linked job | Exact offer copy retained; link existing ordinary successor, no creation or activation. |
-| Q-08/Q-09/Q-10 | Merged foundations reused; no backfill; dispatcher allocated 0191. |
+| Q-08/Q-09/Q-10 | Merged foundations reused; no backfill; dispatcher allocated 0201. |
 | CH4 replay/original receive time | Existing receipt and original fact timestamps unchanged; new command server time uses PostgreSQL microseconds. |
 | CH4 intervals / restart | T-01 STOP; B real capacity dependency. No fixture meter or cached count authorizes a place. |
 | CH4 closed check / lock | Serialized SQL guards; no reopening reset of status, baseline, lock, trial or check. |
@@ -51,3 +51,21 @@ are unchanged; after the required exact lane/registry/POST additions remain in
 place. Their source files are outside the builder allowlist. See receipt for
 executed failures and the separate unrun shared DB observer assumptions. None
 was bypassed by hiding routes, changing classifications or weakening assertions.
+
+## CI ROUND v5-r1 — 20 October 2026
+
+Migration reserved by dispatch: **0201** (renamed SQL and migration note).
+Source fixes: retain the repository live SHARE guard, authenticate before it,
+and avoid upgrading finish/cancel job locks. Their event serializer is acquired
+before revision reads; other commands retain sorted UPDATE locks. Audit is last.
+New commands check active owner, then live state, then revision; stored replay
+still precedes lifecycle checks. Command fixtures explicitly bind pre-live
+practice jobs to the synthetic small-builder track, enabling link racers to
+reach the unchanged cycle exclusion. Added only the missing private projection
+catalogue record and seven exact new routine rows in SERIOUS-B5 (no new tables).
+
+Local results and limitations are in BUILDER_RECEIPT.md v5-r1. PostgreSQL and
+browser evidence: NOT RUN; GitHub required checks remain outstanding. Normal
+session HTTP wiring and the historical DB timeout item remain PARK; this round's
+DB unit run passed without changing timeouts. Capacity/timing gates are unchanged.
+The speed-v5 dispatch ledger lives outside this worktree and was not edited.

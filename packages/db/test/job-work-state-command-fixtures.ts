@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { jobWorkStateReadV1 } from "@jobguard/core";
-import { seedWorkPractice, workTenant, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
+import { seedWorkPractice as seedPractice, workTenant, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
+/** Explicit command fixtures include pre-live synthetic small-builder jobs.
+ * Legacy track binding runs only for live jobs; quoting jobs need a labelled binding.
+ * No production authority or lifecycle gate is bypassed. */
+export async function seedWorkPractice(f: WorkFixture) {
+ const p = await seedPractice(f);
+ await workTenant(f.admin,p.auth.context.tenantId,db=>db.query(
+  "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) SELECT tenant_id,id,'small_builder','synthetic_demo','backfilled_synthetic_fixture',id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 ON CONFLICT(tenant_id,job_id) DO NOTHING",
+  [p.auth.context.tenantId,p.auth.digest]));
+ return p;
+}
 export type WorkPractice = Awaited<ReturnType<typeof seedWorkPractice>>;
 export const workCommand = (action = "finish", extra: Record<string, unknown> = {}) => ({version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action,...extra});
 export async function commandOn(db: Pick<PoolClient,"query">, p: WorkPractice, input: unknown, jobId = p.jobId, digest = p.auth.digest) {

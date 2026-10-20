@@ -4,7 +4,7 @@ import type { PoolClient } from "pg";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { closeWorkFixture,createWorkFixture,fixtureLifecycle,insertPhoto,seedWorkJob,type WorkFixture } from "./job-work-state-fixtures.js";
-const own="0197_job_work_state_commands.sql";
+const own="0201_job_work_state_commands.sql";
 const tables=["job","job_work_state_event","job_site_source_receipt","job_link","job_photo_purpose","command_receipt","audit_event","watchdog_command_identity"];
 type DB=Pick<PoolClient,"query">;
 async function snapshot(db:DB){

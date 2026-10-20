@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
-import { closeWorkFixture,createWorkFixture,seedWorkPractice,seedWorkJob,workTenant,boundaryLock,type WorkFixture } from "./job-work-state-fixtures.js";
-import { commandCounts,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
+import { closeWorkFixture,createWorkFixture,seedWorkJob,workTenant,boundaryLock,type WorkFixture } from "./job-work-state-fixtures.js";
+import { seedWorkPractice,commandCounts,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("active-owner success; same-ID replay; fresh connection persistence; no money/outbox effects",async()=>{
@@ -22,6 +22,9 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  it("pre-live administration does not admit site work or change commercial status",async()=>{
   const p=await seedWorkPractice(f),job=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' LIMIT 1",[p.auth.context.tenantId,p.auth.digest])).rows[0].id as string;
   await expect(runWorkCommand(f.runtime,p,workCommand(),job)).rejects.toThrow("JOB_NOT_LIVE");
+  // Authority first, then live state, then expected revision (including normal owners).
+  await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,p.auth.membershipId)).rejects.toThrow("JOB_NOT_LIVE");
+  await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
   const closed=await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional customer cancelled before site work"}),job);
   expect(closed.events.at(-1)?.kind).toBe("closed");expect((await f.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,job])).rows[0].status).toBe("quoting");
  });

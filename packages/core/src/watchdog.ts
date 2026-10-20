@@ -202,7 +202,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
 /** Business entrypoints used by the registry's live-only commands. */
 export const watchdogCommandGuards = [
-  // Work-state entrypoints precheck live state; controlled SQL also enforces it.
+  // Work-state prechecks hold SHARE; SQL uses the event serializer without upgrading.
   { file: "job-work-state-repository.ts", method: "finish", calls: 1 },
   { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 1 },
   { file: "purchase-order-repository.ts", method: "revise", calls: 1 },

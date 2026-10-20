@@ -7,7 +7,8 @@ ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identi
  'supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place',
  'supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete',
  'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link'));
--- Lock order: job(s) sorted UUID; command identity; graph/event serializers;
+-- Lock order: finish/cancel job SHARE, other jobs UPDATE sorted UUID;
+-- command identity; graph/event serializers;
 -- receipt and facts; deferred audit last; authority recheck uses plain reads.
 CREATE FUNCTION app.ch4_require_command_owner(t uuid,j uuid,digest text) RETURNS uuid
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
@@ -56,7 +57,15 @@ BEGIN
   IF EXISTS(WITH RECURSIVE descendants(id) AS(SELECT NEW.successor_job_id UNION SELECT l.successor_job_id FROM app.job_link l JOIN descendants d ON d.id=l.predecessor_job_id WHERE l.tenant_id=NEW.tenant_id) SELECT 1 FROM descendants WHERE id=NEW.predecessor_job_id) THEN RAISE EXCEPTION 'JOB_LINK_CYCLE'; END IF;
   RETURN NEW;
  END IF;
- IF TG_TABLE_NAME='job_work_state_event' THEN IF NEW.source_receipt_id IS NULL THEN PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE; END IF; END IF;
+ IF TG_TABLE_NAME='job_work_state_event' THEN
+  IF NEW.source_receipt_id IS NULL THEN
+   IF NEW.kind IN('finished_on_site','finished_cancelled') THEN
+    PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;
+   ELSE
+    PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
+   END IF;
+  END IF;
+ END IF;
  -- Command facts use current tenant-owner authority, not the job creator's
  -- practice session. Source facts and photo purposes keep their existing gates.
  IF TG_TABLE_NAME='job_work_state_event' THEN
@@ -139,7 +148,13 @@ BEGIN
  THEN RAISE EXCEPTION 'INVALID_WORK_STATE_INPUT'; END IF;
  actor:=app.ch4_require_command_owner(t,j,digest);
  IF action='link' THEN PERFORM app.ch4_require_command_owner(t,successor,digest); END IF;
- PERFORM 1 FROM app.job WHERE tenant_id=t AND id IN(j,successor) ORDER BY id FOR UPDATE;
+ -- Live-only commands retain the repository's first SHARE lock. Taking UPDATE
+ -- here would deadlock parallel duplicates upgrading their mutually held SHAREs.
+ IF action IN('finish','cancel_finish') THEN
+  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+ ELSE
+  PERFORM 1 FROM app.job WHERE tenant_id=t AND id IN(j,successor) ORDER BY id FOR UPDATE;
+ END IF;
  actor:=app.ch4_require_command_owner(t,j,digest);
  IF action='link' THEN PERFORM app.ch4_require_command_owner(t,successor,digest); END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||t::text||':'||cid::text,0));
@@ -154,6 +169,14 @@ BEGIN
   IF prior.command_type IS DISTINCT FROM 'WorkState.'||action OR prior.request_hash IS DISTINCT FROM request_digest OR prior.actor_membership_id IS DISTINCT FROM actor OR prior.status<>'succeeded' THEN RAISE EXCEPTION 'WORK_STATE_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN prior.result;
  END IF;
+ -- Current authority precedes live state; live state precedes revision.
+ -- Replays above retain their original snapshot even after lifecycle changes.
+ IF action IN('finish','cancel_finish') THEN PERFORM app.require_watchdog_live(j); END IF;
+ -- Same serializer as the event trigger, acquired before reading the revision.
+ -- Distinct finish/cancel IDs may share the job SHARE lock but cannot race facts.
+ IF action IN('finish','cancel_finish') THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,144));
+ END IF;
  SELECT coalesce(max(sequence),0) INTO seq FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j;
  revision:=seq+(SELECT count(*) FROM app.job_link WHERE tenant_id=t AND predecessor_job_id=j);
  IF expected<>revision THEN RAISE EXCEPTION 'WORK_STATE_STALE_REVISION' USING ERRCODE='40001'; END IF;
@@ -161,7 +184,6 @@ BEGIN
  SELECT * INTO marker FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j AND kind IN('finished_on_site','finished_cancelled') ORDER BY sequence DESC LIMIT 1;
  IF action IN('finish','cancel_finish') THEN
   -- Stored replay precedes current lifecycle checks, but never current authority.
-  PERFORM app.require_watchdog_live(j);
   PERFORM app.ch4_require_open(t,j);
  END IF;
  IF action='finish' AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;

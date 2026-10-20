@@ -1,7 +1,8 @@
+import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
-import { closeWorkFixture,createWorkFixture,seedWorkPractice,type WorkFixture } from "./job-work-state-fixtures.js";
-import { commandCounts,commandOn,runWorkCommand,waitForJobLock,workCommand } from "./job-work-state-command-fixtures.js";
+import { closeWorkFixture,createWorkFixture,type WorkFixture } from "./job-work-state-fixtures.js";
+import { seedWorkPractice,commandCounts,commandOn,runWorkCommand,waitForJobLock,workCommand } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C real database races and rollback",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("revocation while waiting is rechecked before command and replay",async()=>{
@@ -18,6 +19,16 @@ describe("CH-4-C real database races and rollback",()=>{
    }finally{await blocker.query("ROLLBACK");await runner.query("ROLLBACK");blocker.release();runner.release()}
    expect(await commandCounts(f,p)).toEqual(before);
   }
+ });
+ it.each(["finish","cancel_finish"] as const)("distinct %s command IDs serialize before revision without a SHARE upgrade",async action=>{
+  const p=await seedWorkPractice(f),repo=new JobWorkStateRepository(f.runtime);
+  const finished=action==="cancel_finish" ? await runWorkCommand(f.runtime,p,workCommand()) : undefined;
+  const input=()=>workCommand(action,finished ? {expectedRevision:finished.events.length,markerId:finished.events.at(-1)!.id} : {});
+  const before=await commandCounts(f,p);
+  const results=await Promise.allSettled([repo.command(p.auth.context,p.jobId,p.auth.digest,input()),repo.command(p.auth.context,p.jobId,p.auth.digest,input())]);
+  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+  const failed=results.find(r=>r.status==="rejected");expect(failed?.status==="rejected" ? String(failed.reason) : "").toContain("WORK_STATE_STALE_REVISION");
+  const after=await commandCounts(f,p);expect(after.job_work_state_event).toBe(before.job_work_state_event!+1);expect(after.command_receipt).toBe(before.command_receipt!+1);
  });
  it("concurrent close serializes expected revision without two closures",async()=>{
   const p=await seedWorkPractice(f),command=()=>workCommand("close",{reason:"other",note:"Fictional closure"});

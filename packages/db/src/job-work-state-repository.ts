@@ -18,7 +18,7 @@ export class JobWorkStateRepository {
    } catch(error) {if(error instanceof Error && error.message==="WORK_STATE_FORBIDDEN")throw new JobWorkStateError("WORK_STATE_FORBIDDEN");throw error;}
   });
  }
- // Live-only prechecks precede SQL business locks; SQL also enforces lifecycle.
+ // Authentication precedes the live SHARE guard. SQL never upgrades finish/cancel locks.
  async finish(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown) { const input=jobWorkStateMutationV1.safeParse(raw);if(!input.success||input.data.action!=="finish")throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");return this.execute(context,jobId,digest,input.data,async db=>{await requireLiveJob(db,jobId);}); }
  async cancelFinish(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown) { const input=jobWorkStateMutationV1.safeParse(raw);if(!input.success||input.data.action!=="cancel_finish")throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");return this.execute(context,jobId,digest,input.data,async db=>{await requireLiveJob(db,jobId);}); }
  async resume(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown) { const input=jobWorkStateMutationV1.safeParse(raw);if(!input.success||input.data.action!=="resume")throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");return this.execute(context,jobId,digest,input.data,async db=>{await requireLiveJob(db,jobId);}); }
@@ -37,7 +37,17 @@ export class JobWorkStateRepository {
    try {
     // Resume remains unavailable until MON-1-PLACES supplies capacity admission.
     if(input.data.action==="resume")throw new JobWorkStateError("CAPACITY_ADMISSION_UNAVAILABLE");
-    await precheck?.(db);
+    if(precheck) {
+     // Plain reads only: authenticate before the first business lock. Controlled
+     // SQL repeats these checks after waits and before returning a stored replay.
+     const actor=z.string().uuid().safeParse(digest).success ? digest :
+      (await db.$client.query<{membership_id:string}>("SELECT membership_id FROM app.authenticate_practice_session($1,$2)",[digest,context.tenantId])).rows[0]?.membership_id;
+     const owner=actor && (await db.$client.query<{allowed:boolean}>(
+      "SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.job_commercial_track c ON c.tenant_id=m.tenant_id WHERE m.tenant_id=$1 AND m.id=$2 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) AND c.job_id=$3 AND c.job_track='small_builder' AND c.environment='synthetic_demo') allowed",
+      [context.tenantId,actor,jobId])).rows[0]?.allowed;
+     if(!owner)throw new JobWorkStateError("WORK_STATE_FORBIDDEN");
+     await precheck(db);
+    }
     const sql=input.data.action==="link"?"SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result":"SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result";
     const row=(await db.$client.query<{result:unknown}>(sql,[context.tenantId,jobId,digest,JSON.stringify(input.data)])).rows[0];
     const parsed=workStateReadV1.safeParse(row?.result);

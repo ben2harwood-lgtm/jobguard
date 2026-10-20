@@ -1,25 +1,26 @@
-# 0191 — CH-4-C owner work-state commands
+# 0201 — CH-4-C owner work-state commands
 
 Sub-order A only, synthetic practice. PostgreSQL execution: NOT RUN in builder
 sandbox. RED requires two independent Claude verdicts at the dispatcher commit.
 
 Reuses 0144 events, links, audit and command receipts. Adds private
-`ch4_require_command_owner(uuid,uuid,text)`, `ch4_require_open(uuid,uuid)`,
+`ch4_command_work_facts(uuid,uuid,text)`, `ch4_require_command_owner(uuid,uuid,text)`, `ch4_require_open(uuid,uuid)`,
 `ch4_admit_place(uuid,uuid,text)` and `ch4_work_state_command(uuid,uuid,text,jsonb)`.
 Only `ch4_record_work_state(uuid,uuid,text,jsonb)` and
-`ch4_link_post_lock_job(uuid,uuid,text,jsonb)` gain runtime EXECUTE. All six are
+`ch4_link_post_lock_job(uuid,uuid,text,jsonb)` gain runtime EXECUTE. All seven are
 migration-owned, fixed-search-path, PUBLIC/infrastructure/shadow denied. There
 are no table grants, columns, row backfills or identity-bridge changes.
 
-Expands only the existing watchdog identity kind CHECK to the six `WorkState.*`
+Expands only the existing watchdog identity kind CHECK to the five `WorkState.*`
 identities, sharing its existing command advisory lock and tenant-wide key.
 Existing legacy watchdog source IDs are checked before a claim. Canonical JSON
 hash binds job, action, authenticated actor, session and strict versioned input.
 Expected revision is max work-event sequence plus outgoing link count. A stored
 result is immutable replay; current authority is checked before returning it.
 
-Locks: both jobs in UUID order for links, otherwise one job; shared command-id
-advisory lock; existing event/graph serializers; receipt/effect writes; deferred
+Locks: finish/cancel retain the live guard's job SHARE lock (no upgrade); other
+commands lock jobs UPDATE in UUID order. The command-id advisory lock and existing
+event/graph serializers precede revision reads and receipt/effect writes; deferred
 audit drain last. A second CH-4 command in the same transaction is refused before
 business locks using the database xid8 claim, not a caller-set flag. Post-wait and
 post-audit authority checks reuse persisted authentication. If the existing

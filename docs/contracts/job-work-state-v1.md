@@ -157,7 +157,7 @@ POST work-state accepts the strict `job-work-state-command.v1` discriminated
 union, or `job-link-command.v1` with `action: link`. IDs and expected revisions
 are required. Revision is max event sequence plus outgoing link count. No actor,
 tenant, timestamp, purpose, permission or policy field is admitted. The two public
-SQL signatures are documented in the 0191 migration note. Commands persist a
+SQL signatures are documented in the 0201 migration note. Commands persist a
 canonical request hash, receipt, event/link and append-only audit atomically.
 Replay rechecks current authority and returns the stored original snapshot without
 adding an event or audit. Fresh GET exposes current persisted history, not a cache.
@@ -211,3 +211,14 @@ origin and membership with the existing identity bridge. Transport wiring is
 STOPPED outside this lane: the shared ApplicationAuthGuard refuses all normal
 session workflow requests and the Next workspace factory supplies only practice
 credentials. No normal-session HTTP availability is claimed by this change.
+
+## v5-r1 CI repair — 20 October 2026
+
+0201 retains the live guard's first job SHARE lock for finish/cancel. These
+commands take command identity and the existing per-job event serializer before
+reading the revision. Their event trigger also retains SHARE, avoiding a lock
+upgrade. Close/reopen/link retain sorted job UPDATE locks. Audit is last.
+Repository plain reads verify authentication/owner membership before the live
+guard; SQL rechecks authority after waits. New live-only commands check live
+state before expected revision. SQL stored replay remains before lifecycle
+checks, with current authority rechecked.

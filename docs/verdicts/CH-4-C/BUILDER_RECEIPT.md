@@ -2,7 +2,7 @@
 
 18 October 2026. Builder: Codex. Base inspected:
 `b881f90be0a6d368838ca4392338147ef819bd3a`; branch `codex/sandbox/ch-4-c`.
-Migration `0197_job_work_state_commands.sql`. Working-tree delivery only: no git
+Migration `0201_job_work_state_commands.sql`. Working-tree delivery only: no git
 add/commit/push, no browser, Playwright or real provider execution. PostgreSQL
 proofs were not run; see the interrupted mixed-suite selection below.
 Dependencies were supplied; no install/download was performed by the builder.
@@ -108,7 +108,7 @@ as a live model evaluation.
    Existing sources still record immutable facts; B must add source restart
    admission before interpreting those facts as new places. No restoration of
    past stopped/billed intervals or restarted trial was invented.
-2. **Capacity handoff B.** `0197_job_work_state_commands.sql:31` supplies an
+2. **Capacity handoff B.** `0201_job_work_state_commands.sql:31` supplies an
    always-refusing private admission seam; unlocked reopen/resume cannot commit.
    `job-work-state-admission.ts` is the typed transaction-bound integration seam.
    No fixture snapshot or cached count authorizes admission. Shared exhaustive
@@ -134,7 +134,7 @@ as a live model evaluation.
 
 ## Migration, compatibility and operational limits
 
-See `packages/db/migration-notes/0197_job_work_state_commands.md` for exact
+See `packages/db/migration-notes/0201_job_work_state_commands.md` for exact
 routines, ACLs, serializer order, forward-fix recovery and B rollout dependency.
 Two public runtime EXECUTE signatures, six new routines, five definition
 replacements and a six-kind extension to the existing watchdog identity CHECK;
@@ -300,7 +300,7 @@ Applied exactly the two authorized repairs:
 
 No item-specific implementation STOP remains. No runtime, migration, policy,
 contract or existing-case change was made in r2. The migration remains
-`0197_job_work_state_commands.sql`; it was already renumbered at the supplied
+`0201_job_work_state_commands.sql`; it was already renumbered at the supplied
 head. Previous capacity/timer/release holds remain. No independent verdict or
 technical acceptance is claimed; the dispatcher owns commit/push and CI.
 
@@ -522,3 +522,117 @@ was modified. PostgreSQL/migrations/shared replay races: **NOT RUN**. Browser:
 Commit message written to `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns the
 commit/push. Status: **PARK / not accepted**, with transport, migration numbering,
 DB unit timeout and CI evidence holds above. No git write was performed.
+
+## CI ROUND v5-r1
+
+20 October 2026; PR #290, sub-order A. Started at `e34b3e30`, with
+`origin/main` at `dc572123`. Read AGENTS.md, lane, earlier receipts, CH-4 and C5
+in BUILD_PLAN, lock observer, LOCK-ORDER-1 tests, shared replay harness and
+`docs/contracts/lp-command-binding-design-v1.md` §4 before finalizing changes.
+Working-tree delivery only: no git add/commit/push, install, package download,
+server startup or database execution. Builder evidence only; independent
+commit-bound verdicts and separate technical acceptance remain required.
+
+### Source diagnosis and changes
+
+1. Renamed the SQL and migration note to **0201_job_work_state_commands**.
+   Updated active fixture, lane, receipt, privilege-record note, contract and
+   CH-4-C ledger references. The main-checkout speed-v5 ledger was read-only
+   inspected: line 43 already reserves 0201 for #290, so no external edit was
+   needed. The retired 0197 paths remain in the lane allowlist solely to permit
+   deleting them from the current commit; only 0201 exists in the working tree.
+   No new table, data backfill, grant or policy is introduced. The SQL retains
+   its existing prerequisite objects from migrations through 0198. Actual fresh
+   install/upgrade applicability is NOT VERIFIED without PostgreSQL CI.
+2. Parallel duplicate deadlock: the repository live guard holds SHARE, while
+   the command and storage trigger previously upgraded that same job to UPDATE.
+   Multiple callers can hold SHARE and wait on each other's upgrades. Final
+   implementation preserves the merged first-SHARE lock observer and all command
+   registry entries: plain owner/authentication reads precede the guard; SQL and
+   event storage retain SHARE for finish/cancel; the existing per-job event
+   serializer is taken before reading revision. Other commands retain sorted
+   job UPDATE locks. Identity, event/graph serialization, receipt/effect writes
+   and audit-last remain. Added distinct-ID finish/cancel races (NOT RUN here)
+   and a supplemental source-only lock-order assertion. Existing shared replay,
+   lock-observer and registry assertions are not weakened or deleted.
+3. Both failed link racers and the pre-live/sibling refusals hit the same track
+   gate: 0053's legacy trigger binds live jobs only, while issued practice
+   quoting siblings have no track row. The underlying practice fixture seeds a
+   current owner; no creator-session restriction was reintroduced. The command
+   fixture wrapper now explicitly binds its issued pre-live jobs as labelled
+   `backfilled_synthetic_fixture` small-builder/synthetic_demo jobs. The original
+   fixture and shared harness are unchanged. Sorted endpoint locking and the
+   existing cycle trigger still select one winner; the original one-edge/cycle
+   assertion is unchanged. No exception is swallowed or converted to success.
+4. SQL checks current owner before lifecycle/revision and live state before
+   expected revision for new finish/cancel commands. Stored SQL replay retains
+   its current-authority check and original snapshot. Added normal-owner pre-live
+   stale-revision and invalid-owner assertions. Contractor/pilot, revoked,
+   expired, foreign and non-owner refusals remain intact. Resume stays HELD.
+5. LP0-17: added only the missing private
+   `ch4_command_work_facts(uuid,uuid,text)` recorded routine row, alongside the
+   CH-4 command records. No runtime EXECUTE or newly claimed approval. Existing
+   main additions mean the final recorded routine count is 366; this round adds
+   exactly one. No fixed expected count was weakened.
+6. SERIOUS-B5: additive helper admits only the seven exact new 0201 routine
+   identities and asserts they did not exist in the predecessor. There are no
+   own new tables/indexes/policies to add. Every original expected catalogue and
+   data row remains in the full comparison, including replaced routine ACLs.
+
+An intermediate implementation delegated all locking to SQL and removed this
+piece's precheck registrations. Source inspection of the shared exhaustive and
+first-SHARE assertions showed that approach incompatible; the final code retains
+both registrations and the first-SHARE guard, eliminating upgrades instead.
+The initial API run before dependency rebuild/final lock fix reported 38 failed,
+97 passed (two guard failures, stale export/classifier failures, including
+EnterpriseLivePromptRepository not a constructor). Final reruns below passed.
+One Python edit invocation used the API cwd and failed with FileNotFoundError
+before changing files; it was rerun successfully from the worktree root.
+
+### Commands actually run and results
+
+Node v24.17.0; installed TypeScript 5.8.3 / Vitest 4.1.11. Dependencies were
+already installed. No clean pinned-install or successful pnpm-wrapper result is
+claimed. All test invocations used at most two Vitest workers.
+
+| Command | Result |
+| --- | --- |
+| `pnpm --version`; `PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm --manage-package-manager-versions=false --package-manager-strict=false --version` | Both stalled in the launcher; interrupted (130). |
+| `pnpm --filter @jobguard/core --filter @jobguard/db --filter @jobguard/api --filter @jobguard/web typecheck`; `LANE_BASE_REF=origin/main pnpm lint`; `pnpm lint:lanes`; `pnpm --filter @jobguard/db exec vitest run src --exclude '**/test/**' --maxWorkers=2`; `pnpm --filter @jobguard/api build`; `pnpm openapi:check` | Each attempted through a Python subprocess with 5s timeout, then terminated while launcher stalled. Checks did not execute through pnpm. |
+| Each of core/db/api/web: installed `tsc -p tsconfig.json --noEmit` | PASS; repeated after implementation edits. Config/ai/storage same command also PASS. These are each package's lint script bodies. |
+| Root `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL: core purity PASS; lane migration-order gate still counts the committed 0197 addition despite its working-tree deletion. |
+| Root `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL: same committed-0197-vs-main-0198 migration-order check. Initial invocation also needed the retired exact paths allowed for their deletion; corrected in lane. |
+| Root `node tools/money-arithmetic-lint.mjs` | PASS. |
+| core: `./node_modules/.bin/vitest run src --maxWorkers=2` | PASS: 124 suites, 2956 tests; final run after restoring both guard entries. |
+| db: `./node_modules/.bin/vitest run src --exclude '**/test/**' --maxWorkers=2` | PASS: 26 suites, 221 tests, including unchanged audit-checkpoint-handoff timeout. Repeated after final lock implementation, PASS. |
+| api: `./node_modules/.bin/vitest run src/job-work-state-commands.test.ts src/watchdog-registry.test.ts --maxWorkers=2` | Final PASS: 2 suites, 136 tests. Intermediate SQL-only design run passed 134 tests before restoring the exhaustive registrations; not the final design. |
+| web: `./node_modules/.bin/vitest run 'app/api/jobs/[id]/work-state/route.test.ts' --maxWorkers=2` | PASS: 1 suite, 8 tests; no socket/browser. |
+| core/config/storage/ai/db: installed `tsc -p tsconfig.json`; api: installed `nest build` | PASS all six builds. Core/db rebuilt and API build repeated after final lock changes. |
+| api: `node --import tsx src/generate-openapi.ts --check` | PASS after dependency rebuild, repeated after final API build. No OpenAPI artifact or route change in this round. |
+| db: installed `tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/job-work-state-command-fixtures.ts test/job-work-state-commands.integration.test.ts test/job-work-state-commands-races.integration.test.ts test/job-work-state-commands-boundaries.integration.test.ts test/serious-b5-upgrade.integration.test.ts` | PASS, repeated with the new race cases. This is source typechecking, not PostgreSQL execution. |
+| Root `git diff --check`; read-only status/diff/source and JSON inspection | PASS whitespace; only lane paths plus expressly authorized shared upgrade-test addition. |
+
+The local lane checker unions changes in HEAD with working-tree/untracked paths,
+so its migration gate still sees HEAD's added 0197 even though this delivery
+renames it to 0201. No gate was bypassed and no git index write was used. The
+dispatcher must commit the deletion/addition together and rerun both lane/root
+lint against origin/main; a passing post-commit gate is not claimed here.
+
+### PARK and remaining evidence
+
+PostgreSQL, migrations/fresh-install/upgrade, shared replay/lock observer races,
+LP0 and SERIOUS-B5: **NOT RUN** locally. Browser/Playwright and socket-dependent
+HTTP suites: **NOT RUN**. GitHub required `checks` after dispatcher push must
+supply this evidence. Broad root test/build wrappers: NOT RUN successfully;
+focused actual script-body results are above. No AI/provider/prompt change;
+evaluation is inapplicable. No new alert, external action or production release.
+
+Normal-session HTTP wiring remains **PARK / outside lane**. The historical DB
+unit timeout item remains parked with no timeout/assertion change; this round's
+full DB unit selection passed. Capacity B, timing conventions, release gates,
+independent verdicts and separate acceptance remain outstanding as before.
+Rollback/forward-fix remains as documented in the renamed migration note; no
+historical receipts, events, links, audit or money are rewritten.
+
+Commit message delivered to `/private/tmp/jg-msg-ch-4-c.txt`. Dispatcher owns
+commit/push and CI. This receipt is not independent verification or acceptance.
