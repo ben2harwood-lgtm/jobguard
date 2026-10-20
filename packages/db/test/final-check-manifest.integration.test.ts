@@ -20,14 +20,25 @@ it("SV5-03 SV5-25 unsupported, failed, unverified and changed inputs never becom
  expect((await repo.manifest(a.context,a.jobId,m.id)).sources[0]!.status).toBe("zero_result");
 });
 it("SV5-14 post-lock server receive time excludes old device-dated evidence from inventory",async()=>{
- const a=await seedFinalCheckJob(f);await a.lock();const e=await insertFinalCheckEvidence(f,a);const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
+ const a=await seedFinalCheckJob(f);await a.lock();const e=await insertFinalCheckEvidence(f,a,'diary','application/pdf');const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
  expect(m.sources.map(s=>s.evidenceId)).not.toContain(e);
 });
 it("SV5-14 post-lock signal is available at once with permanent evidence_after_lock regardless of device date",async()=>{
- const a=await seedFinalCheckJob(f);await a.lock();const e=await insertFinalCheckEvidence(f,a);
+ const a=await seedFinalCheckJob(f);await a.lock();const e=await insertFinalCheckEvidence(f,a,'diary','application/pdf');
  const {finalCheckProposal}=await import('./final-check-fixture.js');const signalId=await finalCheckProposal(f,a,e);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);expect(view.postLockItems).toEqual([expect.objectContaining({signalId,evidenceAfterLock:true})]);
  expect((await f.admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3",[a.tenantId,a.jobId,signalId])).rows).toContainEqual({reason:'evidence_after_lock'});
+});
+it("SV5-B3 a signal supported only by post-lock evidence is not offered that evidence and cannot be revealed as a main finding (per C135 repair)",async()=>{
+ const {finalCheckProposal}=await import('./final-check-fixture.js'),{randomUUID}=await import('node:crypto');
+ const a=await seedFinalCheckJob(f);await a.lock();const late=await insertFinalCheckEvidence(f,a,'diary','application/pdf');const signalId=await finalCheckProposal(f,a,late);
+ const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId);
+ const fresh=await repo.manifest(a.context,a.jobId,m.id);expect(fresh.signals.find(x=>x.signalId===signalId)!.evidenceIds).toEqual([]);
+ const comparisons={baselineItemIds:[a.scopeItemId],captureIds:[],lockedLineIds:[a.lineId]};
+ await expect(repo.reconcile(a.context,a.jobId,m.id,[{signalId,expectedRevision:0,outcome:'reveal',references:[],comparisons}])).rejects.toMatchObject({code:'FINAL_CHECK_SOURCE_CHANGED'});
+ const done=await repo.reconcile(a.context,a.jobId,m.id,[{signalId,expectedRevision:0,outcome:'not_enough_evidence',references:[],comparisons}]) as {runId:string};
+ expect(done.runId).toBeTruthy();
+ expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[a.tenantId,a.jobId,signalId])).rows[0].state).not.toBe('revealed');void randomUUID;
 });
 it("SV5-25 invalidated evidence cannot remain available as successfully checked proof",async()=>{
  const {availableFinalCheck,finalCheckTenant,FINAL_CHECK_ACTOR}=await import('./final-check-fixture.js');const a=await seedFinalCheckJob(f),r=await availableFinalCheck(f,a),e=r.manifest.sources[0]!.evidenceId;
