@@ -6,7 +6,7 @@ The addendum's requested first line names Claude Sonnet 5.5 and says Codex was u
 
 ## Issued base and source inspection
 
-HEAD and origin/main: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`; branch `codex/sandbox/sv-5`. Initial worktree was clean. No git add, commit, checkout, push, PR, merge or deployment was performed. Migration allocation is `0145_final_check.sql`. Intended commit message: `/private/tmp/jg-msg-sv-5.txt`.
+HEAD and origin/main: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`; branch `codex/sandbox/sv-5`. Initial worktree was clean. No git add, commit, checkout, push, PR, merge or deployment was performed. Migration allocation is `0199_final_check.sql`. Intended commit message: `/private/tmp/jg-msg-sv-5.txt`.
 
 Read repository AGENTS.md, BUILD_PLAN §§2.4, 10.2.1–10.2.11, SV-5 (§10.4, line 1859), graph §12.3 and the existing lock/detection/persistence contracts. At this issued base the quoted contracts/card remain applicable. Main wins over the draft inventory: `0140_site_extra_pricing.sql` is already registered on main, following 0138; the draft's assertion that main ends at 0138 is stale. Existing 0128/0132/0133 and 0097 dependencies are present. No contractor branch was used. Q4/Q5/Q6 prerequisites are not supplied at this base.
 
@@ -52,7 +52,7 @@ Validation command ledger (pnpm uses the PATH prefix described above):
 | `pnpm --filter @jobguard/api openapi:generate` | 1 | refused: tsx IPC listen EPERM; snapshot not changed |
 | `git diff --check` (repeated after final edits) | 0 | no whitespace errors |
 | `git diff --stat`, `git diff --numstat`, `git status --short`, `git rev-parse HEAD origin/main` | 0 | read-only working-tree evidence; head unchanged |
-| `shasum -a 256 packages/db/migrations/0145_final_check.sql` | 0 | intermediate hash only; final hash below supersedes it |
+| `shasum -a 256 packages/db/migrations/0199_final_check.sql` | 0 | intermediate hash only; final hash below supersedes it |
 | Python Git-blob/SHA-256/allow-list comparison | 0 | 1,593 original tracked files unchanged; all changed/new paths in lane; 13 explicitly protected files equal main |
 
 Typecheck, lint and build were each invoked once with `--force`; no cache-hit green is claimed. Typecheck is recorded FAILED, then the own error was fixed and all seven forced package lint checks and builds compiled successfully. Turbo emitted `WARNING IO error: Operation not permitted (os error 1)` for shared cache I/O. That cache item was not repaired or rerouted; tasks themselves ran with zero cache hits. Build also emitted existing Next workspace-root and CSS warnings. No build/test run overlapped; direct Vitest runs were sequential, max two workers, max three explicit files.
@@ -260,7 +260,7 @@ Changed/new source SHA-256 (receipt excluded to avoid a circular hash):
 - `packages/core/src/index.ts` — `a2af7ded1cfc8985358aadc541ae01ba0794753fd4dbcb814c0cf0777a8935e2`
 - `packages/core/src/watchdog.ts` — `2c9451800cc35bdd80820bca593a6df7f7841ca4736af14c4ba308a056c787d6`
 - `packages/db/MIGRATIONS.md` — `c76d8914fc97d58abd593dfcc9c4eae8b13fceeb10c00babaafef02073c9c9a2`
-- `packages/db/migrations/0145_final_check.sql` — `2fe83516cfd3adc43c3a4ed37a3c94ab4d40eccb54b79cd36852c46066abb4db`
+- `packages/db/migrations/0199_final_check.sql` — `2fe83516cfd3adc43c3a4ed37a3c94ab4d40eccb54b79cd36852c46066abb4db`
 - `packages/db/src/final-check-repository.ts` — `540685dead851ade0137dda9a4a88739f56250725daaf2c1c861ee198c3ec29e`
 - `packages/db/src/final-check-source-reader.ts` — `bd80cb1a73f65b7315910c4a326ea64f5da1e6820b0b5e5eb47c50d3cfdc6382`
 - `packages/db/src/index.ts` — `22564468ce9b61e0fb6eb1c741f09111c42518e858cc2ca7cc74279df912d462`
