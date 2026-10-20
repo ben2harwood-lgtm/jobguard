@@ -113,11 +113,22 @@ export async function publishInvoiceFixtureCompletion(shadow: Pool, admin: Pool,
 }
 export async function prepareInvoiceFinalCheck(page:Page,jobId:string,account:{id:string;revision:number}){
  await withSyntheticShadow(tenant,async(shadow,admin)=>{
-  const path=`/api/jobs/${jobId}/final-account`;
+  // Set-up only (per C135): a job taken live without the capture activation has no commercial track; establish the synthetic small-builder premise, never rewriting an existing track.
+  const trackDb=await admin.connect();
+  try{await trackDb.query("BEGIN");await trackDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+   await trackDb.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenant,jobId]);
+   await trackDb.query("COMMIT");}catch(error){await trackDb.query("ROLLBACK");throw error;}finally{trackDb.release();}
+   const path=`/api/jobs/${jobId}/final-account`;
   await jsonResult(page.request.post(`${path}/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}}),"Accept invoice fixture terms");
   const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenant,jobId,account.id])).rows;
   for(const item of scope)await jsonResult(page.request.post(`${path}/dispositions`,{data:{version:"final-account.disposition.v1",commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:"done"}}),"Record invoice fixture disposition");
   await jsonResult(page.request.post(`${path}/lock`,{data:{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:account.id,expectedRevision:account.revision,declarationVersion:"final_account_declaration.v1"}}),"Lock invoice fixture");
   await publishInvoiceFixtureCompletion(shadow,admin,tenant,jobId);
  });
+}
+
+/** Set-up only (per C135): the issue routine now needs the lock and a checked completion; take the current account and establish both. */
+export async function prepareCurrentInvoiceFinalCheck(page:Page,jobId:string){
+ const state=await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`),"Read final account for invoice set-up");
+ await prepareInvoiceFinalCheck(page,jobId,state.account);
 }

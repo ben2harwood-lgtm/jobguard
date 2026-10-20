@@ -21,7 +21,7 @@ export async function recordedProof(page: Page, jobId: string, complete = false)
 }
 
 /** The persisted practice job every recovery journey starts from: accepted quote, approved extra, proof, issued customer invoice. */
-export async function persistedRecoverySources(page: Page) {
+export async function persistedRecoverySources<T = undefined>(page: Page, beforeLock?: (context: { jobId: string; scopeItemId: string }) => Promise<T>) {
   await openReview(page);
   for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await click(page, `Accept ${name}`);
   await click(page, "Dismiss Replace shelves");
@@ -53,7 +53,9 @@ export async function persistedRecoverySources(page: Page) {
   const proofId = await recordedProof(page, jobId, true);
   const final = await post(page, `/api/jobs/${jobId}/final-account`, { version: "final-account.assemble.v1", commandId: randomUUID() });
   expect(final.account.issueBlocked).toBe(false);
+  // Set-up order only (per C135): material orders and supplier documents are new site work, refused once the account is locked.
+  const before = beforeLock ? await beforeLock({ jobId, scopeItemId: variationBefore.parentScopeItemId as string }) : (undefined as T);
   await prepareInvoiceFinalCheck(page,jobId,final.account);
   const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });
-  return { jobId, quoteId: quote.documentId as string, proofId, variationId: variation.currentRevisionId as string, invoiceId: invoices.invoices.at(-1).id as string, scopeItemId: variationBefore.parentScopeItemId as string };
+  return { jobId, quoteId: quote.documentId as string, proofId, variationId: variation.currentRevisionId as string, invoiceId: invoices.invoices.at(-1).id as string, scopeItemId: variationBefore.parentScopeItemId as string, before };
 }
