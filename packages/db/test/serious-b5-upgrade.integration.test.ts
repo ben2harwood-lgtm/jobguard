@@ -212,6 +212,33 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
+// Per C135 (SV-5): exact additions created by the separable final-check persistence migration (0199), layered on the expected snapshot above.
+async function separableFinalCheckAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["final_check_disposition_binding", "final_check_manifest", "final_check_manifest_source", "final_check_reveal_proof", "final_check_run_binding", "final_check_source_attempt"];
+ const indexNames = ["final_check_classification_job_identity", "final_check_disposition_binding_pkey", "final_check_disposition_binding_tenant_id_command_id_key", "final_check_disposition_binding_tenant_id_job_id_signal_id_key",
+  "final_check_disposition_job_identity", "final_check_manifest_pkey", "final_check_manifest_source_pkey", "final_check_manifest_source_tenant_id_job_id_manifest_id_so_key", "final_check_manifest_tenant_id_job_id_id_key",
+  "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key", "final_check_reveal_proof_pkey", "final_check_run_binding_pkey",
+  "final_check_run_binding_tenant_id_job_id_manifest_id_key", "final_check_run_binding_tenant_id_job_id_run_id_lock_id_key", "final_check_source_attempt_pkey", "final_check_source_attempt_tenant_id_job_id_manifest_id_sou_key"];
+ const routineIdentities = [["append_final_check_audit", "e uuid, actor text, j uuid, k text, refs jsonb"], ["begin_final_check", "t uuid, j uuid, detector text, policy text"], ["complete_final_check", "t uuid, j uuid, m uuid, p jsonb"],
+  ["final_check_builder", "t uuid, j uuid, d text, locking boolean"], ["final_check_context", "t uuid"], ["final_check_guard_fact", ""], ["final_check_guard_manifest", ""], ["final_check_post_lock_link", ""], ["final_check_refuse_held_case", ""],
+  ["final_check_worker", "t uuid, j uuid"], ["read_final_check_disputes", "t uuid, j uuid, d text"], ["read_final_check_manifest", "t uuid, j uuid, m uuid"], ["read_final_check_reveal", "t uuid, j uuid, d text"],
+  ["record_final_check_disposition", "t uuid, j uuid, d text, p jsonb"], ["record_final_check_source_result", "t uuid, j uuid, m uuid, s uuid, attempt uuid, p jsonb"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const table of tables) expect(Object.keys(prior.rows)).not.toContain(`app.${table}`);
+ const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
+  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+  return [...old, ...added].sort((a, b) => position(a) - position(b));
+ };
+ return { rows: { ...prior.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) }, routines: additive(prior.routines, routines, after.routines),
+  relations: additive(prior.relations, relations, after.relations), policies: additive(prior.policies, policies, after.policies) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -225,7 +252,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await contractorAgreementAdditions(await with0188And0192Additions(before));
+ const expected = await separableFinalCheckAdditions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
