@@ -51,7 +51,8 @@
         "apps/api/src/job-work-state.http.test.ts",
         "packages/db/src/watchdog.ts",
         "packages/db/test/watchdog.integration.test.ts",
-        "packages/db/test/watchdog-legacy-identities.integration.test.ts"
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts",
+        "packages/db/test/site-extra-evidence-routines.integration.test.ts"
       ]
     }
   }
