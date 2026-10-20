@@ -305,7 +305,8 @@ BEGIN
   END IF;
   -- cb_begin holds the tenant billing fence (618), including across anchor jobs.
   -- Same-fact replay has already been skipped above. Never invalidate the first match.
-  IF valid AND EXISTS(
+  -- Movements validate their composition above; only invoice facts own export-line matches.
+  IF valid AND e->>'factType'='invoiced' AND EXISTS(
    SELECT 1 FROM jsonb_array_elements(e->'composition'->'lines') x
    JOIN app.billing_line_match m ON m.tenant_id=t AND m.export_line_id=(x->'match'->>'exportLineId')::uuid
    WHERE x->>'kind'='extra'
@@ -315,7 +316,7 @@ BEGIN
   VALUES(t,f,p_job,contract,imp,e->>'source',e->>'sourceEventId',e->>'invoiceNumber',e,h,valid);
   IF NOT valid THEN
    INSERT INTO app.billing_quarantine(tenant_id,id,job_id,client_contract_id,fact_id,reason) VALUES(t,gen_random_uuid(),p_job,contract,f,quarantine_reason);
-  ELSE
+  ELSIF e->>'factType'='invoiced' THEN
    FOR l IN SELECT value FROM jsonb_array_elements(e->'composition'->'lines') WHERE value->>'kind'='extra' LOOP
     INSERT INTO app.billing_line_match(tenant_id,id,job_id,client_contract_id,fact_id,external_invoice_line_id,export_line_id,line_job_id)
     VALUES(t,gen_random_uuid(),p_job,contract,f,l->>'externalInvoiceLineId',(l->'match'->>'exportLineId')::uuid,(l->'match'->>'jobId')::uuid);
