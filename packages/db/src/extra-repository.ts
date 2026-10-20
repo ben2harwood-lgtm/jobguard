@@ -64,6 +64,8 @@ export class ExtraRepository {
   const requestHash = sha256Hex(canonicalJson(content));
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase();
+   // Match revision/revocation order: tenant administration before job locks and origin foreign keys.
+   await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
    await lockJob(db, tenant, input.jobId);
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");

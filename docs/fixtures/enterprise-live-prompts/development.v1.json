@@ -1,0 +1,197 @@
+{
+  "version": "enterprise-completion-corpus.v1",
+  "cases": [
+    {
+      "id": "development-101",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "door"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-development-terms.v1",
+          "entries": [
+            {
+              "workId": "door",
+              "terms": [
+                "door",
+                "entrance leaf"
+              ]
+            },
+            {
+              "workId": "vent",
+              "terms": [
+                "new vent"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000001015",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-101",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: new vent"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000001016",
+            "evidenceId": "00000000-0000-4000-8000-000000001015",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-101",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 14,
+              "quote": "new vent"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "development-102",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "door"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-development-terms.v1",
+          "entries": [
+            {
+              "workId": "door",
+              "terms": [
+                "door",
+                "entrance leaf"
+              ]
+            },
+            {
+              "workId": "vent",
+              "terms": [
+                "new vent"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000001025",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-102",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: door"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000001026",
+            "evidenceId": "00000000-0000-4000-8000-000000001025",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-102",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 10,
+              "quote": "door"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "development-103",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "door"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-development-terms.v1",
+          "entries": [
+            {
+              "workId": "door",
+              "terms": [
+                "door",
+                "entrance leaf"
+              ]
+            },
+            {
+              "workId": "vent",
+              "terms": [
+                "new vent"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000001035",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-103",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: entrance leaf"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000001036",
+            "evidenceId": "00000000-0000-4000-8000-000000001035",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-103",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "entrance leaf"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

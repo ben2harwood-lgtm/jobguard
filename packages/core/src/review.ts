@@ -1,11 +1,15 @@
 import { z } from "zod";
+import { MAX_MONEY_PENCE } from "./money.js";
+import { parseQuantity } from "./quantity.js";
 
 export const REVIEW_CONTRACT_VERSION = "proposal_review_v1" as const;
 const uuid = z.string().uuid();
 const nullableCommercial = z.object({
-  quantity: z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u).nullable(),
+  quantity: z.string().refine((value) => {
+    try { parseQuantity(value); return true; } catch { return false; }
+  }, "Quantity must be a non-negative canonical decimal with at most six fractional places").nullable(),
   unit: z.string().min(1).max(40).nullable(),
-  unitPricePence: z.number().int().nonnegative().nullable(),
+  unitPricePence: z.number().int().nonnegative().max(MAX_MONEY_PENCE).nullable(),
 });
 
 export const reviewLineV1 = z.object({
@@ -60,7 +64,7 @@ export function assertReviewConfirmable(review: ProposalReview): void {
   if (review.lines.some((line) => line.disposition === "proposed")) throw new ReviewIncompleteError("Every proposed line needs an explicit disposition");
   if (review.questions.some((question) => question.blocking && question.disposition !== "answered")) throw new ReviewIncompleteError("Blocking questions must be answered");
   if (review.questions.some((question) => !question.blocking && question.disposition === "unresolved")) throw new ReviewIncompleteError("Non-blocking questions require a visible disposition");
-  const promoted = review.lines.filter((line) => line.disposition === "accepted" || line.origin === "human");
+  const promoted = review.lines.filter((line) => line.disposition === "accepted");
   if (!promoted.length) throw new ReviewIncompleteError("At least one scope line must be confirmed");
   for (const line of promoted) {
     if (line.quantity === null || line.unit === null) throw new ReviewIncompleteError("Confirmed scope needs quantity and unit before quoting");

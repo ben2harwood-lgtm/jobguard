@@ -1,0 +1,43 @@
+# ENT-8a: released independent completion calculation
+
+Scope: the dispatch's §6 split, synthetic supplied facts only. This implements part of A-01–A-04 and A-21's report mechanics. Aggregate ENT-8a, database guarantees and A-24 remain open. No public operation, persisted prompt, source adapter, automatic invocation or possible-extras screen exists in this change.
+
+`enterprise-completion-input.v1` is a strict internal calculation input. It binds a tenant/job, an exact named baseline (order/revision IDs and SHA-256), a versioned supplied recognition vocabulary, source evidence snapshots and observations. Environment is restricted to `synthetic_demo`; that field is a calculation constraint, never server authorization or a tenant-context constructor. All UUIDs and lowercase SHA-256 hashes are validated. Objects at every nesting level reject extra fields. Duplicate source, observation, baseline work and recognition identities refuse with `INVALID_LIVE_PROMPT_INPUT`. Instructed identities must exist in the vocabulary, so incomplete baseline interpretation cannot assert absence.
+
+An observation identifies one supplied work term through a text span or photo tag. Text offsets are zero-based UTF-16 code units with an exclusive end; the exact quote must equal the stored supplied slice. A tag must be present exactly in the supplied photo tag list. Missing evidence, a different tenant/job, hash/version mismatch, wrong source kind or unresolved locator raises `INVALID_LIVE_PROMPT_CITATION`. These are checks against supplied snapshots, **not PostgreSQL evidence verification**, object hashing or proof of work. Pending, quarantined, rejected, superseded or invalidated snapshots cannot produce findings. Malformed references refuse even when the source status would otherwise suppress a finding.
+
+`calculateCompletionWorkFindings` implements only rule (a). Exact supplied terms map to canonical work identities; explicit synonyms are terms of the same identity. No case folding, substring search, fuzzy matching, AI or inference of meaning occurs. Unsupported terms and terms mapped to multiple identities stay silent. Work identified on the baseline stays silent. A verified observation of an unambiguous identity absent from that baseline yields `enterprise-completion-finding.v1`, carrying rule/version, recognition version, baseline, observation and exact citation. Results sort by observation UUID. Inputs are parsed into independent values and remain unchanged.
+
+The calculation assumes the supplied completion observation and vocabulary have already been established by their eventual source owner. It cannot extract or validate the meaning of arbitrary prose, decide whether an assertion is true, or discover unknown synonyms. In particular, selecting a word out of uncertain prose is not a source adapter supplied by this change. All examples are fictional; the supplied vocabulary is not an approved production matching policy.
+
+One observation yields at most one finding. Multiple observations of the same work remain separate; their identities support diagnostic evaluation only. Output has no coalescing key, selected existing extra, origin, price, approval, fee, actor or grant. It is deliberately distinct from the merged `enterprisePromptProposalV1`, whose complete persisted flow requires the held matching policy and authorized read projection. No existing proposal schema changes.
+
+Held portions:
+
+- H-01–H-03: rules (c), (b), (d), duration/factor, material mapping/returns and close-out scope/state policies; no operational materials schema/import.
+- H-04–H-05: coalescing, confirmation, dismissal, office matching, public read/evaluate/import authority and projection.
+- H-06–H-07: agreement enablement, authoritative job completion, real data, safety/legal terms, production processing and charging.
+- H-08–H-09: catalogue prerequisite, whole migration, checked routines/repositories, dependency-owned source/office/completion hooks. ENT-5 foundation merged as `9865e4b32b71c75b763240bcdf27bd6a75b42f34` (#215); that does not release these seams. Migration 0161 is allocated by dispatch but is not created or registered.
+- H-10: UI remains parked. Separate exact-commit independent verdict and technical acceptance belong to other actors.
+
+There are no migrations, new GRANT statements, backfills, external actions, runtime alerts or backwards-incompatible changes. Shared registration overlaps are limited to the new lane entry and two core exports. Existing tests, fingerprints, auth/context bridges, watchdog registries, money and small-builder behavior are untouched; executed versus pending regression evidence is recorded separately in the receipt.
+
+## ENT-8A-P persisted practice path (18 October 2026)
+
+This section supersedes the held policy questions for rules (b)–(d), matching and materials authority above, using the dispatcher ruling and Ben's 17 October answers. It does not claim whole-task acceptance.
+
+Migration 0193 adds seven immutable tenant-qualified tables. Runtime has no direct table privileges. Session-bound checked routines provide a supervisor-only paginated Possible extras lane, detail access for the three resolution roles, finance/owner materials imports, evaluation and exact-hash confirmation/dismissal. New work requires synthetic mode, current scoped authority, active contractor capability and a live job before receipt lookup; historical reads retain scoped access after capability loss. Unknown/foreign/out-of-scope jobs use the same authority refusal. No shadow workflow or external provider is involved.
+
+`materials-strict-excess.v1` sums unique positive issue facts with the same explicit SoR work identity and unit against summed quantities in the current immutable order revision. Unknown identities/units remain unevaluated. Returns/corrections are retained as unsupported facts and quarantine the comparison; contradictory same-source, same-time facts likewise quarantine it and prevent confirming an earlier affected prompt. Non-issue facts never subtract quantities or generate excess. No conversions or labour inference occur. Source replay retains the original result; changed source content conflicts.
+
+`visit-exact-factor.v1` compares each completed visit's server microseconds with quantity-scaled standards and a positive exact factor bound to an immutable client-contract settings row. Missing standards, factor or coverage are unevaluated; equality is silent. Settings are migration-owned synthetic configuration with no customer write endpoint. `closeout-job-wide.v1` surfaces a persisted yes only if no extra was ever logged for the job, irrespective of its later state. Visit completion invokes evaluation before the existing final audit append and is never treated as job completion.
+
+Matching has no fee or origin authority. Confirmation either points to one exact existing extra or creates one unpriced logged extra with capture note, scope identity and immutable surfaced origin. Materials confirmation binds the instructed-line excess; multiple possible lines require explicit `excessScopeItemId`. Visit/closeout confirmation requires an explicit `confirmedWorkIdentity` from the bound catalogue. Ambiguous candidate extras are refused. Dismissal requires a reason and remains immutable. The persisted office-origin trigger links matching surfaced/dismissed prompts without changing office origin/hash or fee eligibility. Existing ENT-5 pricing remains a separate command.
+
+### Remaining acceptance gaps
+
+- End check: missing authoritative enterprise agreement/version and contractor completion-event interfaces. The refusal-only invocation is not positive completion evidence; the owning completion command must remain active-owner-only.
+- Rule (a): the source reader uses stored original PNG bytes, verified hash/byte length/object version, and a bounded CRC-checked `tEXt` parser for the explicit `jobguard:completion-work` metadata key. Tags are validated against immutable recognition settings; no visual inference occurs. Tests create actual PNG originals through existing begin/finalize commands. The optional text-note path still requires a verified note object; existing image intake does not create note objects. No new note uploader is claimed.
+- PostgreSQL execution, independent RED verdicts and separate acceptance remain required. The pure held-out evaluation is synthetic supplied-fact evidence, not database provenance or production approval.
+
+Ambiguous exact existing-extra matches require `existingExtraId` on confirmation. It must select an already matching same-job extra; a missing, foreign or nonmatching choice refuses. Selection records coalescence only and never merges duplicate groups or changes origin.

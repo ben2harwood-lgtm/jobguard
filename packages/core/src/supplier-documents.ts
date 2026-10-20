@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
+export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice", "practice-credit-300", "practice-later-invoice-1440"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
   commandId: z.string().uuid().optional(),
@@ -10,7 +10,34 @@ export const supplierDocumentIntakeV1 = z.object({
   expectedRevision: z.number().int().nonnegative(),
   remoteUrl: z.never().optional(), attachmentPath: z.never().optional(), partial: z.literal(false).optional(),
 }).strict();
-export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:z.string().regex(/^\d+(?:\.\d+)?$/),rejected:z.string().regex(/^\d+(?:\.\d+)?$/),expectedRevision:z.number().int().nonnegative()}).strict();
+// PostgreSQL numeric(20,6): fourteen whole digits and six fractional digits.
+const RECEIPT_SCALE = 1_000_000n;
+const RECEIPT_MAX = 99_999_999_999_999_999_999n;
+const RECEIPT_DECIMAL = /^\d+(?:\.\d{1,6})?$/;
+function receiptMicrosUnchecked(value: string): bigint {
+  const [whole, fraction = ""] = value.split(".");
+  return BigInt(whole!) * RECEIPT_SCALE + BigInt(fraction.padEnd(6, "0"));
+}
+const receiptQuantityV1 = z.string().regex(RECEIPT_DECIMAL).refine(
+  value => !RECEIPT_DECIMAL.test(value) || receiptMicrosUnchecked(value) <= RECEIPT_MAX,
+  "Receipt quantity exceeds numeric(20,6)",
+);
+/** Exact millionths, preserving the receipt boundary's existing leading-zero support. */
+export function receiptQuantityMicros(value: string): bigint {
+  return receiptMicrosUnchecked(receiptQuantityV1.parse(value));
+}
+/** Decimal display/SQL formatting; no rounding and no binary-float intermediate. */
+export function formatReceiptQuantity(micros: bigint): string {
+  const magnitude = micros < 0n ? -micros : micros;
+  if (magnitude > RECEIPT_MAX) throw new RangeError("Receipt quantity exceeds numeric(20,6)");
+  const fraction = (magnitude % RECEIPT_SCALE).toString().padStart(6, "0").replace(/0+$/, "");
+  return `${micros < 0n ? "-" : ""}${magnitude / RECEIPT_SCALE}${fraction ? `.${fraction}` : ""}`;
+}
+export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:receiptQuantityV1,rejected:receiptQuantityV1,expectedRevision:z.number().int().nonnegative()}).strict().refine(
+  input => !RECEIPT_DECIMAL.test(input.accepted) || !RECEIPT_DECIMAL.test(input.rejected)
+    || receiptMicrosUnchecked(input.accepted) + receiptMicrosUnchecked(input.rejected) <= RECEIPT_MAX,
+  { message: "Delivered quantity exceeds numeric(20,6)", path: ["rejected"] },
+);
 export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 
 export const supplierFixtures = {
@@ -25,4 +52,6 @@ export const supplierFixtures = {
   "unreadable": {type:"invoice",number:null,media:"image/png",bytes:"generated unreadable image fixture",pages:1,hold:"Document is unreadable"},
   "password-protected": {type:"invoice",number:null,media:"application/pdf",bytes:"%PDF synthetic encrypted",pages:1,hold:"Password-protected documents cannot be reviewed"},
   "multi-page-invoice": {type:"invoice",number:"INV-MB-002",media:"application/pdf",bytes:"%PDF synthetic pages one and two",pages:2},
+  "practice-credit-300": {type:"credit",number:"CR-PF1B-001",media:"text/plain",bytes:"FICTIONAL INTERIM SUPPLIER CREDIT CR-PF1B-001\nNET GBP 300.00",pages:1},
+  "practice-later-invoice-1440": {type:"invoice",number:"INV-PF1B-001",media:"text/plain",bytes:"FICTIONAL INTERIM LATER SUPPLIER INVOICE INV-PF1B-001\nAMOUNT TO PAY GBP 1440.00",pages:1},
 } as const;

@@ -1,3 +1,4 @@
+import { readJobSourceObservations } from "./job-source-observation-reader.js";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
@@ -66,6 +67,10 @@ export class ShadowObservationReader {
         if (!source) continue;
         observations.push(observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId, kind,
           evidence: { id: e.id, objectVersionId: e.object_version_id, sha256: e.sha256, serverReceivedAt: e.received }, ...source, facts:{...source.facts,scopeArea:"job"} }));
+      }
+      // SV-7A: exact synthetic originals, on the same runtime transaction. No shadow query or intake scheduling.
+      for (const source of await readJobSourceObservations(db,context.tenantId,jobId)) {
+        if (!observations.some(o => o.evidence.id === source.evidence.id && o.evidence.objectVersionId === source.evidence.objectVersionId)) observations.push(source);
       }
       // Scope area is not persisted in the merged source tables. The synthetic adapter uses the conservative job-wide area.
       const baseline = (await db.$client.query(`SELECT l.scope_item_id,l.scope_revision_id,l.description,

@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error, type RecoveryEligibilityViewV3 } from "@jobguard/core";
+import { evaluateRecoveryEligibilityV3, moneyFromBigInt, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error, type RecoveryEligibilityViewV3 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
+import { reviewPracticeSupplierCredit } from "./practice-supplier-credit-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 export type RecoveryEligibilityV3Review = Readonly<{id:string;revision:number;caseRevision:number;sourceEventId:string|null;result:RecoveryEligibilityViewV3}>;
 export async function readRecoveryEligibilityV3(db:TenantTransaction,tenantId:string,caseId:string):Promise<RecoveryEligibilityV3Review|null> {
@@ -15,6 +16,7 @@ export class RecoveryEligibilityV3Repository {
   if(this.environment!=="synthetic_demo")throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
   const parsed=recoveryEligibilityCommandV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
   const input={...parsed.data,commandId:parsed.data.commandId.toLowerCase(),caseId:parsed.data.caseId.toLowerCase()},job=jobId.toLowerCase();
+  if(input.fixture==="F14"||input.fixture==="F16-partial"||input.fixture==="F16-full")return reviewPracticeSupplierCredit(this.pool,context,job,input,sessionDigest);
   const payloadHash=hash({jobId:job,...input});
   return withTenant(this.pool,context,async db=>{
    await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
@@ -46,15 +48,53 @@ export class RecoveryEligibilityV3Repository {
    if(!event&&!["F15","F21","F22"].includes(input.fixture))throw new RecoveryEligibilityV3Error("ELIGIBILITY_SOURCE_REQUIRED");
    const before=event?.settled_before_opening===true;
    if(input.fixture==="F20"&&!before)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
-   const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
-    settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+   // Lock before deriving the fact, not only later in the INSERT trigger: a concurrent
+   // mark or payer correction must commit wholly before or after this snapshot.
+   let payer:{payer:"not_insurer"|"insurer_unmarked"|"insurer_customer_own";paying_party_binding_id:string|null;payer_mark_id:string|null}={payer:"not_insurer",paying_party_binding_id:null,payer_mark_id:null};
+   if(definition.category==="withheld_customer_payment"&&event){
+    // Earlier upgrade proofs execute this repository before atomic migration 0142.
+    // Its table is the schema boundary; once present, missing helpers must fail.
+    const payerSchema=(await db.$client.query<{installed:boolean}>("SELECT to_regclass('app.recovery_payment_payer_mark') IS NOT NULL installed")).rows[0]!;
+    if(payerSchema.installed){
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,`payer-mark:${event.id}`]);
+    await db.$client.query("SELECT app.lock_recovery_payer_job($1::uuid,$2::uuid,$3::uuid)",[context.tenantId,job,actor.membershipId]);
+    // One SQL decision uses the shared payer function, never the customer's type.
+    payer=(await db.$client.query<typeof payer>(`WITH payer AS (SELECT app.recovery_job_payer_type($1,$2) payer_type)
+     SELECT CASE WHEN payer_type IS DISTINCT FROM 'insurer' THEN 'not_insurer'
+      WHEN m.state='customer_own' THEN 'insurer_customer_own' ELSE 'insurer_unmarked' END payer,
+      CASE WHEN payer_type='insurer' THEN b.binding_id END paying_party_binding_id,
+      CASE WHEN payer_type='insurer' AND m.state='customer_own' THEN m.id END payer_mark_id
+     FROM payer LEFT JOIN app.job_party_current b ON b.tenant_id=$1 AND b.job_id=$2
+     LEFT JOIN LATERAL(SELECT id,state FROM app.recovery_payment_payer_mark
+      WHERE tenant_id=$1 AND job_id=$2 AND source_event_id=$3 ORDER BY revision DESC LIMIT 1) m ON true`,[context.tenantId,job,event.id])).rows[0]!;
+    }
+   }
+   let result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
+    payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+   // Principal settlement cannot prove the separate, outside-VAT interest receipt.
+   // Keep the existing whole-case exclusions; qualify F18's interest independently.
+   let interestSourceEventId:string|undefined;
+   if(input.fixture==="F18"&&result.qualifyingPrincipal.pence>0){
+    const interest=(await db.$client.query<{id:string;state:string;settled_before_opening:boolean;duplicate_held:boolean}>(`SELECT e.id,e.state,
+     (e.state='settled' AND e.created_at<=c.created_at) settled_before_opening,
+     EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
+      AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held
+     FROM app.practice_feed_event e JOIN app.recovery_case_current c ON c.tenant_id=e.tenant_id AND c.job_id=e.job_id AND c.id=$3
+     WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key='receipt-interest-120' AND e.identity='identified' AND e.event_kind IN('settled','pending')
+     ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,input.caseId])).rows[0];
+    interestSourceEventId=interest?.id;
+    const interestResult=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
+     payer:payer.payer,settlement:interest?.state==="settled"&&!interest.duplicate_held?"settled":"pending",paymentTiming:interest?.settled_before_opening?"before_opening":"after_opening",sourceRef:interest?.id??input.caseId});
+    const lines=result.lines.map(line=>line.kind==="statutory_interest"?interestResult.lines.find(component=>component.kind==="statutory_interest")!:line);
+    result=recoveryEligibilityViewV3.parse({...result,lines,qualifyingPrincipal:moneyFromBigInt(lines.reduce((sum,line)=>sum+BigInt(line.qualifyingPrincipal.pence),0n)),reason:lines.find(line=>line.reason!==null)?.reason??null});
+   }
    if(definition.lines[0]!.netPence>Number(c.claim_pence))throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
    const id=randomUUID(),revision=(latest?.revision??0)+1;
    const inserted=await db.$client.query<{result_hash:string}>(`INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash`,[id,context.tenantId,job,input.caseId,revision,c.revision,input.fixture,event?.id??null,actor.membershipId,input.commandId,payloadHash,JSON.stringify(result)]);
    for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),context.tenantId,job,input.caseId,id,line.kind,line.debtorType,line.netPence]);
    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:input.caseId,
-    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
+    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{}),...(interestSourceEventId?{interestSourceEventId}:{}),...(payer.paying_party_binding_id?{payingPartyBindingId:payer.paying_party_binding_id}:{}),...(payer.payer_mark_id?{payerMarkId:payer.payer_mark_id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
    return {id,revision,caseRevision:c.revision,sourceEventId:event?.id??null,result};
   }).catch((error: unknown) => {
    // Known database pre-commit guards use the same typed refusal contract as the service.

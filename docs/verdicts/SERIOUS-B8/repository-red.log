@@ -1,0 +1,59 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/dbsrc-08/packages/db
+
+ ❯ src/serious-b8.test.ts (2 tests | 2 failed) 6ms
+   × S24: session A's zero budget leaves session B's advisories visible 4ms
+   × S25: a revocation observed by the membership fence refuses before any command write 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/serious-b8.test.ts > S24: session A's zero budget leaves session B's advisories visible
+AssertionError: expected +0 to be 100 // Object.is equality
+
+- Expected
++ Received
+
+- 100
++ 0
+
+ ❯ src/serious-b8.test.ts:32:27
+     30|  await repo.setBudget(context,aj,{commandId:randomUUID(),advisoryBudge…
+     31|  const b=await repo.view(context,bj,member,"b".repeat(64));
+     32|  expect(b.advisoryBudget).toBe(100);expect(b.advisory).toHaveLength(1);
+       |                           ^
+     33|  expect((await repo.view(context,aj,member,"a".repeat(64))).advisory).…
+     34| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/serious-b8.test.ts > S25: a revocation observed by the membership fence refuses before any command write
+AssertionError: expected Error: UNAUTHORIZED_COMMAND_WRITE to match object { code: 'FORBIDDEN' }
+
+- Expected
++ Received
+
+- {
+-   "code": "FORBIDDEN",
++ Error {
++   "message": "UNAUTHORIZED_COMMAND_WRITE",
+  }
+
+ ❯ src/serious-b8.test.ts:48:4
+     46|  await expect(new PreventionCheckRepository(pool).command(context,memb…
+     47|   version:"prevention-command.v1",commandId:randomUUID(),action:"prope…
+     48|  })).rejects.toMatchObject({code:"FORBIDDEN"});
+       |    ^
+     49|  expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT"))).toBe…
+     50|  expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  14:21:30
+   Duration  517ms (transform 210ms, setup 0ms, import 442ms, tests 6ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/dbsrc-08/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/serious-b8.test.ts

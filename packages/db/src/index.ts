@@ -89,5 +89,36 @@ export * from "./contractor-practice-session-repository.js";
 export * from "./site-extra-repository.js";
 export * from "./scim-repository.js";
 export * from "./recovery-allocation-repository.js";
+export * from "./site-visit-repository.js";
+export * from "./recovery-payment-payer-repository.js";
+
+export * from "./commercial-integrity-application-repository.js";
+export * from "./job-work-state-repository.js";
+export * from "./job-work-state-sources.js";
+export * from "./extra-approval-repository.js";
+export * from "./extra-evidence-pack-sources.js";
+export * from "./extra-evidence-pack-repository.js";
+export * from "./extra-approval-chain-repository.js";
+export * from "./northside-demo.js";
+
+export * from "./job-source-repository.js";
+export * from "./job-source-observation-reader.js";
+export * from "./job-source-fixtures.js";
+export * from "./enterprise-dashboard-repository.js";
+export * from "./practice-worker-switch-repository.js";
+
+export * from "./meter-persistence.js";
+export * from "./meter-repository.js";
+export * from "./northside-settings.js";
+export * from "./northside-run.js";
+export * from "./subscription-repository.js";
+export * from "./subscription-meter-source.js";
+export * from "./platform-statement-repository.js";
+export * from "./subscription-simulated-payment-adapter.js";
+export * from "./subscription-executor.js";
+
+export * from "./enterprise-live-prompt-repository.js";
+
+export * from "./contractor-entitlement-authority-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
