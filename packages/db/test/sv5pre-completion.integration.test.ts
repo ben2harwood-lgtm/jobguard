@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant, publishFixtureCompletion } from "./sv5pre-fixtures.js";
+import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant, publishFixtureCompletion, LOCK_OWNER, LOCK_HASH } from "./sv5pre-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { FinalCheckCompletionRepository } from "../src/shadow-detection-repository.js";
 
@@ -32,6 +32,40 @@ describe("SV5PRE authoritative completion", () => {
   await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
   await repo.lock(a.context,a.input);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(1);
+ });
+ it("C204 rejected, quarantined and expired-unswept uploads are excluded and recorded; the check completes and the invoice issues; a live pending upload still blocks",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a),ids={rejected:randomUUID(),quarantined:randomUUID(),expired:randomUUID(),live:randomUUID()};
+  const upload=(id:string,state:string,expires:string,extra="")=>asFixtureTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state${extra?",rejection_code":""}) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',${expires},$6${extra?",'SYNTHETIC'":""})`,[a.tenantId,a.jobId,id,a.scopeItemId,`c204/${id}`,state]));
+  await upload(ids.rejected,"rejected","clock_timestamp()+interval '1 day'","x");
+  await upload(ids.quarantined,"quarantined","clock_timestamp()+interval '1 day'");
+  await upload(ids.expired,"pending","clock_timestamp()+interval '1 millisecond'");
+  await upload(ids.live,"pending","clock_timestamp()+interval '1 day'");
+  await new Promise(r=>setTimeout(r,50));
+  // Another pending upload that is still live blocks the lock; terminal and expired ones do not.
+  await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,ids.live]));
+  await repo.lock(a.context,a.input);
+  await publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
+  const manifest=(await f.admin.query("SELECT id,source_count FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
+  expect(manifest.source_count).toBe(4);
+  const rows=(await f.admin.query("SELECT upload_id,excluded_state,excluded_reason FROM app.final_check_manifest_source WHERE tenant_id=$1 AND manifest_id=$2 ORDER BY excluded_state,upload_id",[a.tenantId,manifest.id])).rows;
+  expect(rows.map(r=>r.excluded_state).sort()).toEqual(["expired","quarantined","quarantined","rejected"]);
+  expect(rows.find(r=>r.upload_id===ids.rejected)).toMatchObject({excluded_state:"rejected",excluded_reason:"SYNTHETIC"});
+  expect(rows.find(r=>r.upload_id===ids.expired)).toMatchObject({excluded_state:"expired",excluded_reason:"expired_unswept"});
+  const audit=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='final_check.sources_excluded'",[a.tenantId])).rows;
+  expect(audit).toHaveLength(1); expect(audit[0].payload.references.exclusions).toHaveLength(4);
+  const issued=await repo.issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:LOCK_HASH,invoiceKind:"final",recipient:"practice-customer@example.invalid",issuedOn:"2026-10-20"});
+  expect(issued.invoiceId).toBeTruthy();
+ });
+ it("C204 a lock timeout that no upload caused is FINAL_ACCOUNT_LOCK_BUSY, not an uploads-in-progress refusal",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a),holder=await f.admin.connect();
+  try {
+   await holder.query("BEGIN");
+   await holder.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+   await holder.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR SHARE",[a.tenantId,a.jobId]);
+   await expect(new FinalAccountLockRepository(f.runtime,300).lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_LOCK_BUSY"});
+  } finally { await holder.query("ROLLBACK"); holder.release(); }
+  await repo.lock(a.context,a.input);
  });
  it("PRE-Q5-01 a completed string without a run is refused", async () => {
   const a=await locked(); await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');

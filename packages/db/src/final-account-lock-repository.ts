@@ -18,12 +18,13 @@ const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisi
  expectedSourceHash: z.string().regex(/^[a-f0-9]{64}$/u), invoiceKind: z.enum(["final", "supplementary"]),
  recipient: z.string().email().regex(/@example\.invalid$/u), issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 }).strict();
-const knownCodes = new Set<string>(["FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
-function typed(error: unknown): never {
+const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
+function typed(error: unknown, uploadInFlight = true): never {
  const e = error as { message?: string; detail?: string };
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
  // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.
- if ((error as { code?: string }).code === "55P03") throw new FinalAccountLockError("FINAL_ACCOUNT_UPLOADS_IN_PROGRESS");
+ // C204: only an evidence upload in flight is reported as such; any other holder of the job lock is a plain busy refusal.
+ if ((error as { code?: string }).code === "55P03") throw new FinalAccountLockError(uploadInFlight ? "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" : "FINAL_ACCOUNT_LOCK_BUSY");
  if (e.message === "STALE_OR_BLOCKED_FINAL_ACCOUNT") throw new FinalAccountLockError("STALE_REVISION");
  if (e.message && knownCodes.has(e.message)) throw new FinalAccountLockError(e.message as FinalAccountLockErrorCode, e.detail && uuid.safeParse(e.detail).success ? e.detail : undefined);
  throw error;
@@ -74,7 +75,14 @@ export class FinalAccountLockRepository {
    const snapshot = createFinalAccountLockSnapshot(row.snapshot);
    if (snapshot.digest !== row.snapshot_digest.trim() || snapshot.captureRegisterHash !== row.capture_register_hash.trim() || snapshot.lineSetHash !== row.line_set_hash.trim() || snapshot.scopeDispositionHash !== row.scope_disposition_hash.trim()) throw new FinalAccountLockError("FINAL_ACCOUNT_SOURCE_CHANGED");
    return lockProjection(row);
-  }); } catch (error) { return typed(error); }
+  }); } catch (error) {
+   if ((error as { code?: string }).code === "55P03") {
+    // Look from a fresh statement (the failed transaction is gone): is any evidence upload write in flight?
+    const inFlight = await this.pool.query<{ held: boolean }>("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='relation' AND relation='app.evidence_upload'::regclass AND mode='RowExclusiveLock' AND granted AND pid<>pg_backend_pid()) held").then(r => r.rows[0]?.held === true, () => true);
+    return typed(error, inFlight);
+   }
+   return typed(error);
+  }
  }
  async disposition(context: VerifiedTenantContext, raw: z.infer<typeof dispositionInput>) {
   const c = parse(dispositionInput, raw);

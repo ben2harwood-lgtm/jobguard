@@ -56,7 +56,7 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  return { rows, routines, relations, policies };
 }
-// Per C135 (SV5PRE): additive allowance for exactly the objects created by the final-check prerequisites migration (0198).
+// Per C135 (SV5PRE): additive allowance for exactly the objects created by the final-check prerequisites migration (0199).
 // Its two invoice routines and lock_final_account are restated, not added: their existing catalogue rows still compare in full.
 async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["final_check_manifest", "final_check_manifest_source", "shadow_final_check_completion", "shadow_final_check_reveal_proof", "shadow_final_check_run_binding", "shadow_final_check_source_attempt"];

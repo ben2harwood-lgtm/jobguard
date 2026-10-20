@@ -12,6 +12,9 @@ CREATE TABLE app.final_check_manifest_source (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,manifest_id uuid NOT NULL,id uuid NOT NULL,upload_id uuid NOT NULL,
  source_kind text NOT NULL CHECK(source_kind='evidence_upload'),evidence_id uuid,object_version_id text,sha256 char(64),source_received_at timestamptz NOT NULL,evidence_received_at timestamptz,
  frozen_input_hash text NOT NULL CHECK(frozen_input_hash ~ '^[a-f0-9]{64}$'),adapter_version text NOT NULL,
+ -- C204: a terminal non-verified upload (rejected, quarantined, or expired and unswept) is listed but excluded; only verified uploads are evidence.
+ excluded_state text CHECK(excluded_state IN('rejected','quarantined','expired')),excluded_reason text CHECK(length(excluded_reason) BETWEEN 1 AND 200),
+ CHECK((excluded_state IS NULL)=(excluded_reason IS NULL)),
  PRIMARY KEY(tenant_id,job_id,manifest_id,id),UNIQUE(tenant_id,job_id,manifest_id,upload_id),
  FOREIGN KEY(tenant_id,job_id,manifest_id) REFERENCES app.final_check_manifest(tenant_id,job_id,id) DEFERRABLE INITIALLY DEFERRED,
  FOREIGN KEY(tenant_id,upload_id) REFERENCES app.evidence_upload(tenant_id,id),
@@ -121,17 +124,28 @@ BEGIN
 END $$;
 CREATE TRIGGER a_final_check_invalidation BEFORE INSERT ON app.evidence_invalidation FOR EACH ROW EXECUTE FUNCTION app.serialize_final_check_invalidation();
 CREATE FUNCTION app.guard_final_check_manifest() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE inventory jsonb;l app.final_account_lock;
+DECLARE inventory jsonb;l app.final_account_lock;excluded jsonb;seq bigint;prev text;ts timestamptz;payload jsonb;ph text;eh text;
 BEGIN
  PERFORM app.final_check_require_worker(NEW.tenant_id,NEW.job_id);
  IF NEW.lock_id IS NULL AND NEW.evidence_cutoff_at IS NULL THEN SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id; NEW.lock_id:=l.id;NEW.evidence_cutoff_at:=l.locked_at; END IF;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE (tenant_id,job_id,id,locked_at)=(NEW.tenant_id,NEW.job_id,NEW.lock_id,NEW.evidence_cutoff_at)) THEN RAISE EXCEPTION 'FINAL_CHECK_LOCK_BINDING_INVALID' USING ERRCODE='23503'; END IF;
- INSERT INTO app.final_check_manifest_source(tenant_id,job_id,manifest_id,id,upload_id,source_kind,evidence_id,object_version_id,sha256,source_received_at,evidence_received_at,frozen_input_hash,adapter_version)
+ INSERT INTO app.final_check_manifest_source(tenant_id,job_id,manifest_id,id,upload_id,source_kind,evidence_id,object_version_id,sha256,source_received_at,evidence_received_at,frozen_input_hash,adapter_version,excluded_state,excluded_reason)
  SELECT u.tenant_id,u.job_id,NEW.id,u.id,u.id,'evidence_upload',e.id,e.object_version_id,e.sha256,u.server_received_at,e.server_received_at,
- app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type)),NEW.detector_version
+ app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type)),NEW.detector_version,
+ CASE WHEN u.state IN('rejected','quarantined') THEN u.state WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired' END,
+ CASE WHEN u.state='rejected' THEN coalesce(u.rejection_code,'rejected') WHEN u.state='quarantined' THEN 'quarantined' WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired_unswept' END
  FROM app.evidence_upload u LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id,e.kind)=(u.tenant_id,u.job_id,u.id,'original')
  WHERE u.tenant_id=NEW.tenant_id AND u.job_id=NEW.job_id AND u.server_received_at<=NEW.evidence_cutoff_at;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'inputHash',frozen_input_hash) ORDER BY id),'[]'),count(*) INTO inventory,NEW.source_count FROM app.final_check_manifest_source WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND manifest_id=NEW.id;
+ SELECT coalesce(jsonb_agg(jsonb_build_object('uploadId',upload_id,'state',excluded_state,'reason',excluded_reason) ORDER BY upload_id),'[]') INTO excluded FROM app.final_check_manifest_source WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND manifest_id=NEW.id AND excluded_state IS NOT NULL;
+ IF jsonb_array_length(excluded)>0 THEN
+  -- Audited once per manifest, with the exact exclusions; the audit head is allocated last, after every business lock above.
+  SELECT sequence,event_hash INTO seq,prev FROM app.lock_audit_head();seq:=seq+1;ts:=date_trunc('milliseconds',clock_timestamp());
+  payload:=jsonb_build_object('references',jsonb_build_object('manifestId',NEW.id,'lockId',NEW.lock_id,'exclusions',excluded));ph:=app.final_lock_hash(payload);
+  eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',NEW.tenant_id::text,seq::text,'system:final_check','final_check.sources_excluded','job',NEW.job_id::text,to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(prev,'')),'UTF8')),'hex');
+  INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash) VALUES(gen_random_uuid(),NEW.tenant_id,seq,'audit.v1','system:final_check','final_check.sources_excluded','job',NEW.job_id::text,ts,payload,ph,prev,eh);
+  PERFORM app.advance_audit_head(seq,eh);
+ END IF;
  NEW.inventory_hash:=app.final_lock_hash(inventory);NEW.created_at:=clock_timestamp();RETURN NEW;
 END $$;
 CREATE TRIGGER final_check_manifest_insert BEFORE INSERT ON app.final_check_manifest FOR EACH ROW EXECUTE FUNCTION app.guard_final_check_manifest();
@@ -201,6 +215,7 @@ BEGIN
  -- A supplied original-object receipt cannot introduce an unprocessed pre-cutoff source outside the frozen inventory.
  OR EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=p_tenant AND e.job_id=p_job AND e.kind='original' AND e.server_received_at<=p_cutoff AND NOT EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE (ms.tenant_id,ms.job_id,ms.manifest_id,ms.upload_id)=(p_tenant,p_job,m.id,e.upload_id))) THEN RAISE EXCEPTION 'FINAL_CHECK_INVENTORY_INCOMPLETE'; END IF;
  FOR s IN SELECT * FROM app.final_check_manifest_source WHERE (tenant_id,job_id,manifest_id)=(p_tenant,p_job,m.id) LOOP
+  IF s.excluded_state IS NOT NULL THEN CONTINUE; END IF; -- C204: excluded uploads are recorded, never evidence
   IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u WHERE (u.tenant_id,u.job_id,u.id,u.server_received_at)=(p_tenant,p_job,s.upload_id,s.source_received_at)
    AND s.frozen_input_hash=app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type))) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_MISMATCH'; END IF;
   SELECT * INTO d FROM app.shadow_final_check_source_attempt WHERE (tenant_id,job_id,manifest_id,source_id,execution_id,stage)=(p_tenant,p_job,m.id,s.id,b.execution_id,'detection') ORDER BY created_at DESC,id DESC LIMIT 1;

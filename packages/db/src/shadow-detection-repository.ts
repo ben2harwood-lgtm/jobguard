@@ -116,7 +116,9 @@ export class FinalCheckCompletionRepository {
   const c=parse(emptyInput,raw);
   try{await withTenant(this.pool,context,async db=>{
    const m=(await db.$client.query("SELECT * FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId])).rows[0];
-   if(!m||m.source_count!==0)throw new FinalCheckPersistenceError("FINAL_CHECK_NOT_COMPLETE");
+   // C204: uploads excluded as rejected, quarantined or expired are recorded in the manifest but are not evidence; only the rest must be empty.
+   const evidenceSources=m?Number((await db.$client.query("SELECT count(*)::int n FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2 AND manifest_id=$3 AND excluded_state IS NULL",[context.tenantId,c.jobId,c.manifestId])).rows[0].n):-1;
+   if(!m||evidenceSources!==0)throw new FinalCheckPersistenceError("FINAL_CHECK_NOT_COMPLETE");
    const prior=(await db.$client.query("SELECT execution_id,manifest_id FROM app.shadow_final_check_run_binding WHERE tenant_id=$1 AND job_id=$2 AND run_id=$3",[context.tenantId,c.jobId,c.runId])).rows[0];
    if(prior){if(prior.execution_id!==c.executionId||prior.manifest_id!==c.manifestId)throw new FinalCheckPersistenceError("IDEMPOTENCY_PAYLOAD_CONFLICT");return;}
    await db.$client.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at,status) SELECT tenant_id,job_id,$4,reconciliation_version,evidence_cutoff_at,'completed' FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId,c.runId]);

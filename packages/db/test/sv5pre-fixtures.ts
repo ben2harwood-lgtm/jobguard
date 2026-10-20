@@ -79,7 +79,7 @@ export async function publishFixtureCompletion(shadow: Pool, admin: Pool, tenant
  });
  // The committed frozen inventory is now visible to the independent fixture reader.
  return asFixtureTenant(shadow,tenantId,async db=>{
-  const sources=(await admin.query("SELECT s.*,e.id finalized_id,e.object_version_id finalized_version,e.sha256 finalized_hash,e.server_received_at::text finalized_received FROM app.final_check_manifest_source s LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(s.tenant_id,s.job_id,s.upload_id) AND e.kind='original' WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.manifest_id=$3 ORDER BY s.id",[tenantId,jobId,manifestId])).rows;
+  const sources=(await admin.query("SELECT s.*,e.id finalized_id,e.object_version_id finalized_version,e.sha256 finalized_hash,e.server_received_at::text finalized_received FROM app.final_check_manifest_source s LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(s.tenant_id,s.job_id,s.upload_id) AND e.kind='original' WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.manifest_id=$3 AND s.excluded_state IS NULL ORDER BY s.id",[tenantId,jobId,manifestId])).rows;
   await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at,status) VALUES($1,$2,$3,'synthetic-fixture.v1',$4,'completed')",[tenantId,jobId,runId,lock.cutoff]);
   const signals=(await db.query("SELECT DISTINCT s.id FROM app.shadow_commercial_signal s JOIN app.shadow_signal_evidence e ON(e.tenant_id,e.job_id,e.signal_id)=(s.tenant_id,s.job_id,s.id) WHERE s.tenant_id=$1 AND s.job_id=$2 AND e.source_received_at<=$3::timestamptz ORDER BY s.id",[tenantId,jobId,lock.cutoff])).rows;
   for(const source of sources) {
@@ -150,4 +150,21 @@ export async function prepareBaselineInvoice(admin: Pool, runtime: Pool, tenantI
  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenantId,jobId]);
  await admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)",[randomUUID(),tenantId,jobId,revisionId,quoteId,scopeItemId,net]);
  await prepareInvoicePrerequisites(admin,runtime,tenantId,jobId,actorMembershipId,revisionId);
+}
+
+/** Per C204: a genuinely historical, unlocked invoice. The pre-guard routine from migration 0187 is installed unchanged under another name and
+ * called as admin, so the job is invoiced without any lock, track or completion, exactly as invoices issued before the lock existed. */
+export async function issueHistoricalInvoice(admin: Pool, tenantId: string, input: { jobId: string; finalAccountRevisionId: string; actorMembershipId: string; commandId?: string; recipient?: string; issuedOn?: string }) {
+ const { readFile } = await import('node:fs/promises');
+ const text = await readFile(new URL('../migrations/0187_final_account_sources_and_pdf.sql', import.meta.url), 'utf8');
+ const start = text.indexOf('CREATE OR REPLACE FUNCTION app.issue_practice_customer_invoice(');
+ const end = text.indexOf('END $$;', start) + 'END $$;'.length;
+ if (start < 0 || end <= start) throw new Error('historical issuer source not found');
+ await admin.query(text.slice(start, end).replace('app.issue_practice_customer_invoice(', 'app.historical_issue_practice_customer_invoice('));
+ const db = await admin.connect();
+ try {
+  await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  await db.query('SELECT * FROM app.historical_issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)', [tenantId, input.jobId, input.finalAccountRevisionId, input.actorMembershipId, input.commandId ?? randomUUID(), input.recipient ?? 'allocation@example.invalid', input.issuedOn ?? '2026-10-12']);
+  await db.query('COMMIT');
+ } catch (error) { await db.query('ROLLBACK'); throw error; } finally { db.release(); }
 }

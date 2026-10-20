@@ -1,4 +1,4 @@
-import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
+import { issueHistoricalInvoice, prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written before persistence; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -68,7 +68,7 @@ afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean } = {}) {
+async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false, historical = false }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean; historical?: boolean } = {}) {
   const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session), digest = auth.digest;
   const jobId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID();
   const draftId = randomUUID(), revisionId = randomUUID(), scopeId = randomUUID(), lineId = randomUUID(), catchLineId = randomUUID();
@@ -121,8 +121,10 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
-  await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
-  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
+  // Per C204: `historical` is an invoice issued before any lock existed (never locked, no track), so evidence can still be added afterwards.
+  if (!historical) await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
+  if (historical) await issueHistoricalInvoice(admin, DEMO_TENANT_ID, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId });
+  const invoice = historical ? (await invoices.list(context, jobId)).at(-1)! : await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const cases = new RecoveryCaseRepository(scoped), packs = new EvidencePackRepository(scoped), views = [];
   for (const claim of [claim1, claim2]) {
@@ -263,6 +265,28 @@ async function expectRemittanceRefused(f: Fixture, paymentId: string, lineId: st
   expect((await admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2 AND object_key LIKE 'allocation-remittance/%'", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
 }
 
+it("DW2/DW6 (historical, unlocked): saved F6 uses explicit verified source even when pro-rata would give the catches value", async () => {
+  const f = await fixture({ historical: true }), source = await remittance(f, f.payment1, f.lineId, 2400000);
+  const view = await allocate(f, f.payment1, 2400000, source);
+  const rows = view.lines.filter(line => line.paymentId === f.payment1);
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every(row => row.rule === "explicit")).toBe(true);
+  expect(total(rows.filter(row => row.lineId === f.catchLineId))).toEqual({ numerator: "0", denominator: "1" });
+  feeCheck(total(rows.filter(row => row.lineId === f.catchLineId)), 0);
+  for (const row of rows) {
+    expect(row.sourceRef).toContain(source);
+    const stored = (await admin.query("SELECT l.rule,l.net_numerator,l.net_denominator,s.evidence_id FROM app.receipt_line_allocation l JOIN app.recovery_allocation_line_source s ON(s.tenant_id,s.id)=(l.tenant_id,l.source_id) WHERE l.tenant_id=$1 AND l.id=$2", [DEMO_TENANT_ID, row.id])).rows[0]!;
+    expect(stored).toMatchObject({ rule: "explicit", evidence_id: source });
+    expect(stored.net_numerator).toBe(row.net.numerator); expect(stored.net_denominator).toBe(row.net.denominator);
+  }
+});
+
+it("DW7 (historical, unlocked): reliable explicit remittance naming a later line is refused before any saved allocation", async () => {
+  const f = await fixture({ lateCatch: true, historical: true }), source = await remittance(f, f.payment1, f.catchLineId, 38400);
+  await expect(allocate(f, f.payment1, 38400, source)).rejects.toMatchObject({ code: "INVALID_ALLOCATION_FACTS" });
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
+});
+
 it("DW2/DW6: post-lock remittance for an explicit verified source is refused (per C135)", async () => {
   const f = await fixture();
   await expectRemittanceRefused(f, f.payment1, f.lineId, 2400000);
@@ -297,6 +321,26 @@ it("DW8: an unallocated partial refund reverses exact pro-rata amounts across th
 
 it.each(["refund", "credit"] as const)("DW8: an item-specific %s with a post-lock remittance source is refused at upload (per C135)", async kind => {
   const f = await fixture(), view = await allocate(f, f.payment1, 2400000);
-  expect(view.allocations[0]).toBeDefined(); expect(kind).toBeTruthy();
+  expect(view.allocations[0]).toBeDefined();
+  // The refusal is the same for a refund and for a credit: neither can attach a post-lock remittance, and nothing reverses.
+  expect(kind === "refund" || kind === "credit").toBe(true);
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, view.allocations[0]!.id])).rows).toEqual([{ n: 0 }]);
   await expectRemittanceRefused(f, f.payment1, f.catchLineId, 51600);
+});
+it.each(["refund", "credit"] as const)("DW8 (historical, unlocked): an item-specific %s reverses the named catch first with selected explicit source identity", async kind => {
+  const f = await fixture({ historical: true }), view = await allocate(f, f.payment1, 2400000);
+  const original = view.allocations[0]!, source = await remittance(f, f.payment1, f.catchLineId, 51600);
+  let creditNoteId: string | undefined;
+  if (kind === "refund") {
+    await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic item-specific refund" });
+  } else {
+    const credit = await f.invoices.previewCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 43000, reason: "Synthetic named-line credit" });
+    creditNoteId = (await f.invoices.issueCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId, commandId: randomUUID(), netPence: 43000, reason: "Synthetic named-line credit", previewHash: credit.previewHash })).creditNoteId;
+  }
+  const reversed = await reverse(f, original.id, 51600, creditNoteId, source), rows = reversed.lines.filter(row => row.reversesId !== null);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ lineId: f.catchLineId, rule: "explicit", sourceRef: source, net: { numerator: "-43000", denominator: "1" } });
+  expect(total(rows.filter(row => row.lineId === f.lineId))).toEqual({ numerator: "0", denominator: "1" });
+  const stored = (await admin.query("SELECT source_kind,credit_note_id,gross_pence,eligible_net_pence FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, original.id])).rows;
+  expect(stored).toEqual([{ source_kind: kind === "credit" ? "credit_note" : "payment_reversal", credit_note_id: creditNoteId ?? null, gross_pence: "51600", eligible_net_pence: "43000" }]);
 });
