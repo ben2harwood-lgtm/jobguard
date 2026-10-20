@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { claimCommandIdentity,withTenant } from "../src/index.js";
 import { Pool } from "pg";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { closeWorkFixture,createWorkFixture,seedWorkJob,workTenant,boundaryLock,type WorkFixture } from "./job-work-state-fixtures.js";
-import { seedWorkPractice,commandCounts,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
+import { seedWorkPractice,commandCounts,runWorkCommand,workCommand,practiceWorkJob,linkPair,runLink } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("active-owner success; same-ID replay; fresh connection persistence; no money/outbox effects",async()=>{
@@ -27,6 +28,47 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
   const closed=await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional customer cancelled before site work"}),job);
   expect(closed.events.at(-1)?.kind).toBe("closed");expect((await f.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,job])).rows[0].status).toBe("quoting");
+ });
+ it("pre-live locked reopen and link use real checked owner commands without changing jobs",async()=>{
+  const p=await seedWorkPractice(f),jobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' LIMIT 1",[p.auth.context.tenantId,p.auth.digest])).rows[0].id as string;
+  const preLive={...p,jobId};await boundaryLock(f,await practiceWorkJob(f,preLive));
+  const before=(await f.admin.query("SELECT row_to_json(j)::text row FROM app.job j WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,jobId])).rows;
+  const closed=await runWorkCommand(f.runtime,preLive,workCommand("close",{reason:"other",note:"Fictional pre-live administration"}));
+  const input=workCommand("reopen",{expectedRevision:closed.events.length,closeEventId:closed.events.at(-1)!.id});
+  const reopened=await runWorkCommand(f.runtime,preLive,input);expect(reopened.events.at(-1)?.kind).toBe("reopened");expect(reopened.lock).toEqual(closed.lock);
+  expect(await runWorkCommand(f.runtime,preLive,input)).toEqual(reopened);
+  await expect(runWorkCommand(f.runtime,preLive,workCommand("cancel_finish",{expectedRevision:reopened.events.length,markerId:randomUUID()}))).rejects.toThrow("JOB_NOT_LIVE");
+  expect((await f.admin.query("SELECT row_to_json(j)::text row FROM app.job j WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,jobId])).rows).toEqual(before);
+  const pair=await linkPair(f,true),jobs=(await f.admin.query("SELECT row_to_json(j)::text row FROM app.job j WHERE tenant_id=$1 ORDER BY id",[pair.p.auth.context.tenantId])).rows;
+  expect((await f.admin.query("SELECT status FROM app.job WHERE id=$1",[pair.p.jobId])).rows[0].status).toBe("quoting");
+  const linked=await runLink(f.runtime,pair.p,pair.input);expect(linked.links).toHaveLength(1);expect(await runLink(f.runtime,pair.p,pair.input)).toEqual(linked);
+  expect((await f.admin.query("SELECT row_to_json(j)::text row FROM app.job j WHERE tenant_id=$1 ORDER BY id",[pair.p.auth.context.tenantId])).rows).toEqual(jobs);
+ });
+ it("pre-live administration rejects foreign owner, invalid session, unknown job and revoked owner without writes",async()=>{
+  const p=await seedWorkPractice(f),other=await seedWorkJob(f),job=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' LIMIT 1",[p.auth.context.tenantId,p.auth.digest])).rows[0].id as string;
+  const input=workCommand("close",{reason:"other",note:"Fictional close"}),before=await commandCounts(f,p);
+  for(const digest of [other.actorId,"0".repeat(64)])await expect(runWorkCommand(f.runtime,p,input,job,digest)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  await expect(runWorkCommand(f.runtime,p,input,randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,p.auth.membershipId]);
+  try{await expect(runWorkCommand(f.runtime,p,input,job)).rejects.toThrow("WORK_STATE_FORBIDDEN");}
+  finally{await f.admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,p.auth.membershipId]);}
+  expect(await commandCounts(f,p)).toEqual(before);
+ });
+ it.each(["close","reopen","link"] as const)("immutable %s identities remain reserved without modern bookkeeping and are tenant-scoped",async action=>{
+  let p=await seedWorkPractice(f),input=workCommand("close",{reason:"other",note:"Fictional closure"});
+  if(action==="link"){
+   const pair=await linkPair(f);p=pair.p;input=pair.input;await runLink(f.runtime,p,input);
+  }else{
+   const closed=await runWorkCommand(f.runtime,p,input);
+   if(action==="reopen"){
+    await boundaryLock(f,await practiceWorkJob(f,p));input=workCommand("reopen",{expectedRevision:closed.events.length,closeEventId:closed.events.at(-1)!.id});await runWorkCommand(f.runtime,p,input);
+   }
+  }
+  await f.admin.query("DELETE FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2",[p.auth.context.tenantId,input.commandId]);
+  const claim=(context:typeof p.auth.context,jobId:string)=>withTenant(f.runtime,context,db=>claimCommandIdentity(db,{tenantId:context.tenantId,jobId,commandId:input.commandId,kind:"readiness.record",requestHash:"a".repeat(64)}));
+  await expect(claim(p.auth.context,p.jobId)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  const foreign=await seedWorkJob(f);await expect(claim(foreign.context,foreign.jobId)).resolves.toBe("new");
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2",[p.auth.context.tenantId,input.commandId])).rows[0].n).toBe(0);
  });
  it("stale revision and same-ID conflicts across command kinds leave no successful effects",async()=>{
   const p=await seedWorkPractice(f),input=workCommand();await runWorkCommand(f.runtime,p,input);const before=await commandCounts(f,p);

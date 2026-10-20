@@ -10,6 +10,36 @@ ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identi
 -- Lock order: finish/cancel job SHARE, other jobs UPDATE sorted UUID;
 -- command identity; graph/event serializers;
 -- receipt and facts; deferred audit last; authority recheck uses plain reads.
+CREATE OR REPLACE FUNCTION app.guard_watchdog_input() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, app AS $$
+BEGIN
+  IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+  THEN RAISE EXCEPTION 'JOB_NOT_FOUND' USING ERRCODE='42501'; END IF;
+  -- These tables also hold non-watchdog bank evidence from the already
+  -- controlled synthetic recovery routine. Only its migration-role execution
+  -- may write its exact generated PDF class after live. Runtime cannot assume
+  -- this role or gain the exception by forging a content type/key/mode.
+  IF current_user='jobguard_migration' AND (to_jsonb(NEW)->>'scope_item_id') IS NULL
+    AND (to_jsonb(NEW)->>'object_key') LIKE 'synthetic/recovery/%'
+    AND ((TG_TABLE_NAME='evidence_upload' AND to_jsonb(NEW)->>'expected_content_type'='application/pdf' AND to_jsonb(NEW)->>'state'='verified')
+      OR (TG_TABLE_NAME='evidence_object' AND to_jsonb(NEW)->>'evidence_type'='synthetic_bank_receipt' AND to_jsonb(NEW)->>'content_type'='application/pdf'))
+  THEN RETURN NEW; END IF;
+  -- Only migration-owned checked CH-4 administration can claim a pre-live ID.
+  -- No GUC, caller-supplied mode or direct runtime write grants this exception.
+  IF current_user='jobguard_migration' AND TG_TABLE_SCHEMA='app' AND TG_TABLE_NAME='watchdog_command_identity' THEN
+    IF NEW.command_type IN('WorkState.close','WorkState.reopen','WorkState.link') AND EXISTS(
+      SELECT 1 FROM app.command_receipt r JOIN app.job_commercial_track c ON c.tenant_id=r.tenant_id AND c.job_id=NEW.job_id
+      WHERE r.tenant_id=NEW.tenant_id AND r.command_id=NEW.command_id AND r.command_type=NEW.command_type
+        AND r.semantic_key=NEW.command_id::text AND r.request_hash=NEW.request_hash AND r.status='processing'
+        AND c.job_track='small_builder' AND c.environment='synthetic_demo'
+        AND EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=r.tenant_id AND m.id=r.actor_membership_id
+          AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
+    ) THEN RETURN NEW; END IF;
+  END IF;
+  PERFORM app.require_watchdog_live(NEW.job_id);
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION app.ch4_require_command_owner(t uuid,j uuid,digest text) RETURNS uuid
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE actor uuid;
@@ -106,6 +136,27 @@ CREATE FUNCTION app.ch4_admit_place(t uuid,j uuid,action text) RETURNS void
 BEGIN
  RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE';
 END $$;
+-- Plain immutable ownership reads are isolated from the command's job locks.
+-- Private, read-only and invoked at the same point under the same identity lock.
+CREATE FUNCTION app.ch4_legacy_command_owned(t uuid,cid uuid) RETURNS boolean
+ LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+ SELECT EXISTS(
+  SELECT 1 FROM app.planned_work_revision WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.readiness_decision WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.discrepancy_finding_revision WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.discrepancy_review_outcome WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.supplier_bill_supersession WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.supplier_match_revision WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.supplier_fact_revision WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.inbox_outcome_event e WHERE e.tenant_id=t AND e.command_id=cid AND e.event_kind='dismissed'
+  UNION ALL SELECT 1 FROM app.purchase_order_placement WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.stage_completion WHERE tenant_id=t AND command_id=cid
+  UNION ALL SELECT 1 FROM app.evidence_upload WHERE tenant_id=t AND id=cid
+
+  UNION ALL SELECT 1 FROM app.job_work_state_event WHERE tenant_id=t AND command_id=cid AND source_receipt_id IS NULL
+  UNION ALL SELECT 1 FROM app.job_link WHERE tenant_id=t AND command_id=cid
+ );
+$$;
 CREATE FUNCTION app.ch4_work_state_command(t uuid,j uuid,digest text,input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; action text; cid uuid; successor uuid; expected bigint; seq bigint; revision bigint;
@@ -214,24 +265,14 @@ BEGIN
  END IF;
  -- Legacy watchdog stores share the same identity lock; reserve their IDs even
  -- when no modern watchdog identity row has been written yet.
- IF EXISTS(
-  SELECT 1 FROM app.planned_work_revision WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.readiness_decision WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.discrepancy_finding_revision WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.discrepancy_review_outcome WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.supplier_bill_supersession WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.supplier_match_revision WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.supplier_fact_revision WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.inbox_outcome_event e WHERE e.tenant_id=t AND e.command_id=cid AND e.event_kind='dismissed'
-  UNION ALL SELECT 1 FROM app.purchase_order_placement WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.stage_completion WHERE tenant_id=t AND command_id=cid
-  UNION ALL SELECT 1 FROM app.evidence_upload WHERE tenant_id=t AND id=cid
- ) THEN RAISE EXCEPTION 'WORK_STATE_CONFLICT' USING ERRCODE='23505'; END IF;
+ IF app.ch4_legacy_command_owned(t,cid) THEN RAISE EXCEPTION 'WORK_STATE_CONFLICT' USING ERRCODE='23505'; END IF;
+ -- The checked receipt binds the narrow administrative identity exception.
+ -- The per-id lock is already held; no commercial/network action occurs here.
+ INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+ VALUES(t,cid,'WorkState.'||action,cid::text,request_digest,'processing',actor);
  INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)
  VALUES(t,cid,j,'WorkState.'||action,request_digest);
  at_time:=clock_timestamp();
- INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
- VALUES(t,cid,'WorkState.'||action,cid::text,request_digest,'processing',actor);
  IF action='link' THEN
   INSERT INTO app.job_link(tenant_id,id,predecessor_job_id,successor_job_id,predecessor_binding_id,successor_binding_id,customer_id,site_id,paying_party_id,command_id,actor_membership_id,linked_at,request_hash,audit_event_id)
   VALUES(t,fact_id,j,successor,p.id,s.id,p.customer_id,p.site_id,p.paying_party_id,cid,actor,at_time,request_digest,audit_id);
@@ -478,7 +519,7 @@ END $$;
 
 DO $$ DECLARE fn regprocedure; BEGIN
  FOR fn IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname IN('ch4_command_work_facts','ch4_require_command_owner','ch4_require_open','ch4_admit_place','ch4_work_state_command','ch4_record_work_state','ch4_link_post_lock_job') LOOP
+ WHERE n.nspname='app' AND p.proname IN('ch4_legacy_command_owned','ch4_command_work_facts','ch4_require_command_owner','ch4_require_open','ch4_admit_place','ch4_work_state_command','ch4_record_work_state','ch4_link_post_lock_job') LOOP
   EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',fn);
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access',fn);
  END LOOP;

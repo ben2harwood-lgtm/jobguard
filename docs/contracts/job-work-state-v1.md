@@ -222,3 +222,21 @@ Repository plain reads verify authentication/owner membership before the live
 guard; SQL rechecks authority after waits. New live-only commands check live
 state before expected revision. SQL stored replay remains before lifecycle
 checks, with current authority rechecked.
+
+## v5-r2 administrative identity boundary
+
+Pre-live close/reopen/link use the existing checked owner command boundary.
+Only the migration-owned identity insertion for those exact actions may bypass
+the identity table's live guard, bound to the command's matching processing
+receipt, active tenant owner and synthetic small-builder binding. A runtime
+insert, forged receipt or caller-set flag cannot obtain that exception.
+All other guarded tables/actions, including finish/cancel, still require live.
+Locked reopen leaves status, baseline, lock and trial unchanged; unlocked reopen
+and resume remain capacity-gated. Both link endpoints retain owner, binding and
+cycle checks. No site work on non-live jobs is enabled.
+
+Immutable command events and links reserve their tenant-wide IDs even without
+modern watchdog bookkeeping. Other kinds/jobs conflict; ambiguous legacy owners
+still have no winner. Exact stored command replay retains its original result
+and current authority checks. Legacy reads are isolated in a private read-only
+helper without changing lock acquisition order or authorizing any new writes.

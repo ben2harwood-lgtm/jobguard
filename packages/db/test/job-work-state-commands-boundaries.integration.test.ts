@@ -11,6 +11,19 @@ describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
   const closed=await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional closure"}));
   await expect(runWorkCommand(f.runtime,p,workCommand("reopen",{expectedRevision:closed.events.length,closeEventId:closed.events.at(-1)!.id}))).rejects.toThrow("CAPACITY_ADMISSION_UNAVAILABLE");
  });
+ it("raw runtime identities cannot forge the pre-live administrative path, even with a matching receipt and settings",async()=>{
+  const p=await seedWorkPractice(f),t=p.auth.context.tenantId,job=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' LIMIT 1",[t,p.auth.digest])).rows[0].id as string;
+  const before=await commandCounts(f,p),identities=(await f.admin.query("SELECT count(*)::int n FROM app.watchdog_command_identity WHERE tenant_id=$1",[t])).rows;
+  for(const action of ["close","reopen","link","finish","cancel_finish"]){
+   await expect(workTenant(f.runtime,t,async db=>{
+    const cid=randomUUID(),kind=`WorkState.${action}`;
+    await db.query("SELECT set_config('app.ch4_action',$1,true),set_config('app.watchdog_claims',$2,true)",[action,`${cid},`]);
+    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$2::uuid::text,$4,'processing',$5)",[t,cid,kind,"a".repeat(64),p.auth.membershipId]);
+    await db.query("INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash) VALUES($1,$2,$3,$4,$5)",[t,cid,job,kind,"a".repeat(64)]);
+   })).rejects.toThrow("JOB_NOT_LIVE");
+  }
+  expect(await commandCounts(f,p)).toEqual(before);expect((await f.admin.query("SELECT count(*)::int n FROM app.watchdog_command_identity WHERE tenant_id=$1",[t])).rows).toEqual(identities);
+ });
  it("immutable successful replay survives lock; locked reopening does not unlock or alter commercial status",async()=>{
   const p=await seedWorkPractice(f),input=workCommand(),result=await runWorkCommand(f.runtime,p,input);await boundaryLock(f,await practiceWorkJob(f,p));
   expect(await runWorkCommand(f.runtime,p,input)).toEqual(result);

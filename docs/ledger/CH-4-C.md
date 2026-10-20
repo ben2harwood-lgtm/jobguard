@@ -69,3 +69,26 @@ browser evidence: NOT RUN; GitHub required checks remain outstanding. Normal
 session HTTP wiring and the historical DB timeout item remain PARK; this round's
 DB unit run passed without changing timeouts. Capacity/timing gates are unchanged.
 The speed-v5 dispatch ledger lives outside this worktree and was not edited.
+
+## CI ROUND v5-r2 — 20 October 2026
+
+Starting head `499a7140ffda7086e289f1b9ae3cb5d2c6ec555c`; frozen main
+`dc5721230fd8aedbf2d9d0457789074b66b48765`. Actual failing-first evidence:
+`/private/tmp/jg-ch4-ci-39465455025.log`, fourteen failures (5 files).
+These were not classified as pre-existing.
+
+| Defect group | Source repair | Regression (PostgreSQL CI only) |
+| --- | --- | --- |
+| Two pre-live close/link failures | Exact checked migration-owned close/reopen/link identity exception; original live/recovery/tenant guards preserved | Existing pre-live command and one-winner link-cycle race assertions unchanged; additive real pre-live locked reopen/link, raw forged identity/receipt, owner/session/job refusal cases |
+| Five supplier/discrepancy lock-observer failures | Complete legacy query moved to private read-only helper with predicates/order retained | Unchanged watchdog-lock-order suite; own helper owner/ACL/read-only catalogue and upgrade rows |
+| Six exhaustive non-live failures | Add actual finish/cancel attempts first in registry order, bind existing owner and explicit synthetic track | Unchanged exhaustive equality, exact JOB_NOT_LIVE and no-write checks, with work-event/link/result snapshots added |
+| Fifteen vs thirteen discovered IDs | Add immutable tenant-scoped CH4 event/link detection; list actual finish/cancel only with real protection | Discovery equality plus exhaustive foreign-kind/replay checks now include both; additive close/reopen/link IDs after bookkeeping removal and foreign-tenant reuse |
+
+0201 is retained. Shared catalogue changes are proposed only in
+`/private/tmp/SHARED-CH-4-C.patch` with rationale `/private/tmp/SHARED-CH-4-C.md`;
+root must apply serially before LP0/SERIOUS-B5 can pass. No supplier/discrepancy
+repository, lock observer, shared replay assertion or cycle-race assertion changed.
+Receipt records allowed local checks and the unchanged shared harness strict
+TypeScript error. Database/migration/browser suites NOT RUN locally. Green CI,
+two independent exact-head Claude checks and separate acceptance remain due.
+Capacity, timer, normal-session transport and all production gates stay held.

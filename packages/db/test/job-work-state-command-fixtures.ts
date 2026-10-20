@@ -42,8 +42,9 @@ export async function waitForJobLock(f:WorkFixture,pid:number) {
  throw new Error(`backend ${pid} did not reach lock wait`);
 }
 /** Same-session ordinary generated successor; only party binding setup is a labelled fixture. */
-export async function linkPair(f:WorkFixture){
- const p=await seedWorkPractice(f),t=p.auth.context.tenantId;
+export async function linkPair(f:WorkFixture,preLive=false){
+ const seeded=await seedWorkPractice(f),t=seeded.auth.context.tenantId;
+ const p=preLive?{...seeded,jobId:(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' ORDER BY id LIMIT 1",[t,seeded.auth.digest])).rows[0].id as string}:seeded;
  const successor=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND id<>$3 ORDER BY id LIMIT 1",[t,p.auth.digest,p.jobId])).rows[0].id as string;
  const source=(await f.admin.query("SELECT b.* FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2",[t,p.jobId])).rows[0];
  const binding=randomUUID();await workTenant(f.admin,t,async db=>{

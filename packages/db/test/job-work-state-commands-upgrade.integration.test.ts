@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import type { PoolClient } from "pg";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { closeWorkFixture,createWorkFixture,fixtureLifecycle,insertPhoto,seedWorkJob,type WorkFixture } from "./job-work-state-fixtures.js";
+import { closeWorkFixture,createWorkFixture,fixtureLifecycle,insertPhoto,seedWorkJob,workTenant,type WorkFixture } from "./job-work-state-fixtures.js";
+import { linkPair } from "./job-work-state-command-fixtures.js";
 const own="0201_job_work_state_commands.sql";
 const tables=["job","job_work_state_event","job_site_source_receipt","job_link","job_photo_purpose","command_receipt","audit_event","watchdog_command_identity"];
 type DB=Pick<PoolClient,"query">;
@@ -37,15 +39,31 @@ describe("CH-4-C isolated forward migration proof",()=>{
   expect(MIGRATION_URLS.slice(0,index).some(u=>u.pathname.endsWith("0187_final_account_sources_and_pdf.sql"))).toBe(true);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,index)){await f.admin.query(await readFile(url,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)])}
-  await installLegacySyntheticPartyFixtures(f.admin);const a=await seedWorkJob(f);await insertPhoto(f,a);await fixtureLifecycle(f,a,"finished_on_site");
+  await installLegacySyntheticPartyFixtures(f.admin);const a=await seedWorkJob(f);const photo=await insertPhoto(f,a);await fixtureLifecycle(f,a,"finished_on_site");
+  // Populate every compared predecessor table using its existing storage contract.
+  // These labelled fixture rows are not new runtime commands or grants.
+  await workTenant(f.admin,a.tenantId,async db=>{
+   const cid=randomUUID();
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture.photo',$2::uuid::text,repeat('a',64),'succeeded',$3,'{}',clock_timestamp())",[a.tenantId,cid,a.actorId]);
+   await db.query("INSERT INTO app.job_photo_purpose(tenant_id,job_id,upload_id,evidence_id,purpose,object_version_id,sha256,actor_membership_id,command_id) SELECT tenant_id,job_id,upload_id,id,'proof',object_version_id,sha256,$3,$4 FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[a.tenantId,photo,a.actorId,cid]);
+   await db.query("INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash) VALUES($1,$2,$3,'readiness.record',repeat('a',64))",[a.tenantId,randomUUID(),a.jobId]);
+  });
+  const pair=await linkPair(f);
+  await workTenant(f.admin,pair.p.auth.context.tenantId,async db=>{
+   const cid=randomUUID(),i=pair.input;
+   const party=(await db.query("SELECT customer_id,site_id,paying_party_id FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2",[pair.p.auth.context.tenantId,i.predecessorBindingId])).rows[0];
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture.link',$2::uuid::text,repeat('a',64),'succeeded',$3,'{}',clock_timestamp())",[pair.p.auth.context.tenantId,cid,pair.p.auth.membershipId]);
+   await db.query("INSERT INTO app.job_link(tenant_id,id,predecessor_job_id,successor_job_id,predecessor_binding_id,successor_binding_id,customer_id,site_id,paying_party_id,command_id,actor_membership_id,request_hash,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$2,$10,repeat('a',64),$2)",[pair.p.auth.context.tenantId,cid,pair.p.jobId,i.successorJobId,i.predecessorBindingId,i.successorBindingId,party.customer_id,party.site_id,party.paying_party_id,pair.p.auth.membershipId]);
+  });
+  for(const table of tables)expect(Number((await f.admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n),`${table} needs predecessor rows`).toBeGreaterThan(0);
   const before=await snapshot(f.admin),functions=await functionCatalog(f.admin);
   await f.admin.query(await readFile(MIGRATION_URLS[index]!,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[own]);
   expect(await snapshot(f.admin)).toEqual(before);
   const after=await functionCatalog(f.admin),changes=after.filter(row=>{const old=functions.find(x=>x.signature===row.signature);return old&&old.definition!==row.definition});
   const added=after.filter(row=>!functions.some(old=>old.signature===row.signature)).map(row=>row.signature).sort();
-  expect(added).toEqual(["app.ch4_command_work_facts(uuid,uuid,text)","app.ch4_require_command_owner(uuid,uuid,text)","app.ch4_require_open(uuid,uuid)","app.ch4_admit_place(uuid,uuid,text)","app.ch4_work_state_command(uuid,uuid,text,jsonb)","app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"].sort());
+  expect(added).toEqual(["app.ch4_legacy_command_owned(uuid,uuid)","app.ch4_command_work_facts(uuid,uuid,text)","app.ch4_require_command_owner(uuid,uuid,text)","app.ch4_require_open(uuid,uuid)","app.ch4_admit_place(uuid,uuid,text)","app.ch4_work_state_command(uuid,uuid,text,jsonb)","app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"].sort());
   // Definitions may change only in the explicitly authorized guard/use seams.
-  const allowedDefinitions=["app.ch4_storage_integrity()","app.ch4_guard_final_check_admission()","app.job_source_insert_guard()","app.reveal_shadow_signals(uuid,uuid)","app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)","app.ch4_guard_new_site_work()"];
+  const allowedDefinitions=["app.guard_watchdog_input()","app.ch4_storage_integrity()","app.ch4_guard_final_check_admission()","app.job_source_insert_guard()","app.reveal_shadow_signals(uuid,uuid)","app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)","app.ch4_guard_new_site_work()"];
   for(const row of changes)expect(allowedDefinitions).toContain(row.signature);
   for(const old of functions){const current=after.find(row=>row.signature===old.signature);expect(current,old.signature).toBeDefined();expect(current!.acl,old.signature).toEqual(old.acl)}
   for(const signature of ["app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"])expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') allowed",[signature])).rows[0].allowed).toBe(true);

@@ -4,10 +4,11 @@ Sub-order A only, synthetic practice. PostgreSQL execution: NOT RUN in builder
 sandbox. RED requires two independent Claude verdicts at the dispatcher commit.
 
 Reuses 0144 events, links, audit and command receipts. Adds private
+`ch4_legacy_command_owned(uuid,uuid)` (SQL STABLE SECURITY INVOKER),
 `ch4_command_work_facts(uuid,uuid,text)`, `ch4_require_command_owner(uuid,uuid,text)`, `ch4_require_open(uuid,uuid)`,
 `ch4_admit_place(uuid,uuid,text)` and `ch4_work_state_command(uuid,uuid,text,jsonb)`.
 Only `ch4_record_work_state(uuid,uuid,text,jsonb)` and
-`ch4_link_post_lock_job(uuid,uuid,text,jsonb)` gain runtime EXECUTE. All seven are
+`ch4_link_post_lock_job(uuid,uuid,text,jsonb)` gain runtime EXECUTE. All eight are
 migration-owned, fixed-search-path, PUBLIC/infrastructure/shadow denied. There
 are no table grants, columns, row backfills or identity-bridge changes.
 
@@ -71,3 +72,36 @@ creator's practice session to remain active. Source and photo gates stay intact.
 No data/backfill/schema changes. Before merge, edit/reapply in a fresh synthetic
 database; after deployment use a separately reviewed forward-fix migration.
 PostgreSQL upgrade/catalog/privilege tests are updated but NOT RUN here.
+
+## v5-r2 — CI run 39465455025
+
+Retains 0201. Replaces `guard_watchdog_input()` with its original tenant check,
+recovery-PDF exception, live enforcement, invoker security, search path, owner
+and ACL intact. The sole added exception is for migration-owned inserts into
+`app.watchdog_command_identity` of `WorkState.close/reopen/link`, bound to the
+checked command's matching processing receipt, active owner and synthetic
+small-builder job. The command authenticates the session/owner and both link
+endpoints before and after waits. Direct runtime inserts cannot take this path,
+even with a forged receipt or GUC. No grant, role membership, RLS or job policy
+changes. Finish/cancel and all earlier commands retain live enforcement.
+
+The complete prior legacy ownership SELECT is extracted into the private
+read-only helper, called at its original position under the same identity lock;
+event/link history adds tenant-scoped reservations. It acquires no new locks.
+This keeps immutable legacy reads outside the routine that locks jobs UPDATE,
+without changing the conservative lock observer or supplier/discrepancy code.
+After that check the processing receipt is inserted before the identity, providing
+the guard binding; all writes still roll back together and precede audit.
+
+Own upgrade proof now fills every compared predecessor table, applies only 0201,
+compares all original rows/types/keys/ACLs, then applies later migrations twice
+and compares the named original-column projection. Microsecond and retyping
+negative controls and nullable-column/replaced-function/insert positive controls
+remain. CI execution is required; no local PostgreSQL claim.
+
+Shared catalogue integration is a HOLD until the coordinator serially applies
+`/private/tmp/SHARED-CH-4-C.patch` (one exact helper row in SERIOUS-B5 and LP0,
+CH4 call metadata and the replaced guard's pending digest). No shared inventory
+was edited in place. PostgreSQL must capture changed definitions; no fabricated
+hash or bulk baseline refresh is supplied. Forward-fix/rollout policy above is
+unchanged. Two exact-head independent Claude checks and green CI remain due.

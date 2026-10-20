@@ -636,3 +636,125 @@ historical receipts, events, links, audit or money are rewritten.
 
 Commit message delivered to `/private/tmp/jg-msg-ch-4-c.txt`. Dispatcher owns
 commit/push and CI. This receipt is not independent verification or acceptance.
+
+## CI ROUND v5-r2 — fourteen-failure repair
+
+20 October 2026. Starting HEAD `499a7140ffda7086e289f1b9ae3cb5d2c6ec555c`,
+branch `codex/sandbox/ch-4-c`; observed frozen `origin/main`
+`dc5721230fd8aedbf2d9d0457789074b66b48765`. Migration **0201 retained**.
+Builder evidence only; no independent verdict or technical acceptance.
+
+Read AGENTS.md in full, CH-4 card and lifecycle/counting contracts in BUILD_PLAN,
+work-state and command-binding contracts, prior receipt, and the approved main
+checkout speed-v5 milestone/deferral dispatch. Prior issued/r1/r2/b1/c1/v5-r1
+orders and BEN-ANSWERS-20261017.md were read from the existing review archive
+`/private/tmp/jobguard-claude-web-20261020/ch-4-c-A-499a7140.zip`, under
+`requirements/orders/` and `requirements/`. No Claude run was made.
+
+### Diagnosis, source repairs and detecting regressions
+
+Real failing-first evidence is the supplied CI log
+`/private/tmp/jg-ch4-ci-39465455025.log`: **14 failed, 3007 passed,
+1 expected fail** in DB; 5 failed files. This is prior CI evidence, not a local
+failing-first execution, and none of the fourteen was called pre-existing.
+
+1. **Two pre-live failures (log lines 3066–3091).** The stack reaches
+   `guard_watchdog_input -> require_watchdog_live` at the WorkState identity
+   insert, after legitimate owner checks. 0201 now preserves the original guard
+   verbatim except one administrative identity branch: current migration role,
+   exact app identity table, exact close/reopen/link kind, matching processing
+   receipt/type/hash/semantic key, active owner and synthetic small-builder track.
+   Processing receipt moves just before identity insertion under the existing
+   identity lock; both roll back with facts/audit. Existing session and both-job
+   authority checks remain in the command. No new grant, role, RLS exception,
+   job policy or non-live site-work capability. Finish/cancel and every original
+   table/action keep their live guard. Regressions: unchanged pre-live close
+   and link-cycle one-winner cases; additive real pre-live locked reopen/link,
+   unchanged job-row comparisons, foreign/invalid/revoked owner/session/job
+   refusal, and raw runtime identity inserts with forged matching receipts/GUCs.
+2. **Five observer failures (3122–3206).** The conservative scanner treats every
+   FROM/JOIN table in a definer routine containing FOR UPDATE as mutable. The
+   new CH4 routine combined job UPDATE locks with eleven plain legacy ownership
+   reads. Extracted that complete SELECT, retaining every predicate and its
+   original invocation/acquisition order, into private SQL STABLE invoker helper
+   `ch4_legacy_command_owned(uuid,uuid)`. It has no writes/locks/runtime EXECUTE.
+   Regressions: unchanged watchdog-lock-order observer/assertions and supplier/
+   discrepancy commands; own read-only/security/owner/search-path/ACL catalogue
+   and exact upgrade routine assertions. No observer assertion was edited.
+3. **Six exhaustive non-live failures (3207–3238).** Add actual finish/cancelFinish
+   repository invocations first in registry order. Bind predecessor jobs to the
+   existing synthetic owner and an explicit synthetic small-builder track, so
+   authority succeeds and the real live check refuses. Exhaustive equality and
+   exact JOB_NOT_LIVE refusals remain; no-write counts additionally cover work
+   events, links and stored watchdog results. No catch-all, skip or reclassification.
+4. **15 vs 13 persistent IDs (3092–3121).** Immutable CH4 command events/links
+   now reserve IDs in the tenant-scoped legacy ownership query. Existing kind/job
+   conflict algebra is unchanged. Add actual finish/cancel to discovery's exact
+   expected set only alongside that protection. The existing exhaustive other-kind
+   refusal/original replay/changed payload assertions now run for both. Additional
+   own close/reopen/link cases remove modern bookkeeping, prove local rejection
+   and permit the same UUID in a different tenant. Original watchdog replay,
+   race and cycle assertions are untouched.
+
+Own upgrade proof populates every compared predecessor table, applies 0201
+alone, compares original rows/full named types/keys/ACLs, then applies later
+migrations twice and checks the named original-column row_to_json text projection.
+Existing microsecond/retyping refusal and later column/function/insert positive
+controls remain. No claim of PostgreSQL execution or parsing is made.
+
+### Actual local commands and results
+
+Node v24.17.0; TypeScript 5.8.3; Vitest 4.1.11. All heavy commands used
+`HEAVY_SLOTS=2 ~/.local/bin/heavy-slot <label> <command>`; at most two at once,
+at most three named Vitest files and two workers per test invocation. Disk checks
+showed about 47.43 million available KiB (above 45 GB); no install/download.
+No clean pinned-install or aggregate all-suite pass is claimed.
+
+| Executed command (cwd root unless indicated) | Exit/result |
+| --- | --- |
+| `pnpm --version`, `LANE_BASE_REF=origin/main pnpm lint`, `LANE_BASE_REF=origin/main pnpm lint:lanes` | Each stalled in installed pnpm launcher after ignored-overrides warning; interrupted, exit 130. No package installed. Used installed script bodies below. |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` | PASS 0; DB typecheck and configured package lint. Final sequential repeat PASS 0. |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json` | PASS 0; DB build. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | PASS 0, twice: core purity, lane, money and commercial boundaries. Existing computed-import diagnostics are reported warnings. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS 0. |
+| core cwd: `./node_modules/.bin/vitest run src/watchdog.test.ts src/job-work-state-commands.test.ts --maxWorkers=2` | PASS 0: 2 files, 13 tests. |
+| DB cwd: `./node_modules/.bin/vitest run src/supplier-match-repository.test.ts src/proof-replacement.test.ts src/evidence-finalization-race.test.ts --maxWorkers=2` | PASS 0: 3 files, 10 tests; mocked/source units, not PostgreSQL. |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-ch4c-v5r2-tsconfig.json` | FAIL 2, twice: sole diagnostic is unchanged shared `watchdog-command-harness.ts:180:91`, string-or-undefined passed to string (ids[0], noUncheckedIndexedAccess). HEAD comparison confirms the line is unchanged. No unrelated harness edit. |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-ch4c-v5r2-own-tsconfig.json` | PASS 0: all edited integration suites except the legacy suite which imports that shared harness; strict settings retained. |
+| API cwd: `node --import tsx src/generate-openapi.ts --check` | PASS 0; no generated API artifact or route edited. |
+| Source comparison script using HEAD and 0096 | PASS 0: original tenant/recovery/live guard retained, all eleven old legacy query predicates present, helper invoked at same position, observer/repositories/replay/cycle-race files byte-unchanged. Deterministic source evidence only. |
+| `git apply --check /private/tmp/SHARED-CH-4-C.patch` | PASS 0; proposed shared patch applies, was NOT applied. |
+| `git diff --check` | PASS 0. |
+
+One concurrent final DB-typecheck invocation exited 2 in heavy-slot with only
+sysctl/sysmon/pgrep sandbox diagnostics and no compiler output; it is not counted
+as a compiler failure or pass. It was retried sequentially: PASS 0. Those helper warnings
+also appear before successful runs; no slot/timeout/worker bypass was used.
+
+### CI selection and outstanding acceptance
+
+PostgreSQL/migration/browser/Playwright suites **NOT RUN** locally, per issuance.
+CI must execute all own `job-work-state-commands{,-boundaries,-races,-upgrade}`
+and `job-work-state-catalog` integration suites (plus existing CH4 source/upgrade
+regressions), `watchdog.integration`, `watchdog-legacy-identities`,
+`watchdog-lock-order`, `command-replay-contract`, LP0, tenancy and SERIOUS-B5.
+No assertion or mandatory suite was skipped, disabled or weakened. No live
+provider/real data/AI change; eval is inapplicable.
+
+**Shared integration HOLD:** `/private/tmp/SHARED-CH-4-C.patch` and companion
+`/private/tmp/SHARED-CH-4-C.md` propose exactly the new helper's SERIOUS-B5/LP0
+rows, CH4's own call metadata and a pending guard digest. Shared inventory and
+SERIOUS-B5 files remain unchanged in this worktree. Root applies serially before
+CI; without it the new helper is deliberately unregistered and those checks hold.
+No source/hash of another piece was frozen or bulk catalogue baseline refreshed.
+
+**Strict auxiliary typecheck HOLD:** unchanged shared harness line 180 above;
+requires its owner if strict checking of that whole imported test graph is desired.
+It does not change the CI-only requirement for the fourteen runtime regressions.
+
+Two independent exact-head Claude checks, green required CI and separate
+acceptance remain outstanding. No self-acceptance. Capacity/timer and normal-session
+transport holds from earlier receipts remain; production/real-use gates stay closed.
+No commit, staging, checkout, push, merge, deploy, provider activation, real-data
+access, spend, global configuration or reserved SV5 worktree work was performed.
+Intended commit message: `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns commit/push.

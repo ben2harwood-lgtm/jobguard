@@ -20,6 +20,13 @@ describe("CH-4 actual catalog and privilege boundary",()=>{
    for(const role of ["jobguard_infrastructure","jobguard_shadow","jobguard_shadow_emergency_access"])expect((await f.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,signatures[0].signature])).rows[0].allowed).toBe(false);
   }
  });
+ it("private legacy ownership helper is read-only with no execute grants; live guard retains invoker security",async()=>{
+  const helper=(await f.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,provolatile,proconfig FROM pg_proc WHERE oid='app.ch4_legacy_command_owned(uuid,uuid)'::regprocedure")).rows[0];
+  expect(helper).toEqual({owner:"jobguard_migration",prosecdef:false,provolatile:"s",proconfig:["search_path=pg_catalog"]});
+  for(const role of ["jobguard_runtime","jobguard_infrastructure","jobguard_shadow","jobguard_shadow_emergency_access"])expect((await f.admin.query("SELECT has_function_privilege($1,'app.ch4_legacy_command_owned(uuid,uuid)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(false);
+  const guard=(await f.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig FROM pg_proc WHERE oid='app.guard_watchdog_input()'::regprocedure")).rows[0];
+  expect(guard).toEqual({owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog, app"]});
+ });
  it("CH4-A20 missing malformed context and cross-tenant reads fail closed; private helpers are not callable",async()=>{
   const a=await seedWorkJob(f);
   expect((await f.runtime.query("SELECT * FROM app.job_work_state_event")).rows).toEqual([]);

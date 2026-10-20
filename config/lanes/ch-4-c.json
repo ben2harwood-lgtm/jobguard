@@ -47,7 +47,10 @@
         "apps/web/app/api/jobs/[id]/work-state/route.ts",
         "apps/web/app/api/jobs/[id]/work-state/route.test.ts",
         "apps/api/src/watchdog-registry.test.ts",
-        "apps/api/src/job-work-state.http.test.ts"
+        "apps/api/src/job-work-state.http.test.ts",
+        "packages/db/src/watchdog.ts",
+        "packages/db/test/watchdog.integration.test.ts",
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts"
       ]
     }
   }
