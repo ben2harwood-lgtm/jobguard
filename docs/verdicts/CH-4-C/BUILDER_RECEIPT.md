@@ -758,3 +758,8 @@ transport holds from earlier receipts remain; production/real-use gates stay clo
 No commit, staging, checkout, push, merge, deploy, provider activation, real-data
 access, spend, global configuration or reserved SV5 worktree work was performed.
 Intended commit message: `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns commit/push.
+
+
+## Coordinator serial integration — 20 October 2026
+
+Actual coordinator: Codex JobGuard coordinator (legacy dispatch script trailer naming a Claude session is stale). Builder committed r2 at d031ca54. Applied the builder-proposed exact additive SERIOUS-B5 signature row and own helper routine record, plus corrected CH4 command static-call references. The existing guard_watchdog_input recorded definition digest is preserved; the proposed replacement with null was NOT applied. Its definition changes in0201, so the old digest remains historical/stale and actual PostgreSQL catalogue capture is still required before technical acceptance. No pin/assertion was removed to obtain a pass. No PostgreSQL/browser execution or independent Claude verdict is claimed.

@@ -212,13 +212,14 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
-// CH-4-C / ruling 113: 0201 creates seven routines and no tables, indexes or policies.
+// CH-4-C / ruling 113: 0201 creates eight routines and no tables, indexes or policies.
 // Replaced routines retain their complete predecessor catalogue rows in the comparison.
 async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [
   ["ch4_admit_place", "t uuid, j uuid, action text"],
   ["ch4_command_work_facts", "t uuid, j uuid, digest text"],
+  ["ch4_legacy_command_owned", "t uuid, cid uuid"],
   ["ch4_link_post_lock_job", "t uuid, j uuid, digest text, input jsonb"],
   ["ch4_record_work_state", "t uuid, j uuid, digest text, input jsonb"],
   ["ch4_require_command_owner", "t uuid, j uuid, digest text"],
