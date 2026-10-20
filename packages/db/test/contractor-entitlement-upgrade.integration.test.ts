@@ -1,33 +1,105 @@
 import { afterAll,beforeAll,expect,it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { own,startBeforeMigration,applyMigration,startSession,status,snapshot,predecessorCatalogue,unchanged,type Cluster } from "./contractor-entitlement-fixtures.js";
-import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
+import { proofBefore, proofColumns, proofDifferences as keyedDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
-type Proof = Awaited<ReturnType<typeof proofBefore>>;
+type KeyedProof = Awaited<ReturnType<typeof proofBefore>>;
+type Facts = Map<string, bigint>;
+type UnkeyedProof = { names: string[]; typed: Record<string,string>; facts: Facts };
+type Proof = { keyed: KeyedProof; unkeyed: Record<string,UnkeyedProof>; tables: string[] };
 const preserved = { rows: [], types: [] };
 const authoritySpine = ["control_plane.tenant", "identity.identity_user", "app.account", "app.membership", "control_plane.contractor_practice_session", "app.commercial_track_assignment", "app.extra_origin"];
 const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
-async function capture(db: Pool | PoolClient) {
- const tables = (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows.map(t => `${t.schemaname}.${t.tablename}`);
- // proofBefore fails with the exact table name on an unkeyed predecessor; none may be omitted.
- const proof = await proofBefore(db, tables);
- expect(Object.keys(proof)).toEqual(tables);
- for (const table of tables) {
-  const count = (await db.query(`SELECT count(*)::text n FROM ${table.split(".").map(ident).join(".")}`)).rows[0]!.n;
-  expect(String(Object.keys(proof[table]!.rows).length), `${table}: all original PK identities, including honestly empty tables`).toBe(count);
+const tableIdent = (table: string) => {
+ const parts=table.split(".");
+ if(parts.length!==2 || parts.some(part=>!part)) throw new Error(`Schema-qualified table required: ${table}`);
+ return parts.map(ident).join(".");
+};
+const requestTable="identity.request_window";
+const syntheticDigest=()=>createHash("sha256").update(`mon8-fictional-request:${randomUUID()}`).digest("hex");
+const requestSeeds=[syntheticDigest(),syntheticDigest()];
+const seedTime="2001-02-03 04:05:06.123456+00";
+// Every capture/comparison uses one pinned connection and transaction-local rendering,
+// including keyed captures. No pool query can silently use a different session's settings.
+async function rendered<T>(db: Pool | PoolClient, work: (client: PoolClient)=>Promise<T>): Promise<T> {
+ if ("totalCount" in db) return rolledBack(db, client=>rendered(client,work));
+ await db.query("SET LOCAL TimeZone='UTC'");
+ await db.query("SET LOCAL DateStyle='ISO, YMD'");
+ return work(db);
+}
+async function factRows(db: PoolClient, table: string, names: string[]): Promise<Facts> {
+ const result=await db.query(`SELECT bytes COLLATE "C" AS bytes,count(*)::text AS multiplicity FROM (
+  SELECT (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name=>`t.${ident(name)}`).join(",")}) s) AS bytes
+  FROM ${tableIdent(table)} t) facts GROUP BY bytes COLLATE "C" ORDER BY bytes COLLATE "C"`);
+ return new Map(result.rows.map(row=>[row.bytes as string,BigInt(row.multiplicity as string)]));
+}
+// This proves observable named-column facts and multiplicities, not physical identity
+// among identical duplicates. An indistinguishable replacement cannot be detected.
+function factDifferences(before: Facts, current: Facts, exact=false): string[] {
+ const differences:string[]=[];
+ for(const [bytes,count] of before) {
+  const now=current.get(bytes)??0n;
+  if(exact ? now!==count : now<count) differences.push(`${bytes}: ${count} -> ${now}`);
  }
- for (const table of authoritySpine) expect(Object.keys(proof[table]!.rows).length, `${table}: seeded authority spine`).toBeGreaterThan(0);
- return proof;
+ if(exact) for(const [bytes,count] of current) if(!before.has(bytes)) differences.push(`${bytes}: 0 -> ${count}`);
+ return differences;
+}
+async function capture(db: Pool | PoolClient): Promise<Proof> {
+ return rendered(db,async client=>{
+  const discovered=(await client.query(`SELECT schemaname,tablename,EXISTS(
+   SELECT 1 FROM pg_index i WHERE i.indrelid=format('%I.%I',schemaname,tablename)::regclass AND i.indisprimary) AS keyed
+   FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
+  const tables=discovered.map(t=>`${t.schemaname}.${t.tablename}`);
+  const unkeyedTables=discovered.filter(t=>!t.keyed).map(t=>`${t.schemaname}.${t.tablename}`);
+  // Explicit inspected exception only; every unexpected unkeyed table remains a STOP.
+  expect(unkeyedTables,"STOP: unexpected unkeyed predecessor").toEqual([requestTable]);
+  const keyed=await proofBefore(client,discovered.filter(t=>t.keyed).map(t=>`${t.schemaname}.${t.tablename}`));
+  const columns=await proofColumns(client,requestTable);
+  const names=columns.map(column=>column.name);
+  const facts=await factRows(client,requestTable,names);
+  const unkeyed: Record<string,UnkeyedProof>={ [requestTable]: {names,typed:Object.fromEntries(columns.map(column=>[column.name,column.type])),facts} };
+  expect([...Object.keys(keyed),...Object.keys(unkeyed)].sort()).toEqual([...tables].sort());
+  for(const table of tables) {
+   const count=BigInt((await client.query(`SELECT count(*)::text n FROM ${tableIdent(table)}`)).rows[0]!.n as string);
+   const captured=keyed[table] ? BigInt(Object.keys(keyed[table].rows).length) : [...unkeyed[table]!.facts.values()].reduce((sum,n)=>sum+n,0n);
+   expect(captured,`${table}: every original row, including honestly empty tables`).toBe(count);
+  }
+  for(const table of authoritySpine) expect(Object.keys(keyed[table]!.rows).length,`${table}: seeded authority spine`).toBeGreaterThan(0);
+  const seeded=[...facts].filter(([bytes])=>requestSeeds.some(digest=>bytes.includes(digest)));
+  expect(seeded).toHaveLength(2);
+  expect(seeded.map(([,count])=>count).sort()).toEqual([1n,2n]);
+  expect(seeded.find(([bytes])=>bytes.includes(requestSeeds[0]!))?.[1]).toBe(2n);
+  expect(seeded.find(([bytes])=>bytes.includes(requestSeeds[1]!))?.[1]).toBe(1n);
+  expect(seeded.reduce((sum,[,count])=>sum+count,0n)).toBe(3n);
+  for(const [bytes] of seeded) expect(bytes).toContain("2001-02-03T04:05:06.123456+00:00");
+  return {keyed,unkeyed,tables};
+ });
+}
+async function proofDifferences(db: Pool | PoolClient, proof: Proof, exact=false) {
+ return rendered(db,async client=>{
+  const result=await keyedDifferences(client,proof.keyed);
+  expect([...Object.keys(proof.keyed),...Object.keys(proof.unkeyed)].sort()).toEqual([...proof.tables].sort());
+  for(const [table,was] of Object.entries(proof.unkeyed)) {
+   const now=new Map((await proofColumns(client,table)).map(column=>[column.name,column.type]));
+   for(const name of was.names) if(now.get(name)!==was.typed[name]) result.types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name)??"(gone)"}`);
+   if(was.names.some(name=>!now.has(name))) continue;
+   result.rows.push(...factDifferences(was.facts,await factRows(client,table,was.names),exact).map(diff=>`${table} ${diff}`));
+  }
+  return result;
+ });
 }
 let original: Proof;
 let catalogue:Awaited<ReturnType<typeof predecessorCatalogue>>;
 let c:Cluster;let previous:Awaited<ReturnType<typeof snapshot>>;
-beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await startBeforeMigration(own);await startSession(c);previous=await snapshot(c.admin);original=await capture(c.admin);expect(Object.keys(original)).toEqual(Object.keys(previous));catalogue=await predecessorCatalogue(c.admin);await applyMigration(c,own);},120000);
+beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await startBeforeMigration(own);await startSession(c);
+ for(const digest of requestSeeds) expect(digest).toMatch(/^[0-9a-f]{64}$/);
+ await c.admin.query("INSERT INTO identity.request_window(ip_digest,requested_at) VALUES($1,$3::timestamptz),($1,$3::timestamptz),($2,$3::timestamptz)",[...requestSeeds,seedTime]);
+ previous=await snapshot(c.admin);original=await capture(c.admin);expect(original.tables).toEqual(Object.keys(previous));catalogue=await predecessorCatalogue(c.admin);await applyMigration(c,own);},120000);
 afterAll(async()=>{await c?.close();});
-it("own migration preserves populated predecessors",async()=>{expect(await snapshot(c.admin)).toEqual({...previous,"app.contractor_agreement_status_revision":[]});expect(await predecessorCatalogue(c.admin)).toEqual(catalogue);expect(await proofDifferences(c.admin,original)).toEqual(preserved);});
+it("own migration preserves populated predecessors",async()=>{expect(await snapshot(c.admin)).toEqual({...previous,"app.contractor_agreement_status_revision":[]});expect(await predecessorCatalogue(c.admin)).toEqual(catalogue);expect(await proofDifferences(c.admin,original,true)).toEqual(preserved);});
 it("legacy origin fixtures acquire no agreement status",async()=>{expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_origin")).rows[0].n).toBeGreaterThan(0);expect((await c.admin.query("SELECT * FROM app.contractor_agreement_status_revision")).rows).toEqual([]);});
 it("runtime cannot manufacture or mutate status",async()=>{
  const f=await startSession(c);await status(c,f,"active");
@@ -69,7 +141,7 @@ it("negative controls detect changed prior rows grants and shapes",async()=>{
 
 it("same comparator detects original value, microsecond and full-type corruption",async()=>{
  const proof=await capture(c.admin);
- const identity=JSON.parse(Object.keys(proof["app.account"]!.rows)[0]!) as {id:string};
+ const identity=JSON.parse(Object.keys(proof.keyed["app.account"]!.rows)[0]!) as {id:string};
  for (const sql of [
   "UPDATE app.account SET name=name || ' damaged' WHERE id=$1",
   "UPDATE app.account SET updated_at=updated_at+interval '1 microsecond' WHERE id=$1",
@@ -117,6 +189,62 @@ it("same comparator detects a missing original identity without deleting a row",
   const proof=await proofBefore(db,["app.mon8_identity_scratch"]);
   // Move the scratch PK: the original identity is absent, with no DELETE or production-row mutation.
   await db.query("UPDATE app.mon8_identity_scratch SET id=2 WHERE id=1");
-  expect(await proofDifferences(db,proof)).toEqual({rows:['app.mon8_identity_scratch {"id":1}: missing'],types:[]});
+  expect(await keyedDifferences(db,proof)).toEqual({rows:['app.mon8_identity_scratch {"id":1}: missing'],types:[]});
  });
+});
+
+it("fact multiset comparator detects duplicate loss and permits only successor additions",()=>{
+ const facts=(...values:string[]):Facts=>{
+  const counts:Facts=new Map();
+  for(const value of values) counts.set(value,(counts.get(value)??0n)+1n);
+  return counts;
+ };
+ const baseline=facts("A","A","B");
+ for(const current of [facts("A","B"),facts(),facts("A","B","B")]) {
+  expect(factDifferences(baseline,current)).not.toEqual([]);
+  expect(factDifferences(baseline,current,true)).not.toEqual([]);
+ }
+ for(const current of [facts("A","A","B","C"),facts("A","A","A","B")]) {
+  expect(factDifferences(baseline,current)).toEqual([]);
+  expect(factDifferences(baseline,current,true)).not.toEqual([]);
+ }
+ expect(factDifferences(baseline,baseline,true)).toEqual([]);
+ const huge=BigInt(Number.MAX_SAFE_INTEGER)+2n;
+ expect(factDifferences(new Map([["A",huge]]),new Map([["A",huge-1n]]))).not.toEqual([]);
+});
+it("request-window same comparator detects changed observable facts and full timestamp type",async()=>{
+ const proof=await capture(c.admin), before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);
+ for(const sql of [
+  "UPDATE identity.request_window SET requested_at=requested_at+interval '1 microsecond' WHERE ip_digest=$1",
+  "UPDATE identity.request_window SET ip_digest=$2 WHERE ip_digest=$1",
+ ]) await rolledBack(c.admin,async db=>{
+  expect((await db.query(sql,sql.includes("$2")?[requestSeeds[1],syntheticDigest()]:[requestSeeds[1]])).rowCount).toBe(1);
+  const difference=await proofDifferences(db,proof);
+  expect(difference.rows).toHaveLength(1);expect(difference.types).toEqual([]);
+  expect((await proofDifferences(db,proof,true)).rows).not.toEqual([]);
+ });
+ await rolledBack(c.admin,async db=>{
+  await db.query("ALTER TABLE identity.request_window ALTER COLUMN requested_at TYPE timestamptz(3)");
+  expect((await proofDifferences(db,proof)).types).toContain("identity.request_window: requested_at timestamp with time zone -> timestamp(3) with time zone");
+ });
+ expect(await proofDifferences(c.admin,proof,true)).toEqual(preserved);
+ expect(await snapshot(c.admin)).toEqual(before);expect(await predecessorCatalogue(c.admin)).toEqual(prior);
+});
+it("request-window successor additions pass while own-step facts and catalogue stay exact",async()=>{
+ const proof=await capture(c.admin), before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);
+ for(const digest of [syntheticDigest(),requestSeeds[0]!]) await rolledBack(c.admin,async db=>{
+  expect((await db.query("INSERT INTO identity.request_window(ip_digest,requested_at) VALUES($1,$2::timestamptz)",[digest,seedTime])).rowCount).toBe(1);
+  expect(await proofDifferences(db,proof)).toEqual(preserved);
+  expect((await proofDifferences(db,proof,true)).rows).toHaveLength(1);
+  expect(await snapshot(db)).not.toEqual(before);
+ });
+ await rolledBack(c.admin,async db=>{
+  await db.query("ALTER TABLE identity.request_window ADD COLUMN mon8_successor_note text");
+  expect(await proofDifferences(db,proof)).toEqual(preserved);
+  // Even exact observable facts ignore later columns; own-step catalogue may not.
+  expect(await proofDifferences(db,proof,true)).toEqual(preserved);
+  expect(await predecessorCatalogue(db)).not.toEqual(prior);
+ });
+ expect(await proofDifferences(c.admin,proof,true)).toEqual(preserved);
+ expect(await snapshot(c.admin)).toEqual(before);expect(await predecessorCatalogue(c.admin)).toEqual(prior);
 });
