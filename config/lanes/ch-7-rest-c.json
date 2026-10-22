@@ -17,7 +17,11 @@
         "packages/db/test/recovery-follow-up.integration.test.ts",
         "docs/contracts/recovery-case-terms-v1.md",
         "docs/ledger/CH-7-REST-C.md",
-        "docs/verdicts/CH-7-REST-C/BUILDER_RECEIPT.md"
+        "docs/verdicts/CH-7-REST-C/BUILDER_RECEIPT.md",
+        "packages/db/test/later-outbox.integration.test.ts",
+        "packages/db/test/later-recovery-message-attempt.integration.test.ts",
+        "packages/db/test/migfix-8.integration.test.ts",
+        "packages/db/test/recovery-message-upgrade.integration.test.ts"
       ]
     }
   }
