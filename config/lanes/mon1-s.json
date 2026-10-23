@@ -12,6 +12,7 @@
         "packages/db/src/meter-lifecycle-repository.ts",
         "packages/db/src/meter-lifecycle-repository.test.ts",
         "packages/db/test/meter-lifecycle-source.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/meter-lifecycle-isolation.integration.test.ts",
         "packages/db/test/meter-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/meter-lifecycle-corrections.integration.test.ts",
