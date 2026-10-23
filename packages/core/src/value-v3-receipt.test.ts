@@ -88,3 +88,34 @@ describe("CH9-R supplied illustrative receipt preparation", () => {
     expect(() => renderValueReceipt({ ...illustrativeValueCases.recovery, collectedPence: 28200 } as unknown as ValueReceiptV3)).toThrow();
   });
 });
+
+it.each([2000000 / 43, 24691 / 2])("fractional principal %s stays not yet complete without an upstream policy", fractionalPence => {
+  const v = clone(illustrativeValueCases.recovery);
+  for (const key of ["settled", "qualifying", "fee", "remainder"] as const) {
+    v.categories[4][key] = { state: "incomplete", reason: "fractional_pence_requires_upstream_policy" };
+  }
+  const unsupported = clone(v);
+  unsupported.categories[4].qualifying = { state: "known", money: { pence: fractionalPence, currency: "GBP" }, basis: "net_principal", sourceRefs: ["withheld"] };
+  expect(() => renderValueReceipt(unsupported)).toThrow();
+  const text = renderValueReceipt(v).text;
+  for (const label of ["Supplied settled amount; source binding held", "Supplied qualifying principal illustration", "Fee illustration (SV-6 supplied)", "yours before VAT and tax"]) {
+    expect(text.split("\n")).toContain(`category=withheld; ${label}: Not yet complete — Unavailable (incomplete); reason=fractional_pence_requires_upstream_policy; basis/sources unavailable; policy/derivation=see referenced supplied source ledger (unverified)`);
+  }
+  expect(text).not.toContain("£");
+  expect(renderValueReceipt(v).status).toBe("incomplete");
+});
+it("rejects fractional pence and undeclared rational transports instead of rounding", () => {
+  const v = clone(illustrativeValueCases.recovery);
+  v.categories[4].qualifying = { state: "known", money: { pence: 24691 / 2, currency: "GBP" }, basis: "net_principal", sourceRefs: ["withheld"] };
+  expect(() => renderValueReceipt(v)).toThrow();
+  const rational = { state: "known", numerator: "2000000", denominator: "43", basis: "net_principal", sourceRefs: ["withheld"] };
+  expect(() => renderValueReceipt({ ...v, categories: [v.categories[0], v.categories[1], v.categories[2], v.categories[3], { ...v.categories[4], qualifying: rational }] } as unknown as ValueReceiptV3)).toThrow();
+});
+it("rejects fees above known qualifying principal even with unavailable remainder", () => {
+  for (const principal of [0, 100]) {
+    const v = clone(illustrativeValueCases.recovery);
+    v.categories[4].qualifying = { state: "known", money: { pence: principal, currency: "GBP" }, basis: "net_principal", sourceRefs: ["withheld"] };
+    v.categories[4].remainder = { state: "unknown", reason: "not_reported" };
+    expect(() => renderValueReceipt(v)).toThrow(/Positive fee requires sufficient known qualifying principal/);
+  }
+});

@@ -74,3 +74,107 @@ Root build warnings: shared cache IO permission warnings; existing Next workspac
 Later resource observation: 51% free memory and 222528184 KiB disk available. All intended scoped Vitest runs retain maxWorkers=2. Full root tests, full root typecheck, all-package lint after lane stage, PostgreSQL/migration/catalogue/restore suites and browser suites are NOT RUN locally; required CI remains outstanding. No CI run/artifact or final commit exists for this uncommitted preparation. OpenAPI loader success does not turn the blocked CLI invocation into a CLI pass.
 
 Final `pnpm build --concurrency=2` after all renderer/test edits: **exit 0**, 7 successful tasks / 7 total, 2 cached, 1m32.149s. Same pre-existing warnings as above. Final scoped typecheck/lint and the 33-test batch also cover these final source bytes. Six-file newline/trailing-whitespace inspection passed (Python assertions, exit 0). Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch9-r.txt`; no git write command was run. All six new repository files remain unstaged/untracked for the dispatcher.
+
+## r1
+
+23 October 2026; repair on `codex/sandbox/ch9-r` from clean HEAD
+`76c030b6b6b7bd319c972615e0eb7fbf9cfef4ec`, containing repaired CH9-S
+`aec2fb43de8b92daae1e58940a0c916b47386197`. Read AGENTS.md, BUILD_PLAN.md
+CH-9 and applicable money contracts, `docs/contracts/value-v3.md`, the complete
+Claude A REPAIR verdict for `34a3bef6` at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch9-r-claude-A-34a3bef6-20261023.md`,
+and CH9-S's r1 receipt before edits. The order's relative `jg-runs/` path does not
+exist in this worktree; the complete externally stored verdict was used.
+This is builder run evidence, not an independent verdict or technical acceptance.
+
+Only the five existing CH9-R allowlisted paths changed: renderer, both renderer
+Vitest files, JSON fixture expectations and this receipt. No parent/schema,
+lane-register, dependency, shared export, route, migration or browser change.
+No Git write, commit, push, PR, deployment or provider action. Dependencies were
+preinstalled; no install/download or clean-install claim. Node v24.17.0 and cached
+pinned pnpm 10.28.1 via `/private/tmp/ch9-r-bin/pnpm` were used. Heavy validation
+commands ran sequentially; Vitest maxWorkers=2 and Turbo concurrency <=2.
+
+Changes and compatibility:
+
+- Tracked builder captures retain their supplied recorded amount and fee row,
+  omit recovery qualifying/remainder rows, and explicitly state that the full
+  recorded amount remains the builder's with a £0 fee when both are known.
+  Unknown input does not acquire a fabricated zero or settlement claim. The
+  £3,600 capture is never described as £0 yours. Found/recovery figures keep
+  their own principal, fee and remainder labels.
+- Existing bare-amount/copy assertions remain intact. Each fixture additionally
+  binds exact category + label + amount + currency prefixes to exactly one
+  rendered line; movement expectations also bind their source, and fact rows
+  bind fact identity and kind. Includes £2,820/£282/£2,538; £320/£32/£288 and
+  −£2,500/−£250 movements; tracked £3,600/£0 and found £800/£80/£720;
+  £500/£50/£450; known zero with unavailable settlement; and every core fact.
+  Expected prefixes end at a semicolon boundary, preventing partial amount
+  matches. No previous assertion was removed or weakened.
+- Adaptation follows CH9-S r1's chosen incomplete fallback: known pence must
+  already be exact integers; no rational transport or rounding policy exists
+  here. Fractional 2000000/43p and 24691/2p stay incomplete, with dependent
+  fee/remainder unavailable, rendered as `Not yet complete` with the upstream
+  policy reason. Unsupported fractional/undeclared rational known inputs are
+  rejected rather than rounded. Regression coverage also verifies the inherited
+  positive-fee <= known qualifying-principal guard with unavailable remainder.
+  No rate, allocation, VAT, fee eligibility or posting calculation was added.
+
+Actually executed fail-before/mutation evidence:
+
+- Tests-first run against the old renderer: **1 failed / 7 passed**, exit 1;
+  tracked capture regression failed. Log `/private/tmp/ch9-r-r1-before.log`.
+- `/private/tmp/ch9-r-r1-mutations.py` temporarily mutated only the allowlisted
+  renderer, ran both CH9-R Vitest files with maxWorkers=2 for each mutation,
+  and restored the original in `finally`. **4/4 caught with assertion failures**:
+  swap fee/remainder labels; swap fee/remainder amounts; restore tracked
+  recovery rows; remove the `Not yet complete` prefix. Per-case logs:
+  `/private/tmp/ch9-r-r1-mutation-*.log`. The first two are the previously
+  surviving reviewer mutations. This is deterministic builder evidence.
+- Final fixture assertions were extended for found settlement and original
+  movements, and fractional tests now probe each actual fractional input.
+  Final unmutated three-file batch: **76/76 passed** (3 files), exit 0.
+  Log `/private/tmp/ch9-r-r1-final-tests.log`.
+
+Validation details follow below. No DB/browser/restore suites were started:
+GitHub CI must run the applicable suites after dispatcher push because the
+issued sandbox cannot start PostgreSQL or bind localhost. AI eval is inapplicable
+(no AI gateway/model/prompt/extraction change). No migrations/backfill, new alerts,
+external actions, operational environment or provider changes. Renderer text is
+changed for tracked and incomplete amounts; the canonical supplied DTO format
+is unchanged. H-VALUE-SOURCES, CH9-S02/S07, upstream rational/policy binding,
+actual runtime completeness/authority/stored history, exact repaired-commit CI,
+fresh independent A/B review and separate technical acceptance remain HELD.
+Prior REPAIR evidence is not a review of these uncommitted bytes. No self-acceptance
+or production/real-data/fee enablement is claimed. Dispatcher owns the eventual
+commit; Ben retains merge/release authority.
+
+| r1 command (cached pinned pnpm PATH as above) | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | PASS; no diagnostics. |
+| `pnpm --filter @jobguard/core lint` | PASS; no diagnostics. |
+| `pnpm --filter @jobguard/core exec vitest run src/value-v3-receipt.test.ts src/value-v3-copy.test.ts src/value-v3.test.ts --maxWorkers=2` | PASS, exit 0, final 76/76 tests in 3 files. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL, exit 1; purity passed, lane check rejected six inherited CH9-S paths before package lints. No allowlist widening. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1; same six inherited parent paths. Required main-range CI remains outstanding. |
+| `LANE_BASE_REF=aec2fb43 pnpm lint:lanes` | PASS, exit 0; actual repaired parent comparison, head 76c030b6 plus dirty worktree. Supplemental stacked-parent check, not a main-range substitute. |
+| `pnpm exec turbo run lint --concurrency=2` | PASS, exit 0; 7/7 package lints, 2 cached; sandbox cache IO warnings. |
+| `node tools/money-arithmetic-lint.mjs` | PASS, exit 0. |
+| `node tools/commercial-boundary-lint.mjs` | PASS, exit 0. |
+
+Logs are `/private/tmp/ch9-r-r1-*.log`. Build/OpenAPI results follow.
+
+| Remaining r1 command | Actual result |
+| --- | --- |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | PASS, exit 0; 7/7 tasks, 2 cached, complete Next build including 41 static pages; 4m14.92s. |
+| `pnpm openapi:check` | FAIL, exit 1; sandbox EPERM on tsx CLI IPC listen, before comparison. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; same generator and committed-document comparison through loader, no file generation. |
+
+Build warnings include sandbox cache IO permissions and existing Next workspace
+root/multiple-lockfile, CSS and dependency warnings. Cached config/storage logs
+reference other worktrees and are replayed cache evidence, not fresh compilation
+there. Full root typecheck/test, DB/migrations/catalogue/RLS/restore and browser
+journeys were NOT RUN in r1; core typecheck, all package lints and bounded leaf
+unit tests are the actual local evidence. Build success is not browser evidence.
+Final `git diff --check` and repaired-parent lane check passed. Only the five
+allowed files above are modified. HEAD remains 76c030b6; no commit/push/PR.
+Intended conventional commit subject/body: `/private/tmp/jg-msg-ch9-r.txt`.

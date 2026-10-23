@@ -65,7 +65,7 @@ const refs = (values: string[]): string => values.length ? values.map(textRef).j
 function amountText(amount: ValueAmountV3): string {
   return amount.state === "known"
     ? `${formatValueMoney(amount)}; currency=GBP; basis=${VALUE_V3_LABELS[amount.basis]}; sources=[${refs(amount.sourceRefs)}]`
-    : `${formatValueMoney(amount)}; reason=${amount.reason}; basis/sources unavailable`;
+    : `${amount.state === "incomplete" ? "Not yet complete — " : ""}${formatValueMoney(amount)}; reason=${amount.reason}; basis/sources unavailable`;
 }
 /** All output is incomplete because CH9-S permits only illustrative_unbound inputs. */
 export function renderValueReceipt(receipt: ValueReceiptV3): RenderedValueReceiptV3 {
@@ -86,7 +86,11 @@ export function renderValueReceipt(receipt: ValueReceiptV3): RenderedValueReceip
   };
   for (const c of [v.categories[1], v.categories[2], v.categories[3], v.categories[4]]) {
     for (const key of ["recorded", "settled", "qualifying", "fee", "remainder"] as const) {
+      if (c.category === "tracked" && (key === "qualifying" || key === "remainder")) continue;
       lines.push(`category=${c.category}; ${labels[key]}: ${amountText(c[key])}; policy/derivation=see referenced supplied source ledger (unverified)`);
+    }
+    if (c.category === "tracked" && c.recorded.state === "known" && c.fee.state === "known") {
+      lines.push(`category=tracked; Builder capture — the full recorded amount remains yours; JobGuard fee is ${formatValueMoney(c.fee)}; basis=recorded amount; sources=[${refs(c.recorded.sourceRefs)}]; policy/derivation=see referenced supplied source ledger (unverified)`);
     }
   }
   for (const s of v.sources) {
