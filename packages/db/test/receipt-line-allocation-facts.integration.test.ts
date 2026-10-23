@@ -80,8 +80,12 @@ it.each([false,true])("B1-DB-1 refuses duplicate UUID identity (case variant: %s
  await insertLine(db,x,{id,gross:"40"});
  expect((await db.query("SELECT id::text FROM app.receipt_allocation_fact_line WHERE tenant_id=$1",[x.tenant])).rows).toEqual([{id}]);
  await refused(db,()=>insertLine(db,x,{id:mixedCase?id.toUpperCase():id,line:second,gross:"40"}),"23505",{constraint:"receipt_allocation_fact_line_pkey"});
- await acceptsWithoutGuard(db,"ALTER TABLE app.receipt_allocation_fact_line DROP CONSTRAINT receipt_allocation_fact_line_pkey",
-  ()=>insertLine(db,x,{id:mixedCase?id.toUpperCase():id,line:second,gross:"40"}));
+ // The tenant/job identity key independently rejects the same duplicate.
+ await db.query("SAVEPOINT removed_primary_key");
+ try {
+  await db.query("ALTER TABLE app.receipt_allocation_fact_line DROP CONSTRAINT receipt_allocation_fact_line_pkey");
+  await refused(db,()=>insertLine(db,x,{id:mixedCase?id.toUpperCase():id,line:second,gross:"40"}),"23505",{constraint:"receipt_allocation_fact_line_tenant_id_job_id_id_key"});
+ } finally { await db.query("ROLLBACK TO SAVEPOINT removed_primary_key"); }
 }));
 it("B1-DB-2 refuses 60+60 against a 100 receipt, including exact fractional excess",async()=>storageFixture(async(db,x)=>{
  const second=randomUUID();

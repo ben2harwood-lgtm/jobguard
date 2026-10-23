@@ -265,3 +265,38 @@ surface: unknown, not zero. No quota/cache benefit is claimed. Requested versus
 runtime-confirmed model/effort remain separate. The dispatcher commits after exit;
 intended message is `/private/tmp/jg-msg-m48-b1.txt`. **M48-B1 remains INCOMPLETE /
 HOLD pending positive-source work, PostgreSQL evidence and independent acceptance.**
+
+
+## r2 — scoped repair (23 October 2026)
+
+Base HEAD `005b8bba`, target `origin/main`. Working-tree changes only; dispatcher owns commit/push. Existing HOLD status and exact-head independent review/acceptance requirements remain. No dependency downloads, git writes, SQL changes, new authority or commercial policy changes.
+
+- Moved the 0211 note unchanged to `packages/db/migration-notes/0211_receipt_line_source_bridge.md`. Lane lists the destination and retains the old path because local lane lint checks deleted paths too. All entries remaining in migrations match the SQL filename contract.
+- Kept the original B1-DB-1 primary-key rejection assertion exactly. For both UUID case variants, temporarily remove only the primary key and assert the tenant/job unique key also rejects the duplicate; rollback restores DDL. The self-FK and every production guard remain intact.
+- Withheld `apps/web/e2e/M48-SOURCE-BRIDGE.spec.ts` until its route exists. Exact original content is in `/private/tmp/jg-pr-m48-b1.md`, ready for the dispatcher PR description. No browser success is claimed.
+
+0211 SQL SHA-256 remains `f0c93fd5f791b34b0b3dde541c1a183c4d9fb249539b413bcb40cc63284d42c9`; a byte comparison against HEAD passed. No backfill, new alerts or compatibility changes. No new migration number.
+
+Installed dependencies reused with Node 24.17.0 and cached pnpm 10.28.1 via `/private/tmp/jg-m48-c0-r1-bin`; `COREPACK_ENABLE_NETWORK=0`. Logs and runner scripts: `/private/tmp/jg-m48-b1-r2-checks/`. This was not a clean install. Commands actually run:
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | Exit 0, seven packages |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 after core purity passed; inherited C0 lane JSON, C0 contract doc and C0 receipt outside B1 lane |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1, same three inherited paths. Final reruns have no repair-path violations; no cross-lane exemption added |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0, seven package compiler lint tasks |
+| `node --test tools/*.test.mjs` (shell glob expanded by runner) | Exit 0, 122 tests |
+| `pnpm exec turbo run test --filter='!@jobguard/db' --concurrency=1` | Exit 1: core discovered compiled dist tests as well as source; five compiled source-inspection tests fail ENOENT. 5921 core tests passed. Subsequent tasks cancelled by Turbo; not a full pass |
+| `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 --testTimeout=30000 --exclude '**/dist/**'` | Source suites exit 0: core 123 files/2963 tests; config 4/41; storage 1/2; AI 15/147; web 40/867. AI uses recorded synthetic fixtures, not a live-model evaluation |
+| Same source command for API, with `src` selector | Exit 1: 119 files passed, 10 failed; 2085 tests passed, 130 failed, 23 skipped, 129 errors. Local HTTP listeners fail EPERM; two isolation fixtures fail free-port setup. Also existing `auth/context-boundary.test.ts` flags 13 uses in the unchanged B1 repository. This is an additional recorded failure, not repaired or waived |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/receipt-line-allocation.application.test.ts` | Exit 0, 13 tests |
+| `pnpm build --concurrency=1` | Exit 0, all seven packages including production Next build; existing webpack/CSS warnings retained |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC listener EPERM; repeated with same result |
+| `node --import tsx src/generate-openapi.ts --check` in apps/api | Exit 0, equivalent contract generation check without CLI IPC listener |
+| `node node_modules/typescript/bin/tsc -p /private/tmp/jg-m48-b1-r1-tests.tsconfig.json` | Exit 0, all four B1 integration files compile; no database execution |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0 |
+| `git diff --check`; SQL/note byte comparison; withheld-spec verbatim comparison | All exit 0 |
+
+Initial overlapping source/package-lint attempts were interrupted after timeout failures under high system load; final completed commands above supersede them. Two supplemental DB unit attempts were also interrupted; no DB unit pass is claimed. An initial DB selector excluded TypeScript integration files but could discover compiled copies; it was stopped and corrected to exclude all integration extensions and dist. No PostgreSQL guarantee was executed or proven here. Root `pnpm test`, database/migration suites and browser suites were not run. API's broad source run did reach existing isolation setup, which failed before a database could start. These remain CI responsibilities after dispatcher push. No live providers or professional sign-off.
+
+Intended conventional commit message: `/private/tmp/jg-msg-m48-b1.txt`. Dispatcher PR text with the withheld file: `/private/tmp/jg-pr-m48-b1.md`. All previous source/HTTP/UI/CI/production holds remain; no self-acceptance or independent verdict is asserted.

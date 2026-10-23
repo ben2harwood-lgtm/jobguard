@@ -10,6 +10,7 @@
       "allow": [
         "packages/db/src/receipt-line-allocation-repository.ts",
         "packages/db/migrations/0211_receipt_line_source_bridge.sql",
+        "packages/db/migration-notes/0211_receipt_line_source_bridge.md",
         "packages/db/migrations/0211_receipt_line_source_bridge.md",
         "packages/db/test/receipt-line-allocation-facts.integration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
