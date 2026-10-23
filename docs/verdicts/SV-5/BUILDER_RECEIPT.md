@@ -278,3 +278,90 @@ Changed/new source SHA-256 (receipt excluded to avoid a circular hash):
 Final HEAD: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`. No independent verdict recorded; no separate technical acceptance recorded. Dispatcher commits and obtains review of that exact resulting commit.
 
 Final handoff commands: `git branch --show-current`, `git rev-parse HEAD`, `git diff --check` and Python final lane/hash/message-existence assertions each exited 0. Branch is `codex/sandbox/sv-5`; final comparison confirms 7 tracked changes, 26 new files, every non-receipt changed-file SHA-256 present above, no out-of-lane file, and the intended message exists. The final receipt append itself exited 0. No subsequent code edit or git mutation was made.
+
+
+---
+
+## SV5-0205-RESERVED-RENUMBER-20261022 — source-only successor
+
+# SV5 reserved 0205 source-only renumber — 22 October 2026
+
+Task SV5-0205-RESERVED-RENUMBER-20261022, under issued Ben decision4 / human turn01a16230-367a-72c2-a342-6d5a211ccbc4 and acknowledged sole ownership transfer. Source HEAD remains a13fc5f1079c18f9301767d48d29659385809dd6. Original sv5-181 ref retained; successor codex/sandbox/sv5-0205-renumber. Original Claude owner remains stopped. No work in #189 or its worktree.
+
+Fresh read-only `git ls-remote origin refs/heads/main` returned dc5721230fd8aedbf2d9d0457789074b66b48765 after the sandbox attempt failed DNS; the authorized metadata check succeeded outside that sandbox. Local main 694e9e1755f2a5680898eb0fa04af48afd66c86b remains historical and untouched. No main checkout/reset/rebase/merge.
+
+C216 exact reservation map: 0199_final_check.sql → 0205_final_check.sql and the matching note path. This consumes the existing #181 reservation, allocates nothing, preserves #189's 0204 and other reservations. SQL SHA-256 remains 79864a87abe47379f7396a3959eb71e651a94f4dfd2b1c5751dba7a44131054e. Note changes only its leading heading number; each of the two named tests changes one file stem. Existing receipt prefix, code, assertions, grants/routines and policy are preserved.
+
+The pinned migration-renumber tool chooses highest(base)+1 and has no exact-reserved-0205 option. It was source-inspected, neither changed nor run; no guessed base. Python performs only the issued exact map. Own lane uses pinned version-2 per-file structure with exact branch/receipt/eight explicit allowed paths; the ninth, its own lane file, is implicitly permitted by lanePathAllowed and omitted from allow because grantsRegister refuses it. Legacy register remains untouched. Python validates structure/rules; Node lane checker is NOT RUN. Whole historical branch diff against DC is not certified by this bounded nine-path lane.
+
+Historical prose findings are retained: docs/contracts/final-check-v1.md still records issued base / 0145; the migration note's own-proof paragraph still says 0145. Historical receipt and legacy-register 0199 references remain as instructed. No additional executable 0199 stem references require edits.
+
+Evidence: /private/tmp/sv5-0205-renumber-20261022-uig_i846. Immutable input manifest copied for reference; original unchanged. Full tracked/ignored before/after hash maps, diff, operation/verification scripts and session record are local source evidence. No tests, Node, pnpm, install, Turbo, tsc, lint, build, DB, browser, Playwright or live-provider actions. Runtime NOT RUN; pure Python byte checks require no heavy slot. No worker/subagent/timer, commit, push, PR, upload, merge, deploy, activation or acceptance.
+
+PR181 WIP/red CI and worker/B3/tenancy/C135 repairs remain held. Synthetic-only and pilot_no_charge refusal and all policy gates remain unchanged. Actual CI, complete fresh A/B Claude review and separate acceptance are owed; Ben merges. Requested model gpt-6.1-sol / medium; runtime model and effort are unknown from exposed environment, and authenticated Yahoo route is not independently confirmed. This records a source candidate only, never technical acceptance.
+
+Session record (requested and confirmed values distinguished):
+
+```json
+{
+  "session_record_version": 1,
+  "task_id": "SV5-0205-RESERVED-RENUMBER-20261022",
+  "project": "JobGuard",
+  "role": "builder",
+  "thread_id": "01a163e6-add8-7362-8bd4-2fed1a05c195",
+  "surface": "unknown (tool-hosted Codex session)",
+  "host": "Bens-MacBook-Pro-2.local",
+  "authorised_route_ref": "original Yahoo route requested by issued order; runtime authentication route not independently exposed",
+  "repository": "ben2harwood-lgtm/jobguard",
+  "integration_target": "remote refs/heads/main",
+  "integration_target_revision": "dc5721230fd8aedbf2d9d0457789074b66b48765",
+  "worktree": "/Users/benharwood/Claude/Projects/my-new-project/.worktrees/jg-sv5b",
+  "branch": "codex/sandbox/sv5-0205-renumber",
+  "starting_base_revision": "a13fc5f1079c18f9301767d48d29659385809dd6",
+  "source_pin": "a13fc5f1079c18f9301767d48d29659385809dd6",
+  "candidate_revision": "uncommitted working tree on source pin",
+  "last_validated_revision": "source pin plus Python byte regression only",
+  "allowed_files_ref": "/private/tmp/sv5-0205-renumber-20261022-uig_i846/source-before.copy.json",
+  "governing_contract_ref": "AGENTS.md; BUILD_PLAN.md \u00a7\u00a72/10 SV-5/12; docs/contracts/final-check-v1.md; C135/C177/C204/C216; NextGen docs/workflow/CODEX_SESSION_POLICY.md (adopted 21 October)",
+  "model_requested": "gpt-6.1-sol",
+  "effort_requested": "medium",
+  "model_runtime_confirmed": "unknown",
+  "effort_runtime_confirmed": "unknown",
+  "runtime_confirmation_ref": "selected environment fields only; no runtime model/effort metadata exposed",
+  "last_completed_turn": "unknown (current turn unfinished at receipt creation)",
+  "last_receipt_ref": "docs/verdicts/SV-5/BUILDER_RECEIPT.md (historical prefix preserved)",
+  "state": "source-only uncommitted candidate; all technical acceptance held",
+  "resumed_from_thread_id": "none claimed; new leaf requested",
+  "successor_reason": "bounded mechanical successor under Ben decision4 and sole ownership transfer; original Claude owner remains stopped",
+  "preflight_ref": "/private/tmp/sv5-0205-renumber-20261022-uig_i846/before.json",
+  "result_id": "sv5-0205-renumber-20261022-uig_i846",
+  "acknowledgement_ref": "issued human turn01a16230-367a-72c2-a342-6d5a211ccbc4; no new acknowledgement claimed",
+  "ci_evidence_ref": "historical PR181 CI failure run 39458044125 per ownership handoff; no fresh CI run",
+  "reviewer": "none this run",
+  "review_evidence_ref": "held; two fresh complete A/B Claude reviews required",
+  "accepting_actor": "none",
+  "acceptance_evidence_ref": "held; separate actor required",
+  "outstanding_holds": "runtime model/effort/route confirmation; red CI; worker capability; B3; tenancy catalogue; C135 compatibility; synthetic and policy gates; complete fresh A/B Claude review; separate acceptance; Ben merge",
+  "builder_finished_at": "unknown pending verification",
+  "coordinator_acknowledged_at": "unknown",
+  "integrated_at": "not integrated",
+  "merged_revision": "not merged"
+}
+```
+
+Commands/results: read-only git status/branch/rev-parse and source reads passed; all nine issued before hashes/absences passed. git ls-remote initially failed sandbox DNS (128), then returned exact DC outside sandbox (0). git show-ref confirmed new branch absent (1). git switch -c initially refused sandbox ref lock (128), then succeeded outside sandbox (0). Python before snapshot passed (0): 2499 tracked and 36848 ignored files hashed. Exact apply script: /private/tmp/sv5-0205-renumber-20261022-uig_i846/apply.py. Final Python verification results are recorded at /private/tmp/sv5-0205-renumber-20261022-uig_i846/verification.json; receipt does not claim runtime test execution. Full exact operation/verification scripts and byte diff live in this output directory.
+
+Final source-only verification: Python returned exit 0 with all 23 checks true, including the complete nine-path boundary, unchanged SQL git blob, exact note/two test substitutions, immutable input, unchanged original refs/index and all 2499 tracked / 36848 ignored-file comparisons. This is deterministic byte/source evidence only. Exact commands/results: /private/tmp/sv5-0205-renumber-20261022-uig_i846/commands.md. Raw model usage counters were not exposed; per-request and cumulative counts are both unknown (not zero), as recorded in /private/tmp/sv5-0205-renumber-20261022-uig_i846/usage.json. No runtime model/effort/route confirmation is claimed. All runtime tests, actual CI, complete fresh A/B Claude review and separate acceptance remain held. Uncommitted for root inspection; Ben merges.
+
+
+## Evidence-path correction — same issued leaf, 22 October 2026
+
+The previous evidence was authored at /private/tmp/sv5-0205-renumber-20261022-uig_i846; that location did not satisfy the issued durable-output requirement. The entire authored evidence/source-original tree is now copied byte-for-byte to /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/output. Temporary originals are retained with no deletion or overwrite. Preservation manifest: /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/output/preservation-manifest.json (SHA-256 dfd634a5c3df12223613e2e08fd6fd77b76c234fbc2732a0334ed4352f77c908); 17 copied files, each with source/destination size, hash and byte-identity result. Existing copied before.json/after.json and diffs remain historical snapshots; correction source mapping is /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/output/evidence-path-repair/source-before-after.json. Preappend ledger/receipt bytes are retained under evidence-path-repair/preappend/. No original mutation or its 23 passed checks was rerun.
+
+Session provenance correction/context, appended without rewriting earlier unavailable-counter statements: exact resumed thread 01a163e6-add8-7362-8bd4-2fed1a05c195, same leaf and original Yahoo route. Root driver /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/done.json confirms prior actual turn 01a163e6-b06a-7413-a77e-f6d3d8838ef1, model gpt-6.1-sol, effort medium, cwd /Users/benharwood/Claude/Projects/my-new-project/.worktrees/jg-sv5b, approval_policy on-request, sandbox_policy.type workspace-write, route /Users/benharwood/.codex-yahoo. Source fields are $.actual_session_id, $.runtime.turn_id/model/effort/cwd/approval_policy/sandbox_policy and $.route. Root preflight is /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/evidence-path-repair/SV5-0205-RESERVED-RENUMBER-20261022-session-preflight.json. Durable provenance and byte-identical copies of both inputs are under /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/output/evidence-path-repair.
+
+Raw usage source /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5-0205-renumber-20261022/done.json $.raw_cli_usage matches the emitted cumulative $.raw_usage_after.info.total_token_usage fields: input_tokens 1182286, cached_input_tokens 1115776, cache_write_input_tokens 0, output_tokens 10215, reasoning_output_tokens 1097 (total_tokens 1192501 is additionally emitted in total_token_usage). The root preflight $.prior_raw_usage identifies line 157, timestamp 2026-10-22T14:02:40.566Z; $.prior_raw_usage.info.last_token_usage is only the latest request: input_tokens 75250, cached_input_tokens 74368, cache_write_input_tokens 0, output_tokens 140, reasoning_output_tokens 0, total_tokens 75390. These are cumulative and per-request observations respectively, not whole-turn or quota-saving measures. No cache/quota savings claim. Current-turn runtime and usage await root-driver verification after completion; none invented.
+
+Before first edit, Python-only file inspection verified exact cwd/session/branch/HEAD a13fc5f1079c18f9301767d48d29659385809dd6, the seven current hashes against root preflight and absent output directory. This turn permits only evidence copy/JSON/hash work and append-only edits to this receipt and ledger. Prefix preservation and correction-only hashes are recorded in evidence-path-repair/source-before-after.json. Remote target DC remains the issued dc5721230fd8aedbf2d9d0457789074b66b48765; no network recheck needed or performed. Historic local main 694e9e1755f2a5680898eb0fa04af48afd66c86b remains untouched.
+
+Runtime tests NOT RUN. Existing red CI, worker/B3/tenancy/C135/synthetic/policy holds remain. No runtime pass, independent review, acceptance, commit, push, merge, upload or activation. Original Claude owner remains stopped. Uncommitted for root inspection; Ben merges.

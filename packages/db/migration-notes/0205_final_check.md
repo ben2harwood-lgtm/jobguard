@@ -1,4 +1,4 @@
-# 0199 — SV-5 separable synthetic final-check persistence
+# 0205 — SV-5 separable synthetic final-check persistence
 
 Adds migration-owned, FORCE RLS, append-only manifest/source/attempt/run/reveal/disposition side tables and seven exact controlled-routine EXECUTE grants. No new runtime table grant or DML; no fingerprinted column. Freezes all pre-cutoff original objects and pending uploads, persists explicit zero/failure accounting and controlled non-confirming answers. Adds the `missed_variation_final_account` case category only; its creation remains Q2-held. Adds a post-lock evidence-link exclusion trigger, retaining existing immutable objects and cutoff times. Q4/Q5 invoice enforcement/publication and Q6 executable worker registration are coordinator prerequisites and are not changed.
 
