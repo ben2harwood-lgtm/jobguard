@@ -376,9 +376,137 @@ export const demoCatalogue = {
     },
     {
       "id": "B24",
-      "operation": "Meter/trial",
-      "commandSchemaAndRoute": "**PROPOSED upstream** MON-1 lifecycle source/admission/read API, MON-2A plan/period command API and MON-3 trial/card/lifecycle API; DEMO spec references named typed ports `DemoMeterCommands`, `DemoSubscriptionCommands`, `DemoTrialCommands` until owning contracts fix routes",
-      "source": "These port names are proposed adapter interfaces only. No undisclosed endpoint, new clock rule, company binding or provider is invented. Implementation/CI is blocked until actual mapping and scope are accepted.",
+      "operation": "MON-1 meter lifecycle",
+      "commandSchemaAndRoute": "**PROPOSED upstream** `DemoMeterCommands`: MON-1 lifecycle source, admission, day-ledger and read operations; exact accepted routes, payload versions and typed results remain owner deliverables.",
+      "source": "MON-1 owner; no local clock, admission or counting substitute.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B25",
+      "operation": "MON-2A subscription",
+      "commandSchemaAndRoute": "**PROPOSED upstream** `DemoSubscriptionCommands`: MON-2A plan, period, statement, simulated settlement and conversion operations; exact accepted routes, payload versions and typed results remain owner deliverables.",
+      "source": "MON-2A owner; no second billing calculator or settlement flag.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B26",
+      "operation": "MON-3 trial",
+      "commandSchemaAndRoute": "**PROPOSED upstream** `DemoTrialCommands`: MON-3 eligibility, card setup, entitlement claim, lifecycle end and expiry operations; exact accepted routes, payload versions and typed results remain owner deliverables.",
+      "source": "MON-3 owner; approved identity, clock and card authority required; no client trial flag.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B27",
+      "operation": "SV-5 completion/reveal",
+      "commandSchemaAndRoute": "**HELD upstream** SV-5 post-lock reconciliation request/completion, reveal and disposition interface; accepted file/method/route and payload/version remain coordinator/owner deliverables.",
+      "source": "BUILD_PLAN.md SV-5: consume worker-owned completion bound to exact lock, cutoff and processed evidence manifest; only explicit human confirmation creates catch work. B14 supplies terms/lock, not check completion.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B28",
+      "operation": "MON-5 customer approval",
+      "commandSchemaAndRoute": "**HELD upstream** MON-5 authenticated customer approval of the exact catch variation revision; accepted customer binding, command schema/version, route and result remain owner deliverables.",
+      "source": "BUILD_PLAN.md MON-5 and H-CUSTOMER; B06 builder-attested quote acceptance cannot supply authentic customer approval.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B29",
+      "operation": "SV-6 attribution/fee derivation",
+      "commandSchemaAndRoute": "**HELD upstream** SV-6 immutable attribution and qualifying allocation/fee-illustration reader; exact accepted source schema/version and read/recovery interface remain owner deliverables.",
+      "source": "BUILD_PLAN.md SV-6: consume lock/capture/cutoff/reveal/approval/billed-line/settled-allocation lineage; M4-8 owns allocation, B23 owns posting/statement execution. No local eligibility or fee calculation.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B30",
+      "operation": "CH-9 job value reader",
+      "commandSchemaAndRoute": "**HELD upstream** accepted CH-9 job value/source reader and source/period/policy/derivation versions. Existing `GET /api/jobs/[id]/value`, `job-value.v1`, is partial baseline evidence only.",
+      "source": "`apps/api/src/value/value.application.ts` ValueApplication.read; `apps/api/src/value/contracts.ts`; `apps/web/app/api/jobs/[id]/value/route.ts`. Existing synthetic money-position response does not establish the full CH-9 source contract.",
+      "status": "HELD",
+      "inspection": "source-inspected-partial",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B31",
+      "operation": "DEMO-I run/report/resume",
+      "commandSchemaAndRoute": "**PROPOSED upstream** DEMO-I `SmallBuilderDemoApplication.readRun/readReport` via `GET /api/practice/small-builder-demo/runs/[runId]` and `/report`; exact accepted query/version, snapshot and operation-result recovery bindings remain owner deliverables.",
+      "source": "DEMO-I planning card; run/report reads recheck current tenant/session/run authority and rehydrate stored domain references. Expected evidence never supplies observed report values or success.",
+      "status": "HELD",
+      "inspection": "proposed-upstream",
+      "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
+      "resultRecovery": "Actual producer result and immutable revision; unknown outcome waits for accepted typed read or permitted exact replay. No generic success adapter.",
+      "acceptanceEvidence": null,
+      "holds": [
+        "H-DEMO-P1-EXEC",
+        "H-OPERATION-READ",
+        "H-REVIEW"
+      ]
+    },
+    {
+      "id": "B32",
+      "operation": "SV-3/SV-5 shadow worker",
+      "commandSchemaAndRoute": "**HELD upstream** SV-3/SV-5 worker source intake/detection and reconciliation processing receipt; exact accepted producer interface, payload/version and manifest source-result binding remain owner deliverables.",
+      "source": "BUILD_PLAN.md SV-3/SV-5; consumes immutable supplier/photo/diary source versions from B11/B12; no builder request queries hidden signals or writes a completed-check flag.",
       "status": "HELD",
       "inspection": "proposed-upstream",
       "authority": "Current server-verified synthetic session/member and exact job/subject; company/customer authority requires accepted owner binding.",
@@ -461,7 +589,8 @@ export const demoCatalogue = {
       "bindingIds": [
         "B13",
         "B14",
-        "B15"
+        "B15",
+        "B27"
       ],
       "projects": [
         "mobile-360",
@@ -503,7 +632,8 @@ export const demoCatalogue = {
       "operation": "Read CH-9 value and report from persisted facts; reload/another authorised browser context",
       "expectedEvidence": "Correct source-linked capture/final-account/invoiced/recorded/reversed/corrected history. No positive recovery/fee from ordinary customer receipts; all counts/zeroes sourced.",
       "bindingIds": [
-        "B23"
+        "B30",
+        "B31"
       ],
       "projects": [
         "mobile-360",
@@ -555,7 +685,8 @@ export const demoCatalogue = {
       "bindingIds": [
         "B13",
         "B14",
-        "B15"
+        "B15",
+        "B27"
       ],
       "projects": [
         "mobile-360",
@@ -586,7 +717,9 @@ export const demoCatalogue = {
       "bindingIds": [
         "B19",
         "B20",
-        "B21"
+        "B21",
+        "B23",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -602,7 +735,9 @@ export const demoCatalogue = {
       "bindingIds": [
         "B19",
         "B20",
-        "B21"
+        "B21",
+        "B23",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -630,9 +765,11 @@ export const demoCatalogue = {
       "operation": "Reverse original£3,000 customer receipt; review/approve linked M4-8 allocation reversal; rederive compensation",
       "expectedEvidence": "Q£320, tax£64, invoice due £22,176; case 2 reopened£2,500; fee execution paused; compensation−£250; original receipt/allocation/statement preserved.",
       "bindingIds": [
+        "B19",
         "B20",
         "B21",
-        "B23"
+        "B23",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -660,7 +797,8 @@ export const demoCatalogue = {
       "operation": "Read report, resume and refresh at each preceding durable boundary",
       "expectedEvidence": "Every amount links through command→source/evidence→approval→settled movement→allocation→attribution→journal→statement→collection/refund. Neither a report expectation nor an old fee illustration supplies a value.",
       "bindingIds": [
-        "B23"
+        "B30",
+        "B31"
       ],
       "projects": [
         "mobile-360",
@@ -674,8 +812,9 @@ export const demoCatalogue = {
       "operation": "After DR-04's delivered message and before DR-05's receipt, schedule a follow-up; use accepted bound `advance_time`; open review of the current pack and approve the exact reminder; execute its separate message command. After real case settlement, perform/observe accepted `close_recovered`; cancellation and reopening use independent command-created branches",
       "expectedEvidence": "Due time creates a Decision with zero automatic sends. The separately approved reminder sends once through the fake sink. A `close_recovered`, dispute or cancellation source stops the intent as specified; bank settlement alone is not the stop source, and reopening never revives a stopped intent. Requires H-FOLLOWUP-CLOCK; no new-run ID is passed to legacy sandbox storage.",
       "bindingIds": [
-        "B18",
-        "B17"
+        "B16",
+        "B17",
+        "B18"
       ],
       "projects": [
         "mobile-360",
@@ -692,7 +831,9 @@ export const demoCatalogue = {
         "B16",
         "B19",
         "B20",
-        "B21"
+        "B21",
+        "B23",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -757,7 +898,8 @@ export const demoCatalogue = {
       "expectedEvidence": "Held findings derived from source; no pre-lock builder response/count/timing/query difference. Never seed signal, reveal or attribution rows. Source fixture→expected catch mapping is owned by SV-3/SV-5.",
       "bindingIds": [
         "B11",
-        "B12"
+        "B12",
+        "B32"
       ],
       "projects": [
         "mobile-360",
@@ -786,8 +928,10 @@ export const demoCatalogue = {
       "operation": "Actual SV-5 completed check/reveal; confirm and price£500 and£300; ordinary current customer approval through approved MON-5 authority",
       "expectedEvidence": "Two unique catches; no duplicated catch across three source types; exact capture absence/lock cutoff/reveal/approval/attribution links. This step is held if customer binding is not approved.",
       "bindingIds": [
-        "B14",
-        "B08"
+        "B08",
+        "B27",
+        "B28",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -818,8 +962,10 @@ export const demoCatalogue = {
       "operation": "Accepted SV-6 attribution and fee derivation; source-linked payment/value views; CH-8 pack/download standalone verify",
       "expectedEvidence": "Found Q£800; fee £80; yours before VAT/tax£720; tracked£3,600 with£0 fee. Paid£41,280 ≠ fee base. Pack walks source→lock→reveal→approved line→invoice→settled receipt/line allocation.",
       "bindingIds": [
+        "B17",
         "B23",
-        "B17"
+        "B29",
+        "B30"
       ],
       "projects": [
         "mobile-360",
@@ -833,7 +979,8 @@ export const demoCatalogue = {
       "operation": "Twelve monthly Solo periods; daily target places for full periods(1,1,1,2,2,2,2,2,2,3,3,4), reached by actual job activity/ends",
       "expectedEvidence": "£29 each period; £348 across twelve actual monthly payments. Annual-plan activation remains off.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -847,7 +994,8 @@ export const demoCatalogue = {
       "operation": "Twelve monthly Builder periods; full-period places(3,4,4,4,4,5,5,5,5,6,6,7)",
       "expectedEvidence": "£69 each period; £828 across twelve actual monthly payments. Annual-plan activation remains off.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -861,7 +1009,8 @@ export const demoCatalogue = {
       "operation": "Builder eighth counted place throughout 30-day period",
       "expectedEvidence": "£89.00. Requires source-linked measured period, subscription statement, approval and simulated settlement; billed and settled principal remain distinct.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -875,7 +1024,8 @@ export const demoCatalogue = {
       "operation": "Builder eighth counted place for 15 of 30 London dates, seven for remaining 15",
       "expectedEvidence": "£79.00. Requires source-linked measured period, subscription statement, approval and simulated settlement; billed and settled principal remain distinct.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -889,7 +1039,8 @@ export const demoCatalogue = {
       "operation": "Builder 12 throughout period",
       "expectedEvidence": "£169.00. Requires source-linked measured period, subscription statement, approval and simulated settlement; billed and settled principal remain distinct.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -903,7 +1054,8 @@ export const demoCatalogue = {
       "operation": "Solo 5 throughout period",
       "expectedEvidence": "£49.00. Requires source-linked measured period, subscription statement, approval and simulated settlement; billed and settled principal remain distinct.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -917,7 +1069,8 @@ export const demoCatalogue = {
       "operation": "Solo 6th admitted grace place",
       "expectedEvidence": "£49.00; visible grace/upgrade Decision;7th refused without explicit move to Builder.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -931,7 +1084,8 @@ export const demoCatalogue = {
       "operation": "Solo 6 places, accepted upgrade effective day 11 of 30;10 days at £49 and20 at £69",
       "expectedEvidence": "(49×10+69×20)/30=£62.333…→£62.33 half-even once.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -945,7 +1099,8 @@ export const demoCatalogue = {
       "operation": "Builder 8 places for 1 day of31",
       "expectedEvidence": "£69+£20/31=£69.645…→£69.65.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -959,7 +1114,8 @@ export const demoCatalogue = {
       "operation": "Builder 13 then 14…17 places through actual admissions",
       "expectedEvidence": "13 is grace; crossing to14 immediately raises `track_review_due`;14–17 remain admitted; subscription≤£169; no automatic contractor track change. Exact day/phase marker retained.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -973,7 +1129,8 @@ export const demoCatalogue = {
       "operation": "Above7 on≥10 days in two of last 3 billing periods; a separate nontrigger profile",
       "expectedEvidence": "Sustained trigger independently tested against accepted versioned rule; not conflated with immediate beyond-grace trigger.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -987,7 +1144,9 @@ export const demoCatalogue = {
       "operation": "MON-1 lifecycle subjourneys: day 31 start; first photo day 5; finished+7 days;30 quiet days; restart; same customer/site; small allowances 4/7; irreversible£4,000 trip; linked live import; invoiced import; trial",
       "expectedEvidence": "Source-bound day ledger/rebuild equals expected period; cache damage cannot change bill; late facts create next-period correction, preserving issued documents. Hidden-signal worlds give identical bills and meter role has no shadow query.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1001,7 +1160,8 @@ export const demoCatalogue = {
       "operation": "Reach actual Solo capacity through fresh admissions; separately attempt resume/reopen/live-import bypasses and two simultaneous distinct-job admissions at the boundary; exercise pause/finish tails, locked-new-work refusal and different-customer/same-site grouping",
       "expectedEvidence": "Accepted cap/grace outcomes derive from real source commands; no more than six committed Solo places without upgrade; one permitted effect or typed capacity/stale conflict, no free import period or cross-customer coalescing. Job-list and next-price displays agree with the accepted day ledger.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25"
       ],
       "projects": [
         "mobile-360",
@@ -1015,7 +1175,15 @@ export const demoCatalogue = {
       "operation": "Approved fresh fictional business; first exact accepted job; card request via accepted synthetic provider adapter; choose Skip for now only here; actual first activation",
       "expectedEvidence": "Eligibility not a client flag; accepted all-key identity claim and trial-start fact; subscription0 while only trial job live; data/exports remain accessible. Missing sufficient independent identity remains held/refused under MON-3 contract, not invented by DEMO.",
       "bindingIds": [
-        "B24"
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B24",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1029,7 +1197,12 @@ export const demoCatalogue = {
       "operation": "Branch A: actual dispositions/terms/lock and completed Final Check",
       "expectedEvidence": "Trial ends at own successful lock; actual Final Check and SV-6 illustration operate normally. No synthetic “ended” flag.",
       "bindingIds": [
-        "B24"
+        "B13",
+        "B14",
+        "B24",
+        "B26",
+        "B27",
+        "B29"
       ],
       "projects": [
         "mobile-360",
@@ -1043,7 +1216,8 @@ export const demoCatalogue = {
       "operation": "Independent branch B: actual close with reason",
       "expectedEvidence": "Trial ends at own close; no Final Check on closed job; reopening cannot restore entitlement.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1057,7 +1231,8 @@ export const demoCatalogue = {
       "operation": "Independent branch C: advance approved reference clock to accepted London day 90 boundary",
       "expectedEvidence": "Before boundary still active; at boundary exactly one durable expiry/end, with approved DST/leap/sub-millisecond semantics. Persisted conversion/stub rules are external holds, not inherited elapsed-day preview behavior.",
       "bindingIds": [
-        "B24"
+        "B25",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1071,7 +1246,9 @@ export const demoCatalogue = {
       "operation": "Independent branch D: prepare second accepted job; attempt without card; complete real accepted synthetic card-setup command; activate second",
       "expectedEvidence": "Without card refuses and offers Add a card; pending/unknown/redirect-only/foreign-business card never qualifies; successful second activation ends trial atomically and prorates accepted subscription from that day; failed activation creates no end/key consumption.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1085,7 +1262,7 @@ export const demoCatalogue = {
       "operation": "Fresh proposed second entitlement with same company number; separately with same normalised phone+provider fingerprint, including cross-tenant attempt",
       "expectedEvidence": "Each duplicate refused; reset never frees either key. Test all available keys, not company-only fallback.",
       "bindingIds": [
-        "B24"
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1099,7 +1276,8 @@ export const demoCatalogue = {
       "operation": "Distinct second small/same-site/noncounting job; failed activation; close other job; own finish/quiet; imported or reopened/historical candidate",
       "expectedEvidence": "Card rule cannot be bypassed by counted-place grouping; failed second/other-job close/finish/quiet do not end; imported/reopened/historical rules follow accepted MON-3 authority.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B26"
       ],
       "projects": [
         "mobile-360",
@@ -1113,7 +1291,9 @@ export const demoCatalogue = {
       "operation": "Close/lock/expiry/second-activation race; delayed earlier fact; replay after session revoke; snapshot after reload",
       "expectedEvidence": "Earliest successful source wins; no duplicate claim/end/statement; no reopened trial; current authority still required. Every conversion figure links to existing accepted MON-2 computation.",
       "bindingIds": [
-        "B24"
+        "B24",
+        "B25",
+        "B26"
       ],
       "projects": [
         "mobile-360",
