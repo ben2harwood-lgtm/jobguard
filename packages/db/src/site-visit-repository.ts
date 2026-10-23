@@ -8,7 +8,7 @@ import { requireLiveJob, WatchdogError } from "./watchdog.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const startInput = z.object({ commandId: uuid, jobId: uuid }).strict();
 const completeInput = z.object({ commandId: uuid, jobId: uuid, visitId: uuid, closeoutAnswer: z.enum(["yes", "no"]) }).strict();
 type Kind = "start" | "complete";

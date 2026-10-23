@@ -8,19 +8,19 @@ const issuer = fictionalUrl.refine(value => new URL(value).origin === value);
 const binding = z.string().regex(/^[A-Za-z0-9_-]{43}$/u);
 export const oidcConfigV1 = z.object({
   version: z.literal("oidc-config.v1"), mode: z.literal("synthetic_demo"), provider: z.literal("in-process-test-idp"),
-  tenantId: z.string().uuid(), connectionId: z.string().uuid(), issuer,
+  tenantId: z.guid({ error: "Invalid uuid" }), connectionId: z.guid({ error: "Invalid uuid" }), issuer,
   clientId: z.string().min(1).max(200), redirectUri: fictionalUrl,
 }).strict();
 export const oidcRequestV1 = z.object({
-  version: z.literal("oidc-request.v1"), tenantId: z.string().uuid(), connectionId: z.string().uuid(), issuer,
+  version: z.literal("oidc-request.v1"), tenantId: z.guid({ error: "Invalid uuid" }), connectionId: z.guid({ error: "Invalid uuid" }), issuer,
   clientId: z.string().min(1).max(200), redirectUri: fictionalUrl,
   state: binding, nonce: binding, verifier: binding, browserBinding: binding,
   createdAt: z.number().int().nonnegative().safe(),
 }).strict();
 export const oidcClaimsV1 = z.object({
-  version: z.literal("oidc-claims.v1"), tenantId: z.string().uuid(), connectionId: z.string().uuid(), issuer,
+  version: z.literal("oidc-claims.v1"), tenantId: z.guid({ error: "Invalid uuid" }), connectionId: z.guid({ error: "Invalid uuid" }), issuer,
   subject: z.string().min(1).max(256),
-  email: z.string().email().max(320).refine(value => /@(?:[a-z0-9-]+\.)+invalid$/u.test(value)),
+  email: z.email({ error: "Invalid email" }).max(320).refine(value => /@(?:[a-z0-9-]+\.)+invalid$/u.test(value)),
   emailVerified: z.literal(true), groups: z.array(z.string().min(1).max(256)).max(100),
 }).strict();
 export type OidcConfig = z.infer<typeof oidcConfigV1>;

@@ -12,14 +12,14 @@ export class MeterFoundationError extends Error {
   }
 }
 
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+function parse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const result = schema.safeParse(raw);
   if (!result.success) throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT");
   return result.data;
 }
 
 const count = z.number().int().nonnegative().safe();
-const uuid = z.string().uuid().transform(value => value.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(value => value.toLowerCase());
 // Meter dates use years 0001–9999; Intl formats year zero as a year in another era.
 const workFactTimeV1 = sourceTimeV1.refine(value => !value.startsWith("0000-"));
 export const meterMoneyV1 = z.object({

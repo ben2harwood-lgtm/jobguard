@@ -18,7 +18,7 @@ export const FINAL_CHECK_TERMS_STATEMENTS = Object.freeze([
 ] as const);
 export const scopeDispositionValues = ["done", "removed", "deferred"] as const;
 export const scopeDispositionV1 = z.enum(scopeDispositionValues);
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 export const finalAccountLockCommandV1 = z.object({
     version: z.literal("final-account.lock.v1"), commandId: uuid,
     finalAccountRevisionId: uuid, expectedRevision: z.number().int().nonnegative().safe(),
