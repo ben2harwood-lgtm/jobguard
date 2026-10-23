@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-vite-737-r3b": {
+      "branches": [
+        "codex/sandbox/deps-vite-737-r3b"
+      ],
+      "receipt": "docs/verdicts/DEPS-VITE-737-R3B/BUILDER_RECEIPT.md",
+      "note": "Bounded R4 dependency security patches; no web workflow. Own lane path is implicitly permitted by lanePathAllowed, avoiding prohibited self-grant.",
+      "allow": [
+        "package.json",
+        "apps/api/package.json",
+        "apps/web/package.json",
+        "packages/ai/package.json",
+        "packages/config/package.json",
+        "packages/core/package.json",
+        "packages/db/package.json",
+        "packages/storage/package.json",
+        "pnpm-lock.yaml",
+        "docs/verdicts/DEPS-VITE-737-R3B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
