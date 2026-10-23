@@ -6,7 +6,7 @@
         "codex/sandbox/sv5pre-0204-renumber"
       ],
       "receipt": "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md",
-      "note": "SV5PRE-0204-RESERVED-RENUMBER-20261022; source-only exact reserved 0199 to 0204 mapping under C216. No product repair or acceptance. Own lane file authorized implicitly by lanePathAllowed; evidence: /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/output",
+      "note": "C238 authorized SV5PRE repair round for PR #189 + stacked #309 (24 October 2026): quarantine lock, verified status, tenant/job-scoped upload marker, S28 negative setup and hygiene. Extends the existing 0204 renumber scope with only this repair’s extra implementation/test paths. Own lane file is implicitly allowed. The explicitly ordered shared-register edit cannot be self-granted by mergeLanePolicy; dispatcher/coordinator handling of that edit and the origin/main stacked comparison remains required. No technical acceptance or release authorization.",
       "allow": [
         "packages/db/migrations/0199_final_check_prerequisites.sql",
         "packages/db/migrations/0204_final_check_prerequisites.sql",
@@ -17,7 +17,12 @@
         "packages/db/test/sv5pre-fixtures.ts",
         "packages/db/test/sv5pre-upgrade.integration.test.ts",
         "docs/ledger/SV5PRE-0204-RENUMBER.md",
-        "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md"
+        "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md",
+        "packages/db/src/final-account-lock-repository.ts",
+        "packages/db/test/sv5pre-completion.integration.test.ts",
+        "packages/db/test/serious-b9.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }

@@ -161,6 +161,7 @@ export async function issueHistoricalInvoice(admin: Pool, tenantId: string, inpu
  const end = text.indexOf('END $$;', start) + 'END $$;'.length;
  if (start < 0 || end <= start) throw new Error('historical issuer source not found');
  await admin.query(text.slice(start, end).replace('app.issue_practice_customer_invoice(', 'app.historical_issue_practice_customer_invoice('));
+ await admin.query('REVOKE ALL ON FUNCTION app.historical_issue_practice_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,date) FROM PUBLIC');
  const db = await admin.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);

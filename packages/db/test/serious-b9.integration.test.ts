@@ -227,7 +227,10 @@ async function reverse(f: Fixture, allocationId: string, grossPence: number, cre
 
 
 it.each([false,true])("S28: penny-valued lines conserve issued tax (saved binding %s)", async bound => {
- const f=await fixture({ baselineNet:16001, catchNet:15999, bound, paymentAmounts:[38400], movementNames:["receipt-384"] });
+ const f=await fixture({ historical: !bound, baselineNet:16001, catchNet:15999, bound, paymentAmounts:[38400], movementNames:["receipt-384"] });
+ // Restore dc5721230's unbound fallback: the historical issuer saves no invoice-line binding.
+ expect((await admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND invoice_id=$2",[DEMO_TENANT_ID,f.invoiceId])).rows[0].n).toBe(bound ? 1 : 0);
+ expect((await admin.query("SELECT count(*)::int n FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[DEMO_TENANT_ID,f.invoiceId])).rows[0].n).toBe(bound ? 2 : 0);
  const view=await allocate(f,f.payment1,38400);
  expect(total(view.lines)).toEqual({ numerator:"32000",denominator:"1" });
  expect(total(view.lines.filter(l=>l.lineId===f.lineId))).toEqual({ numerator:"16001",denominator:"1" });

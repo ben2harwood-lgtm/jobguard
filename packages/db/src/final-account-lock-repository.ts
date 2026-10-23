@@ -19,7 +19,7 @@ const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisi
  recipient: z.string().email().regex(/@example\.invalid$/u), issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 }).strict();
 const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
-function typed(error: unknown, uploadInFlight = true): never {
+function typed(error: unknown, uploadInFlight = false): never {
  const e = error as { message?: string; detail?: string };
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
  // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.
@@ -77,8 +77,11 @@ export class FinalAccountLockRepository {
    return lockProjection(row);
   }); } catch (error) {
    if ((error as { code?: string }).code === "55P03") {
-    // Look from a fresh statement (the failed transaction is gone): is any evidence upload write in flight?
-    const inFlight = await this.pool.query<{ held: boolean }>("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='relation' AND relation='app.evidence_upload'::regclass AND mode='RowExclusiveLock' AND granted AND pid<>pg_backend_pid()) held").then(r => r.rows[0]?.held === true, () => true);
+    // The failed transaction is gone. Inspect only the shared upload marker for this verified tenant/job.
+    const inFlight = await this.pool.query<{ held: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_locks
+     WHERE locktype='advisory' AND classid=(hashtext('final_check_upload:'||$1::text)::bigint & 4294967295)::oid
+     AND objid=(hashtext($2::text)::bigint & 4294967295)::oid AND objsubid=2
+     AND mode='ShareLock' AND granted AND pid<>pg_backend_pid()) held`, [context.tenantId, input.jobId]).then(r => r.rows[0]?.held === true, () => false);
     return typed(error, inFlight);
    }
    return typed(error);

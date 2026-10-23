@@ -94,10 +94,19 @@ DECLARE prior text:=current_setting('app.tenant_id',true);
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(prior,'')::uuid AND NOT pg_has_role(session_user,'jobguard_migration','USAGE') AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
+ -- A shared marker identifies only this tenant/job's in-flight uploads on a bounded lock timeout.
+ -- It never conflicts with another upload or acquires a business lock.
+ IF TG_TABLE_NAME='evidence_upload' THEN
+  PERFORM pg_advisory_xact_lock_shared(hashtext('final_check_upload:'||NEW.tenant_id::text),hashtext(NEW.job_id::text));
+ END IF;
  -- SHARE matches the watchdog live guard and blocks the exclusive lock/freeze/publication
  -- without upgrading concurrent evidence commands from SHARE to UPDATE.
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;
  IF TG_TABLE_NAME='evidence_upload' THEN
+  IF TG_OP='UPDATE' AND OLD.state='verified' AND NEW.state IS DISTINCT FROM OLD.state
+   AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=OLD.tenant_id AND job_id=OLD.job_id) THEN
+   RAISE EXCEPTION 'FINAL_CHECK_VERIFIED_SOURCE_LOCKED' USING ERRCODE='55000';
+  END IF;
   -- Preserve supplied receipts. A later insert cannot claim a place before an existing lock.
   IF TG_OP='INSERT' AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND NEW.server_received_at<=locked_at) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='55000';
   ELSIF TG_OP='UPDATE' AND ROW(NEW.tenant_id,NEW.id,NEW.job_id,NEW.server_received_at,NEW.object_key,NEW.expected_sha256,NEW.expected_content_type) IS DISTINCT FROM ROW(OLD.tenant_id,OLD.id,OLD.job_id,OLD.server_received_at,OLD.object_key,OLD.expected_sha256,OLD.expected_content_type) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='42501'; END IF;
@@ -132,8 +141,8 @@ BEGIN
  INSERT INTO app.final_check_manifest_source(tenant_id,job_id,manifest_id,id,upload_id,source_kind,evidence_id,object_version_id,sha256,source_received_at,evidence_received_at,frozen_input_hash,adapter_version,excluded_state,excluded_reason)
  SELECT u.tenant_id,u.job_id,NEW.id,u.id,u.id,'evidence_upload',e.id,e.object_version_id,e.sha256,u.server_received_at,e.server_received_at,
  app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type)),NEW.detector_version,
- CASE WHEN u.state IN('rejected','quarantined') THEN u.state WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired' END,
- CASE WHEN u.state='rejected' THEN coalesce(u.rejection_code,'rejected') WHEN u.state='quarantined' THEN 'quarantined' WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired_unswept' END
+ CASE WHEN u.state='rejected' THEN u.state WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired' END,
+ CASE WHEN u.state='rejected' THEN coalesce(u.rejection_code,'rejected') WHEN u.state='pending' AND u.expires_at<=clock_timestamp() THEN 'expired_unswept' END
  FROM app.evidence_upload u LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id,e.kind)=(u.tenant_id,u.job_id,u.id,'original')
  WHERE u.tenant_id=NEW.tenant_id AND u.job_id=NEW.job_id AND u.server_received_at<=NEW.evidence_cutoff_at;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'inputHash',frozen_input_hash) ORDER BY id),'[]'),count(*) INTO inventory,NEW.source_count FROM app.final_check_manifest_source WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND manifest_id=NEW.id;
@@ -587,9 +596,11 @@ BEGIN
  WHERE x.tenant_id=p_tenant AND x.job_id=p_job AND x.id=p_revision AND x.revision=p_expected AND NOT x.issue_blocked;
  IF NOT FOUND THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
  -- C135 / R1: a site photo begun before the lock must finish its check first. After the lock the job-work-state rule refuses any
- -- verification of a photo upload, so a pending one could never be checked and the final check could never complete.
- IF EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job AND u.state='pending'
-  AND u.expected_content_type IN('image/png','image/jpeg','image/webp') AND u.expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_UPLOADS_IN_PROGRESS' USING ERRCODE='55000'; END IF;
+ -- verification of a photo upload, so an unfinished one could never be checked and the final check could never complete.
+ -- Quarantined is also the temporary scan state; no final-quarantine discriminator exists, so all quarantine blocks.
+ IF EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job
+  AND (u.state='quarantined' OR (u.state='pending' AND u.expected_content_type IN('image/png','image/jpeg','image/webp')
+   AND u.expires_at>clock_timestamp()))) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_UPLOADS_IN_PROGRESS' USING ERRCODE='55000'; END IF;
  PERFORM 1 FROM app.variation WHERE tenant_id=p_tenant AND job_id=p_job ORDER BY id FOR UPDATE;
  -- Both directions matter: missing, replaced, duplicated or spurious approved lines require reassembly.
  -- Approval writers lock their variation before inserting approval, so this statement runs after all waits.
