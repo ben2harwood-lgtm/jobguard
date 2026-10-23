@@ -6,6 +6,43 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { posix, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { createHash } from 'node:crypto';
+
+export const BASELINE_PATH = 'tools/commercial-integrity-current-source-guard.unresolved.json';
+const fingerprintCache = new WeakMap();
+// Bind the full statement bytes (excluding leading trivia), cause and occurrence.
+// Line movement is harmless; edits inside a reviewed construct require review.
+function fingerprint(node, dependency) {
+  if (node && fingerprintCache.get(node)?.has(dependency)) return fingerprintCache.get(node).get(dependency);
+  let construct = node;
+  while (construct?.parent && !ts.isStatement(construct)) construct = construct.parent;
+  const text = construct?.getText() ?? '';
+  // Distinct identical occurrences are separate cases; duplicated new code cannot
+  // borrow an existing exception. Root-chain duplicates still share one case.
+  let occurrence = 0;
+  if (construct) {
+    const count = n => {
+      if (n.getStart() >= construct.getStart()) return;
+      if (n.kind === construct.kind && n.getText() === text) occurrence++;
+      ts.forEachChild(n, count);
+    };
+    count(construct.getSourceFile());
+  }
+  const result = createHash('sha256').update(JSON.stringify([text, dependency, occurrence])).digest('hex');
+  if (node) { if (!fingerprintCache.has(node)) fingerprintCache.set(node, new Map()); fingerprintCache.get(node).set(dependency, result); }
+  return result;
+}
+
+export function applyUnresolvedBaseline(diagnostics, entries) {
+  const key = d => JSON.stringify([d.code, d.file, d.fingerprint]);
+  const valid = Array.isArray(entries) && entries.every(e => e && e.code === 'UNRESOLVED_COVERED_EDGE' && typeof e.file === 'string' && Number.isInteger(e.line) && e.line > 0 && /^[a-f0-9]{64}$/u.test(e.fingerprint) && typeof e.reason === 'string' && e.reason.trim());
+  const failure = dependency => ({ code: 'INVALID_UNRESOLVED_BASELINE', file: BASELINE_PATH, line: 1, dependency, chain: [BASELINE_PATH] });
+  if (!valid || new Set(entries.map(key)).size !== entries.length) return [...diagnostics, failure('invalid or duplicate baseline entries')];
+  const allowed = new Set(entries.map(key));
+  const occurring = new Set(diagnostics.filter(d => d.code === 'UNRESOLVED_COVERED_EDGE').map(key));
+  return [...diagnostics.filter(d => d.code !== 'UNRESOLVED_COVERED_EDGE' || !allowed.has(key(d))),
+    ...entries.filter(e => !occurring.has(key(e))).map(e => ({ ...e, code: 'STALE_UNRESOLVED_BASELINE', dependency: e.reason, chain: [e.file] }))];
+}
 
 export const DIRECTORIES = ['packages/core/src', 'packages/db/src', 'apps/api/src', 'apps/web/app'];
 export const ORIGINS = ['packages/core/src/commercial-integrity.ts', 'packages/db/src/commercial-integrity-repository.ts', 'packages/db/src/commercial-integrity-application-repository.ts', 'apps/api/src/commercial-integrity.application.ts', 'apps/api/src/commercial-integrity.contracts.ts'];
@@ -35,12 +72,15 @@ export function loadRepoProject(root = fileURLToPath(new URL('..', import.meta.u
       }
     } catch { errors.push(f+': invalid package manifest'); }
   }
-  const p = createProject(files); p.loadErrors = errors; return p;
+  const p = createProject(files); p.loadErrors = errors;
+  try { p.unresolvedBaseline = JSON.parse(readFileSync(join(root, BASELINE_PATH), 'utf8')); }
+  catch { p.unresolvedBaseline = {}; }
+  return p;
 }
 
-export function checkCommercialIntegrityBoundary(p) {
+export function checkCommercialIntegrityBoundary(p, { baseline = p.unresolvedBaseline } = {}) {
   const diagnostics = [], keys = new Set();
-  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain]}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
+  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain], ...(code === 'UNRESOLVED_COVERED_EDGE' ? { fingerprint: fingerprint(node, dependency) } : {})}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
   const unresolved = (f,n,d,c) => emit('UNRESOLVED_COVERED_EDGE',f,n,d,c);
   for (const err of p.loadErrors) unresolved(err.split(':')[0],null,err,[err.split(':')[0]]);
   for (const dir of DIRECTORIES) if (![...p.sources.keys()].some(f => f.startsWith(dir+'/'))) unresolved(dir,null,'missing required source directory',[dir]);
@@ -114,14 +154,63 @@ export function checkCommercialIntegrityBoundary(p) {
       };
       const binding=(n,seen=new Set())=> { if(!n) return null; if(ts.isPropertyAccessExpression(n)||ts.isElementAccessExpression(n)) { const b=binding(n.expression,seen); if(b?.name==='*') { const name=ts.isPropertyAccessExpression(n)?n.name.text:ts.isStringLiteral(n.argumentExpression)?n.argumentExpression.text:null; return {...b,name:name??'*',unsafe:!name}; } return null; } if(!ts.isIdentifier(n)) return null; const sym=symbol(n); if(!sym||seen.has(sym)) return null; seen.add(sym); const im=imports.get(f).get(sym); if(im) return im;
         const d=sym.valueDeclaration; if(d && ts.isVariableDeclaration(d) && d.initializer) { const b=binding(d.initializer,seen); if(b) { if(!(d.parent.flags & ts.NodeFlags.Const)) return {...b,unsafe:true}; return b; } } return null; };
-      const value=(n,seen=new Set())=> { if(!n) return undefined; if(ts.isStringLiteral(n)||ts.isNoSubstitutionTemplateLiteral(n)||ts.isNumericLiteral(n)) return n.text; if(ts.isParenthesizedExpression(n)||ts.isAsExpression(n)||ts.isNonNullExpression(n)) return value(n.expression,seen); if(ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.PlusToken) { const a=value(n.left,seen),b=value(n.right,seen); return a!==undefined&&b!==undefined?a+b:undefined; } if(ts.isIdentifier(n)) { const sym=symbol(n),d=sym?.valueDeclaration; if(!seen.has(sym)&&d&&ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)) return value(d.initializer,new Set(seen).add(sym)); } return undefined; };
+      // Only closed scalar expressions and single-expression local helpers are evaluated.
+      // No inspected JavaScript runs. Parameters are substituted lexically, never by name.
+      const written = new Set();
+      const mark = x => { if (ts.isIdentifier(x)) written.add(symbol(x)); ts.forEachChild(x, mark); };
+      const writes = n => {
+        if ((ts.isForOfStatement(n) || ts.isForInStatement(n)) && !ts.isVariableDeclarationList(n.initializer)) mark(n.initializer);
+        if ((ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) || ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(n.operator))) {
+          const target = ts.isBinaryExpression(n) ? n.left : n.operand;
+          mark(target);
+        }
+        ts.forEachChild(n, writes);
+      }; writes(s);
+      const value=(n,seen=new Set(),env=new Map())=> {
+        if(!n || seen.size > 64) return undefined;
+        if(ts.isStringLiteral(n)||ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+        if(ts.isNumericLiteral(n)) return Number(n.text);
+        if(ts.isParenthesizedExpression(n)||ts.isAsExpression(n)||ts.isNonNullExpression(n)) return value(n.expression,seen,env);
+        if(ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.PlusToken) {
+          const a=value(n.left,seen,env), b=value(n.right,seen,env);
+          return a!==undefined&&b!==undefined?a+b:undefined;
+        }
+        if(ts.isTemplateExpression(n)) {
+          let text=n.head.text;
+          for(const span of n.templateSpans) { const v=value(span.expression,seen,env); if(v===undefined) return undefined; text+=String(v)+span.literal.text; }
+          return text;
+        }
+        if(ts.isIdentifier(n)) {
+          const sym=symbol(n),d=sym?.valueDeclaration;
+          if(written.has(sym)) return undefined;
+          if(env.has(sym)) return env.get(sym);
+          if(!seen.has(sym)&&d&&ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)) return value(d.initializer,new Set(seen).add(sym),env);
+        }
+        if(ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+          const sym=symbol(n.expression),d=sym?.valueDeclaration;
+          if(!d || seen.has(sym) || written.has(sym)) return undefined;
+          const fn=ts.isFunctionDeclaration(d)?d:ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)?d.initializer:undefined;
+          if(!fn || !(ts.isFunctionDeclaration(fn)||ts.isArrowFunction(fn)||ts.isFunctionExpression(fn)) || fn.asteriskToken || fn.modifiers?.some(m=>m.kind===ts.SyntaxKind.AsyncKeyword) || !fn.body || fn.parameters.length!==n.arguments.length) return undefined;
+          const body=ts.isBlock(fn.body)?fn.body.statements.length===1&&ts.isReturnStatement(fn.body.statements[0])?fn.body.statements[0].expression:undefined:fn.body;
+          if(!body) return undefined;
+          const bound=new Map(env);
+          for(let i=0;i<fn.parameters.length;i++) {
+            const param=fn.parameters[i];
+            if(!ts.isIdentifier(param.name)||param.initializer||param.dotDotDotToken||written.has(symbol(param.name))) return undefined;
+            const v=value(n.arguments[i],seen,env); if(v===undefined) return undefined;
+            bound.set(symbol(param.name),v);
+          }
+          return value(body,new Set(seen).add(sym),bound);
+        }
+        return undefined;
+      };
       const visit=n=> {
         if(ts.isImportDeclaration(n)) { if(!n.importClause) follow(n.moduleSpecifier.text,'!side-effect',n); return; }
         if(ts.isExportDeclaration(n)||ts.isInterfaceDeclaration(n)||ts.isTypeAliasDeclaration(n)||ts.isTypeNode(n)) return;
         if(ts.isImportEqualsDeclaration(n)) { unresolved(f,n,'unsupported import binding',chain); return; }
         if(ts.isCallExpression(n)||ts.isNewExpression(n)) {
           const e=n.expression, terminal=ts.isPropertyAccessExpression(e)?e.name.text:ts.isElementAccessExpression(e)?value(e.argumentExpression):ts.isIdentifier(e)?e.text:'';
-          if(e.kind===ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e)&&e.text==='require')) {const spec=value(n.arguments?.[0]); if(spec===undefined) unresolved(f,n,'dynamic import/require',chain); else {
+          if(e.kind===ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e)&&e.text==='require')) {const spec=value(n.arguments?.[0]); if(typeof spec!=='string') unresolved(f,n,'dynamic import/require',chain); else {
             let use=n.parent;
             if(ts.isAwaitExpression(use)) use=use.parent;
             if(ts.isParenthesizedExpression(use)) use=use.parent;
@@ -150,12 +239,12 @@ export function checkCommercialIntegrityBoundary(p) {
       visit(s);
     }
   }
-  return diagnostics.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return (baseline == null ? diagnostics : applyUnresolvedBaseline(diagnostics, baseline)).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
 function inspectSql(node, query, params, value, file, chain, emit, unresolved, symbol) {
   const text=value(query);
-  if(text===undefined) return unresolved(file,node,'unknown query text/structure',chain);
+  if(typeof text!=='string') return unresolved(file,node,'unknown query text/structure',chain);
   const tokens=[], rx=/\s+|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|"(?:""|[^"])*"|'(?:''|[^'])*'|\$\d+|[A-Za-z_][A-Za-z_0-9$]*|[().,*=;]|./gy;
   for(const m of text.matchAll(rx)) { const s=m[0]; if(/^\s|^--|^\/\*/u.test(s)) continue; if(s[0]==='"') tokens.push({kind:'id',v:s.slice(1,-1).replaceAll('""','"').toLowerCase()}); else if(s[0]==="'") tokens.push({kind:'str',v:s.slice(1,-1).replaceAll("''", "'")}); else if(/^\$\d+$/u.test(s)) tokens.push({kind:'param',v:Number(s.slice(1))}); else if(/^[A-Za-z_]/u.test(s)) tokens.push({kind:'id',v:s.toLowerCase()}); else if(['"',"'",'/'].includes(s)) return unresolved(file,node,'unresolved SQL token',chain); else tokens.push({kind:'punct',v:s}); }
   const has=v=>tokens.some(t=>t.kind==='id'&&t.v===v);
@@ -194,7 +283,7 @@ if(process.argv[1] && fileURLToPath(import.meta.url)===process.argv[1]) {
     const project=loadRepoProject(process.argv[2]);
     const diagnostics=checkCommercialIntegrityBoundary(project);
     for(const d of diagnostics) console.error(JSON.stringify(d));
-    console.log(`${project.roots.length} protected roots; ${diagnostics.length} diagnostics`);
+    console.log(`${project.roots.length} protected roots; ${diagnostics.length} diagnostics; ${Array.isArray(project.unresolvedBaseline) ? project.unresolvedBaseline.length : 0} baselined unresolved cases`);
     process.exitCode=diagnostics.length?1:0;
   } catch(error) { console.error(JSON.stringify({code:'UNRESOLVED_COVERED_EDGE',file:process.argv[2]??'.',line:1,dependency:String(error.message),chain:[process.argv[2]??'.']})); process.exitCode=1; }
 }

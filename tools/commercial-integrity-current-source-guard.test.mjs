@@ -7,7 +7,7 @@ import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { createProject, loadRepoProject, checkCommercialIntegrityBoundary } from "./commercial-integrity-current-source-guard.mjs";
+import { createProject, loadRepoProject, checkCommercialIntegrityBoundary, applyUnresolvedBaseline } from "./commercial-integrity-current-source-guard.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const ORIGIN = "packages/core/src/commercial-integrity.ts";
@@ -58,7 +58,7 @@ function sourceFiles(dir, result = []) {
   return result;
 }
 
-test("CSG-01 installed repository has real origins and nonempty nested authority roots, and must have zero diagnostics for PASS", () => {
+test("CSG-01 installed repository has real origins and nonempty nested authority roots, and must have zero confirmed, unbaselined or stale diagnostics for PASS", () => {
   const files = ["packages/core/src", "packages/db/src", "apps/api/src", "apps/web/app"].flatMap(p => sourceFiles(join(root, p)));
   for (const path of Object.keys(anchors)) assert.ok(files.includes(path), path);
   for (const path of ["packages/core/src/fee.ts", "packages/db/src/account-repository.ts", "apps/api/src/effects/fee-posting.ts"]) assert.ok(files.includes(path), path);
@@ -307,3 +307,104 @@ test("CSG-03 external re-export leaves do not hide runtime references in local i
   [AUTHORITY]: 'import { safe } from "./bridge.js"; export const price = safe();',
   "packages/core/src/bridge.ts": 'export { safe } from "external-package"; import { evaluateCommercialIntegrity } from "./commercial-integrity.js"; evaluateCommercialIntegrity();',
 }, FORBIDDEN, "packages/core/src/bridge.ts", ORIGIN));
+
+// Each of the eleven resolved installed cases has both directions exercised.
+const fragmentCases = [
+  ["extra:135 originColumns", 'const originColumns = "*";', '`SELECT ${originColumns} FROM TABLE`'],
+  ["extra:147 nested originColumns", 'const originColumns = "*";', '`WITH x AS (SELECT 1) SELECT ${originColumns} FROM TABLE`'],
+  ["extra:193 permission function", 'function allowed(a: number, b: number): string { return `($${a} = $${b})`; }', '`SELECT * FROM TABLE WHERE ${allowed(1, 2)}`'],
+  ["extra:206 nested permission function", 'function allowed(a: number, b: number): string { return `($${a} = $${b})`; }', '`WITH x AS (SELECT 1) SELECT * FROM TABLE WHERE ${allowed(2, 3)}`'],
+  ["site-visit:139 timestampText", 'const timestampText = (column: string) => `to_char(${column}, "UTC")`;', '`SELECT ${timestampText("started_at")} FROM TABLE`'],
+  ["site-visit:144 timestampText", 'const timestampText = (column: string) => `to_char(${column}, "UTC")`;', '`SELECT ${timestampText("completed_at")} FROM TABLE`'],
+  ["work-order:125 TENANT_WIDE_IMPORT", 'const TENANT_WIDE_IMPORT = "true";', '`WITH me AS (SELECT ${TENANT_WIDE_IMPORT}) SELECT * FROM TABLE`'],
+  ["work-order:176 TENANT_WIDE_IMPORT", 'const TENANT_WIDE_IMPORT = "true";', '`SELECT * FROM TABLE WHERE ${TENANT_WIDE_IMPORT}`'],
+  ["work-order:182 permission builder", 'const WIDE = "true"; const visible = (restriction: string) => `SELECT * FROM TABLE WHERE ${WIDE} ${restriction}`;', '`WITH seen AS (${visible("")}) SELECT * FROM seen`'],
+  ["work-order:307 permission builder", 'const WIDE = "true"; const visible = (restriction: string) => `SELECT * FROM TABLE WHERE ${WIDE} ${restriction}`;', '`WITH seen AS (${visible("AND id=$1")}) SELECT * FROM seen`'],
+  ["work-order:312 COVERED_CLIENTS", 'const COVERED_CLIENTS = "SELECT * FROM TABLE";', '`WITH covered AS (${COVERED_CLIENTS}) SELECT * FROM covered`'],
+];
+for (const [name, declarations, expression] of fragmentCases) {
+  for (const forbidden of [false, true]) test(`r1 ${name} ${forbidden ? "retains forbidden SQL" : "resolves static SQL"}`, () => {
+    const source = `${declarations} export const price = () => db.query(${expression});`.replaceAll("TABLE", forbidden ? "app.commercial_integrity_value_fact" : "app.job");
+    if (forbidden) violation({ [AUTHORITY]: source }, SQL);
+    else clean({ [AUTHORITY]: source });
+  });
+}
+for (const [name, source] of [
+  ["runtime argument", 'const fragment = (x: string) => `SELECT * FROM ${x}`; db.query(fragment(runtime));'],
+  ["recursive helper", 'function fragment() { return fragment(); } db.query(fragment());'],
+  ["mutable helper", 'let fragment = () => "SELECT * FROM app.job"; db.query(fragment());'],
+  ["reassigned declaration", 'function fragment() { return "SELECT * FROM app.job"; } fragment = opaque; db.query(fragment());'],
+  ["for-of reassignment", 'function fragment() { return "SELECT * FROM app.job"; } for (fragment of replacements) {} db.query(fragment());'],
+  ["for-in reassignment", 'function fragment() { return "SELECT * FROM app.job"; } for (fragment in replacements) {} db.query(fragment());'],
+  ["side effect body", 'function fragment() { opaque(); return "SELECT * FROM app.job"; } db.query(fragment());'],
+  ["written parameter", 'function fragment(x: string) { return x = "SELECT * FROM app.job"; } db.query(fragment("SELECT * FROM app.commercial_integrity_value_fact"));'],
+  ["default parameter", 'function fragment(x = opaque()) { return x; } db.query(fragment());'],
+  ["async helper", 'const fragment = async () => "SELECT * FROM app.job"; db.query(fragment());'],
+  ["lexical shadow", 'const fragment = (x: string) => `SELECT * FROM ${x}`; function price(fragment: unknown) { return db.query(fragment("app.job")); }'],
+]) test(`r1 unsupported ${name} stays unresolved`, () => violation({ [AUTHORITY]: source }, UNKNOWN));
+test("r1 literal helper arguments retain forbidden receipt discriminator", () => violation({ [AUTHORITY]: 'const kind = (x: string) => x; db.query("SELECT result FROM app.command_receipt WHERE command_type=$1", [kind("commercial_integrity.review")]);' }, SQL));
+
+const entryFor = d => ({ file: d.file, line: d.line, fingerprint: d.fingerprint, reason: "Reviewed finite static-analysis limitation in this fixture", code: d.code });
+test("r1 baseline permits only the exact unresolved construct across root chains and line shifts", () => {
+  const source = 'db.query(runtimeQuery);';
+  const ds = diagnostics({ [AUTHORITY]: source });
+  const entries = ds.map(entryFor);
+  assert.deepEqual(applyUnresolvedBaseline(ds, entries), []);
+  assert.deepEqual(applyUnresolvedBaseline(diagnostics({ [AUTHORITY]: "\n// shifted\n" + source }), entries), []);
+  assert.deepEqual(applyUnresolvedBaseline([...ds, { ...ds[0], chain: ["other-root", AUTHORITY] }], entries), []);
+});
+test("r1 new or changed unresolved edges fail without baseline coverage", () => {
+  const ds = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery);' });
+  assert.ok(applyUnresolvedBaseline(ds, []).some(d => d.code === UNKNOWN));
+  const changed = diagnostics({ [AUTHORITY]: 'db.query(differentQuery);' });
+  const result = applyUnresolvedBaseline(changed, ds.map(entryFor));
+  assert.ok(result.some(d => d.code === UNKNOWN));
+  assert.ok(result.some(d => d.code === "STALE_UNRESOLVED_BASELINE"));
+});
+test("r1 resolved or deleted constructs fail as stale until baseline shrinks", () => {
+  const entries = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery);' }).map(entryFor);
+  assert.ok(applyUnresolvedBaseline([], entries).some(d => d.code === "STALE_UNRESOLVED_BASELINE"));
+  assert.deepEqual(applyUnresolvedBaseline([], []), []);
+});
+test("r1 baseline never masks confirmed forbidden SQL or dependencies", () => {
+  const ds = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery); db.query("SELECT * FROM app.commercial_integrity_value_fact"); import { evaluateCommercialIntegrity } from "./commercial-integrity.js"; evaluateCommercialIntegrity();' });
+  const entries = ds.filter(d => d.code === UNKNOWN).map(entryFor);
+  const remaining = applyUnresolvedBaseline(ds, entries);
+  assert.ok(remaining.some(d => d.code === SQL));
+  assert.ok(remaining.some(d => d.code === FORBIDDEN));
+  for (const code of [SQL, FORBIDDEN]) {
+    const invalid = [...entries, { ...entries[0], code }];
+    const failures = applyUnresolvedBaseline(ds, invalid);
+    assert.ok(failures.some(d => d.code === "INVALID_UNRESOLVED_BASELINE"));
+    assert.ok(failures.some(d => d.code === code));
+  }
+});
+test("r1 malformed and duplicate baseline entries fail closed", () => {
+  const ds = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery);' });
+  const e = entryFor(ds[0]);
+  for (const entries of [{}, [e, e], [{ ...e, reason: "" }], [{ ...e, fingerprint: "line:1" }]]) {
+    assert.ok(applyUnresolvedBaseline(ds, entries).some(d => d.code === "INVALID_UNRESOLVED_BASELINE"));
+  }
+});
+test("r1 a duplicated unresolved construct needs its own baseline entry", () => {
+  const ds = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery);' });
+  for (const second of ["db.query(runtimeQuery);", "db.query( runtimeQuery );"]) {
+    const doubled = diagnostics({ [AUTHORITY]: `db.query(runtimeQuery); ${second}` });
+    assert.equal(new Set(doubled.map(d => d.fingerprint)).size, 2);
+    assert.equal(applyUnresolvedBaseline(doubled, ds.map(entryFor)).filter(d => d.code === UNKNOWN).length, 1);
+  }
+});
+test("r1 repository-check API enforces baseline coverage, stale entries and confirmed violations", () => {
+  const entries = diagnostics({ [AUTHORITY]: 'db.query(runtimeQuery);' }).map(entryFor);
+  const check = source => {
+    const project = createProject({ ...base, [AUTHORITY]: source });
+    project.unresolvedBaseline = entries;
+    return checkCommercialIntegrityBoundary(project);
+  };
+  assert.deepEqual(check('db.query(runtimeQuery);'), []);
+  assert.ok(check('db.query(newRuntimeQuery);').some(d => d.code === UNKNOWN));
+  assert.ok(check('export const price = 1;').some(d => d.code === "STALE_UNRESOLVED_BASELINE"));
+  const confirmed = check('db.query(runtimeQuery); db.query("SELECT * FROM app.commercial_integrity_value_fact"); import { evaluateCommercialIntegrity } from "./commercial-integrity.js"; evaluateCommercialIntegrity();');
+  assert.ok(confirmed.some(d => d.code === SQL));
+  assert.ok(confirmed.some(d => d.code === FORBIDDEN));
+});
