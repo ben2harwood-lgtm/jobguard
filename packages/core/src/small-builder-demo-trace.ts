@@ -19,8 +19,12 @@ export const demoTraceSourceV1 = z.object({
   subjectId: identity, revision: identity, sha256: digest,
   values: z.array(z.object({ key: identity, value: demoTraceValueV1 }).strict()).min(1).max(1000),
 }).strict();
+// Closed preparation vocabulary: aliases are input compatibility only. Unknown IDs
+// fail schema validation, so renaming an external-action claim cannot skip its rule.
+const metricId = z.enum(["net", "external-actions", "real-external-actions", "External-Actions", "realExternalActions"])
+  .transform(id => id === "net" ? "net" as const : "external-actions" as const);
 const metric = z.object({
-  id: identity, value: demoTraceValueV1,
+  id: metricId, value: demoTraceValueV1,
   evidence: z.array(z.object({ sourceId: identity, key: identity }).strict()).min(1).max(1000),
 }).strict();
 const rowFields = { stepId: identity, metrics: z.array(metric).max(1000) };

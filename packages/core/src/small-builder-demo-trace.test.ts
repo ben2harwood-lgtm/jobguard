@@ -84,6 +84,49 @@ describe("DEMO-P2 pure preparation", () => {
     r.sources.pop(); r.rows[0].metrics[0].evidence.pop();
     expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("external_actions_evidence");
   });
+  it.each(["external-actions", "real-external-actions", "External-Actions", "realExternalActions"])(
+    "normalises %s and refuses fixture-only zero evidence", id => {
+      const r = JSON.parse(JSON.stringify(withMetric()));
+      const value = { kind: "count", count: 0 };
+      r.sources[0].values[0].value = value;
+      r.rows[0].metrics[0] = { id, value, evidence: [{ sourceId: "source-1", key: "net" }] };
+      expect(demoProductReportV1.parse(r).rows[0]!.metrics[0]!.id).toBe("external-actions");
+      expect(validateDemoProductReport(r)).toMatchObject({
+        structurallyComplete: false, issues: [{ code: "external_actions_evidence" }],
+      });
+      r.sources = ["adapter", "sentinel"].map(kind => ({ ...r.sources[0], id: kind, kind }));
+      r.rows[0].metrics[0].evidence = r.sources.map((s: { id: string }) => ({ sourceId: s.id, key: "net" }));
+      expect(validateDemoProductReport(r).structurallyComplete).toBe(true);
+      // Even a matching adapter/sentinel pair cannot turn an amount into an action count.
+      r.rows[0].metrics[0].value = { kind: "amount", pence: 0, currency: "GBP" };
+      for (const source of r.sources) source.values[0].value = r.rows[0].metrics[0].value;
+      expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("external_actions_evidence");
+    },
+  );
+  it("rejects unknown metric spellings instead of accepting a renamed external-action claim", () => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.rows[0].metrics[0].id = "real_external_actions_v2";
+    expect(demoProductReportV1.safeParse(r).success).toBe(false);
+    expect(validateDemoProductReport(r)).toMatchObject({ structurallyComplete: false, issues: [{ code: "invalid_schema" }] });
+  });
+  it("detects duplicate external-action identities after alias normalisation", () => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.sources = ["adapter", "sentinel"].map(kind => ({ ...r.sources[0], id: kind, kind, values: [{ key: "attempts", value: { kind: "count", count: 0 } }] }));
+    r.rows[0].metrics = ["external-actions", "realExternalActions"].map(id => ({
+      id, value: { kind: "count", count: 0 }, evidence: r.sources.map((s: { id: string }) => ({ sourceId: s.id, key: "attempts" })),
+    }));
+    expect(validateDemoProductReport(r)).toMatchObject({ structurallyComplete: false, issues: [{ code: "duplicate_identity" }] });
+  });
+  it.each(demoCatalogue.steps)("keeps repaired catalogue step $id blocked on its current bindings", step => {
+    const r = specimen(step.family);
+    const target = r.rows.find(row => row.stepId === step.id)!;
+    const observed = { ...target, state: "observed", metrics: withMetric().rows[0]!.metrics };
+    const { reason: _reason, ...withoutReason } = observed;
+    const input = { ...withMetric(), family: step.family, rows: r.rows.map(row => row.stepId === step.id ? withoutReason : row) };
+    expect(step.bindingIds.length).toBeGreaterThan(0);
+    for (const id of step.bindingIds) expect(demoCatalogue.bindings.find(binding => binding.id === id)?.status).toBe("HELD");
+    expect(validateDemoProductReport(input).issues).toContainEqual({ code: "held_binding", path: `rows.${r.rows.indexOf(target)}` });
+  });
   it("does not accept schema-complete external artifacts as verified verdicts", () => {
     const trace = { version: "small-builder-demo-acceptance-trace.v1", scope, reportSha256: digest, artifacts: [{
       kind: "claude", locator: "https://evidence.invalid/PASS.md", sha256: digest, commit: "b".repeat(40), provenance: "unverified",
