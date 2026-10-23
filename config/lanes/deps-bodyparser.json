@@ -3,8 +3,8 @@
   "lanes": {
     "deps-bodyparser": {
       "branches": ["codex/sandbox/deps-bodyparser"],
-      "note": "Security dependency override only; no web workflow. Exact changed file: package.json. This lane file is implicitly permitted; online lockfile resolution is required before commit.",
-      "allow": ["package.json"]
+      "note": "Security dependency override only; no web workflow. Exact changed files: package.json and pnpm-lock.yaml. This lane file is implicitly permitted; online lockfile resolution is required before commit.",
+      "allow": ["package.json", "pnpm-lock.yaml"]
     }
   }
 }
