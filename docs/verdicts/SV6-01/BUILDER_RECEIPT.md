@@ -143,3 +143,53 @@ No tests were deleted or weakened. Only the leaf implementation, its runtime tes
 Independent re-review of the repair and separate acceptance remain held, along with the existing source-owner/dependency and production gates. Root lane checks passed on the current starting commit plus working tree; dispatcher must bind CI and fresh verdicts to the eventual commit. This r1 does not resolve later review rounds or grant production fee authority.
 
 Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv6-01.txt`. No git write commands, commit, push or PR creation. HEAD remains `106cd0a3fddb7222cb1c9fbac309f1b6c0f75abd`; dispatcher owns commit/push and CI.
+
+
+## r1b
+
+23 October 2026. Repair round 1 part b, issued by the Track A+B dispatcher; builder Codex (issued gpt-6.1-sol, medium). Starting HEAD `164f88e794fdecf6bdd93474393aa9a3a8301782` (the committed r1 repair), branch `codex/sandbox/sv6-01`, initially clean. Read reviewer A's complete verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv6-01-claude-A-106cd0a3-20261023.md`; the repository-relative path is absent. Re-read AGENTS.md, BUILD_PLAN.md §10.2.8 and SV-6, the leaf contract, current implementation/tests, r1 receipt and lane allowlist. This is builder execution evidence, not an independent verdict or acceptance.
+
+Tests only: no real implementation defect appeared. Add 15 test cases without deleting or weakening earlier tests. A1's shared source is now explicitly cited as both evidence and disclosure, with exact duplicates and the `aa/AA` variant; add the exact `lineAllocationIds` `2a/2A` example. Existing r1 inventory case coverage is retained and supplemented with `aa/AA` for all three inventories. The r1 lowercase-only boundary rejects the uppercase entries before raw-string uniqueness can disagree with PostgreSQL. A2's false predicates, permanent exclusions and positive-principal examples are covered by r1; add the missing unresolved and dismissed dispute cases with nonempty reasons and valid excluded controls. A3 now covers duplicate/missing kinds at array length three, each inventory's foreign lock and wrong-kind source, a second unfrozen baseline source cited by the absence fact, and exact duplicate item IDs with matching counts. Each new case starts from a valid control. Only the runtime test file and this receipt change; no schema, contract, shared predicate, migration, policy, authorization, money calculation or external action changes.
+
+### Actual guard removals
+
+For each row, delete the actual production guard locally, execute the named test selection with `--maxWorkers=2`, record failure, and restore the exact original source (including a `finally` restoration). All mutations below executed and exited 1. No mutation remains; production source has no diff from r1. Names use `0`, `1`, `2` for baseline, capture and locked-bill inventory respectively.
+
+| Removed production guard | Failing test name(s) observed | Result |
+| --- | --- | --- |
+| One inventory per kind (`manifests.length !== 1` branch; original :80) | `S6-01-B r1b requires one frozen inventory per kind even with length three` | 1 failed; removing the entire branch also removes its `continue`, so the missing-kind iteration throws TypeError instead of returning the asserted validation refusal |
+| Entire lock/kind binding guard (original :82) | `S6-01-B r1b binds frozen inventory 0 to its lock` (also 1, 2); `S6-01-B r1b checks frozen inventory 0 source kind` (also 1, 2) | 6 failed |
+| Lock binding disjunct alone | `S6-01-B r1b binds frozen inventory 0 to its lock` (also 1, 2) | 3 failed; invalid inputs parsed successfully |
+| Source-kind binding disjunct alone | `S6-01-B r1b checks frozen inventory 0 source kind` (also 1, 2) | 3 failed; required kind-binding issue absent |
+| Absence citation guard (original :84) | `S6-01-B r1b requires absence to cite the frozen inventory rather than a second source` | 1 failed; invalid input parsed successfully |
+| Only itemIds uniqueness conjunct, preserving count equality (original :53) | `S6-01-B r1b requires unique itemIds in frozen inventory 0 with matching count` (also 1, 2) | 3 failed; exact duplicates parsed successfully despite matching counts |
+| Outcome/ready agreement guard, checking A2's additional dispute examples | `S6-01-D r1b refuses eligible outcome with reasons and unresolved dispute`; `S6-01-D r1b refuses eligible outcome with reasons and dismissed dispute` | 2 failed; invalid inputs parsed successfully |
+
+Wrong-kind inventory inputs also violate absence citation; those tests independently assert the specific `Wrong complete manifest binding` issue so citation refusal cannot conceal a missing kind guard. The kind disjunct removal confirms this. This assertion tests an existing validation rule, not a new product policy.
+
+Reproducer: `/private/tmp/jg-sv6-01-r1b-mutations.py`. Logs: `/private/tmp/jg-sv6-01-r1b-mutation-{one-per-kind,inventory-binding,inventory-lock,inventory-kind,frozen-citation,item-uniqueness,dispute-outcome}.log`. Focused mutation runs deliberately select only the corresponding tests; final leaf checks select both files in full. These are deterministic builder-run mutation checks, not model review.
+
+
+### Verification and handoff
+
+Existing installed Node `v24.17.0`, cached pnpm `10.28.1` through `PATH=/private/tmp/jg-ch5-c-tools:$PATH`; no install/download. Final checks ran sequentially through `HEAVY_SLOTS=1 /Users/benharwood/.local/bin/heavy-slot` using `/private/tmp/jg-sv6-01-r1b-checks.py`. Repository checks use `LANE_BASE_REF=origin/main`. The shared slot queue was respected; the wrapper's sysctl/ps host probes were sandbox-denied. Disk check showed 200 GiB free, memory free 55–64%; host load/process counts are not claimed.
+
+| Actual command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | Exit 0; includes negative compile tests |
+| `pnpm --filter @jobguard/core lint` | Exit 0 |
+| `pnpm --dir packages/core exec vitest run --maxWorkers=2 src/recovery-attribution-persistence.test.ts src/recovery-attribution-persistence.type.test.ts` | Exit 0; 2 files, 41 tests passed, no skips |
+| `pnpm --dir packages/core exec vitest run --maxWorkers=2 src/shadow-domain/attribution.test.ts src/shadow-domain/eligibility.test.ts src/shadow-domain/type-contracts.test.ts` | Exit 0; 3 files, 14 tests passed, no skips |
+| `pnpm typecheck --concurrency=1` | Exit 0; 7 tasks successful, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 0; 7 tasks successful, 2 cached; root purity, lane, money and commercial checks included |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; sv6-01, base dc572123, head 164f88e7 |
+| `pnpm build --concurrency=1` | Exit 0; 7 tasks successful, 2 cached; existing Next dependency-expression and sandbox cache IO warnings |
+| `pnpm openapi:check` | Exit 1; tsx CLI IPC pipe listen EPERM under sandbox restrictions |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator/check via socket-free loader; generated file unchanged |
+| `git diff --check`; exact working-tree path comparison with `config/lanes/sv6-01.json` | Exit 0; exactly the two permitted test/receipt paths; production source restored |
+
+Final logs: `/private/tmp/jg-sv6-01-r1b-{typecheck,package-lint,tests,regression,root-typecheck,lint,lanes,build,openapi,openapi-loader}.log`. These are local builder execution artifacts, not CI or independent review. No clean install, full-root test suite, PostgreSQL, migration, browser, provider or live-model run is claimed. DB/browser suites remain for dispatcher-run GitHub CI under the issued sandbox restriction. Tests-only changes introduce no subsystem that requires a new integration suite, migration/backfill, model evaluation, operational alert or release permission.
+
+Independent recheck has not occurred. Exact-commit CI, source-owner/dependency acknowledgements, two fresh independent verdicts, separate acceptance and production gates remain held. The earlier receipt is history; this section binds local execution to r1 plus the present working-tree repair, not to a future commit. The dispatcher owns committing/pushing and must bind CI and reviews to that final commit. No PR created; no git write commands, commit, push or merge. HEAD remains `164f88e794fdecf6bdd93474393aa9a3a8301782`.
+
+Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv6-01.txt`: `test(core): verify recovery attribution manifest guards`.
