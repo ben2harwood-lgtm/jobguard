@@ -198,3 +198,91 @@ No warning was suppressed. All writes are limited to issued lane paths,
 renaming its migration/note, the explicitly authorized MON1-L paths, and the
 requested temporary commit message/logs. HEAD remains `3d515205` on
 `codex/sandbox/mon1-s`; no git write command was run.
+
+
+## review repair 1
+
+23 October 2026. Issued RED money/meter repair of reviewed `e7589b38`.
+Working-tree starting HEAD is `ef9cd520` (dispatcher’s subsequent lane addition
+for `demo-bootstrap.ts`). No git write, commit, push or package installation.
+Read AGENTS.md, BUILD_PLAN.md §10.1.5 and MON-1, both lifecycle contracts,
+and both complete reviews at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-s-claude-{A,B}-e7589b38-20261023.md`.
+Those reviews say REPAIR for the former head; no verdict or acceptance of this
+repair is claimed.
+
+Changes:
+
+- 0209 guards cluster-wide meter-role creation and rejects privileged posture
+  or inherited roles. Bootstrap ensureRoles pre-creates meter alongside the
+  shadow roles, checks posture (including replication), and applies the same
+  PostgreSQL 16 ADMIN-only creator-holder exception. No role-assumption grant
+  to migration/runtime or broad schema CREATE grant is added.
+- All lifecycle functions retain jobguard_migration ownership, SECURITY DEFINER
+  and pg_catalog search_path. Renamed the capture local to v_revision at every
+  variable use, retaining revision column/JSON field names.
+- Ownership assertions now additionally require SECURITY DEFINER and the exact
+  search_path. Added a real second-database/same-cluster migrate-twice regression
+  to the own upgrade suite; this remains unexecuted locally.
+- Removed test-only source grants from the positive source suite: migration-owned
+  definers already use existing migration-owner source policies. M1S-02 now
+  demands the specific missing-agreement refusal, preserving zero partial scope
+  assertions instead of accepting a generic error for any broken routine.
+  This is a consequence of the ordered ownership change, not a grant bypass.
+- Corrected contract and migration note: missing meter grants no longer disable
+  these checked routines. Migration-owner privileges remain a trust boundary;
+  isolation from shadow tables is not claimed for that owner. Transitive review,
+  writer locking, audit/receipt integration and all clock/trial/practice/correction
+  and production holds remain. Rollback must not drop the cluster-wide role.
+- Rechecked MON1-S source/integration fixtures: no final_review/extra_origin branch
+  exists. The activation track’s backfilled_synthetic_fixture is valid and stays.
+
+Checks use cached pnpm 10.28.1 via PATH=/private/tmp/jg-mon1-l-bin:$PATH,
+Node v24.17.0 and installed dependencies. No database/browser server was started.
+
+| Command actually run | Result |
+| --- | --- |
+| pnpm --filter @jobguard/db typecheck | PASS |
+| pnpm --filter @jobguard/db lint | PASS |
+| pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-lifecycle-repository.test.ts src/meter-repository.test.ts src/meter-persistence.test.ts | PASS, 3 files / 21 tests |
+| tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext on all four meter-lifecycle integration test files | PASS static checking only |
+| LANE_BASE_REF=3d515205 pnpm lint:lanes | PASS before final receipt; final rerun below |
+| LANE_BASE_REF=origin/main pnpm lint --concurrency=2 | FAIL at lane check for inherited out-of-lane stack paths; purity passed. Package db lint ran separately. |
+| pnpm openapi:check | FAIL: tsx IPC listen EPERM in sandbox |
+| node --import tsx src/generate-openapi.ts --check (apps/api) | PASS |
+| pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace' | FAIL: existing mock supplies posture only for shadow roles, not new meter role. PostgreSQL tests skipped by name filter. |
+| git diff --check | PASS before final receipt; final rerun below |
+
+The existing SQL-trace fixture is outside the issued lane. Requested explicit
+permission to update packages/db/test/demo-bootstrap.integration.test.ts and
+prepared the concrete narrow patch at /private/tmp/jg-mon1-s-bootstrap-test.patch.
+It adds meter to the mock, supplies replication posture and asserts meter
+provisioning/posture occurs before SET ROLE. It does not relax a check.
+Pending that authorization the test file and lane register remain untouched.
+This known failing mock must be repaired before technical acceptance.
+
+NOT RUN: PostgreSQL, test:db, test:migrations, real demo-bootstrap “creates roles”
+case, M1S-01/03/04 capture/cache/replay, second-database migration, browser suites.
+Reviewer A/dispatcher CI must run these after commit/push; static/type/unit
+checks do not establish successful SQL application or runtime tenant isolation.
+No new migration file, backfill, commercial fee, provider route, prompt/model,
+external action or production capability is enabled.
+Logs: /private/tmp/jg-mon1-s-review-repair1-*.log.
+Intended commit message: /private/tmp/jg-msg-mon1-s.txt.
+
+Final available-check results:
+
+| Command | Result |
+| --- | --- |
+| pnpm build --concurrency=2 | PASS, 7/7 tasks, 3 cached, 2m55.435s |
+| pnpm typecheck --concurrency=2 | PASS, 7/7 tasks, 2 cached, 1m21.316s |
+| LANE_BASE_REF=3d515205 pnpm lint:lanes (final receipt included) | PASS |
+| LANE_BASE_REF=origin/main pnpm lint:lanes | FAIL, same inherited out-of-lane paths |
+| node tools/money-arithmetic-lint.mjs | PASS |
+| node tools/commercial-boundary-lint.mjs | PASS |
+| git diff --check | PASS |
+
+Build warnings: Turbo cache IO permissions; existing Next tracing-root, CSS
+and Nest/file-type/computed-dependency warnings. None suppressed. The SQL-trace
+mock failure remains an explicit hold pending the requested test-file lane
+permission; no successful real-bootstrap or PostgreSQL result is claimed.

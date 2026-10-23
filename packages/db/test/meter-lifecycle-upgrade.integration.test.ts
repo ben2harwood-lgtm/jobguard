@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { Pool } from 'pg';
 import { afterAll,beforeAll,describe,expect,it } from 'vitest';
 import { MIGRATION_URLS,migrate } from '../src/migrate.js';
 import { createWorkFixture,closeWorkFixture,seedWorkJob,type WorkFixture } from './job-work-state-fixtures.js';
@@ -35,4 +36,18 @@ describe('MON1-S own-0209 predecessor upgrade, CI PostgreSQL only',()=>{
    expect(await proofDifferences(db,before)).not.toEqual({rows:[],types:[]});
   });
  });
+ it('M1S-10 migrates a second database in the same cluster with the meter role already present',async()=>{
+  const name=`mon1s_${randomUUID().replaceAll('-','')}`;
+  await f.admin.query(`CREATE DATABASE ${name}`);
+  const second=new Pool({...f.admin.options,database:name});
+  try {
+   await migrate(second);
+   await migrate(second);
+   expect((await second.query('SELECT count(*)::int n FROM public.jobguard_schema_migration')).rows[0].n).toBe(MIGRATION_URLS.length);
+   expect((await second.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig FROM pg_proc WHERE oid='app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)'::regprocedure")).rows).toEqual([
+    {owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog']}
+   ]);
+  } finally { await second.end(); }
+ },60000);
+
 });
