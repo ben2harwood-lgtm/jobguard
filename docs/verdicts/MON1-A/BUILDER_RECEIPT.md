@@ -339,3 +339,96 @@ silently declared repaired by this scoped round.
 
 Intended conventional commit subject/body written to
 `/private/tmp/jg-msg-mon1-a.txt`. Working-tree handoff only; no commit or push.
+
+
+## MON1-A parent/catalogue catch-up — 23 October 2026
+
+Order: accepted base `90a5c5ac`, parent `codex/sandbox/mon1-s` at
+`5831f0c2` (accepted `d4300ba8` plus its 0209 catalogue rows). Inspected
+AGENTS.md, BUILD_PLAN.md MON-1 and LP-0, migrations 0209/0210, and the
+MON1-T (`153dd5b2`) and MON1-S catalogue additions before editing.
+
+The sandbox prohibits Git metadata writes. Applied the exact four-file parent
+delta from merge base `24aa4f91` into the working tree using read-only Git object
+reads and ordinary file writes. Each destination equalled the merge-base version,
+so there were no content conflicts. This is merge content, not recorded merge
+ancestry: the dispatcher must record integration/commit metadata outside this
+sandbox. No git add, commit, checkout, merge, push or release was run.
+
+Added only the 0210 routine owner entry and private routine protection record to
+`docs/contracts/lp-0-effective-privileges-v1.json`, using the existing MON1-S
+`a-mon1b-meter` group. `app.mon1_admit_place(uuid,uuid,text,uuid)` is owned by
+`jobguard_migration`, SECURITY INVOKER, search_path pg_catalog, not reachable by
+non-owner roles, and has no runtime/PUBLIC/other execute grant or static business
+writes/calls. Its definitionSha256 remains null under the MON1-T/S source-inspected
+catalogue convention; this is not PostgreSQL capture evidence. Migration 0210
+creates **no tables**, so there are no 0210 tenancy RLS/owner table-list rows to
+add. The merged tenancy list retains all eight 0209 table entries in both lists.
+No SQL, product behavior, lane policy, grants or dependency versions changed.
+No new migration, runtime grant, operational alert or compatibility change.
+
+Structural comparison passed: all four parent files match `5831f0c2` exactly,
+except the two explicitly added 0210 LP-0 rows; every previous LP-0 entry and
+record, including relative order, is unchanged. All pre-existing MON1-A files
+matched HEAD byte-for-byte before this receipt append. `git diff --check` passed.
+This catch-up serializes the shared catalogue files after MON1-S.
+
+Validation used installed Node 24.17.0 and cached pnpm 10.28.1, without a clean
+install or dependency download. Initial attempts selected the global pnpm launcher
+and were interrupted before checks ran; subsequent commands used a temporary
+PATH wrapper invoking the cached pinned pnpm.cjs, with login-shell rewriting
+disabled. Logs are `/private/tmp/jg-mon1-a-*.log` (only the checks below describe
+this catch-up; other existing log names may belong to prior rounds).
+
+- PASS `pnpm typecheck`: 7 successful tasks, 2 cached.
+- PASS `pnpm build`: 7 successful tasks, 3 cached. Turbo emitted sandbox IO
+  warnings; Next emitted existing optional-dependency/tracing warnings.
+- FAIL `LANE_BASE_REF=origin/main pnpm lint` and `pnpm lint:lanes`: the MON1-A
+  lane rejects inherited branch paths and requested shared catalogue files.
+  Lane policy was deliberately left unchanged in this bounded order.
+- PASS `pnpm exec turbo run lint`: 7 successful tasks, 2 cached. An earlier
+  supplemental run was interrupted to reduce concurrent validation load.
+- PASS standalone money-arithmetic and commercial-boundary lint. Core purity
+  passed before the root lint stopped at the lane guard.
+- PASS `node --test tools/*.test.mjs`: 122 tests.
+- PASS core source unit suite: 128 files, 3028 tests.
+- PASS web source unit suite: 41 files, 875 tests. Initial `vitest run src`
+  discovered no web tests; corrected to the package's configured discovery.
+- PASS AI/config/storage source suites: 147/41/2 tests respectively. The AI
+  fixture result is not a live-model evaluation or production approval.
+- DB source-only unit run: 430 passed, one 30-second timeout in
+  `test/verify-audit-export-cli.test.ts`, during concurrent validation. Immediate
+  isolated rerun with the same timeout passed all 14 tests in 1.55 seconds.
+- PASS final DB source-only unit rerun: 48 files, 431 tests; same exclusions,
+  worker limit and timeout. No assertions or implementation were changed.
+- API source run: 119 files passed, 7 failed; 2080 tests passed, 129 failed.
+  There were 128 unhandled listen EPERM errors and corresponding Supertest
+  null-port failures; one site-extra-pricing HTTP test timed out in its
+  10-second setup hook during concurrent checks. These HTTP checks require CI.
+  No API test is claimed green from this failed aggregate run.
+- FAIL `pnpm openapi:check`: tsx launcher cannot bind its IPC pipe (EPERM).
+  PASS equivalent `pnpm --filter @jobguard/api exec node --import tsx
+  src/generate-openapi.ts --check`, exit 0, no generated changes.
+
+Source unit commands (using installed dependencies):
+
+```sh
+pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/web exec vitest run --exclude '**/dist/**' --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/db exec vitest run --exclude '**/dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/api exec vitest run src --exclude '**/*isolation*.test.ts' --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/ai --filter @jobguard/config --filter @jobguard/storage -r exec vitest run src --maxWorkers=1 --testTimeout=30000
+```
+
+Full database, migration and browser suites NOT RUN: dispatcher states that this
+sandbox cannot bind localhost or start PostgreSQL. The DB unit command excludes
+integration and socket-allocation tests; the API source command excludes the two
+isolation suites that start PostgreSQL. Dispatcher GitHub CI must verify actual
+catalogue/grants/RLS, migrations and browser behavior after push. Existing
+commercial/security release holds, including the MON1-S shadow privilege hold,
+are unchanged. This receipt is builder evidence, not an independent model verdict
+or acceptance; exact-commit review and separate acceptance remain required.
+
+Final `git diff --check` passed. Intended conventional subject/body is in
+`/private/tmp/jg-msg-mon1-a.txt`. Final scope is the four parent-merge files
+plus this receipt; the LP-0 file adds exactly two rows beyond the parent.
