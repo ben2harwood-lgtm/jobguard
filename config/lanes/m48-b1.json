@@ -25,7 +25,10 @@
         "apps/web/app/ui/receipt-line-allocations.tsx",
         "apps/web/app/ui/receipt-line-allocations.test.tsx",
         "apps/web/e2e/M48-SOURCE-BRIDGE.spec.ts",
-        "docs/verdicts/M48-B1/BUILDER_RECEIPT.md"
+        "docs/verdicts/M48-B1/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/receipt-line-allocation-source.ts",
+        "packages/core/src/receipt-line-allocation-source.test.ts"
       ]
     }
   }
