@@ -71,3 +71,43 @@ After preserving reference bytes without trimming and using actual 5/6 original 
 Final `git diff --check` exits 0. Because new files are untracked and cannot be staged here, also inspected the complete new source/test/document text; no existing tracked file is modified. A read-only diagnostic using the actual `loadLanePolicy`, `selectLane` and `lanePathAllowed` exports selects only `m48-c0` and confirms all five working-tree additions are allowed. This diagnostic is explicitly **not** the missing actual lane-check PASS; dispatcher must commit then rerun root lint/lint:lanes.
 
 Intended conventional commit subject and body written to `/private/tmp/jg-msg-m48-c0.txt`. No git write command executed. Delivery is ready for dispatcher commit and required review/CI, with the holds above intact.
+
+## r1
+
+23 October 2026; builder Codex gpt-6.1-sol. Repair against inspected HEAD `84b1e1fe1d3d89aa935fb4e7b0ed0afa08e20d04`, branch `codex/sandbox/m48-c0`, initially clean. Read both full Claude verdicts first from `/Users/benharwood/.local/share/full-steam/jg-runs/v5-m48-c0-claude-{A,B}-84b1e1fe-20261023.md` (not present relative to this worktree), then repository instructions, applicable BUILD_PLAN contracts (§§10.2.8, 10.3.2, M4-8-S), lane and source contract. Both verdicts are REPAIR; this receipt does not replace them or claim independent acceptance.
+
+Tests-only repair of the issued missing guard coverage. Added ten test cases in the leaf test file; existing tests were neither removed nor weakened. Added valid controls for each new case. Over-allocation cases preserve the original 5/6 ratio: gross/net 96006/80005 and 96001/(480005/6), plus signed reversals, with exact-equal 96000/80000 accepted. The net-above-gross case uses original and allocated net 96001 against gross 96000, preserving the ratio. Zero-gross cases use zero net and distinct reversal IDs. Review tests use otherwise valid ready views, testing negative receipt proposals, linked receipts, positive reversals and missing reversal links; a separate test rejects `qualified: true` on the review itself.
+
+No defect found. Production source is unchanged. Only the lane-owned test and this receipt are changed; no migration, compatibility, provider, alert, prompt or production-policy change. Separate LATER findings remain outside this issued repair. All existing source-design, B1, CI, independent-final-head review, separate acceptance and release holds remain.
+
+### Guard deletion evidence
+
+Ran `/private/tmp/jg-m48-c0-r1-mutations.py`. Each mutation was applied separately to the actual working-tree source, run with pinned pnpm 10.28.1 against `src/receipt-line-allocation-source.test.ts --maxWorkers=2 --reporter=verbose -t <test prefix>`, then restored in `finally`. Every run exited 1 with an assertion failure (`expected true to be false`), not an import/type/setup failure. Nonmatching tests were filtered only during these sensitivity runs. Final source checked byte-for-byte against the pre-mutation text and with `git diff` (empty source diff).
+
+| Guard deleted locally, then restored | Observed failing test name(s) |
+|---|---|
+| `Allocation exceeds original line` conditional | `r1 rejects ratio-consistent over-allocation for receipt`; `r1 rejects ratio-consistent over-allocation for reversal` |
+| `Net exceeds gross` conditional | `r1 rejects original net above gross with a consistent allocation ratio` |
+| `gross > 0n &&` from receipt sign branch | `r1 rejects zero-gross receipt rows` |
+| `gross < 0n &&` from reversal sign branch | `r1 rejects zero-gross reversal rows` |
+| Review proposal sign/link conditional and issue | `r1 rejects review proposal sign/link mismatch: 'negative receipt'`; `'linked receipt'`; `'positive reversal'`; `'unlinked reversal'` (same full prefix for all four) |
+| Review object's `.strict()` | `r1 rejects unknown review keys` |
+
+All six mutants killed, ten new assertion cases fail collectively. Detailed logs: `/private/tmp/jg-m48-c0-r1-mutant-*.log`.
+
+### r1 executed checks and delivery
+
+Dependencies reused without installation. Node v24.17.0; pinned pnpm 10.28.1 executed from `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. The default pnpm launcher stalled attempting its automatic version/signature resolution and failed with registry fetch errors before running the initial test command; its separate version probe was interrupted. No package download/install was requested. Subsequent commands used a temporary `/private/tmp/jg-m48-c0-r1-bin/pnpm` wrapper invoking the already cached pinned executable; check runner additionally set `COREPACK_ENABLE_NETWORK=0`. No repository configuration changed.
+
+Actually run after restoring all source guards (check runner `/private/tmp/jg-m48-c0-r1-checks.py`, logs `/private/tmp/jg-m48-c0-r1-*.log`):
+
+- PASS: `pnpm --filter @jobguard/core typecheck` and `pnpm --filter @jobguard/core lint` (each exit 0).
+- PASS: `pnpm typecheck --concurrency=1` (7 successful tasks, exit 0).
+- PASS: `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` (7 successful tasks, exit 0).
+- PASS: `LANE_BASE_REF=origin/main pnpm lint:lanes` (exit 0; selected m48-c0, branch codex/sandbox/m48-c0, merge-base dc572123 against head 84b1e1fe, five original leaf paths).
+- PASS: `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/receipt-line-allocation-source.test.ts src/recovery-allocation.test.ts src/receipt-allocation.test.ts` — 103/103 tests, 3/3 files, exit 0. Ran once before mutations and again after restoration; leaf now has 20 tests including 10 new r1 cases.
+- PASS: `pnpm build --concurrency=1` (7 successful tasks, 2 cached, 1m32.454s, exit 0). Existing computed-import / webpack dependency warnings and sandbox cache IO warnings appeared; no checks were disabled.
+- `pnpm openapi:check`: exit 1 before generator execution because the tsx CLI's IPC socket bind was denied (`listen EPERM .../tsx-501/41269.pipe`). PASS via equivalent generator invocation from `apps/api`: `node --import tsx src/generate-openapi.ts --check` (exit 0; same source and `--check`, no socket needed). Log: `/private/tmp/jg-m48-c0-r1-openapi-loader.log`. The standard script still needs exact-head CI confirmation.
+- PASS: final `git diff --check`; production source diff empty. Final changed paths are only the leaf test and this receipt, both in the lane allowlist.
+
+No PostgreSQL/database/migration/browser suites or services run, per dispatcher sandbox instruction; these remain with GitHub CI after dispatcher push. No clean-install, whole-repository test-suite, exact-final-head CI, independent r1 review, technical acceptance or release claim. No commit, add, checkout, push or PR command executed. Intended conventional commit subject/body written to `/private/tmp/jg-msg-m48-c0.txt` for dispatcher use.
