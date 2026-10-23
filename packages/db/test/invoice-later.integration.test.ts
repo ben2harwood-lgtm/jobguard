@@ -6,6 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, CustomerBillingCommandService, withTenant } from "../src/index.js";
+import { prepareBaselineInvoice } from "./sv5pre-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
@@ -36,6 +37,7 @@ async function fresh(net = 20003, tax = 4001) {
  await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
   VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',$7,$8,$9,false,'[]')`, [revision,T,jobId,draft,H,quote,net,tax,net+tax]);
  await admin.query(`UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`, [T,draft,revision]);
+ await prepareBaselineInvoice(admin, runtime, T, jobId, M, revision, quote, net);
  const command = { jobId, finalAccountRevisionId: revision, actorMembershipId: M, commandId: randomUUID(),
   recipient: "practice@example.invalid", issuedOn: "2026-10-16" };
  return { jobId, command, invoice: await repo.issue(context,command) };
