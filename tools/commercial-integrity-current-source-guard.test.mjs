@@ -408,3 +408,69 @@ test("r1 repository-check API enforces baseline coverage, stale entries and conf
   assert.ok(confirmed.some(d => d.code === SQL));
   assert.ok(confirmed.some(d => d.code === FORBIDDEN));
 });
+
+// Independent Claude A/B review repair 1 repros.
+for (const [name, sql] of [
+  ['to_jsonb', 'SELECT to_jsonb(c) FROM app.command_receipt c WHERE c.command_type=$2'],
+  ['row_to_json', 'SELECT row_to_json(c) FROM app.command_receipt c'],
+  ['jsonb_agg', 'SELECT (SELECT jsonb_agg(c) FROM app.command_receipt c)'],
+  ['bare row', 'SELECT c FROM app.command_receipt c'],
+  ['IS FALSE', "SELECT result FROM app.command_receipt WHERE command_type='quote.send' IS FALSE"],
+  ['boolean comparison', "SELECT result FROM app.command_receipt WHERE (command_type='quote.send') = false"],
+  ['CASE', "SELECT result FROM app.command_receipt WHERE CASE WHEN command_type='quote.send' THEN false ELSE true END"],
+]) test(`review repair 1 receipt ${name} fails closed`, () => violation({ [AUTHORITY]: `db.query(${JSON.stringify(sql)});` }, UNKNOWN));
+for (const mutation of ['params[0]="commercial_integrity.review";', 'params.splice(0,1,"commercial_integrity.review");', 'opaque(params);']) {
+  test(`review repair 1 mutable or escaped array ${mutation}`, () => violation({ [AUTHORITY]: `const params=["quote.send"]; ${mutation} db.query("SELECT result FROM app.command_receipt WHERE command_type=$1",params);` }, UNKNOWN));
+}
+test('review repair 1 spread parameters cannot prove ordinal', () => violation({ [AUTHORITY]: 'db.query("SELECT result FROM app.command_receipt WHERE command_type=$2",[...lead,"quote.send"]);' }, UNKNOWN));
+for (const helper of ['claim', 'readReceipt', 'dispatch']) test(`review repair 1 advisory literal at new ${helper} call cannot borrow baseline`, () => {
+  const source=`function ${helper}(type: string) { db.query("SELECT result FROM app.command_receipt WHERE command_type=$1",[type]); }`;
+  const entries=diagnostics({[AUTHORITY]:source}).map(entryFor);
+  const ds=diagnostics({[AUTHORITY]:source+`${helper}("commercial_integrity.review");`});
+  assert.ok(applyUnresolvedBaseline(ds,entries).some(d=>d.code===SQL));
+});
+for (const declaration of ['const sql = runtime;', 'function sql() { return runtime; }']) test(`review repair 1 fingerprints bind feeding declaration ${declaration}`, () => {
+  const source=`${declaration} function price() { db.query(${declaration.startsWith('const')?'sql':'sql()'}); }`;
+  const entries=diagnostics({[AUTHORITY]:source}).map(entryFor);
+  const changed=diagnostics({[AUTHORITY]:source.replace('runtime','otherRuntime')});
+  const remaining=applyUnresolvedBaseline(changed,entries);
+  assert.ok(remaining.some(d=>d.code===UNKNOWN));
+  assert.ok(remaining.some(d=>d.code==='STALE_UNRESOLVED_BASELINE'));
+});
+for (const bad of [false,true]) test(`review repair 1 finite ternaries and literal defaults ${bad}`,()=>{
+  const source=`function owned(p="$3") { return \`SELECT * FROM ${bad?'app.commercial_integrity_activity_fact':'app.job'} WHERE id=\${p}\`; } const table=kind?"app.job":"app.job"; const sql=owned()+(kind?"":" UNION SELECT * FROM "+table); db.query(sql);`;
+  if(bad) violation({[AUTHORITY]:source},SQL); else clean({[AUTHORITY]:source});
+});
+test('review repair 1 decorated constructor emits runtime advisory dependency',()=>violation({
+  'apps/api/src/subscription.application.ts':'import { CommercialIntegrityApplication } from "./commercial-integrity.application.js"; @Injectable() export class SneakyFee { constructor(private readonly integrity: CommercialIntegrityApplication) {} fee(j) { return this.integrity.view(j); } }',
+},FORBIDDEN,'apps/api/src/subscription.application.ts'));
+// Reproduce edits at the exact installed sites without executing modified code.
+for (const [file, before, after] of [
+  ['apps/api/src/practice-access.ts','"app.evidence_upload"','"app.commercial_integrity_value_fact"'],
+  ['apps/api/src/practice-access.ts','SELECT id FROM app.evidence_object WHERE',"SELECT result AS id FROM app.command_receipt WHERE command_type='commercial_integrity.review' AND"],
+  ['packages/db/src/practice-session.ts','SELECT id FROM app.job WHERE','SELECT id FROM app.commercial_integrity_activity_fact WHERE'],
+  ['packages/db/src/practice-session.ts','JOIN app.recovery_case c', 'JOIN app.commercial_integrity_activity_fact c'],
+  ['packages/db/src/practice-session.ts',' SELECT id FROM practice_owned_job WHERE'," SELECT result FROM app.command_receipt WHERE command_type='commercial_integrity.review' AND"],
+]) test(`review repair 1 installed mutation ${file} ${after}`,()=>{
+  const project=loadRepoProject(root), original=project.texts.get(file);
+  assert.ok(original.includes(before));
+  const changed=createProject({...Object.fromEntries(project.texts),[file]:original.replace(before,after)});
+  const ds=checkCommercialIntegrityBoundary(changed,{baseline:project.unresolvedBaseline});
+  assert.ok(ds.some(d=>d.code===SQL),JSON.stringify(ds));
+});
+for (const [name, prefix, binding] of [
+  ['undecorated', '', 'import'], ['explicit type import', '@Injectable()', 'import type'],
+]) test(`review repair 1 ${name} constructor remains erased`,()=>clean({
+  'apps/api/src/subscription.application.ts':`${binding} { CommercialIntegrityApplication } from "./commercial-integrity.application.js"; ${prefix} export class Fee { constructor(private readonly integrity: CommercialIntegrityApplication) {} }`,
+}));
+test('review repair 1 decorated constructor safe dependency stays legal',()=>clean({
+  'apps/api/src/subscription.application.ts':'import { money } from "@jobguard/core"; @Injectable() export class Fee { constructor(private readonly ordinary: money) {} }',
+}));
+test('review repair 1 exact installed subscription injection repro',()=>{
+  const p=loadRepoProject(root), file='apps/api/src/subscription.application.ts';
+  const source=p.texts.get(file)+'\nimport { CommercialIntegrityApplication as Integrity } from "./commercial-integrity.application.js"; @Injectable() class SneakyFee { constructor(private readonly integrity: Integrity) {} fee(j) { return this.integrity.view(j); } }';
+  const ds=checkCommercialIntegrityBoundary(createProject({...Object.fromEntries(p.texts),[file]:source}),{baseline:p.unresolvedBaseline});
+  assert.ok(ds.some(d=>d.code===FORBIDDEN));
+});
+for(const sql of ['SELECT (SELECT 1 FROM app.job), c FROM app.command_receipt c', 'SELECT to_jsonb(app.command_receipt) FROM app.command_receipt']) test(`review repair 1 row projection ${sql}`,()=>violation({[AUTHORITY]:`db.query(${JSON.stringify(sql)});`},UNKNOWN));
+test('review repair 1 every fixed ternary alternative is inspected',()=>violation({[AUTHORITY]:'const table=flag?"app.job":"app.commercial_integrity_value_fact"; db.query(`SELECT * FROM ${table}`);'},SQL));

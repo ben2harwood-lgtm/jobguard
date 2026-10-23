@@ -148,3 +148,59 @@ Final source hashes (SHA-256):
 - Baseline: `9c2c90863af91d3d4e6b6194f867971b281b55b242204891ee75826ac7e6d1b9`.
 
 Final intended conventional commit subject/body: `/private/tmp/jg-msg-ch6-csg-01.txt`. Changes are confined to the guard, its tests, the new baseline and this receipt. Free disk observed at 205 GiB during final checks. HEAD remains `62d8b6886f8d085b145ef65ec19cb5af0da178a9`; no final commit was created by the builder. Dispatcher must commit/push the working tree and bind the actual final SHA, CI results and independent verdicts. **Independent exact-head Claude verdicts, separate technical acceptance and founder merge/release remain outstanding.** This is r1 local implementation evidence only: no CH-6/CH6-B parent closure, dependency waiver, v3 adoption, production activation, fee entitlement or real-data approval.
+
+## review repair 1
+
+Issued 23 October 2026 for PR #305, branch `codex/sandbox/ch6-csg-01`, starting head `fc3ff245da71d5862fcf7964379918f8e613652c`, base `dc572123`. Read AGENTS, BUILD_PLAN §2/C1–C8 and CH-6, both independent Claude A/B review files **in full** from `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch6-csg-01-claude-{A,B}-fc3ff245-20261023.md`, the guard/tests/baseline, applicable source constructs and registered lane. The review files are outside this worktree's `jg-runs/`. Both verdicts are REPAIR against the starting head; neither is a verdict on these uncommitted repairs. No sub-agents were used.
+
+### Changes and invariants
+
+- Enumerate every finite conditional alternative, including combinations in templates/concatenations and bounded local helpers with statically evaluated defaults. Enumeration is capped at 128 alternatives and the existing 64-symbol depth bound; unsupported expressions remain unresolved. No inspected code executes. The three cases `practice-access.ts:27`, `practice-session.ts:21/:52` now resolve and leave the baseline. Forbidden branches, edits to `table`/`sql`, and edits to `practiceOwnedJobsSql` are caught in installed-source mutation regressions.
+- Fingerprints now bind the enclosing function/class (or statement), the original statement/cause/occurrence, and the transitive same-module declaration closure referenced by that construct. This is deliberately broader than the evaluator's visited inputs and includes declarations it cannot evaluate. Sorted declaration text makes traversal order immaterial; results are cached per AST node/cause. Feeding const/helper edits fail as unbaselined plus stale. Line movement, duplicate occurrence protection and chain-independent matching retain their earlier tests. All remaining 13 sites were re-bound to this stronger fingerprint; no new site or reason was added. Baseline **16 → 13**, raw chain-specific unresolved records **38 → 32**.
+- Exact advisory marker literals anywhere in executable covered source produce a confirmed diagnostic, including new `claim`, `readReceipt` and dispatcher call arguments. They cannot borrow a generic helper's baseline. Type declarations remain erased. Ordinary SQL string labels retain their prior positive control.
+- Imported runtime bindings in decorated constructor parameter types now count as dependencies, conservatively in every source tree (the installed API enables decorator metadata). Parameter decorators and decorated properties are also covered. Existing undecorated type-position behavior and explicit `import type` stay legal. Tests include the installed subscription application injection repro and safe/erased controls.
+- Whole-row receipt references, including JSON conversion/aggregation and bare row aliases, count as result reads. Qualified columns and receipt counts retain their existing behavior. Non-advisory proof requires a plain positive `command_type = literal/immutable parameter` WHERE conjunct. Boolean comparisons, IS/CASE/NOT/OR and nested/joined ambiguous scopes fail closed. Array bindings must be const, unwritten, unmutated and unescaped; spreads cannot prove parameter ordinals. Element writes, splice and opaque escapes have regressions.
+
+Existing tests were not edited or weakened. The first 24 reviewer-repro tests were added before implementation: **162 total, 138 passed / 24 failed** (`/private/tmp/ch6-review1-before.log`). They all pass after the repair. Additional controls cover erased metadata types, installed injection, nested/schema-qualified row projections and alternate forbidden ternary branches. Final targeted suite: **169/169 pass**, no skips/todos/cancellations. These are deterministic tests, not independent model verification.
+
+The 13 remaining baseline cases retain their individual source-inspected reasons: runtime/generic receipt replay, the joined origin receipt read, the generic practice forwarding query, and business methods conservatively covered by the terminal `execute` name. No application source, commercial policy, migration, provider, package/lockfile, CI script, shared guard or lane file changed. C1: no web workflow. No migration/backfill/rollback, production compatibility change or deployed alert is needed; guard failure diagnostics remain the operational signal.
+
+### Execution evidence
+
+Used existing installed Node `v24.17.0`, TypeScript `5.8.3`, pnpm `10.28.1` through `/private/tmp/ch6-csg-01-bin/pnpm`. No dependency download/install or clean-install claim. Turbo uses concurrency 1 and unit runners use one worker. Existing Turbo cache output can refer to another worktree. Build used `CIRCLE_NODE_TOTAL=2`. Logs are `/private/tmp/ch6-review1-*.log`.
+
+| Command / scope | Actual result |
+| --- | --- |
+| `node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard.test.mjs` | **0; 169/169 pass** (`targeted-final.log`). |
+| `node tools/commercial-integrity-current-source-guard.mjs` | **0; 42 protected roots; 0 diagnostics; 13 baselined cases** (`cli.log`). Explicit raw API inspection: 32 unresolved records, **0 confirmed violations**; default API: 0 diagnostics. |
+| `node --test --test-concurrency=1 tools/*.test.mjs` (shell-expanded list) | Final **0; 291/291 pass** (`final-tools.log`), includes earlier shared-money and purity regression suites. |
+| `pnpm typecheck --concurrency=1` | **0; 7 successful / 7 cached** (`typecheck.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | **0**, initial and final; final 7 successful / 4 cached, existing cache IO permission warnings (`final-lint.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **0** (`lanes.log`). |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | **0; 7 successful / 7 cached** (`build.log`). |
+| `pnpm openapi:check` | **1**, tsx CLI IPC `listen EPERM` before comparison (`openapi.log`). |
+| Core cwd: `pnpm exec vitest run src/ --maxWorkers=1` | **0; 2941 tests / 122 files pass** (`core.log`). |
+| Config cwd: same source-only command | **0; 41 tests / 4 files pass** (`config.log`). |
+| AI cwd: same source-only command | **0; 147 tests / 15 files pass**, synthetic fixtures/fakes, no live-model evaluation (`ai.log`). |
+| Storage cwd: same source-only command | **0; 2 tests / 1 file pass**, adapter fakes (`storage.log`). |
+| DB cwd: same source-only command | **0; 216 tests / 25 files pass**, source units, not PostgreSQL integration (`db-source.log`). |
+| API cwd: source-only command with local server/DB exclusions | Initial **1; 2061 pass / 2 fail**, 116 passing / 1 failing file, plus 2 unhandled errors. Excluded `**/*.http.test.ts`, `src/health.test.ts`, `src/shadow-isolation.application.test.ts`, `src/sso/action-paths.test.ts` and `src/final-account-lock.isolation.test.ts`. SSO exclusion had the wrong directory; actual `src/auth/sso/action-paths.test.ts` attempted a listener and failed `EPERM` (`api-source.log`). This failure remains recorded. |
+
+The first broader-unit driver was interrupted after the API result, while starting web units; that web attempt has no completion result (`web.log`). Corrected API subset, fresh web units and OpenAPI import-hook results are appended below. Exclusions are local sandbox subsets only; no repository test or mandatory CI suite was made optional. Root `pnpm test`, real PostgreSQL/migrations and browser suites remain for GitHub CI as the dispatcher instructed; the sandbox cannot bind localhost or start PostgreSQL.
+
+Finite scope remains explicit: naming-based authority discovery, module-level traversal after selective barrel resolution, opaque external packages, no universal taint/SQL isolation claim. Deliberate loader/method obfuscation (`createRequire`, query `.call`/`.bind`), dependency injection wired through unrelated composition modules, unqualified SQL/search_path and arbitrary third-party builders remain outside this finite guard. The reviews' adjacent LATER items are not claimed fixed. Structural unresolved diagnostics and chain-independent baseline keys retain the existing finite contract.
+
+Source SHA-256:
+
+- Guard: `a0aec9e217a30d6fa6f8ec330173febfd82312ab3e79317c7d305f63981d24f8`.
+- Tests: `8d4d173667ae8ac5354c4c2dfe5ae128cb918812e8f5760a02e801882461a05f`.
+- Baseline: `11b391f70086f138124cca9da916598cf8d189f2d04b39ed33db6726107c3b58`.
+
+No Git write/stage/commit/push was performed. Intended conventional commit subject/body: `/private/tmp/jg-msg-ch6-csg-01.txt`. The dispatcher must commit/push and bind final-head CI and fresh independent verdicts; separate technical acceptance and founder merge/release remain outstanding. **HOLD for those gates**, with local guard repair complete; no parent CH-6/CH6-B closure, v3 adoption, fee activation or real-data approval is inferred.
+
+Final broader-unit completions:
+
+- API cwd: `pnpm exec vitest run src/ --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/final-account-lock.isolation.test.ts`: **0; 2045 tests / 116 files pass** (`api-local.log`). This corrects the local SSO exclusion; the initial failure above is not reclassified.
+- Web cwd: `pnpm exec vitest run --maxWorkers=1`: **0; 867 tests / 40 files pass** (`web-final.log`), unit/adapter coverage, not browser journeys.
+- API cwd: `node --import tsx src/generate-openapi.ts --check`: **0** (`openapi-fallback.log`), actual source OpenAPI comparison without the tsx CLI IPC listener; no spec edited.
+- `node --check` both tools, `git diff --check`: **0**. Final working tree has only the guard, appended tests, smaller baseline and appended receipt modified. Remaining exact-head CI, real PostgreSQL/migrations/browser and independent acceptance gates are unchanged.

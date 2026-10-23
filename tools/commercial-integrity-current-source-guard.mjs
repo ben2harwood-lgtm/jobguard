@@ -10,15 +10,32 @@ import { createHash } from 'node:crypto';
 
 export const BASELINE_PATH = 'tools/commercial-integrity-current-source-guard.unresolved.json';
 const fingerprintCache = new WeakMap();
-// Bind the full statement bytes (excluding leading trivia), cause and occurrence.
-// Line movement is harmless; edits inside a reviewed construct require review.
-function fingerprint(node, dependency) {
-  if (node && fingerprintCache.get(node)?.has(dependency)) return fingerprintCache.get(node).get(dependency);
+// Bind the enclosing executable construct and its transitive same-module inputs.
+// This includes unresolved helpers, not just successfully evaluated declarations.
+function fingerprint(node, dependency, checker) {
+  if(node && fingerprintCache.get(node)?.has(dependency)) return fingerprintCache.get(node).get(dependency);
   let construct = node;
   while (construct?.parent && !ts.isStatement(construct)) construct = construct.parent;
+  let owner = construct;
+  for (let n = construct; n?.parent; n = n.parent) {
+    if (ts.isFunctionLike(n) || ts.isClassDeclaration(n)) owner = n;
+  }
+  const visited = new Set(), inputs = [];
+  const collect = n => {
+    if (!n || visited.has(n)) return;
+    visited.add(n);
+    inputs.push([n.kind, n.getText()]);
+    const walk = x => {
+      if (ts.isIdentifier(x)) {
+        const d = checker.getSymbolAtLocation(x)?.valueDeclaration;
+        if (d && d.getSourceFile() === node.getSourceFile() && !(d.pos >= n.pos && d.end <= n.end)) collect(d);
+      }
+      ts.forEachChild(x, walk);
+    };
+    walk(n);
+  };
+  collect(owner);
   const text = construct?.getText() ?? '';
-  // Distinct identical occurrences are separate cases; duplicated new code cannot
-  // borrow an existing exception. Root-chain duplicates still share one case.
   let occurrence = 0;
   if (construct) {
     const count = n => {
@@ -28,10 +45,11 @@ function fingerprint(node, dependency) {
     };
     count(construct.getSourceFile());
   }
-  const result = createHash('sha256').update(JSON.stringify([text, dependency, occurrence])).digest('hex');
-  if (node) { if (!fingerprintCache.has(node)) fingerprintCache.set(node, new Map()); fingerprintCache.get(node).set(dependency, result); }
+  const result=createHash('sha256').update(JSON.stringify([text, dependency, occurrence, inputs.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))])).digest('hex');
+  if(node) { if(!fingerprintCache.has(node)) fingerprintCache.set(node,new Map()); fingerprintCache.get(node).set(dependency,result); }
   return result;
 }
+const advisoryMarkers = ['commercial_integrity.review','commercial-integrity-review.v1','commercial-integrity-view.v1','commercial_integrity.reviewed'];
 
 export function applyUnresolvedBaseline(diagnostics, entries) {
   const key = d => JSON.stringify([d.code, d.file, d.fingerprint]);
@@ -80,7 +98,7 @@ export function loadRepoProject(root = fileURLToPath(new URL('..', import.meta.u
 
 export function checkCommercialIntegrityBoundary(p, { baseline = p.unresolvedBaseline } = {}) {
   const diagnostics = [], keys = new Set();
-  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain], ...(code === 'UNRESOLVED_COVERED_EDGE' ? { fingerprint: fingerprint(node, dependency) } : {})}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
+  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain], ...(code === 'UNRESOLVED_COVERED_EDGE' ? { fingerprint: fingerprint(node, dependency, p.checker) } : {})}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
   const unresolved = (f,n,d,c) => emit('UNRESOLVED_COVERED_EDGE',f,n,d,c);
   for (const err of p.loadErrors) unresolved(err.split(':')[0],null,err,[err.split(':')[0]]);
   for (const dir of DIRECTORIES) if (![...p.sources.keys()].some(f => f.startsWith(dir+'/'))) unresolved(dir,null,'missing required source directory',[dir]);
@@ -166,47 +184,71 @@ export function checkCommercialIntegrityBoundary(p, { baseline = p.unresolvedBas
         }
         ts.forEachChild(n, writes);
       }; writes(s);
-      const value=(n,seen=new Set(),env=new Map())=> {
+      // Arrays of alternatives are bounded; no inspected code executes.
+      const combine = (a,b,fn) => a && b && a.length*b.length <= 128 ? [...new Set(a.flatMap(x=>b.map(y=>fn(x,y))))] : undefined;
+      const values=(n,seen=new Set(),env=new Map())=> {
         if(!n || seen.size > 64) return undefined;
-        if(ts.isStringLiteral(n)||ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
-        if(ts.isNumericLiteral(n)) return Number(n.text);
-        if(ts.isParenthesizedExpression(n)||ts.isAsExpression(n)||ts.isNonNullExpression(n)) return value(n.expression,seen,env);
-        if(ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.PlusToken) {
-          const a=value(n.left,seen,env), b=value(n.right,seen,env);
-          return a!==undefined&&b!==undefined?a+b:undefined;
+        if(ts.isStringLiteral(n)||ts.isNoSubstitutionTemplateLiteral(n)) return [n.text];
+        if(ts.isNumericLiteral(n)) return [Number(n.text)];
+        if(ts.isParenthesizedExpression(n)||ts.isAsExpression(n)||ts.isNonNullExpression(n)) return values(n.expression,seen,env);
+        if(ts.isConditionalExpression(n)) {
+          const a=values(n.whenTrue,seen,env), b=values(n.whenFalse,seen,env);
+          return a && b && a.length+b.length<=128 ? [...new Set([...a,...b])] : undefined;
         }
+        if(ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.PlusToken) return combine(values(n.left,seen,env),values(n.right,seen,env),(a,b)=>a+b);
         if(ts.isTemplateExpression(n)) {
-          let text=n.head.text;
-          for(const span of n.templateSpans) { const v=value(span.expression,seen,env); if(v===undefined) return undefined; text+=String(v)+span.literal.text; }
+          let text=[n.head.text];
+          for(const span of n.templateSpans) text=combine(text,values(span.expression,seen,env),(a,b)=>a+String(b)+span.literal.text);
           return text;
         }
         if(ts.isIdentifier(n)) {
           const sym=symbol(n),d=sym?.valueDeclaration;
           if(written.has(sym)) return undefined;
           if(env.has(sym)) return env.get(sym);
-          if(!seen.has(sym)&&d&&ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)) return value(d.initializer,new Set(seen).add(sym),env);
+          if(!seen.has(sym)&&d&&ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)) return values(d.initializer,new Set(seen).add(sym),env);
         }
         if(ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
           const sym=symbol(n.expression),d=sym?.valueDeclaration;
           if(!d || seen.has(sym) || written.has(sym)) return undefined;
           const fn=ts.isFunctionDeclaration(d)?d:ts.isVariableDeclaration(d)&&(d.parent.flags&ts.NodeFlags.Const)?d.initializer:undefined;
-          if(!fn || !(ts.isFunctionDeclaration(fn)||ts.isArrowFunction(fn)||ts.isFunctionExpression(fn)) || fn.asteriskToken || fn.modifiers?.some(m=>m.kind===ts.SyntaxKind.AsyncKeyword) || !fn.body || fn.parameters.length!==n.arguments.length) return undefined;
+          if(!fn || !(ts.isFunctionDeclaration(fn)||ts.isArrowFunction(fn)||ts.isFunctionExpression(fn)) || fn.asteriskToken || fn.modifiers?.some(m=>m.kind===ts.SyntaxKind.AsyncKeyword) || !fn.body || n.arguments.length>fn.parameters.length) return undefined;
           const body=ts.isBlock(fn.body)?fn.body.statements.length===1&&ts.isReturnStatement(fn.body.statements[0])?fn.body.statements[0].expression:undefined:fn.body;
           if(!body) return undefined;
           const bound=new Map(env);
           for(let i=0;i<fn.parameters.length;i++) {
             const param=fn.parameters[i];
-            if(!ts.isIdentifier(param.name)||param.initializer||param.dotDotDotToken||written.has(symbol(param.name))) return undefined;
-            const v=value(n.arguments[i],seen,env); if(v===undefined) return undefined;
+            if(!ts.isIdentifier(param.name)||param.dotDotDotToken||written.has(symbol(param.name))) return undefined;
+            const v=values(n.arguments[i]??param.initializer,seen,env); if(!v) return undefined;
             bound.set(symbol(param.name),v);
           }
-          return value(body,new Set(seen).add(sym),bound);
+          return values(body,new Set(seen).add(sym),bound);
         }
         return undefined;
       };
+      const value=n=> { const all=values(n); return all?.length===1 ? all[0] : undefined; };
+      const inspect=(n,q,params)=> {
+        const all=values(q);
+        if(!all) return unresolved(f,n,'unknown query text/structure',chain);
+        for(const text of all) inspectSql(n,q,params,x=>x===q?text:value(x),f,chain,emit,unresolved,symbol,written);
+      };
       const visit=n=> {
         if(ts.isImportDeclaration(n)) { if(!n.importClause) follow(n.moduleSpecifier.text,'!side-effect',n); return; }
-        if(ts.isExportDeclaration(n)||ts.isInterfaceDeclaration(n)||ts.isTypeAliasDeclaration(n)||ts.isTypeNode(n)) return;
+        if(ts.isExportDeclaration(n)||ts.isInterfaceDeclaration(n)||ts.isTypeAliasDeclaration(n)) return;
+        if(ts.isTypeNode(n)) {
+          // Decorated constructors can emit design:paramtypes (the API enables it).
+          // Conservatively cover this syntax in every source tree.
+          const parameter=n.parent;
+          const ctor=parameter?.parent, cls=ctor?.parent;
+          if((ts.isParameter(parameter) && ts.isConstructorDeclaration(ctor) && ts.isClassDeclaration(cls) && (ts.getDecorators(cls)?.length || ctor.parameters.some(p=>ts.getDecorators(p)?.length))) || (ts.isPropertyDeclaration(parameter) && ts.getDecorators(parameter)?.length)) {
+            const metadata=x=> {
+              if(ts.isIdentifier(x)) { const b=binding(x); if(b) follow(b.spec,b.name,x); }
+              ts.forEachChild(x,metadata);
+            };
+            metadata(n);
+          }
+          return;
+        }
+        if((ts.isStringLiteral(n)||ts.isNoSubstitutionTemplateLiteral(n)) && advisoryMarkers.includes(n.text)) emit('FORBIDDEN_ADVISORY_SQL',f,n,'advisory executable marker literal',chain);
         if(ts.isImportEqualsDeclaration(n)) { unresolved(f,n,'unsupported import binding',chain); return; }
         if(ts.isCallExpression(n)||ts.isNewExpression(n)) {
           const e=n.expression, terminal=ts.isPropertyAccessExpression(e)?e.name.text:ts.isElementAccessExpression(e)?value(e.argumentExpression):ts.isIdentifier(e)?e.text:'';
@@ -219,9 +261,9 @@ export function checkCommercialIntegrityBoundary(p, { baseline = p.unresolvedBas
             else { const r=resolve(f,spec); if(!r.external) { follow(spec,'!side-effect',n); unresolved(f,n,'dynamic module namespace escape',chain); } }
           } }
           if(['eval','Function'].includes(terminal)) unresolved(f,n,'eval/Function loading',chain);
-          if(['query','execute'].includes(terminal)) inspectSql(n,n.arguments?.[0],n.arguments?.[1],value,f,chain,emit,unresolved,symbol);
+          if(['query','execute'].includes(terminal)) inspect(n,n.arguments?.[0],n.arguments?.[1]);
         }
-        if(ts.isTaggedTemplateExpression(n)) { const tag=n.tag; if((ts.isIdentifier(tag)?tag.text:ts.isPropertyAccessExpression(tag)?tag.name.text:'')==='sql') inspectSql(n,n.template,undefined,value,f,chain,emit,unresolved,symbol); }
+        if(ts.isTaggedTemplateExpression(n)) { const tag=n.tag; if((ts.isIdentifier(tag)?tag.text:ts.isPropertyAccessExpression(tag)?tag.name.text:'')==='sql') inspect(n,n.template,undefined); }
         if(ts.isIdentifier(n)) {
           const parent=n.parent;
           const isName=(parent.name===n && !ts.isShorthandPropertyAssignment(parent)) || ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent);
@@ -242,7 +284,7 @@ export function checkCommercialIntegrityBoundary(p, { baseline = p.unresolvedBas
   return (baseline == null ? diagnostics : applyUnresolvedBaseline(diagnostics, baseline)).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
-function inspectSql(node, query, params, value, file, chain, emit, unresolved, symbol) {
+function inspectSql(node, query, params, value, file, chain, emit, unresolved, symbol, written) {
   const text=value(query);
   if(typeof text!=='string') return unresolved(file,node,'unknown query text/structure',chain);
   const tokens=[], rx=/\s+|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|"(?:""|[^"])*"|'(?:''|[^'])*'|\$\d+|[A-Za-z_][A-Za-z_0-9$]*|[().,*=;]|./gy;
@@ -254,28 +296,78 @@ function inspectSql(node, query, params, value, file, chain, emit, unresolved, s
   for(const t of tables) if(['commercial_integrity_value_fact','commercial_integrity_activity_fact'].includes(t)) forbidden('app.'+t);
   const reads=has('select')||has('returning');
   if(!reads) return;
-  const markers=['commercial_integrity.review','commercial-integrity-review.v1','commercial-integrity-view.v1','commercial_integrity.reviewed'];
+  const markers=advisoryMarkers;
   let array=params;
   // Parameters may be an immutable array binding; scalar aliases use lexical symbols.
   const seen=new Set();
   while(array && ts.isIdentifier(array)) {
     const decl=symbol(array)?.valueDeclaration;
-    if(!decl || !ts.isVariableDeclaration(decl) || !(decl.parent.flags&ts.NodeFlags.Const) || seen.has(decl)) { array=undefined; break; }
+    if(written.has(symbol(array)) || !decl || !ts.isVariableDeclaration(decl) || !(decl.parent.flags&ts.NodeFlags.Const) || seen.has(decl)) { array=undefined; break; }
     seen.add(decl); array=decl.initializer;
+  }
+  // A const array is not immutable: reject mutation, aliases and escapes.
+  if(array && ts.isArrayLiteralExpression(array)) {
+    if(array.elements.some(e=>ts.isSpreadElement(e))) array=undefined;
+    else for(const decl of seen) {
+      const sym=symbol(decl.name);
+      let unsafe=false;
+      const references=n=> {
+        if(ts.isIdentifier(n) && symbol(n)===sym && n!==decl.name && n!==params) unsafe=true;
+        ts.forEachChild(n,references);
+      };
+      references(node.getSourceFile());
+      if(unsafe) array=undefined;
+    }
   }
   const val=t=>t?.kind==='str'?t.v:t?.kind==='param'&&array&&ts.isArrayLiteralExpression(array)?value(array.elements[t.v-1]):undefined;
   const from=tokens.findIndex(t=>t.kind==='id'&&t.v==='from');
   if(from>=0 && tokens.slice(from).some(t=>markers.includes(val(t)))) forbidden('advisory review/view/audit discriminator');
   const wildcard=tokens.some((t,i)=>t.v==='*' && ['select','distinct','all','returning','.',','].includes(tokens[i-1]?.v));
-  if(tables.includes('command_receipt') && (has('result')||wildcard)) {
+  if(tables.includes('command_receipt') && (has('result')||wildcard||!provenReceiptProjection(tokens))) {
     const discriminators=[];
     for(let i=0;i<tokens.length;i++) if(tokens[i].kind==='id'&&tokens[i].v==='command_type') {
       if(tokens[i+1]?.v==='=') discriminators.push(val(tokens[i+2]));
       else if(tokens[i-1]?.v==='=') discriminators.push(val(tokens[i-2]));
     }
     if(discriminators.includes('commercial_integrity.review')) forbidden('app.command_receipt.result commercial_integrity.review');
-    else if(!discriminators.length||discriminators.some(x=>x===undefined)||has('or')||has('union')||has('not')||has('join')||tables.length!==1||tokens.slice(from+1,tokens.findIndex(t=>t.kind==='id'&&t.v==='where')<0?undefined:tokens.findIndex(t=>t.kind==='id'&&t.v==='where')).some(t=>t.v===',')||tokens.filter(t=>t.kind==='id'&&t.v==='select').length>1) unresolved(file,node,'app.command_receipt.result without proven non-advisory discriminator',chain);
+    else if(!discriminators.length||discriminators.some(x=>x===undefined)||has('or')||has('union')||has('not')||has('join')||has('is')||has('case')||has('false')||has('true')||!plainReceiptEquality(tokens,val)||tables.length!==1||tokens.slice(from+1,tokens.findIndex(t=>t.kind==='id'&&t.v==='where')<0?undefined:tokens.findIndex(t=>t.kind==='id'&&t.v==='where')).some(t=>t.v===',')||tokens.filter(t=>t.kind==='id'&&t.v==='select').length>1) unresolved(file,node,'app.command_receipt.result without proven non-advisory discriminator',chain);
   }
+}
+
+// Deliberately small positive grammar: a WHERE conjunction containing a plain
+// command_type equality. Expressions, CASE, negation and nested scopes fail closed.
+function plainReceiptEquality(tokens,val) {
+  const where=tokens.findIndex(t=>t.kind==='id'&&t.v==='where');
+  if(where<0) return false;
+  const tail=tokens.slice(where+1);
+  let start=0, proof=false;
+  for(let i=0;i<=tail.length;i++) {
+    if(i!==tail.length && tail[i].v!=='and') continue;
+    const part=tail.slice(start,i); start=i+1;
+    if(!part.some(t=>t.kind==='id'&&t.v==='command_type')) continue;
+    const v=part.map(t=>t.v);
+    const offset=part.length===5 && part[0].kind==='id' && v[1]==='.' ? 2 : 0;
+    if(part.length!==offset+3 || v[offset]!=='command_type' || v[offset+1]!=='=' || typeof val(part[offset+2])!=='string') return false;
+    proof=true;
+  }
+  return proof;
+}
+function provenReceiptProjection(tokens) {
+  const aliases=new Set(['command_receipt']), definitions=new Set();
+  for(let i=0;i<tokens.length;i++) if(tokens[i].v==='command_receipt' && tokens[i-1]?.v==='.' && tokens[i-2]?.v==='app' && ['from','join','update','into',','].includes(tokens[i-3]?.v)) {
+    definitions.add(i);
+    let at=i+1;
+    if(tokens[at]?.v==='as') at++;
+    const next=tokens[at];
+    if(next?.kind==='id' && !['where','join','on','returning','order','limit','set'].includes(next.v)) { aliases.add(next.v); definitions.add(at); }
+  }
+  // A bare row identifier anywhere may expose its result, including inside a
+  // nested projection or JSON function. Qualified column references are safe.
+  for(let i=0;i<tokens.length;i++) {
+    const t=tokens[i];
+    if(t.kind==='id' && aliases.has(t.v) && !definitions.has(i) && tokens[i+1]?.v!=='.') return false;
+  }
+  return true;
 }
 
 if(process.argv[1] && fileURLToPath(import.meta.url)===process.argv[1]) {
