@@ -89,11 +89,11 @@ export class CommercialIntegrityV3Error extends Error {
  constructor(readonly code: "INVALID_COMMERCIAL_INTEGRITY_V3_INPUT") { super(code); this.name = "CommercialIntegrityV3Error"; }
 }
 
-/** UTF-16 ordinal key ordering, JSON scalar encoding, set-like arrays sorted/deduplicated by canonical bytes.
+/** UTF-16 ordinal key ordering, undefined object keys omitted, JSON scalar encoding, set-like arrays sorted/deduplicated by canonical bytes.
  * SQL must implement this exact representation (not jsonb::text); hashing belongs outside pure core. */
 function canonical(value: unknown): string {
  if (Array.isArray(value)) return `[${[...new Set(value.map(canonical))].sort().join(",")}]`;
- if (value !== null && typeof value === "object") return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`).join(",")}}`;
+ if (value !== null && typeof value === "object") return `{${Object.keys(value).filter(k => (value as Record<string, unknown>)[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`).join(",")}}`;
  return JSON.stringify(value);
 }
 export function canonicalCommercialIntegritySnapshot(raw: CommercialIntegrityReviewSourceSnapshotV3): string {

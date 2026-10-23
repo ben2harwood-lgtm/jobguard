@@ -183,7 +183,9 @@ server timestamp order; replays and multiple restarts of one finish count once.
 The adapter must hash those exact UTF-8 bytes and bind the result as
 `findingSnapshotHash`; the core does not fabricate a hash. Arrays are canonical
 sets (sorted and deduplicated), object keys use UTF-16 ordinal order and scalars
-use JSON encoding. PostgreSQL `jsonb::text` is not this representation. An actual
+use JSON encoding. Undefined-valued optional object keys are omitted, so absent
+and explicit `undefined` profile options produce identical valid JSON and hash
+input bytes. PostgreSQL `jsonb::text` is not this representation. An actual
 SQL implementation and real-source reproduction remain CH6-P/CI-H1/H5 holds.
 There are no package barrel exports in this build; the dispatcher must integrate
 and agree the module symbol inventory before CH6-B/P/A/J consume it.

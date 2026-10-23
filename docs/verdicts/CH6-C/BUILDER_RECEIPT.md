@@ -88,3 +88,36 @@ Check-level STOPs: exact root/lane lint until dispatcher commit; standard OpenAP
 **NOT RUN:** root `pnpm test`/full root typecheck/full mandatory CI; PostgreSQL `pnpm test:db`, `pnpm test:migrations`, all integration/catalogue/query-log/upgrade/restore suites; browser `pnpm test:e2e`/both projects; model `pnpm eval`/live model gates (no model/prompt change). Database/browser suites are explicitly CI-only under the issued order and sandbox. No clean reinstall (dependencies supplied; no downloads), remote CI URL/artifacts, review submissions, independent verdicts, acceptance, commit, push, PR or merge.
 
 Intended conventional commit message is written outside the worktree at `/private/tmp/jg-msg-ch6-c.txt` for dispatcher use.
+
+
+## r1
+
+23 October 2026. Repair of candidate `72f7ca2a39c0670f1aa3d62b65692f54ea9b0cc9` on `codex/sandbox/ch6-c`, base `dc5721230fd8aedbf2d9d0457789074b66b48765` (`origin/main`). Read reviewer B's complete `v5-ch6-c-claude-B-72f7ca2a-20261023.md` from `/Users/benharwood/.local/share/full-steam/jg-runs/` (the worktree-relative path was absent), actual AGENTS.md, BUILD_PLAN.md CH-6 and the lane contract/allowlist. This section records builder source inspection and executed checks; it is not independent review or acceptance. Reviewer A's reported PASS does not certify this uncommitted repair. No commit, push, PR, provider action or permission change.
+
+### Repairs and discriminating failure checks
+
+1. **CI-F02:** added a 60p deposit replay against a 100p locked account: the single and duplicate-identity cases both produce zero receipt-excess findings, while two distinct 60p receipt identities produce one. The duplicate is a separate structured clone, so object-reference equality cannot satisfy the test. Temporarily replaced only `receipts = unique(pub.receipts)` with `receipts = pub.receipts`; ran `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/commercial-integrity-v3.test.ts -t 'duplicate deposit cannot cross'`. **Expected EXIT 1 observed**, at the replay assertion (one finding instead of zero). Restored the original source in a `finally` block. The existing deduplication implementation required no behavioral change.
+2. **CI-C07:** canonical object serialization now omits undefined-valued keys. Added absent-versus-explicit-undefined coverage for each of `allocation`, `won`, `quote`, and `restart`, through both evaluator input and direct snapshot serialization. Equal snapshots must yield identical canonical text, identical real SHA-256 over UTF-8 bytes, and JSON that parses to the same value. Hashing is test-only via Web Crypto; the production core still returns text without crypto/I/O. Ran the new test against the original serializer before applying the filter: **expected EXIT 1 observed**, showing `"allocation":undefined` in the received text. The initial test used a static `node:crypto` import; Vitest passed but core typecheck and the first root lint run failed TS2307 (no Node module types in core). Replaced it with standard test-only Web Crypto, without changing package dependencies. Subsequent typecheck/lint and the complete source test suite pass.
+
+The serializer comment and lane contract now document undefined omission. v1 D11 source and test remain byte-identical to `origin/main`; `git diff --exit-code origin/main -- packages/core/src/commercial-integrity.ts packages/core/src/commercial-integrity.test.ts` returned 0. Only existing lane-allowed v3 source/tests, contract and this receipt change. No migration, external boundary, model/prompt, adapter, barrel, operational alert or commercial-policy change. Existing integration/SQL/review/release holds above remain held; reviewer B's LATER observations are outside this two-blocker repair.
+
+### r1 actual checks
+
+Used supplied dependencies, Node `v24.17.0` and cached `pnpm@10.28.1` via `PATH=/private/tmp/ch6-c-bin:$PATH`. No install or download. Vitest uses `--maxWorkers=2`; Turbo uses concurrency two. Commands ran directly, without claiming host resource admission measurements.
+
+| Command | Result |
+| --- | --- |
+| New CI-C07 test, original serializer | EXIT 1 as required; canonical text contained literal undefined. |
+| New CI-F02 test, deduplication removed temporarily | Vitest EXIT 1 as required; duplicate 60p deposit falsely exceeded 100p. Mutation restored. |
+| `pnpm --filter @jobguard/core typecheck` | Final EXIT 0 (initial Node-crypto type failure corrected as described above). |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/commercial-integrity-v3.test.ts src/commercial-integrity-v3.boundaries.test.ts src/commercial-integrity.test.ts` | EXIT 0, 25 tests / 3 files, including unchanged v1. |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | EXIT 1: 5913 passed, 5 failed / 248 files. Discovers both source tests and compiled `dist` copies. All five failures are ENOENT source-inspection reads for missing `dist/*.ts`: jobs-on-the-go, recovery-allocation, site-extra-pricing and two subscription-architecture checks. No source test failed. No test/config was weakened or deleted. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src` | EXIT 0, 2960 tests / 124 source files. |
+| `LANE_BASE_REF=origin/main TURBO_CONCURRENCY=2 pnpm lint` | Final EXIT 0, all 7 packages (2 cached); core purity, lane, money and commercial boundaries passed. Seven existing reported-only computed-import notes; Turbo cache IO permission warnings. Initial run failed on the corrected test-only Node-crypto import. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | EXIT 0, actual branch/head/base. This checks the committed candidate range; supplemental working-tree scope inspection also confirms the repair stays within the allowlist. |
+| `pnpm openapi:check` | EXIT 1 before generator: tsx CLI IPC listen EPERM under sandbox. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | EXIT 0, same generator/check using installed loader, no IPC listener. |
+| `pnpm build --concurrency=2` | EXIT 0, all 7 packages (2 cached), 3m37.838s. Warnings: shared-cache IO permission, Next workspace-root inference, existing CSS autoprefixer and Nest file-type/dynamic-dependency warnings. |
+| `git diff --check`; unchanged v1 source/test diff | EXIT 0. |
+
+Database/migration and browser suites remain CI-only under the dispatcher's sandbox instruction (no PostgreSQL/local listener). Root `pnpm test` was not run because it invokes database/listener suites; no clean reinstall, live-model evaluation, external integration, SQL canonical equivalence, exact-repair independent verdict or technical acceptance is claimed. The dispatcher must commit, run required CI and obtain the repair verdict. Intended commit message: `/private/tmp/jg-msg-ch6-c.txt`.

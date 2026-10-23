@@ -73,6 +73,25 @@ it("CI-C07 source snapshots bind revisions/hashes/amount/profile/anchor but excl
  expect(fingerprint(paid)).not.toBe(fingerprint({ ...paid, published: { ...paid.published, receipts: [{ ...paid.published.receipts[0], value: amount(102) }] } }));
  expect(fingerprint(paid)).not.toBe(fingerprint({ ...paid, published: { ...paid.published, contractVersion: "changed" } }));
 });
+it("CI-C07 absent and explicit undefined profile keys yield identical valid JSON and SHA-256", async () => {
+ const input = withFinding();
+ const original = evaluateCommercialIntegrityV3(input).findings[0]!.sourceSnapshot;
+ const originalText = canonicalCommercialIntegritySnapshot(original);
+ const sha256 = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2, "0")).join("");
+ expect(JSON.parse(originalText)).toEqual(original);
+ for (const key of ["allocation", "won", "quote", "restart"] as const) {
+  const profile = { ...input.profile, [key]: undefined };
+  expect(commercialIntegrityV3InputSchema.safeParse({ ...input, profile }).success).toBe(true);
+  const fromInput = evaluateCommercialIntegrityV3({ ...input, profile }).findings[0]!.sourceSnapshot;
+  // Also exercise direct snapshot parsing, as used by a future hash-binding adapter.
+  for (const snapshot of [fromInput, { ...original, profile }]) {
+   const text = canonicalCommercialIntegritySnapshot(snapshot);
+   expect(text).toBe(originalText);
+   expect(await sha256(text)).toBe(await sha256(originalText));
+   expect(JSON.parse(text)).toEqual(JSON.parse(originalText));
+  }
+ }
+});
 it("CI-C02 quote scope rejects foreign tenant/session and post-lock input is structurally impossible pre-lock", () => {
  const input = fixture(), quote = { source: source("q", otherJob), status: "accepted", customerId: "customer", siteId: "flat", bindingConfirmed: true, value: amount(1), acceptedAt: start };
  for (const patch of [{ tenantId: "10000000-0000-4000-8000-000000000002" }, { scopeId: "other-session" }]) expect(commercialIntegrityV3InputSchema.safeParse({ ...input, ordinaryFacts: { ...input.ordinaryFacts, quotes: [{ ...quote, source: { ...quote.source, ...patch } }] } }).success).toBe(false);

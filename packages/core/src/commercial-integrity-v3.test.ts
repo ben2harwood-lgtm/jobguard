@@ -36,6 +36,15 @@ describe("CH6-C nine advisory families", () => {
   expect(credited.unavailable).toContainEqual({ kind: "receipts_exceed_locked_account_and_confirmed_catches", reason: "credit_basis_unavailable" });
   expect(run([{ ...receipt, value: { ...amount(101), basis: "gross" } }]).unavailable.some(x => x.reason === "basis_unavailable")).toBe(true);
  });
+ it("CI-F02 duplicate deposit cannot cross the locked-account threshold", () => {
+  const base = postFixture(), deposit = { source: source("deposit"), value: amount(60), reversed: false };
+  const run = (receipts: unknown[]) => evaluate({ ...base, published: { ...base.published, receipts } }).findings.filter(f => f.kind === "receipts_exceed_locked_account_and_confirmed_catches");
+  // 60p is below the 100p account; only counting its replay twice would exceed it.
+  expect(run([deposit])).toHaveLength(0);
+  expect(run([deposit, structuredClone(deposit)])).toHaveLength(0);
+  // A distinct receipt of the same amount really does cross the threshold.
+  expect(run([deposit, { ...deposit, source: source("second-deposit") }])).toHaveLength(1);
+ });
  it("CI-F03 requires actual mapped catch-line correction", () => {
   const base = postFixture(), c = { source: source("c"), catchId: "c", status: "confirmed", includedInLockedAccount: true, value: amount(10), invoiceLineId: "line" };
   for (const correctionKind of ["credit", "writeoff"]) {
