@@ -122,3 +122,5 @@ export * from "./enterprise-live-prompt-repository.js";
 export * from "./contractor-entitlement-authority-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
+
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";

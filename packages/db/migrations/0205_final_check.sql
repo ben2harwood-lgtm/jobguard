@@ -470,7 +470,8 @@ BEGIN
 END $$;
 ALTER FUNCTION app.final_check_refuse_held_case() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.final_check_refuse_held_case() FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
-CREATE TRIGGER a_final_check_held_case BEFORE INSERT ON app.recovery_case FOR EACH ROW EXECUTE FUNCTION app.final_check_refuse_held_case();
+-- Keep the server-time pin first among BEFORE INSERT row triggers.
+CREATE TRIGGER final_check_held_case BEFORE INSERT ON app.recovery_case FOR EACH ROW EXECUTE FUNCTION app.final_check_refuse_held_case();
 
 -- Category only. Q2 still forbids creating a catch case or selecting its initial claim.
 ALTER TABLE app.recovery_case DROP CONSTRAINT recovery_case_case_type_check;
