@@ -6,24 +6,17 @@ import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 import { MeterLifecycleRepository } from "../src/meter-lifecycle-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 
-// Coordinator grants below are TEST-ONLY, deliberately not migration behavior.
-// This suite proves the source kernel with prerequisites installed, and proves
-// that the issued migration alone fails closed before those grants exist.
+// Checked lifecycle functions run as jobguard_migration; no test-only source grants.
 describe("MON1-S normal-company source kernel, CI PostgreSQL only", () => {
  let f: WorkFixture;
  beforeAll(async () => { f = await createWorkFixture(); }, 60000);
  afterAll(async () => closeWorkFixture(f));
- it("M1S-02 default capture fails closed, leaving no partial source or scope", async () => {
+ it("M1S-02 missing agreement fails closed, leaving no partial source or scope", async () => {
   const a = await meterCompany(f);
-  await expect(new MeterLifecycleRepository(f.runtime).capture(a.context,a.digest,{ version:"meter-lifecycle-capture.v1",commandId:randomUUID(),periodStart:"2026-09-01",expectedSourceRevision:0 })).rejects.toThrow("METER_UNAVAILABLE");
+  await expect(new MeterLifecycleRepository(f.runtime).capture(a.context,a.digest,{ version:"meter-lifecycle-capture.v1",commandId:randomUUID(),periodStart:"2026-09-01",expectedSourceRevision:0 })).rejects.toThrow("METER_LIFECYCLE_TERMS_UNAVAILABLE");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.meter_lifecycle_scope WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
  });
  it("M1S-01/03 fixture activation plus real CH-4 finish → immutable source → fresh connection/replay", async () => {
-  const sources = ["subscription_agreement_revision","job","job_activation","job_activation_terms","job_party_binding","job_work_state_event","final_account_lock","job_small_trip_event","job_small_trip_observation","job_link"];
-  for (const table of sources) {
-   await f.admin.query(`GRANT SELECT ON app.${table} TO jobguard_meter`);
-   await f.admin.query(`CREATE POLICY mon1s_test_source ON app.${table} FOR SELECT TO jobguard_meter USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)`);
-  }
   const a = await meterCompany(f);
   await historicalAgreement(f,a);
   // Activation parents are a labelled synthetic storage fixture, not a claim

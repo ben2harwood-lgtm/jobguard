@@ -16,8 +16,8 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       queries.push({ sql, values });
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
-      // SV-2's two shadow roles: a least-privilege posture row each, and no holder other than the creator's (none in this trace).
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, member: false }] };
+      // Restricted shadow/meter roles: one posture row each; no holders in this trace.
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
       if (sql.includes("count(*)::int count")) return { rowCount: 1, rows: [{ count: 45 }] };
@@ -29,6 +29,10 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     try {
       await bootstrapSyntheticDemo({ ownerUrl: `postgresql://synthetic_owner:fixture@localhost/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: `postgresql://jobguard_runtime:fixture@localhost/${SYNTHETIC_DATABASE_NAME}` });
+      expect(queries.some(({sql}) => sql.includes('CREATE ROLE jobguard_meter'))).toBe(true);
+      expect(queries.some(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter')).toBe(true);
+      expect(queries.findIndex(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter'))
+        .toBeLessThan(queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration'));
       const binding = queries.findIndex(({ sql }) => sql.includes("INSERT INTO app.job_commercial_track"));
       const live = queries.findIndex(({ sql }) => sql.includes("UPDATE app.job SET status='live'"));
       expect(binding, "missing SH-1 binding before UPDATE-to-live").toBeGreaterThan(queries.findIndex(({ sql }) => sql === "BEGIN"));

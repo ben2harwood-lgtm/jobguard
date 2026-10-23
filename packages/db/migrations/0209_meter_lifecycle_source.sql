@@ -1,7 +1,16 @@
 BEGIN;
 -- MON1-S: normal-company, synthetic actual-source foundation. No trial or
 -- practice authority, billable counts, commercial writes or subscription bridge.
-CREATE ROLE jobguard_meter NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_meter') THEN
+  CREATE ROLE jobguard_meter NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ END IF;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='jobguard_meter' AND
+  (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls)) OR
+  EXISTS(SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='jobguard_meter')) THEN
+  RAISE EXCEPTION 'unsafe meter role posture' USING ERRCODE='42501';
+ END IF;
+END $$;
 GRANT USAGE ON SCHEMA app TO jobguard_meter;
 CREATE TABLE app.meter_lifecycle_scope (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id), id uuid NOT NULL,
@@ -143,7 +152,7 @@ END $$;
 CREATE FUNCTION app.mon1_lifecycle_capture(t uuid,digest text,command uuid,start_day date,expected integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; scope uuid; old app.meter_lifecycle_source; agreement app.subscription_agreement_revision;
- revision integer; finish date; cutoff timestamptz; src jsonb; jobs jsonb; source_uuid uuid; j jsonb;
+ v_revision integer; finish date; cutoff timestamptz; src jsonb; jobs jsonb; source_uuid uuid; j jsonb;
 BEGIN
  actor:=app.mon1_lifecycle_actor(t,digest,true);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));
@@ -158,10 +167,10 @@ BEGIN
   IF old.period_start<>start_day OR old.expected_revision<>expected THEN RAISE EXCEPTION 'METER_LIFECYCLE_CONFLICT' USING ERRCODE='40001'; END IF;
   RETURN app.mon1_lifecycle_rebuild(t,digest,old.id);
  END IF;
- SELECT coalesce(max(s.revision),0) INTO revision FROM app.meter_lifecycle_source s WHERE (s.tenant_id,s.scope_id,s.period_start)=(t,scope,start_day);
- IF revision<>expected THEN RAISE EXCEPTION 'METER_LIFECYCLE_CONFLICT' USING ERRCODE='40001'; END IF;
- -- These existing-source SELECT privileges/policies are intentionally NOT
- -- installed here: coordinator owns the shared grants and source wiring.
+ SELECT coalesce(max(s.revision),0) INTO v_revision FROM app.meter_lifecycle_source s WHERE (s.tenant_id,s.scope_id,s.period_start)=(t,scope,start_day);
+ IF v_revision<>expected THEN RAISE EXCEPTION 'METER_LIFECYCLE_CONFLICT' USING ERRCODE='40001'; END IF;
+ -- Source reads execute with migration-owner privileges through this checked
+ -- definer; no source-table privileges are granted to runtime or meter.
  SELECT * INTO agreement FROM app.subscription_agreement_revision ar WHERE ar.tenant_id=t AND ar.effective_date<=start_day ORDER BY ar.effective_date DESC,ar.revision DESC LIMIT 1;
  IF agreement.id IS NULL OR agreement.cadence<>'monthly' THEN RAISE EXCEPTION 'METER_LIFECYCLE_TERMS_UNAVAILABLE' USING ERRCODE='22023'; END IF;
  IF extract(day FROM start_day)::integer<>least(agreement.anchor_day,extract(day FROM date_trunc('month',start_day)+interval '1 month - 1 day')::integer) THEN RAISE EXCEPTION 'INVALID_METER_LIFECYCLE_INPUT' USING ERRCODE='22023'; END IF;
@@ -173,7 +182,7 @@ BEGIN
  actor:=app.mon1_lifecycle_actor(t,digest,true);
  cutoff:=clock_timestamp();
  SELECT coalesce(jsonb_agg(jsonb_build_object(
-  'version','meter-lifecycle-input.v1','tenantId',t,'jobId',a.job_id,'sourceRevision',revision+1,
+  'version','meter-lifecycle-input.v1','tenantId',t,'jobId',a.job_id,'sourceRevision',v_revision+1,
   'activation',jsonb_build_object('id',a.id,'at',to_char(a.activated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'termsId',terms.id,'termsRevision',1,'track','small_builder','partyBindingId',b.id,'customerId',b.customer_id,'siteId',b.site_id,'small',terms.small_job),
   'events',coalesce((SELECT jsonb_agg(jsonb_build_object('version',e.version,'id',e.id,'jobId',e.job_id,'sequence',e.sequence,'kind',e.kind,
    'factAt',to_char(e.fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'recordedAt',to_char(e.recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
@@ -206,7 +215,7 @@ BEGIN
    WHERE e.tenant_id=t AND EXISTS(SELECT 1 FROM jsonb_array_elements(jobs) AS element(value) WHERE element.value->>'jobId'=e.job_id::text)),'[]'::jsonb));
  source_uuid:=gen_random_uuid();
  INSERT INTO app.meter_lifecycle_source(tenant_id,scope_id,id,command_id,period_start,revision,expected_revision,source,source_hash,actor_membership_id)
- VALUES(t,scope,source_uuid,command,start_day,revision+1,expected,src,encode(sha256(convert_to(src::text,'UTF8')),'hex'),actor);
+ VALUES(t,scope,source_uuid,command,start_day,v_revision+1,expected,src,encode(sha256(convert_to(src::text,'UTF8')),'hex'),actor);
  FOR j IN SELECT value FROM jsonb_array_elements(jobs) LOOP
   INSERT INTO app.meter_lifecycle_source_ref(tenant_id,scope_id,source_id,job_id,activation_id,terms_id,binding_id,source_hash)
   VALUES(t,scope,source_uuid,(j->>'jobId')::uuid,(j#>>'{activation,id}')::uuid,(j#>>'{activation,termsId}')::uuid,(j#>>'{activation,partyBindingId}')::uuid,encode(sha256(convert_to(j::text,'UTF8')),'hex'));
@@ -215,7 +224,7 @@ BEGIN
 END $$;
 DO $$ DECLARE signature text; BEGIN
  FOREACH signature IN ARRAY ARRAY['app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)','app.mon1_lifecycle_rebuild(uuid,text,uuid)','app.mon1_lifecycle_read(uuid,text,uuid)'] LOOP
-  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_meter',signature);
+  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',signature);
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,jobguard_runtime',signature);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO jobguard_runtime',signature);
  END LOOP;

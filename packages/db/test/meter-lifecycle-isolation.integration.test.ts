@@ -26,7 +26,7 @@ describe('MON1-S local privilege boundary, CI PostgreSQL only',()=>{
   expect(hidden.length).toBeGreaterThan(0);
   for(const table of hidden)expect((await f.admin.query("SELECT has_table_privilege('jobguard_meter',$1::oid,'SELECT') yes",[table.oid])).rows[0].yes).toBe(false);
   const signatures=['app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)','app.mon1_lifecycle_rebuild(uuid,text,uuid)','app.mon1_lifecycle_read(uuid,text,uuid)'];
-  for(const signature of signatures)expect((await f.admin.query("SELECT pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') executable FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows[0]).toEqual({owner:'jobguard_meter',executable:true});
+  for(const signature of signatures)expect((await f.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,has_function_privilege('jobguard_runtime',oid,'EXECUTE') executable FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows[0]).toEqual({owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],executable:true});
   expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_lifecycle_actor(uuid,text,boolean)','EXECUTE') yes")).rows[0].yes).toBe(false);
  });
  it('direct cross-tenant source insert is unavailable to runtime, even under a valid context',async()=>{
