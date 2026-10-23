@@ -1,0 +1,12 @@
+{
+  "version": "value-v3-receipt-cases.v1",
+  "evidence": "illustrative_unbound",
+  "cases": [
+    { "fixture": "recovery", "category": "withheld", "expected": ["£2820.00", "£282.00", "£2538.00"] },
+    { "fixture": "reversed", "category": "withheld", "expected": ["£320.00", "£32.00", "£288.00", "−£2500.00", "−£250.00"], "corrects": "withheld" },
+    { "fixture": "shadow", "category": "found", "expected": ["£3600.00", "£0.00", "£800.00", "£80.00", "£720.00"] },
+    { "fixture": "fiveHundred", "category": "withheld", "expected": ["£500.00", "£50.00", "£450.00"] },
+    { "fixture": "zero", "category": "withheld", "expected": ["£0.00", "Unavailable (unknown)"] },
+    { "fixture": "core", "category": "tracked", "expected": ["£1100.00", "£1320.00", "£125.00", "−£25.00", "£50.00", "£500.00", "£820.00", "−£820.00", "−£100.00"] }
+  ]
+}
