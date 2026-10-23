@@ -81,6 +81,11 @@ describe("SV6-05 pure illustration", () => {
     overflow.captures.push({ ...overflow.captures[0]!, captureId: id(61), exactNet: wire("1") });
     expect(() => derive(overflow)).toThrow(RecoveryFeeIllustrationError);
   });
+  it("r1 preserves maximum principal and refuses aggregate over-maximum principal", () => {
+    expect(derive(rawInput(String(MAX_MONEY_PENCE))).cumulativeFee.pence).toBe(MAX_MONEY_PENCE / 10);
+    const over = rawInput(String(MAX_MONEY_PENCE)); over.sources.push(independentEntry("1"));
+    expect(() => derive(over)).toThrow(RecoveryFeeIllustrationError);
+  });
   it("S6-05-C F12/F13 captured is fee-free, remainder is separate, F23 never offsets", () => {
     const result = derive(rawInput());
     expect(result.exactCapturedFeeFreeNet).toEqual(wire("360000"));
@@ -116,6 +121,86 @@ describe("SV6-05 pure illustration", () => {
     }
     const duplicateAllocation = rawInput(); duplicateAllocation.sources[0]!.qualification.source.lineAllocationIds.push(id(28));
     expect(() => derive(duplicateAllocation)).toThrow();
+  });
+  it.each(["allocation", "work", "assessment", "review", "capture"] as const)("r1 refuses case-variant duplicate %s IDs", kind => {
+    // Letter-bearing UUIDs are essential: the original numeric fixture cannot vary in case.
+    const raw = JSON.parse(JSON.stringify(rawInput()).replaceAll("10000000", "abcdefab")) as ReturnType<typeof rawInput>;
+    const original = raw.sources[0]!;
+    const firstId = kind === "allocation" ? original.qualification.source.lineAllocationIds[0]!
+      : kind === "work" ? original.workId : kind === "assessment" ? original.assessment.assessmentId
+      : kind === "review" ? original.qualification.source.reviewId : raw.captures[0]!.captureId;
+    expect(firstId.toUpperCase()).not.toBe(firstId);
+    expect(derive(raw).cumulativeFee.pence).toBe(8000);
+    if (kind === "capture") {
+      raw.captures.push({ ...raw.captures[0]!, captureId: firstId.toUpperCase() });
+    } else {
+      let second = independentEntry("80000");
+      const secondId = kind === "allocation" ? second.qualification.source.lineAllocationIds[0]!
+        : kind === "work" ? second.workId : kind === "assessment" ? second.assessment.assessmentId : second.qualification.source.reviewId;
+      second = JSON.parse(JSON.stringify(second).replaceAll(secondId, firstId.toUpperCase())) as typeof second;
+      raw.sources.push(second);
+    }
+    // In particular, one £800 allocation cannot become Q £1,600 / F £160.
+    expect(recoveryFeeIllustrationInputV1.safeParse(raw).success).toBe(false);
+    expect(() => deriveRecoveryFeeIllustration(raw as never)).toThrow(RecoveryFeeIllustrationError);
+  });
+  it.each(["tenantId", "jobId", "lockId"] as const)("r1 rejects noncanonical %s in empty envelope and capture scope", field => {
+    const raw = JSON.parse(JSON.stringify(rawInput()).replaceAll("10000000", "abcdefab")) as ReturnType<typeof rawInput>;
+    raw.sources = []; raw.captures = [];
+    expect(derive(raw).cumulativeFee.pence).toBe(0);
+    expect(() => deriveRecoveryFeeIllustration({ ...raw, [field]: raw[field].toUpperCase() } as never)).toThrow(RecoveryFeeIllustrationError);
+    const captureOnly = JSON.parse(JSON.stringify(rawInput()).replaceAll("10000000", "abcdefab")) as ReturnType<typeof rawInput>;
+    captureOnly.sources = [];
+    captureOnly.captures[0]![field] = captureOnly[field].toUpperCase();
+    expect(() => deriveRecoveryFeeIllustration(captureOnly as never)).toThrow(RecoveryFeeIllustrationError);
+  });
+  it.each(["caseId", "workId", "lineId"] as const)("r1 rejects noncanonical source selector %s", field => {
+    const raw = JSON.parse(JSON.stringify(rawInput()).replaceAll("10000000", "abcdefab")) as ReturnType<typeof rawInput>;
+    raw.sources[0]![field] = raw.sources[0]![field].toUpperCase();
+    expect(recoveryFeeIllustrationInputV1.safeParse(raw).success).toBe(false);
+    expect(() => deriveRecoveryFeeIllustration(raw as never)).toThrow(RecoveryFeeIllustrationError);
+  });
+  it("r1 refuses uppercase at every nested UUID ID boundary, including authorization and manifest IDs", () => {
+    const raw = JSON.parse(JSON.stringify(rawInput()).replaceAll("10000000", "abcdefab")) as ReturnType<typeof rawInput>;
+    const paths: (string | number)[][] = [];
+    const visit = (value: unknown, path: (string | number)[] = []) => {
+      if (typeof value !== "object" || value === null) return;
+      for (const [key, child] of Object.entries(value)) {
+        const next = [...path, Array.isArray(value) ? Number(key) : key];
+        if (key.endsWith("Id") && typeof child === "string") paths.push(next);
+        else if (key.endsWith("Ids") && Array.isArray(child)) child.forEach((_, i) => paths.push([...next, i]));
+        else visit(child, next);
+      }
+    };
+    visit(raw);
+    expect(paths.length).toBeGreaterThan(80);
+    for (const path of paths) {
+      const changed = structuredClone(raw);
+      let target: unknown = changed;
+      for (const key of path.slice(0, -1)) target = (target as Record<string | number, unknown>)[key];
+      const record = target as Record<string | number, string>, key = path.at(-1)!;
+      record[key] = record[key]!.toUpperCase();
+      expect(() => recoveryFeeIllustrationInputV1.parse(changed), path.join(".")).toThrow();
+      expect(() => deriveRecoveryFeeIllustration(changed as never), path.join(".")).toThrow(RecoveryFeeIllustrationError);
+    }
+  });
+  it.each(["tenantId", "jobId", "lockId"] as const)("r1 source scope guard rejects mismatched %s without captures", field => {
+    const raw = rawInput(); raw.captures = [];
+    expect(derive(raw).cumulativeFee.pence).toBe(8000);
+    raw[field] = id(99);
+    // Both embedded records remain individually valid; only this leaf's scope guard can reject.
+    expect(recoveryFeeIllustrationInputV1.safeParse(raw).success).toBe(true);
+    expect(() => derive(raw)).toThrow(RecoveryFeeIllustrationError);
+  });
+  it.each(["tenantId", "jobId", "lockId"] as const)("r1 checks source and assessment %s independently without captures", field => {
+    for (const side of ["source", "assessment"] as const) {
+      const raw = rawInput(); raw.captures = [];
+      const entry = raw.sources[0]!;
+      if (side === "source") entry.qualification.source[field] = id(99);
+      else entry.assessment = JSON.parse(JSON.stringify(entry.assessment).replaceAll(raw[field], id(99))) as typeof entry.assessment;
+      expect(recoveryFeeIllustrationInputV1.safeParse(raw).success, side).toBe(true);
+      expect(() => derive(raw), side).toThrow(RecoveryFeeIllustrationError);
+    }
   });
   it("S6-05-D checks every envelope binding and source watermark", () => {
     for (const field of ["tenantId", "jobId", "lockId"] as const) {

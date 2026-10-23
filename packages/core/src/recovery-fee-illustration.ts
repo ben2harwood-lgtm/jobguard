@@ -2,11 +2,12 @@ import { z } from "zod";
 import { calculateCumulativeFee, compareExactPence, exactPence, exactPenceV1, parseExactPence, serializeExactPence, sumExactPence } from "./cumulative-fee.js";
 import { money, moneyFromBigInt } from "./money.js";
 import { currentAttributionQualificationV1, recoveryAttributionRevisionV1 } from "./recovery-attribution-persistence.js";
-import { qualifiesAttribution } from "./shadow-domain/attribution.js";
-import { freezeShadow, shadowId, shadowRef } from "./shadow-domain/types.js";
+import { freezeShadow, shadowId as baseShadowId, shadowRef } from "./shadow-domain/types.js";
 
 /** Synthetic reference composition only; never an approval of D01/D02/D03/D13 or production charging. */
 export const recoveryFeeIllustrationPolicyBundleV1 = z.literal("recovery-fee-illustration.synthetic-policy.v1");
+// Match the consumed SV6-01 wire contract for IDs owned by this envelope too.
+const shadowId = baseShadowId.refine(v => v === v.toLowerCase(), "Lowercase UUID required");
 const scope = { tenantId: shadowId, jobId: shadowId, lockId: shadowId };
 const capture = z.object({
   ...scope, captureId: shadowId, sourceRevision: shadowRef, sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), exactNet: exactPenceV1,
@@ -70,7 +71,7 @@ export function deriveRecoveryFeeIllustration(input: RecoveryFeeIllustrationInpu
       if (s.policyBundleRef !== f.policyBundleRef || a.policyBundleRef !== f.policyBundleRef ||
           s.assessmentId !== a.assessmentId || s.assessmentRevision !== a.revision ||
           s.sourceRevision !== a.sourceRevision || s.sourceHash !== a.sourceHash ||
-          a.assessmentOutcome !== "eligible_for_review" || !qualifiesAttribution(a.facts)) return fail();
+          a.assessmentOutcome !== "eligible_for_review") return fail();
       const remaining = parseExactPence(s.exactRemainingPrincipal);
       if (compareExactPence(remaining, parseExactPence(a.remainingPrincipal)) !== 0) return fail();
       // One coalesced work identity, one current assessment/review and one allocation consumption.

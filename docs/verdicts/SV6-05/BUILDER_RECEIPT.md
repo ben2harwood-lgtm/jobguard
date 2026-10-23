@@ -101,3 +101,71 @@ All files below were newly created; no tracked parent file changed. The receipt 
 - `packages/core/src/recovery-fee-illustration.ts` — SHA-256 `f5fa951cd82958f2ed20c2286e5d4381c4e659b8290058a9b3c5bcedba5b979e`
 - `packages/core/src/recovery-fee-illustration.test.ts` — SHA-256 `8e641aee05b5e5264b116341447e5217654e5a5222c78e8690da5215600aaae7`
 - `packages/core/src/recovery-fee-illustration.type.test.ts` — SHA-256 `26faef2e861440e20846c115ad97ba1117da361ea955715e9defa6548c65ddce`
+
+## r1 (catch-up + review)
+
+23 October 2026. Builder: Codex gpt-6.1-sol, medium reasoning. Issued review-repair order; RED money lane. Starting and unchanged HEAD `294482ff55499127b4771ac0ff0e927d64a213e5`, incorporating repaired SV6-01 r1/r1b through `7596d818`. Initial working tree clean. No git write commands, commit, push, PR, acceptance or release. This section supersedes the initial receipt's implementation/test claims where the repaired parent changes them; it is builder evidence, not an independent verdict.
+
+Read repository AGENTS.md; BUILD_PLAN SV-6, §10.2.8 and §§10.3.1–10.3.3; the lane allowlist and existing illustration contract; both requested Claude review reports at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv6-05-claude-{A,B}-ede3c728-20261023.md` (the relative `jg-runs/` paths are not in this worktree); repaired SV6-01 schemas and their tests. No predecessor or shared file edited.
+
+### Changes and regressions
+
+- A: consume SV6-01's lowercase UUID rejection for embedded assessment/qualification records; apply the same rejection to this leaf's envelope, case/work/line selectors, capture IDs/scope and output. Validation precedes equality/uniqueness checks; no silent rewriting. Case-variant allocation, work, assessment, review and capture duplicate regressions all refuse. Each uses letter-bearing UUIDs; the allocation repro supplies two otherwise independent £800 sources citing the same UUID in opposite cases and must refuse instead of Q £1,600 / fee £160. The capture alias cannot double £3,600 to £7,200. Empty-envelope scope and selector cases prove the leaf owns its own canonical boundary. A recursive test changes every populated UUID `*Id`/`*Ids` path independently, covering nested authorization, assessment, facts, manifests and allocation IDs as well.
+- Catch-up: consume the repaired assessment eligibility gate; remove this leaf's redundant `qualifiesAttribution` invocation/import. Retain the eligible-outcome requirement and all cross-record/source binding checks. No duplicate parent eligibility/manifest implementation added.
+- B: add tenant/job/lock envelope mismatches with `captures: []`, asserting schema validity before deriving the typed refusal. Additional source-only and assessment-only changes keep embedded schemas valid and exercise each side of that guard independently.
+- Preserve the arithmetic: summation, half-even cumulative fee call, single rounding, current remaining net principal, frozen previous results, fee-free captured total and exact remainder code are unchanged. Add explicit maximum-principal and aggregate-over-maximum cases. All earlier source tests pass.
+- Update only the illustration module, its runtime tests, its contract and this receipt, all within the existing SV6-05 allowlist. No migration, persistence/backfill, network/provider, API, OpenAPI, money posting or production enablement change. The stricter UUID input/output validation intentionally refuses formerly accepted uppercase strings; upstream SV6-01 now has the same wire restriction. No new operational alert; existing release and integration holds remain.
+
+### Tests fail without their rules
+
+Tests were added before the repair. Initial focused run exited 1: seven failures exposed capture alias acceptance, three noncanonical empty-envelope IDs and three noncanonical selectors. Parent-owned mixed-case source IDs already refused under repaired SV6-01, as intended; no claim that this leaf independently reimplements those restrictions.
+
+Four temporary mutations were then executed sequentially against the completed tests, with the source restored by `finally`:
+
+| Removed rule | Result |
+|---|---|
+| Leaf lowercase UUID refinement | Exit 1; 8 new tests fail, including capture alias, envelope and selectors. |
+| Only qualification-source scope comparison | Exit 1; tenant/job/lock independent-source tests all fail. |
+| Only assessment scope comparison | Exit 1; tenant/job/lock independent-assessment tests all fail. |
+| Whole source/assessment scope guard | Exit 1; all three capture-free envelope mismatch tests fail. |
+
+Logs `/private/tmp/jg-sv6-05-r1-mutant-{canonical-ids,source-scope,assessment-scope,combined-scope}.log`; temporary runner `/private/tmp/jg-sv6-05-r1-mutations.py`. Mutations are not shipped tests or independent model review. The restored final tests pass. The parent schema was never mutated or edited.
+
+### Commands actually run
+
+Existing installed Node v24.17.0, pnpm 10.28.1, Vitest 4.1.11 and TypeScript 5.8.3; no dependency install/download attempted. `PINNED_PNPM` below means `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. The first repository-wide typecheck stalled in the host pnpm wrapper and was interrupted (130). Retried with a temporary `/private/tmp/jg-sv6-05-r1-bin/pnpm` shim pointing only to the installed pinned executable; child package commands then ran. Turbo reported nonfatal sandbox cache I/O warnings. No sandbox escalation or permission request was needed.
+
+| Command | Actual result |
+|---|---|
+| `PINNED_PNPM --dir packages/core exec vitest run --maxWorkers=2 src/recovery-fee-illustration.test.ts src/recovery-fee-illustration.type.test.ts src/recovery-attribution-persistence.test.ts src/recovery-attribution-persistence.type.test.ts` | PASS: 4 files, 68 tests. |
+| `PINNED_PNPM --dir packages/core exec vitest run --maxWorkers=2 src/cumulative-fee.test.ts src/shadow-domain/success-fee.test.ts src/receipt-allocation.test.ts src/fee.test.ts src/fee-what-if.test.ts src/fee-statement.test.ts` | PASS: 6 files, 172 tests. |
+| `PINNED_PNPM --dir packages/core typecheck` | PASS, including the TypeScript negative cases. |
+| `PINNED_PNPM --dir packages/core lint` | PASS. |
+| `PINNED_PNPM --dir packages/core exec vitest run --maxWorkers=2` | Exit 1: 5 failures, 5,959 passes across source and generated tests; all failures are compiled `dist` source-inspection tests looking for `.ts` siblings that do not exist there. No source test failed. No tests weakened or dist files patched. |
+| `PINNED_PNPM --dir packages/core exec vitest run --maxWorkers=2 src` | PASS: all 126 source files, 3,009 tests. This is the distinct source-only result, not a claim that unfiltered test discovery passed. |
+| `PINNED_PNPM typecheck --concurrency=2` (pinned child PATH) | PASS: 7 tasks, 2 cache hits. |
+| `LANE_BASE_REF=origin/main PINNED_PNPM lint --concurrency=2` | HOLD/exit 1: lane guard rejects only six inherited SV6-01 files. Package lint did run separately and passed. |
+| `LANE_BASE_REF=origin/main PINNED_PNPM lint:lanes` | HOLD/exit 1: same inherited parent delta. |
+| `LANE_BASE_REF=7596d818 PINNED_PNPM lint:lanes` | PASS: diagnostic against repaired parent, not a replacement for the required main comparison. |
+| `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs` | PASS individually. |
+
+Check logs are `/private/tmp/jg-sv6-05-r1-{unit,money-regression,core-typecheck,core-lint,core-all,core-source,typecheck,lint,lanes,lanes-parent,purity,money-lint,commercial-lint}.log`; interrupted typecheck separately recorded at `...-typecheck-interrupted.log`.
+
+| Final command | Actual result |
+|---|---|
+| `CIRCLE_NODE_TOTAL=2 PINNED_PNPM build --concurrency=2` (pinned child PATH) | PASS: 7 tasks, 2 cache hits, 1m21.339s. Existing web build dependency warnings and sandbox cache I/O warnings only. |
+| `PINNED_PNPM openapi:check` (pinned child PATH) | Exit 1 before generator execution: tsx CLI IPC `listen EPERM` on its temporary `.pipe`, a sandbox socket restriction. |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | PASS, exit 0: same source generator and committed snapshot comparison, using installed tsx loader without its CLI IPC listener. No snapshot changed. |
+| `git diff --check` and exact allowlist comparison of working-tree paths | PASS; four permitted tracked files modified, no untracked files. |
+
+Final build/OpenAPI logs: `/private/tmp/jg-sv6-05-r1-{build,openapi,openapi-loader}.log`. No fresh install is claimed: dependencies were already installed as instructed. The receipt is appended after those checks; no executable source changed afterwards.
+
+Remaining holds: main-based lane lint still includes the six inherited SV6-01 files and needs dispatcher integration handling. Unfiltered core Vitest discovery still includes failing generated-source inspection tests; the complete source suite is green, and this repair does not change test discovery. Database, migrations and browser suites were not attempted because this sandbox cannot start PostgreSQL or bind localhost; GitHub CI after dispatcher push remains their evidence source. No AI gateway/model/prompt changed, so no live-model evaluation applies to this pure fee repair. No new independent exact-commit review or separate acceptance is claimed. Existing policy, production, caller freshness/authorization and downstream journey gates remain in force.
+
+Intended conventional commit subject and body are written to `/private/tmp/jg-msg-sv6-05.txt`. Dispatcher owns committing and review. No commit or push was performed.
+
+Updated content binding for r1 (supersedes the original hashes for these files; receipt is not self-hashed):
+
+- `packages/core/src/recovery-fee-illustration.ts` — SHA-256 `9140b0724820a0521c087611448f8dc999934a7faef9413c5f0e7f4f24e0e22a`
+- `packages/core/src/recovery-fee-illustration.test.ts` — SHA-256 `9804672d4dde30f28832736b9fec625947af0c7526323f9f223a27fbf57b3a17`
+- `docs/contracts/recovery-fee-illustration-v3.md` — SHA-256 `9fdc1c4e76ba0039c6f141d7a10d52a0665ec59061e25b0d722de8c786bd648e`
