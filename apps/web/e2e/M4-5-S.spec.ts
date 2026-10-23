@@ -178,13 +178,14 @@ test("previews, approves and simulates one factual customer message that is deli
 });
 
 test("uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends", async ({ page, browser }, testInfo) => {
-  const source = await persistedRecoverySources(page);
+  // Set-up order only (per C135): the order and the supplier documents are new site work, so they are created before the final-account lock.
+  const source = await persistedRecoverySources(page, async context => {
   const rate = await post(page, "/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional Builders Merchant", sku: `MSG-${randomUUID()}`, description: "Fictional building material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Entered synthetic agreement", expectedVersion: 0 });
-  await post(page, `/api/jobs/${source.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: source.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
-  const requirement = (await get(page, `/api/jobs/${source.jobId}/materials`)).materials.at(-1);
-  await post(page, `/api/jobs/${source.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
-  const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
-  await page.goto(`/jobs/${source.jobId}#supplier-documents`);
+  await post(page, `/api/jobs/${context.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: context.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
+  const requirement = (await get(page, `/api/jobs/${context.jobId}/materials`)).materials.at(-1);
+  await post(page, `/api/jobs/${context.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
+  const documentsPath = `/api/jobs/${context.jobId}/supplier-documents`;
+  await page.goto(`/jobs/${context.jobId}#supplier-documents`);
   const documentPicker = page.locator("#supplier-documents select").first();
   for (const fixtureId of ["materials-B-delivery", "materials-320-invoice"]) {
     await expect(documentPicker).toBeEnabled();
@@ -194,6 +195,10 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
     expect((await imported).ok()).toBe(true);
     await expect(button(page, "Import generated document")).toBeEnabled();
   }
+    return rate;
+  });
+  const rate = source.before!;
+  const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
   const documents = (await get(page, documentsPath)).state;
   const invoice = documents.facts.filter((fact: { document_number: string }) => fact.document_number === "INV-M320-001").at(-1);
   const delivery = documents.documents.find((document: { document_type: string; status: string }) => document.document_type === "delivery" && document.status === "ready");
@@ -280,7 +285,10 @@ test("revocation and changed evidence both block execution and nothing is sent",
   await V(page, "pursuit-delivery", "Preview only — awaiting your approval");
   await click(page, "Approve this exact message");
   await V(page, "pursuit-delivery", "Approved — queued, nothing sent");
-  const newProofId = await recordedProof(page, source.jobId);
+  // Per C135: new proof after the final-account lock is refused (POST_LOCK_WORK_REQUIRES_LINKED_JOB). Was: a new proof was recorded; the invalidation below still changes the evidence.
+  const refusedProof = await page.request.post(`/api/jobs/${source.jobId}/proof`, { data: { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", fixture: "completion-photo", scopeItemId: source.scopeItemId } });
+  expect(refusedProof.ok()).toBe(false); expect(await refusedProof.text()).toContain("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  const newProofId = source.proofId;
   await post(page, `/api/jobs/${source.jobId}/proof`, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "invalidate", evidenceId: source.proofId, reasonCode: "object_revoked" });
   await click(page, "Build evidence pack");
   await expect(page.getByTestId("pack-attachment-status")).toHaveText("Previous attachment approval invalidated by the new evidence version");

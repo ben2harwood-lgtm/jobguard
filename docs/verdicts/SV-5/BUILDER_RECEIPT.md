@@ -122,7 +122,7 @@ const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,taskL
 
 Required after: a reviewed final-check task/composition seam, durable scheduling/discovery and restart execution, preserving the existing queued-context constructor/pinned boundary. The concrete permitted seam is **not issued**. No replacement/addition to this protected file is guessed. Handler/factory tests do not satisfy SV5-32.
 
-4. **Additional catalog prerequisite — `packages/db/test/tenancy.integration.test.ts:252` and `:491`.** Untouched. Exact before lines:
+4. **Additional catalog prerequisite — `packages/db/test/tenancy.integration.test.ts:252` and `:491`.** Historical initial stop; r1 commit `69bff475` subsequently added the catalogue rows, and the C239 round resolves both parents' rows. Exact before lines:
 
 ```ts
       { relname: "final_check_terms_acceptance", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -161,7 +161,7 @@ Rule G and this lane exclude every merged test edit. The coordinator must insert
 Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/83429.pipe
 ```
 
-Stopped this item. `apps/api/openapi.json` is byte-unchanged and lacks the new endpoint additions. Dispatcher must generate/check it in an environment where the authorized generator starts. No alternate path, permission request or generator workaround was attempted.
+Historical initial stop, superseded by r1 commit `a13fc5f1`, which regenerated `apps/api/openapi.json` with the final-check routes. The OpenAPI artifact is changed at the current head; current validation is recorded in the C239 round below.
 
 6. **Lane check — nested actual command** `/usr/local/bin/node tools/agent-lane-boundary-lint.mjs`, exit 1:
 
@@ -209,7 +209,7 @@ LATER: separately issue the reveal UI/browser portion after the server, invoice 
 
 ## File evidence and final head
 
-Final SQL SHA-256: `2fe83516cfd3adc43c3a4ed37a3c94ab4d40eccb54b79cd36852c46066abb4db`.
+Current 0205 SQL SHA-256 (C239 repair): `5b8ec86fc5104172e2604027d1326c86ef2985d9857acbdcc52bc586d81f5ada`. The initial historical 0199 SQL digest was `2fe83516cfd3adc43c3a4ed37a3c94ab4d40eccb54b79cd36852c46066abb4db`.
 
 The Git-blob comparison against main found 1,593 original tracked files byte-unchanged, 7 tracked lane files changed and 25 new lane files before this receipt (26 with it). Every out-of-lane tracked file stayed unchanged; no merged test or SHA-pinned bridge was edited. Every non-SV-5 lane entry was compared semantically to main and remains equal. Protected SHA-256 values equal main:
 
@@ -260,7 +260,7 @@ Changed/new source SHA-256 (receipt excluded to avoid a circular hash):
 - `packages/core/src/index.ts` — `a2af7ded1cfc8985358aadc541ae01ba0794753fd4dbcb814c0cf0777a8935e2`
 - `packages/core/src/watchdog.ts` — `2c9451800cc35bdd80820bca593a6df7f7841ca4736af14c4ba308a056c787d6`
 - `packages/db/MIGRATIONS.md` — `c76d8914fc97d58abd593dfcc9c4eae8b13fceeb10c00babaafef02073c9c9a2`
-- `packages/db/migrations/0199_final_check.sql` — `2fe83516cfd3adc43c3a4ed37a3c94ab4d40eccb54b79cd36852c46066abb4db`
+- Current `packages/db/migrations/0205_final_check.sql` — `5b8ec86fc5104172e2604027d1326c86ef2985d9857acbdcc52bc586d81f5ada` (C239 repair; supersedes the historical 0199 hash in this list)
 - `packages/db/src/final-check-repository.ts` — `540685dead851ade0137dda9a4a88739f56250725daaf2c1c861ee198c3ec29e`
 - `packages/db/src/final-check-source-reader.ts` — `bd80cb1a73f65b7315910c4a326ea64f5da1e6820b0b5e5eb47c50d3cfdc6382`
 - `packages/db/src/index.ts` — `22564468ce9b61e0fb6eb1c741f09111c42518e858cc2ca7cc74279df912d462`
@@ -381,3 +381,195 @@ Commands/results (cached installed pnpm 10.28.1, Node 24.17.0; logs `/private/tm
 - `pnpm openapi:check`: blocked by tsx IPC `listen EPERM`; after build, equivalent `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS. `git diff --check` and both-parent export/marker checks: PASS.
 
 PostgreSQL suites (including LP0 adversarial grants and recovery timing), browser CI, independent exact-commit model verdict, separate acceptance and founder merge remain held. No green-CI, live integration or release claim. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5-181-green.txt`.
+
+
+## r1 repair provenance — bf86ea7b..a13fc5f1 (fresh review required)
+
+Read-only first-parent history identifies these repair commits: `bf86ea7b` main catch-up; `b72f2321` migration 0145 → 0199 and migration note; `69bff475` concrete worker factory relocated to test support, B3/source cutoff repair, fixtures and tenancy rows; `e944c74c` exact catalogue allowances and lane; `a13fc5f1` OpenAPI regeneration. These are inherited source changes, not work performed or accepted in this turn. The later reservation maps 0199 to 0205.
+
+B3 failing-first evidence was not present in the inherited receipt. This round reconstructed a **source-only** regression from `git show 69bff475^:packages/db/migrations/0199_final_check.sql`, saved as `/private/tmp/jg-sv5-b3-before.sql`. A Node strict assertion that the worker manifest read bounds offered signal evidence by `e.source_received_at<=manifest.evidence_cutoff_at` exits 1 with `AssertionError [ERR_ASSERTION]: B3: post-lock evidence is offered to main reconciliation` (`/private/tmp/jg-sv5-b3-before.log`). The matching current Vitest assertion is in `final-check-c239.test.ts`. This is not an executed historical DB failure; original r1 DB failing-first output is unknown. The existing B3 integration expectation is retained for CI.
+
+## C239 rebuild on repaired #189 — 24 October 2026, fresh review round
+
+Preflight: branch `codex/sandbox/sv5-181-green`, starting HEAD `ee2b3beb53d2444ee915d78475bd136231ffb6c5`; origin/main `89b7b3d2e55ed668cd09aac117d8055f4fb03b0c`; in-progress merge source `7ffd93acffb3479edf01ae91b9ae1b4c36cb44f1`. Both merge conflicts are resolved in file contents, retaining all distinct catalogue rows from both parents. Git index remains unmerged for dispatcher staging. No git write command, commit, push, package installation, PostgreSQL startup or browser suite was run. Installed pnpm 10.28.1 is invoked through the existing `/private/tmp/jg-sv5-green-bin` wrapper; the initial default pnpm shim hung, was interrupted, and was not used for verification.
+
+0204 owns both manifest tables. 0205 adds nullable processing metadata and qualified constraints to the manifest, preserving all original columns/keys/RLS/policies/grants and source-generation guards. A separate owner-only `final_check_processing_source` table retains #181's exact source snapshots and unsupported unlinked supplier/capture inventory. The prerequisite source count/hash remain unchanged. Reconciliation now supplies exact staged attempts, result descriptors and run binding through 0204's unchanged proof triggers, and must pass `verify_final_check_run`. Certificate publication remains explicit; the existing expectation of no automatically inserted lock-check fact is retained. Prerequisite job/advisory locks are taken before shadow locks and audit allocation. C177/catch creation and `pilot_no_charge` refusals remain unchanged.
+
+C204: rejected and expired pre-lock uploads remain in 0204's generated inventory with recorded reason and `final_check.sources_excluded` audit event, while the processing inventory omits them. Retry preserves the same frozen manifest and can finish an explicit empty result. New integration cases require replay, builder completed view and successful authoritative publication; a further case publishes an evidence-backed classified result through the same gate. C135 still blocks pending photos/quarantine before lock. No superseded upload state exists in the preserved schema; invalidated verified evidence continues to block, as required by the retained test. No re-freeze or mutation is introduced. Existing prerequisite-only manifests retain null processing metadata and their original 0204 proof path; #181 begin fails pending rather than rewriting them.
+
+C204 failing-first: before SQL edits, `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-c239.test.ts` exited 1: `Test Files 1 failed (1); Tests 2 failed (2)`. The C204 assertion failed because the processing inventory had no prerequisite exclusion path; C239 also failed on the duplicate CREATE TABLE. Raw output: `/private/tmp/jg-sv5-c204-before.log`. The initial same command after SQL repair passed both tests (`/private/tmp/jg-sv5-c204-after.log`); the later unit run passes all three including the B3 source regression. This is deterministic source evidence, not a substitute for the new behavioral DB cases, which were not run locally.
+
+Upgrade proof now seeds all four tables 0205 alters (`final_check_manifest`, `shadow_signal_classification`, `shadow_signal_disposition`, `recovery_case`), plus generated manifest sources. It compares populated pre-existing named columns/types/keys/bytes across 0205 and repeated successors, and checks unchanged shared-table owner/ACL/RLS/policies plus preservation of every original constraint. No old acceptance expectation was removed. New processing-table catalogue facts extend tenancy, contractor-entitlement and serious-b5; LP-0 documents unchanged inherited shadow grants and new owner-only processing storage without stale owner-only capability allowances.
+
+Preservation checks: 0204 SQL SHA-256 `e3dacbd072a2237ac65a16066f7b2e3daea2a4b7df9cd4fa0360aac21cfd5ab7` equals MERGE_HEAD. Shared lane register SHA-256 `b84812ed3fa585cfe4b45bb356da3bd3e5ea3810e1d6ccf6665153693afab785` equals its staged merge input. The only lane authored here is `config/lanes/sv5-181-green.json`, extended with exact authored files; inherited allowances remain. Its own path is implicitly permitted by the lane checker and cannot be placed in allow.
+
+Final candidate 0205 SQL SHA-256: `5b8ec86fc5104172e2604027d1326c86ef2985d9857acbdcc52bc586d81f5ada`. Metadata is nullable only as an all-or-none group, preserving prerequisite-only rows while requiring the processing policy, hash, count, comparisons and tenant-qualified audit reference together for #181 manifests. Repository translation maps prerequisite proof failures to the versioned pending/forbidden/idempotency error contract; seven final source/adapter unit regressions pass.
+
+Commands actually run, one at a time, with installed dependencies (Vitest `--maxWorkers=2`, Turbo `--concurrency=1`; observed load stayed below 20):
+
+- `pnpm typecheck --concurrency=1`: PASS twice, final seven tasks successful (`/private/tmp/jg-sv5-c239-typecheck-final.log`).
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: FAIL at lane boundary, before package lint; `/private/tmp/jg-sv5-c239-lint.log`.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL with the exact inherited-history/pending-merge list reproduced below (`/private/tmp/jg-sv5-c239-lanes.log`). No blanket allowance or shared register edit.
+- `pnpm turbo run lint --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-c239-package-lint.log`). Final core-purity, money-arithmetic and commercial-boundary scripts each PASS separately (`/private/tmp/jg-sv5-c239-{purity,money,commercial}-final.log`).
+- `node --test tools/*.test.mjs`: PASS, 126 tests (`/private/tmp/jg-sv5-c239-tools-test.log`).
+- `pnpm -r --workspace-concurrency=1 exec vitest run --passWithNoTests --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**' --exclude '**/shadow-isolation.application.test.ts' --exclude '**/final-account-lock.isolation.test.ts'`: config 41, core 2965, storage 2, AI 147 passed; DB 425 passed / two failed, both free-port tests reporting `listen EPERM`. pnpm stopped at DB; no DB cluster was started. The two excluded API isolation files use real PostgreSQL and are left to CI. `/private/tmp/jg-sv5-c239-units.log`.
+- API separately with identical source filters: initially 2053 passed / 177 failed, including stale pre-merge package exports; after the build, 2097 passed / 133 failed (eight files), with 133 socket errors. Remaining failures are Supertest's null port after refused listen and `listen EPERM`; no stale-constructor errors remain. `/private/tmp/jg-sv5-c239-api-after-build.log` is the final API result; `/private/tmp/jg-sv5-c239-api-units.log` retains the earlier result.
+- Web separately with the source filters: PASS, 897 tests (`/private/tmp/jg-sv5-c239-web-units.log`).
+- New regression file: final PASS, seven tests (`pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-c239.test.ts`; `/private/tmp/jg-sv5-c239-regression-final.log`). An intermediate adapter test incorrectly asserted Error.name; corrected to assert the actual FinalCheckError class and code. No inherited test was weakened.
+- `pnpm build --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-c239-build.log`).
+- `pnpm openapi:check`: blocked by tsx IPC `listen EPERM` (`/private/tmp/jg-sv5-c239-openapi.log`). Equivalent generator invocation `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS, exit 0 (`/private/tmp/jg-sv5-c239-openapi-direct.log`). No OpenAPI artifact was authored in this repair.
+
+DB integration/migration, browser, fresh independent exact-commit A/B verdicts, separate acceptance and founder merge remain required. Earlier REPAIR reviews of ee2b3beb are not approvals of this candidate. No full-green CI or technical acceptance claim. Intended commit subject/body is `/private/tmp/jg-msg-sv5-181-green.txt`.
+
+Exact lane failure list (all lines from the final checker output; these files were not added to this repair's allowance):
+
+```text
+"apps/api/openapi.json"
+"apps/api/src/app.module.ts"
+"apps/api/src/final-check.application.test.ts"
+"apps/api/src/final-check.application.ts"
+"apps/api/src/final-check.contracts.ts"
+"apps/api/src/final-check.controller.test.ts"
+"apps/api/src/final-check.controller.ts"
+"apps/api/src/final-check.http.test.ts"
+"apps/api/src/final-check.isolation.test.ts"
+"apps/api/src/final-check.worker.test.ts"
+"apps/api/src/final-check.worker.ts"
+"config/agent-lane-assignments.json"
+"config/lanes/sv5-0205-renumber.json"
+"docs/ledger/SV5-0205-RENUMBER.md"
+"packages/core/src/final-check.test.ts"
+"packages/core/src/final-check.ts"
+"packages/core/src/index.ts"
+"packages/core/src/watchdog.ts"
+"packages/db/src/final-check-source-reader.ts"
+"packages/db/test/final-check-catch.integration.test.ts"
+"packages/db/test/final-check-disposition.integration.test.ts"
+"packages/db/test/final-check-fixture.ts"
+"packages/db/test/final-check-invoice.integration.test.ts"
+"packages/db/test/final-check-races.integration.test.ts"
+"packages/db/test/final-check-worker-factory.ts"
+"packages/db/test/final-check.integration.test.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.test.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.ts"
+"apps/api/src/customer-invoice.application.ts"
+"apps/api/src/customer-invoice.controller.ts"
+"apps/api/src/final-account-lock.application.test.ts"
+"apps/api/src/final-account-lock.application.ts"
+"apps/api/src/final-account-lock.controller.ts"
+"apps/api/src/final-check-task-executor.ts"
+"apps/api/src/shadow-detection.worker.test.ts"
+"apps/api/src/shadow-isolation.application.test.ts"
+"apps/api/src/sv5pre-invoice.http.test.ts"
+"apps/api/src/sv5pre-worker-execution.integration.test.ts"
+"apps/api/src/sv5pre-worker-registration.test.ts"
+"apps/api/src/worker-task-extensions.ts"
+"apps/api/src/worker.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.test.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.ts"
+"apps/web/e2e/M4-3-S.spec.ts"
+"apps/web/e2e/M4-5-S.spec.ts"
+"apps/web/e2e/SV-4.spec.ts"
+"apps/web/e2e/UIWIRE-10.spec.ts"
+"apps/web/e2e/UIWIRE-11.spec.ts"
+"apps/web/e2e/UIWIRE-15.spec.ts"
+"apps/web/e2e/VALUE-1.spec.ts"
+"apps/web/e2e/helpers/customer-invoice-journey.ts"
+"apps/web/e2e/helpers/recovery-allocation-journey.ts"
+"apps/web/e2e/helpers/recovery-sources.ts"
+"config/lanes/sv5pre-0204-renumber.json"
+"docs/contracts/final-account-lock-v1.md"
+"docs/contracts/sv5pre-completion-v1.md"
+"docs/ledger/SV5PRE-0204-RENUMBER.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r14.md"
+"packages/core/src/final-account-lock.ts"
+"packages/core/src/final-check-completion.test.ts"
+"packages/core/src/final-check-completion.ts"
+"packages/db/migration-notes/0204_final_check_prerequisites.md"
+"packages/db/migrations/0204_final_check_prerequisites.sql"
+"packages/db/src/final-account-lock-repository.ts"
+"packages/db/src/final-check-completion-repository.ts"
+"packages/db/src/guarded-practice-invoice-repository.ts"
+"packages/db/src/shadow-detection-repository.ts"
+"packages/db/test/UIWIRE-10.integration.test.ts"
+"packages/db/test/UIWIRE-11.integration.test.ts"
+"packages/db/test/UIWIRE-12.integration.test.ts"
+"packages/db/test/final-account-lock-invoice.integration.test.ts"
+"packages/db/test/final-account-lock.integration.test.ts"
+"packages/db/test/invoice-later.integration.test.ts"
+"packages/db/test/migfix-5.integration.test.ts"
+"packages/db/test/practice-facts.integration.test.ts"
+"packages/db/test/practice-feed.integration.test.ts"
+"packages/db/test/practice-invoice-audit.integration.test.ts"
+"packages/db/test/recovery-allocation-races.integration.test.ts"
+"packages/db/test/recovery-allocation-upgrade.integration.test.ts"
+"packages/db/test/recovery-allocation.integration.test.ts"
+"packages/db/test/recovery-case-terms-upgrade.integration.test.ts"
+"packages/db/test/recovery-case-terms.integration.test.ts"
+"packages/db/test/recovery-line-allocation.integration.test.ts"
+"packages/db/test/serious-b5.integration.test.ts"
+"packages/db/test/serious-b9.integration.test.ts"
+"packages/db/test/sv5pre-completion-access.integration.test.ts"
+"packages/db/test/sv5pre-completion-isolation.integration.test.ts"
+"packages/db/test/sv5pre-completion.integration.test.ts"
+"packages/db/test/sv5pre-fixtures.ts"
+"packages/db/test/sv5pre-legacy-invoice.integration.test.ts"
+"packages/db/test/sv5pre-session-invoice.integration.test.ts"
+"packages/db/test/sv5pre-upgrade.integration.test.ts"
+```
+
+Session record (unknown fields are not inferred; no session-continuity, runtime-model or cache claim):
+
+```json
+{
+  "session_record_version": 1,
+  "task_id": "SV-5 #181 C239 rebuild on #189, 24 October 2026",
+  "project": "JobGuard",
+  "role": "builder",
+  "thread_id": "unknown",
+  "surface": "unknown",
+  "host": "unknown",
+  "authorised_route_ref": "unknown",
+  "repository": "ben2harwood-lgtm/jobguard",
+  "integration_target": "origin/main",
+  "integration_target_revision": "89b7b3d2e55ed668cd09aac117d8055f4fb03b0c",
+  "worktree": "/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-green",
+  "branch": "codex/sandbox/sv5-181-green",
+  "starting_base_revision": "ee2b3beb53d2444ee915d78475bd136231ffb6c5",
+  "source_pin": "7ffd93acffb3479edf01ae91b9ae1b4c36cb44f1",
+  "candidate_revision": "uncommitted working tree; dispatcher will stage/commit the pending merge",
+  "last_validated_revision": "this uncommitted candidate, source/unit/type/build checks only",
+  "allowed_files_ref": "config/lanes/sv5-181-green.json",
+  "governing_contract_ref": "AGENTS.md; BUILD_PLAN.md SV-5; C239 order; docs/contracts/final-check-v1.md; docs/contracts/sv5pre-completion-v1.md; /Users/benharwood/Claude/Projects/Next Gen Learning Platform/docs/workflow/CODEX_SESSION_POLICY.md (adopted 21 October 2026)",
+  "model_requested": "unknown",
+  "effort_requested": "unknown",
+  "model_runtime_confirmed": "unknown",
+  "effort_runtime_confirmed": "unknown",
+  "runtime_confirmation_ref": "unknown",
+  "last_completed_turn": "unknown",
+  "last_receipt_ref": "docs/verdicts/SV-5/BUILDER_RECEIPT.md",
+  "state": "working-tree handoff; independent review and acceptance pending",
+  "resumed_from_thread_id": "unknown",
+  "successor_reason": "unknown",
+  "preflight_ref": "C239 rebuild section in this receipt",
+  "result_id": "unknown",
+  "acknowledgement_ref": "unknown",
+  "ci_evidence_ref": "unknown",
+  "reviewer": "unknown",
+  "review_evidence_ref": "unknown",
+  "accepting_actor": "unknown",
+  "acceptance_evidence_ref": "unknown",
+  "outstanding_holds": "DB/migration/browser CI; socket-dependent unit tests; inherited lane failures; fresh exact-commit independent verdicts; separate acceptance; founder merge/release",
+  "builder_finished_at": "unknown",
+  "coordinator_acknowledged_at": "unknown",
+  "integrated_at": "unknown",
+  "merged_revision": "unknown"
+}
+```
+
+Usage source/turn ID/timestamp and input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens: unknown. Per-turn versus cumulative: unknown. Cache-read share, quota change and resume/acknowledgement/integration timing: unknown. No counters were inferred from context or prior receipts.
+
+Final read-only handoff verification: PASS for 15 authored paths, exact added lane allowances (no unused new allowance), shared register identical to its staged merge input, 0204 identical to repaired #189, no conflict markers in authored files, correct receipt SQL hash, and intended commit-message file present. `git diff --check` exited 0. These are deterministic working-tree checks. No Git write, independent verdict, acceptance or merge was performed.

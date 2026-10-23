@@ -50,3 +50,26 @@ it("SV5-01 SV5-03 unlinked supplier versions are inventoried as unsupported rath
  await finalCheckTenant(f.admin,a.tenantId,async db=>{await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'Synthetic supplier','invoice',$4,'held')",[documentId,a.tenantId,a.jobId,'a'.repeat(64)]);await db.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'application/pdf',1,$5,1)",[versionId,a.tenantId,a.jobId,documentId,'a'.repeat(64)]);});
  await a.lock();const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId);expect(m.sources).toEqual([expect.objectContaining({sourceKind:'unlinked_supplier_version',sourceRef:versionId,processable:false,status:'pending'})]);await expect(repo.reconcile(a.context,a.jobId,m.id,[])).rejects.toThrow('FINAL_CHECK_PENDING');
 });
+it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, excluded, and does not freeze completion",async terminal=>{
+ const {finalCheckTenant}=await import('./final-check-fixture.js');
+ const {FinalCheckCompletionRepository}=await import('../src/shadow-detection-repository.js');
+ const a=await seedFinalCheckJob(f),upload=randomUUID();
+ await finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,rejection_code) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()-interval '1 hour',$7,$8)",[upload,a.tenantId,a.jobId,a.scopeItemId,`synthetic/terminal/${upload}`,'a'.repeat(64),terminal==='expired'?'pending':'rejected',terminal==='rejected'?'verification_invalid':null]));
+ await a.lock();const worker=new FinalCheckRepository(f.shadow),builder=new FinalCheckRepository(f.runtime),m=await worker.begin(a.context,a.jobId);
+ expect(m.sources).toEqual([]);expect(m.excludedUploads).toEqual([{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}]);
+ expect(await worker.begin(a.context,a.jobId)).toEqual(m);
+ const result=await worker.reconcile(a.context,a.jobId,m.id,[]) as {runId:string};
+ expect(await worker.reconcile(a.context,a.jobId,m.id,[])).toEqual(result);
+ await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
+ expect((await builder.read(a.context,a.jobId,a.digest)).state).toBe('completed');
+ expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]))).rows[0].complete).toBe(true);
+ const events=(await f.admin.query("SELECT payload->'references'->'exclusions' exclusions FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
+ expect(events).toEqual([{exclusions:[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}]}]);
+});
+
+it("C239 exact processed evidence and classifications satisfy the unchanged prerequisite publication gate",async()=>{
+ const {availableFinalCheck}=await import('./final-check-fixture.js');const {FinalCheckCompletionRepository}=await import('../src/shadow-detection-repository.js');
+ const a=await seedFinalCheckJob(f),result=await availableFinalCheck(f,a);
+ await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
+ expect((await f.admin.query('SELECT count(*)::int n FROM app.shadow_final_check_completion WHERE tenant_id=$1 AND job_id=$2 AND run_id=$3',[a.tenantId,a.jobId,result.runId])).rows[0].n).toBe(1);
+});
