@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-05": {
+      "branches": [
+        "codex/sandbox/sv6-05"
+      ],
+      "receipt": "docs/verdicts/SV6-05/BUILDER_RECEIPT.md",
+      "note": "C1 pure-core leaf; build ahead only under decision 74. No web, database, network or posting authority; parents still gate merge.",
+      "allow": [
+        "packages/core/src/recovery-fee-illustration.ts",
+        "packages/core/src/recovery-fee-illustration.test.ts",
+        "packages/core/src/recovery-fee-illustration.type.test.ts",
+        "docs/contracts/recovery-fee-illustration-v3.md",
+        "docs/verdicts/SV6-05/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
