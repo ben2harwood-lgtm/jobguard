@@ -11,11 +11,19 @@ let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 
+let seededPromise: Promise<{ session: Awaited<ReturnType<typeof startSession>>; seed: NorthsideSeed }> | undefined;
+function seeded() {
+  return seededPromise ??= (async () => {
+    const session = await startSession(c);
+    const started = Date.now();
+    const seed: NorthsideSeed = await seedNorthsideDemo(c.runtime, session.p, session.context);
+    console.log("seed ms", Date.now() - started);
+    return { session, seed };
+  })();
+}
+
 it("ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40 operatives, 2,000 orders in the month, all counted back from the rows", async () => {
-  const session = await startSession(c), owner = session.p;
-  const started = Date.now();
-  const seed: NorthsideSeed = await seedNorthsideDemo(c.runtime, owner, session.context);
-  console.log("seed ms", Date.now() - started);
+  const { session, seed } = await seeded(), owner = session.p;
   const facts = await northsideFacts(c.runtime, owner, session.context);
   expect(facts).toMatchObject({ companyName: northsideName, clients: northsideTargets.clients, operatives: northsideTargets.operatives, ordersThisMonth: northsideTargets.ordersPerMonth, extras: 0 });
   expect(facts.orderValuePence).toBeGreaterThan(0);
@@ -31,7 +39,7 @@ it("ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40
 }, 600_000);
 
 async function reworkWorld() {
-  const f = await startSession(c), seed = await seedNorthsideDemo(c.runtime, f.p, f.context);
+  const { session: f, seed } = await seeded();
   const switches = new PracticeWorkerSwitchRepository(c.runtime), repo = new ExtraApprovalRepository(c.runtime);
   const act = async (target?: string) => {
     if ((await switches.state(f.context, f.session)).state !== "owner") await switches.switchOff(f.context, f.p, f.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
