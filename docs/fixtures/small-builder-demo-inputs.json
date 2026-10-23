@@ -1,0 +1,46 @@
+{
+  "version": "small-builder-demo-inputs.v1",
+  "purpose": "fictional-source-input-only",
+  "recipes": [
+    {
+      "id": "core-1000-capture-v1",
+      "family": "core-1000",
+      "source": {
+        "kind": "text",
+        "text": "Fictional practice job: protect room, prepare walls, paint walls, finish trim and clean site. Consider replacing shelves; ask about disposal. Customer: Practice Builder; recipient: customer@example.invalid."
+      }
+    },
+    {
+      "id": "recovery-18800-capture-v1",
+      "family": "recovery-18800",
+      "source": {
+        "kind": "text",
+        "text": "Fictional practice job: protect room, prepare walls, paint walls, finish trim and clean site. Consider replacing shelves; ask about disposal. Customer: Practice Builder; recipient: customer@example.invalid."
+      }
+    },
+    {
+      "id": "shadow-30000-capture-v1",
+      "family": "shadow-30000",
+      "source": {
+        "kind": "text",
+        "text": "Fictional practice job: protect room, prepare walls, paint walls, finish trim and clean site. Consider replacing shelves; ask about disposal. Customer: Practice Builder; recipient: customer@example.invalid."
+      }
+    },
+    {
+      "id": "meter-capture-v1",
+      "family": "meter",
+      "source": {
+        "kind": "text",
+        "text": "Fictional practice job: protect room, prepare walls, paint walls, finish trim and clean site. Consider replacing shelves; ask about disposal. Customer: Practice Builder; recipient: customer@example.invalid."
+      }
+    },
+    {
+      "id": "trial-capture-v1",
+      "family": "trial",
+      "source": {
+        "kind": "text",
+        "text": "Fictional practice job: protect room, prepare walls, paint walls, finish trim and clean site. Consider replacing shelves; ask about disposal. Customer: Practice Builder; recipient: customer@example.invalid."
+      }
+    }
+  ]
+}
