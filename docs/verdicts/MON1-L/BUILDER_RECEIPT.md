@@ -5,6 +5,9 @@ No commit, staging, push, PR, merge, enablement, provider action, real data or
 spending. Ben merges. This is test-executed foundation evidence, not an
 independent verdict, separate acceptance or completed MON1-L/DEMO-S.
 
+The sections before r1 record the original pre-commit build session. Coverage
+claims below have been corrected against reviewer A; r1 records the repair runs.
+
 ## Inspected base and scope
 
 - `HEAD` and `origin/main`: `dc5721230fd8aedbf2d9d0457789074b66b48765`.
@@ -67,11 +70,11 @@ Chosen simplest proposed forms:
 | M1L-01 | London day31 candidate, first-photo day5 earlier source | Actual intervals/day membership held |
 | M1L-02 | Spring/fall/leap/year date enumeration and day31 | STOP finish+7 / quiet30 exact deadlines, DST, inclusion endpoints Q-04 |
 | M1L-03 | Cancellation sources validated; unresolved cases held | STOP prospective cancellation after ended interval Q-05, explicit/implicit restart/admission |
-| M1L-04 | Canonical replay, identical duplicate, conflicting duplicate refusal, microseconds, later delivery of earlier source, input unchanged | No durable historical correction or issued statement proof |
+| M1L-04 | Canonical replay, identical duplicate, conflicting duplicate refusal, microseconds, input unchanged; delayed-recording cutoff was NOT covered in the original suite (added in r1) | No durable historical correction or issued statement proof |
 | M1L-05 | Same customer/site, different customers, mixed small group, candidate allowances 4/7, strict threshold helper | Candidate grouping only; counted membership still null |
-| M1L-06 | Exact close/lock candidates, post-lock activity hold, unknown payment event refusal; unchanged CH-4 regressions | STOP stop-day inclusion, reopening authority and full no-restart lifecycle proof |
+| M1L-06 | Close-before-lock candidate only, post-lock activity hold, unknown payment event refusal; unchanged CH-4 regressions. Lock-only stop, stop-gated starts and stopped commitment were NOT covered originally (added in r1) | STOP stop-day inclusion, reopening authority and full no-restart lifecycle proof |
 | M1L-07 | Original trip day makes later diagnostic classification non-small; no omission/untrip input | Authoritative trip/approval source integration remains MON1-T |
-| M1L-08 | Unknown fields/kinds, wrong job, preactivation sources, absent/zero revision, policy overrides and fake accepted trial rejected | Pure inputs cannot certify real source authority/completeness |
+| M1L-08 | Unknown fields/kinds, wrong job, preactivation event/trip (NOT lock in the original suite; added in r1), absent/zero revision, policy overrides and fake accepted trial rejected | Pure inputs cannot certify real source authority/completeness |
 | M1L-09 | Transitive pure-core allowlist, no ambient clock/network/timers/dynamic imports | Actual SQL grants and hidden/no-hidden runtime consumer proof remain external |
 
 Additional item STOPs: accepted trial source variant unavailable; first-ever
@@ -156,3 +159,98 @@ No migrations/backfill, backwards incompatible existing API changes or new
 operational alerts. No business network/database action. New exports are only
 file-local module exports pending coordinator integration. The receipt and
 contract are reviewable partial build artifacts; the task remains HOLD.
+
+## r1 (reviewer A repair)
+
+23 October 2026. Working-tree repair on `e2532dda4f99a14a6000447b2016a8eeac9d80ab`,
+base `origin/main` = `dc5721230fd8aedbf2d9d0457789074b66b48765`.
+Read reviewer A's full verdict at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-l-claude-A-e2532dda-20261023.md`
+first. Reviewer B's file was not read. This is builder evidence, not a new
+independent verdict or acceptance. No commit, staging, push or PR performed.
+
+Corrected the original acceptance map's unsupported coverage claims: the
+original suite did not isolate lock stops, stop-gated starts, stopped commitment,
+delayed recorded-time visibility or preactivation locks. r1 adds that coverage
+without removing or weakening earlier assertions. The replay test was renamed
+to remove its unsupported delayed-source claim.
+
+Changes and focused assertions:
+
+- M1L-06: lock-only stop; close before lock and lock before close; first evidence
+  exactly at and after stop; day31 exactly at and after stop; exact stopped
+  commitment status and source identity.
+- M1L-04/08: fact earlier than cutoff but recorded later is excluded, then included
+  exactly at recorded time; preactivation lock rejected.
+- Recommended cases: future trip ignored even on later supplied dates;
+  recordedAt before factAt, ID alias, trip equal to/after lock, and empty/reversed
+  date range refused; cancellation output explicitly includes H-CH4.
+- UUIDs normalized to lowercase within this module's envelope before alias and
+  replay checks, including event reference UUIDs. Case-only replay deduplicates;
+  case-variant identity with conflicting content refuses; case-variant alias
+  refuses. Shared CH-4 source was not changed.
+- `candidateAllowance.countedPlaces` now has type `null`, with runtime assertions
+  for every day including dates before activation and after lock. Contract updated.
+  Other allowance fields remain supplied-job diagnostics. No actual day-counting,
+  billing, admission, trial or held policy was enabled.
+
+Mutation evidence (test-executed locally, individually, then source restored):
+`python3 /private/tmp/jg-mon1-l-mutations.py` invoked the local Vitest binary with
+`--maxWorkers=2` and all three lifecycle test files for each mutation. Each run
+exited 1 with assertion failures, not an import/compile failure. Baseline and
+restored suites passed. These are deterministic mutation checks, not model review.
+
+| Mutation | Failed assertions / 39 |
+| --- | --- |
+| M1 remove recordedAt cutoff | 1 |
+| M2 never append lock stop | 6 |
+| M3 remove alias refusal | 2 |
+| M4 remove trip >= lock refusal | 2 |
+| M7 remove trip asOf cutoff | 1 |
+| M8 remove recordedAt < factAt refusal | 1 |
+| M9 remove evidence stop gate | 2 |
+| M10 remove range refusal | 2 |
+| M11 remove preactivation lock refusal (keep trip refusal) | 1 |
+| M12 remove H-CH4 hold | 1 |
+| M13 remove day31 stop gate | 4 |
+| M14 always return candidate commitment | 3 |
+| Remove event ID lowercase normalization | 1 |
+| Restore numeric candidate allowance count | 3 |
+
+All pnpm commands use the already cached pinned pnpm 10.28.1 through
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`; Node v24.17.0. No install/download.
+
+| r1 command actually run | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | PASS |
+| `pnpm --filter @jobguard/core lint` | PASS |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts` | PASS, 3 files / 39 tests |
+| Same focused command plus the six original predecessor/regression files listed above | PASS, 9 files / 130 tests |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | PASS, 7/7 tasks, 2 cached; purity/lane/money/commercial checks passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, real branch/range; no simulated event |
+| `pnpm openapi:check` | FAIL, tsx IPC listen EPERM before generation |
+| `node dist/generate-openapi.js --check` from apps/api | FAIL, existing openapi.json stale; artifact unchanged/outside permitted scope |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | FAIL, 6 assertions in 5 compiled dist test files: source readers seek nonexistent dist/*.ts; 245 files / 5954 tests pass. No test weakened or build output removed to hide this. |
+
+The unrestricted package test command discovers compiled test copies in `dist`
+after build as well as `src`. A separate complete source-only run is recorded
+below. Root lint/build warnings include shared-cache permission IO, workspace-root,
+CSS autoprefixer, Nest/file-type and computed-import warnings; none suppressed.
+PostgreSQL/migrations/browser suites not run: sandbox cannot bind/start PostgreSQL;
+dispatcher-owned GitHub CI remains required. No schema, migration, provider, prompt,
+public API, alert or shared barrel change. All previous holds remain open,
+including independent exact-candidate review and separate acceptance.
+
+Final r1 results:
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src` | PASS, all 125 source test files / 2980 tests; log `/private/tmp/jg-mon1-l-core-source-tests.log` |
+| `pnpm build --concurrency=2` | PASS, 7/7 tasks, 2 cached / 5 executed; 1m9.16s |
+| `git diff --check` | PASS |
+
+Final tracked changes are exactly five permitted files: lifecycle implementation,
+lifecycle tests, calendar tests, contract and this receipt. The lane and
+architecture test are unchanged. Intended commit subject/body written to
+`/private/tmp/jg-msg-mon1-l.txt`. No independently reviewed repair SHA exists yet;
+dispatcher must commit, rerun required CI and obtain the required verdict/acceptance.
