@@ -119,3 +119,17 @@ it("rejects fees above known qualifying principal even with unavailable remainde
     expect(() => renderValueReceipt(v)).toThrow(/Positive fee requires sufficient known qualifying principal/);
   }
 });
+
+it.each([
+  ["gross", "Gross (including any invoice VAT)"],
+  ["net_principal", "Net principal (excluding VAT)"],
+] as const)("R04 capture summary states the exact %s basis without an ownership claim", (basis, label) => {
+  const v = clone(illustrativeValueCases.shadow);
+  const tracked = v.categories[1];
+  if (tracked.recorded.state !== "known") throw new Error("fixture requires known capture");
+  tracked.recorded.basis = basis;
+  const lines = renderValueReceipt(v).text.split("\n");
+  expect(lines.filter(line => line.includes("Builder capture —"))).toEqual([
+    `category=tracked; Builder capture — JobGuard fee is £0.00; currency=GBP; basis=Net principal (excluding VAT); sources=["capture"]; recorded amount basis=${label}; policy/derivation=see referenced supplied source ledger (unverified)`,
+  ]);
+});

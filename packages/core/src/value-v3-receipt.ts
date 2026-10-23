@@ -90,7 +90,7 @@ export function renderValueReceipt(receipt: ValueReceiptV3): RenderedValueReceip
       lines.push(`category=${c.category}; ${labels[key]}: ${amountText(c[key])}; policy/derivation=see referenced supplied source ledger (unverified)`);
     }
     if (c.category === "tracked" && c.recorded.state === "known" && c.fee.state === "known") {
-      lines.push(`category=tracked; Builder capture — the full recorded amount remains yours; JobGuard fee is ${formatValueMoney(c.fee)}; basis=recorded amount; sources=[${refs(c.recorded.sourceRefs)}]; policy/derivation=see referenced supplied source ledger (unverified)`);
+      lines.push(`category=tracked; Builder capture — JobGuard fee is ${amountText(c.fee)}; recorded amount basis=${VALUE_V3_LABELS[c.recorded.basis]}; policy/derivation=see referenced supplied source ledger (unverified)`);
     }
   }
   for (const s of v.sources) {

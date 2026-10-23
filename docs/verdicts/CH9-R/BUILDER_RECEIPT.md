@@ -178,3 +178,90 @@ unit tests are the actual local evidence. Build success is not browser evidence.
 Final `git diff --check` and repaired-parent lane check passed. Only the five
 allowed files above are modified. HEAD remains 76c030b6; no commit/push/PR.
 Intended conventional commit subject/body: `/private/tmp/jg-msg-ch9-r.txt`.
+
+## r2
+
+23 October 2026; final default repair round on `codex/sandbox/ch9-r`, starting
+HEAD `94fb83de0f0371fa6823e4f630a9947d2e7413dc`, over accepted CH9-S
+`aec2fb43de8b92daae1e58940a0c916b47386197`. Read AGENTS.md, BUILD_PLAN.md
+CH-9, `docs/contracts/value-v3.md`, and Reviewer B's complete delta verdict at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch9-r-claude-B-94fb83de-20261023.md`.
+The issued relative `jg-runs/` path is absent; the external verdict was read in
+full. This records builder execution, not independent review or acceptance.
+
+The tracked summary now states only the JobGuard fee, using the existing
+basis-labelled amount formatter, followed by the recorded amount's own explicit
+net/gross basis label. It makes no ownership claim about gross, net or negative
+captures. Recorded amounts, zero fees, source references and the omission of
+recovery-only tracked rows remain covered. No calculation or tax policy changed.
+The existing copy assertion now requires the corrected exact summary. Additional
+net- and gross-basis tests each assert the whole rendered summary line.
+
+The copy audit now checks each line for unqualified `you kept`, `remains yours`,
+`yours`, `you keep`, `kept by you` and `stays with you`; `before VAT and tax` must
+occur on that same line. Tests reject the exact defective r1 line, exercise every
+synonym and reject a qualification appearing only on another line. Existing
+copy prohibitions and fixture/amount assertions are preserved; no test was
+removed, skipped or weakened.
+
+Fail-before evidence: tests-first against the r1 renderer failed with 4 failed /
+24 passed across both CH9-R files (exit 1), including the net/gross regressions
+and the rendered-copy audit. Log `/private/tmp/ch9-r-r2-before.log`. Narrowing the
+new audit back to the old literal `you kept` caused 6 failures / 9 passes (exit 1),
+including the exact r1 rejection test; restored in `finally`. Log
+`/private/tmp/ch9-r-r2-audit-mutation.log`. Thus both renderer and audit repairs
+have actually executed failure evidence, rather than only source inspection.
+The shadow fixture's recorded basis is net principal; its corrected exact-line
+expectation was adjusted accordingly after an initial 84-pass/1-fail run. The
+final unmutated CH9-R + CH9-S run passed **85/85 tests in 3 files** (exit 0), log
+`/private/tmp/ch9-r-r2-tests.log`.
+
+Only renderer, its two existing test files and this receipt are changed, all
+CH9-R allowlisted. No schema, fixture data, migration, API, browser, dependency,
+provider, operational alert or external-action changes. No clean install or
+download attempted; preinstalled Node v24.17.0 and cached pinned pnpm 10.28.1
+through `/private/tmp/ch9-r-bin/pnpm`. Validation is serialized, Vitest uses
+`--maxWorkers=2` and Turbo concurrency is bounded. DB/migration/restore/browser
+suites are not run under the issued sandbox restrictions; dispatcher-triggered
+GitHub CI remains required. AI eval is inapplicable to this copy-only change.
+H-VALUE-SOURCES, source/clock/rational policy bindings, actual runtime authority
+and stored history remain HELD. Exact eventual-commit CI, fresh independent
+review and separate acceptance remain required; no self-acceptance, release,
+real-data or fee enablement is claimed. Dispatcher owns commit/push; none run here.
+
+Final mutation recheck after correcting the shadow expectation: temporarily
+restored the exact HEAD/r1 renderer via read-only `git show`, ran both CH9-R
+files, observed **4 failed / 24 passed** (exit 1), and restored repaired bytes
+in `finally`. Both exact net/gross tests, the corrected existing assertion and
+the rendered audit fail without the renderer fix. Log
+`/private/tmp/ch9-r-r2-renderer-mutation.log`. Final restored three-file batch
+again passed **85/85**, exit 0. Build/typecheck/lint covered these same repaired
+source bytes before the temporary mutation; it left no source change.
+
+| r2 command (pinned cached pnpm via PATH above) | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | PASS, exit 0. |
+| `pnpm --filter @jobguard/core lint` | PASS, exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run src/value-v3-receipt.test.ts src/value-v3-copy.test.ts src/value-v3.test.ts --maxWorkers=2` | PASS, exit 0; all CH9-R and CH9-S files, 85 tests. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL, exit 1; lane guard rejects six inherited CH9-S paths before package lints. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1; inherited `config/lanes/ch9-s.json`, CH9-S contract/receipt, schema, fixtures and tests outside CH9-R lane. No allowlist widening. |
+| `LANE_BASE_REF=aec2fb43 pnpm lint:lanes` | PASS, exit 0; accepted stacked-parent comparison, not a substitute for main-range CI. |
+| `pnpm exec turbo run lint --concurrency=2` | PASS, exit 0; 7/7 package lints, 2 cached. |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | PASS, exit 0; 7/7 tasks, 2 cached; 1m20.872s. |
+| `pnpm openapi:check` | FAIL, exit 1; sandbox EPERM prevents tsx CLI IPC listen before comparison. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; same generator comparison through loader, no generated changes. |
+| `node tools/money-arithmetic-lint.mjs` | PASS, exit 0. |
+| `node tools/commercial-boundary-lint.mjs` | PASS, exit 0. |
+| `git diff --check` | PASS, exit 0. |
+
+Logs: `/private/tmp/ch9-r-r2-*.log`. Build warnings include existing Next
+workspace-root/multiple-lockfile, CSS/dependency and sandbox cache IO warnings;
+cached logs are replayed evidence, not fresh compilation in their named other
+worktrees. Full root test/typecheck and DB/browser suites were not executed;
+only the explicitly listed local checks are claimed. Main-range lane and
+standard OpenAPI CLI failures remain recorded, with parent/loader checks kept
+separate. No policy, security or commercial approval is inferred from these runs.
+Only four permitted files are dirty. Intended conventional commit subject/body
+is in `/private/tmp/jg-msg-ch9-r.txt`; HEAD remains `94fb83de`, with no Git write,
+commit, push or PR performed. Dispatcher must bind the eventual commit to CI and
+review evidence.
