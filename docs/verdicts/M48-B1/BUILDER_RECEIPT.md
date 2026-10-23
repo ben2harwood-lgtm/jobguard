@@ -300,3 +300,30 @@ Installed dependencies reused with Node 24.17.0 and cached pnpm 10.28.1 via `/pr
 Initial overlapping source/package-lint attempts were interrupted after timeout failures under high system load; final completed commands above supersede them. Two supplemental DB unit attempts were also interrupted; no DB unit pass is claimed. An initial DB selector excluded TypeScript integration files but could discover compiled copies; it was stopped and corrected to exclude all integration extensions and dist. No PostgreSQL guarantee was executed or proven here. Root `pnpm test`, database/migration suites and browser suites were not run. API's broad source run did reach existing isolation setup, which failed before a database could start. These remain CI responsibilities after dispatcher push. No live providers or professional sign-off.
 
 Intended conventional commit message: `/private/tmp/jg-msg-m48-b1.txt`. Dispatcher PR text with the withheld file: `/private/tmp/jg-pr-m48-b1.md`. All previous source/HTTP/UI/CI/production holds remain; no self-acceptance or independent verdict is asserted.
+
+## Review-repair round 2 — C236 tenant-context port (24 October order)
+
+Working-tree repair over candidate `e50ce8e1`; no commit, push, technical acceptance or independent verdict is asserted. The verified tenant context now travels whole as its own argument through `readCurrentInTransaction` and the private scope check. Actor and session digest travel separately. Updated the API test port/calls and the one PostgreSQL caller; retained every existing assertion. No context-boundary guard/test changes or exemptions.
+
+Preserved round-1 work: moved migration note, byte-identical 0211 SQL (SHA-256 `f0c93fd5f791b34b0b3dde541c1a183c4d9fb249539b413bcb40cc63284d42c9`), withheld e2e spec and B1-DB-1 control. Protected paths compare unchanged against HEAD; repository SQL/string literals also compare unchanged. No migration, backfill, policy change, external action, new alert or production capability. Internal transaction-port callers must use the new separate arguments; all discovered callers updated.
+
+Checks actually run in this sandbox using installed Node 24.17.0 and cached pnpm 10.28.1 (network disabled); detailed logs: `/private/tmp/jg-m48-b1-final-r2/`:
+
+| Command | Result |
+|---|---|
+| `pnpm --filter api exec vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/receipt-line-allocation.application.test.ts` | Exit 0: 2 files, 158 tests. Unchanged real-repository tenant-context guard passes with zero violations |
+| `VITEST_MAX_WORKERS=2 pnpm --filter api test` | Exit 1: 120 files passed, 9 failed; 2086 tests passed, 129 failed, 23 skipped; 129 errors. Failures are sandbox listener/free-port EPERM. The first default-concurrency attempt was interrupted after listener failures and a timeout; the completed bounded run supersedes it. OpenAPI script after `&&` was not reached |
+| `pnpm typecheck` | Exit 0: all 7 package tasks (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint`; same environment `pnpm lint:lanes` | Both exit 1 solely on inherited C0 paths: `config/lanes/m48-c0.json`, `docs/contracts/receipt-line-allocation-source-v1.md`, `docs/verdicts/M48-C0/BUILDER_RECEIPT.md`. M48-C0 is not merged. No workaround/exemption added |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0: all 7 package tasks (2 cached) |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0 |
+| `node --test tools/*.test.mjs` (glob expanded by runner) | Exit 0: 122 tests |
+| `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 --testTimeout=30000 --exclude '**/dist/**'` | Exit 0 for core (123 files/2963 tests), config (4/41), storage (1/2), AI (15/147), web (40/867). AI uses recorded fixtures, not a live model |
+| Same source unit command for DB with `--exclude '**/*.integration.*'` | Exit 1: 47 files passed, 1 failed; 422 tests passed, 2 free-port tests failed on listener EPERM. No PostgreSQL started |
+| `node node_modules/typescript/bin/tsc -p /private/tmp/jg-m48-b1-r1-tests.tsconfig.json` | Exit 0: all four B1 PostgreSQL integration test files compile; no database execution |
+| `pnpm build --concurrency=1` | Exit 0: all 7 packages (4 cached), including production Next build. Existing build warnings retained |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC listener EPERM |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | Exit 0: same generator/check without CLI IPC listener |
+| `git diff --check`; preservation comparisons | Exit 0 |
+
+Root `pnpm test` was not run because it includes PostgreSQL integration suites; package source units and tooling were run as recorded above. Database/migration and browser suites remain GitHub CI responsibilities after dispatcher push. Source authority and every prior release/acceptance hold remain in force. The C236 repair is source-inspected and locally test-executed to the limits above, not independently verified or self-accepted. Dispatcher commit message: `/private/tmp/jg-msg-m48-b1.txt`.

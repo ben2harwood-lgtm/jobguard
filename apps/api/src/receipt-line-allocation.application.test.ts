@@ -7,7 +7,7 @@ type HeldRepository = {
  view(context: unknown, actor: unknown, digest: string, jobId: string, query?: unknown): Promise<never>;
  command(context: unknown, actor: unknown, digest: string, jobId: string, raw: unknown): Promise<never>;
  readCurrent(context: unknown, actor: unknown, digest: string, selector: unknown): Promise<never>;
- readCurrentInTransaction(db: unknown, scope: unknown, selector: unknown, expected?: unknown): Promise<never>;
+ readCurrentInTransaction(db: unknown, context: unknown, actor: unknown, digest: string, selector: unknown, expected?: unknown): Promise<never>;
 };
 const { RecoveryLineAllocationRepository } = await vi.importActual<{
  RecoveryLineAllocationRepository: new(pool: Pool, environment: string) => HeldRepository;
@@ -51,7 +51,7 @@ describe("M48-B1 caller-owned transaction boundary", () => {
  it("A3/A6: uses only the supplied transaction and refuses even fabricated database success", async () => {
   const { repository, pool } = fixture();
   const query = vi.fn().mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ result: { revision: 1, rows: [] } }] });
-  await expect(repository.readCurrentInTransaction({ $client: { query } }, { context, actor, sessionDigest: digest }, { jobId }, { revision: 2, sourceHash: "b".repeat(64) }))
+  await expect(repository.readCurrentInTransaction({ $client: { query } }, context, actor, digest, { jobId }, { revision: 2, sourceHash: "b".repeat(64) }))
    .rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
   expect(pool.connect).not.toHaveBeenCalled();
   expect(query).toHaveBeenCalledTimes(3);
@@ -62,17 +62,17 @@ describe("M48-B1 caller-owned transaction boundary", () => {
  it("A2: rechecks current owner/session before touching the held source routine", async () => {
   const { repository, pool } = fixture();
   const query = vi.fn().mockResolvedValue({ rowCount: 0 });
-  await expect(repository.readCurrentInTransaction({ $client: { query } }, { context, actor, sessionDigest: digest }, { jobId })).rejects.toMatchObject({ code: "RECEIPT_LINE_FORBIDDEN" });
+  await expect(repository.readCurrentInTransaction({ $client: { query } }, context, actor, digest, { jobId })).rejects.toMatchObject({ code: "RECEIPT_LINE_FORBIDDEN" });
   expect(query).toHaveBeenCalledOnce(); expect(pool.connect).not.toHaveBeenCalled();
  });
  it("A3: preserves an unknown database failure without labelling it a definite refusal", async () => {
   const { repository } = fixture(), unavailable = new Error("connection lost");
   const query = vi.fn().mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({}).mockRejectedValueOnce(unavailable);
-  await expect(repository.readCurrentInTransaction({ $client: { query } }, { context, actor, sessionDigest: digest }, { jobId })).rejects.toBe(unavailable);
+  await expect(repository.readCurrentInTransaction({ $client: { query } }, context, actor, digest, { jobId })).rejects.toBe(unavailable);
  });
  it("A3: rejects malformed expected watermarks before reading", async () => {
   const { repository } = fixture(), query = vi.fn();
-  await expect(repository.readCurrentInTransaction({ $client: { query } }, { context, actor, sessionDigest: digest }, { jobId }, { revision: 0, sourceHash: "bad" })).rejects.toMatchObject({ code: "INVALID_RECEIPT_LINE_QUERY" });
+  await expect(repository.readCurrentInTransaction({ $client: { query } }, context, actor, digest, { jobId }, { revision: 0, sourceHash: "bad" })).rejects.toMatchObject({ code: "INVALID_RECEIPT_LINE_QUERY" });
   expect(query).not.toHaveBeenCalled();
  });
 });

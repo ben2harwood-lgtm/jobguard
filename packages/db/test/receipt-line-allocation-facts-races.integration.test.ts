@@ -20,7 +20,7 @@ it("A3/A6: concurrent approvals cannot turn a held source into current facts", a
 it("A3: caller-owned transaction cannot use a held read as a positive-use watermark", async () => {
  const { auth, jobId } = await seedWorkPractice(f), repository = new RecoveryLineAllocationRepository(f.runtime, "synthetic_demo");
  await expect(withTenant(practiceMaterialPool(f.runtime, auth.digest), auth.context, async db => {
-  await repository.readCurrentInTransaction(db, { context: auth.context, actor: auth, sessionDigest: auth.digest }, { jobId }, { revision: 1, sourceHash: "a".repeat(64) });
+  await repository.readCurrentInTransaction(db, auth.context, auth, auth.digest, { jobId }, { revision: 1, sourceHash: "a".repeat(64) });
   throw new Error("UNSAFE_DEPENDENT_WRITE_REACHED");
  })).rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
 });
