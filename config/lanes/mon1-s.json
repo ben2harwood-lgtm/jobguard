@@ -26,7 +26,8 @@
         "docs/contracts/meter-lifecycle-v1.md",
         "packages/db/migrations/0207_meter_lifecycle_source.sql",
         "packages/db/migration-notes/0207_meter_lifecycle_source.md",
-        "packages/db/src/demo-bootstrap.ts"
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts"
       ]
     }
   }
