@@ -39,7 +39,7 @@ describe('MON1-S own-0209 predecessor upgrade, CI PostgreSQL only',()=>{
  it('M1S-10 migrates a second database in the same cluster with the meter role already present',async()=>{
   const name=`mon1s_${randomUUID().replaceAll('-','')}`;
   await f.admin.query(`CREATE DATABASE ${name}`);
-  const second=new Pool({...f.admin.options,database:name});
+  const second=new Pool({...f.admin.options,password:f.admin.options.password,database:name});
   try {
    await migrate(second);
    await migrate(second);

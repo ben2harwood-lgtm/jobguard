@@ -286,3 +286,80 @@ Build warnings: Turbo cache IO permissions; existing Next tracing-root, CSS
 and Nest/file-type/computed-dependency warnings. None suppressed. The SQL-trace
 mock failure remains an explicit hold pending the requested test-file lane
 permission; no successful real-bootstrap or PostgreSQL result is claimed.
+
+
+## review repair 2
+
+23 October 2026; final default repair round, issued by the Track A+B dispatcher.
+Starting HEAD `24aa4f91`, branch `codex/sandbox/mon1-s`; initial working tree clean.
+No commit, push, stage, checkout, dependency installation or PostgreSQL/browser
+server startup. Node v24.17.0; installed pnpm 10.28.1 via
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`. These checks use the existing install,
+not a newly verified clean install.
+
+Only code change: explicitly copy `password: f.admin.options.password` when
+constructing the second-database pool in
+`packages/db/test/meter-lifecycle-upgrade.integration.test.ts`. pg-pool makes
+that option non-enumerable, so object spread alone loses it. Migration SQL,
+assertions and all product behavior are unchanged. Repository-wide test searches
+for pool-options spreads found no other occurrence missing an explicit password;
+all other pool copies already supply the original or a deliberate test password.
+An in-memory Node assertion confirmed that spread drops the password and the
+explicit copy preserves it, without opening a database connection or logging it.
+
+The supplied `jg-runs/v5-mon1-s-claude-A-24aa4f91-20261023.md` is absent from
+this worktree and the checked project/nearby run directories; no report contents
+were available to read. This repair follows the dispatcher's quoted finding.
+Reviewer B's PASS and reviewer A's confirmation of the earlier fixes are
+reported by the dispatcher for `24aa4f91`, not claimed as independent verdicts
+on this uncommitted repair. Reviewer A must rerun the second-database test.
+
+**H-MON1S-SHADOW-PRIV remains HOLD and must be resolved before merge. It is
+outside this repair round's scope.** No shadow privilege, role, routine ownership,
+grant, migration or integration hold is changed or cleared. Existing release
+and separate-acceptance gates remain closed; this builder does not accept its
+own work.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS |
+| `pnpm --filter @jobguard/db lint` | PASS |
+| `pnpm typecheck --concurrency=2` | PASS, 7/7 tasks, 2 cached |
+| `pnpm build --concurrency=2` | PASS, 7/7 tasks, 3 cached; 41 static web pages |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL at lane boundary on inherited out-of-lane stack paths; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same inherited stack paths; no allowlist changed |
+| `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs` | PASS |
+| `tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/meter-lifecycle-upgrade.integration.test.ts` via installed `node_modules/.bin/tsc` | PASS, static only |
+| `pnpm openapi:check` | FAIL, sandbox EPERM on tsx IPC listen |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | PASS |
+| `node --test tools/*.test.mjs` (glob expanded by Python) | PASS, 122 tests |
+| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | PASS, 8 files / 82 tests |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2` | PASS, 2 files / 4 tests |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | PASS, 15 files / 147 tests; fixture evaluation only |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2` | FAIL, 4 generated dist files / 5 assertions try to inspect missing dist/*.ts sources; 250 files / 5989 tests passed |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 127 source files / 2997 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src` | FAIL: substring filter also selected four dbsrc integration files, which failed at port discovery before PostgreSQL startup; one audit source-inspection test timed out under concurrent checks |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 <explicit src/**/*.test.ts paths>` (paths expanded by Python) | PASS, 26 source files / 225 tests, including the audit source-inspection test |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 <explicit src/**/*.test.ts paths>` (paths expanded by Python) | FAIL, 9 files; 120 files / 2089 tests passed, 129 tests failed, 23 skipped. Two source suites require PostgreSQL and failed port discovery before startup; HTTP tests hit forbidden listeners (EPERM and Supertest null-port errors) |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 <explicit app/**/*.test.ts(x) paths>` (paths expanded by Python) | PASS, 41 files / 875 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'` | PASS, 1 mock test, 3 database tests skipped; not a PostgreSQL bootstrap result |
+| In-memory Node assertions on pg-pool option copying | PASS, no database connection opened |
+| `git diff --check` | PASS |
+
+The initial sequential unit-check driver was interrupted during its first API
+attempt after the DB substring-filter mistake; completed results are recorded
+above. Its replacement uses explicit source test paths. No test timeout,
+assertion, configuration or product source was changed to obtain a pass.
+
+PostgreSQL **NOT RUN**: no PostgreSQL instance started and no database assertions
+executed. Broad source-test discovery included DB-dependent API suites as well
+as the accidental dbsrc matches noted above; all failed at sandbox port discovery
+before database startup. In particular M1S-10 second-database migration, `test:db` and
+`test:migrations` remain for reviewer A / dispatcher GitHub CI after push.
+Browser suites NOT RUN under the supplied sandbox restriction. No clean-install,
+live provider, live model, database migration or tenant-isolation proof is claimed.
+
+Build retains existing Turbo cache IO-permission, Next tracing-root, CSS and
+Nest/file-type/computed-dependency warnings. Logs:
+`/private/tmp/jg-mon1-s-review-repair2-*.log`.
+Intended conventional commit message: `/private/tmp/jg-msg-mon1-s.txt`.
