@@ -1,32 +1,55 @@
 # 0211 receipt-line source bridge — held build-ahead storage
 
-Issued migration number: 0211. Base: 84b1e1fe1d3d89aa935fb4e7b0ed0afa08e20d04.
-The base ends at 0198 and lacks the required 0210 predecessor. The upgrade test
-refuses to certify the requested 0210 upgrade without it. PostgreSQL NOT RUN.
+Round r1 actual base: `acaad61e89401bf3f96c6c5e39b8d7c68d2e602c`
+(dispatcher lane assignment after `43412768`, accepted C0 `e55f1c69`).
+The latest preceding migration actually present is
+`0198_contractor_entitlement_authority.sql`. 0210 belongs to unrelated MON1-A;
+it is not a prerequisite. Additive discovery installs 0211 without a runner edit.
+Renumber if needed to stay above main at merge time. PostgreSQL NOT RUN here.
 
-This migration creates five empty append-only tenant/job-qualified tables. FORCE
-RLS applies; runtime is neither their owner nor a direct reader/writer. The only
-runtime grants are two checked routines. Both authenticate current tenant,
-session, owner membership and job, then raise
-`RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED`. Neither returns current facts nor stores
-an artifact, command, review, approval, money or audit effect. There are no new
-financial, external-action, case-landing or qualification effects to audit.
+Five empty append-only tenant/job-qualified tables have FORCE RLS and no runtime
+SELECT/INSERT/UPDATE/DELETE/TRUNCATE. Both runtime routines authenticate their
+existing synthetic owner/session/job boundary and then raise
+`RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED`. The source-design/authority hold remains;
+no HTTP/UI, command success, allocation, case landing, fee or audit effect is enabled.
 
-These tables are a quarantined foundation, not a released cross-row financial
-integrity contract. Known identity FKs exist; complete invoice/movement/line
-ancestry, exact ratios, deduplication, expiry/revocation, reversal availability
-and source serialization still require the missing handoff and positive tests.
-Runtime cannot use these tables before that happens. A migration owner or
-superuser is outside the runtime trust boundary.
+R1 storage defenses (independent of the core parser):
 
-Use existing additive migration discovery after 0210 is supplied. Do not register
-0211 in migrate.ts. Fresh and upgrade CI must inspect actual roles/grants/RLS/FKs
-and run existing regressions. Catalogue additions are coordinator-owned.
+- UUID columns canonicalize IDs to lower-case; the tenant/line UUID primary key
+  refuses exact and case-variant duplicates. Tenant/job/source/invoice and
+  tenant/job/revision/payment composite FKs bind distributions.
+- An AFTER INSERT trigger requires SERIALIZABLE isolation. Exact fraction sums
+  are compared by cross-products, reduced by integer gcd, never rounded. Positive
+  gross per payment cannot exceed customer_payment.amount_pence; positive gross
+  per invoice line cannot exceed its immutable gross. Ratio and original-line
+  identity/amounts must match the bound invoiced line.
+- Reversals must reference a positive original in the same tenant/job/payment/
+  invoice/line. Their cumulative magnitude cannot exceed that original. Reversals
+  do not reopen historical positive allocation capacity automatically.
+- Stored source, review and result projections cannot advertise saved_distribution
+  for any receipt, including pending, unmatched, duplicate_held or reversed cash.
+  A claimed settled JSON state cannot substitute for the held source authority.
+  The quarantine refuses all saved-distribution projections until a reviewed
+  forward migration; runtime reads still refuse altogether.
 
-Forward fix requires a reviewed additive migration with the accepted source
-projection, locks, cross-row validation, controlled inserts, session SELECT
-policy, review consumption and same-transaction audit constraint. Removing the
-hold alone cannot enable a safe writer. No backfill is authorized. Application
-rollback leaves storage intact. Confirm all five tables are empty before any
-SQL rollback; removal requires a migration-owner migration. Never rewrite old
-commercial rows or drop historical money.
+The SERIALIZABLE requirement is a quarantined storage precondition, not a source
+lock-order handoff or actor grant. PostgreSQL SSI must abort concurrent write skew;
+the written race test requires exactly one successful 60p commit against 100p.
+A future writer must handle serialization failures and unknown outcomes and still
+obtain the accepted source serialization/authorization contract. These triggers
+are invoker routines with no runtime grants; they do not bypass RLS. PostgreSQL
+numeric range overflow rejects a write rather than approximating wide fractions.
+
+Integration tests explicitly seed synthetic predecessor parents with replication
+triggers disabled, then restore origin mode before every tested insert. They are
+storage tests, not a genuine receipt/source/approval journey. Upgrade proof applies
+only 0211 over populated actual predecessors, compares named rows/types/PKs, uses
+mutation/retype controls, then runs successors and reruns. No backfill is needed.
+All database and browser checks remain NOT RUN in this sandbox.
+
+Forward fix: retain these defenses while adding a reviewed source contract,
+authorization, complete read validation, exact Decisions, review consumption and
+atomic audit. Never enable writes simply by removing the hold. Application
+rollback leaves the additive storage intact. Any SQL removal requires proving the
+five tables empty and a migration-owner migration; never drop historical money.
+Catalogue additions and exact-head CI/review/acceptance remain dispatcher-owned.

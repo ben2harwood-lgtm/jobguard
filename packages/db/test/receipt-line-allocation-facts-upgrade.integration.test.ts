@@ -1,4 +1,4 @@
-// CI ONLY. Required 0210 is absent from the issued base. Never silently skip it.
+// CI ONLY. Certify against the actual latest migration before this leaf.
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createWorkFixture, closeWorkFixture, seedWorkJob, type WorkFixture } from "./job-work-state-fixtures.js";
@@ -8,11 +8,12 @@ import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils
 let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 120_000);
 afterAll(async () => { await closeWorkFixture(f); });
-it("A8: populated 0210 -> only 0211 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
+it("A8: populated actual base -> only 0211 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0211_receipt_line_source_bridge.sql"));
- const previous = MIGRATION_URLS.findIndex(url => /\/0210_[^/]+\.sql$/u.test(url.pathname));
- expect(previous, "STOP-PREDECESSOR-0210: dispatcher must supply the actual predecessor").toBeGreaterThan(-1);
- expect(own).toBe(previous + 1);
+ expect(own).toBeGreaterThan(0);
+ const previous = MIGRATION_URLS[own - 1]!;
+ expect(previous.pathname).toMatch(/\/0198_[^/]+\.sql$/u);
+ expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(211);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, own)) {
   const name = url.pathname.split("/").at(-1)!;

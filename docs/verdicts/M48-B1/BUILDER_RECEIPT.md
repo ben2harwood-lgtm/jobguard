@@ -90,3 +90,178 @@ Final exact commit/CI SHA and CI links are unavailable because the dispatcher co
 - `HEAVY_SLOTS=2 /Users/benharwood/.local/bin/heavy-slot m48-b1-web-build ./node_modules/.bin/next build` (apps/web): exit 0; generated 41 static pages and printed the existing route inventory. Warnings: workspace root inferred from multiple lockfiles, existing CSS `end` compatibility warnings, Nest `file-type` package-export warning and webpack warning serialization. No new receipt-line route exists in the build.
 - Final working-tree inventory: **11 new files**, all permitted by this lane; no tracked-source modification, commit or push. This remains an inventory result, not a full lane-lint PASS against origin/main.
 - M48-B1 stays **INCOMPLETE / HOLD**. Successful neutral money persistence and complete A1–A8 acceptance are outstanding; do not conflate the green compiler/build/guard checks with completion.
+
+## r1 (catch-up + reviewer carries)
+
+23 October 2026. Dispatcher-issued continuation on `codex/sandbox/m48-b1`, no PR,
+commit or push. Initial tree clean. Actual preflight HEAD was
+`acaad61e89401bf3f96c6c5e39b8d7c68d2e602c`, one dispatcher lane-assignment commit
+above the issued `43412768` merge of accepted C0 `e55f1c69`. Read current AGENTS,
+BUILD_PLAN M4-8-S / allocation contracts, the parent session policy, the accepted
+C0 source contract, and these shared-workspace records in
+`/Users/benharwood/.local/share/full-steam/`:
+
+- `jg-runs/v5-m48-c0-acceptance-e55f1c69-20261023.md`;
+- `jg-runs/v5-m48-c0-claude-A-e55f1c69-20261023.md`;
+- `jg-runs/v5-m48-c0-claude-B-e55f1c69-20261023.md`;
+- `jg-orders/next-wave/BEN-ANSWERS-20261023.md`.
+
+**Dispatcher rulings supersede the historical STOPs above:**
+STOP-PREDECESSOR-0210 is retired; 0210 belongs to unrelated MON1-A and is not a
+prerequisite. The upgrade test now identifies this migration in actual discovery
+order and asserts the actual preceding 0198 migration. Active migration notes
+are corrected; earlier receipt references to a required real 0210 describe the
+superseded order only. STOP-CORE-EXPORT is resolved by exactly one additive export
+line, immediately after receipt-allocation in the core barrel. The dispatcher also
+assigned the two C0 source/test files to this lane. No lane policy was changed by
+this builder. STOP-SOURCE-AUTHORITY / H-M48-SOURCE-DESIGN and HTTP/UI remain HELD.
+Both writer and reader still refuse with RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED;
+no actor authority, source lock order or clearance authority was invented.
+
+Changes and rule-to-test inspection (PostgreSQL tests **written, NOT RUN**):
+
+| Rule | Database defense | Named integration coverage |
+|---|---|---|
+| 1. Duplicate/case-variant allocation IDs | PostgreSQL UUID canonical output and tenant/ID primary key | B1-DB-1 checks lower-case output, exact/case duplicate refusal, named PK; transactional PK-removal control |
+| 2. One payment's allocations cannot exceed receipt gross | SERIALIZABLE-only AFTER INSERT trigger, exact fraction sum bounded by customer_payment.amount_pence | B1-DB-2: 60+60 and 60+40.1 against 100 refused; 60+40 accepted; trigger-removal control; SSI race requires one 40001 and one commit |
+| 3. Same line cannot be allocated twice at full gross | Positive historical sum bounded by immutable line gross across the same tenant/job/line identity, including different invoices | B1-DB-3: two payments, same/different invoice variants, trigger-removal controls |
+| 4. No mixed tenants in a distribution | Tenant/job-qualified FKs; source also binds invoice, revision also binds payment | B1-DB-4: foreign-tenant line insertion refused; actual composite FK catalogue checked |
+| 5. Reversal needs its original and cannot exceed it | Tenant/job original FK plus trigger requires matching positive original/payment/invoice/line and cumulative exact reversal capacity | B1-DB-5: missing original, -61 against 60, -40 then -21 refused; -40 then -20 accepted; excessive-reversal trigger-removal control |
+| 6. Unsafe receipt cannot appear saved without a hold | Source/review/result CHECKs forbid every saved_distribution projection while source authority is held, including forged settled JSON | B1-DB-6: pending/unmatched/duplicate_held/reversed table inserts fail the named projection CHECK; held projection allowed by predicate; claimed settled remains refused |
+
+I inspected each negative case against its enforcing database rule and checked
+that capacity failures assert the specific error, duplicates the named PK, and
+unsafe projections the named CHECK. Exact-valid controls avoid a blanket-denial
+money test. Guard-removal controls were authored for UUID uniqueness and each
+positive/reversal capacity boundary, but **neither PostgreSQL assertions nor
+PostgreSQL removal controls were executed here**. FK and trigger original checks
+are intentionally redundant. No parser or mocked test is offered as database
+proof. Parent identity/commercial/source parents are explicitly synthetic fixture
+rows, seeded with predecessor triggers/FKs bypassed only during setup; tested line
+inserts use origin triggers and real FKs/checks. Removal controls roll back DDL and
+invalid rows in savepoints. The concurrency test uses committed disposable
+fixture parents and real PostgreSQL SERIALIZABLE transactions.
+
+The storage isolation precondition is not an accepted shared source lock order.
+SSI predicate reads must reject write skew; production/source enablement still
+requires its own reviewed handoff, authorization, retry/unknown-outcome handling
+and atomic audit. Reversals do not silently reopen historical positive capacity.
+Wide fraction overflow rejects rather than rounds. No network or business effect
+was enabled. These guards are invoker routines with no runtime grant; RLS/grants,
+immutability and the existing held routines are preserved.
+
+**C0 reviewer carry / safest choice:** canonicalize every UUID before comparisons
+and eventual hashing; mixed-case self reversal is refused. Receipt rows still
+require evidence. Reversal rows may retain an empty evidence list, preserving the
+negative fact rather than dropping the reversal and retaining positive cash.
+Every reversal forces source_held in the view status, and snapshots require
+REVERSED_MOVEMENT. Evidence alone does not clear reversed cash; no clearance
+contract exists, so no reversal is automatically released. This applies Ben's
+"do not count, rather than count" choice on synthetic data only. A reviewed
+clearance contract can replace this choice later. No existing test assertion was
+weakened. Cross-row conservation and receipt-state truth remain database/server
+obligations, not promises made by the standalone core parser.
+
+Core rule-removal check actually executed in a scratch copy:
+`python3 /private/tmp/jg-m48-b1-r1-mutations.py`. Six single mutants each exited 1
+with AssertionError: UUID canonicalization removed, self-reversal check removed,
+receipt evidence check removed, reversal evidence made mandatory again, reversal
+status hold removed, and snapshot reversal hold removed. Original worktree source
+was never mutated by this harness. Each new core guard/change therefore has a
+checked test failure when removed/reverted. Scratch path:
+`/private/tmp/jg-m48-b1-r1-mutants-fkcl757x`; individual logs use
+`/private/tmp/jg-m48-b1-r1-mutant-*.log`.
+
+Commands actually run this round, with existing installed dependencies only:
+`python3 /private/tmp/jg-m48-b1-r1-checks.py` used the cached exact pnpm 10.28.1
+launcher via the existing `/private/tmp/jg-m48-c0-r1-bin/pnpm`,
+COREPACK_ENABLE_NETWORK=0 and LANE_BASE_REF=origin/main. This was dependency reuse,
+not a clean install. Node v24.17.0, installed Vitest 4.1.11.
+
+| Command | Actual result |
+|---|---|
+| pnpm --filter @jobguard/core typecheck; pnpm --filter @jobguard/db typecheck | Both PASS |
+| pnpm --filter @jobguard/core lint; pnpm --filter @jobguard/db lint | Both PASS (package compiler lint) |
+| pnpm typecheck --concurrency=1 | PASS across all 7 packages |
+| LANE_BASE_REF=origin/main pnpm lint --concurrency=1 | FAIL at lane boundary after core purity passed: inherited C0 lane JSON, C0 contract doc, C0 builder receipt outside B1 allowlist |
+| LANE_BASE_REF=origin/main pnpm lint:lanes | Same three inherited-path failures; not a pass and no scope exemption added |
+| pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/receipt-line-allocation-source.test.ts src/recovery-allocation.test.ts src/receipt-allocation.test.ts | PASS, 3 files / 105 tests |
+| pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/receipt-line-allocation.application.test.ts | PASS, 13 tests |
+| pnpm build --concurrency=1 | PASS across all 7 packages, including Next production build |
+| pnpm openapi:check | FAIL before generator: tsx IPC pipe listen EPERM in sandbox |
+| node --import tsx src/generate-openapi.ts --check (apps/api) | PASS, direct equivalent check without tsx CLI IPC listener |
+| tsc -p /private/tmp/jg-m48-b1-r1-tests.tsconfig.json | PASS, explicit compilation of all four B1 integration files and their imports; no database execution |
+| node tools/money-arithmetic-lint.mjs; node tools/commercial-boundary-lint.mjs | Both PASS |
+| git diff --check | PASS |
+
+Logs: `/private/tmp/jg-m48-b1-r1-*.log`. An early focused run caught an overly broad
+parser change that conflicted with C0's existing unmatched-receipt parser test;
+the change was removed and the existing assertion preserved. The final 118-test
+batch above passed. Database state validation stays in the held database boundary.
+PostgreSQL, migrations, browser, full repository test sweeps, restore and live-model
+checks NOT RUN. No model/prompt was changed. Standard root lint and standard
+OpenAPI orchestration are not claimed green. Exact-head CI must run database,
+migration/catalogue/race/browser gates after dispatcher push. No independent
+review, acceptance or release evidence is generated by this receipt.
+
+Migration/backwards compatibility: unused additive 0211 storage only, no backfill
+or legacy commercial-row rewrite. Forward fix/rollback is in the same-stem
+migration note. A future writer must preserve these guards and obtain the held
+source/authorization/audit handoff; removing the refusal alone remains unsafe.
+No new operational alert, provider destination, external action or UI route.
+Coordinator-owned catalogue additions remain outstanding. C0 contract prose about
+mandatory evidence on every row is superseded for reversals by this explicit
+issued carry; its document path is outside this round's B1 lane.
+
+Session record (same bounded task; no new agent/reviewer session was launched):
+
+```yaml
+session_record_version: 1
+task_id: M48-B1
+project: JobGuard
+role: builder
+thread_id: unknown
+surface: unknown
+host: local sandbox
+authorised_route_ref: dispatcher user continuation, 23 October 2026
+repository: /Users/benharwood/Claude/Projects/my-new-project
+integration_target: origin/main
+integration_target_revision: dc5721230fd8aedbf2d9d0457789074b66b48765
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/m48-b1
+branch: codex/sandbox/m48-b1
+starting_base_revision: acaad61e89401bf3f96c6c5e39b8d7c68d2e602c
+source_pin: e55f1c6982b8e90d15101c95593fa5f00c78cca2
+candidate_revision: uncommitted working tree
+last_validated_revision: uncommitted working tree
+allowed_files_ref: config/lanes/m48-b1.json plus dispatcher carry order
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md M4-8-S; C0 source contract
+model_requested: Codex gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: unknown
+effort_runtime_confirmed: unknown
+runtime_confirmation_ref: unknown
+last_completed_turn: r1 catch-up and reviewer carries
+last_receipt_ref: docs/verdicts/M48-B1/BUILDER_RECEIPT.md
+state: builder handoff; parent HOLD
+resumed_from_thread_id: unknown
+successor_reason: none declared
+preflight_ref: r1 section above
+result_id: unknown
+acknowledgement_ref: unknown
+ci_evidence_ref: unknown
+reviewer: pending independent reviewers
+review_evidence_ref: unknown
+accepting_actor: pending separate actor
+acceptance_evidence_ref: unknown
+outstanding_holds: source authority/design; HTTP/UI; CI; independent review/acceptance
+builder_finished_at: 2026-10-23
+coordinator_acknowledged_at: unknown
+integrated_at: unknown
+merged_revision: unknown
+```
+
+Token/cache usage fields and their source counters are unavailable in this
+surface: unknown, not zero. No quota/cache benefit is claimed. Requested versus
+runtime-confirmed model/effort remain separate. The dispatcher commits after exit;
+intended message is `/private/tmp/jg-msg-m48-b1.txt`. **M48-B1 remains INCOMPLETE /
+HOLD pending positive-source work, PostgreSQL evidence and independent acceptance.**

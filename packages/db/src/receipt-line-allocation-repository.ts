@@ -21,7 +21,7 @@ function fail(code: ReceiptLineAllocationErrorCode): never { throw new ReceiptLi
  * Build-ahead access boundary ONLY. The issued base has no released neutral
  * source authority/locking port. Promise<never> is deliberate: no saved/current
  * snapshot or command result can be invented while that item is STOPped.
- * No public API/HTTP route is composed until the C0 exports and source handoff.
+ * C0 exports are integrated; no public API/HTTP route is composed until the source handoff.
  */
 export class RecoveryLineAllocationRepository {
  constructor(private readonly pool: Pool, private readonly environment = process.env.JOBGUARD_ENV ?? "unconfigured") {}
@@ -79,7 +79,7 @@ export class RecoveryLineAllocationRepository {
    await this.scope(db, { context, actor, sessionDigest }, jobId);
    await db.$client.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
    // No parsing/authority is inferred from raw: every possible command is held.
-   // Do not forward arbitrary unbounded input into SQL while C0 integration is STOPped.
+   // Do not forward arbitrary unbounded input into SQL while source authority remains held.
    void raw;
    return this.translate(() => db.$client.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,NULL::jsonb,NULL::jsonb)", [context.tenantId, jobId, sessionDigest]));
   });

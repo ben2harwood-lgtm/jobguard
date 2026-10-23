@@ -71,9 +71,101 @@ CREATE TABLE app.receipt_allocation_fact_line (
  CHECK((reverses_line_allocation_id IS NULL AND left(gross_numerator,1)<>'-' AND left(net_numerator,1)<>'-')
     OR(reverses_line_allocation_id IS NOT NULL AND left(gross_numerator,1)='-' AND (left(net_numerator,1)='-' OR net_numerator='0')))
 );
--- Fractions stay text to preserve the shared kernel's wide output range and
--- original bytes. Cross-row source/ratio/completeness checks remain held, so no
--- ordinary role has INSERT, including via a definer. No incomplete row is usable.
+-- Private storage guards only. No source-lock order, actor permission or positive
+-- writer is introduced. The runtime routines below remain unconditionally held.
+-- UUID columns use PostgreSQL's canonical lower-case output and UUID equality.
+ALTER TABLE app.receipt_allocation_fact_revision ADD UNIQUE(tenant_id,job_id,id,payment_id);
+ALTER TABLE app.receipt_allocation_fact_source ADD UNIQUE(tenant_id,job_id,id,invoice_id);
+ALTER TABLE app.receipt_allocation_fact_source ADD FOREIGN KEY(tenant_id,job_id,allocation_revision_id,payment_id)
+ REFERENCES app.receipt_allocation_fact_revision(tenant_id,job_id,id,payment_id);
+ALTER TABLE app.receipt_allocation_fact_line DROP CONSTRAINT receipt_allocation_fact_line_tenant_id_job_id_source_id_fkey;
+ALTER TABLE app.receipt_allocation_fact_line ADD FOREIGN KEY(tenant_id,job_id,source_id,invoice_id)
+ REFERENCES app.receipt_allocation_fact_source(tenant_id,job_id,id,invoice_id);
+
+-- No accepted source authority exists to clear pending/unmatched/duplicate or
+-- reversed cash. A claimed settled state in JSON is not that authority. Refuse
+-- ALL saved-distribution projections until a reviewed forward migration installs
+-- the source handoff; held rows remain quarantined and the readers still refuse.
+CREATE FUNCTION app.receipt_fact_projection_safe(p jsonb) RETURNS boolean
+ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+ SELECT p->>'status' IS DISTINCT FROM 'saved_distribution'
+$$;
+ALTER TABLE app.receipt_allocation_fact_source ADD CONSTRAINT receipt_fact_saved_projection_safe
+ CHECK(app.receipt_fact_projection_safe(source_manifest));
+ALTER TABLE app.receipt_allocation_fact_command ADD CONSTRAINT receipt_fact_result_projection_safe
+ CHECK(app.receipt_fact_projection_safe(result));
+ALTER TABLE app.receipt_allocation_fact_review ADD CONSTRAINT receipt_fact_review_projection_safe
+ CHECK(app.receipt_fact_projection_safe(artifact));
+
+-- Exact fraction addition: no division/rounding of money. Reduce only by integer
+-- gcd; PostgreSQL numeric overflow refuses the write rather than approximating.
+CREATE FUNCTION app.assert_receipt_fact_bound(parts jsonb,limit_n numeric,limit_d numeric)
+ RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE part jsonb; n numeric:=0; d numeric:=1; pn numeric; pd numeric; g numeric;
+BEGIN
+ FOR part IN SELECT value FROM jsonb_array_elements(parts) LOOP
+  pn:=abs((part->>'n')::numeric); pd:=(part->>'d')::numeric;
+  n:=n*pd+pn*d; d:=d*pd;
+  IF n*limit_d>limit_n*d THEN RAISE EXCEPTION 'RECEIPT_LINE_CAPACITY_EXCEEDED' USING ERRCODE='23514'; END IF;
+  g:=gcd(n,d); n:=div(n,g); d:=div(d,g);
+ END LOOP;
+END $$;
+CREATE FUNCTION app.guard_receipt_fact_line() RETURNS trigger
+ LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
+DECLARE src record; original record; invoiced record; cap bigint; parts jsonb;
+BEGIN
+ -- Quarantined storage integrity requires SSI, not a guessed source lock order.
+ -- Predicate reads below protect against concurrent write skew. Retry of a
+ -- serialization failure remains the future writer's responsibility.
+ IF current_setting('transaction_isolation')<>'serializable' THEN
+  RAISE EXCEPTION 'RECEIPT_LINE_SERIALIZABLE_REQUIRED' USING ERRCODE='25001';
+ END IF;
+ SELECT s.*,r.direction INTO src FROM app.receipt_allocation_fact_source s
+ JOIN app.receipt_allocation_fact_revision r ON(r.tenant_id,r.job_id,r.id)=(s.tenant_id,s.job_id,s.allocation_revision_id)
+ WHERE (s.tenant_id,s.job_id,s.id)=(NEW.tenant_id,NEW.job_id,NEW.source_id);
+ IF NOT FOUND THEN RAISE EXCEPTION 'RECEIPT_LINE_SOURCE_MISSING' USING ERRCODE='23503'; END IF;
+ IF (src.direction='reversal') IS DISTINCT FROM (NEW.reverses_line_allocation_id IS NOT NULL) THEN
+  RAISE EXCEPTION 'RECEIPT_LINE_DIRECTION_MISMATCH' USING ERRCODE='23514'; END IF;
+ SELECT * INTO invoiced FROM app.final_account_invoiced_line
+ WHERE (tenant_id,job_id,invoice_id,final_account_line_id)=(NEW.tenant_id,NEW.job_id,NEW.invoice_id,NEW.line_id);
+ IF NOT FOUND THEN RAISE EXCEPTION 'RECEIPT_LINE_INVOICE_MISSING' USING ERRCODE='23503'; END IF;
+ IF (NEW.scope_item_id,NEW.commercial_revision_id,NEW.original_line_net_pence,NEW.original_line_gross_pence)
+ IS DISTINCT FROM (invoiced.scope_item_id,invoiced.commercial_revision_id,invoiced.net_pence,invoiced.gross_pence)
+ OR NEW.net_numerator::numeric*NEW.gross_denominator::numeric*invoiced.gross_pence
+ <>NEW.gross_numerator::numeric*NEW.net_denominator::numeric*invoiced.net_pence THEN
+  RAISE EXCEPTION 'RECEIPT_LINE_RATIO_MISMATCH' USING ERRCODE='23514'; END IF;
+ IF NEW.reverses_line_allocation_id IS NULL THEN
+  SELECT amount_pence INTO cap FROM app.customer_payment WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,src.payment_id) AND invoice_id=src.invoice_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'RECEIPT_LINE_PAYMENT_MISSING' USING ERRCODE='23503'; END IF;
+  SELECT coalesce(jsonb_agg(jsonb_build_object('n',l.gross_numerator,'d',l.gross_denominator)),'[]') INTO parts
+  FROM app.receipt_allocation_fact_line l JOIN app.receipt_allocation_fact_source s ON(s.tenant_id,s.job_id,s.id)=(l.tenant_id,l.job_id,l.source_id)
+  WHERE l.tenant_id=NEW.tenant_id AND s.payment_id=src.payment_id AND l.reverses_line_allocation_id IS NULL;
+  PERFORM app.assert_receipt_fact_bound(parts,cap,1);
+  -- Conservative historical positive capacity: reversals do not silently reopen it.
+  SELECT coalesce(jsonb_agg(jsonb_build_object('n',gross_numerator,'d',gross_denominator)),'[]') INTO parts
+  FROM app.receipt_allocation_fact_line WHERE (tenant_id,job_id,line_id)=(NEW.tenant_id,NEW.job_id,NEW.line_id)
+   AND reverses_line_allocation_id IS NULL;
+  PERFORM app.assert_receipt_fact_bound(parts,invoiced.gross_pence,1);
+ ELSE
+  SELECT l.* INTO original FROM app.receipt_allocation_fact_line l JOIN app.receipt_allocation_fact_source s
+   ON(s.tenant_id,s.job_id,s.id)=(l.tenant_id,l.job_id,l.source_id)
+  WHERE (l.tenant_id,l.job_id,l.id)=(NEW.tenant_id,NEW.job_id,NEW.reverses_line_allocation_id)
+   AND (l.invoice_id,l.line_id,s.payment_id)=(NEW.invoice_id,NEW.line_id,src.payment_id) AND l.reverses_line_allocation_id IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'RECEIPT_LINE_ORIGINAL_MISSING' USING ERRCODE='23503'; END IF;
+  SELECT coalesce(jsonb_agg(jsonb_build_object('n',gross_numerator,'d',gross_denominator)),'[]') INTO parts
+  FROM app.receipt_allocation_fact_line WHERE (tenant_id,job_id,reverses_line_allocation_id)=(NEW.tenant_id,NEW.job_id,original.id);
+  PERFORM app.assert_receipt_fact_bound(parts,original.gross_numerator::numeric,original.gross_denominator::numeric);
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER receipt_fact_line_integrity AFTER INSERT ON app.receipt_allocation_fact_line
+ FOR EACH ROW EXECUTE FUNCTION app.guard_receipt_fact_line();
+ALTER FUNCTION app.receipt_fact_projection_safe(jsonb) OWNER TO jobguard_migration;
+ALTER FUNCTION app.assert_receipt_fact_bound(jsonb,numeric,numeric) OWNER TO jobguard_migration;
+ALTER FUNCTION app.guard_receipt_fact_line() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.receipt_fact_projection_safe(jsonb),app.assert_receipt_fact_bound(jsonb,numeric,numeric),app.guard_receipt_fact_line()
+ FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
+
 DO $$ DECLARE n text; BEGIN
  FOREACH n IN ARRAY ARRAY['receipt_allocation_fact_command','receipt_allocation_fact_review','receipt_allocation_fact_revision','receipt_allocation_fact_source','receipt_allocation_fact_line'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
