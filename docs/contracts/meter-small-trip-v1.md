@@ -2,7 +2,7 @@
 
 Build-ahead foundation on CH-4-C `14eca75074217fa82fb719c38cac8a997eec59ad`.
 Synthetic only; not accepted, wired, enabled or independently reviewed.
-The issued order reserves migration `0206_meter_small_trip.sql`. The order's
+The issued order reserves migration `0208_meter_small_trip.sql`. The order's
 branch `codex/sandbox/mon1-t` supersedes the draft's proposed branch name.
 
 ## Storage and replay

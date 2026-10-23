@@ -1,4 +1,4 @@
-# 0206 — MON1-T small-job trip foundation
+# 0208 — MON1-T small-job trip foundation
 
 Additive, synthetic-only private source seam and two append-only tenant/job tables.
 No existing table/column, fingerprinted row, routine, grant, trigger, historical
@@ -22,7 +22,7 @@ See `docs/contracts/meter-small-trip-v1.md` for replay/time choices and holds.
 No backfill. Old activations, documents, v1 rows and existing statements stay
 byte-identical. A predecessor application simply ignores the new objects. N is
 autodiscovered; do not register it in the sealed historical runner list. Number
-0206 was reserved by the issued order and must be rechecked by the dispatcher
+0208 (renumbered from 0206 by the dispatcher on 23 Oct after a clash with MON-3-P-B) was reserved by the issued order and must be rechecked by the dispatcher
 against eventual main before landing. Any renumber is coordinator-owned.
 
 Validation written: `meter-trip.integration.test.ts` (fresh migration via real
