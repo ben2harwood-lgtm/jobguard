@@ -6,7 +6,10 @@ const binding = { tenantId: id(1), jobId: id(2), evidenceId: id(3), objectVersio
 const input = () => ({ version: "imported-evidence-provenance.v1", binding, adoptedAt: "2026-10-01T12:00:00.000000Z", sourceOccurredAt: "2026-10-01T11:59:59.999999Z", receivedAt: "2026-10-02T00:00:00.000000Z", historyContradictory: false, prior: null });
 describe("CH5-C historical provenance", () => {
   it("[CH5-C05] keeps one microsecond before, equivalent offsets and strictly after distinct without reading a clock", () => {
-    const clock = vi.spyOn(Date, "now").mockImplementation(() => { throw new Error("ambient clock"); });
+    const OriginalDate = Date;
+    const clock = vi.fn(() => { throw new Error("ambient clock"); });
+    vi.stubGlobal("Date", class extends OriginalDate { constructor() { clock(); super(0); } static override now = clock; });
+    const performanceClock = vi.spyOn(performance, "now").mockImplementation(clock);
     try {
       const before = classifyImportedEvidenceProvenance(input());
       expect(before).toMatchObject({ classification: "pre_adoption_evidence", permanentExclusion: true });
@@ -14,10 +17,10 @@ describe("CH5-C historical provenance", () => {
       expect(classifyImportedEvidenceProvenance({ ...input(), adoptedAt: "2026-10-01T13:00:00.000000+01:00" })).toMatchObject({ classification: before.classification });
       expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: "2026-10-01T12:00:00.000001Z" })).toMatchObject({ classification: "not_pre_adoption_by_timing", permanentExclusion: false, positiveEligibility: "not_asserted" });
       expect(before.sourceOccurredAt).toBe(input().sourceOccurredAt);
-    } finally { clock.mockRestore(); }
+    } finally { vi.unstubAllGlobals(); performanceClock.mockRestore(); }
   });
   it("[CH5-C05] equal, missing, invalid, imprecise and contradictory history stays held", () => {
-    for (const sourceOccurredAt of [input().adoptedAt, "2026-10-01T13:00:00.000000+01:00", null, "bad", "2026-02-30T00:00:00.000000Z", "2026-10-01T11:59:59Z", "2026-10-01T11:59:59.999Z", "2026-10-01T11:59:59.999999-00:00"]) {
+    for (const sourceOccurredAt of [input().adoptedAt, "2026-10-01T13:00:00.000000+01:00", null, "bad", "2026-02-30T00:00:00.000000Z", "2026-10-01T11:59:59.999999-00:00"]) {
       expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt })).toMatchObject({ classification: "timing_unresolved", positiveEligibility: "held" });
     }
     for (const change of [{ adoptedAt: "bad" }, { receivedAt: null }, { historyContradictory: true }, { receivedAt: "2026-09-01T00:00:00.000000Z" }])
@@ -39,6 +42,32 @@ describe("CH5-C historical provenance", () => {
     expect(() => classifyImportedEvidenceProvenance({ ...input(), adoptedAt: "2026-11-01T00:00:00.000000Z", prior })).toThrow("IMPORT_PROVENANCE_BINDING_MISMATCH");
     expect(Object.isFrozen(prior.binding)).toBe(true);
     expect(Object.isFrozen(binding)).toBe(false);
+  });
+  it("[LATER A1/B1/B11] orders disjoint coarse timestamp intervals without padding requirements", () => {
+    for (const sourceOccurredAt of ["2025-06-01T10:00:00Z", "2025-06-01T10:00:00.000Z", "2026-10-01T11:59:59Z", "2026-10-01T11:59:59.999Z"])
+      expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt }).permanentExclusion).toBe(true);
+    expect(classifyImportedEvidenceProvenance({ ...input(), adoptedAt: "2026-10-01T12:00:00Z", sourceOccurredAt: "2026-10-01T12:00:01Z" }).classification).toBe("not_pre_adoption_by_timing");
+  });
+  it("[LATER A3] holds overlapping mixed precision intervals", () => {
+    expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: "2026-10-01T12:00:00.000000500Z" })).toMatchObject({ classification: "timing_unresolved", holdReason: "precision_overlap" });
+  });
+  it("[LATER A2/B2] metadata drift is a sticky hold, including clearing contradictions", () => {
+    const prior = classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: input().adoptedAt });
+    for (const change of [{ sourceOccurredAt: "2026-10-01T12:00:01.000000Z" }, { receivedAt: "2026-12-01T00:00:00.000000Z" }, { historyContradictory: true }]) {
+      const held = classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: input().adoptedAt, ...change, prior });
+      expect(held).toMatchObject({ classification: "timing_unresolved", holdReason: "prior_metadata_changed" });
+      expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: input().adoptedAt, prior: held })).toMatchObject({ holdReason: "prior_metadata_changed" });
+      expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: held.sourceOccurredAt, receivedAt: held.receivedAt, historyContradictory: held.historyContradictory, prior: held })).toMatchObject({ holdReason: "prior_metadata_changed" });
+    }
+    const contradictory = classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: "2026-10-01T12:00:01.000000Z", historyContradictory: true });
+    expect(classifyImportedEvidenceProvenance({ ...input(), sourceOccurredAt: contradictory.sourceOccurredAt, prior: contradictory })).toMatchObject({ holdReason: "prior_metadata_changed", positiveEligibility: "held" });
+  });
+  it("[LATER A4/B3/B4] supplies deterministic hold reasons, including absent receive time", () => {
+    for (const [change, holdReason] of [
+      [{ receivedAt: null }, "missing_time"], [{ receivedAt: "bad" }, "invalid_time"],
+      [{ historyContradictory: true }, "contradictory_history"], [{ receivedAt: "2025-01-01T00:00:00Z" }, "source_after_receipt"],
+      [{ sourceOccurredAt: input().adoptedAt }, "equal_time"],
+    ] as const) expect(classifyImportedEvidenceProvenance({ ...input(), ...change })).toMatchObject({ classification: "timing_unresolved", positiveEligibility: "held", holdReason });
   });
   it("[CH5-C02] fails typed on malformed binding or unknown authority fields", () => {
     expect(() => classifyImportedEvidenceProvenance({ ...input(), feeEligible: true })).toThrow("INVALID_IMPORT_PROVENANCE");
