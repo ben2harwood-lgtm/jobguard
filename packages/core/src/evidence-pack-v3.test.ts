@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildEvidenceManifestV3, canonicalManifestV3, evidenceManifestV3,
   manifestDigestV3, renderStandalonePackV3, verifyStandalonePackV3,
+  evidencePackSpecimenInputV3, standaloneEvidencePackV3,
   EvidencePackV3Error, type EvidencePackSpecimenInput,
 } from "./evidence-pack-v3.js";
 import { sha256 } from "./evidence-pack.js";
@@ -21,7 +22,7 @@ const altered = (change: (pack: any) => void) => {
   const { text } = exported();
   const pack = JSON.parse(text);
   change(pack);
-  return verifyStandalonePackV3(JSON.stringify(pack));
+  return verifyStandalonePackV3(renderStandalonePackV3(pack.manifest, pack.sources));
 };
 
 describe("CH8-A unbound preparation specimens only", () => {
@@ -75,19 +76,122 @@ describe("CH8-A unbound preparation specimens only", () => {
     expect(() => buildEvidenceManifestV3(supplied)).toThrow(EvidencePackV3Error);
   });
 
-  it("EP-A01/03: rejects unknown versions, fields, bad hashes, links, cutoff and section omissions", () => {
-    const { manifest } = exported();
-    for (const bad of [
-      { ...manifest, version: "evidence-pack-manifest.v4" },
-      { ...manifest, binding: "accepted" }, { ...manifest, requestId: "irrelevant" },
-      { ...manifest, entries: [{ ...manifest.entries[0], contentHash: "bad" }] },
-      { ...manifest, entries: [...manifest.entries, manifest.entries[0]] },
-      { ...manifest, lifecycle: { ...manifest.lifecycle, evidenceCutoff: "2026-10-21T00:00:00.000000Z" } },
-      { ...manifest, sections: manifest.sections.slice(1) },
-    ]) expect(evidenceManifestV3.safeParse(bad).success).toBe(false);
+  it.each([
+    ["manifest version", (m: any) => { m.version = "evidence-pack-manifest.v4"; }],
+    ["binding", (m: any) => { m.binding = "accepted"; }],
+    ["manifest strict", (m: any) => { m.requestId = "irrelevant"; }],
+    ["digest regex", (m: any) => { m.entries[0].contentHash = "A".repeat(64); }],
+    ["short digest", (m: any) => { m.entries[0].contentHash = "a".repeat(63); }],
+    ["descriptor strict", (m: any) => { m.entries[0].unknown = true; }],
+    ["duplicate entry", (m: any) => { m.entries.push(m.entries[0]); }],
+    ["cutoff after lock", (m: any) => { m.lifecycle.evidenceCutoff = "2026-10-21T00:00:00.000000Z"; }],
+    ["missing lifecycle declaration", (m: any) => { m.sections = m.sections.filter((s: any) => s.kind !== "settlement"); }],
+  ])("EP-A01: isolated %s rejection", (_name, change) => {
+    const supplied = input("unpaid");
+    const manifest = buildEvidenceManifestV3(supplied);
+    expect(evidenceManifestV3.safeParse(manifest).success).toBe(true);
+    change(manifest);
+    expect(evidenceManifestV3.safeParse(manifest).success).toBe(false);
+  });
+
+  it.each([
+    ["source strict", (p: any) => { p.sources[0].unknown = true; }],
+    ["content Unicode", (p: any) => { p.sources[0].content = "\ud800"; }],
+    ["ID Unicode", (p: any) => { p.sources[0].sourceId = "\udfff"; }],
+    ["calendar", (p: any) => { p.sources[0].recordedAt = "2026-02-30T00:00:00.123456Z"; }],
+    ["six microsecond digits", (p: any) => { p.sources[0].recordedAt = "2026-10-20T00:00:00.123Z"; }],
+    ["pre-lock lifecycle strict", (p: any) => { p.lifecycle.unknown = true; }],
+    ["input strict", (p: any) => { p.unknown = true; }],
+  ])("EP-A01: isolated %s input rejection", (_name, change) => {
+    const supplied = input("pre_lock_ordinary");
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
+    change(supplied);
+    expect(() => buildEvidenceManifestV3(supplied)).toThrow(EvidencePackV3Error);
+  });
+
+  it.each([
+    ["present section strict", (p: any) => { p.sections[0].unknown = true; }],
+    ["absent section strict", (p: any) => { p.sections.at(-1).unknown = true; }],
+    ["absent section with source", (p: any) => { p.sections.at(-1).sourceIds = ["not-a-source"]; }],
+    ["absent reason enum", (p: any) => { p.sections.at(-1).reason = "invented"; }],
+    ["present section nonempty", (p: any) => { p.sections[0].sourceIds = []; }],
+    ["post-lock lifecycle strict", (p: any) => { p.lifecycle.unknown = true; }],
+  ])("EP-A01: isolated %s schema rejection", (_name, change) => {
+    const supplied = input("unpaid");
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
+    expect(evidencePackSpecimenInputV3.safeParse(supplied).success).toBe(true);
+    change(supplied);
+    // Inspect the input schema directly so downstream link checks cannot mask this guard.
+    expect(evidencePackSpecimenInputV3.safeParse(supplied).success).toBe(false);
+  });
+
+  it("EP-A01: isolated link strict rejection", () => {
     const supplied = input("appended_reversal");
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
+    Object.assign(supplied.sources.at(-1)!.links[0]!, { unknown: true });
+    expect(evidencePackSpecimenInputV3.safeParse(supplied).success).toBe(false);
+  });
+
+  it("EP-A03: foreign declared link job is rejected without filtering", () => {
+    const supplied = input("appended_reversal");
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
     supplied.sources.at(-1)!.links[0]!.jobId = "foreign";
     expect(() => buildEvidenceManifestV3(supplied)).toThrow(EvidencePackV3Error);
+  });
+
+  it("EP-A01: isolated unsectioned source rejection", () => {
+    const supplied = input("unpaid");
+    supplied.sources.push(input("pre_lock_ordinary").sources[0]!);
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
+    supplied.sources.at(-1)!.kind = "settlement";
+    expect(() => buildEvidenceManifestV3(supplied)).toThrow(EvidencePackV3Error);
+  });
+
+  it.each([
+    ["export version", (p: any) => { p.version = "evidence-pack-export.v1"; }],
+    ["export banner", (p: any) => { p.banner = "changed banner"; }],
+    ["export strict", (p: any) => { p.checkpointTrusted = true; }],
+  ])("EP-A01: isolated %s rejection", (_name, change) => {
+    const { text } = exported();
+    const pack = JSON.parse(text);
+    expect(standaloneEvidencePackV3.safeParse(pack).success).toBe(true);
+    change(pack);
+    expect(standaloneEvidencePackV3.safeParse(pack).success).toBe(false);
+    expect(() => verifyStandalonePackV3(JSON.stringify(pack))).toThrow(EvidencePackV3Error);
+  });
+
+  it("EP-A02: multiple declared links canonicalise in either order", () => {
+    const a = input("appended_reversal");
+    const manifest = buildEvidenceManifestV3(a);
+    const { kind: _kind, recordedAt: _time, links: _links, ...secondLink } = manifest.entries.find((e) => e.kind === "lock")!;
+    a.sources.at(-1)!.links.push(secondLink);
+    const b = structuredClone(a);
+    b.sources.at(-1)!.links.reverse();
+    const ma = buildEvidenceManifestV3(a), mb = buildEvidenceManifestV3(b);
+    expect(canonicalManifestV3(ma)).toBe(canonicalManifestV3(mb));
+    expect(ma).toEqual(mb);
+    expect(manifestDigestV3(ma)).toBe(manifestDigestV3(mb));
+    const ta = renderStandalonePackV3(ma, a.sources), tb = renderStandalonePackV3(mb, b.sources);
+    expect(ta).toBe(tb);
+    expect(verifyStandalonePackV3(ta).artifactHash).toBe(sha256(tb));
+  });
+
+  it("EP-A03: duplicate content key before the genuine content refuses trusted verification", () => {
+    const { manifest, text } = exported();
+    const trustedManifestDigest = manifestDigestV3(manifest);
+    expect(verifyStandalonePackV3(text, { trustedManifestDigest }).specimenIntegrityComplete).toBe(true);
+    const lockContent = JSON.parse(text).sources.find((source: any) => source.sourceId === "specimen-lock").content;
+    const genuine = `"content":${JSON.stringify(lockContent)}`;
+    const forged = text.replace(genuine, `"content":"FORGED £8000 shown to a naive reader",${genuine}`);
+    expect(forged).not.toBe(text);
+    // JSON.parse retains the genuine last key: schema/content checks alone cannot detect the forgery.
+    expect(JSON.parse(forged)).toEqual(JSON.parse(text));
+    expect(() => verifyStandalonePackV3(forged, { trustedManifestDigest })).toThrow(EvidencePackV3Error);
+  });
+
+  it("EP-A03: noncanonical whitespace refuses trusted verification", () => {
+    const { manifest, text } = exported();
+    expect(() => verifyStandalonePackV3(text + "\n", { trustedManifestDigest: manifestDigestV3(manifest) })).toThrow(EvidencePackV3Error);
   });
 
   it("EP-A04: distinguishes supplied integrity, independent trust and held provenance", () => {
@@ -110,6 +214,13 @@ describe("CH8-A unbound preparation specimens only", () => {
     expect(() => buildEvidenceManifestV3({ ...ordinary, signalCount: 0 })).toThrow(EvidencePackV3Error);
   });
 
+  it.each(["settled_catch", "section_reveal"])("EP-A05: consistent %s sections are forbidden before lock", (name) => {
+    const supplied = input(name);
+    expect(() => buildEvidenceManifestV3(supplied)).not.toThrow();
+    supplied.lifecycle = { state: "pre_lock" };
+    expect(() => buildEvidenceManifestV3(supplied)).toThrow(EvidencePackV3Error);
+  });
+
   it("EP-A06: appended correction retains historical bytes and verifies exact declared links", () => {
     const original = input(), corrected = input("appended_reversal");
     expect(corrected.sources.slice(0, -1)).toEqual(original.sources);
@@ -123,15 +234,9 @@ describe("CH8-A unbound preparation specimens only", () => {
 
   it("EP-A01/03: strict nested schemas, microsecond boundaries and linked originals fail closed", () => {
     const supplied = input();
-    for (const bad of [
-      { ...supplied, sources: [{ ...supplied.sources[0], unknown: true }] },
-      { ...supplied, sources: [{ ...supplied.sources[0], content: "\ud800" }] },
-      { ...supplied, sources: [{ ...supplied.sources[0], sourceId: "\udfff" }] },
-      { ...supplied, sources: [{ ...supplied.sources[0], recordedAt: "2026-02-30T00:00:00.123456Z" }] },
-      { ...supplied, sources: [{ ...supplied.sources[0], recordedAt: "2026-10-20T00:00:00.123Z" }] },
-      { ...supplied, sections: [{ ...supplied.sections[0], unknown: true }] },
-      { ...supplied, sources: [...supplied.sources, supplied.sources[0]] },
-    ]) expect(() => buildEvidenceManifestV3(bad)).toThrow(EvidencePackV3Error);
+    const duplicate = structuredClone(supplied);
+    duplicate.sources.push(duplicate.sources[0]!);
+    expect(() => buildEvidenceManifestV3(duplicate)).toThrow(EvidencePackV3Error);
     const unicode = input(); unicode.sources[0]!.content = "\ufeff£ 🧱 e\u0301";
     const unicodeManifest = buildEvidenceManifestV3(unicode);
     expect(verifyStandalonePackV3(renderStandalonePackV3(unicodeManifest, unicode.sources)).contentMatches).toBe(true);

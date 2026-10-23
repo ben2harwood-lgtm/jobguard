@@ -145,3 +145,110 @@ HTTP or web workflow was changed. Dispatcher must rerun root lint/lint:lanes aft
 its commit and run required CI. No existing test was weakened or deleted.
 
 Intended dispatcher commit message: `/private/tmp/jg-msg-ch8-a.txt`.
+
+
+## r1
+
+23 October 2026 repair on `codex/sandbox/ch8-a`, inspected HEAD
+`afab2eb8cb392ac329fedfdc2c9f65bd9ad27608`. Builder: Codex gpt-6.1-sol.
+Read both named Claude REPAIR verdicts in full before editing, located at
+`/Users/benharwood/.local/share/full-steam/jg-runs/`:
+`v5-ch8-a-claude-A-afab2eb8-20261023.md` and
+`v5-ch8-a-claude-B-afab2eb8-20261023.md`.
+Read actual AGENTS.md, BUILD_PLAN.md CH-8 and the preparation contract/lane.
+This receipt supersedes the original test-coverage claims for the confounded
+negatives identified by those verdicts. It is builder test evidence only;
+a new exact-commit independent verdict and separate acceptance remain required.
+
+Scope: only the issued negative-test repairs and duplicate-key verifier defect.
+Replaced whole-array malformed specimens with isolated changes to otherwise valid
+full specimens and explicit passing controls. For schema guards, direct schema
+assertions prevent downstream referential checks (or canonical re-rendering)
+from masking removal. Added consistent pre-lock settled/reveal packs, an absent
+section carrying sourceIds, a present section with empty sourceIds, isolated
+unsectioned-source/count tests and two-link permutations. Preserved the existing
+owner/content/link/cutoff/trust/reversal and v1 regression assertions.
+
+Verifier now requires exact equality with `renderStandalonePackV3` before it
+reports content/checkpoint trust. B's duplicate-content-key repro inserts the
+forged value immediately before the genuine `specimen-lock` content and supplies
+the correct independent manifest digest. It now throws `EvidencePackV3Error`.
+Noncanonical whitespace is also rejected. Contract updated to state this deliberate
+compatibility change; renderer bytes and fixture goldens are unchanged. Existing
+content-tampering tests render canonical artifacts so they still exercise the
+content checks. No v1, fixture, provider, DB, API, UI or barrel change; no migration
+or new operational alert. The original producer/runtime/release holds all remain.
+
+### Guard-removal evidence
+
+Actually removed/weakened each guard below separately in the local source,
+ran `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2
+src/evidence-pack-v3.test.ts --reporter=json`, then restored the source.
+All 25 runs exited 1 with assertion failures; zero survivors. Each row records
+actual failing test names. No test was weakened. Final restored tests were rerun.
+Temporary harness: `/private/tmp/ch8-a-r1-mutations.py`; complete JSON results:
+`/private/tmp/ch8-a-r1-mutations.json`; per-mutation logs:
+`/private/tmp/ch8-a-r1-mutation-{1..25}.log`. The first harness run's JSON
+reader encountered pnpm's trailing failure text; extraction was corrected and
+all 25 mutations were rerun successfully against the final repro/test source.
+
+| Removed guard | Failing test name(s) |
+|---|---|
+| digest regex | `EP-A01: isolated digest regex rejection`; `EP-A01: isolated short digest rejection` |
+| six microsecond digits | `EP-A01: isolated six microsecond digits input rejection` |
+| calendar check | `EP-A01: isolated calendar input rejection` |
+| ID Unicode | `EP-A01: isolated ID Unicode input rejection` |
+| content Unicode | `EP-A01: isolated content Unicode input rejection` |
+| link strict | `EP-A01: isolated link strict rejection` |
+| descriptor strict | `EP-A01: isolated descriptor strict rejection` |
+| source strict | `EP-A01: isolated source strict input rejection` |
+| present section strict | `EP-A01: isolated present section strict schema rejection` |
+| absent section strict | `EP-A01: isolated absent section strict schema rejection`; `EP-A01: isolated absent section with source schema rejection` |
+| pre-lock lifecycle strict | `EP-A01: isolated pre-lock lifecycle strict input rejection` |
+| post-lock lifecycle strict | `EP-A01: isolated post-lock lifecycle strict schema rejection` |
+| input strict | `EP-A01: isolated input strict input rejection`; `EP-A05: pre-lock ordinary shape cannot carry shadow sections or metadata` |
+| manifest strict | `EP-A01: isolated manifest strict rejection` |
+| export strict | `EP-A01: isolated export strict rejection` |
+| export version | `EP-A01: isolated export version rejection` |
+| export banner | `EP-A01: isolated export banner rejection` |
+| absent reason enum | `EP-A01: isolated absent reason enum schema rejection` |
+| present section nonempty | `EP-A01: isolated present section nonempty schema rejection` |
+| post-lock section count | `EP-A01: isolated missing lifecycle declaration rejection` |
+| unsectioned source | `EP-A01: isolated unsectioned source rejection` |
+| pre-lock guard | `EP-A05: consistent settled_catch sections are forbidden before lock`; `EP-A05: consistent section_reveal sections are forbidden before lock` |
+| manifest link sorting | `EP-A02: multiple declared links canonicalise in either order` |
+| export source link sorting | `EP-A02: multiple declared links canonicalise in either order` |
+| canonical bytes check | `EP-A03: duplicate content key before the genuine content refuses trusted verification`; `EP-A03: noncanonical whitespace refuses trusted verification` |
+
+### Checks actually run
+
+Existing installed dependencies only; no download/install or lockfile edit.
+Node `v24.17.0` (repository pin `24.15.0`), cached pnpm `10.28.1` via
+`PATH=/private/tmp/ch8-a-bin:$PATH`; this is not a clean pinned-install claim.
+Logs use `/private/tmp/ch8-a-r1-*.log`.
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @jobguard/core typecheck` | PASS exit 0; rerun after final restoration |
+| `pnpm --filter @jobguard/core lint` | PASS exit 0; rerun after final restoration |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/evidence-pack-v3.test.ts src/evidence-pack.test.ts` | PASS exit 0, 96 tests: 70 v3 and 26 unchanged v1 |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2` | FAIL exit 1, 5 failures / 5990 tests; 5985 passed. Vitest also discovered generated `dist/*.test.js`; five source-inspection assertions tried to open nonexistent `dist/*.ts` files (jobs-on-the-go, recovery-allocation, site-extra-pricing, subscription-architecture). No test/config/output was deleted or weakened to suppress this. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src` | PASS exit 0, all 3011 tests across 123 source files |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS exit 0; committed-range check against base dc572123 through afab2eb8 |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | PASS exit 0, all 7 workspace tasks; includes purity, lane, money and commercial checks |
+| `pnpm typecheck --concurrency=1` | PASS exit 0, all 7 workspace tasks |
+| `pnpm build --concurrency=1` | PASS exit 0, all 7 workspace tasks (2 cached); 1m50.551s |
+| `pnpm openapi:check` | FAIL exit 1: sandbox refuses tsx CLI IPC pipe listen (EPERM) before checker execution |
+| `node --import tsx src/generate-openapi.ts --check` in apps/api | PASS exit 0, same checker without CLI IPC |
+| `git diff --check` | PASS exit 0 |
+
+Build emitted existing Nest dynamic-dependency/Next lockfile/CSS warnings and
+nonfatal Turbo cache IO EPERM warnings; this is not a warning-free-build claim.
+
+Working-tree scope is separately checked against `config/lanes/ch8-a.json`;
+committed-range lane lint alone cannot certify these uncommitted edits.
+No DB/PostgreSQL, migrations, browser, service listener, live provider/eval or
+native suite was run, per dispatcher/environment constraints and unchanged
+subsystems. Dispatcher owns CI checks after committing. No commit, push or PR
+performed. Intended conventional commit subject/body saved to
+`/private/tmp/jg-msg-ch8-a.txt`.

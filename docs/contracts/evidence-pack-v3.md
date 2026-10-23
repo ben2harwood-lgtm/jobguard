@@ -58,8 +58,10 @@ absent; arrays that represent sets are sorted on copies. Input objects remain
 unchanged. Source text and IDs/times remain exact. Generation time, random pack
 ID and request ID have no envelope field. SHA-256 over UTF-8 canonical manifest
 is `manifestHash`; SHA-256 over the exact supplied export text is `artifactHash`.
-Renderer bytes are deterministic under input permutations. Reformatting exported
-JSON may preserve manifest integrity but changes the artifact hash.
+Renderer bytes are deterministic under input permutations. Verification requires
+the supplied text to equal the canonical renderer output byte for byte. Duplicate
+JSON keys, reformatting and other noncanonical artifacts raise
+`EvidencePackV3Error` before content or checkpoint trust can be reported.
 
 The text/plain JSON export retains the exact practice sandbox banner. It contains
 no self-declared trusted digest or trust flag. A caller may optionally supply

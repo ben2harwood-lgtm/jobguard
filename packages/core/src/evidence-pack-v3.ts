@@ -177,6 +177,8 @@ export function renderStandalonePackV3(manifest: EvidenceManifestV3, sources: Ev
 /** The optional digest must arrive through an independently trusted channel. No producer trust is inferred. */
 export function verifyStandalonePackV3(text: string, options: { trustedManifestDigest?: string } = {}) {
   const pack = checked(() => standaloneEvidencePackV3.parse(JSON.parse(text)));
+  // Exact rendering rejects duplicate JSON keys and alternate readings of the supplied bytes.
+  if (text !== renderStandalonePackV3(pack.manifest, pack.sources)) throw new EvidencePackV3Error();
   const findings: string[] = [];
   const supplied = new Map<string, EvidenceSpecimenSourceV3>();
   for (const source of pack.sources) {
