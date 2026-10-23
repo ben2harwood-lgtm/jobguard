@@ -29,12 +29,33 @@ function pool(result: unknown, fail?: Error) {
   return { value: { connect: async () => client } as unknown as Pool, calls, released: () => released };
 }
 describe("MON1-S normal-company lifecycle source adapter", () => {
+  it("discovers lifecycle migration after repaired MON1-T on fresh installs", async () => {
+    const { MIGRATION_URLS } = await import("./migrate.js");
+    const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1));
+    const index = names.indexOf("0209_meter_lifecycle_source.sql");
+    expect(index).toBeGreaterThan(0);
+    expect(names[index - 1]).toBe("0208_meter_small_trip.sql");
+    expect(names).not.toContain("0207_meter_lifecycle_source.sql");
+  });
+  it("replays canonical event identities through the stored-source adapter", () => {
+    const raw = stored(), job = raw.source.jobs[0]!;
+    const first = { version: "job-work-state-event.v1", id: "abcdefab-0000-4000-8000-000000000010",
+      jobId: job.jobId, sequence: 1, kind: "first_site_evidence", factAt: "2026-10-05T12:00:00.000001Z",
+      recordedAt: "2026-10-05T12:00:00.000002Z", sourceReceiptId: randomUUID(), commandId: null,
+      predecessorId: null, closeReason: null, closeNote: null };
+    const envelope = (events: unknown[]) => ({ ...raw, source: { ...raw.source, jobs: [{ ...job, events }] } });
+    expect(projectStoredMeterLifecycle(tenant, envelope([first, { ...first, id: first.id.toUpperCase() }])))
+      .toEqual(projectStoredMeterLifecycle(tenant, envelope([first])));
+    expect(() => projectStoredMeterLifecycle(tenant, envelope([first, { ...first, id: first.id.toUpperCase(), sequence: 2 }])))
+      .toThrow("METER_PROJECTION_MISMATCH");
+  });
   it("projects immutable actual sources through MON1-L and keeps every count held", async () => {
     const raw = stored(), p = pool(raw);
     const read = await new MeterLifecycleRepository(p.value).read(context(), digest, { version: "meter-lifecycle-read.v1", computationId });
     expect(read.provenance).toBe("actual_normal_company.v1");
     expect(read.result.days).toHaveLength(31);
     expect(read.result.days.every(day => day.places === null && day.countedPlaces === null)).toBe(true);
+    expect(read.result.days.every(day => day.candidateAllowance.rawPlaces === null && day.candidateAllowance.freeSmallPlaces === null && day.candidateAllowance.countedPlaces === null)).toBe(true);
     expect(read.result.timelines[0]?.asOf).toBe("2026-10-15T12:00:00.123456Z");
     expect(read.resultHash).toBe(projectStoredMeterLifecycle(tenant, raw).resultHash);
     expect(read.corrections).toEqual([]);

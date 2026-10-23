@@ -14,9 +14,9 @@ Read repository AGENTS.md, BUILD_PLAN.md §§10.1.4–10.1.6 and MON-1/SB-17–1
 
 ## Changes and exact limits
 
-Adds only the issued source/repository/unit file, four PostgreSQL files, contract, 0207 SQL/note, own lane and this receipt. Existing supplied-input classes, 0184 history, grants on existing tables, catalogue tests, source consumers, subscription integration and shared exports remain untouched.
+Adds only the issued source/repository/unit file, four PostgreSQL files, contract, 0209 SQL/note, own lane and this receipt. Existing supplied-input classes, 0184 history, grants on existing tables, catalogue tests, source consumers, subscription integration and shared exports remain untouched.
 
-0207 adds normal-company scope, immutable source/source-reference/computation rows, held day cache, reserved place/correction storage, deduplicated alerts, isolated NOLOGIN/NOINHERIT/NOBYPASSRLS meter role, three checked entrypoints and private identity-only bridge. Every new business table is migration-owned, tenant-qualified and FORCE RLS. Runtime receives no table privileges. Authority runs before lock 184, after it, and before replay/lookup. Capture/rebuild require current owner; owner/admin can read. Shared practice is refused structurally. Caller provides no counts, sources, price, policy, actor, tenant or trial selector.
+0209 adds normal-company scope, immutable source/source-reference/computation rows, held day cache, reserved place/correction storage, deduplicated alerts, isolated NOLOGIN/NOINHERIT/NOBYPASSRLS meter role, three checked entrypoints and private identity-only bridge. Every new business table is migration-owned, tenant-qualified and FORCE RLS. Runtime receives no table privileges. Authority runs before lock 184, after it, and before replay/lookup. Capture/rebuild require current owner; owner/admin can read. Shared practice is refused structurally. Caller provides no counts, sources, price, policy, actor, tenant or trial selector.
 
 Source SQL snapshots accepted monthly agreement, activation/terms, activation-frozen CH-3a binding, work events and lock, links between included jobs, and latest MON1-T trip observation including source/observation identity, hashes and six-digit times. Source provenance is `actual_normal_company.v1`, never the 0184 supplied fixture envelope. Missing source/terms and mid-period plan changes return typed unavailability/hold. Computation binds the immutable source and recipe; TypeScript invokes both actual MON1-L functions on every read. Cached held-day mismatch cannot change output and records one alert.
 
@@ -54,7 +54,7 @@ The pinned pnpm launcher could not run the requested script entrypoints reliably
 - `meter-lifecycle-source.integration.test.ts`: default capture fails closed/zero partial rows; test-only coordinator prerequisites; labelled activation storage fixture plus real CH-4 finish; fresh-connection replay, revision conflict, unique computation, cache tamper with one alert. It does **not** claim a real switch-live journey.
 - `meter-lifecycle-isolation.integration.test.ts`: shared-practice/malformed/revoked authority, admin mutation denial, role memberships, local table/function grants, owner/FORCE RLS and shadow access checks. Full transitive shared catalogue proof remains coordinator-owned.
 - `meter-lifecycle-corrections.integration.test.ts`: correction hold and append-only reservations. Does **not** prove priced late corrections, negative handling or closed receiving-period arithmetic.
-- `meter-lifecycle-upgrade.integration.test.ts`: populated predecessor bytes/types/ACL/policies, own 0207 after 0206, successors twice and comparator control. Fresh migration is exercised by the other suites' fixture setup.
+- `meter-lifecycle-upgrade.integration.test.ts`: populated predecessor bytes/types/ACL/policies, own 0209 after 0208, successors twice and comparator control. Fresh migration is exercised by the other suites' fixture setup.
 
 CI must run these four files, existing meter persistence/rebuild/upgrade tests and subscription persistence/statements/replay regressions with the packet's single-worker PostgreSQL commands. Actual migration execution is unverified here.
 
@@ -66,12 +66,12 @@ No shared catalogue file was edited. Add exact real PostgreSQL records for:
 2. Role `jobguard_meter`: NOLOGIN, NOINHERIT, NOSUPERUSER, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOBYPASSRLS; no memberships in either direction; app USAGE only; no role assumption; SELECT/INSERT on scope/source/ref/computation/day/alert and SELECT-only reserved place/correction tables; no UPDATE/DELETE/TRUNCATE.
 3. `app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)`, `app.mon1_lifecycle_rebuild(uuid,text,uuid)`, `app.mon1_lifecycle_read(uuid,text,uuid)`: meter ownership, SECURITY DEFINER, fixed `pg_catalog` search path, runtime EXECUTE only, PUBLIC denied.
 4. `app.mon1_lifecycle_actor(uuid,text,boolean)`: migration ownership, fixed search path, SECURITY DEFINER, meter EXECUTE only; runtime/PUBLIC denied. Traverse existing `mon1_company_actor` → session/SSO identity authority as an explicit reviewed identity exception. It returns only current actor; no source/calculator bridge runs as migration owner.
-5. Future narrow SELECT grants/policies on `subscription_agreement_revision`, `job`, `job_activation`, `job_activation_terms`, `job_party_binding`, `job_work_state_event`, `final_account_lock`, `job_small_trip_event`, `job_small_trip_observation`, `job_link`. They are **not installed by 0207**. Install only after effective/transitive privilege review and source-writer lock reconciliation. No UPDATE, shadow, fee, finding, infrastructure or provider grant is required. Test-only grants in the source suite are not product grants.
+5. Future narrow SELECT grants/policies on `subscription_agreement_revision`, `job`, `job_activation`, `job_activation_terms`, `job_party_binding`, `job_work_state_event`, `final_account_lock`, `job_small_trip_event`, `job_small_trip_observation`, `job_link`. They are **not installed by 0209**. Install only after effective/transitive privilege review and source-writer lock reconciliation. No UPDATE, shadow, fee, finding, infrastructure or provider grant is required. Test-only grants in the source suite are not product grants.
 6. Verify the complete actual privilege/call graph, hidden/no-hidden output/hash/query equivalence, malformed context and pooled reuse, current-session/membership races after waits/on replay, own N/fresh/successor proofs, and unchanged 0184/subscription catalogues. Do not invent fingerprints in advance.
 
 ## STOPs / holds / acceptance mapping
 
-- **STOP source-grants:** capture is intentionally unavailable with 0207 alone because shared source grants are outside this issue. Coordinator integration is required. No fixture fallback exists. M1S-01 positive source-kernel evidence is written with test-only prerequisites; execution and full actual-command journey held.
+- **STOP source-grants:** capture is intentionally unavailable with 0209 alone because shared source grants are outside this issue. Coordinator integration is required. No fixture fallback exists. M1S-01 positive source-kernel evidence is written with test-only prerequisites; execution and full actual-command journey held.
 - **STOP public-export:** required L symbols exist but shared public exports do not; compiled monorepo seam works after core build. Public export integration held.
 - **STOP check environment:** pnpm pinned launcher blocked; root lane check against main fails on the issued inherited stack. No scanner/lane weakening or allowance expansion to inherited paths.
 - **H-PRACTICE:** not cleared; zero session-scoped schema/authority. Normal rejection tests written; A/B practice/adoption/session expiry claims held (M1S-07).
@@ -81,4 +81,120 @@ No shared catalogue file was edited. Add exact real PostgreSQL records for:
 - **H-CI:** M1S-01/03/04/08/10 PostgreSQL, race and migration claims are source-inspected/typechecked, not test-executed. Local unit tests cover strict inputs, held projections, source bindings, typed refusals/rollback, microseconds, trip seam and preserved fixture model; they are not isolation proof.
 - **H-REVIEW:** no exact-commit Claude A/B verdict, separate acceptance, required CI or merge exists. Builder does not accept this work. Dependencies remain unreviewed/unmerged as issued.
 
-No new provider route, prompt/model, external action, secret or production operational alert path. The durable internal `METER_CACHE_MISMATCH` alert needs coordinator monitoring wiring. No data rewrite/backfill; rollback/forward-fix guidance is in the 0207 note. Adjacent work is recorded here because BUILD_PLAN/shared files are outside the private allowlist.
+No new provider route, prompt/model, external action, secret or production operational alert path. The durable internal `METER_CACHE_MISMATCH` alert needs coordinator monitoring wiring. No data rewrite/backfill; rollback/forward-fix guidance is in the 0209 note. Adjacent work is recorded here because BUILD_PLAN/shared files are outside the private allowlist.
+
+
+## r1 (catch-up)
+
+23 October 2026. Issued RED money/meter catch-up on side branch
+`codex/sandbox/mon1-s`, starting HEAD `3d515205`. No PR, staging, commit,
+push or merge performed. Dispatcher owns committing and pushing. Intended
+commit subject/body: `/private/tmp/jg-msg-mon1-s.txt`.
+
+Read AGENTS.md, BUILD_PLAN.md §§10.1.4–6 and MON-1, both lifecycle contracts,
+MON1-L's r1 receipt and the separate acceptance record
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-l-acceptance-70e1778a-20261023.md`.
+That record accepts only the partial foundation at `70e1778a`; it is not an
+acceptance of this new working tree. MON1-L r1 and repaired MON1-T `6e5d5093`
+are merged dependencies per this order, superseding the original receipt's
+unmerged-dependency statement. No builder self-acceptance or new model verdict.
+
+Changes and evidence:
+
+- Renamed migration/note to `0209_meter_lifecycle_source`; SQL bytes are
+  unchanged. Updated lane, upgrade assertions, contract and earlier receipt
+  references. Fresh-discovery unit assertion requires 0208 immediately before
+  0209 and refuses the old lifecycle filename. The PostgreSQL upgrade test
+  now seeds through 0208 and applies 0209; execution remains CI-only.
+- Adapted stored-source consumer coverage to null held counts and canonical
+  event identity replay/conflict. Job sorting uses the same explicit lexical
+  comparator as MON1-L. No mutable source refresh or new billing path.
+- All three candidate allowance numbers (`rawPlaces`, `freeSmallPlaces`,
+  `countedPlaces`) are typed/runtime null for every date, including before
+  activation and after lock. The allowance version remains unchanged;
+  candidate grouping/classification remains explicitly diagnostic. Numeric
+  allowance assertions were replaced by stronger held-count assertions as
+  expressly ordered; no unrelated test was weakened.
+- Contract explicitly records H-METER-CLOCK: evidence/day31 exactly at the
+  earliest stop yields no start; the rule does not approve complete intervals
+  or stop-day inclusion. Existing exact-tie tests remain in force.
+- Added jobId and predecessorId case-normalization assertions for replay and
+  predecessor validation. The architecture traversal resolves ../src from
+  either source or compiled tests, independent of a dist source copy. Inspected
+  merged `job-work-timing.ts` (only zod and job-work-state imports), added it
+  to the explicit traversal allowlist, and kept every purity assertion.
+- Fixture audit: MON1-S's four PostgreSQL suites and their reused
+  `meter-persistence-fixtures.ts` contain no `final_review`/`extra_origin`
+  insertion. The copied activation uses `job_commercial_track` provenance
+  `backfilled_synthetic_fixture`, allowed by 0053's track CHECK. MON1-T's
+  repaired `final_review` fixture uses `command` plus receipt/member identity;
+  no invalid final-review fixture was copied here and no fixture fix is needed.
+
+Mutation evidence: restoring numeric raw allowance or numeric free-small
+allowance caused three assertion failures each; removing jobId lowercase
+caused one test failure, and removing predecessorId lowercase caused one.
+Original source restored in finally blocks. The ad hoc mutation driver's
+extra diagnostic assertion itself rejected the typed-error output in the UUID
+runs; Vitest independently exited 1 with one failed test in each, with no
+compile/import failure. Logs: `/private/tmp/jg-mon1-s-mutation-*.log`.
+These are deterministic tests, not independent model review.
+
+Node v24.17.0; pinned cached pnpm 10.28.1 through
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`; existing dependencies only, no install.
+Final check results follow below. Earlier failed intermediate runs are not
+passes: architecture initially rejected the merged timing dependency; restoring
+allowance version required a literal type annotation; a pre-rebuild compiled
+architecture copy failed until rebuilt. No assertion was removed to resolve them.
+
+
+| r1 command actually run (pinned pnpm PATH above) | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | PASS |
+| `pnpm --filter @jobguard/db typecheck` | PASS |
+| `pnpm --filter @jobguard/core lint` | PASS |
+| `pnpm --filter @jobguard/db lint` | PASS |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-lifecycle-repository.test.ts` | PASS, 1 file / 9 tests |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts dist/meter-lifecycle-architecture.test.js` | PASS, 4 files / 42 tests |
+| Same three core source files plus `src/job-work-state.test.ts src/job-work-timing.test.ts src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts src/subscription-allocation.test.ts src/subscription-period.test.ts src/subscription-architecture.test.ts` (`--maxWorkers=2`) | Initial run: 140 pass / 1 timeout in existing generated subscription-period test while compilation competed. Unchanged retry: PASS, 10 files / 141 tests, 4.04s. Default timeout retained. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL: purity check passes; lane stage rejects inherited CH-4-C/MON1-L/MON1-T paths and old-name working-tree deletions outside current lane. Turbo package lint stage not reached; core/db package lint run separately above. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same inherited-range/deletion boundary; no simulated range or policy-tool weakening |
+| `pnpm openapi:check` | FAIL before generator: tsx CLI IPC listen EPERM |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | PASS, exit 0; same source generator, no IPC server; no artifact changed |
+| `git diff --check` | PASS |
+| Compare renamed SQL bytes against `git show HEAD:packages/db/migrations/0207_meter_lifecycle_source.sql` | PASS; byte-preserving rename |
+
+The unchanged former architecture path was also tested against the compiled
+architecture test: failed with ENOENT seeking dist/meter-lifecycle.ts as expected.
+Compiled test artifact restored; source/dist architecture rerun recorded below.
+No source copy was placed in dist. No independent model review is claimed.
+
+PostgreSQL tests, `pnpm test:db`, `pnpm test:migrations` and browser suites:
+**NOT RUN locally**, per order/sandbox constraints. Dispatcher must run real
+PostgreSQL migration/upgrade/privilege/RLS/race suites and browser checks in
+GitHub CI after push. Fresh-discovery unit evidence is not proof that SQL
+applied. Root full test/typecheck, native and model evaluations: NOT RUN;
+no native/provider/prompt change. No new migration logic, data backfill,
+external action, operational alert, fee or production enablement.
+
+All source-grant/integration, H-METER-CLOCK, H-CH4, H-PRACTICE, H-TRIAL,
+H-CORRECTIONS, H-CI and new exact-candidate review/acceptance holds remain.
+The raw/free-small null type change is intentional and requires consumers to
+preserve held semantics. MON1-S remains a partial source foundation awaiting
+independent verdicts, separate acceptance and dispatcher CI; not task closure.
+Logs for this round are `/private/tmp/jg-mon1-s-*.log`.
+
+
+Final results:
+
+| Command | Result |
+| --- | --- |
+| `pnpm build --concurrency=2` | PASS, 7/7 tasks, 2 cached; 3m51.942s |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-lifecycle-architecture.test.ts dist/meter-lifecycle-architecture.test.js` after reverting path mutation | PASS, 2 files / 2 tests |
+
+Build warnings retained: Turbo cache IO permission warnings, existing pnpm
+configuration warning in replayed cache output, Next workspace-root warning,
+CSS autoprefixer warning and Nest/file-type/computed dependency warnings.
+No warning was suppressed. All writes are limited to issued lane paths,
+renaming its migration/note, the explicitly authorized MON1-L paths, and the
+requested temporary commit message/logs. HEAD remains `3d515205` on
+`codex/sandbox/mon1-s`; no git write command was run.

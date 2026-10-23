@@ -5,11 +5,11 @@ import { MIGRATION_URLS,migrate } from '../src/migrate.js';
 import { createWorkFixture,closeWorkFixture,seedWorkJob,type WorkFixture } from './job-work-state-fixtures.js';
 import { installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { proofBefore,proofDifferences,rolledBack } from './upgrade-proof-utils.js';
-describe('MON1-S own-0207 predecessor upgrade, CI PostgreSQL only',()=>{
+describe('MON1-S own-0209 predecessor upgrade, CI PostgreSQL only',()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false)},60000);afterAll(async()=>closeWorkFixture(f));
- it('M1S-10 installs after 0206, preserves populated old rows/ACL/policies and runs successors twice',async()=>{
-  const own='0207_meter_lifecycle_source.sql',n=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(own));
-  expect(n).toBeGreaterThan(0);expect(MIGRATION_URLS[n-1]?.pathname).toMatch(/0206_meter_small_trip.sql$/u);
+ it('M1S-10 installs after 0208, preserves populated old rows/ACL/policies and runs successors twice',async()=>{
+  const own='0209_meter_lifecycle_source.sql',n=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(own));
+  expect(n).toBeGreaterThan(0);expect(MIGRATION_URLS[n-1]?.pathname).toMatch(/0208_meter_small_trip.sql$/u);
   await f.admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
   for(const url of MIGRATION_URLS.slice(0,n)){
    await f.admin.query(await readFile(url,'utf8'));

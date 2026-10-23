@@ -37,9 +37,9 @@ describe("MON1-L calendar and candidate classification (not counted days)", () =
     expect(result.days[0]?.candidatePlaces.find(place => place.jobIds.includes(a.jobId))).toMatchObject({ jobIds: [a.jobId, b.jobId], small: false });
     expect(result).toEqual(projectMeterDays({ version: "meter-lifecycle-days-input.v1", plan: "Solo", jobs: [a, b, c] }));
   });
-  it.each([["Solo", 4], ["Builder", 7]])("M1L-05 candidate allowance %s %s", (plan, free) => {
+  it.each(["Solo", "Builder"])("M1L-05 holds every allowance field for %s", plan => {
     const result = projectMeterDays({ version: "meter-lifecycle-days-input.v1", plan, jobs: Array.from({ length: 8 }, (_, i) => job(i + 1)) });
-    expect(result.days[0]?.candidateAllowance).toMatchObject({ rawPlaces: 8, freeSmallPlaces: free, countedPlaces: null });
+    expect(result.days[0]?.candidateAllowance).toMatchObject({ rawPlaces: null, freeSmallPlaces: null, countedPlaces: null });
     expect(result.days[0]?.countedPlaces).toBeNull();
   });
   it("M1L-05 never supplies an allowance count before activation or after lock", () => {
@@ -49,7 +49,9 @@ describe("MON1-L calendar and candidate classification (not counted days)", () =
     expect(days).toHaveLength(31);
     for (const day of days) {
       const count: null = day.candidateAllowance.countedPlaces;
-      expect(count).toBeNull();
+      const rawCount: null = day.candidateAllowance.rawPlaces;
+      const freeCount: null = day.candidateAllowance.freeSmallPlaces;
+      expect([rawCount, freeCount, count]).toEqual([null, null, null]);
     }
   });
   it("M1L-05 immutable activation smallness must originate from the strict threshold helper", () => {

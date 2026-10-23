@@ -60,7 +60,7 @@ export function projectStoredMeterLifecycle(tenantId: string, raw: unknown) {
     if (stored.source.tenantId !== tenantId || stored.source.jobs.some(job => job.sourceRevision !== stored.sourceRevision)) {
       throw new MeterLifecyclePersistenceError("METER_PROJECTION_MISMATCH");
     }
-    const jobs = [...stored.source.jobs].sort((a, b) => a.jobId.localeCompare(b.jobId));
+    const jobs = [...stored.source.jobs].sort((a, b) => a.jobId < b.jobId ? -1 : a.jobId > b.jobId ? 1 : 0);
     // Consume both accepted MON1-L APIs and retain their held/null semantics.
     const timelines = jobs.map(job => projectMeterJobTimeline(job));
     const result = projectMeterDays({ version: "meter-lifecycle-days-input.v1", plan: stored.source.plan, jobs });

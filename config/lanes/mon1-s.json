@@ -13,10 +13,15 @@
         "packages/db/test/meter-lifecycle-isolation.integration.test.ts",
         "packages/db/test/meter-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/meter-lifecycle-corrections.integration.test.ts",
-        "packages/db/migrations/0207_meter_lifecycle_source.sql",
-        "packages/db/migration-notes/0207_meter_lifecycle_source.md",
+        "packages/db/migrations/0209_meter_lifecycle_source.sql",
+        "packages/db/migration-notes/0209_meter_lifecycle_source.md",
         "docs/contracts/meter-lifecycle-persistence-v1.md",
-        "docs/verdicts/MON1-S/BUILDER_RECEIPT.md"
+        "docs/verdicts/MON1-S/BUILDER_RECEIPT.md",
+        "packages/core/src/meter-lifecycle.ts",
+        "packages/core/src/meter-lifecycle.test.ts",
+        "packages/core/src/meter-lifecycle-calendar.test.ts",
+        "packages/core/src/meter-lifecycle-architecture.test.ts",
+        "docs/contracts/meter-lifecycle-v1.md"
       ]
     }
   }
