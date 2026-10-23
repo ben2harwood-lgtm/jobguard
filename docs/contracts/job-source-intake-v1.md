@@ -4,7 +4,7 @@ SV7A-INT-C, issued 23 October 2026 under decision 74. This additive contract sup
 
 ## Existing request bodies
 
-`classifyJobSourceIntake(kind, input)` takes `diary` with the unchanged strict `diaryInputV1` (`job-diary-input.v1`), or `customer_message` with unchanged strict `customerMessageInputV1` (`customer-message-input.v1`). Unknown kinds, mismatched versions, invalid inputs and extra keys throw `JobSourceIntakeError("INVALID_JOB_SOURCE_INPUT")`. No request schema or GET version is replaced.
+`classifyJobSourceIntake(kind, input)` takes `diary` with the unchanged strict `diaryInputV1` (`job-diary-input.v1`), or `customer_message` with unchanged strict `customerMessageInputV1` (`customer-message-input.v1`). Unknown kinds, mismatched versions, invalid inputs, extra keys and exceptions while inspecting non-JSON values (including getters and proxies) throw `JobSourceIntakeError("INVALID_JOB_SOURCE_INPUT")`. No request schema or GET version is replaced.
 
 Both bodies contain `commandId` and exact reviewed `text`. Diary also contains `entryMode: typed | dictated_text` and boolean `onSite`; dictated text is reviewed text only, never audio. Message also contains `fictionalCustomer: { kind: named_fictional_customer, name }`. Fictional names or roles confer no authenticated tester/customer identity. The existing fictional-name metadata validation is unchanged.
 
@@ -39,10 +39,14 @@ Unknown properties are rejected at every schema object boundary. There are no hi
 | Off-site diary | `job_diary_text` | `note_or_voice` | `false` |
 | Customer message | `customer_message_text` | `customer_request` | `false` |
 
-These are the only classification fields. On-site diary alone can request the later checked CH-4 source adapter. This boolean proves neither physical location nor current permission, work state, eligibility, activity interval, capacity admission or charge. Off-site diary and messages remain evidence without requesting site activity. No CH-4 algorithm or new source variant is installed here.
+These are the only classification fields. `observationKind` is constrained by `Observation["kind"]`, so removing either observation variant fails core typechecking. Evidence-kind literals match the installed database vocabulary; that database contract has no shared core type and remains an integration check. On-site diary alone can request the later checked CH-4 source adapter. This boolean proves neither physical location nor current permission, work state, eligibility, activity interval, capacity admission or charge. Off-site diary and messages remain evidence without requesting site activity. No CH-4 algorithm or new source variant is installed here.
 
 ## Failures and trust boundary
 
 `JobSourceIntakeError` has `name: JobSourceIntakeError`, a stable typed `code`, and `message` equal to that code. Supported codes are `INVALID_JOB_SOURCE_INPUT`, `JOB_SOURCE_FORBIDDEN`, `SYNTHETIC_MODE_REQUIRED`, `IDEMPOTENCY_CONFLICT`, `SOURCE_NOT_FINALIZED`, `JOB_SOURCE_UNAVAILABLE`. The pure classifier emits only the first; other codes are vocabulary for later checked integration. Errors contain no submitted text, raw SQL, provider exceptions or hidden state. Existing CH-4/MON-1 lifecycle/admission errors must propagate through their own checked contracts, including `linkedJobOfferV1` and its exact copy; this module neither wraps nor invents those errors.
+
+### Error handoff to held P/A layers
+
+The classifier throws `JobSourceIntakeError`; new intake orchestration in SV7A-INT-P uses that class for this contract's six codes. Existing v1 paths retain `JobSourceError` and their existing behaviour. These are distinct classes; matching code strings do not make an `instanceof JobSourceError` check recognize an intake error. SV7A-INT-A must explicitly recognize both classes at its transport boundary, preserve the existing v1 mapping for shared codes, and explicitly map `IDEMPOTENCY_CONFLICT`. A valid intake input failure must reach the existing 400 `INVALID_JOB_SOURCE_INPUT` response rather than fall through to 503 `JOB_SOURCE_UNAVAILABLE`. Only recognized typed errors may supply public codes; arbitrary thrown objects or messages are never forwarded. CH-4/MON-1 errors retain their separate checked path. The existing API mapper is unchanged here; this handoff is required before runtime integration.
 
 No database, network, platform/provider import, write, queue, permission check, payment or hidden-shadow access occurs here. Shape validity grants no authority. Server-selected mode, authenticated ownership, tenant/job binding, durable idempotency, finalized original bytes, server-derived actor/time/hash/version and atomic lifecycle admission remain responsibilities of held runtime leaves. The coordinator alone adds public barrel exports and later routing/worker composition. Acceptance of these pure tests cannot close SV-7A, Test O or DEMO-S.

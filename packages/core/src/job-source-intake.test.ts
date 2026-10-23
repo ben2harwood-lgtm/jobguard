@@ -4,8 +4,10 @@ import {
 } from "./job-source-intake.js";
 import {
   customerMessageInputV1, diaryInputV1, JOB_DIARY_NOTICE, JOB_DIARY_NOTICE_VERSION,
-  MAX_JOB_SOURCE_BYTES, MAX_JOB_SOURCE_TEXT,
+  MAX_JOB_SOURCE_BYTES, MAX_JOB_SOURCE_TEXT, JobSourceError,
 } from "./job-sources.js";
+
+import { observationKinds } from "./observation.js";
 
 const id = "a0000000-0000-4000-8000-000000000001";
 const diary = { version: "job-diary-input.v1", commandId: id, entryMode: "typed", onSite: true, text: "  Fictional café 🛠\r\n" };
@@ -79,6 +81,45 @@ describe("SV7A-INT-C pure contract", () => {
       for (const change of [{ environment: "production" }, { realExternalActions: 1 }, { jobId: "foreign" }, { version: "v2" }]) expect(jobSourceIntakeReceiptV1.safeParse({ ...receipt, ...change }).success).toBe(false);
       for (const change of [{ sha256: "bad" }, { objectVersionId: "" }, { serverReceivedAt: "yesterday" }, { processed: true }]) expect(jobSourceIntakeReceiptV1.safeParse({ ...receipt, record: { ...receipt.record, evidence: { ...evidence, ...change } } }).success).toBe(false);
     }
+  });
+
+  it("keeps the UTF-8 byte ceiling implied by the UTF-16 text cap", () => {
+    expect(MAX_JOB_SOURCE_TEXT * 3).toBeLessThanOrEqual(MAX_JOB_SOURCE_BYTES);
+  });
+
+  it("keeps classification vocabulary bound to the observation contract", () => {
+    for (const [kind, input] of [["diary", diary], ["customer_message", message]] as const) {
+      expect(observationKinds).toContain(classifyJobSourceIntake(kind, input).observationKind);
+    }
+  });
+
+  it("maps throwing getters and proxies to a typed input error without leaking their message", () => {
+    const secret = "untrusted getter payload";
+    const inputs = [
+      Object.defineProperty({}, "version", { get() { throw new TypeError(secret); } }),
+      new Proxy({}, { get() { throw new RangeError(secret); } }),
+    ];
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    inputs.push(revoked.proxy);
+    for (const kind of ["diary", "customer_message"]) {
+      for (const input of inputs) {
+        let caught: unknown;
+        try { classifyJobSourceIntake(kind, input); } catch (error) { caught = error; }
+        expect(caught).toBeInstanceOf(JobSourceIntakeError);
+        expect(caught).toMatchObject({ code: "INVALID_JOB_SOURCE_INPUT", message: "INVALID_JOB_SOURCE_INPUT" });
+        expect(String(caught)).not.toContain(secret);
+        expect((caught as Error).cause).toBeUndefined();
+      }
+    }
+  });
+
+  it("keeps legacy and intake errors distinct for the documented transport handoff", () => {
+    const legacy = new JobSourceError("INVALID_JOB_SOURCE_INPUT");
+    const intake = new JobSourceIntakeError("INVALID_JOB_SOURCE_INPUT");
+    expect(intake.code).toBe(legacy.code);
+    expect(intake).not.toBeInstanceOf(JobSourceError);
+    expect(legacy).not.toBeInstanceOf(JobSourceIntakeError);
   });
 
   it("exposes only stable typed error codes without raw input", () => {

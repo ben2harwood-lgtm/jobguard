@@ -70,3 +70,89 @@ H-REVIEW: two actual independent Claude exact-head PASSes, required CI, and a se
 NOT RUN locally: PostgreSQL, migration/catalogue/upgrade/race/query-log tests and browser suites (sandbox/order CI-only; no DB/web changes); root `pnpm test` and root `pnpm typecheck` (dispatcher CI; only issued named units and touched-package typecheck locally); `pnpm eval` and live-model evaluation (no prompt/model/parser/matching change); dependency audit/secrets scan and independent reviews/acceptance (required CI/review actors). No fabricated CI URL, review verdict, trace or generated persisted fixture ID. Synthetic test UUIDs are in-memory fixtures only.
 
 Intended commit message is supplied separately at `/private/tmp/jg-msg-sv7a-int-c.txt`. Dispatcher commits after exit; Ben merges after predecessor/integration/review gates.
+
+## LATER items
+
+23 October 2026 follow-up, explicitly issued by the Track A+B dispatcher; no commit/push/PR. Preflight: clean working tree on `codex/sandbox/sv7a-int-c`, accepted starting HEAD `a6c00a3adf3ac1b30056cb020ad50c6e5b1e66ae`; origin/main remains `dc5721230fd8aedbf2d9d0457789074b66b48765`. Read both complete reviews at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv7a-int-c-claude-{A,B}-a6c00a3a-20261023.md`, the issued order/spec, current AGENTS/build-plan contracts, and `jg-orders/next-wave/BEN-ANSWERS-20261023.md` under that same full-steam directory. Also read the main checkout's AGENTS.override.md and `docs/workflow/CODEX_SESSION_POLICY.md`. Initial relative review paths were absent; their full-steam copies were found before edits. No policy decision required: the changes below harden validation or clarify existing technical responsibilities. Ben's safest-choice authority opens no release gates.
+
+One line per reviewer item (duplicates retained for traceability):
+
+- A1 — carried: `apps/api/src/job-source.errors.ts` is outside this lane; INT-A must map the new class explicitly. Contract handoff now documents the obligation; no API fix claimed.
+- A2 — fixed (`keeps classification vocabulary bound to the observation contract`): observation literals have a generic constraint against `Observation["kind"]`, preserving the exact output union. Evidence vocabulary exists in database SQL, with no shared core type; that part is carried to coordinator/runtime integration outside the lane, explicitly documented.
+- A3 — fixed (`maps throwing getters and proxies to a typed input error without leaking their message`): catch inspection exceptions and return only `INVALID_JOB_SOURCE_INPUT`, without cause/raw text.
+- A4 — fixed (`keeps the UTF-8 byte ceiling implied by the UTF-16 text cap`): explicit constant relationship assertion.
+- A5 — fixed (receipt evidence, no code test applicable): this appendix binds the original reviewer evidence to committed head `a6c00a3adf3ac1b30056cb020ad50c6e5b1e66ae`. Current working-tree changes need a new dispatcher commit and renewed review; eventual PR binding remains dispatcher-owned.
+- A6 — carried: invisible-only text and timestamp offset/precision validation are inherited from `job-sources.ts`/`receipt-allocation.ts`, outside this lane. INT-P must address server-side requirements; no accepted v1 behaviour changed here.
+- B1 — fixed (receipt evidence, no code test applicable): committed starting head named above; post-commit lane/root-lint results recorded below. These runs include the new uncommitted working tree and do not bind a future commit.
+- B2 — fixed (`keeps classification vocabulary bound to the observation contract`), same change as A2.
+- B3 — fixed (`keeps legacy and intake errors distinct for the documented transport handoff`): contract names new P orchestration's intake class, preserves legacy class behaviour, and requires A to recognize both trusted classes and explicitly map the new conflict code; runtime mapper work carried under A1.
+- B4 — fixed (`keeps the UTF-8 byte ceiling implied by the UTF-16 text cap`), same change as A4.
+- B5 — fixed (`maps throwing getters and proxies to a typed input error without leaking their message`), same change as A3.
+- B6 — carried: same inherited v1 validation concerns as A6; no out-of-lane changes.
+
+### Follow-up execution evidence
+
+Pinned cached pnpm 10.28.1, Node v24.17.0, installed Vitest 4.1.11; dependencies already installed, no install/download requested. Commands below use `PATH=/private/tmp/jg-sv7a-int-c-bin:$PATH` (existing cached-pnpm shim) unless noted. Only the four allowed leaf files changed. No migration, provider call, commercial action, route/barrel change or new operational alert.
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-source-intake.test.ts` before the implementation fix: exit 1, 1 failed/8 passed. The new getter/proxy test reproduced the raw TypeError leak.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-source-intake.test.ts src/job-sources.test.ts src/job-work-state.test.ts`: exit 0, 3 files/27 tests pass after all test additions (10 intake, 17 existing regression tests). Prior intermediate run: 26/26 pass.
+- `pnpm --filter @jobguard/core typecheck`: exit 0; `pnpm --filter @jobguard/core lint`: exit 0.
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=2`: exit 0, 7/7 package tasks successful (2 cached); core purity, lane, money and commercial boundaries pass. Existing computed-import reports and sandbox cache IO warnings remain. The initial direct cached-pnpm invocation of root lint/build was interrupted after subprocesses selected the host launcher; its graceful exit 0 is not counted as a full pass. Both commands rerun with the pinned shim in PATH.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 0, lane sv7a-int-c, committed comparison dc572123..a6c00a3a. Supplemental working-tree allowlist inspection is recorded below; this committed-range result alone does not prove the uncommitted delta.
+- `pnpm openapi:check`: exit 1, sandbox denies tsx's IPC pipe listen (EPERM). Equivalent `node --import tsx src/generate-openapi.ts --check` in apps/api: exit 0, same generator/check mode, no snapshot change.
+- `git diff --check`: exit 0.
+
+NOT RUN: PostgreSQL, migrations and browser suites (dispatcher CI; pure leaf changes no DB/web behaviour), root test/typecheck and eval (named core/regression checks used; no AI change). No new independent verdict or acceptance is claimed. The old two PASS verdicts cover a6c00a3a only. Runtime/API mapping, server evidence checks, coordinator exports and all previously documented production/integration holds remain; no new working-tree change is accepted by this builder.
+
+- `pnpm build --concurrency=2`: exit 0, 7/7 tasks successful (2 cached), production Next build complete. Existing workspace-root, CSS/dependency and sandbox cache IO warnings only. Full log: `/private/tmp/jg-sv7a-int-c-later-build.log`; root lint log: `/private/tmp/jg-sv7a-int-c-later-lint.log`.
+- Final supplemental working-tree check: Python compared `git diff --name-only` with `config/lanes/sv7a-int-c.json`'s exact allowlist: exit 0, exactly four permitted modified files. Final `git diff --check`: exit 0. No git-writing commands executed.
+- Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv7a-int-c.txt`; dispatcher owns committing, rebinding review and eventual PR evidence.
+
+Session continuity supplement (bounded follow-up issued in this conversation; original builder session identifier is not exposed in this tool context):
+
+```yaml
+session_record_version: 1
+task_id: SV7A-INT-C
+project: JobGuard
+role: builder
+thread_id: unknown
+surface: Codex app
+host: local macOS
+repository: /Users/benharwood/Claude/Projects/my-new-project
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv7a-int-c
+branch: codex/sandbox/sv7a-int-c
+integration_target: main
+integration_target_revision: dc5721230fd8aedbf2d9d0457789074b66b48765
+starting_base_revision: a6c00a3adf3ac1b30056cb020ad50c6e5b1e66ae
+source_pin: a6c00a3adf3ac1b30056cb020ad50c6e5b1e66ae
+candidate_revision: uncommitted working tree
+last_validated_revision: uncommitted working tree
+allowed_files_ref: config/lanes/sv7a-int-c.json
+governing_contract_ref: docs/contracts/job-source-intake-v1.md
+authorised_route_ref: dispatcher LATER-ITEMS order in current conversation
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: unknown
+effort_runtime_confirmed: unknown
+runtime_confirmation_ref: unknown
+resumed_from_thread_id: unknown
+successor_reason: unknown; dispatcher owns session mapping
+last_completed_turn: 23 October 2026 LATER-items follow-up
+last_receipt_ref: docs/verdicts/SV7A-INT-C/BUILDER_RECEIPT.md
+state: ready for dispatcher commit and fresh review
+preflight_ref: LATER items appendix above
+result_id: unknown
+acknowledgement_ref: unknown
+ci_evidence_ref: unknown
+reviewer: Claude A and B for starting head only
+review_evidence_ref: full-steam jg-runs paths above
+accepting_actor: dispatcher reports starting head ACCEPTED
+acceptance_evidence_ref: current issued order; no new acceptance claimed
+outstanding_holds: fresh exact-head review, CI, carried work and all retained integration/release gates
+builder_finished_at: 2026-10-23
+coordinator_acknowledged_at: unknown
+integrated_at: unknown
+merged_revision: unknown
+```
+
+Usage counters and turn identifiers are not exposed here; input/cached/cache-write/output/reasoning token counts are `unknown`, not zero. No cache benefit inferred.
