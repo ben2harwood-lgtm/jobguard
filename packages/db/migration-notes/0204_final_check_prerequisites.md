@@ -1,4 +1,4 @@
-# 0199 — SV5PRE final-check prerequisites (13 October 2026; renumbered from 0147 to 0196, then 0197, then 0198, then 0199, on 19 October 2026)
+# 0204 — SV5PRE final-check prerequisites (13 October 2026; renumbered from 0147 to 0196, then 0197, then 0198, then 0199, on 19 October 2026)
 
 Six tenant/job-qualified append-only FORCE RLS side tables persist server inventory, processing attempts, exact run binding, canonical available results and opaque completion certificates. Private checked triggers retain the existing shadow INSERT-only check boundary. Both invoice routines require authoritative completion for new final/supplementary effects; history remains unchanged. Runtime has no certificate SELECT or proof DML. Evidence upload/object registration serializes source receipt against manifest freezing; no fingerprinted columns are added. Forward-fix only, keeping issuance fail-closed. The actual worker registration is present but domain execution is explicitly uninstalled until SV-5. See `docs/contracts/sv5pre-completion-v1.md` and `docs/verdicts/SV5PRE/BUILDER_RECEIPT.md`; PostgreSQL upgrade/access proofs remain NOT RUN in the builder sandbox.
 

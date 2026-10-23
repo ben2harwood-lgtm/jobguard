@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5pre-0204-renumber": {
+      "branches": [
+        "codex/sandbox/sv5pre-0204-renumber"
+      ],
+      "receipt": "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md",
+      "note": "SV5PRE-0204-RESERVED-RENUMBER-20261022; source-only exact reserved 0199 to 0204 mapping under C216. No product repair or acceptance. Own lane file authorized implicitly by lanePathAllowed; evidence: /Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/output",
+      "allow": [
+        "packages/db/migrations/0199_final_check_prerequisites.sql",
+        "packages/db/migrations/0204_final_check_prerequisites.sql",
+        "packages/db/migration-notes/0199_final_check_prerequisites.md",
+        "packages/db/migration-notes/0204_final_check_prerequisites.md",
+        "docs/contracts/sv5pre-completion-v1.md",
+        "docs/contracts/final-account-lock-v1.md",
+        "packages/db/test/sv5pre-fixtures.ts",
+        "packages/db/test/sv5pre-upgrade.integration.test.ts",
+        "docs/ledger/SV5PRE-0204-RENUMBER.md",
+        "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

@@ -1352,3 +1352,115 @@ Changed implementation/test SHA-256 values:
 - `packages/db/migrations/0199_final_check_prerequisites.sql`: `6daafc2d278efe85c24f674be45639adb0a0fdbb7a596ae9e7d873ddb557edd9`
 - `packages/db/test/sv5pre-completion.integration.test.ts`: `10d9af575036a4a1bad3db7942f27d9c8ee81fd3a49a375628302c4734694e01`
 - `docs/contracts/sv5pre-completion-v1.md`: `2579580b5de8dfdfc8d257424c1c1d2dfe44b95557a39dc25d95f636a40607aa`
+
+
+## SV5PRE-0204-RESERVED-RENUMBER-20261022 — source-only mechanical successor receipt
+
+# SV5PRE reserved migration renumber — 22 October 2026
+
+Task: SV5PRE-0204-RESERVED-RENUMBER-20261022. SOURCE-ONLY uncommitted candidate for root inspection.
+
+Exact source HEAD: `b6b18e84dc7b2c9d00274ec59e75ea46647264a5`. Branch: `codex/sandbox/sv5pre-0204-renumber`. Target is remote `refs/heads/main` at `dc5721230fd8aedbf2d9d0457789074b66b48765`, freshly read with `git ls-remote --refs origin refs/heads/main`. Historical local main `694e9e1755f2a5680898eb0fa04af48afd66c86b` is preserved. Prior turn stopped before writes on the apparent target mismatch; root's target-context refresh clarified the remote target without changing source authority.
+
+C216 already reserved 0204 for #189 and 0205 for #181. This order only moves `0199_final_check_prerequisites.sql` to `0204_final_check_prerequisites.sql` and its note, changes only the note's leading heading number, and substitutes the exact stem in two contract references and two test filename constants. No number is allocated. SQL bytes are identical to the old committed blob: SHA-256 `625b9eed1216735762900c3ae2e6e654792c855834355f3ec472e7a36d6ae1f7`. Assertions, SQL statements, grants, policies, locks, functions and business meaning are unchanged by construction and byte comparison. Historical receipt bytes are retained as an unchanged prefix.
+
+Source-inspected `tools/migration-renumber.mjs`: only --base and --write are supported; planRenumber chooses highest base number + 1, with no exact reserved target. DC's highest migration is 0198, so its automatic target would be 0199, not reserved 0204. The exact-map order supersedes generic selection; the tool was neither run nor edited, and no artificial base was used.
+
+The new lane limits this branch to the supplied paths (old and new rename paths included). Its own lane file is implicitly permitted by lanePathAllowed and omitted from `allow` because mergeLanePolicy refuses grants to config/lanes. The legacy lane register is unchanged. Work on overlapping paths was serial; no other writer or subagent was launched. No #181 worktree, commit, push, PR/API mutation, merge, deployment, activation or fee-policy edit was performed.
+
+Deterministic source evidence only: `/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/output` contains the executable Python stdlib operation/regression script, full before/after SHA-256 maps, old/new source comparison, append-only receipt proof, tracked-file hashes, command/results and diff. This is neither runtime validation nor independent verification.
+
+Historical CI: handoff reports checks/secrets/dependency-review SUCCESS on pre-renumber b6b18e84 (run 39371899445); that is historical evidence only, not fresh CI for this candidate. Every runtime check is NOT RUN because the heavy Node gate is closed. Fresh complete A/B reviews, actual CI and separate acceptance remain HELD. Root re-inspects and may commit/push only under existing authority/checks. Ben merges.
+
+C135 guards and lock checks remain; C177 synthetic-only boundary and pilot_no_charge refusal remain; C204 exclusion-gaming, expiry-versus-lock race and database-wide upload-lock isolation concerns remain for review; test-only 0187 fixture containment remains for review. D12/D13, production/release and root-case policy clearance remain held.
+
+Stale C204 source wording (separate finding, unchanged): docs/contracts/sv5pre-completion-v1.md still says the manifest includes pending, quarantined and rejected uploads and unfinished uploads remain present. This predates C204 terminal exclusions. Normative C204 leads; stale prose is reported, not repaired by this mechanical order.
+
+Rollback of this uncommitted mechanical candidate is restoration of the named files from the pinned source after preserving evidence; no database operation was executed. Deployment/upgrade compatibility remains unvalidated.
+
+All runtime validation NOT RUN and held: install, pnpm typecheck, pnpm lint, pnpm test, pnpm build, pnpm test:db, pnpm test:migrations, pnpm eval, pnpm test:e2e, Node/Turbo/tsc/Vitest, database/browser/migration execution, lane checker runtime, fresh CI, fresh independent A/B review, acceptance.
+
+Session record (requested and runtime-confirmed fields kept separate):
+
+```json
+{
+  "surface": "codex-cli (issued mapping)",
+  "host": "Bens-MacBook-Pro-2.local",
+  "model_runtime_confirmed": "unknown",
+  "effort_runtime_confirmed": "unknown",
+  "last_completed_turn": "unknown",
+  "acknowledgement_ref": "unknown",
+  "reviewer": "unknown",
+  "review_evidence_ref": "unknown",
+  "accepting_actor": "unknown",
+  "acceptance_evidence_ref": "unknown",
+  "coordinator_acknowledged_at": "unknown",
+  "integrated_at": "unknown",
+  "merged_revision": "unknown",
+  "session_record_version": 1,
+  "task_id": "SV5PRE-0204-RESERVED-RENUMBER-20261022",
+  "project": "JobGuard",
+  "role": "bounded source-only mechanical builder",
+  "thread_id": "01a163d6-b7fb-7a11-b623-d48e91e08557",
+  "authorised_route_ref": "original Yahoo route per bounded order; credentials not inspected",
+  "repository": "/Users/benharwood/Claude/Projects/my-new-project",
+  "integration_target": "REMOTE refs/heads/main",
+  "integration_target_revision": "dc5721230fd8aedbf2d9d0457789074b66b48765",
+  "worktree": "/Users/benharwood/Claude/Projects/my-new-project/.worktrees/jg-sv5",
+  "branch": "codex/sandbox/sv5pre-0204-renumber",
+  "starting_base_revision": "b6b18e84dc7b2c9d00274ec59e75ea46647264a5",
+  "source_pin": "b6b18e84dc7b2c9d00274ec59e75ea46647264a5",
+  "candidate_revision": "uncommitted; see after.json and candidate.diff",
+  "last_validated_revision": "source-only uncommitted candidate; no runtime validation",
+  "allowed_files_ref": "/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/source-before.json",
+  "governing_contract_ref": "AGENTS.md; BUILD_PLAN.md SV-4/SV-5; sv5pre-completion-v1.md; final-account-lock-v1.md; normative C135/C177/C204/C216",
+  "model_requested": "gpt-6.1-sol",
+  "effort_requested": "medium",
+  "runtime_confirmation_ref": "/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/target-context-resume/SV5PRE-0204-RESERVED-RENUMBER-20261022-session-preflight.json (previous runtime gpt-6.1-sol/medium confirmed there; current-turn runtime fields unavailable to tools)",
+  "last_receipt_ref": "docs/verdicts/SV5PRE/BUILDER_RECEIPT.md",
+  "state": "source-only candidate; runtime/review/acceptance held",
+  "resumed_from_thread_id": "01a163d6-b7fb-7a11-b623-d48e91e08557",
+  "successor_reason": "Explicit mechanical successor to stopped Claude owner only; same saved Sol leaf resumed after no-write HOLD. No continuity/cache transfer claimed with Claude.",
+  "preflight_ref": "/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/output/before.json",
+  "result_id": "/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/output/after.json",
+  "ci_evidence_ref": "Historical run 39371899445 only; fresh CI HELD",
+  "outstanding_holds": "C135 guards and lock checks remain; C177 synthetic-only boundary and pilot_no_charge refusal remain; C204 exclusion-gaming, expiry-versus-lock race and database-wide upload-lock isolation concerns remain for review; test-only 0187 fixture containment remains for review. D12/D13, production/release and root-case policy clearance remain held.",
+  "builder_finished_at": "see after.json recorded_at_utc"
+}
+```
+
+Available raw usage provenance (baseline only, no cumulative counters added):
+
+```json
+{
+  "source_ref": "/Users/benharwood/Claude/Projects/Next Gen Learning Platform/.wpb-runs/ops/sv5pre-0204-renumber-20261022/target-context-resume/SV5PRE-0204-RESERVED-RENUMBER-20261022-session-preflight.json",
+  "raw_usage_baseline": {
+    "line": 38,
+    "timestamp": "2026-10-22T13:40:14.888Z",
+    "info": {
+      "total_token_usage": {
+        "input_tokens": 140902,
+        "cached_input_tokens": 108672,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 901,
+        "reasoning_output_tokens": 86,
+        "total_tokens": 141803
+      },
+      "last_token_usage": {
+        "input_tokens": 44715,
+        "cached_input_tokens": 43520,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 155,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 44870
+      },
+      "model_context_window": 475000
+    }
+  },
+  "current_turn_id": "unknown",
+  "current_turn_raw_usage": "unknown; not exposed by tools",
+  "allowance_change": "unknown",
+  "cache_impact": "unverified; no quota savings claimed",
+  "timing": "resume-to-first-useful-work and acknowledgement/integration durations unknown; no waiting/timers used"
+}
+```

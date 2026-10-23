@@ -9,7 +9,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
-const OWN = "0199_final_check_prerequisites.sql";
+const OWN = "0204_final_check_prerequisites.sql";
 // customer_invoice includes the original artifact bytes/hash; action_outbox includes its approved artifact.
 const TABLES = ["app.customer_invoice", "app.customer_payment", "app.command_receipt", "app.customer_invoice_sequence",
   "app.decision", "app.decision_resolution", "app.action_authorization", "app.action_outbox", "app.audit_event",
