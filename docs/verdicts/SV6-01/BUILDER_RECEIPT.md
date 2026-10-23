@@ -95,3 +95,51 @@ Local log files: `/private/tmp/jg-sv6-01-{red,compile-brand-mutation,final-typec
 - Dispatcher must commit, rerun root lint/lint:lanes and required CI, integrate any narrow shared export serially, and bind fresh evidence to that final commit. No shared export change is needed to build this standalone module; consumers require coordinator-owned registration.
 - Independent Claude A and B verdicts and separate fresh-context acceptance are absent and held. Builder does not accept its own work. No policy/release approval is inferred from tests. Parent SV-6 remains incomplete.
 - Intended conventional commit subject/body saved to `/private/tmp/jg-msg-sv6-01.txt`. No git write commands, commit, push, merge or PR creation performed.
+
+
+## r1
+
+23 October 2026. Repair order from the Track A+B dispatcher; builder Codex (issued gpt-6.1-sol, medium). Starting HEAD `106cd0a3fddb7222cb1c9fbac309f1b6c0f75abd`, branch `codex/sandbox/sv6-01`, initially clean working tree. This section supersedes earlier missing-review statements only to record receipt of Claude B's review of that starting commit; it does not claim independent review of this repair, technical acceptance or merge readiness.
+
+Read the named verdict in full before changing code: `/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv6-01-claude-B-106cd0a3-20261023.md` (REPAIR, two BLOCKING findings). The repository-relative path was absent; the full dispatcher file was located under full-steam. Re-read AGENTS.md, the lane allowlist, the leaf contract and BUILD_PLAN.md §10.2.8 and §10.3.1–3. Only the two issued blockers are addressed. Claude A and B's LATER findings are outside r1.
+
+Changes: derive a local lowercase-only UUID schema from the existing shared UUID validator and use it consistently for this module's identity fields. Refuse uppercase without silently normalising; existing equality and uniqueness guards then agree with PostgreSQL UUID identity. Shared shadow-domain schemas and all earlier tests are unchanged. Update the leaf contract to state this wire restriction. Add five case-variant regressions, ten false-fact cases with nonempty reasons, four permanent-exclusion cases with nonempty reasons, and the zero-principal case. Each case also has a valid lowercase or correctly excluded control. No database, provider, fee formula, approval or commercial policy changed. The compatibility change intentionally rejects previously accepted uppercase wire IDs.
+
+### Tests and actual guard removals
+
+Before the lowercase fix, the two leaf files executed with **5 failed / 21 passed**, exit 1: all five newly added case-variant regressions reproduced the blocker. With the fix, **26 passed**, exit 0. The compiler then caught an inferred `never[]` in the new inventory-test construction; the construction was corrected without changing assertions or existing fixtures. Initial compiler/lint/build failures are retained in `/private/tmp/jg-sv6-01-r1-initial-*.log`.
+
+For each mutation below, the actual production guard was removed locally, the named Vitest selection executed with `--maxWorkers=2`, failures were recorded, and the exact production source was restored in a `finally` block. No mutation remains. These are builder-executed mutation checks, not an independent model verdict.
+
+| Removed guard | Failing test names observed | Result |
+| --- | --- | --- |
+| Lowercase UUID refinement (replaced with the original UUID schema) | `S6-01-B r1 refuses case-variant source identities under different kinds`; `S6-01-B r1 refuses an allocation relisted as a case-variant invoice line`; `S6-01-B r1 refuses a case-variant self predecessor`; `S6-01-B r1 refuses case-variant duplicates in frozen inventories`; `S6-01-B r1 refuses case-variant duplicate qualifying allocations` | Exit 1, all 5 failed |
+| Entire outcome/ready agreement guard (original line 87) | `S6-01-A r1 refuses eligible outcome with reasons and false absent_from_builder_captures_at_lock`, plus all nine other `attributionPredicates` parameter cases; `S6-01-D r1 refuses eligible outcome with reasons and permanent disclosed_before_lock`, plus `surfaced_early`, `evidence_after_lock`, `pre_adoption_evidence` parameter cases | Exit 1, all 14 failed |
+| Positive principal conjunct `&& BigInt(v.remainingPrincipal.numerator) > 0n` (original line 86) | `S6-01-A r1 refuses eligible outcome with zero principal and all facts true` | Exit 1, 1 failed |
+
+Reproducer: `/private/tmp/jg-sv6-01-r1-mutations.py`. Mutation logs: `/private/tmp/jg-sv6-01-r1-mutation-{canonical-ids,outcome-guard,positive-principal}.log`. Focused mutation runs intentionally leave unrelated tests unselected; the final full leaf run selects both files without skips.
+
+### Verification and handoff
+
+Used the existing installed Node `v24.17.0`, cached pnpm `10.28.1` via `PATH=/private/tmp/jg-ch5-c-tools:$PATH`, TypeScript `5.8.3` and Vitest `4.1.11`. No dependency installation or download. Commands ran sequentially through `HEAVY_SLOTS=1 /Users/benharwood/.local/bin/heavy-slot`; repository checks set `LANE_BASE_REF=origin/main`. Free disk observed 202 GiB and free memory 72–73%. The wrapper's `sysctl`/`ps` probes were sandbox-denied; host process/load measurements are not claimed. Final command logs are `/private/tmp/jg-sv6-01-r1-<label>.log`; the sequential driver is `/private/tmp/jg-sv6-01-r1-checks.py`.
+
+| Actual final command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | Exit 0; includes negative compile tests |
+| `pnpm --filter @jobguard/core lint` | Exit 0 |
+| `pnpm --dir packages/core exec vitest run --maxWorkers=2 src/recovery-attribution-persistence.test.ts src/recovery-attribution-persistence.type.test.ts` | Exit 0; 2 files, 26 tests passed, no skips |
+| `pnpm --dir packages/core exec vitest run --maxWorkers=2 src/shadow-domain/attribution.test.ts src/shadow-domain/eligibility.test.ts src/shadow-domain/type-contracts.test.ts` | Exit 0; 3 files, 14 tests passed, no skips |
+| `pnpm typecheck --concurrency=1` | Exit 0; 7 tasks successful, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 0; 7 tasks successful, 2 cached; core purity, lane, money and commercial checks included |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; sv6-01 lane, base dc572123, head 106cd0a3 |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0 |
+| `pnpm build --concurrency=1` | Exit 0; 7 tasks successful, 2 cached; existing Next dependency-expression and sandbox IO warnings |
+| `pnpm openapi:check` | Exit 1; tsx CLI IPC pipe listen EPERM in sandbox |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator/check through the socket-free loader; generated file unchanged |
+| `git diff --check`; working-tree path comparison with the leaf allowlist | Exit 0; exactly 4 permitted modified files |
+
+No tests were deleted or weakened. Only the leaf implementation, its runtime test file, its contract and this receipt changed. Existing type tests, shared predicates and earlier regression suites are unchanged. No migration or data backfill; no new external action or operational alert. No AI prompt/model/parser/gateway change, so no model evaluation applies. No clean install, full-root test suite, PostgreSQL, browser, provider or live-model run is claimed. Database/browser suites remain for dispatcher CI under the issued sandbox restriction. The pure leaf supplies no runtime DB/browser integration.
+
+Independent re-review of the repair and separate acceptance remain held, along with the existing source-owner/dependency and production gates. Root lane checks passed on the current starting commit plus working tree; dispatcher must bind CI and fresh verdicts to the eventual commit. This r1 does not resolve later review rounds or grant production fee authority.
+
+Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv6-01.txt`. No git write commands, commit, push or PR creation. HEAD remains `106cd0a3fddb7222cb1c9fbac309f1b6c0f75abd`; dispatcher owns commit/push and CI.

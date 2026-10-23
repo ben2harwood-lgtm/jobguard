@@ -2,7 +2,7 @@
 
 Status: synthetic build-ahead contract; no persistence, authentication, review approval, fee permission or production activation. Source-owner acknowledgement and all parent merge dependencies remain held. The issued SV6-01 order of 23 October 2026 amends the draft's build hold only. Ben merges.
 
-The sole implementation is `packages/core/src/recovery-attribution-persistence.ts`. Shared barrel/export registration remains coordinator-owned. Existing `shadowAttributionV1`, `assertAttributionBinding` and `qualifiesAttribution` are reused without changes. Every versioned object rejects unknown keys, with no policy defaults added. UUIDs, lowercase SHA-256, bounded references, safe revision integers and existing `instantV1` timestamps are validated. Parsing grants no authority, even to schema-valid attacker JSON.
+The sole implementation is `packages/core/src/recovery-attribution-persistence.ts`. Shared barrel/export registration remains coordinator-owned. Existing `shadowAttributionV1`, `assertAttributionBinding` and `qualifiesAttribution` are reused without changes. Every versioned object rejects unknown keys, with no policy defaults added. Lowercase-only UUIDs (uppercase is refused, never silently normalised), lowercase SHA-256, bounded references, safe revision integers and existing `instantV1` timestamps are validated. Parsing grants no authority, even to schema-valid attacker JSON.
 
 ## Public command
 
