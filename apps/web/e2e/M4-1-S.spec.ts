@@ -9,6 +9,15 @@ const expectVisibleKeyboardFocus=async(page:Page,name:string)=>{const target=but
 // CH-2 (rebase onto main): the proof stage on the same page now announces its own role=alert ("This proof record could not load") while a job is not live,
 // so every workbench alert below is read inside the recovery workbench (#recovery-cases), where the text, focus and count assertions are unchanged.
 test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,browser},testInfo)=>{
+ // Hold real proof responses until focus is in the recovery panel. This makes
+ // the trace's late background error deterministic; no success API is fabricated.
+ let releaseProof!:()=>void;
+ const proofGate=new Promise<void>(resolve=>{releaseProof=resolve});
+ await page.route("**/api/jobs/*/proof",async route=>{
+  const response=await route.fetch();
+  await proofGate;
+  await route.fulfill({response});
+ });
  await openReview(page);
  for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
  await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
@@ -16,7 +25,11 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
  // C7 keyboard path: Tab/Shift+Tab between the first actions (keyboard modality, so :focus-visible applies) and require a visible focus ring on each.
  await expect(button(page,"Open materials-320 overcharge")).toBeEnabled();
+ await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
  await button(page,"Open materials-320 overcharge").focus();
+ releaseProof();
+ await expect(page.locator("#work-proof").getByRole("alert")).toHaveText("This proof record could not load. Try again.");
+ await expect(button(page,"Open materials-320 overcharge")).toBeFocused();
  await page.keyboard.press("Tab");await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
  await page.keyboard.press("Shift+Tab");await expectVisibleKeyboardFocus(page,"Open materials-320 overcharge");
  for(const name of["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"])await expectTouchTarget(button(page,name));
