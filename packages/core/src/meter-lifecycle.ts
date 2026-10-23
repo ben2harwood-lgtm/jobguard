@@ -2,7 +2,13 @@ import { z } from "zod";
 import { jobWorkStateEventV1, orderWorkFacts, projectWorkFacts, workFactTimeV1 } from "./job-work-state.js";
 import { computeSmallPlaceAllowance, groupSuppliedMeterPlaces, londonMeterDate, londonMeterDateV1, meterDay31Candidate } from "./jobs-on-the-go.js";
 
-const uuid = z.string().uuid();
+const uuid = z.string().uuid().transform(value => value.toLowerCase());
+// Normalize locally before CH-4 replay compares identities and canonical content.
+const eventV1 = jobWorkStateEventV1.transform(event => ({ ...event,
+  id: event.id.toLowerCase(), jobId: event.jobId.toLowerCase(),
+  sourceReceiptId: event.sourceReceiptId?.toLowerCase() ?? null,
+  commandId: event.commandId?.toLowerCase() ?? null, predecessorId: event.predecessorId?.toLowerCase() ?? null,
+}));
 const revision = z.number().int().positive().safe();
 const time = workFactTimeV1.refine(value => !value.startsWith("0000-"));
 const source = z.object({ id: uuid, at: time }).strict();
@@ -11,7 +17,7 @@ export const meterLifecycleInputV1 = z.object({
   version: z.literal("meter-lifecycle-input.v1"), tenantId: uuid, jobId: uuid, sourceRevision: revision,
   activation: z.object({ id: uuid, at: time, termsId: uuid, termsRevision: revision,
     track: z.literal("small_builder"), partyBindingId: uuid, customerId: uuid, siteId: uuid, small: z.boolean() }).strict(),
-  events: z.array(jobWorkStateEventV1), lock: source.nullable(), trip: source.nullable(),
+  events: z.array(eventV1), lock: source.nullable(), trip: source.nullable(),
   // Authoritative trial facts need the separately accepted lifecycle contract; no Boolean fallback.
   trial: z.object({ status: z.literal("unavailable") }).strict(),
   policy: z.object({ version: z.literal("meter-lifecycle-policy.v1"), revision: z.literal("specified-foundation.v1"), clockStatus: z.literal("held") }).strict(),
@@ -100,7 +106,7 @@ export function projectMeterDays(raw: unknown): MeterLifecycleDaysV1 {
     const candidateAllowance = computeSmallPlaceAllowance({ version: "meter-small-allowance.v1", plan: input.plan,
       rawPlaces: candidatePlaces.length, smallPlaces: candidatePlaces.filter(place => place.small).length });
     days.push({ date, status: "held" as const, holds: ["H-METER-CLOCK"], places: null, countedPlaces: null,
-      classifications, candidatePlaces, candidateAllowance });
+      classifications, candidatePlaces, candidateAllowance: { ...candidateAllowance, countedPlaces: null } });
     const calendar = new Date(`${date}T00:00:00.000Z`);
     calendar.setUTCDate(calendar.getUTCDate() + 1);
     date = calendar.toISOString().slice(0, 10);
@@ -114,5 +120,5 @@ export type MeterLifecycleDaysV1 = {
   days: { date: string; status: "held"; holds: string[]; places: null; countedPlaces: null;
     classifications: { tenantId: string; jobId: string; customerId: string; siteId: string; small: boolean }[];
     candidatePlaces: ReturnType<typeof groupSuppliedMeterPlaces>["places"];
-    candidateAllowance: ReturnType<typeof computeSmallPlaceAllowance> }[];
+    candidateAllowance: Omit<ReturnType<typeof computeSmallPlaceAllowance>, "countedPlaces"> & { countedPlaces: null } }[];
 };

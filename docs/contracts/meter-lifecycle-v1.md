@@ -19,7 +19,9 @@ events, optional lock/trip identities and times, supplied as-of cutoff and
 London date range `[startDate,endDateExclusive)`. Missing or unknown fields,
 versions, revisions, source kinds and caller count/time/policy overrides fail
 with `INVALID_METER_LIFECYCLE_INPUT`; duplicate event ID with different content
-retains CH-4's `WORK_FACT_IDENTITY_CONFLICT`. No input values appear in errors.
+retains CH-4's `WORK_FACT_IDENTITY_CONFLICT`. UUID fields are normalized to lowercase in this envelope before identity, alias
+and replay comparisons; case-only duplicates replay once and conflicting
+content is refused. Shared CH-4 helpers are unchanged. No input values appear in errors.
 
 The caller must supply **all known facts**, verified from immutable server
 sources. This pure module cannot authenticate the caller, verify tenant
@@ -67,7 +69,9 @@ returns every calendar label in the supplied range. `places` and
 `countedPlaces` are **null**, with held status, on every date. Separately named
 `classifications`, `candidatePlaces` and `candidateAllowance` are diagnostics
 over **all supplied jobs**, irrespective of interval membership, activation date
-or stop. They must never be billed or displayed as actual counting places.
+or stop. `candidateAllowance.countedPlaces` is typed **null** until real day
+membership exists; allowance fields describe supplied-job diagnostics only.
+They must never be billed or displayed as actual counting places.
 Grouping uses `groupSuppliedMeterPlaces`; allowance uses
 `computeSmallPlaceAllowance` without duplicating pricing arithmetic. Same
 customer/site forms one candidate place, mixed groups are non-small, and a
