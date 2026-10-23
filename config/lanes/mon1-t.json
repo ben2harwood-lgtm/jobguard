@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-t": {
+      "branches": ["codex/sandbox/mon1-t"],
+      "receipt": "docs/verdicts/MON1-T/BUILDER_RECEIPT.md",
+      "note": "RED. MON1-T private synthetic trip foundation only; build ahead on CH-4-C. C1: no HTTP/UI workflow changes; PostgreSQL proofs remain CI-only, source wiring held for MON1-I.",
+      "allow": [
+        "packages/db/src/meter-small-trip.ts",
+        "packages/db/migrations/0206_meter_small_trip.sql",
+        "packages/db/migration-notes/0206_meter_small_trip.md",
+        "packages/db/test/meter-trip.integration.test.ts",
+        "packages/db/test/meter-trip-races.integration.test.ts",
+        "packages/db/test/meter-trip-upgrade.integration.test.ts",
+        "docs/contracts/meter-small-trip-v1.md",
+        "docs/verdicts/MON1-T/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
