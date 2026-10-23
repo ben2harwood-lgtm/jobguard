@@ -254,3 +254,76 @@ Build concurrency was 2; no Vitest workers or PostgreSQL/browser processes launc
 
 ## Dispatcher renumber (23 Oct)
 Migration renumbered 0206 -> 0208: 0206 belongs to MON-3-P-B (Codex coordinator). Mechanical rename of the SQL file, its note and references only; SQL body unchanged.
+
+## catalogue rows (dispatcher-assigned)
+
+Integration round issued 23 October 2026 on `6e5d5093339db6a88be5fc7408bb9b8511fa425e`,
+base CH-4-C `14eca75074217fa82fb719c38cac8a997eec59ad`. The dispatcher owns the
+shared catalogues and expressly assigned these additive edits. Read reviewer B's
+full report at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-t-claude-B-4026c3b5-20261023.md`,
+including LATER 2's tenancy/LP-0 catalogue prediction. The relative `jg-runs/`
+path supplied in the order was absent; the shared report path was available.
+Inspected migration 0208, BUILD_PLAN §10.1.6/MON-1 and §11.8/LP-0, the trip
+contract, catalogue derivation code, earlier additive snapshot helpers and
+read-only catalogue history (including ruling 113 examples).
+
+Delivered only 0208's own catalogue additions:
+
+- `tenancy.integration.test.ts`: two FORCE-RLS/tenant-policy rows and two
+  migration-owner rows, each in the existing PostgreSQL table-name order.
+- `lp-0-effective-privileges-v1.json`: two existing runtime SELECT facts, two
+  table-owner facts, one private invoker routine protection record, and two rows
+  each for recorded RLS, policies and immutable triggers. Existing groups classify
+  the read-only access and migration ownership. No EXECUTE fact or reachable
+  authority path is added: the new routine is migration-owned, unreachable to
+  runtime/PUBLIC/other roles and has no non-owner ACL; `deriveFacts` does not emit
+  an owner fact for such a routine. The routine's null definition digest denotes
+  source inspection only, following earlier additive records; no PostgreSQL digest
+  capture is claimed. Existing inventory metadata, groups, paths and rows remain.
+- `serious-b5-upgrade.integration.test.ts`: additive successor layer restricted to
+  the two named tables, their seven constraint indexes, two policies and exact
+  new function signature. Expected new table contents remain empty. Every prior
+  snapshot value and comparison is retained, ordered by existing catalogue
+  positions, following the earlier ruling-113 helpers.
+- Registered exactly those three shared files in `config/lanes/mon1-t.json`.
+  No migration, grant, application source, existing row or assertion was changed
+  or removed. A read-only subsequence comparison against HEAD proved every prior
+  line in all three shared files remains in order. No item required a STOP for a
+  non-additive expectation change.
+
+Used the existing pinned pnpm wrapper and installed dependencies; no download or
+install. Local checks are deterministic builder evidence, not a model verdict.
+
+| Command | Catalogue-round result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/db lint` | PASS, exit 0 |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-catalogue-tsconfig.json` | PASS, exit 0; strict noEmit compilation of tenancy, SERIOUS-B5 upgrade and LP-0 catalogue tests and their imports |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS, 4 files / 42 tests |
+| Read-only `parseInventory` / `pathCompleteness` probe via `node --import tsx --input-type=module` from apps/api | PASS, exit 0; actual edited inventory parses and has no authority-path completeness gaps; initial root invocation failed because tsx is installed under apps/api |
+| Read-only predecessor-line preservation and inventory-delta probe | PASS; exact delta: four privilege/owner facts, one routine, two RLS/policy/trigger records each |
+| `LANE_BASE_REF=14eca750 pnpm lint:lanes` | PASS, exit 0; actual working-tree range including shared catalogue files |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1; inherited CH-4-C files outside this lane, core purity passed |
+| `pnpm openapi:check` | FAIL, exit 1; tsx IPC socket listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, exit 0; socket-free invocation of the same OpenAPI check |
+| `pnpm typecheck` | PASS, exit 0; 7 tasks, 2 cached |
+| `LANE_BASE_REF=14eca750 pnpm lint` | PASS, exit 0; root checks and 7 package tasks, 2 cached |
+| `pnpm build --concurrency=2` | PASS, exit 0; 7 tasks, 3 cached; nonfatal shared-cache EPERM and existing Next/CSS/Nest warnings |
+| `git diff --check` and final `LANE_BASE_REF=14eca750 pnpm lint:lanes` | PASS, exit 0; only the three assigned shared files, own lane file and appended receipt differ from HEAD |
+
+PostgreSQL, tenancy/LP-0 integration, SERIOUS-B5 upgrade, `test:db`,
+`test:migrations` and browser suites: **NOT RUN**, as the dispatcher instructed.
+The dispatcher's reported two reviewer PASS verdicts and reviewer A's 22/22
+trip tests are prior-head evidence, not verification of this catalogue delta.
+Required reviewer/CI re-run on the dispatcher-created integrated commit:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/tenancy.integration.test.ts test/lp-0-grant-freeze.integration.test.ts test/lp-0-authority-paths.integration.test.ts test/serious-b5-upgrade.integration.test.ts
+```
+
+No new migration, compatibility behavior, grant, alert or commercial policy is
+introduced by these catalogue rows. Existing integration, predecessor, policy,
+exact-commit independent-review and separate-acceptance holds remain. No commit,
+index write, checkout, push, PR, deployment, PostgreSQL or browser process was
+performed. Conventional commit subject/body is in `/private/tmp/jg-msg-mon1-t.txt`.
