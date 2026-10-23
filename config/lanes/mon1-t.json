@@ -7,8 +7,8 @@
       "note": "RED. MON1-T private synthetic trip foundation only; build ahead on CH-4-C. C1: no HTTP/UI workflow changes; PostgreSQL proofs remain CI-only, source wiring held for MON1-I.",
       "allow": [
         "packages/db/src/meter-small-trip.ts",
-        "packages/db/migrations/0206_meter_small_trip.sql",
-        "packages/db/migration-notes/0206_meter_small_trip.md",
+        "packages/db/migrations/0208_meter_small_trip.sql",
+        "packages/db/migration-notes/0208_meter_small_trip.md",
         "packages/db/test/meter-trip.integration.test.ts",
         "packages/db/test/meter-trip-races.integration.test.ts",
         "packages/db/test/meter-trip-upgrade.integration.test.ts",

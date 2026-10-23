@@ -51,7 +51,7 @@ async function observations(f: WorkFixture, a: WorkJob) {
   return (await f.admin.query(`SELECT id,trip_id,revision,previous_observation_id,net_pence::text,source_id,source_hash,to_char(effective_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') effective_at FROM app.job_small_trip_observation WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision`, [a.tenantId, a.jobId])).rows;
 }
 
-const own = "0206_meter_small_trip.sql";
+const own = "0208_meter_small_trip.sql";
 describe("MON1-T own-migration upgrade proof", () => {
   let f: WorkFixture;
   beforeAll(async () => { f = await createWorkFixture(false); }, 60000);

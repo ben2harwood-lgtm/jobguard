@@ -251,3 +251,6 @@ Final r1 verification: `git diff --check` PASS. A read-only check using the exis
 This scope check does not replace the failed origin/main lane gate.
 Intended conventional commit subject/body saved to `/private/tmp/jg-msg-mon1-t.txt`.
 Build concurrency was 2; no Vitest workers or PostgreSQL/browser processes launched.
+
+## Dispatcher renumber (23 Oct)
+Migration renumbered 0206 -> 0208: 0206 belongs to MON-3-P-B (Codex coordinator). Mechanical rename of the SQL file, its note and references only; SQL body unchanged.
