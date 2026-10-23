@@ -208,14 +208,7 @@ export class SiteVisitRepository {
  async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
    const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null }>(
-    `SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
-     FROM app.work_order w
-     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
-     JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
-     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id)
-     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
-     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`, [actor.tenantId, actor.membershipId])).rows;
+    assignedJobsQuery, [actor.tenantId, actor.membershipId])).rows;
    return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })), truncated: rows.length > 200 };
   });
  }
@@ -254,3 +247,22 @@ export class SiteVisitRepository {
   }
  }
 }
+
+// Materialize current assignments before invoking the unchanged, per-job authority rule.
+// Keep the 201-row limit AFTER authority and ordering (the public list returns 200).
+export const assignedJobsQuery = `WITH assigned_orders AS MATERIALIZED (
+      SELECT w.tenant_id,w.job_id,w.id,w.reference,c.revision_id
+      FROM app.work_order w
+      JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+      WHERE w.tenant_id=$1 AND EXISTS (
+       SELECT 1 FROM app.job_assignment a
+       WHERE (a.tenant_id,a.revision_id)=(c.tenant_id,c.revision_id) AND a.membership_id=$2
+      )
+     )
+     SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM assigned_orders w
+     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
+     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;

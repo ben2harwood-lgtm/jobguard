@@ -9,14 +9,14 @@ const expectVisibleKeyboardFocus=async(page:Page,name:string)=>{const target=but
 // CH-2 (rebase onto main): the proof stage on the same page now announces its own role=alert ("This proof record could not load") while a job is not live,
 // so every workbench alert below is read inside the recovery workbench (#recovery-cases), where the text, focus and count assertions are unchanged.
 test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,browser},testInfo)=>{
- // Hold real proof responses until focus is in the recovery panel. This makes
- // the trace's late background error deterministic; no success API is fabricated.
+ // Keep every proof GET failing, including retries after confirmation. Hold errors
+ // until keyboard focus has moved, so a late background failure is deterministic.
  let releaseProof!:()=>void;
  const proofGate=new Promise<void>(resolve=>{releaseProof=resolve});
  await page.route("**/api/jobs/*/proof",async route=>{
-  const response=await route.fetch();
+  if(route.request().method()!=="GET")return route.continue();
   await proofGate;
-  await route.fulfill({response});
+  await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({code:"PROOF_UNAVAILABLE"})});
  });
  await openReview(page);
  for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
@@ -27,10 +27,10 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await expect(button(page,"Open materials-320 overcharge")).toBeEnabled();
  await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
  await button(page,"Open materials-320 overcharge").focus();
+ await page.keyboard.press("Tab");await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
  releaseProof();
  await expect(page.locator("#work-proof").getByRole("alert")).toHaveText("This proof record could not load. Try again.");
- await expect(button(page,"Open materials-320 overcharge")).toBeFocused();
- await page.keyboard.press("Tab");await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
+ await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
  await page.keyboard.press("Shift+Tab");await expectVisibleKeyboardFocus(page,"Open materials-320 overcharge");
  for(const name of["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"])await expectTouchTarget(button(page,name));
  // Merchant overcharge: supplier documents only, never customer debt.

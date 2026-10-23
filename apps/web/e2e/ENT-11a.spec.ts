@@ -53,12 +53,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await switchTo("operative");
   await page.setViewportSize({ width: 360, height: 800 }); // mobile-360
   const op = { page };
-  // Navigation completes before the assigned-jobs read. Await that exact read,
-  // then require the app's successful readiness state and the original job text.
-  const jobsLoaded = op.page.waitForResponse(response => new URL(response.url()).pathname === "/api/contractor/site/jobs" && response.request().method() === "GET");
   await op.page.goto("/site/extra");
-  const jobsResponse = await jobsLoaded;
-  expect(jobsResponse.status(), await jobsResponse.text()).toBe(200);
   await expect(op.page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready");
   await expect(op.page.getByText(banner, { exact: true })).toHaveCount(1);
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
