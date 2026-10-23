@@ -62,6 +62,48 @@ describe("M48-C0 factual contracts", () => {
     for (const key of Object.keys(row())) { const input: Record<string, unknown> = row(); delete input[key]; expect(source.safeParse(input).success).toBe(false); }
     expect(source.safeParse({ ...row(), evidence: [{ ...row().evidence[0], objectVersionId: "" }] }).success).toBe(false);
   });
+  it.each(["receipt", "reversal"])("r1 rejects ratio-consistent over-allocation for %s", direction => {
+    const sign = direction === "reversal" ? "-" : "";
+    const input = { ...row(), direction, lineAllocationId: other,
+      reversesLineAllocationId: direction === "reversal" ? id : null };
+    expect(source.safeParse({ ...input, gross: fraction(`${sign}96000`), net: fraction(`${sign}80000`) }).success).toBe(true);
+    // Both allocations retain the original 5/6 net/gross ratio.
+    for (const [gross, net] of [[fraction(`${sign}96006`), fraction(`${sign}80005`)],
+      [fraction(`${sign}96001`), fraction(`${sign}480005`, "6")]]) {
+      expect(source.safeParse({ ...input, gross, net }).success).toBe(false);
+    }
+  });
+  it("r1 rejects original net above gross with a consistent allocation ratio", () => {
+    const input = { ...row(), gross: fraction("96000"), net: fraction("96000"), originalLineNetPence: 96000 };
+    expect(source.safeParse(input).success).toBe(true);
+    expect(source.safeParse({ ...input, net: fraction("96001"), originalLineNetPence: 96001 }).success).toBe(false);
+  });
+  it.each(["receipt", "reversal"])("r1 rejects zero-gross %s rows", direction => {
+    const input = { ...row(), direction, lineAllocationId: other,
+      reversesLineAllocationId: direction === "reversal" ? id : null };
+    expect(source.safeParse({ ...input, gross: fraction(direction === "reversal" ? "-48000" : "48000"),
+      net: fraction(direction === "reversal" ? "-40000" : "40000") }).success).toBe(true);
+    expect(source.safeParse({ ...input, gross: fraction("0"), net: fraction("0") }).success).toBe(false);
+  });
+  it.each([
+    { operation: "receipt", gross: "-48000", net: "-40000", link: null, reason: "negative receipt" },
+    { operation: "receipt", gross: "48000", net: "40000", link: id, reason: "linked receipt" },
+    { operation: "reversal", gross: "48000", net: "40000", link: id, reason: "positive reversal" },
+    { operation: "reversal", gross: "-48000", net: "-40000", link: null, reason: "unlinked reversal" },
+  ])("r1 rejects review proposal sign/link mismatch: $reason", ({ operation, gross, net, link }) => {
+    const proposal = review().proposedLines[0]!;
+    const input = { ...view(), status: "review_ready", review: { ...review(), operation,
+      proposedLines: [{ ...proposal, gross: fraction(operation === "reversal" ? "-48000" : "48000"),
+        net: fraction(operation === "reversal" ? "-40000" : "40000"), reversesLineAllocationId: operation === "reversal" ? id : null }] } };
+    expect(viewSchema.safeParse(input).success).toBe(true);
+    expect(viewSchema.safeParse({ ...input, review: { ...input.review,
+      proposedLines: [{ ...proposal, gross: fraction(gross), net: fraction(net), reversesLineAllocationId: link }] } }).success).toBe(false);
+  });
+  it("r1 rejects unknown review keys", () => {
+    const input = { ...view(), status: "review_ready", review: review() };
+    expect(viewSchema.safeParse(input).success).toBe(true);
+    expect(viewSchema.safeParse({ ...input, review: { ...input.review, qualified: true } }).success).toBe(false);
+  });
   it("M48-C0-A3 accepts only identity selections and rejects forged authority in every command variant", () => {
     for (const input of commands) {
       expect(command.parse(input)).toEqual(input);
