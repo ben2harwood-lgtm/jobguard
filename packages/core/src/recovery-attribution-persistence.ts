@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { attributionPredicates, assertAttributionBinding, qualifiesAttribution, shadowAttributionV1 } from "./shadow-domain/attribution.js";
-import { freezeShadow, shadowId, shadowRef } from "./shadow-domain/types.js";
+import { freezeShadow, shadowId as baseShadowId, shadowRef } from "./shadow-domain/types.js";
 import { exactPenceV1 } from "./cumulative-fee.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 import { instantV1 } from "./receipt-allocation.js";
+// Canonical wire identities must match PostgreSQL UUID equality without silent rewriting.
+const shadowId = baseShadowId.refine(v => v === v.toLowerCase(), "Lowercase UUID required");
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const revision = z.number().int().positive().safe();
 const selector = { jobId: shadowId, caseId: shadowId, workId: shadowId, lineId: shadowId, lockId: shadowId };
