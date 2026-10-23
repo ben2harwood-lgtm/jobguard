@@ -18,8 +18,13 @@ requires actual Builder approval before seventh. Builder admits seven included,
 five extras, thirteenth grace, and all further places with track review. Maximum
 principal stays 4,900p/16,900p. This function neither calculates a bill nor changes
 a plan. Zero-place additions create no new capacity consequence and confer no
-trial/card authority. `day31`/`small_trip` are synthetic automatic oracle cases;
-first-evidence/restart overlap throws a typed hold. Runtime callers receive no
+trial/card authority. `day31` requires an already committed job with unchanged
+customer, site and small classification: it continues with zero added capacity.
+A new job labelled `day31` is invalid, including beyond Solo's grace place.
+`small_trip` requires an existing small job and preserves its customer and site;
+automatic capacity treatment derives from that verified classification transition,
+never the source label alone. These remain supplied synthetic facts, not actual
+server authority. First-evidence/restart overlap throws a typed hold. Runtime callers receive no
 bypass flag. Source vocabulary is local to this oracle, not an accepted adapter.
 
 Hash recipe: SHA-256 of JSON with normalized schema field order, lowercase UUIDs,

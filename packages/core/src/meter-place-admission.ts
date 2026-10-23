@@ -16,9 +16,12 @@ export const meterPlaceAdditionV1 = z.object({
 }).strict().superRefine((value,context)=>{
  const existing=value.committedJobs.find(j=>j.jobId===value.prospective.jobId);
  const trip=value.source.kind==="small_trip";
+ const continuation=value.source.kind==="day31";
  if(new Set(value.committedJobs.map(j=>j.jobId)).size!==value.committedJobs.length ||
   value.committedJobs.some(j=>j.tenantId!==value.prospective.tenantId) ||
-  (existing!==undefined && !trip) ||
+  (existing!==undefined && !trip && !continuation) ||
+  (continuation && (!existing || existing.customerId!==value.prospective.customerId ||
+   existing.siteId!==value.prospective.siteId || existing.small!==value.prospective.small)) ||
   (trip && (!existing || !existing.small || value.prospective.small ||
    existing.customerId!==value.prospective.customerId || existing.siteId!==value.prospective.siteId)))
   context.addIssue({code:z.ZodIssueCode.custom,message:"One tenant and distinct committed/prospective jobs required"});
@@ -28,7 +31,8 @@ export class MeterPlaceAdmissionError extends Error {
 }
 /** Capacity oracle for independently supplied synthetic committed membership, including jobs
  * not yet counting today. No IO, Decision, permit, billing or runtime source reconstruction.
- * Automatic kinds are only test inputs; no runtime caller can select them as a bypass. */
+ * Membership/classification facts constrain automatic effects; labels grant no bypass.
+ * Actual source authority remains held at the runtime boundary. */
 export function evaluateMeterPlaceAddition(raw:unknown) {
  const parsed=meterPlaceAdditionV1.safeParse(raw);
  if(!parsed.success)throw new MeterPlaceAdmissionError("INVALID_METER_PLACE_ADMISSION");
@@ -43,7 +47,10 @@ export function evaluateMeterPlaceAddition(raw:unknown) {
  const beforeFacts=facts(input.committedJobs),afterFacts=facts([...input.committedJobs.filter(j=>j.jobId!==input.prospective.jobId),input.prospective]);
  const before=beforeFacts.chargeableCommittedPlaces,after=afterFacts.chargeableCommittedPlaces;
  const terms=syntheticMeterPolicyV1[input.plan],cap=terms.included+terms.extrasCap;
- const automatic=input.source.kind==="day31"||input.source.kind==="small_trip";
+ // A day-31 start is already committed and cannot change capacity. Only a
+ // validated existing small-to-non-small transition can add automatic capacity.
+ const existing=input.committedJobs.find(j=>j.jobId===input.prospective.jobId);
+ const automatic=existing?.small===true && !input.prospective.small;
  let decision:"admit"|"admit_upgrade_due"|"refuse_upgrade_required"|"admit_track_review_due"="admit";
  if(after>before && after>cap) {
   if(input.plan==="Builder" && after>cap+1)decision="admit_track_review_due";

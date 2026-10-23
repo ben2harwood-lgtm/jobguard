@@ -37,14 +37,43 @@ describe("MON1-A supplied synthetic capacity rules (never runtime authority)",()
  it.each(["resume","reopen","live_import"] as const)("M1A-05 %s uses the same Solo boundary",kind=>{
   const v=input(6);expect(evaluateMeterPlaceAddition({...v,source:{...v.source,kind}}).decision).toBe("refuse_upgrade_required");
  });
- it.each(["day31"] as const)("M1A-06 synthetic automatic %s never denies or raises maximum",kind=>{
-  const v=input(99);expect(evaluateMeterPlaceAddition({...v,source:{...v.source,kind}})).toMatchObject({decision:"admit_upgrade_due",maximumPence:4900});
+ it("M1A-06 day31 continues an unchanged committed job without adding capacity",()=>{
+  const v=input(99), prospective=v.committedJobs[0]!;
+  expect(evaluateMeterPlaceAddition({...v,source:{...v.source,kind:"day31"},prospective}))
+   .toMatchObject({decision:"admit",before:99,after:99,maximumPence:4900});
+ });
+ it("M1A-06 a new job labelled day31 cannot bypass Solo six",()=>{
+  const v=input(6);
+  expect(()=>evaluateMeterPlaceAddition({...v,source:{...v.source,kind:"day31"}})).toThrow("INVALID_METER_PLACE_ADMISSION");
+ });
+ it.each(["customerId","siteId","small"] as const)("M1A-06 day31 cannot change committed %s",field=>{
+  const v=input(6), original=v.committedJobs[0]!;
+  const prospective={...original,[field]:field==="small"?true:id(9000)};
+  expect(()=>evaluateMeterPlaceAddition({...v,source:{...v.source,kind:"day31"},prospective})).toThrow("INVALID_METER_PLACE_ADMISSION");
  });
  it("M1A-06 trip replaces the original small classification, never duplicates a job or denies",()=>{
   const v=input(99), original=job(99,true);
   const r=evaluateMeterPlaceAddition({...v,committedJobs:[...v.committedJobs,original],source:{...v.source,kind:"small_trip"},prospective:{...original,small:false}});
   expect(r).toMatchObject({before:99,after:100,decision:"admit_upgrade_due",maximumPence:4900});
   expect(r.afterFacts.rawJobs).toBe(100);
+ });
+ it.each(["customerId","siteId"] as const)("M1A-06 small trip cannot change committed %s",field=>{
+  const v=input(6), original=job(6,true);
+  expect(()=>evaluateMeterPlaceAddition({...v,committedJobs:[...v.committedJobs,original],
+   source:{...v.source,kind:"small_trip"},prospective:{...original,small:false,[field]:id(9000)}}))
+   .toThrow("INVALID_METER_PLACE_ADMISSION");
+ });
+ it("M1A-04 same customer and site counts once at Solo six",()=>{
+  const v=input(6), original=v.committedJobs[0]!;
+  const prospective={...v.prospective,customerId:original.customerId,siteId:original.siteId};
+  expect(evaluateMeterPlaceAddition({...v,prospective})).toMatchObject({decision:"admit",before:6,after:6,
+   afterFacts:{rawJobs:7,groupedPlaces:6}});
+ });
+ it("M1A-04 same customer at a different site adds a place and is refused at Solo six",()=>{
+  const v=input(6), original=v.committedJobs[0]!;
+  const prospective={...v.prospective,customerId:original.customerId};
+  expect(evaluateMeterPlaceAddition({...v,prospective})).toMatchObject({decision:"refuse_upgrade_required",before:6,after:7,
+   afterFacts:{rawJobs:7,groupedPlaces:7}});
  });
  it("M1A-06 first-evidence overlap remains held, no automatic bypass selector",()=>{
   const v=input(6);

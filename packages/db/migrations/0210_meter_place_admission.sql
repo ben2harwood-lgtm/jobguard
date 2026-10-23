@@ -1,4 +1,7 @@
 BEGIN;
+-- Role dependency follows repaired 0209: guarded creation/posture validation of
+-- jobguard_meter there, pre-created and posture-checked by demo-bootstrap before
+-- SET ROLE jobguard_migration. No new role or ownership transfer in this step.
 -- Private fail-closed boundary only. MON1-S deliberately exposes held candidate
 -- commitments. No source enum/resolver or authenticated pre-mutation handoff is
 -- accepted yet. Never turn supplied counts or an invented future row into authority.

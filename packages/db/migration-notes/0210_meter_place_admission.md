@@ -6,6 +6,13 @@ runtime, meter, infrastructure or shadow execution. No rows, tables, policies,
 grants on existing objects, backfill or business effects. Existing tenant tables
 retain RLS and FORCE RLS; runtime remains non-owner.
 
+Role provisioning is inherited from repaired 0209: guarded jobguard_meter creation
+and posture validation; demo-bootstrap pre-creates and checks that role before
+running migrations as jobguard_migration (which cannot create roles). 0210 only
+revokes meter execution; it creates no role and keeps migration ownership. The
+parent v_revision rename and held allowance fields require no admission consumer
+adaptation: this boundary consumes neither source computations nor allowances.
+
 Positive admission is STOP pending accepted committed-membership timing, checked
 pre-mutation source/authorization resolver and coordinator lock-order confirmation.
 The function checks an already-held tenant lock 184 and always refuses. A later

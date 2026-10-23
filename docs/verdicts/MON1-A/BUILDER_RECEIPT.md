@@ -228,3 +228,114 @@ not an independent verdict, professional approval, technical acceptance or relea
 Outstanding: positive atomic admission STOPs; required origin/main lane integration
 hold; unexecuted PostgreSQL proof; exact-head independent reviews, CI and separate
 acceptance. No assertion that MON1-A is complete or mergeable.
+
+## r1 (catch-up + review)
+
+23 October 2026; Codex builder, MON1-A RED money/meter lane. Issued worktree
+HEAD `cf3c670faaf74d4713a2d9dd2db064a20080e401`, branch
+`codex/sandbox/mon1-a`. This head includes repaired MON1-S `24aa4f91`.
+Read the full repository AGENTS.md, BUILD_PLAN §10.1.4 and MON-1 criteria,
+current admission contract, repaired 0209/bootstrap and both independent reviews
+from `~/.local/share/full-steam/jg-runs/`:
+`v5-mon1-a-claude-A-196a95e2-20261023.md` (bounded-foundation PASS) and
+`v5-mon1-a-claude-B-196a95e2-20261023.md` (REPAIR). Their verdicts bind
+`196a95e2`, not these uncommitted repairs. No new independent verdict or acceptance
+is claimed. No PR, commit, staging, checkout, push, install or download performed.
+
+### Repairs and parent compatibility
+
+- B BLOCKING 1 / A LATER 1: day 31 now requires existing committed membership
+  with unchanged customer, site and small classification. It returns `admit`
+  with before == after, including well beyond Solo grace. A new job labelled
+  `day31` fails with `INVALID_METER_PLACE_ADMISSION`; the label cannot bypass
+  Solo six. The only automatic capacity increase is derived from the validated
+  existing-small to non-small transition, rather than from a caller's kind label.
+  These are still supplied synthetic facts. Authoritative server reconstruction
+  and actual admission remain STOP; no result becomes a runtime permit.
+- Corrected the erroneous M1A-06 assertion, preserving its never-refused and
+  maximum-bound checks for the actual committed-job continuation. Added the old
+  bypass regression and day31 customer/site/classification tampering assertions.
+- A LATER 2: added independent trip customer and site mismatch rejections, plus
+  same customer/site counts once and same customer/different site adds a place
+  assertions at Solo six. Existing tests were retained except the explicitly
+  ordered correction of the wrong day31 expectation.
+- 0210 still owns its routine as `jobguard_migration`; no ownership handoff or
+  runtime execution grant. Its only meter-role use is REVOKE. Repaired 0209
+  provides guarded creation and posture validation; demo-bootstrap pre-creates
+  and checks that role before SET ROLE to the migration owner. No duplicate role
+  provisioner is necessary in 0210. Added dependency comments/notes. Parent
+  `v_revision` and held allowance changes need no consuming-code changes: this
+  leaf consumes neither source computation nor held allowance fields.
+- Migration executable SQL is unchanged (comments only); no new role, migration,
+  table, data backfill, permissions, alert, provider or external action. Forward-fix
+  strategy and compatibility notes remain in the 0210 migration note.
+- **STOP-LOCK-ORDER remains held**, together with source, clock/commitment,
+  Decision, positive race/replay/rollback, consumer, CI and release gates. The
+  routine still checks preheld 184 and unconditionally refuses. No automatic
+  event path has been wired to that refusal.
+
+### Regression evidence actually executed
+
+Using installed Node v24.17.0, cached pnpm 10.28.1, Vitest 4.1.11;
+`PATH=/private/tmp/jg-mon1-a-bin:$PATH` selects the pinned CLI for nested commands.
+All unit invocations used `--maxWorkers=2`.
+
+1. Added the regression assertions BEFORE fixing the kernel. Ran
+   `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-place-admission.test.ts`:
+   **exit 1, 2 failed / 29 passed**. The existing-job day31 continuation threw,
+   and the new-job bypass did not throw. Log: `/private/tmp/jg-mon1-a-r1-red.log`.
+2. Repaired kernel: targeted admission/grouping/allocation batch **76 passed**
+   across three files (31 admission assertions). Repeated after restoring mutations.
+3. Seven individual mutations each produced **exit 1 with assertion failure**:
+   remove trip customer guard; remove trip site guard (the surviving review
+   mutation); remove day31 customer/site/classification guards separately; split
+   identical customer/site by job ID; group different sites by customer alone.
+   The two grouping tests and both trip identity tests therefore fail without
+   their respective guards. Sources restored in `finally` after each probe;
+   production grouping source has no final diff. Script and per-mutation logs:
+   `/private/tmp/jg-mon1-a-r1-mutate.py`,
+   `/private/tmp/jg-mon1-a-r1-mutation-*.log`. These are deterministic test evidence,
+   not an independent model review or PostgreSQL verification.
+
+### r1 checks
+
+Executed check script: `/private/tmp/jg-mon1-a-r1-checks.sh`; logs at
+`/private/tmp/jg-mon1-a-r1-*.log`.
+
+- Core and DB `pnpm --filter @jobguard/{core,db} typecheck`: exit 0 each.
+- Core and DB `pnpm --filter @jobguard/{core,db} lint`: exit 0 each.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-place-admission.test.ts src/jobs-on-the-go.test.ts src/subscription-allocation.test.ts`:
+  exit 0, **76 passed / 3 files**.
+- `LANE_BASE_REF=cf3c670f pnpm lint:lanes`: exit 1, **self-comparison refused**:
+  issued base equals current HEAD because the dispatcher commits after exit.
+  This is an outstanding gate, not a pass.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 1, inherited parent changes
+  outside MON1-A. `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` also
+  exits 1 at this lane gate (core purity passed). No lane policy weakened.
+- Read-only working-tree allowlist diagnostic:
+  `node /private/tmp/jg-mon1-a-r1-scope.mjs`: exit 0. This verifies only repair
+  paths against the issued lane and does not replace either required lane check.
+- `pnpm typecheck --concurrency=2`: exit 0, 7 successful tasks (2 cached).
+- `pnpm build --concurrency=2`: exit 0, 7 successful tasks (2 cached), 1m2.292s.
+  Turbo reported a sandbox IO warning; the build itself succeeded.
+- `pnpm openapi:check`: exit 1 because the tsx CLI tried to listen on an IPC
+  socket and received EPERM. Safe launcher fallback:
+  `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`:
+  **exit 0**, same generator/check flag, no socket listener and no generated diff.
+- `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-mon1-a-db-tests-tsconfig.json`:
+  exit 0; compiles the three owned DB integration files only, does not execute them.
+- Final `git diff --check`: exit 0. Final working-tree scope diagnostic:
+  6 tracked edits, zero new files, all within MON1-A; no migration additions.
+
+**PostgreSQL NOT RUN here.** No database/server/browser suite attempted: dispatcher
+states this sandbox cannot start PostgreSQL or bind localhost. CI after dispatcher
+push must run required database/migration/security suites and final lane checks.
+No browser flow or AI prompt/model was changed; consumer journeys and live gates
+remain with their existing owners. Unit checks and static DB test compilation do
+not establish PostgreSQL privileges, upgrade safety, positive atomic admission
+or lock ordering. Independent exact-commit review and separate acceptance are
+still required after the dispatcher commits. Other review LATER items were not
+silently declared repaired by this scoped round.
+
+Intended conventional commit subject/body written to
+`/private/tmp/jg-msg-mon1-a.txt`. Working-tree handoff only; no commit or push.
