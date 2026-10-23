@@ -63,12 +63,12 @@ The final intended subject/body is written to `/private/tmp/jg-msg-ch9-s.txt`; n
 | CH9-S01 | Unit PASS: five strict groups; checked rejects money; job subscription rejected. Schema-only. |
 | CH9-S02 | **HELD**: runtime authoritative source reproduction/completeness and actual producer records/derivations require CH9-J04/09 and CH9-B02/06/07. DTO reference adversaries do not discharge it. |
 | CH9-S03 | Unit PASS: unavailable vs known-zero, six nonqualifying labels, preserved supplied payment, propagated unavailable dependent values. No real qualification/settlement proof. |
-| CH9-S04 | Unit PASS: supplied recovery and reversal figures/links; no v1 credit/cap/base. |
-| CH9-S05 | Unit PASS: tracked/found figures and separate supplier/withheld groups. |
-| CH9-S06 | Unit PASS: independent supplied £500/£50 and unpaid £0/£0. Zero example deliberately has unknown settlement. |
+| CH9-S04 | Initial 19-test run checked supplied recovery/reversal fixtures and links only; it did not test rejection of a wrong remainder. r1 below adds and mutation-checks that guard. No runtime derivation proof. |
+| CH9-S05 | Initial run asserted fixture figures/group order only; category separation and tracked fee-free rejection were untested. r1 below adds and mutation-checks both. |
+| CH9-S06 | Initial run asserted supplied £500/£50 and unpaid £0/£0 fixtures only; it did not establish zero-principal/positive-fee rejection. r1 below fixes and tests this. Settlement remains unknown in the zero example. |
 | CH9-S07 | **HELD**: actual event/window contract, exact boundaries, canonical duplication/join/pagination/out-of-order behavior and cross-period corrections require CH9-J04/09 and CH9-B02/03. Equal illustrative timestamps and reference checks do not discharge it. |
 | CH9-S08 | Unit PASS: distinct invoice net/gross, approved/unapproved deltas, recorded payments, linked reversal/correction. Existing v1 implementation untouched; full v1 runtime regressions NOT RUN. |
-| CH9-S09 | Unit PASS: no subscription offset fields, job allocation, prevention amount or hidden fields; prelock found IDs rejected. Actual hidden-state noninterference/authority remains runtime work. |
+| CH9-S09 | Initial run tested strict shape/offset/prelock rejection, but not period-reference separation or cost-reference guards. r1 below adds and mutation-checks these. Actual hidden-state noninterference/authority remains runtime work. |
 
 ## NOT RUN and holds that remain
 
@@ -77,4 +77,95 @@ The final intended subject/body is written to `/private/tmp/jg-msg-ch9-s.txt`; n
 - Full root tests, root typecheck, PostgreSQL/catalogue/RLS/migrations/concurrency/upgrade suites, lane regression Node suites, browser journeys in both `mobile-360` and `desktop`, restore and clean production web build: **NOT RUN locally / required CI as applicable**. No DB or web workflow was changed by this leaf. AI eval/live-model evaluation is inapplicable: no AI prompt/model/extraction/output schema or gateway change.
 - Root lint/lint:lanes need a real committed comparison range. Root OpenAPI wrapper remains sandbox-blocked; loader comparison passed. Required exact-head CI is still **NOT RUN**; no CI URL/artifact exists for this uncommitted build.
 - Missing commercial policy and clock decisions remain held. Production/pilot enablement, real processing/providers/funds, MON/SV/M4 runtime adapters and DEMO end-state/source acceptance remain outside this order.
-- Two actual independent exact-head Claude A/B verdicts and a distinct technical acceptance actor are **NOT RECORDED**. No self-acceptance, invented identity, human builder observation or professional approval. Dispatcher must bind the final committed diff to real review/acceptance evidence; Ben alone merges.
+- At the initial build, independent exact-head Claude A/B verdicts and a distinct technical acceptance actor were **NOT RECORDED**. The subsequent 253cfea5 A/B REPAIR verdicts are recorded externally and read in r1 below; they do not review this uncommitted repair. No self-acceptance, invented identity, human builder observation or professional approval. Dispatcher must bind the final committed diff to real review/acceptance evidence; Ben alone merges.
+
+
+## r1 (Claude A/B repair)
+
+23 October 2026; repair starts at `253cfea5084fea35b8a95ad9a688a3fec3ba87e5`
+on `codex/sandbox/ch9-s`. Working tree was clean. Read both complete independent
+verdicts before edits:
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch9-s-claude-A-253cfea5-20261023.md`
+and the corresponding `claude-B` file. Both are REPAIR for that prior head.
+This receipt is builder evidence, not independent review or technical acceptance.
+
+Changes are restricted to the existing lane's schema, test, contract and receipt.
+No fixtures, lane registration, shared exports, dependencies, runtime adapters,
+database or browser code changed. No Git write, commit, push or PR was performed.
+The scope is only the three issued blockers; LATER findings remain deferred.
+
+- Positive known fees now require known qualifying principal >= fee for both
+  measures and every remainder state. Three separate rejecting cases cover
+  £0/£5 with unknown remainder, £1/£50 with unknown remainder, and window
+  £0/£5/−£5, all with hypothetically qualifying sources.
+- Chosen fractional remedy is the reviewers' permitted incomplete fallback,
+  not rational transport. Known principal/remainder/movements must be exact
+  upstream integer pence; no rounding is performed here. The new incomplete
+  reason `fractional_pence_requires_upstream_policy` keeps F4's Q=2000000/43p
+  and Q=24691/2p unavailable, propagating to fee/remainder and formatting as
+  unavailable. Incoming 4651p/1235p fee values cannot turn these into complete
+  illustrations. Non-integral movements stay null and dependent amounts
+  incomplete. Rational preservation and upstream rounding-policy binding are
+  explicitly HELD under H-VALUE-SOURCES. No fee-rate or tax rule is invented.
+- One rejecting test per superRefine guard, with targeted issue-message
+  assertions, now covers all 21 guard statements (including the new positive
+  fee bound). Additional cases isolate duplicate event vs source IDs, each
+  scope field, correction-link faults, three principal-only fields and both
+  clauses of each subscription guard. S04–S06 original tests now also mutate
+  valid inputs and assert rejection; their existing assertions remain intact.
+
+Fail-before evidence (actually executed, not inferred):
+
+- Before either schema fix, the expanded leaf suite failed **5 tests** and
+  passed 52 (`/private/tmp/ch9-r1-before.log`): all three positive-fee cases and
+  both fractional cases failed. After fixes, all 57 pass.
+- `/private/tmp/ch9-r1-mutations.py` removed each guard statement individually,
+  ran only `src/value-v3.test.ts --maxWorkers=2`, then restored the source in
+  `finally`. All **21 guard removals** caused assertion failures. Removing the
+  dedicated fractional-incomplete reason also failed: **22/22 mutations
+  caught**, no survivors or infrastructure-only failures. Per-mutation logs
+  and summary are in `/private/tmp/ch9-r1-mutation-*.log` and
+  `/private/tmp/ch9-r1-mutations.log`. This checks the previously untested guards
+  fail without their protection; it is deterministic builder-side evidence.
+- Final original S04–S06 behavioural assertions were added after the mutation
+  run; they only add assertions. The final unmutated 57-test suite passed again.
+
+Preinstalled dependencies used throughout; no installation/download or clean
+install claim. Cached pinned pnpm 10.28.1 is selected via
+`PATH=/private/tmp/jg-ch9-s-bin:$PATH`. Vitest uses `--maxWorkers=2`;
+Turbo lint uses `--concurrency=2`, build uses `--concurrency=1` with
+`CIRCLE_NODE_TOTAL=2` (installed Next derives one static worker from that value).
+No test assertion was weakened or removed.
+
+r1 validation commands actually run (logs `/private/tmp/ch9-r1-*.log`):
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --concurrency=2` | PASS, exit 0; all 7 package checks, 2 cached. |
+| `pnpm --filter @jobguard/core typecheck` | PASS, exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run src/value-v3.test.ts --maxWorkers=2` | PASS, 57/57, exit 0 after all test/source edits. Only this leaf's Vitest file run. |
+| `pnpm --filter @jobguard/core lint` | PASS, exit 0. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | PASS, exit 0; boundary and money/purity/commercial checks plus 7 package lints (2 cached). Turbo sandbox cache IO warnings. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0; real local branch, base dc572123, head 253cfea5, all six original lane paths checked including dirty working-tree changes. |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | PASS, exit 0; all 7 packages, including complete Next production build (2 cached). Existing workspace-lockfile/CSS and sandbox cache warnings. This supersedes the initial build's incomplete web-build evidence only; it is not a browser journey. |
+| `pnpm openapi:check` | FAIL, exit 1, sandbox EPERM on tsx CLI IPC listen. |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | PASS, exit 0, same generator/comparison avoiding CLI IPC. |
+
+No migrations, operational alerts, external actions or provider/environment
+changes. Compatibility: candidate validation is stricter for unsupported positive
+fees, and the incomplete-reason enum is additive; there are no runtime consumers
+in this leaf. No fee eligibility, rate or posting calculation was introduced.
+
+Database, migrations, browser, restore, full root tests and clean pinned install
+were NOT RUN in r1. Database/browser execution belongs to GitHub CI after the
+dispatcher pushes, per the issued sandbox limitation. The leaf's package checks
+and bounded root checks do not establish those guarantees. AI evaluation is
+inapplicable (no AI gateway, prompt, model or extraction change).
+H-VALUE-SOURCES, S02/S07, rational transport/upstream display-policy binding,
+exact repaired-commit CI, fresh independent review and separate technical
+acceptance remain HELD. The prior A/B REPAIR responses are not a verdict on this
+uncommitted repair. No merge/release, production-fee or real-data authority.
+Intended conventional commit subject/body: `/private/tmp/jg-msg-ch9-s.txt`.
+
+Final `git diff --check`: PASS. Final local lane check: PASS. Only the four
+permitted files listed above are modified; HEAD remains 253cfea5.

@@ -2,12 +2,14 @@ import { z } from "zod";
 import { MAX_MONEY_PENCE } from "./money.js";
 
 // Candidate DTO contract only: no producer binding, eligibility or fee calculation.
+// Known pence must be exact upstream integers. Never round at this boundary;
+// non-integral upstream amounts are incomplete until a producer policy is bound.
 const ref = z.string().min(1).max(200);
 const moneySchema = z.object({ pence: z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE), currency: z.literal("GBP") }).strict();
 export const valueAmountV3 = z.discriminatedUnion("state", [
   z.object({ state: z.literal("known"), money: moneySchema, basis: z.enum(["net_principal", "gross"]), sourceRefs: z.array(ref).min(1) }).strict(),
   z.object({ state: z.literal("unknown"), reason: z.enum(["source_unavailable", "binding_held", "not_reported"]) }).strict(),
-  z.object({ state: z.literal("incomplete"), reason: z.enum(["source_unavailable", "binding_held", "not_reported"]) }).strict(),
+  z.object({ state: z.literal("incomplete"), reason: z.enum(["source_unavailable", "binding_held", "not_reported", "fractional_pence_requires_upstream_policy"]) }).strict(),
 ]);
 export type ValueAmountV3 = z.infer<typeof valueAmountV3>;
 const categoryName = z.enum(["tracked", "found", "supplier", "withheld"]);
@@ -69,6 +71,7 @@ export const valueReceiptV3 = candidate.superRefine((v, ctx) => {
       }
     }
     if (c.qualifying.state !== "known" && (c.fee.state === "known" || c.remainder.state === "known")) fail("Unavailable qualification requires unavailable dependent values");
+    if (c.fee.state === "known" && c.fee.money.pence > 0 && (c.qualifying.state !== "known" || c.qualifying.money.pence < c.fee.money.pence)) fail("Positive fee requires sufficient known qualifying principal");
     if (c.fee.state !== "known" && c.remainder.state === "known") fail("Unavailable fee requires unavailable remainder");
     if (c.category === "tracked" && c.fee.state === "known" && c.fee.money.pence !== 0) fail("Builder capture is fee free");
     if (c.qualifying.state === "known" && c.fee.state === "known" && c.remainder.state === "known" && [c.qualifying.money.pence, c.fee.money.pence, c.remainder.money.pence].every(Number.isSafeInteger) && BigInt(c.qualifying.money.pence) - BigInt(c.fee.money.pence) !== BigInt(c.remainder.money.pence)) fail("Supplied remainder mismatch");

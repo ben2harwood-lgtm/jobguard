@@ -50,13 +50,28 @@ any field named `settled` through this schema does not verify settlement.
 
 An amount is one of:
 
-- `known`: bounded safe-integer GBP pence, an explicit `net_principal` or `gross`
-  basis and at least one source reference. Known zero is explicit £0.00 under the
+- `known`: exact upstream bounded safe-integer GBP pence (never rounded here),
+  an explicit `net_principal` or `gross` basis and at least one source reference. Known zero is explicit £0.00 under the
   supplied assumptions; it is not a default for missing facts.
 - `unknown`: a reason (`source_unavailable`, `binding_held` or `not_reported`),
   without money, basis or source-reference fields.
-- `incomplete`: the same reason vocabulary and absent money fields, identifying
-  incomplete inputs separately from unknown inputs.
+- `incomplete`: the same reason vocabulary plus
+  `fractional_pence_requires_upstream_policy`, with absent money fields,
+  identifying incomplete inputs separately from unknown inputs.
+
+This boundary performs **no rounding**. A producer may supply `known` only when
+its amount is already an exact integer pence value. A supplied SV-6 fee is
+the upstream derivation output; this module neither rounds nor recomputes it.
+An exact rational qualifying amount, remainder or source movement must never be rounded to fit this DTO. Non-integral amounts use `incomplete` with
+`fractional_pence_requires_upstream_policy`; dependent fee/remainder amounts also
+remain unavailable under the rules below. Non-integral source movements cannot
+be supplied as known movements; omit those optional movements (`null`) and keep
+any dependent category amounts incomplete. Null does not establish a zero or a
+complete source claim. For F4, Q = 2000000/43p and remainder = 1800007/43p
+therefore remain incomplete here, even though the upstream fee is 4651p.
+The same applies to Q = 24691/2p and a supplied fee of 1235p. Rational
+preservation and the upstream display-policy/version binding remain explicitly
+**HELD** with H-VALUE-SOURCES; this leaf invents no rounding or tax policy.
 
 `formatValueMoney` formats integer pence exactly and returns `Unavailable` with
 the state for unknown/incomplete inputs. It neither supplies a missing amount nor
@@ -64,6 +79,9 @@ calculates VAT. Known qualifying, fee and remainder illustrations require
 `net_principal` basis, including zero amounts.
 The supplied remainder is checked against qualifying principal minus supplied
 fee using integer arithmetic; this checks composition, not fee entitlement.
+Any known positive fee requires known qualifying principal at least as large,
+regardless of measure or remainder availability. This is a consistency bound,
+not a fee-rate calculation.
 Unavailable qualification cannot have known dependent fee/remainder values; an unavailable fee also requires an unavailable remainder.
 
 ## Illustrative references and event rules
