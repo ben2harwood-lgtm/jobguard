@@ -24,7 +24,7 @@ CREATE TABLE app.final_check_processing_source (
  source_received_at timestamptz NOT NULL,adapter_version text NOT NULL CHECK(adapter_version='synthetic-observation.v1'),
  input_hash char(64) NOT NULL CHECK(input_hash ~ '^[a-f0-9]{64}$'),processable boolean NOT NULL, frozen_input jsonb NOT NULL,
  PRIMARY KEY(tenant_id,job_id,manifest_id,id),CONSTRAINT final_check_processing_source_identity UNIQUE(tenant_id,job_id,manifest_id,source_kind,source_ref),
- FOREIGN KEY(tenant_id,job_id,manifest_id) REFERENCES app.final_check_manifest(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,job_id,manifest_id) REFERENCES app.final_check_manifest(tenant_id,job_id,id) DEFERRABLE INITIALLY DEFERRED,
  FOREIGN KEY(tenant_id,job_id,evidence_id,object_version_id,sha256,source_received_at) REFERENCES app.evidence_object(tenant_id,job_id,id,object_version_id,sha256,server_received_at),
  CHECK((evidence_id IS NULL)=(object_version_id IS NULL)),CHECK((evidence_id IS NULL)=(sha256 IS NULL)),CHECK(NOT processable OR evidence_id IS NOT NULL)
 );
@@ -152,8 +152,44 @@ BEGIN
  RETURN jsonb_build_object('version','final-check.manifest.v1','id',manifest.id,'lockId',manifest.lock_id,'cutoff',to_char(manifest.evidence_cutoff_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'hash',manifest.manifest_hash,'detectorVersion',manifest.detector_version,'policyVersion',manifest.policy_version,'sources',inventory,'excludedUploads',(SELECT coalesce(jsonb_agg(jsonb_build_object('uploadId',ms.upload_id,'state',ms.excluded_state,'reason',ms.excluded_reason) ORDER BY ms.upload_id),'[]') FROM app.final_check_manifest_source ms WHERE ms.tenant_id=t AND ms.job_id=j AND ms.manifest_id=m AND ms.excluded_state IS NOT NULL),'comparisons',manifest.frozen_comparisons,'result',(SELECT jsonb_build_object('runId',b.run_id,'lockId',b.lock_id,'zeroResult',b.zero_result,'classifications',b.classifications) FROM app.final_check_run_binding b WHERE b.tenant_id=t AND b.job_id=j AND b.manifest_id=m),'signals',(SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',s.id,'revision',s.revision,'description',s.description,'scopeItemId',s.matched_scope_item_id,'coalescedIntoSignalId',s.coalesced_into_signal_id,'permanentExclusion',s.disclosed_before_lock OR s.state='surfaced_early' OR EXISTS(SELECT 1 FROM app.shadow_signal_ineligibility i WHERE i.tenant_id=t AND i.job_id=j AND i.signal_id=s.id AND i.reason IN('disclosed_before_lock','surfaced_early','pre_adoption_evidence','attribution_disputed')) OR EXISTS(SELECT 1 FROM app.shadow_signal_disposition prior WHERE prior.tenant_id=t AND prior.job_id=j AND prior.signal_id=s.id),'evidenceIds',(SELECT coalesce(jsonb_agg(e.evidence_id ORDER BY e.evidence_id),'[]') FROM app.shadow_signal_evidence e WHERE e.tenant_id=t AND e.job_id=j AND e.signal_id=s.id AND e.source_received_at<=manifest.evidence_cutoff_at)) ORDER BY s.id),'[]') FROM app.shadow_commercial_signal s WHERE s.tenant_id=t AND s.job_id=j));
 END $$;
+-- C241b: runs after 0204's final_check_manifest_insert, using its frozen exclusions.
+CREATE FUNCTION app.final_check_freeze_processing_inventory() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app SET timezone='UTC' AS $$
+DECLARE t uuid:=NEW.tenant_id;j uuid:=NEW.job_id;mid uuid:=NEW.id;l app.final_account_lock;inventory jsonb;entry jsonb;
+BEGIN
+ IF NEW.manifest_hash IS NULL THEN RETURN NEW; END IF;
+ PERFORM app.final_check_worker(t,j);
+ SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=t AND job_id=j AND id=NEW.lock_id;
+ SELECT coalesce(jsonb_agg(x ORDER BY x->>'source_ref',x->>'kind'),'[]') INTO inventory FROM (
+  SELECT jsonb_build_object('source_ref',e.id,'kind',e.evidence_type,'evidence_id',e.id,'object_version_id',e.object_version_id,'sha256',e.sha256,'received_at',e.server_received_at,
+   'processable',NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=e.id) AND NOT EXISTS(SELECT 1 FROM app.job imported WHERE imported.tenant_id=t AND imported.id=j AND imported.provenance='imported'),'input',to_jsonb(e)) x
+  FROM app.final_check_manifest_source ms JOIN app.evidence_object e ON (e.tenant_id,e.job_id,e.id)=(ms.tenant_id,ms.job_id,ms.evidence_id) WHERE ms.tenant_id=t AND ms.job_id=j AND ms.manifest_id=mid AND ms.excluded_state IS NULL AND e.tenant_id=t AND e.job_id=j AND e.kind='original' AND e.server_received_at<=l.locked_at AND EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=t AND u.job_id=j AND u.id=e.upload_id AND u.state='verified')
+  UNION ALL SELECT jsonb_build_object('source_ref',u.id,'kind','pending_upload','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',u.server_received_at,'processable',false,'input',to_jsonb(u))
+  FROM app.final_check_manifest_source ms JOIN app.evidence_upload u ON (u.tenant_id,u.job_id,u.id)=(ms.tenant_id,ms.job_id,ms.upload_id) WHERE ms.tenant_id=t AND ms.job_id=j AND ms.manifest_id=mid AND ms.excluded_state IS NULL AND (ms.evidence_id IS NULL OR ms.evidence_received_at>l.locked_at)
+
+
+  UNION ALL SELECT jsonb_build_object('source_ref',v.id,'kind','unlinked_supplier_version','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',v.created_at,'processable',false,'input',to_jsonb(v))
+  FROM app.supplier_document_version v WHERE v.tenant_id=t AND v.job_id=j AND v.created_at<=l.locked_at
+  UNION ALL SELECT jsonb_build_object('source_ref',d.id,'kind','unlinked_supplier_document','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',d.created_at,'processable',false,'input',to_jsonb(d))
+  FROM app.supplier_document d WHERE d.tenant_id=t AND d.job_id=j AND d.created_at<=l.locked_at AND NOT EXISTS(SELECT 1 FROM app.supplier_document_version v WHERE v.tenant_id=t AND v.job_id=j AND v.document_id=d.id AND v.created_at<=l.locked_at)
+  UNION ALL SELECT jsonb_build_object('source_ref',v.id,'kind','unlinked_purchase_order','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',v.created_at,'processable',false,'input',to_jsonb(v))
+  FROM app.purchase_order_revision v WHERE v.tenant_id=t AND v.job_id=j AND v.created_at<=l.locked_at
+  UNION ALL SELECT DISTINCT jsonb_build_object('source_ref',c.id,'kind','unlinked_capture_source','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',c.created_at,'processable',false,'input',to_jsonb(c))
+  FROM app.capture_source c JOIN app.job_record_proposal p ON(p.tenant_id,p.source_id)=(c.tenant_id,c.id) WHERE p.tenant_id=t AND p.job_id=j AND c.created_at<=l.locked_at AND p.created_at<=l.locked_at
+ ) sources;
+ NEW.manifest_hash:=app.final_lock_hash(jsonb_build_object('lock',l.snapshot_digest,'cutoff',l.locked_at,'detector',NEW.detector_version,'policy',NEW.policy_version,'sources',inventory,'comparisons',NEW.frozen_comparisons));
+ NEW.processing_source_count:=jsonb_array_length(inventory);
+ FOR entry IN SELECT value FROM jsonb_array_elements(inventory) LOOP
+  INSERT INTO app.final_check_processing_source(tenant_id,job_id,manifest_id,id,source_kind,source_ref,evidence_id,object_version_id,sha256,source_received_at,adapter_version,input_hash,processable,frozen_input)
+  VALUES(t,j,mid,gen_random_uuid(),entry->>'kind',(entry->>'source_ref')::uuid,(entry->>'evidence_id')::uuid,entry->>'object_version_id',entry->>'sha256',(entry->>'received_at')::timestamptz,'synthetic-observation.v1',app.final_lock_hash(entry->'input'),(entry->>'processable')::boolean,entry->'input');
+ END LOOP;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.final_check_freeze_processing_inventory() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.final_check_freeze_processing_inventory() FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
+CREATE TRIGGER z_final_check_processing_inventory BEFORE INSERT ON app.final_check_manifest FOR EACH ROW EXECUTE FUNCTION app.final_check_freeze_processing_inventory();
+
 CREATE FUNCTION app.begin_final_check(t uuid,j uuid,detector text,policy text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app SET timezone='UTC' AS $$
-DECLARE l app.final_account_lock;m app.final_check_manifest;inventory jsonb;comparison jsonb;entry jsonb;result jsonb;mid uuid:=gen_random_uuid();event uuid:=gen_random_uuid();
+DECLARE l app.final_account_lock;m app.final_check_manifest;comparison jsonb;result jsonb;mid uuid:=gen_random_uuid();event uuid:=gen_random_uuid();
 BEGIN
  PERFORM app.final_check_worker(t,j);
  IF detector IS NULL OR length(detector) NOT BETWEEN 1 AND 80 OR policy IS DISTINCT FROM 'final-check.reconciliation.v1' THEN RAISE EXCEPTION 'INVALID_FINAL_CHECK_INPUT'; END IF;
@@ -167,30 +203,10 @@ BEGIN
   IF m.manifest_hash IS NULL THEN RAISE EXCEPTION 'FINAL_CHECK_PENDING'; END IF;
   RETURN app.read_final_check_manifest(t,j,m.id);
  END IF;
- SELECT coalesce(jsonb_agg(x ORDER BY x->>'source_ref',x->>'kind'),'[]') INTO inventory FROM (
-  SELECT jsonb_build_object('source_ref',e.id,'kind',e.evidence_type,'evidence_id',e.id,'object_version_id',e.object_version_id,'sha256',e.sha256,'received_at',e.server_received_at,
-   'processable',NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=e.id) AND NOT EXISTS(SELECT 1 FROM app.job imported WHERE imported.tenant_id=t AND imported.id=j AND imported.provenance='imported'),'input',to_jsonb(e)) x
-  FROM app.evidence_object e WHERE e.tenant_id=t AND e.job_id=j AND e.kind='original' AND e.server_received_at<=l.locked_at AND EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=t AND u.job_id=j AND u.id=e.upload_id AND u.state='verified')
-  UNION ALL SELECT jsonb_build_object('source_ref',u.id,'kind','pending_upload','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',u.server_received_at,'processable',false,'input',to_jsonb(u))
-  FROM app.evidence_upload u WHERE u.tenant_id=t AND u.job_id=j AND u.server_received_at<=l.locked_at AND u.state<>'rejected' AND NOT(u.state='pending' AND u.expires_at<=clock_timestamp()) AND NOT EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=t AND e.upload_id=u.id AND e.server_received_at<=l.locked_at)
-
-  UNION ALL SELECT jsonb_build_object('source_ref',v.id,'kind','unlinked_supplier_version','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',v.created_at,'processable',false,'input',to_jsonb(v))
-  FROM app.supplier_document_version v WHERE v.tenant_id=t AND v.job_id=j AND v.created_at<=l.locked_at
-  UNION ALL SELECT jsonb_build_object('source_ref',d.id,'kind','unlinked_supplier_document','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',d.created_at,'processable',false,'input',to_jsonb(d))
-  FROM app.supplier_document d WHERE d.tenant_id=t AND d.job_id=j AND d.created_at<=l.locked_at AND NOT EXISTS(SELECT 1 FROM app.supplier_document_version v WHERE v.tenant_id=t AND v.job_id=j AND v.document_id=d.id AND v.created_at<=l.locked_at)
-  UNION ALL SELECT jsonb_build_object('source_ref',v.id,'kind','unlinked_purchase_order','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',v.created_at,'processable',false,'input',to_jsonb(v))
-  FROM app.purchase_order_revision v WHERE v.tenant_id=t AND v.job_id=j AND v.created_at<=l.locked_at
-  UNION ALL SELECT DISTINCT jsonb_build_object('source_ref',c.id,'kind','unlinked_capture_source','evidence_id',NULL,'object_version_id',NULL,'sha256',NULL,'received_at',c.created_at,'processable',false,'input',to_jsonb(c))
-  FROM app.capture_source c JOIN app.job_record_proposal p ON(p.tenant_id,p.source_id)=(c.tenant_id,c.id) WHERE p.tenant_id=t AND p.job_id=j AND c.created_at<=l.locked_at AND p.created_at<=l.locked_at
- ) sources;
  comparison:=jsonb_build_object('tenantId',t,'jobId',j,'captures',l.snapshot->'captureRegister','baselineItemIds',l.snapshot->'baselineScopeItemIds','lines',l.snapshot->'lines',
   'baselineRecordedAt',to_char((SELECT created_at FROM app.quote_version WHERE tenant_id=t AND job_id=j AND id=l.baseline_quote_version_id) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'baseline',(SELECT coalesce(jsonb_agg(to_jsonb(line) ORDER BY line.id),'[]') FROM app.final_account_line line WHERE line.tenant_id=t AND line.job_id=j AND line.final_account_revision_id=l.final_account_revision_id AND line.line_kind='baseline'));
  INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,detector_version,reconciliation_version,policy_version,manifest_hash,processing_source_count,frozen_comparisons,audit_event_id)
- VALUES(t,j,mid,l.id,l.locked_at,detector,policy,policy,app.final_lock_hash(jsonb_build_object('lock',l.snapshot_digest,'cutoff',l.locked_at,'detector',detector,'policy',policy,'sources',inventory,'comparisons',comparison)),jsonb_array_length(inventory),comparison,event);
- FOR entry IN SELECT value FROM jsonb_array_elements(inventory) LOOP
-  INSERT INTO app.final_check_processing_source(tenant_id,job_id,manifest_id,id,source_kind,source_ref,evidence_id,object_version_id,sha256,source_received_at,adapter_version,input_hash,processable,frozen_input)
-  VALUES(t,j,mid,gen_random_uuid(),entry->>'kind',(entry->>'source_ref')::uuid,(entry->>'evidence_id')::uuid,entry->>'object_version_id',entry->>'sha256',(entry->>'received_at')::timestamptz,'synthetic-observation.v1',app.final_lock_hash(entry->'input'),(entry->>'processable')::boolean,entry->'input');
- END LOOP;
+ VALUES(t,j,mid,l.id,l.locked_at,detector,policy,policy,repeat('0',64),0,comparison,event);
  result:=app.read_final_check_manifest(t,j,mid);
  PERFORM app.append_final_check_audit(event,'system:final-check',j,'final_check.manifest_frozen',jsonb_build_object('manifestId',mid,'lockId',l.id));
  RETURN result;
@@ -444,7 +460,7 @@ REVOKE ALL ON FUNCTION app.final_check_post_lock_link() FROM PUBLIC,jobguard_run
 CREATE TRIGGER final_check_post_lock_link AFTER INSERT ON app.shadow_signal_evidence FOR EACH ROW EXECUTE FUNCTION app.final_check_post_lock_link();
 
 
-CREATE FUNCTION app.final_check_guard_fact() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,app SET timezone='UTC' AS $$
+CREATE FUNCTION app.final_check_guard_fact() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app SET timezone='UTC' AS $$
 DECLARE m app.final_check_manifest;l app.final_account_lock;s app.shadow_signal_disposition;c app.shadow_signal_classification;
 BEGIN
  IF TG_TABLE_NAME='final_check_processing_source' THEN
@@ -474,7 +490,7 @@ BEGIN
 END $$;
 ALTER FUNCTION app.final_check_guard_fact() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.final_check_guard_fact() FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
-CREATE TRIGGER final_check_source_identity BEFORE INSERT ON app.final_check_processing_source FOR EACH ROW EXECUTE FUNCTION app.final_check_guard_fact();
+CREATE CONSTRAINT TRIGGER final_check_source_identity AFTER INSERT ON app.final_check_processing_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.final_check_guard_fact();
 CREATE TRIGGER final_check_proof_identity BEFORE INSERT ON app.final_check_reveal_proof FOR EACH ROW EXECUTE FUNCTION app.final_check_guard_fact();
 CREATE TRIGGER final_check_disposition_identity BEFORE INSERT ON app.final_check_disposition_binding FOR EACH ROW EXECUTE FUNCTION app.final_check_guard_fact();
 CREATE FUNCTION app.final_check_guard_manifest() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app SET timezone='UTC' AS $$
@@ -489,6 +505,11 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE ms.tenant_id=NEW.tenant_id AND ms.job_id=NEW.job_id AND ms.manifest_id=NEW.id AND ms.excluded_state IS NULL
   AND NOT EXISTS(SELECT 1 FROM app.final_check_processing_source ps LEFT JOIN app.evidence_object e ON e.tenant_id=ps.tenant_id AND e.job_id=ps.job_id AND e.id=ps.evidence_id
    WHERE ps.tenant_id=ms.tenant_id AND ps.job_id=ms.job_id AND ps.manifest_id=ms.manifest_id AND (e.upload_id=ms.upload_id OR (ps.source_kind='pending_upload' AND ps.source_ref=ms.upload_id)))) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_CHANGED'; END IF;
+ -- Reverse coverage: no upload-backed processing row may escape 0204's active inventory.
+ IF EXISTS(SELECT 1 FROM app.final_check_processing_source ps LEFT JOIN app.evidence_object e ON (e.tenant_id,e.job_id,e.id)=(ps.tenant_id,ps.job_id,ps.evidence_id)
+  WHERE ps.tenant_id=NEW.tenant_id AND ps.job_id=NEW.job_id AND ps.manifest_id=NEW.id AND (ps.evidence_id IS NOT NULL OR ps.source_kind='pending_upload')
+  AND NOT EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE ms.tenant_id=ps.tenant_id AND ms.job_id=ps.job_id AND ms.manifest_id=ps.manifest_id
+   AND ms.excluded_state IS NULL AND ms.upload_id=CASE WHEN ps.source_kind='pending_upload' THEN ps.source_ref ELSE e.upload_id END)) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_CHANGED'; END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('source_ref',s.source_ref,'kind',s.source_kind,'evidence_id',s.evidence_id,'object_version_id',s.object_version_id,'sha256',s.sha256,'received_at',s.source_received_at,'processable',s.processable,'input',s.frozen_input) ORDER BY s.source_ref,s.source_kind),'[]') INTO inventory
  FROM app.final_check_processing_source s WHERE s.tenant_id=NEW.tenant_id AND s.job_id=NEW.job_id AND s.manifest_id=NEW.id;
  IF NEW.manifest_hash<>app.final_lock_hash(jsonb_build_object('lock',l.snapshot_digest,'cutoff',l.locked_at,'detector',NEW.detector_version,'policy',NEW.policy_version,'sources',inventory,'comparisons',NEW.frozen_comparisons)) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_CHANGED'; END IF;

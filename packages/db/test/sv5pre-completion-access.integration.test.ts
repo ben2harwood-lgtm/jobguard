@@ -10,7 +10,14 @@ describe("SV5PRE completion access",()=>{
   const rows=(await f.admin.query("SELECT c.relname,has_table_privilege('jobguard_runtime',c.oid,'INSERT,UPDATE,DELETE,TRUNCATE') dml,c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1)",[hidden.concat("shadow_final_check_completion")])).rows;
   expect(rows).toHaveLength(6);for(const row of rows)expect(row).toMatchObject({dml:false,relrowsecurity:true,relforcerowsecurity:true});
   await expect(f.runtime.query("SELECT * FROM app.shadow_final_check_completion")).rejects.toMatchObject({code:"42501"});
-  const callable=(await f.admin.query("SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname LIKE '%final_check%' AND p.prorettype<>'trigger'::regtype AND has_function_privilege('jobguard_shadow',p.oid,'EXECUTE')")).rows;expect(callable).toEqual([]);
+  const callable=(await f.admin.query("SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname LIKE '%final_check%' AND p.prorettype<>'trigger'::regtype AND has_function_privilege('jobguard_shadow',p.oid,'EXECUTE')")).rows;// C241a: only the four reviewed 0205 shadow entrypoints extend PRE-Q5-11.
+  const allowed=[
+   {nspname:'app',proname:'begin_final_check',args:'t uuid, j uuid, detector text, policy text'},
+   {nspname:'app',proname:'read_final_check_manifest',args:'t uuid, j uuid, m uuid'},
+   {nspname:'app',proname:'record_final_check_source_result',args:'t uuid, j uuid, m uuid, s uuid, attempt uuid, p jsonb'},
+   {nspname:'app',proname:'complete_final_check',args:'t uuid, j uuid, m uuid, p jsonb'},
+  ];
+  expect(callable.sort((a,b)=>a.proname.localeCompare(b.proname))).toEqual(allowed.sort((a,b)=>a.proname.localeCompare(b.proname)));
  });
  it("PRE-Q5-10 completion proof is append only under actual logins",async()=>{
   for(const pool of [f.runtime,f.shadow])for(const table of hidden.concat("shadow_final_check_completion"))for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table}`])await expect(pool.query(sql)).rejects.toMatchObject({code:"42501"});

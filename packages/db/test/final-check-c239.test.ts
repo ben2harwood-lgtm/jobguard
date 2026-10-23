@@ -30,3 +30,10 @@ it.each([
  await expect(result).rejects.toBeInstanceOf(FinalCheckError);await expect(result).rejects.toMatchObject({code});
  expect(statements.at(-1)).toBe('ROLLBACK');expect(statements).not.toContain('COMMIT');
 });
+
+it('C241b processing freezes after prerequisite rows and never re-evaluates upload expiry', () => {
+ const begin=sql.slice(sql.indexOf('CREATE FUNCTION app.begin_final_check'),sql.indexOf('CREATE FUNCTION app.record_final_check_source_result'));
+ expect(begin).not.toContain('clock_timestamp()');
+ expect(sql).toContain('CREATE TRIGGER z_final_check_processing_inventory BEFORE INSERT ON app.final_check_manifest');
+ expect(sql).toContain('Reverse coverage: no upload-backed processing row');
+});

@@ -73,3 +73,33 @@ it("C239 exact processed evidence and classifications satisfy the unchanged prer
  await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
  expect((await f.admin.query('SELECT count(*)::int n FROM app.shadow_final_check_completion WHERE tenant_id=$1 AND job_id=$2 AND run_id=$3',[a.tenantId,a.jobId,result.runId])).rows[0].n).toBe(1);
 });
+
+it.each(['quarantined_after_lock','expiry_between_freezes'] as const)('C241b %s uses exactly the prerequisite exclusions and completes',async scenario=>{
+ const {finalCheckTenant}=await import('./final-check-fixture.js');
+ const {FinalCheckCompletionRepository}=await import('../src/shadow-detection-repository.js');
+ const a=await seedFinalCheckJob(f),upload=randomUUID();
+ // A non-photo pending upload is permitted by C135; photos/quarantine still block the lock.
+ await finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state) VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day','pending')",[upload,a.tenantId,a.jobId,a.scopeItemId,`synthetic/c241/${upload}`,'a'.repeat(64)]));
+ await a.lock();
+ if(scenario==='quarantined_after_lock')await finalCheckTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,upload]));
+ else {
+  // Deterministically cross expiry between the old 0205 clock read and 0204's read.
+  // No sleeps: run immediately before 0204's inventory trigger, after old begin's SELECT.
+  await f.admin.query(`CREATE FUNCTION app.c241_test_expiry() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+   IF NEW.job_id='${a.jobId}'::uuid THEN UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 hour' WHERE tenant_id=NEW.tenant_id AND id='${upload}'::uuid; END IF;
+   RETURN NEW; END $$;
+   CREATE TRIGGER a_c241_test_expiry BEFORE INSERT ON app.final_check_manifest FOR EACH ROW EXECUTE FUNCTION app.c241_test_expiry()`);
+ }
+ try {
+  const worker=new FinalCheckRepository(f.shadow),m=await worker.begin(a.context,a.jobId);
+  const frozen=(await f.admin.query('SELECT upload_id,excluded_state,excluded_reason FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2 AND manifest_id=$3',[a.tenantId,a.jobId,m.id])).rows;
+  expect(frozen).toEqual([{upload_id:upload,excluded_state:scenario==='quarantined_after_lock'?'quarantined':'expired',excluded_reason:scenario==='quarantined_after_lock'?'quarantined':'expired_unswept'}]);
+  expect(m.sources).toEqual([]);
+  expect(m.excludedUploads).toEqual(frozen.map(s=>({uploadId:s.upload_id,state:s.excluded_state,reason:s.excluded_reason})));
+  const result=await worker.reconcile(a.context,a.jobId,m.id,[]) as {runId:string};
+  await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
+  expect((await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).state).toBe('completed');
+ } finally {
+  if(scenario==='expiry_between_freezes')await f.admin.query('DROP TRIGGER a_c241_test_expiry ON app.final_check_manifest; DROP FUNCTION app.c241_test_expiry()');
+ }
+});

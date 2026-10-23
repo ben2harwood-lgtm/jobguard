@@ -22,7 +22,8 @@
         "packages/db/test/final-check-c239.test.ts",
         "packages/db/migration-notes/0205_final_check.md",
         "docs/contracts/final-check-v1.md",
-        "docs/operations/final-check-recovery.md"
+        "docs/operations/final-check-recovery.md",
+        "packages/db/test/sv5pre-completion-access.integration.test.ts"
       ]
     }
   }

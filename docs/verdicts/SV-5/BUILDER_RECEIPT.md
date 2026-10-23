@@ -573,3 +573,144 @@ Session record (unknown fields are not inferred; no session-continuity, runtime-
 Usage source/turn ID/timestamp and input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens: unknown. Per-turn versus cumulative: unknown. Cache-read share, quota change and resume/acknowledgement/integration timing: unknown. No counters were inferred from context or prior receipts.
 
 Final read-only handoff verification: PASS for 15 authored paths, exact added lane allowances (no unused new allowance), shared register identical to its staged merge input, 0204 identical to repaired #189, no conflict markers in authored files, correct receipt SQL hash, and intended commit-message file present. `git diff --check` exited 0. These are deterministic working-tree checks. No Git write, independent verdict, acceptance or merge was performed.
+
+
+## R4 — C241 on head 0a764943 (order dated 24 October 2026)
+
+Working-tree repair only; no Git write, commit, push, independent model verdict or acceptance was performed. Starting branch: `codex/sandbox/sv5-181-green`. The shared `config/agent-lane-assignments.json` is unchanged. The lane adds only the exact PRE-Q5-11 test path; the new private trigger's exact identity is also added to the serious-b5 upgrade expectation.
+
+Changes:
+
+- SV5-23 casts the ordered FK-name array to `text[]`, requires an actual array for every constraint, asserts exactly 21 FKs and compares the evidence-upload columns by exact array equality. Other tenant/job checks now operate on arrays.
+- C241a permits exactly four reviewed shadow entrypoints, matching schema, function name and identity arguments; unexpected functions or overloads still fail the complete-set comparison.
+- C241b moves processing inventory freezing into a private BEFORE trigger ordered after 0204's generated inventory. Upload-backed entries require the matching frozen `excluded_state IS NULL` row. 0205 no longer computes an expiry decision. A reverse coverage guard rejects extra processing entries as well as missing active uploads. The processing-parent FK and source validator defer until the parent exists; the validator runs as the migration owner with no ordinary EXECUTE grant. Metadata and source hashes remain checked at commit. Prerequisite-only manifests retain their original path.
+- Added PostgreSQL regressions for a pending non-photo upload quarantined after lock, and for expiry crossed deterministically immediately before 0204 freezes (a scoped disposable test trigger, no timing sleep). Each requires matching exclusions, empty processing sources and successful reconciliation/publication/completed builder projection. C135's pre-lock photo/quarantine guards are untouched.
+
+Outstanding source discrepancy / clarification: 0204's actual exclusion CASE currently handles only rejected and expired uploads, although its comment and excluded-state constraint mention quarantine. Merely consuming its frozen rows cannot make the requested quarantine-after-lock case pass: it still produces an active pending source. The builder asked whether to make the narrow quarantine CASE correction in 0204 or retain that file and report this hold. No answer has been received at this receipt stage; 0204 is unchanged. The quarantine DB regression is written but is expected to fail until that discrepancy is resolved. This is source inspection, not an executed database result.
+
+Failing-first evidence: before changing SQL, `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-c239.test.ts` exited 1, with `Test Files 1 failed (1); Tests 1 failed | 7 passed (8)`. The added C241b source assertion failed because old begin still called `clock_timestamp()`. Raw output: `/private/tmp/jg-sv5-r4-before.log`. After repair the same command exited 0: eight tests passed (`/private/tmp/jg-sv5-r4-regression.log`). This proves the deterministic source regression only. DB failing-first execution and real-array catalogue execution are not claimed: this sandbox cannot bind localhost/start PostgreSQL, and the dispatcher explicitly assigns those suites to CI.
+
+Checks actually run sequentially with installed dependencies, Vitest `--maxWorkers=2` and Turbo `--concurrency=1`; observed load remained below 20. Pinned cached pnpm launcher was placed first in PATH after the initial launcher stalled; no package download/install was requested. The initial typecheck was interrupted after four tasks and is not counted as a pass.
+
+- `pnpm typecheck --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r4-typecheck-final.log`).
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: FAIL at inherited lane history before package lint (`/private/tmp/jg-sv5-r4-lint.log`).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: same inherited path failures (`/private/tmp/jg-sv5-r4-lanes.log`). Exact list below; none of these paths was newly authored by R4.
+- `pnpm turbo run lint --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r4-package-lint.log`). Core purity passed in the lint wrapper; separate money-arithmetic and commercial-boundary checks passed (`/private/tmp/jg-sv5-r4-{money,commercial}.log`).
+- `node --test tools/*.test.mjs`: PASS, 126 tests (`/private/tmp/jg-sv5-r4-tools.log`).
+- `pnpm -r --workspace-concurrency=1 exec vitest run --passWithNoTests --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**' --exclude '**/shadow-isolation.application.test.ts' --exclude '**/final-account-lock.isolation.test.ts'`: config 41, core 2965, storage 2, AI 147 passed; DB 430 passed / 2 failed on free-port `listen EPERM`; recursive execution then stopped (`/private/tmp/jg-sv5-r4-units.log`). The two named API isolation exclusions use PostgreSQL and remain assigned to CI; no test file was altered to skip.
+- API separately with identical source filters: 2097 passed / 133 failed across eight files, listener restrictions / null port after refused listen (`/private/tmp/jg-sv5-r4-api-units.log`).
+- Web separately with the source integration/dist exclusions: PASS, 897 tests (`/private/tmp/jg-sv5-r4-web-units.log`).
+
+Exact inherited lane failure list:
+
+```text
+"apps/api/openapi.json"
+"apps/api/src/app.module.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.test.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.ts"
+"apps/api/src/customer-invoice.application.ts"
+"apps/api/src/customer-invoice.controller.ts"
+"apps/api/src/final-account-lock.application.test.ts"
+"apps/api/src/final-account-lock.application.ts"
+"apps/api/src/final-account-lock.controller.ts"
+"apps/api/src/final-check-task-executor.ts"
+"apps/api/src/final-check.application.test.ts"
+"apps/api/src/final-check.application.ts"
+"apps/api/src/final-check.contracts.ts"
+"apps/api/src/final-check.controller.test.ts"
+"apps/api/src/final-check.controller.ts"
+"apps/api/src/final-check.http.test.ts"
+"apps/api/src/final-check.isolation.test.ts"
+"apps/api/src/final-check.worker.test.ts"
+"apps/api/src/final-check.worker.ts"
+"apps/api/src/shadow-detection.worker.test.ts"
+"apps/api/src/shadow-isolation.application.test.ts"
+"apps/api/src/sv5pre-invoice.http.test.ts"
+"apps/api/src/sv5pre-worker-execution.integration.test.ts"
+"apps/api/src/sv5pre-worker-registration.test.ts"
+"apps/api/src/worker-task-extensions.ts"
+"apps/api/src/worker.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.test.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.ts"
+"apps/web/e2e/M4-3-S.spec.ts"
+"apps/web/e2e/M4-5-S.spec.ts"
+"apps/web/e2e/SV-4.spec.ts"
+"apps/web/e2e/UIWIRE-10.spec.ts"
+"apps/web/e2e/UIWIRE-11.spec.ts"
+"apps/web/e2e/UIWIRE-15.spec.ts"
+"apps/web/e2e/VALUE-1.spec.ts"
+"apps/web/e2e/helpers/customer-invoice-journey.ts"
+"apps/web/e2e/helpers/recovery-allocation-journey.ts"
+"apps/web/e2e/helpers/recovery-sources.ts"
+"config/agent-lane-assignments.json"
+"config/lanes/sv5-0205-renumber.json"
+"config/lanes/sv5pre-0204-renumber.json"
+"docs/contracts/final-account-lock-v1.md"
+"docs/contracts/sv5pre-completion-v1.md"
+"docs/ledger/SV5-0205-RENUMBER.md"
+"docs/ledger/SV5PRE-0204-RENUMBER.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r14.md"
+"packages/core/src/final-account-lock.ts"
+"packages/core/src/final-check-completion.test.ts"
+"packages/core/src/final-check-completion.ts"
+"packages/core/src/final-check.test.ts"
+"packages/core/src/final-check.ts"
+"packages/core/src/index.ts"
+"packages/core/src/watchdog.ts"
+"packages/db/migration-notes/0204_final_check_prerequisites.md"
+"packages/db/migrations/0204_final_check_prerequisites.sql"
+"packages/db/src/final-account-lock-repository.ts"
+"packages/db/src/final-check-completion-repository.ts"
+"packages/db/src/final-check-source-reader.ts"
+"packages/db/src/guarded-practice-invoice-repository.ts"
+"packages/db/src/shadow-detection-repository.ts"
+"packages/db/test/UIWIRE-10.integration.test.ts"
+"packages/db/test/UIWIRE-11.integration.test.ts"
+"packages/db/test/UIWIRE-12.integration.test.ts"
+"packages/db/test/final-account-lock-invoice.integration.test.ts"
+"packages/db/test/final-account-lock.integration.test.ts"
+"packages/db/test/final-check-catch.integration.test.ts"
+"packages/db/test/final-check-disposition.integration.test.ts"
+"packages/db/test/final-check-fixture.ts"
+"packages/db/test/final-check-invoice.integration.test.ts"
+"packages/db/test/final-check-races.integration.test.ts"
+"packages/db/test/final-check-worker-factory.ts"
+"packages/db/test/final-check.integration.test.ts"
+"packages/db/test/invoice-later.integration.test.ts"
+"packages/db/test/migfix-5.integration.test.ts"
+"packages/db/test/practice-facts.integration.test.ts"
+"packages/db/test/practice-feed.integration.test.ts"
+"packages/db/test/practice-invoice-audit.integration.test.ts"
+"packages/db/test/recovery-allocation-races.integration.test.ts"
+"packages/db/test/recovery-allocation-upgrade.integration.test.ts"
+"packages/db/test/recovery-allocation.integration.test.ts"
+"packages/db/test/recovery-case-terms-upgrade.integration.test.ts"
+"packages/db/test/recovery-case-terms.integration.test.ts"
+"packages/db/test/recovery-line-allocation.integration.test.ts"
+"packages/db/test/serious-b5.integration.test.ts"
+"packages/db/test/serious-b9.integration.test.ts"
+"packages/db/test/sv5pre-completion-isolation.integration.test.ts"
+"packages/db/test/sv5pre-completion.integration.test.ts"
+"packages/db/test/sv5pre-fixtures.ts"
+"packages/db/test/sv5pre-legacy-invoice.integration.test.ts"
+"packages/db/test/sv5pre-session-invoice.integration.test.ts"
+"packages/db/test/sv5pre-upgrade.integration.test.ts"
+```
+
+Final checks:
+
+- `pnpm build --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r4-build.log`).
+- `pnpm openapi:check`: blocked, exit 1, tsx IPC `listen EPERM` (`/private/tmp/jg-sv5-r4-openapi.log`). Equivalent generator `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS (`/private/tmp/jg-sv5-r4-openapi-direct.log`).
+- `git diff --check`: PASS. No database/browser suite or PostgreSQL startup was attempted, as directed. No installed package changes were made.
+
+A concrete, unapplied two-line proposal for the quarantine discrepancy is `/private/tmp/jg-sv5-r4-quarantine-proposed.patch`. Applying it would additionally require allowing the exact 0204 SQL path in this lane. It changes only manifest exclusion state/reason for a quarantined upload after lock; the C135 lock predicate remains untouched. This proposal is not included in the working-tree SQL and has not been approved or tested. The R4 quarantine criterion remains a HOLD; do not describe all three repairs as complete.
+
+Final migration hashes (working-tree candidate):
+
+- `0204_final_check_prerequisites.sql`: `e3dacbd072a2237ac65a16066f7b2e3daea2a4b7df9cd4fa0360aac21cfd5ab7`.
+- `0205_final_check.sql`: `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`.
+
+Outstanding: resolve the 0204 quarantine discrepancy; PostgreSQL catalogue/behavior/migration suites and browser suites in GitHub CI; fresh exact-commit A/B verdicts; separate acceptance and founder integration. No technical acceptance or release claim. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5-181-green.txt`.
