@@ -118,7 +118,7 @@ No PostgreSQL or browser suite was launched.
 | --- | --- |
 | M1T-01 | 399999/400000/400001, latest approved replacement and exact SQL arithmetic; CI pending |
 | M1T-02 | Later approved omission and unapproved revision keep stable event; CI pending |
-| M1T-03 | Private approved final-review fact trips without draft rebuild; actual source hook HOLD MON1-I |
+| M1T-03 | Test prepared for final-review fact without draft rebuild; reviewer A found its fixture fails before capture at 4026c3b5. r1 repairs fixture; PostgreSQL re-run pending. Actual source hook HOLD MON1-I |
 | M1T-04 | Draft/priced/rejected/withdrawn-only facts do not trip; unsupported price/payment/catch kinds refused; CI pending |
 | M1T-05 | Stable event, two immutable observations, microseconds, replay and invalidation hold; computation/statement correction uniqueness HOLD MON1-S/I |
 | M1T-06 | Overlapping source INSERT+capture, replay, earlier source concurrency and source/trip/audit rollback; authenticated command composition HOLD MON1-I |
@@ -187,3 +187,67 @@ Backwards compatibility: additive only, no backfill/history rewrite, old readers
 ignore new objects. Operational change: private typed reconciliation/range/lock
 refusals and appended trip audit facts; no scheduled alert, worker or external action
 was installed. Forward-fix/rollback posture is in the same-stem migration note.
+
+
+## r1 (Claude A/B repair)
+
+Issued 23 October 2026 against `4026c3b50570f7caf82e91568ba13350088e1480`;
+build-ahead base remains CH-4-C `14eca750`. Read independent reviewer A's full
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-t-claude-A-4026c3b5-20261023.md`
+before editing. Only BLOCKING 1 is repaired here; B is still pending and the
+verdict's LATER items are not included in this round.
+
+Repair: the final-review fixture now inserts a matching synthetic
+`AddFinalReviewExtra` receipt in `processing`, an owner-bound `command` origin,
+and completes that receipt. Normal origin constraints and validation triggers
+remain enabled. Migration 0053 and every other migration are unchanged. This is
+fixture setup, not execution of the authenticated AddFinalReviewExtra workflow.
+M1T-03 retains both original assertions and additionally checks the persisted
+final-review kind, command provenance, exact receipt/actor/semantic key and the
+400001p observation linked to its approval. No test was removed or weakened.
+
+**Failure without fix checked:** reviewer A's actual embedded-PostgreSQL run on
+4026c3b5 recorded M1T-03 failing at `extra_origin_check1` (21/22 tests passed).
+Source inspection confirms reverting this fixture repair restores that rejected
+final_review/backfilled_synthetic_fixture combination. That is the existing
+regression test for this fix, now strengthened; no local PostgreSQL red/green or
+mutation execution is claimed. Dispatcher must confirm green after repair.
+
+Coverage correction: the original M1T-03 acceptance row above is corrected.
+At 4026c3b5 the final-review replay branch was **not exercised**, because setup
+failed. Reviewer A's 21 passing tests are independent local execution evidence
+for that head, not GitHub CI or evidence that this repaired worktree passes.
+The original command table remains a historical builder receipt.
+
+Commands for r1 used preinstalled pinned pnpm 10.28.1 through the existing
+`/private/tmp/jg-mon1-t-bin` wrapper; no install/download, git write, commit or push.
+
+| Command | r1 result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/db lint` | PASS, exit 0 |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-test-tsconfig.json` | PASS, exit 0; strict compilation includes all three own test files and imported helpers |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1; core purity passes, lane gate rejects inherited CH-4-C paths |
+| `pnpm lint:lanes` | FAIL, exit 1; inherited CH-4-C paths against origin/main, as reviewer A independently confirmed |
+| `pnpm build --concurrency=2` | PASS, exit 0; 7 tasks / 3 cached; nonfatal shared-cache EPERM and existing Next/CSS/Nest warnings |
+| `pnpm openapi:check` | FAIL, exit 1; tsx IPC listen EPERM |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, exit 0; socket-free invocation of the same check |
+
+PostgreSQL (including the leaf's three Vitest files, test:db and test:migrations)
+and browser suites: **NOT RUN**, per dispatcher sandbox restriction. This leaf
+has no separate non-PostgreSQL unit test files. No database suite is skipped or
+made optional in code. Required dispatcher re-run (maximum two workers):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/meter-trip.integration.test.ts test/meter-trip-races.integration.test.ts test/meter-trip-upgrade.integration.test.ts
+```
+
+All prior integration, catalog, predecessor, policy, review and acceptance holds
+remain. No migration, production behavior, privileges or commercial policy changed.
+
+Final r1 verification: `git diff --check` PASS. A read-only check using the existing
+`lanePathAllowed` against the current working-tree diff PASS: only
+`packages/db/test/meter-trip.integration.test.ts` and this receipt changed.
+This scope check does not replace the failed origin/main lane gate.
+Intended conventional commit subject/body saved to `/private/tmp/jg-msg-mon1-t.txt`.
+Build concurrency was 2; no Vitest workers or PostgreSQL/browser processes launched.

@@ -21,13 +21,18 @@ async function activated(f: WorkFixture) {
   });
   return { ...a, activation, baseline };
 }
-async function priced(f: WorkFixture, a: WorkJob, net: number, at: string, approve = true, existing?: { variation: string; revision: string; sequence: number }, origin = "builder_logged") {
+async function priced(f: WorkFixture, a: WorkJob, net: number, at: string, approve = true, existing?: { variation: string; revision: string; sequence: number }, origin: "builder_logged" | "final_review" = "builder_logged") {
   const variation = existing?.variation ?? randomUUID(), revision = randomUUID(), approval = randomUUID(), scope = randomUUID(), sequence = (existing?.sequence ?? 0) + 1;
   await workTenant(f.admin, a.tenantId, async db => {
     if (!existing) {
       await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, a.tenantId, a.jobId]);
       await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional final-review extra','Fictional extra',$5)", [variation, a.tenantId, a.jobId, scope, origin]);
-      if (origin !== "builder_logged") await db.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,raising_role,provenance,source_capture_kind,source_capture_hash) VALUES($1,$2,$3,'small_builder',$4,'legacy_unrecorded','backfilled_synthetic_fixture','text',$5)",[a.tenantId,a.jobId,variation,origin,CH4_HASH]);
+      if (origin === "final_review") {
+        // Synthetic command parents; normal 0053 constraint/trigger enforcement.
+        await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'AddFinalReviewExtra',$3,$4,'processing',$5)", [a.tenantId,variation,`extra-origin:${a.jobId}:${variation}`,CH4_HASH,a.actorId]);
+        await db.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_capture_kind,source_capture_hash) VALUES($1,$2,$3,'small_builder','final_review',$3,$4,'owner','command','text',$5)", [a.tenantId,a.jobId,variation,a.actorId,CH4_HASH]);
+        await db.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [a.tenantId,variation,JSON.stringify({variationId:variation})]);
+      }
     }
     const identity = (await db.query("SELECT scope_item_id FROM app.variation WHERE tenant_id=$1 AND id=$2", [a.tenantId, variation])).rows[0]!.scope_item_id;
     await db.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,previous_revision_id,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)
@@ -93,7 +98,16 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
 
   it("M1T-03 final-review approval can trip without any final-account draft rebuild", async () => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z",true,undefined,"final_review");
+    expect((await f.admin.query(`SELECT v.origin, o.kind, o.provenance, o.command_id, o.raising_membership_id, o.raising_role, c.command_type, c.status, c.semantic_key
+      FROM app.variation v JOIN app.extra_origin o ON (o.tenant_id,o.variation_id)=(v.tenant_id,v.id)
+      JOIN app.command_receipt c ON (c.tenant_id,c.command_id)=(o.tenant_id,o.command_id)
+      WHERE v.tenant_id=$1 AND v.job_id=$2 AND v.id=$3`, [a.tenantId,a.jobId,p.variation])).rows).toEqual([{
+      origin:"final_review",kind:"final_review",provenance:"command",command_id:p.variation,
+      raising_membership_id:a.actorId,raising_role:"owner",command_type:"AddFinalReviewExtra",status:"succeeded",
+      semantic_key:`extra-origin:${a.jobId}:${p.variation}`,
+    }]);
     expect(await trip(f,a,p.approval)).toEqual(expect.any(String));
+    expect(await observations(f,a)).toEqual([expect.objectContaining({net_pence:"400001",source_id:p.approval,effective_at:"2026-10-02T12:00:00.000000Z"})]);
     expect((await f.admin.query("SELECT id FROM app.final_account_draft WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([]);
   });
 
