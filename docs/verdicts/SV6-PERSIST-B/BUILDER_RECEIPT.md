@@ -123,3 +123,43 @@ Reviewer/CI owes actual PostgreSQL access/replay/HTTP execution; prior allocatio
 `git diff --check` exited 0. A separate working-tree-only check used the existing lane policy's `lanePathAllowed` on modified/untracked paths, plus whitespace checks including untracked files; it passed for all 20 changed/new files. This is explicitly **not** a passing official lane comparison; official origin/main and ordered-base self-comparison results remain failed above. The legacy lane register was not touched.
 
 No commit created. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv6-persist-b.txt`. Dispatcher must commit the working tree, then bind any independent verdict to that exact commit. Builder did not review or accept its own work.
+
+
+## R1 — C250 repair, 24 October 2026
+
+Ordered head: `35b4d9c9fa80194210e245dc74f6669486e4997a`. Addresses only the four issued repairs from the dispatcher’s C250 REPAIR summary (`jg-runs/v5-sv6-persist-b-claude-A-35b4d9c9-20261024.md`, not present in this checkout). This is a builder run receipt, not an independent verdict or acceptance.
+
+- `seedAccount` now casts both uses of `$3` to `text`, avoiding conflicting PostgreSQL parameter inference against the `char(64)` digest column.
+- SV6-22 now seeds the practice job’s `job_commercial_track` as a synthetic small-builder fixture before inserting its 25 held signals. The existing actual count, identical history/SQL trace and forbidden-table assertions remain unchanged.
+- The Nest controller explicitly injects `Pool` with `@Inject(Pool)`, so the source-loaded Vitest application does not depend on emitted constructor metadata.
+- History job IDs now validate with `z.guid({ error: "Invalid uuid" })`. This branch still pins Zod 3 and its embedded core revision schema is Zod 3; directly converting the enclosing schema to Zod 4 failed typecheck (incompatible array element schema). A local Zod 3 `custom<string>` bridge calls the installed `zod/v4` GUID validator, retaining the existing enclosing schemas and error handling without changing dependencies. Main’s C246 conversion is not present on this ordered head. No other product files, pins, migrations, grants, policies, test assertions or lane allowances changed.
+
+### R1 checks actually executed
+
+Checks ran serially using the existing cached pnpm wrapper (`PATH=/private/tmp/jg-sv6-bin:$PATH`), without an install or download. Every Vitest invocation used `--maxWorkers=2`. These are deterministic checks, not model review.
+
+| Command/check | Result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | Initial direct-Zod-4 attempt exited 2 at the mixed-version schema; final bridge version exited 0, all 7 tasks successful. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Initial and final exit 1 at the existing stacked-parent lane violations; root lint is not green. Core purity passed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1 for the same SV6-01, SV6-05 and Part A parent paths recorded above. No R1 out-of-lane path added; allowances unchanged. |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0; all 7 package checks successful. |
+| `node --test tools/*.test.mjs` | Exit 0; 122 tests passed. |
+| Serial `pnpm exec vitest run --maxWorkers=2 <selected files>` in core/config/storage/ai/db/api/web | Exit 0 in all 7 packages: 333 files / 6,349 tests passed. Selection/logs in `/private/tmp/jg-sv6b-r1-units.py` and `/private/tmp/jg-sv6b-r1-unit-summary.json`. DB selection covers source unit tests only. API excludes the PostgreSQL application-isolation files; the later dedicated attribution HTTP file run excludes its real PostgreSQL/socket test. No root `pnpm test` pass claimed. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-attribution.application.test.ts src/recovery-attribution.controller.test.ts src/recovery-attribution.http.test.ts -t '^(?!.*PostgreSQL actual HTTP)'` | Exit 0 after the GUID bridge: 3 files / 9 tests passed, 1 PostgreSQL/socket test skipped explicitly. Nest registered-handler and scripted Next proof only. |
+| `pnpm build --concurrency=1` | Exit 0; all 7 tasks successful (4 cache hits). Existing Next workspace-root/CSS warnings and sandbox cache IO warning only. |
+| `pnpm openapi:check` | Exit 1: existing `tsx` CLI IPC `listen EPERM`; no API server or PostgreSQL started. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same source OpenAPI check via the loader, without CLI IPC. No OpenAPI artifact change. |
+| `node --import tsx --input-type=module` GUID assertions in API directory | Exit 0; main-compatible non-RFC GUID accepted; malformed GUIDs and non-string values rejected by the bridged field. Log `/private/tmp/jg-sv6b-r1-guid.log`. |
+
+### R1 pre-lock-stop mutation
+
+Removed exactly `if (!gate.locked) return [];` temporarily from the repository and ran `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/recovery-attribution-repository.test.ts -t 'SV6-22 pre lock'`. The mutant exited 1: the forbidden-table assertion detected the added `SELECT document FROM app.recovery_attribution_revision` query. Restored the original repository bytes in `finally`; the same focused baseline exited 0. No repository product change remains. Logs: `/private/tmp/jg-sv6b-r1-prelock-{mutant,restored}.log`; driver `/private/tmp/jg-sv6b-r1-mutation.py`.
+
+This mutation kill is scripted SQL-boundary unit evidence. The repaired real PostgreSQL zero-vs-25 proof and its pre-lock-stop mutation are **NOT RUN locally**, because the dispatcher states this sandbox cannot bind localhost or start PostgreSQL. CI/reviewer must run `test/recovery-attribution-access.integration.test.ts` baseline, remove that guard and rerun SV6-22 expecting failure, then restore it and require a passing baseline. Its query-trace assertion must kill that mutation; no database mutation pass is claimed here. Actual SV6-26 PostgreSQL/HTTP, DB/migration suites and browser suites likewise remain CI gates after dispatcher push.
+
+### R1 final handoff
+
+The explicit DB fixture compilation (`pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/recovery-attribution-access.integration.test.ts test/recovery-attribution-fixture.ts`) exited 0; it does not execute PostgreSQL. Final whitespace and working-tree path checks passed: the only five modified paths are the four ordered code/test files and this receipt, all within the existing lane allowlist. No git write, commit, push, package installation, localhost binding or PostgreSQL startup was attempted in R1. Dispatcher commit message is `/private/tmp/jg-msg-sv6-persist-b.txt` (conventional subject and body).
+
+R1 logs are `/private/tmp/jg-sv6b-r1-{typecheck,typecheck-final,lint,lint-final,lanes,package-lint,tools-test,unit-core,unit-config,unit-storage,unit-ai,unit-db,unit-api,unit-web,api-final,build,openapi,openapi-loader,guid,fixture-typecheck}.log`. Independent exact-commit verdict, separate acceptance and the CI gates above remain outstanding. No source-backed execution or aggregate SV-6 completion is claimed.

@@ -59,6 +59,7 @@ it("SV6-22 pre lock attribution reveals no shadow existence with zero and many s
   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[M,T,A,U]);
   const token=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,token);
   const job=(await f.admin.query("SELECT id FROM app.job WHERE practice_session_digest=$1 LIMIT 1",[auth.digest])).rows[0].id;
+  await f.admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[T,job]);
   const statements:string[]=[];
   const pool=new Proxy(f.runtime,{get(target,key){
    if(key==="connect")return async()=>{

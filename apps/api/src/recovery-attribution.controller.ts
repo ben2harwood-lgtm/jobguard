@@ -1,4 +1,4 @@
-import { Body,Controller,Get,Post,Headers,Header,Param,Query,HttpException } from "@nestjs/common";
+import { Body,Controller,Get,Post,Headers,Header,Param,Query,HttpException,Inject } from "@nestjs/common";
 import { ApiOperation,ApiTags,ApiResponse } from "@nestjs/swagger";
 import { Pool } from "pg";
 import { RecoveryAttributionApplication,recoveryAttributionFailure } from "./recovery-attribution.application.js";
@@ -6,7 +6,7 @@ import { practiceCookie } from "./practice-access.js";
 @ApiTags("synthetic recovery attribution")
 @Controller("jobs/:id/success-fee-attribution")
 export class RecoveryAttributionController {
- constructor(private readonly pool:Pool){}
+ constructor(@Inject(Pool) private readonly pool:Pool){}
  private async run(work:(app:RecoveryAttributionApplication)=>Promise<unknown>,cookie?:string){
   try{return await work(new RecoveryAttributionApplication(this.pool,practiceCookie(cookie)));}
   catch(error){const failure=recoveryAttributionFailure(error);if(failure)throw new HttpException(failure.body,failure.status);throw error;}
