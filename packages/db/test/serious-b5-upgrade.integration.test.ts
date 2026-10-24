@@ -289,6 +289,23 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
+// C248: only 0212's exact private function/trigger extend the upgrade catalogue.
+async function with0212Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
+ expect(additions).toHaveLength(1);
+ expect(before.routines.some(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition')).toBe(false);
+ expect(additions[0]).toMatchObject({prosecdef:true,proconfig:['search_path=pg_catalog, app']});
+ const guards=(await f.admin.query(`SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='app.evidence_upload'::regclass
+  AND tgfoid='app.guard_post_lock_upload_transition()'::regprocedure ORDER BY tgname`)).rows;
+ expect(guards).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O'}]);
+ const acl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid='app.guard_post_lock_upload_transition()'::regprocedure`)).rows;
+ expect(acl).toEqual([{owner:'jobguard_migration',executors:['jobguard_migration']}]);
+ const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
+ return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -302,7 +319,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await separableFinalCheckAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before))));
+ const expected = await with0212Additions(await separableFinalCheckAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
