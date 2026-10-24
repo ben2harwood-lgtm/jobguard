@@ -278,3 +278,31 @@ No completion of full server/card acceptance, professional sign-off, independent
 - Intended conventional commit subject/body is written to `/private/tmp/jg-msg-m4-9-s.txt`. No shared repository commit or push was made. Dispatcher must commit, run CI/database/browser gates, obtain the exact-commit independent verdict, and arrange separate acceptance. This receipt is not that verdict.
 
 The outstanding dependency work and Q2/Q3/UI holds above remain outstanding at handoff. Source-backed schema, review, authorization, positive/zero posting, compensation and their full assertions are not replaced by generic refusals or reference arithmetic.
+
+## R1 — C250 repair round 1, 24 October 2026
+
+Ordered base: `04fea7be`, branch `codex/sandbox/m4-9-s`. This section records the three repairs requested after `jg-runs/v5-m4-9-s-claude-A-04fea7be-20261024.md` (REPAIR). Earlier receipt entries are historical; this builder does not issue acceptance or an independent verdict.
+
+- SF-14/15: the wrong-policy setup now disables only `app.job`'s `job_fixed_baseline` trigger before its administrative UPDATE, inside that case's BEGIN/ROLLBACK transaction. The runtime-role refusal assertion remains intact; ROLLBACK restores the trigger and fixture. Wrong-track/mode fixtures retain their existing rollback-only trigger overrides.
+- SF-23: catalogue discovery partitions predecessor tables by actual primary-key presence. Only PK tables enter `proofBefore`/`proofDifferences`. Keyless tables retain PostgreSQL `row_to_json` text over all named pre-existing columns plus full column types; comparison consumes matching rows individually, preserving duplicate multiplicities. These comparisons run after 0218 alone and both later migration passes. Later additive rows/columns remain permitted, while missing/changed original rows or types fail.
+- Money adversary: added Q = `149/10` p, J = 0, asserting exact Q preservation, F = 1 p and delta = 1 p. The intermediate-rounding mutant now FAILS: rounding Q to 15 p before applying 10% produces 2 p, rejected by the new assertion (exit 1, expected 1 p / received 2 p). Mutation was made only in `/private/tmp/jg-m49-r1-mutant-core`, a copied core source tree using existing dependencies; no workspace fee code was mutated. Command there: `pnpm exec vitest run --maxWorkers=2 src/success-fee-posting.test.ts -t 'rounds only after'`. Log: `/private/tmp/jg-m49-r1-mutant-intermediate-rounding.log`. This is a deterministic mutation check, not a model verdict.
+
+Only the three test files and this receipt change. No fee implementation, migration, contract, provider, UI or production gate changes. The dependency, Q2/Q3 and UI holds above remain. PostgreSQL/database/browser suites are assigned to GitHub CI after dispatcher push because this sandbox cannot bind localhost/start PostgreSQL. Neither authored SQL nor compilation is claimed as executed database proof.
+
+R1 validation uses the already-installed dependencies, Node `v24.17.0` and cached pnpm `10.28.1` via `PATH=/private/tmp/jg-sv6-bin:$PATH`; no install, git write, commit or push was attempted.
+
+| Command | R1 result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | Exit 0; seven tasks. Log `/private/tmp/jg-m49-r1-typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 1; inherited SV6-01/05/PERSIST-A/B paths outside this lane stop root lint. Log `/private/tmp/jg-m49-r1-lint.log`. No lane rule changed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same inherited paths. Log `/private/tmp/jg-m49-r1-lanes.log`. |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0; seven package checks. Log `/private/tmp/jg-m49-r1-package-lint.log`. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/success-fee-access.integration.test.ts test/success-fee-upgrade.integration.test.ts` | Final exit 0. Initial run exposed an implicit-any array in the new keyless comparison; explicit snapshot typing fixed it. Log `/private/tmp/jg-m49-r1-db-fixture-typecheck.log`. Compilation only. |
+| `python3 /private/tmp/jg-m49-r1-units.py` | All 116 sequential batches exit 0: 340 files, 6,446 passed, one explicitly filtered PostgreSQL/socket test skipped. Uses the exact package/file selections listed earlier in this receipt, `pnpm exec vitest run --maxWorkers=2`, at most three files per invocation. Unchanged socket/database exclusions apply. Driver, summary and individual logs: `/private/tmp/jg-m49-r1-units.py`, `/private/tmp/jg-m49-r1-unit-summary.json`, `/private/tmp/jg-m49-r1-unit-<package>-<batch>.log`. The new fractional-Q baseline passes. |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | Exit 0; 122 passed. Log `/private/tmp/jg-m49-r1-tools.log`. |
+| `pnpm build --concurrency=1` | Exit 0; seven tasks. Existing Next workspace-root/CSS and Turbo cache IO warnings only. Log `/private/tmp/jg-m49-r1-build.log`. |
+| `pnpm openapi:check` | Exit 1; `tsx` launcher IPC socket `listen EPERM` in this sandbox. Log `/private/tmp/jg-m49-r1-openapi-wrapper.log`. |
+| `node --import tsx src/generate-openapi.ts --check` (API cwd) | Exit 0; same generator/check through the socket-free loader. OpenAPI artifact unchanged. Log `/private/tmp/jg-m49-r1-openapi.log`. |
+| `git diff --check` | Exit 0. Final path inspection confirms only the three ordered tests and this receipt changed. |
+
+Handoff: intended conventional commit subject/body is in `/private/tmp/jg-msg-m4-9-s.txt`. Dispatcher owns commit/push and CI PostgreSQL/browser execution. R1 is ready for exact-commit independent re-review; no technical acceptance, new independent verdict or production permission is claimed here. The previous full-card dependency and release holds remain.

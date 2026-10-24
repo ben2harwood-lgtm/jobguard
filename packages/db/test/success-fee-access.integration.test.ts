@@ -65,7 +65,7 @@ it("SF-21 no source or shadow relation is queried by either boundary",async()=>{
 it("SF-14/15 wrong track, mode and policy are refused (rolled-back administrative defects)",async()=>{
  const before=await protectedSnapshot(f);
  const defects=[
-  "UPDATE app.job SET fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=1 WHERE id=$1",
+  "ALTER TABLE app.job DISABLE TRIGGER job_fixed_baseline; UPDATE app.job SET fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=1 WHERE id=$1",
   "ALTER TABLE app.job_commercial_track DISABLE TRIGGER job_commercial_track_immutable; UPDATE app.job_commercial_track SET job_track='contractor' WHERE job_id=$1",
   "ALTER TABLE app.job_commercial_track DISABLE TRIGGER job_commercial_track_immutable; UPDATE app.job_commercial_track SET environment='pilot_no_charge' WHERE job_id=$1",
  ];
