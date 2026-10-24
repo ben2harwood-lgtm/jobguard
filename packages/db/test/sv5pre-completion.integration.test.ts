@@ -200,7 +200,8 @@ describe("SV5PRE authoritative completion", () => {
  });
  async function sourceFixture(){
   const a=await seedAccount(f.admin),uploadId=randomUUID();
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
+  // Set-up only (C245): terminal upload before lock; finalize() supplies the original later.
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',clock_timestamp(),'immutable.v1')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
   const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);const repo=new FinalCheckCompletionRepository(f.shadow);
   const manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"});
   return {a,uploadId,repo,manifest,executionId:randomUUID(),runId:randomUUID()};

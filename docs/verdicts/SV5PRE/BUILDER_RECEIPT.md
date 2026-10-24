@@ -1560,3 +1560,52 @@ Web retains its configured e2e exclusion. Full `pnpm test`, `pnpm test:db`, `pnp
 Logs: `/private/tmp/jg-sv5pre-r6-typecheck.log`, `jg-sv5pre-r6-lint-task-base.log`, `jg-sv5pre-r6-lint-main.log`, `jg-sv5pre-r6-lanes-main.log`, `jg-sv5pre-r6-tools-tests.log`, `jg-sv5pre-r6-unit-checks.log`, `jg-sv5pre-r6-unit-results.json`, per-package `jg-sv5pre-r6-unit-*.log`, `jg-sv5pre-r6-build.log`, `jg-sv5pre-r6-openapi.log`, and `jg-sv5pre-r6-openapi-loader.log` (all under `/private/tmp`). Exact unit commands/exclusions: `/private/tmp/jg-sv5pre-r6-unit-checks.py` and results JSON. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`.
 
 Final source-only verification: PASS exact two SQL edits against HEAD, unchanged receipt prefix, exactly four authorized changed files, unchanged lane/register, and `git diff --check`. These checks do not execute PostgreSQL or constitute independent review.
+
+
+## R7 — C245 — 24 October 2026 — head 0b9b3d19
+
+**State: setup-only working-tree repair; HOLD for reviewer/GitHub PostgreSQL CI, fresh exact-commit independent verdict and separate acceptance.** Starting HEAD `0b9b3d19fdcfbf13289127b73b3902d42e95a880`, branch `codex/sandbox/sv5pre-0204-renumber`; working tree was clean. This is builder evidence, not independent review or acceptance. No Git write, commit, push, database startup, browser run, install, download or provider action was performed. The dispatcher commits and pushes. Earlier receipt bytes remain an unchanged prefix (SHA-256 before this append: `c913d8d846c5c1ef9c04bedbf750abc3a4564cc924c25f1e98438b01b48138fa`).
+
+### Exact setup change and other-file audit
+
+The sole changed test file is `packages/db/test/sv5pre-completion.integration.test.ts`. Its shared `sourceFixture()` now inserts the PDF upload as terminal `verified`, with `server_verified_at` and `object_version_id='immutable.v1'`, before locking. Every caller needs an unexcluded inventory source: the successful processing cases later use it as evidence, the C238 guard needs verified state to attempt its forbidden transition, and the incomplete-source cases must still require processing. Making those sources rejected/expired would exclude them and bypass the completion predicate being tested. The original object is still absent at freeze and supplied by the unchanged `finalize()` helper, preserving the exact `evidence_id:null` expectation and the delayed/post-cutoff object cases. No assertion, expected value, test title, caller, finalization helper or production SQL changed. Byte comparison proves everything outside `sourceFixture()` is unchanged; that helper contains no assertions. The R6 known setup hold is addressed in source; execution remains owed.
+
+Searched all `packages/db/test` files for lock calls (`.lock(` / `lock_final_account`), lock preparation, invoice prerequisite helpers and upload inserts, including default-pending inserts and shared fixtures. No other setup repair was required. Files with upload-bearing lock paths inspected for this pattern (all unchanged except the file named above):
+
+- `packages/db/test/final-account-lock.integration.test.ts`: its proof upload is already verified.
+- `packages/db/test/sv5pre-completion-isolation.integration.test.ts`: uploads already verified before lock.
+- `packages/db/test/job-work-state-upgrade.integration.test.ts`, `job-work-state-races.integration.test.ts`, `job-work-state-post-lock.integration.test.ts`, and shared `job-work-state-fixtures.ts` (all under `packages/db/test`): `insertPhoto()` is already verified; the direct PDF insert is verified; the source/lock race inserts a supplier document rather than a pending upload.
+- `packages/db/test/migfix-5-upgrade.integration.test.ts`: proof upload already verified.
+- `packages/db/test/recovery-case-terms.integration.test.ts` and `recovery-case-terms-upgrade.integration.test.ts`: proof uploads already verified.
+- `packages/db/test/recovery-allocation.integration.test.ts`, `recovery-allocation-races.integration.test.ts`, `recovery-allocation-upgrade.integration.test.ts`, `recovery-line-allocation.integration.test.ts`, and `serious-b9.integration.test.ts`: uploads already verified; historical upgrade/issuer paths remain unchanged.
+- Shared `packages/db/test/sv5pre-fixtures.ts`, `evidence-pack-fixture.ts` and `job-sources-fixture.ts`: no upload creation in the lock/prerequisite helper; proof/source helpers insert verified uploads.
+
+Other lock/prerequisite search hits have no upload insert that can leave a live pending upload before their lock: `final-account-lock-invoice.integration.test.ts`, `final-account-lock-reveal.integration.test.ts`, `final-account-lock-upgrade.integration.test.ts`, `sv5pre-completion-access.integration.test.ts`, `sv5pre-legacy-invoice.integration.test.ts`, `sv5pre-session-invoice.integration.test.ts`, `sv5pre-upgrade.integration.test.ts`, `serious-b5.integration.test.ts`, `serious-b5-upgrade.integration.test.ts`, `migfix-5.integration.test.ts`, `UIWIRE-10.integration.test.ts`, `UIWIRE-11.integration.test.ts`, `UIWIRE-12.integration.test.ts`, `practice-facts.integration.test.ts`, `practice-feed.integration.test.ts`, and `practice-invoice-audit.integration.test.ts` (all under `packages/db/test`). The SV5PRE upgrade receipt-identity case inserts an upload but never locks that job. In the changed file, intentional live pending/quarantined refusal and concurrency cases already reject their uploads with recorded `SYNTHETIC` reason before a successful lock, or roll back the writer. The expired-unswept fixture already records `expired_unswept` through the manifest. Those setups and their assertions are untouched.
+
+No migration, backfill, permission, authorization, money, audit, provider, production behavior or operational alert changed. C244's SQL remains byte-for-byte at HEAD. No rollback/forward repair is needed for this test-only change. No subagent/reviewer was invoked or acceptance invented.
+
+### R7 checks actually run
+
+Installed Node `v24.17.0` and cached pnpm `10.28.1` via `/private/tmp/jg-sv5pre-bin/pnpm`; no install/download. Required package checks ran one at a time, Turbo `--concurrency=1`, Vitest `--maxWorkers=2` / `VITEST_MAX_WORKERS=2`, tooling tests `--test-concurrency=1`. One-minute load observed before every suite/package stayed below 20 (maximum 11.04); no threshold wait was required.
+
+| Command / check | Actual result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | PASS, 7 tasks (2 cached) |
+| `LANE_BASE_REF=origin/codex/sandbox/sv5pre pnpm lint --concurrency=1` | PASS, lane/core/money/commercial checks and 7 package tasks (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL at existing stacked-parent lane boundary; paths outside this renumber lane. No bypass or widening |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same existing stacked comparison boundary |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | PASS, 122 tests |
+| Per-package source-only Vitest selection below | PASS, 6,526 tests: core 2,952; config 41; storage 2; AI 147; DB 422; API 2,065; web 897 |
+| `pnpm build --concurrency=1` | PASS, 7 tasks (3 cached); existing cache-write/workspace-root warnings nonfatal |
+| `pnpm openapi:check` | BLOCKED by tsx CLI IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check without CLI IPC server |
+| TypeScript `transpileModule` on changed integration test | PASS, syntax/transpile only; workspace typecheck excludes DB test files |
+| Source comparison outside shared fixture | PASS, byte-identical; every assertion and expected value unchanged |
+
+Unit command per package: `pnpm exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'`, retaining R6's sandbox socket/database selection. DB additionally excludes `test/free-port.test.ts`. API additionally excludes `src/final-account-lock.isolation.test.ts`, `src/sv5pre-worker-execution.integration.test.ts`, `src/sv5pre-invoice.http.test.ts`, `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-visit.http.test.ts`, and `src/auth/sso/action-paths.test.ts`. Web retains its configured e2e exclusion. No test is edited or made optional by this selection. Full `pnpm test`, database/migration suites, browser suites and the repaired 13 tests / 16 cases are NOT RUN here: this sandbox cannot bind localhost or start PostgreSQL. Reviewer/GitHub CI owns those mandatory executions after dispatcher's push; no passing DB evidence is claimed.
+
+Logs: `/private/tmp/jg-sv5pre-r7-typecheck.log`, `jg-sv5pre-r7-lint-task-base.log`, `jg-sv5pre-r7-lint-main.log`, `jg-sv5pre-r7-lanes-main.log`, `jg-sv5pre-r7-tools-tests.log`, `jg-sv5pre-r7-unit-checks.log`, per-package `jg-sv5pre-r7-unit-*.log`, `jg-sv5pre-r7-build.log`, `jg-sv5pre-r7-openapi.log`, and `jg-sv5pre-r7-openapi-loader.log` (all under `/private/tmp`). Exact sequential commands/results: `/private/tmp/jg-sv5pre-r7-checks.py`, `jg-sv5pre-r7-check-results.json`, `jg-sv5pre-r7-unit-checks.py`, and `jg-sv5pre-r7-unit-results.json`. Search evidence: `/private/tmp/jg-r7-lock-search.txt`, `jg-r7-all-lock-search.txt`, `jg-r7-lock-callers.txt`, `jg-r7-upload-files.txt`.
+
+Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`. Only the test fixture file and this append are changed. PostgreSQL/browser CI, main-base lane handling, fresh exact-commit independent verdict, separate acceptance, D12/D13 and all production/release gates remain HOLD.
+
+Final deterministic verification: PASS `git diff --check`, exact two-file scope, unchanged assertions/expectations outside the assertion-free fixture helper, unchanged C244 SQL, unchanged historical receipt prefix, and commit-message file present. Source-only evidence; no database or independent-verdict claim.
