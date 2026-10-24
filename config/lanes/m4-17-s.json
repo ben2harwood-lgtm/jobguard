@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-s": {
+      "branches": [
+        "codex/sandbox/m4-17-s"
+      ],
+      "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
+      "note": "C262 / 0222. Decision 74 preparation on accepted partial b3b322aa. Independent reference comparison and authenticated availability only; run authority, source-backed fee contracts, persistence, review, compensation and UI held. Catalogue additions only for actual objects.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/money-trail-reconciliation.ts",
+        "packages/core/src/money-trail-reconciliation.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/money-trail-repository.ts",
+        "packages/db/src/money-trail-repository.test.ts",
+        "packages/db/migrations/0222_money_trail_reconciliation.sql",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/money-trail-security.integration.test.ts",
+        "packages/db/test/money-trail-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/money-trail-reconciliation-v1.md",
+        "docs/operations/money-trail-synthetic-restore.md",
+        "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

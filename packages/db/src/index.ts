@@ -123,3 +123,4 @@ export * from "./contractor-entitlement-authority-repository.js";
 
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
+export * from "./money-trail-repository.js";

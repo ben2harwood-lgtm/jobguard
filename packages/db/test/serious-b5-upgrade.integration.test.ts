@@ -221,6 +221,8 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
   ["recovery_attribution_immutable",""],
   ["append_recovery_attribution","p_document jsonb, p_actor uuid, p_command jsonb, p_cause text, p_source text"],
   ["assess_recovery_attribution","p_job uuid, p_session text, p_command jsonb"],
+  // M4-17-S / 0222: exact availability-only identity; no table/row allowance.
+  ["read_money_trail_availability","p_job uuid, p_session text"],
   // M4-9-S / 0218: exact additive routine identities, no table/row allowance.
   ["read_success_fee_v3","p_job uuid, p_session text"],
   ["write_success_fee_v3","p_job uuid, p_session text, p_command jsonb, p_artifact jsonb"],
