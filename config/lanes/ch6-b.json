@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch6-b": {
+      "branches": ["codex/sandbox/ch6-b"],
+      "receipt": "docs/verdicts/CH6-B/BUILDER_RECEIPT.md",
+      "note": "Issued pure v3 advisory isolation tooling; C1 browser exemption: no route, page, runtime, database or migration changes. Build ahead only; source and independent review holds remain.",
+      "allow": [
+        "tools/commercial-integrity-boundary.mjs",
+        "tools/commercial-integrity-boundary.test.mjs",
+        "docs/verdicts/CH6-B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
