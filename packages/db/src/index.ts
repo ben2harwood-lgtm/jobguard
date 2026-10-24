@@ -122,3 +122,4 @@ export * from "./enterprise-live-prompt-repository.js";
 export * from "./contractor-entitlement-authority-repository.js";
 
 export * from "./recovery-attribution-repository.js";
+export * from "./success-fee-repository.js";

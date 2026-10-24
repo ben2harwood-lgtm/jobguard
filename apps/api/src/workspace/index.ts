@@ -93,3 +93,5 @@ export * from "../contractor/practice-worker-switch.application.js";
 
 export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
+
+export { successFeeFailure } from "../success-fee.application.js";

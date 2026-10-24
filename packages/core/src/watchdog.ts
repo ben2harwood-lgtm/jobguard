@@ -15,6 +15,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/success-fees": "post_live_billing",
+  "nest:/jobs/:id/success-fees": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
   "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // ENT-8A-P: contractor mutations enforce their own authority-first live-job guard.

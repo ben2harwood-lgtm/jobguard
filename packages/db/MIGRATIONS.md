@@ -1203,3 +1203,21 @@ in `docs/contracts/practice-worker-switch-v1.md`. This disables acting and new
 switches while retaining switch-off/state access. PostgreSQL execution, catalogue,
 upgrade and rollback proofs require dispatcher/CI verification; they were not run
 in the builder sandbox.
+
+### 0218 — M4-9-S dependency boundary
+
+Adds only `app.read_success_fee_v3(uuid,text)` and
+`app.write_success_fee_v3(uuid,text,jsonb,jsonb)`. Migration directory discovery
+registers 0218; the closed historical list is unchanged. No table, row backfill,
+existing routine, existing grant or ledger kind changes. Runtime receives only
+these exact EXECUTE signatures; PUBLIC and infrastructure receive none. Both
+calls reauthenticate the persisted session/current owner and require an owned,
+synthetic small-builder v3 job. Reads expose constant dependency status;
+writes always refuse without business effects. No source or hidden table is read.
+
+Deploy before using the new server route. Source-backed reviews, approvals,
+derivations, journal/source tables and posting remain DEPENDENCY-BOUND on the
+accepted SV-6 source/proof seam; this is not a completed fee-posting migration.
+Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
+disable the route and append a reviewed migration; preserve any future financial
+history. Never enable posting by removing the refusal alone.
