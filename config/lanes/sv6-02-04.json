@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-02-04": {
+      "branches": ["codex/sandbox/sv6-02-04"],
+      "receipt": "docs/verdicts/SV6-02-04/BUILDER_RECEIPT.md",
+      "note": "Synthetic SV6-02/03/04 pure source-contract regressions on accepted SV6-05. Persisted attribution and source reconstruction remain dependency-bound. This file is implicitly editable by its own branch under the lane loader.",
+      "allow": [
+        "packages/core/src/recovery-attribution-persistence.test.ts",
+        "docs/verdicts/SV6-02-04/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
