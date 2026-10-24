@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-r": {
+      "branches": [
+        "codex/sandbox/mon1-r"
+      ],
+      "receipt": "docs/verdicts/MON1-R/BUILDER_RECEIPT.md",
+      "note": "RED build-ahead MON1-R. STOP: issued MON1-I file scope conflicts with MON1-R task and consumer exclusion; product allowlist clarification pending. H-PRACTICE and held predecessor counts preserved. Receipt-only registration; no product or shared-file grant.",
+      "allow": [
+        "docs/verdicts/MON1-R/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
