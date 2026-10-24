@@ -1510,3 +1510,53 @@ DB unit selection additionally excludes `test/free-port.test.ts`. API unit selec
 Raw logs/commands: `/private/tmp/jg-sv5pre-tools-tests.log`, `/private/tmp/jg-sv5pre-source-unit-results.json`, `/private/tmp/jg-sv5pre-source-unit-*.log`, `/private/tmp/jg-sv5pre-api-unit-results.json`, `/private/tmp/jg-sv5pre-api-unit-apps-api.log`, `/private/tmp/jg-sv5pre-build.log`. Unit commands/exclusions are recorded by `/private/tmp/jg-sv5pre-source-unit-checks.py` and `/private/tmp/jg-sv5pre-api-unit-checks.py`. Initial diagnostic logs are retained at `/private/tmp/jg-sv5pre-unit-*.log`.
 
 No independent reviewer was invoked and no verdict or acceptance was invented. Database/migration/browser CI, lane handling, fresh A/B verdicts bound to the dispatcher’s exact new commit, separate acceptance, D12/D13 and all production/release gates remain HOLD. Intended commit message is `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`.
+
+
+## R6 — C244 — 24 October 2026 — head 7ffd93ac
+
+**State: narrow working-tree repair; HOLD for PostgreSQL CI, independent exact-commit verdict and separate acceptance.** Starting HEAD `7ffd93acffb3479edf01ae91b9ae1b4c36cb44f1`, branch `codex/sandbox/sv5pre-0204-renumber`. This is builder evidence, not a review or acceptance. No Git write, commit, push, database startup, browser run, install or download was performed. The dispatcher commits and pushes. Earlier receipt bytes remain an unchanged prefix (SHA-256 before this append: `67660f9307c3a694f5ac71db22715d099cf8c9c4a37520ebec4e00b6053a689e`).
+
+### Exact change and regression evidence
+
+- Removed only the content-type restriction from the lock's live-pending clause in unmerged migration 0204. Every pending upload with `expires_at > clock_timestamp()` for the same tenant/job blocks with `FINAL_ACCOUNT_UPLOADS_IN_PROGRESS` (SQLSTATE 55000). C238's quarantine clause, including expired quarantine, tenant/job filters, serialization and timeout classification remain unchanged. Rejected and expired pending inputs retain their existing manifest exclusions. No new schema, privileges, backfill, provider action or operational alert.
+- Corrected the manifest comment: quarantine blocks the lock rather than being excluded. Updated the 0204 migration note. Migration SHA-256 after R6: `1813bf44d914e19dccf5cbd1519433d0a9a2b3f69d5484b654e7265849387b98`. Deployed candidates require an additive forward fix; do not remove the lock or issuance gate.
+- Added `C244 a live pending non-photo upload blocks the lock` in `sv5pre-completion.integration.test.ts`: inserts a live pending `application/pdf`, requires the typed refusal and no lock, then rejects that upload and requires a successful lock. This regression **must fail on 7ffd93ac**: that head's predicate admits only pending PNG/JPEG/WebP, so the PDF bypasses refusal and the rejection assertion fails. This is source-inspected red/green reasoning, **not an executed old-head failure or new-head PostgreSQL pass**; both executions remain owed to reviewer/CI because this sandbox cannot bind localhost/start PostgreSQL.
+- No LP-0/catalogue hash update: this changes no signature, ACL, static write/call set or compared catalogue fact. `packages/db/test/lp-0-catalog.ts` explicitly records rather than compares routine definition hashes under held Q2/LP0-13. The existing recorded digest is not claimed as fresh validation of this function. Shared register and own lane file are unchanged; no new repository file is needed.
+
+**Known integration hold, source-inspected:** the existing `sourceFixture()` in this same test file inserts a live pending PDF and immediately locks, then dependent cases finalize it after lock. C244 intentionally refuses that setup, so those cases need a separately authorized fixture/expectation reconciliation before the whole DB suite can pass. No existing fixture or assertion was changed under this order's “Change nothing else” restriction. This is not a passing task acceptance claim.
+
+### R6 checks actually run
+
+Dependencies were already installed. Node `v24.17.0`, cached pnpm `10.28.1` via `/private/tmp/jg-sv5pre-bin/pnpm`; no package download. Required suites ran one at a time, Turbo `--concurrency=1`, Vitest `--maxWorkers=2`, tools `--test-concurrency=1`. Observed one-minute load stayed below 20; no threshold wait was required.
+
+| Command / check | Result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | PASS, 7 tasks (2 cached) |
+| `LANE_BASE_REF=origin/codex/sandbox/sv5pre pnpm lint --concurrency=1` | PASS, lane/core/money/commercial checks and 7 package tasks (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL at lane boundary: existing stacked-parent paths, shared register and catalogue outside this lane; no bypass or widening |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same existing stacked comparison boundary |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | PASS, 122 tests |
+| Per-package `pnpm exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'` plus socket/database exclusions below | PASS, 6,526 selected source unit tests: core 2,952; config 41; storage 2; AI 147; DB 422; API 2,065; web 897 |
+| TypeScript `transpileModule` on the changed integration test | PASS, syntax/transpile only; workspace typecheck excludes DB test files |
+| `pnpm build --concurrency=1` | PASS, 7 tasks (3 cached), Next builds 41 pages; existing cache-write/workspace-root warnings are nonfatal |
+| `pnpm openapi:check` | BLOCKED: tsx CLI IPC socket `listen EPERM` in this sandbox |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check through the loader without CLI IPC |
+
+Unit exclusions retain the previous sandbox selection; no test was edited or made optional. All `*.integration.test.ts` and compiled `dist` tests were excluded. DB additionally excludes `test/free-port.test.ts`. API additionally excludes:
+- `src/final-account-lock.isolation.test.ts`
+- `src/sv5pre-worker-execution.integration.test.ts`
+- `src/sv5pre-invoice.http.test.ts`
+- `src/shadow-isolation.application.test.ts`
+- `src/health.test.ts`
+- `src/contractor/practice-worker-switch.http.test.ts`
+- `src/contractor/site-extra.http.test.ts`
+- `src/contractor/contractor-practice-session.http.test.ts`
+- `src/contractor/site-extra-pricing.http.test.ts`
+- `src/contractor/site-visit.http.test.ts`
+- `src/auth/sso/action-paths.test.ts`
+
+Web retains its configured e2e exclusion. Full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, browser suites and both old/new-head executions of the new regression are NOT RUN here; reviewer/GitHub CI owns them. They remain mandatory and are not claimed green. D12/D13, independent exact-commit review, separate acceptance and all production/release gates remain held.
+
+Logs: `/private/tmp/jg-sv5pre-r6-typecheck.log`, `jg-sv5pre-r6-lint-task-base.log`, `jg-sv5pre-r6-lint-main.log`, `jg-sv5pre-r6-lanes-main.log`, `jg-sv5pre-r6-tools-tests.log`, `jg-sv5pre-r6-unit-checks.log`, `jg-sv5pre-r6-unit-results.json`, per-package `jg-sv5pre-r6-unit-*.log`, `jg-sv5pre-r6-build.log`, `jg-sv5pre-r6-openapi.log`, and `jg-sv5pre-r6-openapi-loader.log` (all under `/private/tmp`). Exact unit commands/exclusions: `/private/tmp/jg-sv5pre-r6-unit-checks.py` and results JSON. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`.
+
+Final source-only verification: PASS exact two SQL edits against HEAD, unchanged receipt prefix, exactly four authorized changed files, unchanged lane/register, and `git diff --check`. These checks do not execute PostgreSQL or constitute independent review.
