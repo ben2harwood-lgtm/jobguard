@@ -1,0 +1,45 @@
+# Fee collection simulation: independent reference contracts v1
+
+Status: pure reference arithmetic and fake-event validation only. No collection/refund authority, financial persistence, executable adapter or transport is implemented. The complete M4-12-S card remains open. Decision 74 authorizes preparation on accepted M4-10-S `4710ea180696b91b4fbf161534b57c1dffffe87f`; acceptance of that partial piece does not establish missing upstream issuance or collection interfaces.
+
+## Existing dependency reality
+
+M4-10-S exports `simulationFeeStatementDocumentV1` / `formatSimulationFeeStatement`: a pure document representation with `settlementHistory.state = integration_unavailable`. It creates no numbered immutable issued record, source manifest, statement-family balance or approval artifact. The existing `app.platform_statement` is subscription-constrained; it is not a success-fee statement family. Migration 0218 supplies `read_success_fee_v3(uuid,text)` and `write_success_fee_v3(uuid,text,jsonb,jsonb)`; the latter always refuses with `SUCCESS_FEE_DEPENDENCY_BOUND` after access verification. SV-6's assessment similarly refuses without an authoritative source adapter. These are not callable posting or compensation implementations. No shared collectible-balance lock or current source/dispute interface exists to join here.
+
+Therefore S12-01's command-built £282 statement fixture is DEPENDENCY-BOUND. No owner-seeded statement, collection, refund or approval substitutes for it. The independent table/read migration cannot establish the required statement/correction composite foreign keys or readers without guessing those missing contracts. Hold that whole runnable sub-part: C260 reserves **0220**, but no migration is created or registered. No new database objects mean no LP-0, lp-0-authority-paths, tenancy, serious-b5 or contractor-entitlement catalogue rows apply; their freezes and existing rows remain unchanged. Future database work must add exact catalogue rows and effective-privilege proofs when its real objects are authorized.
+
+## Pure reference arithmetic
+
+`feeCollectionReferenceV1` is strict supplied reference data, never an HTTP command or trusted database fact. Its version is `fee-collection-reference.v1`, environment exactly `synthetic_demo`, and fields are `currentFeePrincipal` plus at most 10,000 attempt snapshots. Each snapshot has a bounded nonempty `id`, original `effectKey`, `kind` (`collection` or `refund`), state, positive GBP `principal`, and nullable `originalCollectionId`. Refunds name one explicit settled original collection. Duplicate attempt or effect identities, missing/nonsettled originals, refunds of refunds and settled-plus-reserved refunds above that original are rejected. Failed attempts retain their historical positive amount but contribute no reservation or settlement. These snapshots are in-memory test inputs; no snapshots are persisted as mutable paid flags.
+
+`projectFeeCollectionReference(unknown)` consumes supplied B, never Q or a rate. C and R sum only supplied settled collections/refunds. Pending, accepted and unknown contribute reservations only. All intermediates use bigint; Money outputs use the existing magnitude and safe integer checks, with GBP only. There is no rounding in subtraction or sums.
+
+- Retained = C − R.
+- Outstanding = max(0, B − retained).
+- Refund due = max(0, retained − B).
+- Collection capacity = max(0, outstanding − active collection reservations), or zero if any outcome is unknown.
+- Refund capacity for an explicitly named original = min(original principal − its settled/reserved refunds, max(0, family refund due − all active refund reservations)), or zero if any outcome is unknown.
+
+`refundableFeeCollectionReference` never selects an original or distributes a refund. Capacity is arithmetic before authority, proof validity, disputes and shared-lock checks; it is not an authorization or promise that a payment may proceed. A supplied correction can reduce B below existing reservations; those reservations remain visible and capacity clamps to zero. This models balance conservation without executing upstream compensation or releasing an uncertain reservation. Output version is `fee-collection-reference-projection.v1` with Money fields `settledPrincipal`, `refundedPrincipal`, `retainedPrincipal`, `outstandingPrincipal`, `refundDue`, `collectionReservedPrincipal`, `refundReservedPrincipal`, `collectionCapacity`, and boolean `unknownOutcome`. It is not a server GET/view or browser-marker proof.
+
+## Transitions and identity
+
+`checkFeeCollectionTransition` validates a supplied pair only. Same-state replay is permitted. Pending may become accepted, unknown, definite failure or settled; accepted may become unknown, definite failure or settled; unknown may remain unknown or become definite failure/settled; definite failure and settled are terminal. Redirect/timeout are not states. Validation never establishes that a claimed failure or settlement actually occurred: definitive outcomes require the held authenticated durable reconciliation path. Unknown cannot become pending/accepted to permit a replacement invocation.
+
+`compareFeeCollectionIdentity` validates two strict `fee-collection-identity.v1` representations and compares tenant/job/actor/command UUIDs and lowercase SHA-256 canonical payload hash. Returns `same` or `conflict`; malformed input throws `FeeCollectionError`. This function does not authenticate access, compute a request hash, store a receipt or return an authoritative replay result. A future command must verify current access before receipt lookup and return its stored first result. No new provisional command, approval-binding or result schema is invented in place of the held upstream artifact contract.
+
+Core failures are redacted typed `FeeCollectionError` codes: `INVALID_FEE_COLLECTION_REFERENCE`, `FEE_COLLECTION_IDENTITY_CONFLICT`, `INVALID_FEE_COLLECTION_TRANSITION`.
+
+## Fake-event validation only
+
+`createFeeCollectionFakeEventValidator(serverMode)` refuses any deployment value except exactly `synthetic_demo`. The caller must obtain that value from server configuration; no route accepts it. It has only `validate`, no invocation/reconciliation methods or provider ports. It validates a strict `fee-collection-adapter-event.v1` shape: fixed `fee_collection_fake.v1` identity, environment, tenant/job/attempt/event UUIDs, bounded original effect key, collection/refund action, pending/accepted/unknown/definite-failure/settled kind, positive bounded GBP Money and fixed fictional `jobguard_synthetic_fee_account` target. Parsed event and principal are copied/frozen. This does not authenticate, generate, persist or settle a fact. Errors expose only `INVALID_FEE_COLLECTION_FAKE_EVENT`.
+
+`compareFeeCollectionFakeEvents` validates both supplied shapes, rejects the same event ID with changed payload or changed invariant bindings on the same tenant-scoped effect (even under a new event ID), and classifies identical replay (`same_event`), equal payload with another ID (`same_fact`), or `distinct`. It stores nothing. Accepted and settled remain distinct kinds. Real semantic uniqueness, cross-job bindings and source-event authentication require the held database routines, not this unit double.
+
+## Explicit holds
+
+H1/Q4: authority-lifetime rule remains unanswered. No chosen duration, invented approval, authority creation/use, approval-derived reservation, execution claim/invocation, durable financial fact, refund, revocation/expiry execution, reconciliation, repository/application/controller/Next mutation, route registration, EXECUTE grant or OpenAPI operation. Rule-independent binding validation needing the missing exact upstream approved artifact remains DEPENDENCY-BOUND; expiry syntax alone cannot create authority. All business locks must precede audit-head acquisition when the upstream lock contract becomes available; no independent collection lock is supplied now.
+
+H2/Q5: no automatic selection/splitting/waterfall across collections. H3/Q7: no standing-authority or MON-4A consent integration. H4: screens, browser journeys, real data, providers, charges/refunds, deployment and release remain held. Non-catch qualification authority and negative-compensation execution remain unbuilt. M4-8-S remains the only allocator; SV-6 attribution and SV-5 reveal/disposition are consumed only through their eventual accepted authoritative interfaces. No v1 ledger/payment, customer receipt, subscription settlement or model output is substituted.
+
+Persisted/transport acceptance, structural SQL proofs, fresh/upgrade controls and server-marker assertions remain open. Future installation must preserve history, use SELECT-only runtime grants with FORCE RLS and narrow checked EXECUTE, and add an expand-compatible migration plus a rule-9 upgrade proof. No migration/backfill/rollback or operational alert is introduced by this pure portion. Source inspection and deterministic tests are separate from an independent exact-commit model verdict and separate actor acceptance.

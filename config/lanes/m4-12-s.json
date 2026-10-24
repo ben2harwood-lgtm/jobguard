@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-12-s": {
+      "branches": [
+        "codex/sandbox/m4-12-s"
+      ],
+      "receipt": "docs/verdicts/M4-12-S/BUILDER_RECEIPT.md",
+      "note": "C260 reserves 0220; Decision 74 preparation on accepted 4710ea18. Independent pure reference arithmetic and fake-event validation only. Persistence, source bindings, Q4 authority lifetime, execution, negative compensation and UI held. No database objects or catalogue changes.",
+      "allow": [
+        "packages/core/src/fee-collection.ts",
+        "packages/core/src/fee-collection.test.ts",
+        "packages/core/src/index.ts",
+        "apps/api/src/fee-collection-fake-adapter.ts",
+        "apps/api/src/fee-collection-fake-adapter.test.ts",
+        "docs/contracts/fee-collection-simulation-v1.md",
+        "docs/verdicts/M4-12-S/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
