@@ -19,6 +19,7 @@
         "packages/db/test/recovery-attribution-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/verdicts/SV6-PERSIST-A/BUILDER_RECEIPT.md"
       ]

@@ -1,5 +1,5 @@
 // PostgreSQL only. Private synthetic storage tests; not upstream source/command acceptance.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { attributionPredicates, recoveryAttributionRevisionV1 } from "@jobguard/core";
 import { createLockFixture, closeLockFixture, asFixtureTenant, storedAttributionFixture, LOCK_OWNER, type LockFixture } from "./recovery-attribution-fixture.js";
@@ -94,4 +94,55 @@ it.each(attributionPredicates)("private storage retains the false conjunct %s wi
  expect(row.document).toEqual(excluded);
  expect(row.document.facts.facts[predicate].holds).toBe(false);
  expect(Object.keys(row.document.facts.facts)).toHaveLength(10);
+});
+
+// Nonempty rows in all three tables are essential: USING(true) must leak a row.
+// Setup uses the fixture owner; reads run as the actual non-owner runtime role.
+it.each(["cross-tenant", "no-session", "pre-lock"] as const)("runtime attribution reads fail closed: %s (including mutation Y control)",async scenario=>{
+ const {p,document,command}=await storedAttributionFixture(f,"11111111-1111-4111-8111-111111111111");
+ await asFixtureTenant(f.owner,p.tenantId,async db=>{
+  await db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]);
+  const assessmentId=randomUUID();
+  const next=recoveryAttributionRevisionV1.parse({...document,assessmentId,revision:2,previousAssessmentId:document.assessmentId,
+   facts:{...document.facts,revisionId:assessmentId}});
+  await db.query("SELECT app.append_recovery_attribution($1,$2,null,'source_changed','synthetic:rls-control')",[next,LOCK_OWNER]);
+ });
+ const digest=createHash("sha256").update(randomUUID()).digest("hex");
+ await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
+ await f.admin.query("INSERT INTO identity.identity_user(id) VALUES('d1500000-0000-4000-8000-000000000001') ON CONFLICT DO NOTHING");
+ await f.admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+  SELECT 'd1500000-0000-4000-8000-000000000003',tenant_id,account_id,'d1500000-0000-4000-8000-000000000001','owner'
+  FROM app.membership WHERE tenant_id=$1 AND id=$2 ON CONFLICT DO NOTHING`,[p.tenantId,LOCK_OWNER]);
+ const probe=async(mutationTable:string|null,positive=false)=>{
+  const db=await f.admin.connect();
+  try{
+   await db.query("BEGIN");
+   // Test-only historical setup. Bypass immutable/FK triggers solely while
+   // binding the practice job or removing its lock; always roll back.
+   await db.query("SET LOCAL session_replication_role='replica'");
+   await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='capture' WHERE tenant_id=$2 AND id=$3",[digest,p.tenantId,p.jobId]);
+   if(!positive && scenario==="pre-lock")await db.query("DELETE FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[p.tenantId,p.jobId]);
+   await db.query("SET LOCAL session_replication_role='origin'");
+   if(mutationTable)await db.query(`ALTER POLICY attribution_read ON app.${mutationTable} USING(true)`);
+   await db.query("SET LOCAL ROLE jobguard_runtime");
+   await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[
+    !positive && scenario==="cross-tenant" ? randomUUID() : p.tenantId,
+    !positive && scenario==="no-session" ? "" : digest,
+   ]);
+   for(const table of tables){
+    // No tenant filter: RLS itself must protect raw table reads.
+    const rows=(await db.query(`SELECT job_id FROM app.${table}`)).rows;
+    if(positive)expect(rows.some(row=>row.job_id===p.jobId)).toBe(true);
+    else expect(rows).toEqual([]);
+   }
+  }finally{await db.query("ROLLBACK");db.release();}
+ };
+ // Prove a valid current owner can see the populated, locked job first.
+ await probe(null,true);
+ await probe(null);
+ // The identical negative assertion MUST fail with the exact USING(true)
+ // mutation, then pass after rollback. This is real PostgreSQL evidence only
+ // when this integration test executes; source inspection is not a run.
+ for(const table of tables)await expect(probe(table)).rejects.toThrow(/expected/u);
+ await probe(null);
 });
