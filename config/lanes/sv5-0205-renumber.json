@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-0205-renumber": {
+      "branches": [
+        "codex/sandbox/sv5-0205-renumber"
+      ],
+      "receipt": "docs/verdicts/SV-5/BUILDER_RECEIPT.md",
+      "note": "Source-only reserved 0205 mechanical renumber under C216; no runtime checks or acceptance. No web workflow introduced.",
+      "allow": [
+        "packages/db/migrations/0199_final_check.sql",
+        "packages/db/migrations/0205_final_check.sql",
+        "packages/db/migration-notes/0199_final_check.md",
+        "packages/db/migration-notes/0205_final_check.md",
+        "packages/db/test/final-check-access.integration.test.ts",
+        "packages/db/test/final-check-upgrade.integration.test.ts",
+        "docs/ledger/SV5-0205-RENUMBER.md",
+        "docs/verdicts/SV-5/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

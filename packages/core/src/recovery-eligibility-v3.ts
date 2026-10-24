@@ -12,6 +12,8 @@ export const recoveryEligibilityCommandV3 = z.object({
 export const recoveryEligibilityFactsV3 = z.object({
  version:z.literal("recovery-eligibility-facts.v3"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),caseId:z.string().uuid(),
  fixture:recoveryEligibilityFixtureV3,payer:z.enum(["not_insurer","insurer_unmarked","insurer_customer_own"]),settlement:z.enum(["settled","pending","unverified"]),paymentTiming:z.enum(["before_opening","after_opening"]),sourceRef:z.string().min(1).max(300),
+ // Ruling 130 option B: server-derived and OPTIONAL. Absent means no persisted fee-terms approval exists for the case; terms never gate a review.
+ termsTiming:z.enum(["before_settlement","after_settlement"]).optional(),
 }).strict();
 export class RecoveryEligibilityV3Error extends Error {
  constructor(readonly code:"INVALID_COMMAND"|"ELIGIBILITY_SOURCE_REQUIRED"|"ELIGIBILITY_FIXTURE_MISMATCH"|"ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE") {super(code);}
@@ -20,6 +22,7 @@ export const recoveryClaimLineKindV3 = z.enum(["principal","statutory_interest",
 export const recoveryDebtorTypeV3 = z.enum(["business","individual"]);
 /** Ben-approved message bytes. Ruling 108 activates F21 for new reviews; historical null/held results remain readable. */
 export const RECOVERY_NOT_COUNTED_WORDING_V1 = {
+ beforeFeeTerms: "This came in before your fee terms were agreed, so it isn't counted as recovered money and there's no fee on it.",
  individualInterest: "Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",
  unpaidBillReduced: "Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",
 } as const;
@@ -27,7 +30,7 @@ export const recoveryEligibilityReasonV3 = z.enum([
  "Credit note below the £250 minimum","Credit note used against an invoice not yet paid in full",
  "Fixed statutory compensation is not part of the fee base","Paid before you opened this case",
  "Pending money cannot qualify","A manual payment record is not settlement evidence","Prevented spending is not recovered cash",
- "Insurer proceeds never qualify", RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest, RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced,
+ "Insurer proceeds never qualify", RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest, RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced, RECOVERY_NOT_COUNTED_WORDING_V1.beforeFeeTerms,
 ]);
 export const recoveryEligibilityViewV3 = z.object({
  version:z.literal("recovery-eligibility-review.v3"),policyVersion:z.literal("reference_recovery_eligibility_policy_v3"),
@@ -47,7 +50,8 @@ export function recoveryFixtureDefinitionV3(fixture:RecoveryEligibilityFixtureV3
  return {category,credit,lines,movement:fixture==="F17"?"supplier-refund-540":fixture==="F20"?"receipt-384":"receipt-3000"} as const;
 }
 /** D03 v3 synthetic candidates only. The required payer fact is server-derived; terms authority is not created here.
- * SV-1's pure predicate receives its existing synthetic prerequisite assumptions for the fixture, not a stored terms approval.
+ * Withheld-payment terms timing is optional and server-derived (ruling 130 option B): only "after_settlement", i.e. a persisted approval strictly later than the
+ * qualifying settlement, is the decision 123 exclusion. "before_settlement" and absent (no approval) evaluate exactly as before DW3; the terms requirement lives at pursuit.
  * No result authorizes pursuit or money posting. All category/line arithmetic comes from SV-1 and SH-1. */
 export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityViewV3 {
  const parsed=recoveryEligibilityFactsV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
@@ -61,7 +65,7 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
    proof:{version:"shadow-settlement-proof.v1",...binding,status:f.settlement==="settled"?"verified_settled":f.settlement==="pending"?"pending":"unverified",sourceRef:f.sourceRef},
    origin:{version:"shadow-eligibility-origin.v1",...binding,kind:definition.category==="withheld_customer_payment"?"builder_opened_case":"approved_supplier_case",sourceRef:f.caseId},principalNet:serializeExactPence(exactPence(BigInt(line.netPence)))};
   const specifics=definition.category==="duplicate_supplier_payment"?{category:definition.category,doublePaymentEvidenced:true,refundForm:"cash"}:
-   definition.category==="withheld_customer_payment"?{category:definition.category,builderOpened:true,feeTermsApprovedBeforePursuit:true,overdue:{version:"D03-overdue.v1",basis:"synthetic_fixture",thresholdMet:true,sourceRef:f.caseId},ownReminderResponse:"ignored",paymentTiming:f.fixture==="F20"?"before_opening":f.paymentTiming,proceeds:f.payer==="insurer_unmarked"?"insurer":"customer_cash",component:line.kind,debtor:line.debtorType}:
+   definition.category==="withheld_customer_payment"?{category:definition.category,builderOpened:true,feeTermsApprovedBeforePursuit:f.termsTiming!=="after_settlement",overdue:{version:"D03-overdue.v1",basis:"synthetic_fixture",thresholdMet:true,sourceRef:f.caseId},ownReminderResponse:"ignored",paymentTiming:f.fixture==="F20"?"before_opening":f.paymentTiming,proceeds:f.payer==="insurer_unmarked"?"insurer":"customer_cash",component:line.kind,debtor:line.debtorType}:
    definition.category==="prevention"?{category:definition.category}:{category:definition.category,mode:"applied_credit",credit:{consumedNetPence:line.netPence,laterInvoiceId:f.jobId,laterInvoicePayment:f.fixture==="F16-partial"?"partial":f.fixture==="F21"?"unpaid":"full",sourceRef:f.sourceRef}};
   const result=evaluateRecoveryEligibility(createEligibilityFacts({...base,...specifics}));
   const reason:RecoveryEligibilityViewV3["reason"]=f.fixture==="F22"?"Prevented spending is not recovered cash":
@@ -70,7 +74,8 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
    line.kind==="fixed_compensation"?"Fixed statutory compensation is not part of the fee base":
    line.kind==="statutory_interest"&&line.debtorType==="individual"?RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest:
    f.fixture==="F15"?"Credit note below the £250 minimum":f.fixture==="F16-partial"?"Credit note used against an invoice not yet paid in full":f.fixture==="F21"?RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced:
-   f.settlement==="pending"?"Pending money cannot qualify":f.settlement==="unverified"?"A manual payment record is not settlement evidence":null;
+   f.settlement==="pending"?"Pending money cannot qualify":f.settlement==="unverified"?"A manual payment record is not settlement evidence":
+   definition.category==="withheld_customer_payment"&&f.termsTiming==="after_settlement"?RECOVERY_NOT_COUNTED_WORDING_V1.beforeFeeTerms:null;
   return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:false};
  });
  const headerReason=f.fixture==="F19"?(lines.find(l=>l.kind==="principal")?.reason??lines.find(l=>l.kind==="fixed_compensation")?.reason??null):lines.find(l=>l.reason!==null)?.reason??null;
