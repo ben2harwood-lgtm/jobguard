@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authUrlV1 } from "@jobguard/config";
 
 /** Versioned schemas for every authentication input boundary. */
 export const challengeRequestV1 = z.object({
@@ -20,5 +21,5 @@ export const tenantRequestCredentialsV1 = z.object({
   requestedTenantId: z.guid({ error: "Invalid uuid" }).optional(),
   tenantHeader: z.guid({ error: "Invalid uuid" }).optional(),
   csrfToken: z.string().min(24).optional(),
-  origin: z.url({ error: "Invalid url" }).optional(),
+  origin: authUrlV1.optional(),
 }).strict();

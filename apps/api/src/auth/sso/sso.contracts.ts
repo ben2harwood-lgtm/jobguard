@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { proposedDecisionRecords, requireApprovedDecision, type DeploymentMode } from "@jobguard/config";
+import { authUrlV1, proposedDecisionRecords, requireApprovedDecision, type DeploymentMode } from "@jobguard/config";
 
 export const ssoErrorCodes = ["INVALID_SSO_INPUT", "SSO_ROUTE_BLOCKED", "SSO_NOT_FOUND", "SSO_FORBIDDEN", "SAML_REFUSED", "ASSERTION_REPLAY", "REQUEST_REFUSED", "DOMAIN_UNVERIFIED", "DOMAIN_CLAIMED", "LINK_REQUIRED", "LINK_FORBIDDEN", "MEMBERSHIP_REVOKED", "NO_MAPPED_GRANTS", "STALE_MAPPING", "SSO_UNAVAILABLE"] as const;
 export class SsoError extends Error {
@@ -28,7 +28,7 @@ export const ssoDataFlowV1 = z.object({
   encryption:nonempty,credentialsClass:nonempty,direction:z.literal("local-inbound"),fallback:z.literal("deny"),d04Evidence:nonempty,d12Evidence:nonempty,
   reviewDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),gateStatus:z.literal("synthetic-only"),killSwitch:nonempty,verificationEvidence:regions,
 }).strict();
-export const ssoMetadataV1 = z.object({version:z.literal("sso-metadata.v1"),protocol:z.literal("saml2"),provider:z.literal("in-process-test-idp"),id:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),idpEntityId:nonempty,spEntityId:nonempty,callbackUrl:z.url({ error: "Invalid url" }),entryPoint:z.url({ error: "Invalid url" }),idpCert:z.string().min(100).max(8192),sessionLimitSeconds:z.number().int().min(60).max(900),dataFlow:ssoDataFlowV1}).strict();
+export const ssoMetadataV1 = z.object({version:z.literal("sso-metadata.v1"),protocol:z.literal("saml2"),provider:z.literal("in-process-test-idp"),id:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),idpEntityId:nonempty,spEntityId:nonempty,callbackUrl:authUrlV1,entryPoint:authUrlV1,idpCert:z.string().min(100).max(8192),sessionLimitSeconds:z.number().int().min(60).max(900),dataFlow:ssoDataFlowV1}).strict();
 export type SsoMetadata = z.infer<typeof ssoMetadataV1>;
 export type SsoAdminCommand = z.infer<typeof ssoAdminV1>;
 /** Identity's legacy `production` label and missing/unknown configuration are denied modes. */

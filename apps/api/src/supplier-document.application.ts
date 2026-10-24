@@ -8,7 +8,7 @@ function parseSupplierCommand<T extends z.ZodType>(schema: T, raw: unknown): z.o
   if (parsed.error.issues.every(issue => issue.code === "invalid_format" && issue.format === "regex")) {
     // Only the legacy error constructor is used, never the vulnerable v3 array parser.
     throw new LegacyZodError(parsed.error.issues.map(issue => ({
-      code: "invalid_string", validation: "regex", message: "Invalid",
+      validation: "regex", code: "invalid_string", message: "Invalid",
       path: issue.path.map(part => typeof part === "symbol" ? String(part) : part),
     })));
   }

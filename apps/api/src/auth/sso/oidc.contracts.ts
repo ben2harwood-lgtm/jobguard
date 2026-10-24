@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { authUrlV1 } from "@jobguard/config";
 
-const fictionalUrl = z.string().max(512).url().refine(value => {
+const fictionalUrl = z.string().max(512).pipe(authUrlV1).refine(value => {
   const url = new URL(value);
   return url.protocol === "https:" && /^(?:[a-z0-9-]+\.)+invalid$/u.test(url.hostname) && !url.username && !url.password && !url.port && !url.search && !url.hash;
 });

@@ -1,5 +1,9 @@
-import { utcDatetimeV1 } from "@jobguard/core";
 import { z } from "zod";
+
+// Kept local so Playwright can load this contract through its CommonJS loader.
+// Compatibility with core utcDatetimeV1 is covered by contracts.datetime.test.ts.
+const dateAndTime = `${z.regexes.date.source.slice(1, -1)}T${z.regexes.time({}).source.slice(1, -1)}`;
+const utcDatetimeV1 = z.string().regex(new RegExp(`^${dateAndTime}Z$`), "Invalid datetime");
 
 export const workspaceJobIdV1 = z.guid({ error: "Invalid uuid" });
 export const workspaceJobStatusV1 = z.enum(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"]);
