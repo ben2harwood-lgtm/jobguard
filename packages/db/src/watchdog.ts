@@ -43,6 +43,7 @@ export function commandIdFor(kind: WatchdogCommandType, jobId: string, request: 
  * immutable, so reading it inside the claiming transaction is race-free for rows that already exist. Stores that exist for other commands
  * (invoices, receipts of money, the like) are not watchdog commands and are not listed; neither are random ids a command writes for its
  * own internal rows (a readiness snapshot's, an inbox "created" event's). */
+// CH-4 command events/links also reserve IDs when modern bookkeeping is absent.
 const LEGACY_COMMAND_OWNERS = `
   SELECT 'readiness.record' AS kind, job_id FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'readiness.advance', job_id FROM app.readiness_decision WHERE tenant_id=$1 AND command_id=$2
@@ -55,7 +56,9 @@ const LEGACY_COMMAND_OWNERS = `
   UNION ALL SELECT 'inbox.seed', nullif(split_part(semantic_key,':',2),'')::uuid FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type='inbox.seed'
   UNION ALL SELECT 'purchase_order.place', job_id FROM app.purchase_order_placement WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'proof.complete', job_id FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2
-  UNION ALL SELECT 'evidence.begin_upload', job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2`;
+  UNION ALL SELECT 'evidence.begin_upload', job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2
+  UNION ALL SELECT CASE kind WHEN 'finished_on_site' THEN 'WorkState.finish' WHEN 'finished_cancelled' THEN 'WorkState.cancel_finish' WHEN 'closed' THEN 'WorkState.close' WHEN 'reopened' THEN 'WorkState.reopen' ELSE 'WorkState.unrecognised' END, job_id FROM app.job_work_state_event WHERE tenant_id=$1 AND command_id=$2 AND source_receipt_id IS NULL
+  UNION ALL SELECT 'WorkState.link', predecessor_job_id FROM app.job_link WHERE tenant_id=$1 AND command_id=$2`;
 
 /** An id the previous schema persisted belongs to the kind and job that persisted it. It can be claimed only by that kind on that job
  * (its own replay); any other kind, or the same kind on another job, is a conflict, so a command whose original has not replayed yet cannot

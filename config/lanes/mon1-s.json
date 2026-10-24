@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-s": {
+      "branches": [
+        "codex/sandbox/mon1-s"
+      ],
+      "receipt": "docs/verdicts/MON1-S/BUILDER_RECEIPT.md",
+      "note": "RED. Normal-company actual-source foundation only, decision 74 build ahead. C1: no HTTP/UI changes. Practice, trial, money projection, shared grants and subscription integration held; PostgreSQL proofs CI-only.",
+      "allow": [
+        "packages/db/src/meter-lifecycle-source.ts",
+        "packages/db/src/meter-lifecycle-repository.ts",
+        "packages/db/src/meter-lifecycle-repository.test.ts",
+        "packages/db/test/meter-lifecycle-source.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/meter-lifecycle-isolation.integration.test.ts",
+        "packages/db/test/meter-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/meter-lifecycle-corrections.integration.test.ts",
+        "packages/db/migrations/0209_meter_lifecycle_source.sql",
+        "packages/db/migration-notes/0209_meter_lifecycle_source.md",
+        "docs/contracts/meter-lifecycle-persistence-v1.md",
+        "docs/verdicts/MON1-S/BUILDER_RECEIPT.md",
+        "packages/core/src/meter-lifecycle.ts",
+        "packages/core/src/meter-lifecycle.test.ts",
+        "packages/core/src/meter-lifecycle-calendar.test.ts",
+        "packages/core/src/meter-lifecycle-architecture.test.ts",
+        "docs/contracts/meter-lifecycle-v1.md",
+        "packages/db/migrations/0207_meter_lifecycle_source.sql",
+        "packages/db/migration-notes/0207_meter_lifecycle_source.md",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
