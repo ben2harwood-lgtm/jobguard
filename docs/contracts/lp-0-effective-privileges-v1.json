@@ -66,6 +66,14 @@
 {"id":"x-variation-writes","title":"Runtime INSERT (and variation column UPDATE) on variation, approval, revision, rejection, withdrawal and rate observation","kind":"commitment","status":"existing_exception","target":{"state":"review_at_card","note":"LP-5c inventories the approval write; LP-6d converts the remaining writers"},"cards":["LP-5c","LP-6d"],"responsibilities":{"LP-5c":"variation_approval and similar approval records are authority-changing grants inventoried for closure","LP-6d":"each remaining direct writer is converted to a checked routine or classified working data with its downstream effect"},"downstream":"variation_approval records an approval of changed price; variation_revision and variation_approval are fingerprinted. Direct writes can create approval records without the approval routine.","sources":["packages/db/migrations/0003_job_spine.sql:113","packages/db/migrations/0003_job_spine.sql:114"],"tests":["packages/db/test/quote.integration.test.ts","packages/db/test/variation.integration.test.ts","packages/db/test/fingerprinted-row-shape.integration.test.ts"],"gaps":[],"path":"ap-quote-variation-commitments","alsoPaths":["ap-lp13-legacy-unknown-raiser"]}
 ],
 "entries":[
+{"key":"acl|rel|table|app.recovery_attribution_command|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.recovery_attribution_command|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|rel|table|app.recovery_attribution_reassessment|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.recovery_attribution_reassessment|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|rel|table|app.recovery_attribution_revision|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.recovery_attribution_revision|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|routine|function:app.assess_recovery_attribution(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
+{"key":"owner|routine|function:app.assess_recovery_attribution(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|rel|table|control_plane.subscription_plan_catalogue|jobguard_runtime|SELECT|-","group":"a-mon2ap-subscription"},
 {"key":"owner|rel:table|control_plane.subscription_plan_catalogue|jobguard_migration","group":"a-mon2ap-subscription"},
 {"key":"acl|routine|function:app.mon2_command(uuid,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-mon2ap-subscription"},

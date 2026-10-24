@@ -1,0 +1,75 @@
+# SV6-PERSIST-A builder receipt
+
+Status: INCOMPLETE — storage foundation built ahead; no independent verdict or acceptance.
+
+## Session
+
+- Date: 24 October 2026; builder: Codex; worktree: `.worktrees/sv6-persist-a`.
+- Branch: `codex/sandbox/sv6-persist-a`; ordered base: accepted SV6-05 `68c87b84` (includes SV6-01).
+- Order: SV6-PERSIST-A, reserved migration 0213 / C253.
+- Synthetic only. No UI/HTTP, provider, model/prompt or money-policy changes. No git write, commit, push, install or PostgreSQL startup authorized in this sandbox.
+- Stack observed: Node v24.17.0; pinned pnpm 10.28.1 used via cached executable (details below).
+
+## Built
+
+Migration 0213 adds migration-owned FORCE-RLS attribution revisions, first-command results and reassessment causes, composite subject foreign keys, sequential revision/predecessor checks, case/command serialization and owner-level UPDATE/DELETE/TRUNCATE rejection. Runtime tables are SELECT-only; private append has no runtime/PUBLIC/infrastructure EXECUTE. A narrow runtime entry point fails closed with `RECOVERY_ATTRIBUTION_DEPENDENCY_BOUND`. The repository parses commands/results and reads history through tenant-scoped transactions and authenticated post-lock RLS.
+
+The private append primitive is an internal synthetic storage seam, not an accepted source adapter. Private tests parse fixtures before persistence. Neither these fixtures nor stored source UUIDs prove actual upstream sources. No review/current-qualification authority, audit-backed business command, allocation or illustration is manufactured. This is a deliberate dependency boundary, **not completion of the ordered persisted command acceptance**.
+
+Tenancy and LP-0 inventory additions are exact. SERIOUS-B5 adds only the three new table names, five index names, three exact function signatures and six policies, preserving every prior comparison. Fingerprinted row guards unchanged. No data backfill; forward-fix note in migration note.
+
+## Acceptance and holds
+
+- SV6-01/02–04/06–07/08–09/12–16/13–15: actual persisted source-backed acceptance DEPENDENCY-BOUND. Private storage tests cover facts, exact rationals, first-result replay and appended history only. Earlier pure tests remain unchanged; their source-adapter holds are not falsely removed.
+- SV6-10: INCOMPLETE — HELD. Authority-table C/F/G/H/M/N and F1–F8/F4b source-backed commands not built; exact F4 fraction storage is separately tested. No saved-allocation, fee or illustrated-history result claimed.
+- SV6-16 and SV6-29: INCOMPLETE — HELD. Stored £800 principal is only a synthetic round-trip; no full value receipt or illustrated output is claimed.
+- SV6-BEN-Q4/Q5: existing boundary contracts retained; no complete persisted billed-vs-paid/illustration acceptance claimed. No “found” meaning, fractional display rounding, comparison target or policy activation chosen.
+- SV6-21: catalogue/DML/TRUNCATE/escalation/forged-call tests written, NOT RUN — PostgreSQL reviewer/CI owed. Public boundary closed; private JSON does not grant source authority.
+- SV6-27/28: upgrade tests written, NOT RUN — PostgreSQL reviewer/CI owed. Own-step full predecessor facts compare before later migrations; later stage compares named job/quote values; new-table immutability, later-column tolerance and old-value corruption controls included.
+- Literal card browser assertions: **NOT BUILT / NOT RUN — UI parked**.
+- SV-5, CH-7, M4-8 accepted source-owner bridge, reassessment execution contract, review authorization/audit, independent exact-commit verdict and separate acceptance remain release/acceptance gates. No aggregate SV-6 completion claimed.
+
+## Guard / mutation evidence
+
+All real-PostgreSQL mutation evidence remains NOT RUN (reviewer/CI). Tests assert owner UPDATE/DELETE/TRUNCATE rejection for each new table and roll back disabling each immutability trigger to demonstrate removal admits the forbidden statement. Replay payload collision, stale predecessor, non-synthetic envelope, missing-context and same-tenant wrong-job subject checks are adversarial tests. Rollback probes widen INSERT and private EXECUTE and remove FORCE RLS, asserting the catalogue changes are detected. Catalog/DML denial tests fail if runtime rights widen. Upgrade controls mutate an old account name (must differ), add a later column while projecting named original columns (must match), and roll back to the exact full snapshot. Full per-guard mutations for tenant/source/authorization and positive runtime behavior remain DEPENDENCY-BOUND / NOT BUILT; this receipt does not claim the order's every-guard mutation requirement satisfied.
+
+## Checks actually run
+
+Actual commands and results are recorded below. Database/browser suites intentionally not run: dispatcher environment cannot bind localhost/start PostgreSQL. Reviewer must run DB suites, including LP-0 freeze, tenancy, fingerprinted-row and SERIOUS-B5 upgrade suites. No mock results substitute for them.
+
+### Executed command record
+
+All checks ran serially. Each explicitly invoked Vitest command used `--maxWorkers=2` and at most three files. Check starts waited while load exceeded 20. No PostgreSQL or browser suite was executed.
+
+Pinned executable: `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`, exposed as `pnpm` through `/private/tmp/jg-sv6-bin/pnpm` for child scripts. The initial PATH `pnpm --version` attempted its own version resolution and failed registry verification/fetch; no installation command was run and no package download succeeded. The cached executable reports 10.28.1.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | Exit 0; 7 successful tasks, 2 cache hits. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 1 at lane boundary; core-purity check passed (234 files). Root lint is **not green**. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; origin/main comparison includes accepted parent SV6-01/SV6-05 lane files, contracts, receipts and pure files outside this lane. No parent lane/register was changed or allowance broadened. |
+| `node tools/money-arithmetic-lint.mjs` | Exit 0. |
+| `node tools/commercial-boundary-lint.mjs` | Exit 0. |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0; all 7 package lint tasks successful, 2 cache hits. This is separate from the failed root lane check. |
+| `node --test tools/*.test.mjs` | Exit 0; 122 passed, zero failed/skipped. |
+| Serial `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 <at-most-three-files>` batches | Final: 170 unit files / 3,412 tests passed: core 126/3,009; config 4/41; storage 1/2; ai 15/147; db/src 24/213. 58 initial batches: 45 passed, 13 failed package resolution before dist existed. After build, all 13 affected batches passed (39 files). No unrelated passing batches repeated. No runtime/database integration proof inferred. |
+| `pnpm build --concurrency=1` | Exit 0; 7 successful tasks, 2 cache hits; Next generated 41 pages. Existing multiple-lockfile/workspace-root warning. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/migrate-discovery.test.ts` | Exit 0; 1 file, 3 tests passed without PostgreSQL. |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC `listen EPERM` in sandbox. |
+| `node apps/api/dist/generate-openapi.js --check` | Exit 1: compiled-script probe reported stale OpenAPI. No OpenAPI artifact regenerated. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0: actual source OpenAPI check through loader, with no CLI IPC. The compiled-script probe is not represented as passing. |
+| Explicit `tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop` on the four new DB test/helper files | Final exit 0. Initial explicit `--types node` could not resolve the workspace's transitive Node type location; retry using normal type resolution exposed a fixture parameter inferred too narrowly from `randomUUID()`. Annotated that fixture tenant parameter as string; final run passed. |
+| `pnpm --filter @jobguard/db exec vitest list test/recovery-attribution.integration.test.ts test/recovery-attribution-figures.integration.test.ts test/recovery-attribution-upgrade.integration.test.ts --maxWorkers=2` | Exit 0; 20 tests collected, **zero tests executed**; no PostgreSQL started. |
+| `git diff --check` | Exit 0. |
+
+Logs and batch manifests are `/private/tmp/jg-sv6-{typecheck,lint,lanes,money-lint,commercial-lint,package-lint,tools-test,unit-tests,unit-retry,build,migration-order,openapi,openapi-built,openapi-loader,db-test-typecheck-final,db-test-collection}.log` and `/private/tmp/jg-sv6-unit-{summary,retry-summary}.json`. They are local run artifacts, not independent verdicts. Typecheck/build/package lint reused two package cache results; direct Vitest batches did not claim Turbo cache execution.
+
+The ordered base is verified as current HEAD `68c87b84ec5ede05434d16034079e507aa9f1635`. No commit was created. Intended conventional commit message: `/private/tmp/jg-msg-sv6-persist-a.txt`.
+
+### Remaining acceptance work
+
+The dispatcher/reviewer must execute the real PostgreSQL tests and paired mutations, the actual catalog/grant freeze, tenancy and fingerprint guards, and both own-step and SERIOUS-B5 upgrade proofs. Source-backed persisted commands, audit atomicity, current source revalidation, approved review authority, saved-allocation integration and the every-guard mutation requirement remain incomplete. Full `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and mandatory existing browser regressions remain CI/reviewer gates; the selected unit batches above are not a full-root-suite claim.
+
+Existing pure `recovery-attribution-persistence.test.ts` and `recovery-fee-illustration.test.ts` passed unchanged. The new storage tests reuse the schema fixture's ten facts and exact principal representation (without importing/registering the pure test suite) and persist every false conjunct individually. These cover storage subclaims only; they do not discharge those tests' upstream persisted/source holds. The earlier pure S6-05-F Q4/Q5/Q9 label/display/projection protection passed as an existing pure regression. SV6-BEN-Q4/Q5 persisted source separation/no-bill acceptance remains independently outstanding; no numeric policy, illustration history or complete value-receipt acceptance is asserted.
+
+Final working-tree-only inspection found 14 changed/new files, all within this lane's exact allowlist (including its own lane file); whitespace inspection including untracked files and `git diff --check` passed. This is a leaf working-tree inspection, **not** a pass of the official origin/main stacked lane check, which remains failed as recorded above.
