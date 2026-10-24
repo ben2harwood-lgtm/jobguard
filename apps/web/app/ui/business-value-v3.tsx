@@ -33,7 +33,6 @@ export function BusinessValueV3() {
   return () => abort.abort();
  }, [revision]);
  return <main style={{ maxWidth: 760, margin: "0 auto", padding: 20, overflowWrap: "anywhere" }}>
-  <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
   <h1>Business value</h1>
   <p role="status" aria-live="polite" data-testid="business-value-status">{state}</p>
   <section aria-labelledby="business-sources-title">

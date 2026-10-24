@@ -142,3 +142,33 @@ No data migration/backfill or financial backwards-compatibility change. No new o
 Required CI: new `value-v3-business.integration.test.ts` plus existing meter/subscription integration regressions; actual route browser spec in both `mobile-360` and `desktop`, worker 1; full inherited checks on the composed exact head. Full positive producer DB/browser tests must be added after accepted contracts exist. Required independent RED verdicts A/B and separate acceptance are missing; builder does not accept this work. Ben/dispatcher own commit, push and merge.
 
 Intended commit message: `/private/tmp/jg-msg-ch9-b.txt`.
+
+## r1
+
+24 October 2026. Repair of reviewer B1 on candidate `276f6a2972bf8cfd7352613d7ee1cd2186be7e39`, accepted parent `5dbb5060`. Read the independent Claude verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch9-b-claude-A-276f6a29-20261024.md` (the issued relative `jg-runs/` path is outside this worktree).
+
+Removed only the duplicate sandbox-notice paragraph from `apps/web/app/ui/business-value-v3.tsx`. The root layout continues to render the notice. The exact, strict assertion in `apps/web/e2e/CH-9-business.spec.ts:15` is unchanged; no other test depended on the removed paragraph. No policy, money, authorization, data, API, migration, dependency or shared-file change. All earlier source/composition/production and acceptance holds remain.
+
+Runtime: Node `v24.17.0`, cached pinned pnpm `10.28.1`, Vitest `4.1.11`. No install or download. The default pnpm launcher stalled during version inspection and was interrupted (exit 130); all commands below used the existing wrapper with `PATH="/private/tmp/jg-ch9-b-bin:$PATH"`. Unit tests used at most two workers; Turbo used concurrency 1. No helper agents.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/web typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/web lint` | PASS, exit 0 |
+| `pnpm --filter @jobguard/web test --maxWorkers=2` | PASS, exit 0; 880 tests in 41 files |
+| `pnpm typecheck --concurrency=1` | PASS, exit 0; 7 tasks, 4 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1; core purity passed, then lane check refused the same 12 accepted-parent CH9-S/R paths recorded above |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1; same accepted-parent ancestry failure, no repair path refused |
+| `pnpm exec turbo run lint --concurrency=1` | PASS, exit 0; all 7 package lint tasks, 2 cached |
+| `node tools/money-arithmetic-lint.mjs` | PASS, exit 0 |
+| `node tools/commercial-boundary-lint.mjs` | PASS, exit 0 |
+| `pnpm build --concurrency=1` | PASS, exit 0; 7 tasks, 5 cached; Next web build executed |
+| `pnpm openapi:check` | BLOCKED/FAIL, exit 1; tsx CLI IPC socket bind denied with `listen EPERM` |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | PASS, exit 0; installed loader runs the same generator check without CLI IPC |
+| `git diff --check` | PASS, exit 0 |
+
+Check logs: `/private/tmp/ch9-b-r1-{web-typecheck,web-lint,web-unit,typecheck,lint,lanes,package-lint,build,openapi,openapi-loader}.log`. Turbo emitted sandbox cache IO warnings; Next emitted existing workspace-root, CSS and dependency-bundling warnings. No shared configuration was changed to suppress them.
+
+**Browser NOT RUN here**, as issued. PostgreSQL and migration suites NOT RUN: sandbox cannot start PostgreSQL or bind localhost; dispatcher-owned GitHub CI must run database and both browser projects. Full root test and clean install NOT RUN. The duplicate is source-inspected as removed; this receipt does not claim a browser pass or independent verification of the repair. Exact repair-commit review and separate acceptance remain with the dispatcher/reviewer. No commit, push, staging or other git write was performed.
+
+Intended commit subject/body written to `/private/tmp/jg-msg-ch9-b.txt` for the dispatcher.
