@@ -1,0 +1,250 @@
+# CH6-P — builder receipt (24 October 2026)
+
+**BUILT WITH HOLDS; NOT ACCEPTED; NOT MERGE-READY.** One construction pass; no
+independent repair round or model verdict. Builder: Codex. No self-acceptance.
+No commit or push. Intended message: `/private/tmp/jg-msg-ch6-p.txt`.
+
+## Authority and exact source frame
+
+Issued CH6-P wave-9 order, decision 74/build-ahead, C250; AGENTS.md rev 3 and
+BUILD_PLAN.md CH-6/§10.2.9; planning draft CH6-P lines 4097–4176, CH-6 common
+source/hold contract, and common order boundaries were read. Ben's
+`jg-orders/next-wave/BEN-ANSWERS-20261023.md` was read: safest synthetic choice,
+refuse rather than allow; no policy/release approval follows.
+
+- Actual base/unchanged HEAD: `c50faa2affbc7dc9f4a8ede5b921ab007a846df6`.
+- Branch/worktree: `codex/sandbox/ch6-p`, `.worktrees/ch6-p`.
+- Target inspected: `origin/main` = `cdd1b29b75fcdc206e43e66dbd68d9f03c9b38fe`.
+- Base contains accepted CH6-C `f2db7eae` and MON1-A `a9dc9c42`, as issued.
+- SV-5 accepted head inspected with **read-only `git show`**, not a worktree:
+  `7e139e0b325c020c07e69867ef12fcfe191d5528`.
+  Acceptance evidence read:
+  `/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv5-acceptance-7e139e0b-20261024.md`.
+  Its own listed merge/postlock-upload holds are preserved.
+- Node actually installed: `v24.17.0`; installed Vitest: `4.1.11`.
+  Dependencies were already present; no install, lockfile or pin change.
+- No live provider, browser, listener, PostgreSQL server or real data used.
+  The OpenAPI CLI's initial tsx IPC listener attempt was denied by the sandbox;
+  the successful alternative uses Node's tsx import loader and no listener.
+
+The order's reference to “MON1-I allowlist” is interpreted as its specified
+**CH6-P** draft file list, not permission to edit meter/integration files. All 13
+new paths match that list plus the explicitly issued lane and receipt exceptions.
+The note uses `packages/db/migration-notes/`, overriding the draft's older path.
+
+## Delivered behavior and safest choices
+
+1. Minimal authenticated v1/v3 family selection, canonical lower-case IDs, exact
+   practice ownership/adoption CTE, current persisted owner/user/session checks
+   before source access, parsing or replay. Unknown/conflicting policies and
+   contractor/unsupported environment refuse. No cap/count/journal discriminator.
+2. CI-F05 ordinary invoice/payment sources and lock absence only. Manual payments
+   remain builder attestations, never settlement proof. Invoice/payment occurrence
+   survives a reversal; no financial comparison is inferred.
+3. `synthetic_fixture.persisted-activity.v3` / `persisted-activity.1` uses an anchored
+   ordinary horizon: job creation through latest saved activity. Server display
+   time is precise UTC microseconds, read after facts, excluded from fingerprints.
+4. No guessed delay, repetition, quote endpoint, allocation consistency or identity
+   policy. Those rules are unavailable; pure fictional tests remain separate.
+   Quote/grouping, activation and lifecycle projections are **not integrated** in
+   this leaf. This is not all-nine persisted detector completion.
+5. Post-lock port returns typed CI-H1 unavailable from the ordinary lock/check
+   projection. It never reads private SV-5 tables or treats an empty array as a
+   successful outcome. Pending/failed/completed checks do not waive that hold.
+6. Reviews recompute and hash the accepted pure evaluator's strict snapshot.
+   Migration 0227 independently reconstructs the exact supported source snapshot,
+   checks absence/current policy/ownership and canonical request hash, serializes
+   command identity, preserves first-result replay, inserts one succeeded receipt
+   and appends the fixed operational audit event atomically.
+7. Conservative **synthetic-only table SHARE locks** prevent concurrent source
+   inserts and changing absence predicates without assuming cooperation from old
+   writers. This limits concurrency and needs security/lock-order review before
+   wider enablement. Session/membership SHARE locks protect revocation; expiry and
+   current authority are rechecked after waits and after final audit acquisition.
+   Deadlock/serialization errors are typed `INTEGRITY_RETRY_REQUIRED` and require
+   retry of the same command, not creation of a fresh command identity.
+8. Seven migration-owned routines, six private; only the exact writer has runtime
+   EXECUTE. Fixed `search_path=pg_catalog`. The new-kind trigger is explicitly
+   SECURITY INVOKER and tests actual execution role, not a caller GUC. No new role,
+   table, column, old-row rewrite or broad grant. Existing v1/unrelated receipts
+   retain their behavior; runtime DELETE/TRUNCATE denials remain.
+9. No Decision, outbox, fee, journal, money, meter, state, eligibility or entitlement
+   write. Explanations stay in receipts; audit contains only identifiers/hashes.
+   No API/page was created, so no browser spec for a nonexistent route was added.
+
+The package currently imports CH6-C's compiled public module at
+`../../core/dist/commercial-integrity-v3.js`. Core was built first locally.
+Coordinator barrel integration and replacing that import with `@jobguard/core`
+remain necessary for clean-install typecheck ordering. This workaround is not
+reported as completed shared integration.
+
+## Verified symbols and STOPs
+
+`git grep` verified installed `PracticeAccess` (apps/api/src/practice-access.ts),
+`practiceOwnedJobsSql`, `withTenant`, `JobPartiesRepository.view/list`,
+`JobWorkStateRepository.read`, `app.ch4_read_work_facts`,
+`FinalAccountLockRepository.read`, `PracticeInvoiceRepository`,
+`RecoveryAllocationRepository`, quote/acceptance/document/activation records,
+ordinary invoice/payment/reversal/allocation relations, family discriminator fields
+and CH6-C module exports. Existing lifecycle code is present; an approved source
+handoff/profile is distinct from finding its implementation.
+
+| STOP / hold | Evidence and disposition |
+| --- | --- |
+| STOP: CH6-C shared package exports absent | `git grep commercial-integrity-v3 packages/core/src/index.ts` returned no match. Public module exists, shared barrel untouched; exact additive rows below. Clean-install integration held. |
+| STOP CI-H1: installed SV-5 public reader absent | `git grep 'FinalCheckRepository\|read_final_check_reveal' packages/db/src packages/db/migrations` returned no match at base. Accepted-head `git show` confirms `FinalCheckRepository.read(context,jobId,digest)` → `app.read_final_check_reveal(uuid,uuid,text)`. Held port, no copied implementation. |
+| CI-H1/H5: exact published DTO missing | Accepted `FinalCheckView` uses `items: record[]`; no accepted exact completion/original evidence, financial basis, line attribution bridge was supplied. No guessed projection. |
+| CI-H2/H3 | Existing work-state symbols are source-inspected, not proof of accepted ordinary integrity handoff or a D11 profile. No supplied meter fixtures substituted. Threshold-dependent adapters remain unavailable. |
+| CI-H4 | No authorized identifier assertion source. No card/phone collection, hashing or cross-account scan. Core CI-F09 is fictional only. |
+| STOP CI-H7: import-v3 source symbols absent | `git grep 'ImportedFinalAccountBaselineV1\|JobImportV3Repository\|imported_job_activation_terms_v3' packages/db packages/core` returned no match. Imported v3 refuses; known v1 import remains v1. |
+| CI-H6 | 0227 is allocated/authored, but catalogue integration and actual PostgreSQL proofs are outstanding. Allocation alone does not close it. |
+| CH6-B / parent merge gates | Transitive advisory isolation scanner/accepted source handoff and exact-head CI/reviews are not supplied here. Local direct-source checks do not replace CH6-B or parent SV-5/MON-1 gates. |
+| Runtime no-store | No transport in this lane. CH6-A must add/test `Cache-Control: no-store`; repository tests do not claim HTTP header proof. |
+| Isolation bytes | The query test normalizes only the independently advancing public `evaluatedAt`; all remaining serialized fields/query sequence must match. Literal bytes including two different server times are not claimed equal. |
+
+## Commands actually run
+
+No database/browser suite ran locally. No mock is called a PostgreSQL test.
+Installed executables were used because the pinned pnpm launcher cannot start.
+
+| Actual command (from repo root unless stated) | Real result |
+| --- | --- |
+| `pnpm --filter @jobguard/core build` | FAILED before build: launcher tried to resolve pnpm 10.28.1, registry signature/fetch verification failed. No package install completed. |
+| `pnpm --filter @jobguard/db typecheck` | Same launcher failure, before compiler. |
+| pnpm version probes with env/CLI “manage-package-manager-versions=false”, including installed 11.8.0 path | Same signature/fetch failure; flags did not prevent launcher version resolution. Installed 9.0.0 probe rejected those flags. No pin override retained. |
+| `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json` | PASS; built CH6-C public module. |
+| `node node_modules/typescript/bin/tsc -p packages/config/tsconfig.json` | PASS. |
+| `node node_modules/typescript/bin/tsc -p packages/storage/tsconfig.json` | PASS. |
+| `node node_modules/typescript/bin/tsc -p packages/ai/tsconfig.json` | PASS. |
+| `node node_modules/typescript/bin/tsc -p apps/api/tsconfig.json` | PASS. |
+| `node node_modules/@nestjs/cli/bin/nest.js build` (apps/api cwd) | PASS. |
+| `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json` | PASS (including final source changes). |
+| `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` | PASS; actual package typecheck and lint implementation. |
+| `node ../../node_modules/typescript/bin/tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/commercial-integrity-v3*.ts` (db cwd) | PASS; integration sources typechecked, not executed. |
+| `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/commercial-integrity-v3.test.ts src/commercial-integrity-v3.boundaries.test.ts src/commercial-integrity.test.ts` (core cwd) | PASS: 3 files, 25 tests, including unchanged v1 tests. |
+| `node node_modules/vitest/vitest.mjs run --maxWorkers=2 test/commercial-integrity-v3-query-isolation.integration.test.ts -t 'local family and architecture checks'` (db cwd) | PASS: 4 local tests. Vitest reports 1 filtered/skipped PostgreSQL test; that test was NOT RUN, and has no `.skip`/`.todo` in source. Final repeat passed after source changes. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL: core purity passed (240 files, 8 existing computed-test-import reports); lane check rejects predecessor/base changes against current main. No weakening or shared edit. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL for the same committed-base divergence, logged to `/private/tmp/ch6-p-lanes.log`. |
+| Lane check with `LANE_BASE_REF=HEAD` / `c50faa2a` | Correctly refused self-comparison; not reported as pass. |
+| Deterministic Node working-tree check using exported `loadLanePolicy`, `selectLane`, `migrationOrderViolations`, `git ls-files --others` and `git ls-tree HEAD` | PASS: all 13 new paths explicitly allowed; new migration order valid. Not a committed-range lane pass. |
+| `node tools/money-arithmetic-lint.mjs` | PASS. |
+| `node tools/commercial-boundary-lint.mjs` | PASS (exit 0). |
+| `node --test tools/agent-lane-boundary.test.mjs tools/agent-lane-boundary-train.test.mjs` | PASS: 66 tests. Tests create isolated temporary Git fixtures; shared repo Git was not written. |
+| `node node_modules/tsx/dist/cli.mjs src/generate-openapi.ts --check` (api cwd) | FAIL: sandbox denied tsx IPC pipe listen. |
+| `node --import tsx src/generate-openapi.ts --check` (api cwd) | Initial attempts failed missing unbuilt workspace dist modules; after building dependencies, PASS (exit 0). No OpenAPI write. |
+| `CIRCLE_NODE_TOTAL=3 node node_modules/next/dist/bin/next build apps/web` | PASS, full production build, two configured Next workers. Existing workspace-root/CSS/Nest dependency warnings remain. No browser started. |
+| `git diff --check`; tracked v1 source `git diff --exit-code HEAD -- ...` | PASS; no tracked edit. |
+
+Initial package compile exposed a cross-package Zod `.extend` type incompatibility;
+fixed by validating C's narrow review and local metadata separately. No original
+schema weakened. Two temporary fixture-path correction commands used the wrong
+cwd; corrected via absolute path. No files outside the allowlist were changed.
+The complete root pnpm wrapper suite and clean pinned install are **not** claimed
+passing. No dependency download was intentionally requested or pin changed; the
+launcher itself attempted registry resolution before refusing execution.
+
+## CI-only written coverage and outstanding assertions
+
+- `commercial-integrity-v3.integration.test.ts`: current authority/session/job denial,
+  minimal v1 routing, named-column protected-state comparisons, revoked session,
+  ordinary locked-port unavailability.
+- `commercial-integrity-v3-query-isolation.integration.test.ts`: local family/direct
+  architecture checks; PostgreSQL zero/many hidden rows, real executed client SQL,
+  controlled routine bodies and absence of runtime hidden grants. Server logs are
+  captured; this is not yet an executed PostgreSQL isolation result.
+- `commercial-integrity-v3-review.integration.test.ts`: concurrent duplicate/restart
+  receipts, conflicts, forged/stale snapshot, stable later evaluation, original replay
+  after changed sources, direct-SQL source/schema attacks, UTF-16/trim validation,
+  canonical audit verifier, membership revocation during an observed server lock wait.
+- `commercial-integrity-v3-receipt-guard.integration.test.ts`: actual role/GUC denial,
+  old kinds unchanged, mutation/conversion/deletion refusal, runtime TRUNCATE denial,
+  exact routine owner/search-path/ACL posture and rollback-only trigger-removal control.
+- `commercial-integrity-v3-upgrade.integration.test.ts`: populated predecessor receipt,
+  named-column/type/artifact preservation when only 0227 applies, then successor
+  migration discovery twice and immutable receipt/audit preservation. No history rewrite.
+
+CI-P01/P04/P05/P07–P11 remain **unverified PostgreSQL assertions**, not PASS.
+CI-P02 additionally retains the public-clock/transport and full transitive-scanner
+limits above. CI-P03 exact published binding and CI-P06 all-nine persisted rule
+matrix remain source-held. Core fixture coverage does not close those paths.
+Browser coverage belongs to CH6-A/J when their routes exist. Prompt/model `eval`
+is inapplicable here: no prompt/model/AI parser or gateway change.
+
+Required CI after dispatcher integration/commit:
+
+```sh
+pnpm typecheck
+LANE_BASE_REF=origin/main pnpm lint
+LANE_BASE_REF=origin/main pnpm lint:lanes
+pnpm test
+pnpm build
+pnpm openapi:check
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/commercial-integrity-v3.integration.test.ts test/commercial-integrity-v3-query-isolation.integration.test.ts test/commercial-integrity-v3-review.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/commercial-integrity-v3-receipt-guard.integration.test.ts test/commercial-integrity-v3-upgrade.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/commercial-integrity.integration.test.ts test/commercial-integrity-api-audit.integration.test.ts test/practice-session.integration.test.ts test/shadow-isolation-query-log.integration.test.ts test/job-parties.integration.test.ts
+pnpm test:db
+pnpm test:migrations
+```
+
+## Exact additive integration handoff (not edited)
+
+1. `packages/core/src/index.ts`: export these CH6-C symbols from
+   `./commercial-integrity-v3.js`: `commercialIntegrityV3InputSchema`,
+   `commercialIntegrityV3ResultSchema`, `commercialIntegrityReviewV3Schema`,
+   `commercialIntegrityReviewSourceSnapshotV3Schema`, `commercialIntegrityFamilyV1Schema`,
+   `commercialIntegrityV3Kinds`, `evaluateCommercialIntegrityV3`,
+   `canonicalCommercialIntegritySnapshot`, `CommercialIntegrityV3Error`; types
+   `CommercialIntegrityV3Input`, `CommercialIntegrityV3Result`,
+   `CommercialIntegrityReviewV3`, `CommercialIntegrityReviewSourceSnapshotV3`,
+   `CommercialIntegrityFamilyV1`. Then replace this leaf's compiled-module imports
+   with those public package exports before clean-install validation.
+2. `packages/db/src/index.ts`: export `CommercialIntegrityV3Repository`; types
+   `CommercialIntegrityActor`, `CommercialIntegrityV3Feedback`,
+   `CommercialIntegrityV3StoredView`; export `CommercialIntegrityPersistenceError`
+   from `./commercial-integrity-v3-sources.js`. The source adapters are internal,
+   not HTTP-facing utilities or permission-granting APIs.
+3. Migration discovery already scans the directory; **no MIGRATION_URLS append**.
+   Register exact new function owner/ACL expectations in LP-0 inventory and its
+   fixture/catalogue tests; the seven signatures are:
+
+```text
+app.ch6_integrity_canonical(jsonb)
+app.ch6_integrity_authority(uuid,uuid,text)
+app.ch6_integrity_family(uuid,uuid)
+app.ch6_integrity_source_fingerprint(uuid,uuid,text,jsonb)
+app.ch6_guard_integrity_review_receipt()
+app.ch6_append_integrity_review_audit(uuid,uuid,uuid,uuid,text,text)
+app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)
+```
+
+For **each** signature add inventory key
+`owner|routine|function:<signature>|jobguard_migration` in `a-owner-routines`.
+The sole new effective runtime ACL key is:
+`acl|routine|function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)|jobguard_runtime|EXECUTE|-`.
+Coordinator supplies its separately reviewed authority-path group; do not mark
+approval from this builder receipt. Six private helper runtime/PUBLIC/shadow/
+infrastructure EXECUTEs must stay absent. Expect writer SECURITY DEFINER only,
+all helpers SECURITY INVOKER, every routine `search_path=pg_catalog`.
+Add trigger posture row `app.command_receipt.ch6_integrity_review_receipt_guard`:
+BEFORE INSERT/UPDATE/DELETE, ROW, enabled, invoking
+`app.ch6_guard_integrity_review_receipt()`. No table, role or RLS-policy addition.
+Update actual `lp-0-catalog.ts`/`.test.ts`, privilege JSON, authority path inventory,
+and exact affected tenancy/SERIOUS-B5 routine/trigger inventories after real
+catalogue inspection. Do not waive their checks or regenerate expectations blindly.
+
+4. Future CH6-A registry rows, when those routes are actually integrated:
+   `"/api/jobs/[id]/commercial-integrity/v3/reviews": "post_live_billing"` and
+   `"nest:/jobs/:id/commercial-integrity/v3/reviews": "post_live_billing"`.
+   No new `WatchdogCommandType`; no route/controller/application composition was
+   edited by P. Transport must use the current authenticated actor and no-store.
+5. SV-5 owner/coordinator must supply exact completed/published lock/run/cutoff,
+   catch disposition, original verified completion, account/receipt basis and
+   line-source contracts before replacing the held port. No hidden relation grant.
+
+Migration strategy: expand-only; disable new composition for application rollback,
+keep succeeded receipts/audit and the guard, use a reviewed forward migration for
+fixes. Full details in `packages/db/migration-notes/0227_commercial_integrity_v3_receipts.md`.
+No new alert subsystem; surfaced typed source/retry/conflict failures require normal
+operational error handling. Privileged credential compromise and arbitrary dynamic
+module use are not claimed covered by local tests. Independent exact-commit verdicts,
+separate acceptance, final CI and all production/D11/G0–G5 gates remain held.
