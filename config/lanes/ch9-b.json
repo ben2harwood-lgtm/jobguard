@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-b": {
+      "branches": [
+        "codex/sandbox/ch9-b"
+      ],
+      "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
+      "note": "CH9-B build-ahead; CH9-J shared files excluded from edits; producer, company/period authority and positive runtime acceptance held.",
+      "allow": [
+        "packages/db/test/value-v3-business.integration.test.ts",
+        "apps/api/src/value/value-v3-business.application.test.ts",
+        "apps/api/src/value/value-business.controller.ts",
+        "apps/api/src/value/value-business.controller.test.ts",
+        "apps/web/app/api/value/route.ts",
+        "apps/web/app/api/value/route.test.ts",
+        "apps/web/app/value/page.tsx",
+        "apps/web/app/ui/business-value-v3.tsx",
+        "apps/web/e2e/CH-9-business.spec.ts",
+        "docs/integration-patches/ch9-b-composition.patch",
+        "docs/verdicts/CH9-B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
