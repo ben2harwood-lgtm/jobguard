@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { ContractorRepository, ContractorRetainedReadRepository } from "@jobguard/db";
 import { ContractorError, contractorQueryV1 } from "@jobguard/core";
-const sessionV1 = z.object({ version: z.literal("contractor-principal.v1"), sessionId: z.string().uuid() }).strict();
+const sessionV1 = z.object({ version: z.literal("contractor-principal.v1"), sessionId: z.guid({ error: "Invalid uuid" }) }).strict();
 const startV1 = z.object({ version: z.literal("contractor-practice.v1"), environment: z.literal("synthetic_demo") }).strict();
 /** Server-only composition; all tenant/membership authority comes from the persisted bearer session. */
 export class ContractorApplication {

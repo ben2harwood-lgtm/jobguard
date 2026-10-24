@@ -13,7 +13,7 @@ export class WatchdogError extends Error {
  * Trigger rechecks acquire the same already-held share lock, never a new row lock.
  */
 export async function requireLiveJob(database: TenantTransaction, jobId: string): Promise<void> {
-  if (!z.string().uuid().safeParse(jobId).success) throw new WatchdogError("JOB_NOT_FOUND");
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new WatchdogError("JOB_NOT_FOUND");
   try {
     await database.$client.query("SELECT app.require_watchdog_live($1::uuid)", [jobId]);
   } catch (error) {
