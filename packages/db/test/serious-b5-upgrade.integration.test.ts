@@ -289,7 +289,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
-// C248: only 0212's exact private function/trigger extend the upgrade catalogue.
+// C248/C249: one added guard; C238 retains its exact identity and privileges.
 async function with0212Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
@@ -301,8 +301,11 @@ async function with0212Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  expect(guards).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O'}]);
  const acl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
   ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
-  FROM pg_proc p WHERE p.oid='app.guard_post_lock_upload_transition()'::regprocedure`)).rows;
- expect(acl).toEqual([{owner:'jobguard_migration',executors:['jobguard_migration']}]);
+  FROM pg_proc p WHERE p.oid IN ('app.guard_post_lock_upload_transition()'::regprocedure,'app.serialize_final_check_evidence()'::regprocedure)`)).rows;
+ expect(acl).toEqual(Array.from({length:2},()=>({owner:'jobguard_migration',executors:['jobguard_migration']})));
+ const restated=(rows:typeof before.routines)=>rows.filter(r=>r.nspname==='app' && r.proname==='serialize_final_check_evidence' && r.args==='');
+ expect(restated(before)).toHaveLength(1);
+ expect(restated(after)).toEqual(restated(before));
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }

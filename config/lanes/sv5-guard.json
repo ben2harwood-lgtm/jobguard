@@ -11,6 +11,7 @@
         "packages/db/migrations/0212_post_lock_upload_guard.sql",
         "packages/db/migration-notes/0212_post_lock_upload_guard.md",
         "packages/db/test/post-lock-upload-guard.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",

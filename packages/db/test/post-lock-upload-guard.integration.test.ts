@@ -16,10 +16,10 @@ async function upload(a: FinalCheckJob, expired = true) {
  return id;
 }
 async function transition(a: FinalCheckJob, id: string, state: string) {
- return finalCheckTenant(f.runtime, a.tenantId, db => db.query(`UPDATE app.evidence_upload SET state=$3,
-  server_verified_at=CASE WHEN $3='verified' THEN clock_timestamp() ELSE NULL END,
-  object_version_id=CASE WHEN $3='verified' THEN 'post-lock.v1' ELSE NULL END,
-  rejection_code=CASE WHEN $3='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2`, [a.tenantId,id,state]));
+ return finalCheckTenant(f.runtime, a.tenantId, db => db.query(`UPDATE app.evidence_upload SET state=$3::varchar,
+  server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,
+  object_version_id=CASE WHEN $3::varchar='verified' THEN 'post-lock.v1' ELSE NULL END,
+  rejection_code=CASE WHEN $3::varchar='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2`, [a.tenantId,id,state]));
 }
 it.each(['quarantined','verified'])("C248 runtime refuses expired pre-lock pending -> %s in the lock-to-freeze window", async state => {
  const a=await seedFinalCheckJob(f),id=await upload(a);
@@ -67,9 +67,30 @@ it("C248 negative control: removing only 0212's trigger restores the reviewer's 
   await db.query(`SET LOCAL ROLE ${f.runtime.options.user}`);
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
   for(const state of ['quarantined','verified']) {
-   const result=await db.query("UPDATE app.evidence_upload SET state=$3,server_verified_at=CASE WHEN $3='verified' THEN clock_timestamp() ELSE NULL END,object_version_id='post-lock.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,id,state]);
+   const result=await db.query("UPDATE app.evidence_upload SET state=$3::varchar,server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,object_version_id='post-lock.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,id,state]);
    expect(result.rowCount).toBe(1);
   }
  } finally {await db.query('ROLLBACK');db.release();}
  await expect(transition(a,id,'quarantined')).rejects.toMatchObject({message:'FINAL_CHECK_UPLOAD_TRANSITION_LOCKED'});
+});
+
+// Pin the caller snapshot before the independent lock transaction commits.
+it.each([
+ ['REPEATABLE READ','pending','quarantined','FINAL_CHECK_UPLOAD_TRANSITION_LOCKED'],
+ ['SERIALIZABLE','pending','quarantined','FINAL_CHECK_UPLOAD_TRANSITION_LOCKED'],
+ ['REPEATABLE READ','verified','rejected','FINAL_CHECK_VERIFIED_SOURCE_LOCKED'],
+ ['SERIALIZABLE','verified','rejected','FINAL_CHECK_VERIFIED_SOURCE_LOCKED'],
+])("C249 %s refuses pre-lock %s -> %s after lock commits",async(isolation,initial,target,message)=>{
+ const a=await seedFinalCheckJob(f),id=await upload(a);
+ if(initial==='verified') await transition(a,id,initial);
+ const db=await f.runtime.connect();
+ try {
+  await db.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  expect((await db.query('SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2',[a.tenantId,id])).rows).toEqual([{state:initial}]);
+  expect((await db.query('SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  await a.lock();
+  await expect(db.query("UPDATE app.evidence_upload SET state=$3::varchar,rejection_code=CASE WHEN $3::varchar='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2",[a.tenantId,id,target])).rejects.toMatchObject({code:'55000',message});
+ } finally {await db.query('ROLLBACK');db.release();}
+ expect((await f.admin.query('SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2',[a.tenantId,id])).rows).toEqual([{state:initial}]);
 });
