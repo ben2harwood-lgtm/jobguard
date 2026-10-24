@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { createLockFixture,closeLockFixture,seedAccount } from "./recovery-attribution-fixture.js";
-import { proofBefore,proofDifferences } from "./upgrade-proof-utils.js";
+import { proofBefore,proofColumns,proofDifferences } from "./upgrade-proof-utils.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const own="0218_success_fee_v3.sql";
 let f:Awaited<ReturnType<typeof createLockFixture>>;
@@ -23,8 +23,28 @@ it("SF-23 adds only the exact new routine overloads, preserving populated predec
  await installLegacySyntheticPartyFixtures(f.admin);const p=await seedAccount(f.admin);
  const named=async()=>(await f.admin.query("SELECT j.tenant_id,j.id,j.title,j.status,j.practice_session_digest,q.id quote_id,q.content_hash,q.net_value_pence FROM app.job j JOIN app.quote_version q ON(q.tenant_id,q.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2",[p.tenantId,p.jobId])).rows;
  const values=await named(),before=await catalogue();
- const oldTables=(await f.admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows.map(r=>`${r.schemaname}.${r.tablename}`);
- const proof=await proofBefore(f.admin,oldTables);
+ const oldTables=(await f.admin.query(`SELECT schemaname,tablename,
+ EXISTS(SELECT 1 FROM pg_index i WHERE i.indrelid=format('%I.%I',schemaname,tablename)::regclass AND i.indisprimary) has_pk
+ FROM pg_tables WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
+ const proof=await proofBefore(f.admin,oldTables.filter(r=>r.has_pk).map(r=>`${r.schemaname}.${r.tablename}`));
+ const ident=(name:string)=>`"${name.replaceAll('"','""')}"`;
+ // Keyless tables need a multiset of full rows: do not collapse duplicate rows into a keyed object.
+ const fullRows=async(table:string,names:string[])=>(await f.admin.query(`SELECT row_to_json(s)::text bytes FROM
+ (SELECT ${names.map(ident).join(',')} FROM ${table.split('.').map(ident).join('.')}) s`)).rows.map(r=>r.bytes as string);
+ const keyless:{table:string;columns:Awaited<ReturnType<typeof proofColumns>>;rows:string[]}[]=[];
+ for(const r of oldTables.filter(r=>!r.has_pk)){
+  const table=`${r.schemaname}.${r.tablename}`,columns=await proofColumns(f.admin,table);
+  keyless.push({table,columns,rows:await fullRows(table,columns.map(c=>c.name))});
+ }
+ const compareKeyless=async()=>{
+  for(const was of keyless){
+   const columns=await proofColumns(f.admin,was.table);
+   expect(columns.filter(c=>was.columns.some(old=>old.name===c.name)),was.table).toEqual(was.columns);
+   const live=await fullRows(was.table,was.columns.map(c=>c.name));
+   // Later migrations may add rows/columns; each original full row, including duplicates, must survive.
+   for(const row of was.rows){const index=live.indexOf(row);expect(index,`${was.table}: missing or changed row`).toBeGreaterThanOrEqual(0);live.splice(index,1);}
+  }
+ };
  await f.admin.query(await readFile(MIGRATION_URLS[pos]!,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[own]);
  const after=await catalogue();expect(after.relations).toEqual(before.relations);expect(after.policies).toEqual(before.policies);
  const added=after.routines.filter(r=>!before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args));
@@ -32,7 +52,7 @@ it("SF-23 adds only the exact new routine overloads, preserving populated predec
   ['app','read_success_fee_v3','p_job uuid, p_session text'],
   ['app','write_success_fee_v3','p_job uuid, p_session text, p_command jsonb, p_artifact jsonb'],
  ]);
- expect(after.routines.filter(r=>!added.includes(r))).toEqual(before.routines);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});
- for(let n=0;n<2;n++){await migrate(f.admin);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});}
+ expect(after.routines.filter(r=>!added.includes(r))).toEqual(before.routines);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});await compareKeyless();
+ for(let n=0;n<2;n++){await migrate(f.admin);expect(await named()).toEqual(values);expect(await proofDifferences(f.admin,proof)).toEqual({rows:[],types:[]});await compareKeyless();}
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1",[own])).rows).toEqual([{n:1}]);
 },120000);

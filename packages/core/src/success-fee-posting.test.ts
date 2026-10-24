@@ -22,6 +22,12 @@ describe("M4-9-S proposal boundaries (arithmetic never authority)",()=>{
  it("proposal schema rejects bounds before invoking the shared kernel",()=>{
   for(const prior of [-1,0.5,MAX_MONEY_PENCE+1,Number.MAX_SAFE_INTEGER+1])expect(successFeeProposalInputV1.safeParse({...input,priorPostedPrincipalPence:prior}).success).toBe(false);
  });
+ it("rounds only after applying 10% to fractional Q (149/10 p gives 1 p)",()=>{
+  const out=calculateSuccessFeeProposal({...input,qualifyingPrincipal:{numerator:"149",denominator:"10"}});
+  expect(out.qualifyingPrincipal).toEqual({numerator:"149",denominator:"10"});
+  expect(out.successFeePrincipal).toEqual({pence:1,currency:"GBP"});
+  expect(out.postingDelta).toEqual({pence:1,currency:"GBP"});
+ });
  it("requires a prior derivation link for a negative calculation",()=>{expect(()=>calculateSuccessFeeProposal({...input,priorPostedPrincipalPence:9000})).toThrow("COMPENSATION_LINK_REQUIRED");});
  it("allows exact bounded arithmetic and returns no execution authority",()=>{
   const out=calculateSuccessFeeProposal({...input,qualifyingPrincipal:{numerator:String(MAX_MONEY_PENCE),denominator:"1"}});
