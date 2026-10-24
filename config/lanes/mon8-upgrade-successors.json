@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon8-upgrade-successors": {
+      "branches": ["codex/sandbox/mon8-upgrade-successors"],
+      "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
+      "note": "Shared 0198 predecessor upgrade proof repair, with a complete populated-data / empty-keyed-structure / explicit identity.request_window fact-multiset partition. C1: no web workflow or production behavior changes.",
+      "allow": [
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
