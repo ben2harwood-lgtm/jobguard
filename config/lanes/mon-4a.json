@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-4a": {
+      "branches": ["codex/sandbox/mon-4a"],
+      "receipt": "docs/verdicts/MON-4A/BUILDER_RECEIPT.md",
+      "note": "Synthetic build-ahead on accepted SV6-PERSIST-B dc9dbfba. Separable boundary validation and comparator controls only: authoritative qualification, receipt contribution and executable fee authority remain dependency-bound. Reservation 0221 unused; no catalogue/grant changes or UI. Exact catalogue additions require the held persistence implementation; no freeze relaxation.",
+      "allow": [
+        "docs/contracts/payment-fee-authority-v1.md",
+        "docs/verdicts/MON-4A/BUILDER_RECEIPT.md",
+        "packages/core/src/payment-fee-authority.ts",
+        "packages/core/src/payment-fee-authority.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/test/payment-fee-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
