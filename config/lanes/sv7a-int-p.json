@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-int-p": {
+      "branches": [
+        "codex/sandbox/sv7a-int-p"
+      ],
+      "receipt": "docs/verdicts/SV7A-INT-P/BUILDER_RECEIPT.md",
+      "note": "Issued build-ahead decision 74, 24 October 2026. Persistence/source handoff STOP: installed MON1-A and CH-4 admission boundaries refuse; no executable writer or migration installed. No route/page: browser checks inapplicable. Ben/dispatcher owns commit and integration.",
+      "allow": [
+        "packages/db/src/job-source-intake-repository.ts",
+        "packages/db/src/job-source-intake-errors.ts",
+        "packages/db/test/job-source-intake.repository.test.ts",
+        "packages/db/test/job-source-intake-fixtures.ts",
+        "packages/db/test/job-source-intake.integration.test.ts",
+        "packages/db/test/job-source-intake-authority.integration.test.ts",
+        "packages/db/test/job-source-intake-races.integration.test.ts",
+        "packages/db/test/job-source-intake-upgrade.integration.test.ts",
+        "packages/db/migrations/0225_job_source_intake.sql",
+        "packages/db/migration-notes/0225_job_source_intake.md",
+        "docs/contracts/job-source-intake-persistence-v1.md",
+        "docs/verdicts/SV7A-INT-P/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
