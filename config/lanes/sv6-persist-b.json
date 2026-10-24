@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-persist-b": {
+      "branches": [
+        "codex/sandbox/sv6-persist-b"
+      ],
+      "receipt": "docs/verdicts/SV6-PERSIST-B/BUILDER_RECEIPT.md",
+      "note": "Synthetic history HTTP boundary and adversarial storage tests stacked on 56499079. Source-backed command/review/audit/reassessment prerequisites remain dependency-bound. No migration or UI.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/recovery-attribution.application.test.ts",
+        "apps/api/src/recovery-attribution.application.ts",
+        "apps/api/src/recovery-attribution.contracts.ts",
+        "apps/api/src/recovery-attribution.controller.test.ts",
+        "apps/api/src/recovery-attribution.controller.ts",
+        "apps/api/src/recovery-attribution.http.test.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/success-fee-attribution/route.ts",
+        "docs/contracts/recovery-attribution-v1.md",
+        "docs/verdicts/SV6-PERSIST-B/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/recovery-attribution-repository.test.ts",
+        "packages/db/src/recovery-attribution-repository.ts",
+        "packages/db/test/recovery-attribution-access.integration.test.ts",
+        "packages/db/test/recovery-attribution-fixture.ts",
+        "packages/db/test/recovery-attribution-replay.integration.test.ts"
+      ]
+    }
+  }
+}

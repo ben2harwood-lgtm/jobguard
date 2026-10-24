@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-01": {
+      "branches": [
+        "codex/sandbox/sv6-01"
+      ],
+      "receipt": "docs/verdicts/SV6-01/BUILDER_RECEIPT.md",
+      "note": "Issued build only; pure synthetic contract. Parent dependencies, source acknowledgement, CI, independent reviews and separate acceptance gate merge.",
+      "allow": [
+        "packages/core/src/recovery-attribution-persistence.ts",
+        "packages/core/src/recovery-attribution-persistence.test.ts",
+        "packages/core/src/recovery-attribution-persistence.type.test.ts",
+        "docs/contracts/recovery-attribution-v1.md",
+        "docs/verdicts/SV6-01/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
