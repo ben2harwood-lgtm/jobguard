@@ -108,11 +108,11 @@ it.each(["cross-tenant", "no-session", "pre-lock"] as const)("runtime attributio
   await db.query("SELECT app.append_recovery_attribution($1,$2,null,'source_changed','synthetic:rls-control')",[next,LOCK_OWNER]);
  });
  const digest=createHash("sha256").update(randomUUID()).digest("hex");
- await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES('d1500000-0000-4000-8000-000000000001') ON CONFLICT DO NOTHING");
  await f.admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
   SELECT 'd1500000-0000-4000-8000-000000000003',tenant_id,account_id,'d1500000-0000-4000-8000-000000000001','owner'
   FROM app.membership WHERE tenant_id=$1 AND id=$2 ON CONFLICT DO NOTHING`,[p.tenantId,LOCK_OWNER]);
+ await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
  const probe=async(mutationTable:string|null,positive=false)=>{
   const db=await f.admin.connect();
   try{
