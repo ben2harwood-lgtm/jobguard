@@ -38,7 +38,7 @@ export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
-export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), net = 3360000) {
+export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), net = 3360000, practiceDigest: string | null = null) {
  const tax=candidateM1TaxPolicy.calculateGroup(money(net),"standard_rate_20"),gross=addMoney(money(net),tax);
  const jobId = randomUUID(), scopeItemId = randomUUID(), baselineId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID(), lineId = randomUUID();
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenantId]);
@@ -47,7 +47,7 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
  await asFixtureTenant(admin, tenantId, async db => {
-  await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional final account','live')", [jobId, tenantId]);
+  await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final account','live',$3,CASE WHEN $3::text IS NULL THEN NULL ELSE 'home' END)", [jobId, tenantId, practiceDigest]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
   await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')", [baselineId, tenantId, jobId, LOCK_HASH, net]);
   await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, tenantId, jobId]);
@@ -66,8 +66,8 @@ export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof s
  return repo;
 }
 
-export async function attributionParents(f: LockFixture, tenantId?: string) {
- const a = await seedAccount(f.admin,tenantId);
+export async function attributionParents(f: LockFixture, tenantId?: string, practiceDigest: string | null = null) {
+ const a = await seedAccount(f.admin,tenantId,3360000,practiceDigest);
  const locks = await prepareLock(f,a);
  await locks.lock(a.context,a.input);
  const lockId = (await f.admin.query("SELECT id FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].id as string;
@@ -90,8 +90,8 @@ export const attributionDocumentFixture = () => ({
   assessedBy: { kind: "membership", actorRef: id(8) }, serverRecordedAt: "2026-10-23T12:00:00Z",
 });
 
-export async function storedAttributionFixture(f: LockFixture, tenantId?: string) {
- const p=await attributionParents(f,tenantId), raw=attributionDocumentFixture();
+export async function storedAttributionFixture(f: LockFixture, tenantId?: string, practiceDigest: string | null = null) {
+ const p=await attributionParents(f,tenantId,practiceDigest), raw=attributionDocumentFixture();
  const bind={tenantId:p.tenantId,jobId:p.jobId,workId:p.workId,lineId:p.lineId,lockId:p.lockId};
  Object.assign(raw,bind,{caseId:p.caseId,assessmentId:randomUUID()});
  Object.assign(raw.facts,bind,{revisionId:raw.assessmentId});

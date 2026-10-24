@@ -1,6 +1,34 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/success-fee-attribution": {
+      "get": {
+        "operationId": "RecoveryAttributionController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic proposed principal-only attribution history; current qualification held",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAttributionController_post",
+        "parameters": [],
+        "responses": {
+          "503": {
+            "description": "Execution held pending accepted source, authorization and audit dependencies"
+          }
+        },
+        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/possible-extras": {
       "get": {
         "operationId": "EnterpriseLivePromptController_list",
