@@ -586,7 +586,7 @@ Changes:
 - C241b moves processing inventory freezing into a private BEFORE trigger ordered after 0204's generated inventory. Upload-backed entries require the matching frozen `excluded_state IS NULL` row. 0205 no longer computes an expiry decision. A reverse coverage guard rejects extra processing entries as well as missing active uploads. The processing-parent FK and source validator defer until the parent exists; the validator runs as the migration owner with no ordinary EXECUTE grant. Metadata and source hashes remain checked at commit. Prerequisite-only manifests retain their original path.
 - Added PostgreSQL regressions for a pending non-photo upload quarantined after lock, and for expiry crossed deterministically immediately before 0204 freezes (a scoped disposable test trigger, no timing sleep). Each requires matching exclusions, empty processing sources and successful reconciliation/publication/completed builder projection. C135's pre-lock photo/quarantine guards are untouched.
 
-Outstanding source discrepancy / clarification: 0204's actual exclusion CASE currently handles only rejected and expired uploads, although its comment and excluded-state constraint mention quarantine. Merely consuming its frozen rows cannot make the requested quarantine-after-lock case pass: it still produces an active pending source. The builder asked whether to make the narrow quarantine CASE correction in 0204 or retain that file and report this hold. No answer has been received at this receipt stage; 0204 is unchanged. The quarantine DB regression is written but is expected to fail until that discrepancy is resolved. This is source inspection, not an executed database result.
+R4 source observation (superseded by C244 in R5): 0204 then allowed pending non-photo uploads at lock and excluded only rejected/expired uploads at manifest freeze. C244 now blocks every live pending upload, closing that route before lock. The R5 regression below replaces the obsolete quarantine scenario; database execution remains assigned to CI.
 
 Failing-first evidence: before changing SQL, `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-c239.test.ts` exited 1, with `Test Files 1 failed (1); Tests 1 failed | 7 passed (8)`. The added C241b source assertion failed because old begin still called `clock_timestamp()`. Raw output: `/private/tmp/jg-sv5-r4-before.log`. After repair the same command exited 0: eight tests passed (`/private/tmp/jg-sv5-r4-regression.log`). This proves the deterministic source regression only. DB failing-first execution and real-array catalogue execution are not claimed: this sandbox cannot bind localhost/start PostgreSQL, and the dispatcher explicitly assigns those suites to CI.
 
@@ -706,11 +706,143 @@ Final checks:
 - `pnpm openapi:check`: blocked, exit 1, tsx IPC `listen EPERM` (`/private/tmp/jg-sv5-r4-openapi.log`). Equivalent generator `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS (`/private/tmp/jg-sv5-r4-openapi-direct.log`).
 - `git diff --check`: PASS. No database/browser suite or PostgreSQL startup was attempted, as directed. No installed package changes were made.
 
-A concrete, unapplied two-line proposal for the quarantine discrepancy is `/private/tmp/jg-sv5-r4-quarantine-proposed.patch`. Applying it would additionally require allowing the exact 0204 SQL path in this lane. It changes only manifest exclusion state/reason for a quarantined upload after lock; the C135 lock predicate remains untouched. This proposal is not included in the working-tree SQL and has not been approved or tested. The R4 quarantine criterion remains a HOLD; do not describe all three repairs as complete.
+R4's proposed quarantine CASE patch was not applied. C244 supersedes that proposal by blocking all live pending uploads at lock; R5 consumes the upstream correction without changing 0204 or 0205 locally.
 
 Final migration hashes (working-tree candidate):
 
 - `0204_final_check_prerequisites.sql`: `e3dacbd072a2237ac65a16066f7b2e3daea2a4b7df9cd4fa0360aac21cfd5ab7`.
 - `0205_final_check.sql`: `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`.
 
-Outstanding: resolve the 0204 quarantine discrepancy; PostgreSQL catalogue/behavior/migration suites and browser suites in GitHub CI; fresh exact-commit A/B verdicts; separate acceptance and founder integration. No technical acceptance or release claim. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5-181-green.txt`.
+Outstanding after R4 (quarantine discrepancy superseded by C244/R5): PostgreSQL catalogue/behavior/migration suites and browser suites in GitHub CI; fresh exact-commit A/B verdicts; separate acceptance and founder integration. No technical acceptance or release claim. Intended conventional commit subject/body: `/private/tmp/jg-msg-sv5-181-green.txt`.
+
+
+## R5 — C244 on head 2170b226 (order dated 24 October 2026)
+
+Working-tree handoff for the dispatcher. HEAD remains `2170b226cb54688d462d25407d41c1bd83f08d6e`; the in-progress merge's MERGE_HEAD is #189 `0b9b3d19fdcfbf13289127b73b3902d42e95a880`. There were no unresolved index entries or conflict markers to resolve. All four incoming paths (0204 SQL, its migration note, prerequisite integration test and prerequisite receipt) match MERGE_HEAD exactly. Both sides are preserved. No Git write, commit, push or merge completion was performed; the dispatcher must stage these two R5 paths and commit the pending merge. `config/agent-lane-assignments.json` is unchanged from HEAD.
+
+Changes and affected invariants:
+
+- Replaced the obsolete live-pending non-photo quarantine-after-lock scenario with parameterized pending/quarantined PDF cases requiring `FINAL_ACCOUNT_UPLOADS_IN_PROGRESS` and zero lock rows. C244 blocks that route before the lock.
+- Preserved the deterministic expiry-split regression using an already-expired pending upload at lock, privileged fixture renewal after lock, and the scoped trigger that crosses expiry immediately before 0204 freezes. No timing sleep is used.
+- After freeze, a privileged fixture changes the upload to quarantined. The test checks the actual changed state, identical begin/replay and manifest projections, the original frozen expired exclusion, empty processing sources, successful reconciliation/publication and completed builder projection. This is a defensive fixture mutation, not a supported in-flight upload path.
+- Source inspection confirms 0205 upload-backed entries originate from 0204's `final_check_manifest_source` rows with `excluded_state IS NULL`; it keeps the reverse coverage guard and computes no independent expiry decision. 0205 is byte-for-byte unchanged. The existing eight C239/C241 deterministic unit assertions remain in the unit run. C241a/c and the upstream expiry split are preserved.
+- Removed obsolete R4 blocker language from this receipt and marked those source observations superseded by C244. No production capability, migration definition, grant, contract, configuration or alert was added locally. The only authored repository paths in R5 are this receipt and `packages/db/test/final-check-manifest.integration.test.ts`.
+
+Checks use installed dependencies with the existing pinned pnpm launcher at `/private/tmp/jg-r1-pnpm-bin`; no packages were downloaded or installed. Commands ran one at a time, Turbo concurrency 1 and Vitest maxWorkers 2. Observed load was below 20 before checks. Database/migration and browser suites were not attempted: the dispatcher assigns them to GitHub CI because this sandbox cannot start PostgreSQL or bind localhost. These tests are authored/source-inspected, not database-executed or independently verified.
+
+- `pnpm typecheck --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r5-typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: FAIL at inherited lane boundaries (`/private/tmp/jg-sv5-r5-lint.log`); the core purity check completed first.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL with the same inherited path list (`/private/tmp/jg-sv5-r5-lanes.log`). Exact checker list follows; neither R5-authored path is refused. No lane allowance was expanded.
+- `pnpm turbo run lint --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r5-package-lint.log`). Separate `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs`: PASS (`/private/tmp/jg-sv5-r5-money.log`, `/private/tmp/jg-sv5-r5-commercial.log`).
+- `node --test tools/*.test.mjs`: PASS, 126 tests (`/private/tmp/jg-sv5-r5-tools.log`).
+
+Exact inherited lane failure list:
+
+```text
+"apps/api/openapi.json"
+"apps/api/src/app.module.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.test.ts"
+"apps/api/src/customer-invoice-sv5pre.filter.ts"
+"apps/api/src/customer-invoice.application.ts"
+"apps/api/src/customer-invoice.controller.ts"
+"apps/api/src/final-account-lock.application.test.ts"
+"apps/api/src/final-account-lock.application.ts"
+"apps/api/src/final-account-lock.controller.ts"
+"apps/api/src/final-check-task-executor.ts"
+"apps/api/src/final-check.application.test.ts"
+"apps/api/src/final-check.application.ts"
+"apps/api/src/final-check.contracts.ts"
+"apps/api/src/final-check.controller.test.ts"
+"apps/api/src/final-check.controller.ts"
+"apps/api/src/final-check.http.test.ts"
+"apps/api/src/final-check.isolation.test.ts"
+"apps/api/src/final-check.worker.test.ts"
+"apps/api/src/final-check.worker.ts"
+"apps/api/src/shadow-detection.worker.test.ts"
+"apps/api/src/shadow-isolation.application.test.ts"
+"apps/api/src/sv5pre-invoice.http.test.ts"
+"apps/api/src/sv5pre-worker-execution.integration.test.ts"
+"apps/api/src/sv5pre-worker-registration.test.ts"
+"apps/api/src/worker-task-extensions.ts"
+"apps/api/src/worker.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.test.ts"
+"apps/web/app/api/jobs/[id]/customer-invoices/route.ts"
+"apps/web/e2e/M4-3-S.spec.ts"
+"apps/web/e2e/M4-5-S.spec.ts"
+"apps/web/e2e/SV-4.spec.ts"
+"apps/web/e2e/UIWIRE-10.spec.ts"
+"apps/web/e2e/UIWIRE-11.spec.ts"
+"apps/web/e2e/UIWIRE-15.spec.ts"
+"apps/web/e2e/VALUE-1.spec.ts"
+"apps/web/e2e/helpers/customer-invoice-journey.ts"
+"apps/web/e2e/helpers/recovery-allocation-journey.ts"
+"apps/web/e2e/helpers/recovery-sources.ts"
+"config/agent-lane-assignments.json"
+"config/lanes/sv5-0205-renumber.json"
+"config/lanes/sv5pre-0204-renumber.json"
+"docs/contracts/final-account-lock-v1.md"
+"docs/contracts/sv5pre-completion-v1.md"
+"docs/ledger/SV5-0205-RENUMBER.md"
+"docs/ledger/SV5PRE-0204-RENUMBER.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r13.md"
+"docs/verdicts/SV5PRE/BUILDER_RECEIPT_r14.md"
+"packages/core/src/final-account-lock.ts"
+"packages/core/src/final-check-completion.test.ts"
+"packages/core/src/final-check-completion.ts"
+"packages/core/src/final-check.test.ts"
+"packages/core/src/final-check.ts"
+"packages/core/src/index.ts"
+"packages/core/src/watchdog.ts"
+"packages/db/migration-notes/0204_final_check_prerequisites.md"
+"packages/db/migrations/0204_final_check_prerequisites.sql"
+"packages/db/src/final-account-lock-repository.ts"
+"packages/db/src/final-check-completion-repository.ts"
+"packages/db/src/final-check-source-reader.ts"
+"packages/db/src/guarded-practice-invoice-repository.ts"
+"packages/db/src/shadow-detection-repository.ts"
+"packages/db/test/UIWIRE-10.integration.test.ts"
+"packages/db/test/UIWIRE-11.integration.test.ts"
+"packages/db/test/UIWIRE-12.integration.test.ts"
+"packages/db/test/final-account-lock-invoice.integration.test.ts"
+"packages/db/test/final-account-lock.integration.test.ts"
+"packages/db/test/final-check-catch.integration.test.ts"
+"packages/db/test/final-check-disposition.integration.test.ts"
+"packages/db/test/final-check-fixture.ts"
+"packages/db/test/final-check-invoice.integration.test.ts"
+"packages/db/test/final-check-races.integration.test.ts"
+"packages/db/test/final-check-worker-factory.ts"
+"packages/db/test/final-check.integration.test.ts"
+"packages/db/test/invoice-later.integration.test.ts"
+"packages/db/test/migfix-5.integration.test.ts"
+"packages/db/test/practice-facts.integration.test.ts"
+"packages/db/test/practice-feed.integration.test.ts"
+"packages/db/test/practice-invoice-audit.integration.test.ts"
+"packages/db/test/recovery-allocation-races.integration.test.ts"
+"packages/db/test/recovery-allocation-upgrade.integration.test.ts"
+"packages/db/test/recovery-allocation.integration.test.ts"
+"packages/db/test/recovery-case-terms-upgrade.integration.test.ts"
+"packages/db/test/recovery-case-terms.integration.test.ts"
+"packages/db/test/recovery-line-allocation.integration.test.ts"
+"packages/db/test/serious-b5.integration.test.ts"
+"packages/db/test/serious-b9.integration.test.ts"
+"packages/db/test/sv5pre-completion-isolation.integration.test.ts"
+"packages/db/test/sv5pre-completion.integration.test.ts"
+"packages/db/test/sv5pre-fixtures.ts"
+"packages/db/test/sv5pre-legacy-invoice.integration.test.ts"
+"packages/db/test/sv5pre-session-invoice.integration.test.ts"
+"packages/db/test/sv5pre-upgrade.integration.test.ts"
+```
+
+Unit command: `pnpm -r --no-bail --workspace-concurrency=1 exec vitest run --passWithNoTests --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**' --exclude '**/shadow-isolation.application.test.ts' --exclude '**/final-account-lock.isolation.test.ts'` (`/private/tmp/jg-sv5-r5-units.log`). Exit 1: five packages passed, two failed. Config 41, core 2965, storage 2, AI 147 and web 897 passed. DB: 430 passed, two free-port tests failed on `listen EPERM`. API: 2097 passed, 133 failed across eight files, with 133 listener errors; HTTP assertions see unavailable/null listening ports. The two explicitly excluded API isolation files require PostgreSQL and remain assigned to CI with the named integration suites; no test source was skipped or weakened. The new database regressions require real PostgreSQL and are not represented as unit-test evidence.
+
+
+Final checks and handoff:
+
+- `pnpm build --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r5-build.log`).
+- `pnpm openapi:check`: exit 1 because the tsx launcher attempts a prohibited IPC listener (`listen EPERM`, `/private/tmp/jg-sv5-r5-openapi.log`). The same generator without the launcher IPC, `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS (`/private/tmp/jg-sv5-r5-openapi-direct.log`).
+- Read-only merge inspection: no unmerged index entries; the four incoming C244 paths match MERGE_HEAD; the shared lane register matches HEAD. Only the two requested R5 paths are locally authored. No conflict markers or obsolete blocker phrases remain in the SV-5 code/tests/receipt. `git diff --check`: PASS.
+- Migration SHA-256: incoming 0204 `1813bf44d914e19dccf5cbd1519433d0a9a2b3f69d5484b654e7265849387b98`; unchanged 0205 `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`. There is no additional R5 migration or backfill, rollback change, provider action or release activation. The upstream forward-fix policy remains applicable.
+
+The obsolete R4 quarantine scenario is replaced under C244. PostgreSQL behavior/catalogue/migration tests, browser suites and socket-dependent failures require GitHub CI after the dispatcher commits/pushes. Fresh exact-commit independent verdicts, separate acceptance and founder merge/release remain required; this builder records no acceptance or independent model verdict. The order cites R4 A/B verdicts on `2170b226`; they do not constitute review of this uncommitted candidate. Intended conventional commit subject/body is written to `/private/tmp/jg-msg-sv5-181-green.txt`.

@@ -12,7 +12,7 @@ CREATE TABLE app.final_check_manifest_source (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,manifest_id uuid NOT NULL,id uuid NOT NULL,upload_id uuid NOT NULL,
  source_kind text NOT NULL CHECK(source_kind='evidence_upload'),evidence_id uuid,object_version_id text,sha256 char(64),source_received_at timestamptz NOT NULL,evidence_received_at timestamptz,
  frozen_input_hash text NOT NULL CHECK(frozen_input_hash ~ '^[a-f0-9]{64}$'),adapter_version text NOT NULL,
- -- C204: a terminal non-verified upload (rejected, quarantined, or expired and unswept) is listed but excluded; only verified uploads are evidence.
+ -- C204/C238: rejected or expired-unswept pending uploads are listed but excluded; quarantined uploads block the lock; only verified uploads are evidence.
  excluded_state text CHECK(excluded_state IN('rejected','quarantined','expired')),excluded_reason text CHECK(length(excluded_reason) BETWEEN 1 AND 200),
  CHECK((excluded_state IS NULL)=(excluded_reason IS NULL)),
  PRIMARY KEY(tenant_id,job_id,manifest_id,id),UNIQUE(tenant_id,job_id,manifest_id,upload_id),
@@ -599,7 +599,7 @@ BEGIN
  -- verification of a photo upload, so an unfinished one could never be checked and the final check could never complete.
  -- Quarantined is also the temporary scan state; no final-quarantine discriminator exists, so all quarantine blocks.
  IF EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job
-  AND (u.state='quarantined' OR (u.state='pending' AND u.expected_content_type IN('image/png','image/jpeg','image/webp')
+  AND (u.state='quarantined' OR (u.state='pending'
    AND u.expires_at>clock_timestamp()))) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_UPLOADS_IN_PROGRESS' USING ERRCODE='55000'; END IF;
  PERFORM 1 FROM app.variation WHERE tenant_id=p_tenant AND job_id=p_job ORDER BY id FOR UPDATE;
  -- Both directions matter: missing, replaced, duplicated or spurious approved lines require reassembly.

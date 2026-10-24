@@ -33,6 +33,15 @@ describe("SV5PRE authoritative completion", () => {
   await repo.lock(a.context,a.input);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(1);
  });
+ it("C244 a live pending non-photo upload blocks the lock",async()=>{
+  const a=await seedAccount(f.admin),uploadId=randomUUID(),repo=await prepareLock(f,a);
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`c244/${uploadId}`]));
+  await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
+  await repo.lock(a.context,a.input);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(1);
+ });
  it("C204 rejected and expired-unswept uploads are excluded and recorded; pending and quarantined scans block until checked",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a),ids={rejected:randomUUID(),quarantined:randomUUID(),expired:randomUUID(),live:randomUUID()};
   const upload=(id:string,state:string,expires:string,extra="")=>asFixtureTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state${extra?",rejection_code":""}) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',${expires},$6${extra?",'SYNTHETIC'":""})`,[a.tenantId,a.jobId,id,a.scopeItemId,`c204/${id}`,state]));
