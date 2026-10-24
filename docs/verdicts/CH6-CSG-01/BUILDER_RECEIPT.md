@@ -265,3 +265,59 @@ Catch-up check completions:
 - Web cwd: `pnpm exec vitest run --maxWorkers=1`: **0; 990 tests / 41 files** (`web`), unit/adapter tests, not browser journeys.
 - API cwd: `node --import tsx src/generate-openapi.ts --check`: **0** (`openapi-fallback`). Executes actual OpenAPI comparison without tsx CLI IPC; no generated spec edited.
 - `git diff --check`: **0**. Final status contains only the two authorized baseline fingerprint replacements and this appended receipt. Same 13 pinned spots and reasons; no application/guard/test behavior change. No scope extension was received before handoff. The missing lane and three other stale pins remain a HOLD.
+
+## catch-up run 2
+
+C261, CH6-CSG-01-CATCHUP, run 2 of 2, 24 October 2026. Starting HEAD `c4da59ec` contains run 1's commands.ts re-pin. This order explicitly extends scope to the three remaining UUID-drift pins. Builder: Codex gpt-6.1-sol, medium reasoning. Installed Node v24.17.0 / pnpm 10.28.1; existing dependencies only, no clean-install claim. No sub-agents, Git write commands, dependency downloads, commit or push.
+
+### Source inspection and bounded delta
+
+Read AGENTS.md, BUILD_PLAN §2.4 C1–C8 and CH-6, the existing receipt, baseline and guard fingerprint logic, and the affected repository paths. `git diff 72f38f0a HEAD -- packages/db/src/extra-repository.ts packages/db/src/site-visit-repository.ts` shows exactly one declaration replacement per file: `const uuid = z.string().uuid();` → `const uuid = z.guid({ error: "Invalid uuid" });`. No query, dispatch, authorization, receipt or money logic changed in these files against the accepted head.
+
+- **extra-repository.ts:75:** the joined receipt read belongs to `raiseExtra`'s client-capture retry path. It joins the origin's tenant/command to its receipt, scopes tenant/job/client capture, checks request hash and succeeded status, claims the retry command and returns/persists the prior `RaisedExtra` result. Its lack of a statically resolved non-advisory command-type discriminator remains the same reviewed unresolved receipt replay pattern. It does not read commercial-integrity advisory output or turn it into authorization or money.
+- **site-visit-repository.ts:197 and :205:** these are the previously reviewed `this.execute(context, actor, "start"/"complete", parsed.data, storedStart/storedComplete)` business-dispatch boundaries, covered conservatively because their terminal name is `execute`; the first argument is context, not SQL. Their implementation uses current membership/job/visit authority checks, live-job checks, hash-bound receipt claim/replay with schema validation and rechecked authority, controlled visit routines and audit. They are unchanged operational visit/receipt paths, with no commercial-integrity advisory input or advisory-to-authority/money conversion. They remain unresolved syntactic boundaries, not confirmed violations.
+
+The enclosing-class/transitive-input fingerprint includes each file's UUID declaration through other methods/schemas. A read-only in-memory substitution of accepted file bytes reproduced all three old fingerprints exactly. Deterministic assertions verified each current file equals the accepted bytes with only that declaration replaced, zero raw non-unresolved diagnostics, and zero final diagnostics after the bounded re-pin. Evidence: `/private/tmp/ch6-run2-delta.mjs` and `/private/tmp/ch6-run2-delta.log`.
+
+Exactly these three fingerprints changed; their reasons, codes and line numbers are unchanged:
+
+| Spot | Old fingerprint | New fingerprint |
+| --- | --- | --- |
+| extra-repository.ts:75 | `dc11aa0852c1e68d1a426c58034477060f5d9ab5c615fbd478143f69878ca7a6` | `76f57e3fb6d3ca5cc459a127f55ff274638b6f03dde8655e1b8eeed397eeea44` |
+| site-visit-repository.ts:197 | `52964c187a3d63fadb5775348c5d16f86d65040dc289a145b6a5f0a8d74d13f2` | `edd95b0087a9a5602902d481a7b5ece185207f942b7f9c41907b86e3967b0e9f` |
+| site-visit-repository.ts:205 | `adf474242ad04527fb255dd1a98998670dd8f4cc2dc14e8a9cf1fe4fe13c3ea8` | `0934a5ddf4618aae687a48fb9f00d27b08defe92181ffbdea9e1b852805d3705` |
+
+The ordered set of 13 pinned spots and reasons is identical to starting HEAD; the other ten entries, including run 1's commands.ts pins, are unchanged. No new spot, guard/test/application behavior, lane configuration, schema, policy, migration, provider or operational alert changed. Invariants preserved: advisory separation, exact authorization, durable replay, tenant isolation and existing guard coverage. No migration/backfill/rollback or compatibility change is needed. C1: no changed web workflow. The earlier three-pin scope HOLD is resolved by this explicit order and the results below; the earlier receipt remains historical evidence.
+
+### Checks actually run
+
+Logs: `/private/tmp/ch6-run2-<label>.log`. Turbo concurrency 1; Vitest one worker. Tests use synthetic fixtures/fake external adapters where defined and do not prove live-provider integration or professional approval.
+
+| Command | Actual result / log label |
+| --- | --- |
+| `node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard.test.mjs` | **0; 169/169 pass** (`targeted`). |
+| `node tools/commercial-integrity-current-source-guard.mjs` | **0; 42 protected roots, 0 diagnostics, 13 baselined cases; 0 unbaselined, 0 stale, 0 confirmed** (`cli`). |
+| `pnpm typecheck --concurrency=1` | **0; 7 tasks, 5 cached** (`typecheck`). |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | **1**, solely the unregistered catch-up branch; purity passes (231 files), later stages not reached (`lint`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **1**, same branch mismatch (`lanes`). Per dispatch, no lane edit: dispatcher pushes to registered `codex/sandbox/ch6-csg-01`. |
+| `pnpm exec turbo run lint --concurrency=1` | **0; 7/7 package lint tasks, none cached** (`package-lint`). |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | **Both 0**, supplemental root-lint stages (`money-arithmetic-lint`, `commercial-boundary-lint`). |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | **0; 295/295 pass** (`tools`). |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | **0; 7 tasks, 5 cached** (`build`). Existing workspace-root/CSS/cache IO warnings, no source repair. |
+| `pnpm openapi:check` | **1**, tsx CLI IPC `listen EPERM` before comparison (`openapi`). |
+| API cwd: `node --import tsx src/generate-openapi.ts --check` | **0**, actual source OpenAPI comparison without CLI IPC (`openapi-fallback`); no generated spec edited. |
+| Core cwd: `pnpm exec vitest run src/ --maxWorkers=1` | **0; 2953 tests / 124 files** (`core`). |
+| Config cwd: same source-only command | **0; 86 tests / 5 files** (`config`). |
+| AI cwd: same source-only command | **0; 147 tests / 15 files** (`ai`), synthetic/fake adapters; no live-model evaluation. |
+| Storage cwd: same source-only command | **0; 2 tests / 1 file** (`storage`), fake adapter. |
+| DB cwd: same source-only command | **0; 216 tests / 25 files** (`db-source`), not PostgreSQL integration. |
+| Web cwd: `pnpm exec vitest run --maxWorkers=1` | **0; 990 tests / 41 files** (`web`), unit/adapter tests, not browser journeys. |
+
+Root `pnpm test` (includes PostgreSQL suites), `test:db`, `test:migrations`, and browser suites are reserved for GitHub CI per dispatch: this sandbox cannot start PostgreSQL or bind localhost. No mandatory CI requirement was removed or made optional. No prompt/model/extraction change; no new evaluation gate applies.
+
+Dispatcher owns commit/push. Intended conventional commit message: `/private/tmp/jg-msg-ch6-csg-01-catchup.txt`. Exact-head GitHub CI, the ordered independent delta verdict and separate acceptance remain required. This is builder source-inspection and deterministic-test evidence, not independent verification, technical acceptance, CH-6 completion, commercial approval or release.
+
+Final completions:
+
+- API cwd: `pnpm exec vitest run src/ --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/final-account-lock.isolation.test.ts`: **0; 2448 tests / 120 files** (`api-local`). Known local listener/database suites excluded here remain mandatory in CI.
+- `git diff --check`: **0**. Final diff assertion: only three authorized baseline fingerprint replacements plus appended run-2 receipt; all 13 spots/reasons preserved, other entries unchanged. Guard, test and application source are unchanged. No commit or push performed.

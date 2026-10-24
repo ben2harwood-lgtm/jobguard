@@ -37,7 +37,7 @@
   {
     "file": "packages/db/src/extra-repository.ts",
     "line": 75,
-    "fingerprint": "dc11aa0852c1e68d1a426c58034477060f5d9ab5c615fbd478143f69878ca7a6",
+    "fingerprint": "76f57e3fb6d3ca5cc459a127f55ff274638b6f03dde8655e1b8eeed397eeea44",
     "reason": "Joined receipt result is selected without a statically resolved non-advisory command-type discriminator.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -65,14 +65,14 @@
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 197,
-    "fingerprint": "52964c187a3d63fadb5775348c5d16f86d65040dc289a145b6a5f0a8d74d13f2",
+    "fingerprint": "edd95b0087a9a5602902d481a7b5ece185207f942b7f9c41907b86e3967b0e9f",
     "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 205,
-    "fingerprint": "adf474242ad04527fb255dd1a98998670dd8f4cc2dc14e8a9cf1fe4fe13c3ea8",
+    "fingerprint": "0934a5ddf4618aae687a48fb9f00d27b08defe92181ffbdea9e1b852805d3705",
     "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
