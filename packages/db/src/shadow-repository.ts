@@ -2,9 +2,9 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
-const readV1 = z.object({ version: z.literal("shadow-read.v1"), jobId: z.string().uuid() }).strict();
+const readV1 = z.object({ version: z.literal("shadow-read.v1"), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 const emergencyReadV1 = readV1.extend({ version: z.literal("shadow-emergency-read.v1"), reason: z.string().trim().min(1).max(1000) }).strict();
-const supportDisclosureV1 = readV1.extend({ version: z.literal("shadow-support-disclosure.v1"), signalId: z.string().uuid(), eventId: z.string().uuid() }).strict();
+const supportDisclosureV1 = readV1.extend({ version: z.literal("shadow-support-disclosure.v1"), signalId: z.guid({ error: "Invalid uuid" }), eventId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowPersistenceError extends Error {
   constructor(readonly code: "INVALID_SHADOW_REQUEST") { super(code); }
 }

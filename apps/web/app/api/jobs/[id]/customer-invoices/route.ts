@@ -1,7 +1,7 @@
 import { FinalAccountLockError } from "@jobguard/core";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
+import { isRouteValidationError, routeErrorCode } from "../../../../lib/route-error-code";
 import { hasSyntheticSession, practiceFailure } from "../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../lib/workspace-server";
 
@@ -26,15 +26,16 @@ function failure(error: unknown, issuing = false) {
  if (error instanceof FinalAccountLockError) {
   return NextResponse.json({ version: "final-check-invoice-error.v1", code: error.code }, { status: 409, headers: noStore });
  }
- if (error instanceof ZodError || error instanceof SyntaxError) {
+ if (isRouteValidationError(error) || error instanceof SyntaxError) {
   return NextResponse.json({ code: "INVALID_INPUT" }, { status: 400, headers: noStore });
  }
  if (!(error instanceof Error)) {
   return NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 400, headers: noStore });
  }
- const status = publicFailures.get(error.message);
+ const code = routeErrorCode(error, "INVALID_INPUT");
+ const status = publicFailures.get(code);
  if (status !== undefined) {
-  return NextResponse.json({ code: error.message }, { status: issuing ? status : 400, headers: noStore });
+  return NextResponse.json({ code }, { status: issuing ? status : 400, headers: noStore });
  }
  // SQL diagnostics and other unexpected failures are never a public error code.
  return NextResponse.json({ code: "INTERNAL_SERVER_ERROR" }, { status: 500, headers: noStore });

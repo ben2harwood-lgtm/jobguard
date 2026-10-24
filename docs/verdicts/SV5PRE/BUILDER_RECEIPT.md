@@ -1,3 +1,40 @@
+## catch-up 1 — C261 — 24 October 2026
+
+Working-tree conflict resolution only, on `codex/sandbox/sv5pre-catchup`, HEAD `a8b71da8745d54b270cc5cf4b705b780b25ec254`, merging `origin/main` `4b1a779008505c86ca85db78fb38eda412394fe4`. Dispatcher started the merge and owns staging, commit and push to #189's `codex/sandbox/sv5pre`. No Git-writing command, dependency installation/download, PostgreSQL start, browser execution, independent review or self-acceptance was performed. Read AGENTS.md, BUILD_PLAN.md SV-4/SV-5, and the final-account-lock/completion contracts. No intended behaviour change, migration, privilege change, new alert or release authorization.
+
+Each conflict hunk (one per file):
+
+| Hunk | Main had | SV5PRE had | Kept |
+| --- | --- | --- | --- |
+| `apps/web/app/api/jobs/[id]/customer-invoices/route.ts`, entire route | C246 `routeErrorCode` classifies validation before business codes; status derives from the code rather than Zod text | C135/completion guard error mapping, `final-check-invoice-error.v1` and `FINAL_ACCOUNT_*` typed refusals, practice-access precedence, no-store, exact known-error allowlist, sanitized unexpected errors | Main's shared validation/code classification plus SV5PRE's route. Validation (including legacy Zod errors) and malformed JSON return its `INVALID_INPUT`/400. Exact approved stale codes retain POST 409 / GET 400; arbitrary diagnostics cannot select status. Typed `FinalAccountLockError` retains 409/version/code. Authentication, successful projections and sanitization remain intact. |
+| `packages/db/src/final-account-lock-repository.ts`, constant/UUID schema | Zod 4 `z.guid({ error: "Invalid uuid" })`; auto-merged email uses `z.email` | Exported 5000ms upload wait constant and original UUID schema; C238 logic elsewhere | Both wait constant and Zod 4 schema. C238 tenant/job-keyed advisory in-flight probe and both `FINAL_ACCOUNT_LOCK_BUSY` / `FINAL_ACCOUNT_UPLOADS_IN_PROGRESS` are unchanged. |
+| `packages/db/src/shadow-detection-repository.ts`, completion import/batch schema | Zod 4 batch `jobId` schema | Completion error/type import and original batch UUID schema | Completion import plus main's `z.guid({ error: "Invalid uuid" })`; all detection and completion implementation stays intact. |
+
+Preservation: a SHA-256 inventory captured before edits covers all tracked working-tree files, including the coordinator's already merged files. Only the three files above and this receipt may differ. No test or expectation changes. C244's every-pending SQL clause and the entire migration remain byte-identical to handoff. Git still reports the index conflicts because staging is reserved to the dispatcher; conflict markers have been removed from the working files.
+
+Validation commands were run sequentially with cached pnpm **10.28.1**, Node **24.17.0**, and every Vitest run used `--maxWorkers=2`. The default pnpm launcher stalled with only a newer-pnpm warning; those initial launcher attempts were interrupted. A temporary PATH symlink to the existing Corepack cache selected the pinned pnpm without installing/downloading anything.
+
+| Check | Actual result | Log in `/private/tmp/` |
+| --- | --- | --- |
+| `pnpm typecheck` | PASS, 7 tasks | `sv5pre-catchup-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL at lane check: temporary catch-up branch matches no registered lane; core purity passed | `sv5pre-catchup-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same unregistered-branch failure; no lane edit/override | `sv5pre-catchup-lanes.log` |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint` | PASS, 7 package lint tasks; supplemental evidence, does not replace the failed root lane gate | `sv5pre-catchup-package-lint.log` |
+| API source units, selection below | PASS after build: 125 files / 2,468 tests | `sv5pre-catchup-api-built.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | FAIL after build: 41 files passed / 1 failed; 1,017 tests passed / 3 failed, detailed below. Includes unchanged invoice-route tests. | `sv5pre-catchup-web-built.log` |
+| `pnpm build` | PASS, 7 tasks; Turbo cache IO, workspace-root and CSS warnings | `sv5pre-catchup-build.log` |
+| `pnpm openapi:check` | BLOCKED/exit 1: tsx CLI IPC `listen EPERM` | `sv5pre-catchup-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check via loader without CLI IPC | `sv5pre-catchup-openapi-loader.log` |
+| SHA-256/source preservation comparison; `git diff --check` | PASS: exact four-file scope, no working-file conflict markers, both repositories equal HEAD plus main's applicable Zod 4 substitutions, every test/migration unchanged from handoff | `sv5pre-catchup-preservation.log` |
+
+API command: `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'`, plus the established sandbox exclusions: `src/final-account-lock.isolation.test.ts`, `src/sv5pre-invoice.http.test.ts`, `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/auth/sso/action-paths.test.ts` (each via `--exclude`). These suites remain required in reviewer/CI.
+
+Initial API/web executions before build failed because workspace package exports were unbuilt: API 110 failed / 15 passed files, 5 failed / 356 passed tests; web 33 failed / 9 passed files, 15 failed / 176 passed tests. Logs: `sv5pre-catchup-api.log`, `sv5pre-catchup-web.log`. Build supplied missing artifacts; identical selections were rerun without changing sources or expectations.
+
+**Review hold — incompatible inherited assertions, left unchanged:** `apps/web/app/lib/route-error-code.test.ts`, customer-invoices compatibility, fails its two `returns 400 for a field containing STALE/CONFLICT` cases because main expects `{code:"DATABASE_UNAVAILABLE"}` while SV5PRE's existing route test requires `{code:"INVALID_INPUT"}` for schema errors. Both return 400. Its `keeps every business outcome byte-identical to main, including genuine 409s` case expects untyped `Error("STALE_REVISION")` to be public 409; SV5PRE's explicit public-code allowlist sanitizes it to 500. Returning arbitrary STALE-containing diagnostics would contradict existing SV5PRE guard tests. No test, expected value or guard was changed to conceal these conflicts. Web is RED, not acceptance evidence.
+
+NOT RUN: PostgreSQL suites (including final-account-lock and sv5pre-completion), migrations, browser suites and full root `pnpm test`; sandbox cannot bind localhost or start PostgreSQL. Reviewer/GitHub CI owns these executions. No prompt/model changes: eval/live-model gate inapplicable. Dependencies were supplied, so no clean-install claim. Independent exact-commit verdict, separate acceptance and remaining production gates are still owed. Intended commit subject/body: `/private/tmp/jg-msg-sv5pre-catchup.txt`. Dispatcher must stage the resolved files; the read-only index still lists them as unmerged.
+
 ## Repair r12 — explicit fixture UUID casts (14 October 2026, dispatcher 5)
 
 PR #189; task SV5PRE; branch `codex/sandbox/sv5pre`. First command `git rev-parse HEAD` returned the required head `4f4017ca1bf43d779c2c11dc560be37fcab92c9b`; initial working tree was clean. Working-tree repair only: no Git-writing command, commit, push, dependency install, database start, self-acceptance or independent verdict. Dispatcher owns the resulting commit and CI/verdict/acceptance loop. This section supersedes prior round status; historical receipts remain below.

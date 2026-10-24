@@ -123,3 +123,5 @@ export * from "./subscription-executor.js";
 export * from "./enterprise-live-prompt-repository.js";
 
 export * from "./contractor-entitlement-authority-repository.js";
+
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
