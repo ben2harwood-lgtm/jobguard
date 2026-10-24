@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "flake-diag-1-negctl": {
+      "branches": ["codex/sandbox/flake-diag-1-negctl"],
+      "note": "Throwaway NEGATIVE CONTROL for PR #308 (FLAKE-DIAG-1): proof-stage.tsx restored to its pre-fix version so CI shows M4-1-S failing. Never merged.",
+      "allow": ["apps/web/app/ui/proof-stage.tsx"]
+    }
+  }
+}
