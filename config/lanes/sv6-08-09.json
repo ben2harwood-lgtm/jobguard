@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-08-09": {
+      "branches": ["codex/sandbox/sv6-08-09"],
+      "receipt": "docs/verdicts/SV6-08-09/BUILDER_RECEIPT.md",
+      "note": "SV6-08/09 pure guard and exact saved-value consumption tests on accepted SV6-05. Persisted integration and parent merge acceptance remain dependency-bound. Shared illustration test edits serialize with other SV-6 lanes.",
+      "allow": [
+        "packages/core/src/recovery-fee-illustration.test.ts",
+        "docs/verdicts/SV6-08-09/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

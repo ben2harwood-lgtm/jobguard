@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as exactMoney from "./cumulative-fee.js";
 import { attributionPredicates } from "./shadow-domain/attribution.js";
 import { recoveryFeeIllustrationInputV1, recoveryFeeIllustrationOutputV1, deriveRecoveryFeeIllustration, RecoveryFeeIllustrationError } from "./recovery-fee-illustration.js";
 import { MAX_MONEY_PENCE } from "./money.js";
@@ -262,5 +263,93 @@ describe("SV6-05 pure illustration", () => {
     }
     expect(() => derive({ ...rawInput(), policyBundleRef: "unapproved" })).toThrow();
     expect(recoveryFeeIllustrationOutputV1.safeParse({ ...fractional, tax: 1 }).success).toBe(false);
+  });
+});
+
+// Build-ahead pure checks only: persisted SV6-08 and SV6-09 figures remain dependency-bound.
+describe("SV6-08/09 saved attribution consumption", () => {
+  it("SV6-08 coalesced work and assessment history cannot duplicate principal", () => {
+    const original = rawInput();
+    const entry = original.sources[0]!;
+    // Several tenant/job-bound citations for the same canonical work are not more principal.
+    for (const n of [70, 71, 72]) entry.assessment.sourceManifest.push({
+      ...entry.assessment.sourceManifest[0]!, sourceId: id(n), sourceHash: "d".repeat(64),
+    });
+    const first = derive(original);
+    expect(first.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(first.cumulativeFee.pence).toBe(8000);
+    expect(first.sourceReferences).toHaveLength(1);
+    const firstBytes = JSON.stringify(first), originalBytes = JSON.stringify(original);
+
+    // A new reviewed revision replaces the contribution. It is never added to its predecessor.
+    const revised = independentEntry("60000");
+    Object.assign(revised, JSON.parse(JSON.stringify(revised)
+      .replaceAll(id(103), id(3)).replaceAll(id(104), id(4)).replaceAll(id(106), id(6))));
+    revised.assessment.revision = 2;
+    // Fixture inference starts with null; the wire schema validates the real predecessor below.
+    const assessment = { ...revised.assessment, previousAssessmentId: id(7), sourceRevision: "sources.2" };
+    const qualification = { ...revised.qualification, currentSourceRevision: "sources.2", source: {
+      ...revised.qualification.source, assessmentRevision: 2, sourceRevision: "sources.2",
+    } };
+    const current = { ...revised, assessment, qualification };
+    const latest = derive({ ...original, sources: [current] });
+    expect(latest.exactQualifyingPrincipal).toEqual(wire("60000"));
+    expect(latest.cumulativeFee.pence).toBe(6000);
+    expect(latest.sourceReferences.map(s => s.assessmentId)).toEqual([id(107)]);
+    for (const sources of [[entry, current], [current, entry]])
+      expect(() => derive({ ...original, sources })).toThrow(RecoveryFeeIllustrationError);
+    expect(JSON.stringify(first)).toBe(firstBytes);
+    expect(JSON.stringify(original)).toBe(originalBytes);
+
+    // Each independent uniqueness guard matters even with otherwise distinct current records.
+    for (const kind of ["assessment", "review", "allocation"] as const) {
+      const other = independentEntry();
+      if (kind === "assessment") Object.assign(other, JSON.parse(JSON.stringify(other).replaceAll(id(107), id(7))));
+      if (kind === "review") other.qualification.source.reviewId = id(10);
+      if (kind === "allocation") {
+        other.qualification.source.lineAllocationIds = [id(28)];
+        other.assessment.sourceManifest.push({ ...other.assessment.sourceManifest[8]!, sourceId: id(28) });
+      }
+      expect(() => derive({ ...original, sources: [entry, other] }), kind).toThrow(RecoveryFeeIllustrationError);
+    }
+    // A separate canonical work really does contribute, so blanket rejection cannot pass.
+    expect(derive({ ...original, sources: [entry, independentEntry("60000")] }).exactQualifyingPrincipal)
+      .toEqual(wire("140000"));
+  });
+
+  it("SV6-09 illustration consumes saved allocations without reallocating or rounding them", () => {
+    // Deliberately unreduced saved F4 rational: parsing/consumption preserves its two strings.
+    const raw = rawInput("4000000", "86");
+    const source = raw.sources[0]!.qualification.source;
+    source.lineAllocationIds.push(id(80));
+    raw.sources[0]!.assessment.sourceManifest.push({
+      ...raw.sources[0]!.assessment.sourceManifest[8]!, sourceId: id(80),
+    });
+    const bytes = JSON.stringify(raw);
+    const parsed = recoveryFeeIllustrationInputV1.parse(raw);
+    expect(parsed.sources[0]!.qualification).toMatchObject({ source: {
+      exactRemainingPrincipal: wire("4000000", "86"), lineAllocationIds: [id(28), id(80)],
+    } });
+    const sum = vi.spyOn(exactMoney, "sumExactPence");
+    try {
+      const output = deriveRecoveryFeeIllustration(parsed);
+      expect(sum.mock.calls.some(([values]) => values.length === 1 &&
+        values[0]!.numerator === 4000000n && values[0]!.denominator === 86n)).toBe(true);
+      expect(output.exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+      expect(output.cumulativeFee.pence).toBe(4651);
+      expect(output.display.qualifyingPrincipal).toBeNull();
+      expect(output.sourceReferences[0]!.lineAllocationIds).toEqual([id(28), id(80)]);
+      expect(JSON.stringify(raw)).toBe(bytes);
+      expect(parsed.sources[0]!.assessment.remainingPrincipal).toEqual(wire("4000000", "86"));
+    } finally { sum.mockRestore(); }
+
+    const mismatch = rawInput("2000000", "43");
+    mismatch.sources[0]!.qualification.source.exactRemainingPrincipal = wire("2000001", "43");
+    expect(() => derive(mismatch)).toThrow(RecoveryFeeIllustrationError);
+    const missing = rawInput();
+    missing.sources[0]!.qualification.source.lineAllocationIds = [id(90)];
+    expect(() => derive(missing)).toThrow(RecoveryFeeIllustrationError);
+    const noProof = rawInput(); noProof.sources[0]!.qualification.source.lineAllocationIds = [];
+    expect(() => derive(noProof)).toThrow();
   });
 });
