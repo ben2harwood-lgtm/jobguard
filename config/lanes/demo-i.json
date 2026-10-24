@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-i": {
+      "branches": [
+        "codex/sandbox/demo-i"
+      ],
+      "receipt": "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
+      "note": "Issued build-ahead; runtime/storage STOP on absent accepted authority/reset/bootstrap/source contracts. DI2 HELD; no route exists so no browser spec. Pure boundary preparation only, no runtime acceptance.",
+      "allow": [
+        "apps/api/src/small-builder-demo.contracts.ts",
+        "apps/api/src/small-builder-demo.application.test.ts",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
