@@ -101,3 +101,4 @@ export * from "./contractor-entitlement-authority.js";
 
 export * from "./recovery-attribution-persistence.js";
 export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
