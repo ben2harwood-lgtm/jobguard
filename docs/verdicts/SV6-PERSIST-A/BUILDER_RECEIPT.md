@@ -109,3 +109,37 @@ Pinned cached pnpm 10.28.1 was used through `/private/tmp/jg-sv6-bin/pnpm`; no d
 **NOT RUN locally:** the edited DB integration suites, LP0-17 live catalogue comparison, full database/migration suites, browser suites, and paired mutation-Y execution. The sandbox cannot bind localhost/start PostgreSQL. The new tests encode **unmutated pass → mutation-Y failure → rollback/unmutated pass**, separately for all three tables and all three denial cases; this is source-inspected and typechecked, not an executed mutation result. CI must execute `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/recovery-attribution.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/lp-0-authority-paths.integration.test.ts` and record the actual paired result. A full external mutation of 0213's runtime policy to `USING(true)` must make the normal negative read assertions fail. No claim that this mutation has been killed in a real DB run is made here.
 
 No schema migration, backwards-incompatible product change, operational alert or policy activation is introduced by R1. Existing source-adapter/release holds, exact-commit independent verdict and separate acceptance remain required. Intended dispatcher commit message: `/private/tmp/jg-msg-sv6-persist-a.txt`.
+
+## R2 — final repair round 2 (run 3 of 3), 24 October 2026
+
+Ordered head: `1d7c8201223a6f121aa78a6450eae822859af414`. The sole code change moves `app.issue_practice_session` below the identity-user and practice-membership inserts in `packages/db/test/recovery-attribution.integration.test.ts`. The session now has its required membership before issuance, allowing the cross-tenant, no-session and pre-lock tests to reach their isolation assertions. No other test logic, product code, migration or policy changed.
+
+### R2 reviewer evidence supplied in the dispatch
+
+The dispatch reports the jg-checks delta re-check confirmed **all 18 tests pass** after this reorder, and **mutation Y (`attribution_read USING(true)`) fails exactly the three new isolation tests** (cross-tenant, no-session, pre-lock). These are reviewer-reported results supplied with the order, not PostgreSQL or mutation executions by this builder. No new exact-commit verdict or acceptance is inferred from that report.
+
+### R2 local validation
+
+Local command results are recorded below after execution. PostgreSQL, migration integration, mutation-Y and browser suites are not run here: the dispatcher states this sandbox cannot bind localhost or start PostgreSQL. GitHub CI must run those suites after the dispatcher pushes. No git write, commit, push, dependency install or package download is part of this repair. Intended conventional commit subject and body are in `/private/tmp/jg-msg-sv6-persist-a.txt`.
+
+All checks below used cached pnpm 10.28.1 through `/private/tmp/jg-sv6-bin/pnpm`, ran serially, and used `--maxWorkers=2` for every Vitest execution. Node: v24.17.0. The initial default-PATH `pnpm --version` probe attempted registry/version resolution and failed with fetch/signature-verification errors; no download succeeded and no installation command was run. Subsequent checks used the cached executable directly through the wrapper.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | Exit 0; 7 tasks successful, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 1; core purity passed; lane boundary rejects the same 12 inherited SV6-01/SV6-05 parent paths. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same inherited parent-path exclusions. No allowlist changed. |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0; 7 package tasks successful, 2 cached. Does not supersede root lint failure. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` (separate serial commands) | Both exit 0. |
+| `node --test tools/*.test.mjs` | Exit 0; 122 passed, none failed/skipped. |
+| Serial `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 <up-to-three-source-files>` | All 59 batches exit 0: 171 files / 3,415 tests passed (core 126/3,009; config 4/41; storage 1/2; ai 15/147; db/src 25/216). |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | Exit 0; 26 pure catalogue tests passed, no PostgreSQL. |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude '**/shadow-isolation.application.test.ts' --maxWorkers=2` | Exit 1; 119 files passed / 8 failed; 2,073 tests passed / 129 failed / 1 skipped. Socket `listen EPERM`, consequent null-port errors and the final-account fixture's free-port search prevent the HTTP/database-backed source cases. This is not a passing API suite. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | Exit 0; 40 files / 867 tests passed. |
+| `pnpm build --concurrency=1` | Exit 0; 7 tasks successful, 3 cached; existing Next multiple-lockfile warning. |
+| `pnpm openapi:check` | Exit 1; tsx CLI IPC socket `listen EPERM`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; actual source OpenAPI check via loader, without CLI IPC. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/recovery-attribution.integration.test.ts` | Exit 0; edited integration test typechecks. |
+| `git diff --check` | Exit 0. |
+
+Local logs: `/private/tmp/jg-sv6-r2-*.log`; exact command/exit manifest: `/private/tmp/jg-sv6-r2-summary.json`. These are local builder artifacts, not independent verdicts. No clean-install claim is made: dependencies were already installed. Full `pnpm test`, DB/migration and browser runs remain for CI because they require capabilities unavailable here. No new migration, backwards-compatibility impact, operational alert or release-policy change. Existing dependency, independent-verdict, acceptance and release holds remain.
