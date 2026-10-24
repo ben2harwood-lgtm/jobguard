@@ -846,3 +846,46 @@ Final checks and handoff:
 - Migration SHA-256: incoming 0204 `1813bf44d914e19dccf5cbd1519433d0a9a2b3f69d5484b654e7265849387b98`; unchanged 0205 `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`. There is no additional R5 migration or backfill, rollback change, provider action or release activation. The upstream forward-fix policy remains applicable.
 
 The obsolete R4 quarantine scenario is replaced under C244. PostgreSQL behavior/catalogue/migration tests, browser suites and socket-dependent failures require GitHub CI after the dispatcher commits/pushes. Fresh exact-commit independent verdicts, separate acceptance and founder merge/release remain required; this builder records no acceptance or independent model verdict. The order cites R4 A/B verdicts on `2170b226`; they do not constitute review of this uncommitted candidate. Intended conventional commit subject/body is written to `/private/tmp/jg-msg-sv5-181-green.txt`.
+
+
+## R6 — LP-0 routine inventory only (24 October 2026)
+
+Order: Ben-allowed extra round, card `jobguard-sv5-extra-round-lp0-20261024`, starting at `5da4b0b9` with hold `H-SV5-LP0-17`. Adds exactly the 16 missing 0205 routine protection records consumed by LP0-17. The 0204 prerequisite routine records and the seven 0205 non-owner EXECUTE grant/owner facts already exist. All existing inventory rows, freeze rules and test expectations are preserved. Only this receipt and the existing lane-allowed JSON catalogue are changed; no lane extension is needed.
+
+All 16 routines are owned by `jobguard_migration` and have PUBLIC EXECUTE revoked. In the table, owner-only means no non-owner EXECUTE grant and `reachable: false`; shadow/runtime mean the named role has EXECUTE and `reachable: true`, as defined by `readProtectionRecord`. Trigger invocation is distinct from direct EXECUTE reachability. Ownership, SECURITY DEFINER, search path, trigger return type and static writes/calls are source-inspected against 0205; 0204 helper identities were checked as already present. `definitionSha256` is null for these new records because no live `pg_get_functiondef` digest was obtained in this sandbox; it is not a fabricated database hash.
+
+| Routine signature | Non-owner EXECUTE |
+| --- | --- |
+| `app.final_check_context(uuid)` | Owner-only |
+| `app.final_check_worker(uuid,uuid)` | Owner-only |
+| `app.final_check_builder(uuid,uuid,text,boolean)` | Owner-only |
+| `app.append_final_check_audit(uuid,text,uuid,text,jsonb)` | Owner-only |
+| `app.read_final_check_manifest(uuid,uuid,uuid)` | `jobguard_shadow` |
+| `app.final_check_freeze_processing_inventory()` | Owner-only |
+| `app.begin_final_check(uuid,uuid,text,text)` | `jobguard_shadow` |
+| `app.record_final_check_source_result(uuid,uuid,uuid,uuid,uuid,jsonb)` | `jobguard_shadow` |
+| `app.complete_final_check(uuid,uuid,uuid,jsonb)` | `jobguard_shadow` |
+| `app.read_final_check_reveal(uuid,uuid,text)` | `jobguard_runtime` |
+| `app.record_final_check_disposition(uuid,uuid,text,jsonb)` | `jobguard_runtime` |
+| `app.read_final_check_disputes(uuid,uuid,text)` | `jobguard_runtime` |
+| `app.final_check_post_lock_link()` | Owner-only |
+| `app.final_check_guard_fact()` | Owner-only |
+| `app.final_check_guard_manifest()` | Owner-only |
+| `app.final_check_refuse_held_case()` | Owner-only |
+
+No migration, backfill, privilege change, external action, operational alert or backwards-compatibility change. Rollback is removal of these 16 records. PostgreSQL LP0-17/catalogue verification and database/browser suites remain assigned to reviewer/GitHub CI: this sandbox cannot bind localhost or start PostgreSQL. This receipt is builder evidence, not an independent verdict or acceptance; hold H-SV5-LP0-17 remains pending reviewer/CI evidence. No commit, push, merge or release was performed.
+
+Checks and handoff results follow.
+
+Checks ran one at a time using installed dependencies and the existing `/private/tmp/jg-r1-pnpm-bin` launcher; no downloads or install attempted. Runtime: Node `v24.17.0`.
+
+- `pnpm typecheck --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: FAIL at inherited lane boundaries after the core purity check (`/private/tmp/jg-sv5-r6-lint.log`).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL, the same 94 refused paths already enumerated in R5 (`/private/tmp/jg-sv5-r6-lanes.log`); a source comparison confirmed every refused path was in R5's list and neither R6-edited file was refused. No allowlist changes.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts`: PASS, 26 tests in one file (`/private/tmp/jg-sv5-r6-lp0-unit.log`). Comparator unit tests do not establish live PostgreSQL catalogue correctness.
+- `pnpm turbo run lint --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-package-lint.log`). `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs`: PASS (`/private/tmp/jg-sv5-r6-money.log`, `/private/tmp/jg-sv5-r6-commercial.log`).
+- `pnpm build --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-build.log`).
+- `pnpm openapi:check`: FAIL, tsx launcher IPC `listen EPERM` (`/private/tmp/jg-sv5-r6-openapi.log`). Same generator via `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS (`/private/tmp/jg-sv5-r6-openapi-direct.log`).
+- Read-only JSON comparison against HEAD: PASS, exactly 16 unique new routine records and all existing catalogue content unchanged. `git diff --check`: PASS. No integration or browser suite was attempted.
+
+Intended conventional commit subject and body are at `/private/tmp/jg-msg-sv5-181-green.txt` for the dispatcher. Only the two lane-allowed documentation files are authored in R6. Independent exact-commit verdict, separate acceptance, reviewer/CI LP0-17 and founder merge/release remain pending.
