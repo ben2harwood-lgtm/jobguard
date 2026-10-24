@@ -7,7 +7,7 @@ import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
 
-const environmentSchema=z.object({GRAPHILE_DATABASE_URL:z.url({ error: "Invalid url" }),RUNTIME_DATABASE_URL:z.url({ error: "Invalid url" }),SHADOW_DATABASE_URL:z.url({ error: "Invalid url" })}).strict();
+const environmentSchema=z.object({GRAPHILE_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),RUNTIME_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),SHADOW_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url")}).strict();
 const environment=environmentSchema.parse({GRAPHILE_DATABASE_URL:process.env.GRAPHILE_DATABASE_URL,RUNTIME_DATABASE_URL:process.env.RUNTIME_DATABASE_URL,SHADOW_DATABASE_URL:process.env.SHADOW_DATABASE_URL});
 const runtimePool=new Pool({connectionString:environment.RUNTIME_DATABASE_URL,application_name:"jobguard-business-worker"});
 const shadowPool=new Pool({connectionString:environment.SHADOW_DATABASE_URL,application_name:"jobguard-shadow-worker"});

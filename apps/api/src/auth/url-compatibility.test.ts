@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { resolveVerifiedTenantContext } from "./principal-bridge.js";
+import { identityStatus } from "./identity-http.js";
+import type { AuthProvider } from "./auth-provider.js";
 import { parseIdentityEnvironment } from "@jobguard/config";
 import { tenantRequestCredentialsV1 } from "./auth-schemas.js";
 import { oidcConfigV1, oidcRequestV1, oidcClaimsV1 } from "./sso/oidc.contracts.js";
@@ -22,14 +25,39 @@ const boundaries = [
   ...["AUTH_ALLOWED_ORIGIN", "IDENTITY_DATABASE_URL"].map(key => ({ name: key, url: environment[key as "AUTH_ALLOWED_ORIGIN" | "IDENTITY_DATABASE_URL"], accepts: (url: string) => { try { parseIdentityEnvironment({ ...environment, [key]: url }); return true; } catch { return false; } } })),
 ];
 
-describe.each(boundaries)("URL compatibility: $name", ({ url, accepts }) => {
-  it("preserves a valid URL verbatim", () => expect(accepts(url)).toBe(true));
-  it.each([" ", "\t", "\r", "\n", "\u00a0", "\ufeff", "\v", "\f", "\u2003"])("rejects edge whitespace %j before URL normalization", whitespace => {
-    expect(accepts(whitespace + url)).toBe(false);
-    expect(accepts(url + whitespace)).toBe(false);
+// These expectations include the pre-existing business refinements, not just URL syntax.
+function expected(name: string, value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  const parsed = new URL(value);
+  if (name.startsWith("OIDC")) {
+    if (value.length > 512 || parsed.protocol !== "https:" || !/^(?:[a-z0-9-]+\.)+invalid$/u.test(parsed.hostname) || parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) return false;
+    if (name.endsWith("issuer")) return parsed.origin === value;
+  }
+  if (name === "IDENTITY_DATABASE_URL") return /^postgres(?:ql)?:$/u.test(parsed.protocol) && decodeURIComponent(parsed.username) === "jobguard_identity";
+  return true;
+}
+
+describe.each(boundaries)("Zod 3 URL compatibility: $name", ({ name, url, accepts }) => {
+  const whitespace = [" ", "\t", "\r", "\n", "\u00a0", "\ufeff", "\v", "\f", "\u2003"];
+  const inputs = [url, "not a url", "", ...whitespace.flatMap(w => [w + url, url + w, url.replace("://", `://${w}`), `${url}/path${w}segment`])];
+  it.each(inputs)("retains the main result for %j", value => {
+    let accepted = false;
+    try { accepted = accepts(value); } catch { /* Existing refinements can throw on an invalid URL. */ }
+    expect(accepted).toBe(expected(name, value));
   });
-  it.each(["\t", "\r", "\n", "\u00a0", "\ufeff"])("rejects embedded %j before URL normalization", whitespace => {
-    expect(accepts(url.replace("://", `://${whitespace}`))).toBe(false);
-    expect(accepts(`${url}/path${whitespace}segment`)).toBe(false);
+});
+
+describe("principal bridge URL compatibility", () => {
+  const provider = {} as AuthProvider; // Origin / missing-session rejection must precede provider access.
+  const origins = [" https://app.builder.invalid", "https://app.builder.invalid ", "\thttps://app.builder.invalid", "https://app.builder.invalid\r", "https://app.builder.invalid\n", "https://app.builder.invalid/path\u00a0x", "https://app.builder.invalid/path\ufeffx"];
+  it.each(origins)("keeps 403 ORIGIN_FORBIDDEN for %j and 401 without a session", async origin => {
+    for (const sessionToken of ["s".repeat(32), undefined]) {
+      try {
+        await resolveVerifiedTenantContext(provider, { origin, ...(sessionToken ? { sessionToken } : {}) }, "https://app.builder.invalid");
+        expect.fail("must reject before provider access");
+      } catch (error) {
+        expect(identityStatus(error)).toEqual(sessionToken ? { status: 403, code: "ORIGIN_FORBIDDEN" } : { status: 401, code: "UNAUTHENTICATED" });
+      }
+    }
   });
 });

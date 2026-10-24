@@ -1,137 +1,58 @@
-# DEPS-ZOD4 builder receipt — round 3, C243, 24 October 2026
+# DEPS-ZOD4 builder receipt — round 4, C246, 24 October 2026
 
-Repair of PR #312 head `b80681eb2a0315d37e0ac38bcf4a1450ff37f1ad`, branch `codex/sandbox/deps-zod4`. Builder evidence only; this is not an independent verdict or acceptance. The order reports both Claude reviewers as REPAIR; fresh independent review must bind to the dispatcher's eventual commit. No Git write, package download, push, PR mutation or deployment performed.
+PR #312, starting head `9525a8684dacfef5a658356fa99f8782f58dcc9c`, branch `codex/sandbox/deps-zod4`. This replaces round 3's incorrect URL expectations and incomplete HTTP-status audit. Builder evidence only; fresh independent review and separate acceptance must bind to the dispatcher's eventual commit. No Git write, dependency download, commit, push, PR mutation, deployment or live-provider action performed.
 
-## Changes limited to C243
+## Repairs
 
-- `apps/api/src/workspace/contracts.ts` now imports only Zod at runtime. Its local UTC datetime schema uses the identical date/time regex composition and error message as core `utcDatetimeV1`. `contracts.datetime.test.ts` compares both schemas on 250 inputs: valid and invalid leap dates, minute/second precision, long fractions, impossible times, offsets, missing zones and non-strings. Browser specs are unchanged; core's `vitest run src` script is unchanged.
-- Shared `packages/config/src/auth-url.ts` checks the original string **before** Zod URL parsing: `value === value.trim()` and no tab, CR, LF, NBSP or BOM anywhere. It does not ban ordinary spaces or other Unicode whitespace inside paths. Applied to tenant credential origin; OIDC config/request issuer and redirect URI; OIDC claims issuer; SSO metadata callback/entry point; identity database URL and allowed origin. Existing URL/protocol/domain, length and credential restrictions remain in place. The config public export is the only new shared registration.
-- Restore supplier regex issue insertion order to `validation`, `code`, `message`, `path`. `supplier-document.error-body.test.ts` compares the serialized `{code: error.message}` body byte-for-byte with the legacy regex error, covering inner and outer key order and error wording. Production parsing remains Zod 4; the test uses a small legacy regex schema solely to obtain its expected error representation.
-- Extend the exact-file lane inventory for the five new source/test files. No route adapter, browser spec, package manifest, lockfile, financial calculation, database schema, permission, prompt or model changed in this round.
+- Replace the URL pre-check and Zod 4 URL parser with exactly `z.string().refine(value => URL.canParse(value), "Invalid url")`. Original strings are returned unchanged. The shared authentication schema covers origin, OIDC issuer/redirect URI, SSO metadata and identity environment fields. Apply the same predicate to all URL fields in worker configuration, audit-checkpoint CLI, bootstrap CLI and storage configuration. Existing protocol, domain, credential, issuer-origin and length refinements remain intact. No raw `z.url(...)` remains in application/package source.
+- Replace the false legacy whitespace assertions with the real WHATWG/Zod 3 acceptance set: edge and embedded space, tab, CR, LF, NBSP, BOM, vertical tab, form feed and em-space; valid/invalid strings and path/protocol cases. Existing business refinements still apply (for example an OIDC issuer must equal its parsed origin). Seven principal-bridge cases explicitly preserve 403 `ORIGIN_FORBIDDEN` with a session and 401 `UNAUTHENTICATED` without one, using the existing status mapper without binding a listener.
+- Add `route-error-code.ts`, which identifies a schema failure by `ZodError` type before reading a message; it also recognizes the legacy supplier error by name. It returns the route's fixed validation fallback code. Business messages retain their original bytes and mapping. Wire it into all 20 substring-based status handlers and the remaining 21 raw-message handlers found during the required audit, including four regex-based final-account handlers. Validation returns 400 even where the route's business default is 403/404/409/503. Preserve readiness's existing typed-code priority and all existing non-validation response bodies/statuses/headers.
+- The 123 new route tests exercise the actual Next handlers with service/framework doubles, not database or browser integrations. Every guarded route receives Zod errors whose field input contains STALE/CONFLICT. All tested non-validation response bodies are byte-for-byte comparisons with the existing main body, and statuses use main's unchanged mapping, including genuine conflicts/staleness, forbidden/not-found/default failures. The existing receipt mapper now checks validation before reading a message. Extend the practice-transports VM's import adapters to load the real new helper; its assertions are unchanged. Update only the exact affected lane paths.
+- The confirmed browser contract fix and supplier regex issue-key order are unchanged. No dependency, lockfile, database schema, financial formula, permission, provider route, prompt, model or browser spec changed in round 4.
 
-## Regression proof on the supplied head
+## Executed comparison with main (Zod 3)
 
-Before changing production source, added `apps/api/src/auth/url-compatibility.test.ts` and ran:
+Created `/private/tmp/jg-zod4-r4-main` using read-only `git archive origin/main` at `89b7b3d2e55ed668cd09aac117d8055f4fb03b0c`. Reused installed dependencies through local links; scratch package resolution uses main's exact `zod@3.25.67` pin. No install or network access. Copied the same updated API URL compatibility test into scratch and ran it against main's actual authentication/OIDC/SSO/identity-environment schemas and principal bridge. A scratch-only Vitest alias points `@jobguard/config` to main's source, rather than this worktree's built config. All **397 tests pass on both main and this worktree**. For the shared-helper corpus (main has no helper file), the scratch fixture is main's original `z.string().url()` expression; all **45 identical inputs pass on both**. These runs compare acceptance, preserve unnormalized successful values, and retain the bridge's 403/401 outcomes. Existing downstream URL refinements can throw on invalid input; these count as rejections, not acceptance.
 
-`pnpm --filter @jobguard/api exec vitest run src/auth/url-compatibility.test.ts --maxWorkers=2`
+Logs: `/private/tmp/jg-zod4-r4-main-{api,config}.log`. Scratch-only files are not repository changes.
 
-**Exit 1: 137 failed, 13 passed (150 tests)** on unchanged `b80681eb` implementation. Log: `/private/tmp/jg-zod4-r3-red.log`. This exercises ten boundary/field combinations, valid URLs, leading/trailing whitespace and embedded tab/CR/LF/NBSP/BOM (authority and path). After repair the same 150 tests pass. The config unit test additionally verifies valid path spaces, percent escapes and embedded em-space are preserved verbatim, avoiding an overbroad all-whitespace ban.
+## HTTP/Zod-text audit
 
-## Client-visible error audit
+Ran:
 
-Searched all `apps/web` client source, unit tests and e2e with `rg` for `e.message`, `error.message`, `.code`, `.message`, `JSON.parse`, `invalid_string`, `invalid_format`, `Invalid uuid`, `Invalid url`, `ZodError`, and code/message comparison, regex and string operations. Full search output is in `/private/tmp/jg-zod4-r3-{client-error-search,error-test-search,error-comparisons,client-consumers,zod-assertion-search}.log`.
+`rg -n '\.(message|issues|errors)\b|ZodError|invalid_(string|format|type|value)' apps/web/app/api --glob '*route.ts'`
 
-Results:
-
-- The affected materials/material-rates, purchase-orders, supplier-documents, supplier-matches, things-to-check, relevance-inbox, readiness, final-account and customer-invoice route families return error text as `code`; their route source, response keys/order, status selection and response structure are unchanged.
-- `materials.tsx`, `purchase-order.tsx`, `supplier-documents.tsx`, `supplier-match.tsx`, `supplier-fact-editor.tsx`, `things-to-check.tsx` and `final-account-lock.tsx` throw/display opaque response codes/messages. No Zod issue text is decoded or compared. `relevance-inbox.tsx` and `job-final-account.tsx` do not parse that text. `final-account.tsx` parses stored lineage JSON, not error text.
-- Named-domain-code handling exists elsewhere: `recovery-case-requests.ts` validates typed refusals and compares stale codes; `practice-receipts-state.ts` maps named codes; `jobguard-app.tsx`, `job-parties.tsx`, contractor admin and client approval screens classify named authorization/conflict codes. `evidence-packs.tsx` matches STALE/CONFLICT/SOURCE_NOT_FOUND, and `recovery-messages.tsx` classifies named recovery codes. These are not Zod issue-message parsers. `receipt-http-error.ts` and its unit test classify the error **name** `ZodError`, preserving a fixed `INVALID_RECEIPT_COMMAND` response.
-- E2e/unit assertions compare named business codes (including ENT-1, CH-2/CH-3a, SV-4, MON-7, M4-5-S/M4-6-S) or generic string type (ENT-10a). No assertion parses/depends on serialized Zod issue wording. No `invalid_string`/`invalid_format` consumer or assertion was found in `apps/web`.
-
-Therefore the order's allowance for changed Zod issue wording applies; no broad error-text translation was added. Supplier regex bytes are explicitly preserved and tested as requested.
+**No matches** (the expected rg exit is 1); `/private/tmp/jg-zod4-r4-route-error-audit.log` is empty. Also inspected the matching runtime library/UI consumers across `apps/web`. `route-error-code.ts` reads business messages only after excluding schema errors; `receipt-http-error.ts` now does the same. `recovery-case-requests.ts` reads already-typed response fields. Domain `fact.issues` and evaluation-report `errors` are not Zod issues. Test-only `.message` assertions deliberately verify that the tainted fixture contains STALE/CONFLICT. **Remaining runtime readers/parsers/comparators of Zod issue text: none.**
 
 ## Commands actually run
 
-Node `v24.17.0`; pnpm `10.28.1` via `PATH=/private/tmp/jg-zod-bin:$PATH`. Installed dependencies reused. Checks ran **one at a time**, all Vitest runs at most two workers and Turbo concurrency one. Observed load averages remained below 20 (approximately 3–6). Logs: `/private/tmp/jg-zod4-r3-*.log`.
+Node `v24.17.0`, pnpm `10.28.1`, `PATH=/private/tmp/jg-zod-bin:$PATH`. Checks ran one at a time, Vitest `--maxWorkers=2`, Turbo `--concurrency=1`; the runner waits if the one-minute load exceeds 20 (observed loads stayed below 20). Existing dependencies were reused. Logs and exact command/exit records: `/private/tmp/jg-zod4-r4-*.log` and `/private/tmp/jg-zod4-r4-results.jsonl`.
 
-| Command | Exit | Evidence |
+| Command | Exit | Result |
 | --- | --- | --- |
 | `pnpm build --concurrency=1` | 0 | All 7 workspaces, including Next production build. |
 | `pnpm typecheck --concurrency=1` | 0 | All 7 workspaces. |
-| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | 0 | Root purity/lane/money/commercial guards and all 7 package lints. |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Actual lane boundary check, including current uncommitted/untracked paths. |
-| `pnpm --filter @jobguard/core test --maxWorkers=2` | 0 | 124 source files, 2,953 tests; source-only selection retained. |
-| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` | 1 | 2,229 passed, 129 failed, 23 skipped; 123 files passed, 9 failed. 129 listener errors are `listen EPERM` / Supertest null listener-port failures. Two additional failed suite setups: final-account isolation cannot obtain port 58400..58650; shadow isolation cannot obtain port 58000..58500. Environment-blocked, not represented as passes. |
-| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | 0 | 5 source files, 42 tests. |
-| `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=2` | 0 | 15 files, 147 tests, including fixture evaluations. No live-provider/model claim. |
-| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0 | 40 files, 867 tests. |
-| `pnpm openapi:check` | 1 | tsx CLI's IPC listener denied with EPERM. |
-| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | 0 | Same actual OpenAPI check through direct loader; no generated output changes. |
-| `pnpm --filter @jobguard/web exec playwright test --list` | 0 | **All 380 tests in 69 files list.** No browser test execution, dev server or use of port 3000. |
-| `pnpm --filter @jobguard/api exec vitest run src/auth/url-compatibility.test.ts src/workspace/contracts.datetime.test.ts src/supplier-document.error-body.test.ts --maxWorkers=2 --reporter=verbose` | 0 | All 3 repair files, 152 tests pass. Focused run isolates the repair evidence from environment-blocked API suites. |
-| `git diff --check` | 0 | No whitespace errors. |
+| `pnpm lint --concurrency=1` | 0 | Root guards and all 7 workspace lint checks; LANE_BASE_REF=origin/main. |
+| `pnpm lint:lanes` | 0 | Official lane check, including working-tree/untracked changes; LANE_BASE_REF=origin/main. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | 0 | 124 source files, 2,953 tests pass. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` | 1 | 123 files pass; 2,476 tests pass, 129 fail, 23 skipped; 129 listener errors. All nine failing files require listeners or PostgreSQL; see exclusions below. No remaining unexpected-import failure. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude src/auth/sso/action-paths.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts --exclude src/contractor/practice-worker-switch.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/final-account-lock.isolation.test.ts --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts` | 0 | 123 source files, 2,458 tests pass. Only the nine environment-blocked files from the unrestricted run are excluded locally; all remain mandatory in CI. |
+| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | 0 | 5 source files, 86 tests pass (including 45 URL corpus cases). |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0 | 41 files, 990 tests pass, including 123 new route tests across all 41 guarded routes. |
+| `pnpm openapi:check` | 1 | tsx CLI fails to bind its IPC pipe (EPERM). |
+| `node --import tsx src/generate-openapi.ts --check` | 0 | Real generator check succeeds through the direct tsx loader; no OpenAPI output change. |
+| `pnpm --filter @jobguard/web exec playwright test --list` | 0 | 380 tests in 69 files discovered; no browser launched. |
+| `pnpm exec vitest run src/auth/url-compatibility.test.ts --config /private/tmp/jg-zod4-r4-main/vitest.config.mts --maxWorkers=2` | 0 | 397 identical tests pass on scratch main with Zod 3.25.67. |
+| `pnpm exec vitest run src/auth-url.test.ts --maxWorkers=2` | 0 | 45 identical URL inputs pass against the original Zod 3 .url() validator in scratch main. |
 
-No clean reinstall was attempted: the order forbids downloads and supplies installed dependencies. No DB/migration or executed-browser suite was attempted separately; the sandbox cannot bind listeners or start PostgreSQL, and the order restricts Playwright to discovery. Coordinator/GitHub CI must run the listener-dependent API, real PostgreSQL/migration and executed-browser suites after committing/pushing. None of those checks was weakened or made optional.
+The scratch comparison commands run from scratch `apps/api` and `packages/config` respectively. The direct OpenAPI loader runs from this worktree's `apps/api`. The locally excluded API files are exactly: `auth/sso/action-paths.test.ts`, `contractor/contractor-practice-session.http.test.ts`, `contractor/practice-worker-switch.http.test.ts`, `contractor/site-extra-pricing.http.test.ts`, `contractor/site-extra.http.test.ts`, `contractor/site-visit.http.test.ts`, `final-account-lock.isolation.test.ts`, `health.test.ts`, and `shadow-isolation.application.test.ts` (all under `apps/api/src`). Unrestricted failures are EPERM listeners/Supertest null ports and two database setup failures (`no free port`); no successful PostgreSQL/HTTP integration is claimed.
 
-## Handoff
+Earlier diagnostics: the initial build passed; initial typecheck/lint failed on missing `.js` extensions in new dynamic test imports, now fixed. Initial API execution also found the VM's missing import adapter, now fixed. The first scratch attempt used the other cached Zod 3 version and exposed invalid-URL refinements that throw; the final recorded scratch comparisons use the exact main pin, 3.25.67, and handle rejections correctly. Early route fixture-generation mistakes were corrected against main before the final successful 123-test route run. These are superseded runs, not final passing evidence. `git diff --check` passes.
 
-No migrations or new operational alerts. Affected invariants: boundary strictness, tenant-origin rejection, timestamp compatibility and public error serialization. Rollback: revert this round's source/test/lane changes together; the prior core Zod migration remains independently reviewable. Commercial, real-data, residency, provider and live-model release gates are unchanged. Shared config index ownership is serialized in this task. Independent exact-commit verdict and separate technical acceptance remain required.
+## Handoff and remaining gates
 
-Intended conventional commit message written to `/private/tmp/jg-msg-deps-zod4.txt`; dispatcher owns Git writes.
+No migrations or data backfill; no new alerts. Affected invariants: boundary validation and HTTP error classification. Revert these source/test edits together for rollback. Shared overlap is limited to the existing DEPS-ZOD4 lane's authorized paths and receipt. No unrelated task work or agents were introduced.
 
----
+The sandbox cannot bind localhost or start PostgreSQL. Full database/migration and browser execution remain mandatory in GitHub CI after the dispatcher commits/pushes; Playwright listing is discovery only. The unrestricted API suite is not green locally. Online advisory scanning, real providers and live-model evaluation were not run. No release/technical acceptance is asserted. Fresh independent verdict and separate acceptance remain required on the eventual commit.
 
-Historical round-2 receipt follows unchanged; its command results and blockers describe that earlier run, not round 3.
-
-# DEPS-ZOD4 builder receipt — round 2, 24 October 2026
-
-Builder evidence only. Independent exact-commit review and separate acceptance remain outstanding. No Git write commands, commit, push, PR creation or deployment performed.
-
-## Scope and changes
-
-The coordinator resolved and installed exact Zod 4.6.6 across all consuming workspaces and the lockfile. This run used that installed version; no dependency download, temporary package replacement or diagnostic Zod implementation was used. The remaining body-parser advisory belongs to separately dispatched PR #310 (dispatcher evidence; not independently audited here).
-
-Round-1 migration retained: explicit two-argument records and sparse enum records, prefaults preserving pre-parse validation/transforms, Zod 4 generic/output types and object-shape access, email/URL helpers, and permissive GUIDs with the original `Invalid uuid` message. Strict objects, schema bounds, money limits and brands remain enforced. The new throwing-getter oversized-array test executes the real patched array parser without allocating a huge array.
-
-Round-2 repairs:
-
-- Restore the former optional semantics of unknown quantity/authority fields. Missing quantity reaches `INVALID_QUANTITY`, while any other malformed command remains `INVALID_COMMAND`; missing download authority produces the same seven-key refusal and cleanup requirement as revoked authority.
-- Add shared pure timestamp schemas in `packages/core/src/datetime.ts`. Zod 4.6.6 now requires seconds for qualified ISO datetimes; the existing contracts allowed minute precision. The shared schemas preserve valid Gregorian dates, optional seconds, unbounded fractional precision and colon/colonless offset syntax. UTC-only boundaries remain UTC-only. Precision-six boundaries continue using the equivalent precision-six validator. Receipt/origin validation still independently enforces offsets from -23:59 to +23:59, producing one field issue for impossible offsets. The money allocator and arithmetic were not changed.
-- Strengthen the new compatibility test with leap dates, minute-precision UTC and offset timestamps, offset issue paths, missing quantity and command-error precedence. No existing test expectation or fixture was edited.
-- Existing tests require exact byte hashes for five modified authentication repository files and exact AST syntax for the worker's queued-context constructor. Restore those files/that constructor's reviewed source rather than change those expectations. These are the test-proven exceptions to the GUID-helper migration: `practice-session.ts`, `contractor-party-repository.ts`, `work-order-repository.ts`, `job-scheduling-repository.ts`, `contractor-session-context.ts`, and worker `queueContext`. Their existing UUID syntax is retained; other migrated UUID sites retain `z.guid({ error: "Invalid uuid" })`.
-- Preserve the supplier application's existing regex error contract for invalid quantities (`ZodError`, `invalid_string`, `regex`, `Invalid`, same path). Parsing uses Zod 4; only the legacy error constructor from the installed package's compatibility export is used to represent this existing public failure. No v3 schema or array parser is used by the adapter. Other failures retain their original Zod 4 error.
-- Building core before an unrestricted Vitest run still produced five ENOENT failures in compiled duplicate tests, because they try to read TypeScript next to `dist/*.js`. Scope the core test script to `vitest run src`, matching API's source-test selection. All 124 source test files still run, with 2,953 tests; no source test was removed or skipped.
-- Refresh the exact-file lane inventory, including `pnpm-lock.yaml`. The lane's own file is implicitly permitted by the existing checker; self-granting it is prohibited. There is no new web workflow (C1).
-
-## Environment and checks
-
-Node 24.17.0, pnpm 10.28.1 through `PATH=/private/tmp/jg-zod-bin:$PATH`. The global pnpm 11 launcher stalled; it was stopped before using the pinned cached launcher. Dependencies were already installed. Builds and requested package checks ran one at a time; a failed OpenAPI CLI attempt briefly overlapped the tail of the supplemental tooling tests, and subsequent checks ran sequentially; all Vitest runs use at most two workers and all Turbo runs concurrency one. Observed load averages were below 20. Full logs: `/private/tmp/jg-zod4-r2-*.log`.
-
-The sandbox prohibits listener binding and PostgreSQL startup. No real PostgreSQL or browser integration result is claimed. Source-inspected, test-executed and independently verified are separate claims.
-
-| Command (pinned PATH above) | Exit | Result |
-| --- | --- | --- |
-| `pnpm turbo run build --filter=@jobguard/core --concurrency=1` | 0 | Core build before source tests; rebuilt after timestamp changes. |
-| `pnpm --filter @jobguard/core test --maxWorkers=2` | 0 | All 124 source files, 2,953 tests pass. |
-| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2` | 1 | Diagnostic after build: 5 compiled-duplicate ENOENT failures, 5,901 passes. Fixed by the source-only package test script above. |
-| `pnpm turbo run build --filter=@jobguard/api --concurrency=1` | 0 | Initial API/dependency build. |
-| `pnpm build --concurrency=1` | 0 | All 7 workspaces, including Next production build; final build after shared timestamp and supplier adapter changes passes. |
-| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` | 1 | Final run: 2,077 pass, 129 fail, 23 skipped, 129 listener errors. HTTP failures are `listen EPERM` / Supertest null listener ports. Final-account and shadow isolation setup fail to acquire PostgreSQL ports. Earlier source-stamp, AST and application regressions pass. These environment-blocked suites remain mandatory in CI. |
-| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | 0 | 41 source tests pass. |
-| `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=2` | 0 | 147 source tests including fixture golden evaluations pass. No live-model or provider evaluation claimed. |
-| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0 | 40 files, 867 tests pass. |
-| `pnpm typecheck --concurrency=1` | 0 | All 7 workspaces. |
-| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | 1 | Core purity passes; lane checker refuses self-comparison because uncommitted branch HEAD equals origin/main. No Git writes permitted; dispatcher must rerun after committing. |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same honest self-comparison refusal. Supplemental working-tree inventory uses the real policy loader and `lanePathAllowed`; no uncovered changed path. |
-
-Final results on the working-tree implementation:
-
-| Additional / final command | Exit | Evidence |
-| --- | --- | --- |
-| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | 0 | 82 tests, including compiled duplicates. |
-| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts'` | 0 | All 72 non-integration files / 638 tests pass. Explicit local exclusions retain mandatory PostgreSQL/listener checks in CI. Initial focused supplier run had 3 failures; the final complete unit run includes and passes those unchanged tests. |
-| `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` | 0 | 2 source adapter tests; no live S3 claim. |
-| `pnpm turbo run lint --concurrency=1` | 0 | Package lint in all 7 workspaces. This supplements, and does not replace, blocked root lane-aware lint. |
-| `node tools/money-arithmetic-lint.mjs` | 0 | Exact-money guard passes. |
-| `node tools/commercial-boundary-lint.mjs` | 0 | Commercial-boundary guard passes. |
-| `node --test --test-concurrency=2 tools/*.test.mjs` | 0 | All 126 tooling tests pass. |
-| `pnpm --filter @jobguard/api openapi:generate` | 1 | tsx CLI cannot create its IPC listener: EPERM. |
-| `pnpm openapi:check` | 1 | Same tsx CLI IPC restriction. |
-| `node --import tsx src/generate-openapi.ts` in `apps/api` | 0 | Actual generator, direct loader avoids the CLI-only IPC listener. |
-| `node --import tsx src/generate-openapi.ts --check` in `apps/api` | 0 | Actual generated output check passes. |
-| Real `loadLanePolicy` / `lanePathAllowed` over tracked + untracked changes | 0 | All 201 changed paths covered, including lockfile and implicitly permitted own lane file. Not represented as official range-check success. |
-| `git diff --check` | 0 | No whitespace errors. |
-
-OpenAPI regenerated output is byte-identical to `origin/main:apps/api/openapi.json`; there is no contract diff to explain. SHA-256: `21376c65338815e24d1dffb8e3ba8dc33ab3e3ce70760cfd2b3ab687ba39868a`.
-
-No dependency advisory scan was attempted in this network-restricted run. The coordinator's installed-lockfile/advisory evidence is separately supplied by the order; this receipt does not claim an independently executed online scan.
-
-## Invariants and handoff
-
-Affected: boundary validation, exact error classification, timestamp language, money input validation, authentication source guards and schema output types. No SQL migration, financial formula, permission, audit-storage rule, provider route, prompt or model changed. No new operational alert. No customer data or live external provider call. Existing real-data, commercial, residency, live-model and release gates remain unchanged.
-
-Shared-file overlap: core's public index adds the UTC timestamp schema export; package manifests and lockfile overlap the coordinator's dependency-resolution work. Other dependency leaves must serialize overlapping source edits. The lane inventory covers these exact paths.
-
-Rollback is source/manifests/lockfile together; reverting the dependency also restores its reported security vulnerability. Production/browser/PostgreSQL/migration checks remain required in GitHub CI. Independent verdict and separate acceptance must bind to the dispatcher's exact eventual commit.
-
-Intended dispatcher message: `/private/tmp/jg-msg-deps-zod4.txt`. The required `do not commit` first line records the unresolved environment/range checks; it is not a claim of technical acceptance.
+Intended conventional commit message: `/private/tmp/jg-msg-deps-zod4.txt`. The dispatcher owns committing and pushing.
