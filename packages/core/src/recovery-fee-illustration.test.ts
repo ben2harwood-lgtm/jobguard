@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { attributionPredicates } from "./shadow-domain/attribution.js";
 import { recoveryFeeIllustrationInputV1, recoveryFeeIllustrationOutputV1, deriveRecoveryFeeIllustration, RecoveryFeeIllustrationError } from "./recovery-fee-illustration.js";
+import { mapRecoveryReceiptToLines, sumRecoveryDeemedNet, type RecoveryReceiptFacts } from "./recovery-allocation.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const binding = { tenantId: id(1), jobId: id(2), workId: id(3), lineId: id(4), lockId: id(5) };
@@ -262,5 +263,105 @@ describe("SV6-05 pure illustration", () => {
     }
     expect(() => derive({ ...rawInput(), policyBundleRef: "unapproved" })).toThrow();
     expect(recoveryFeeIllustrationOutputV1.safeParse({ ...fractional, tax: 1 }).success).toBe(false);
+  });
+});
+
+// Pure synthetic fixtures only: these are not persisted commands or settlement proof.
+// Exercise the existing owner kernel; the illustration consumes its exact results unchanged.
+const allocationFixture = (): RecoveryReceiptFacts => ({
+  version: "recovery-receipt-facts.v1", environment: "synthetic_demo", direction: "receipt", compositionComplete: true,
+  receipt: { id: id(90), invoiceId: id(91), gross: wire("2400000"), effectiveAt: "2026-10-23T12:00:00Z", sourceRef: "synthetic-receipt.1" },
+  lines: [
+    { id: id(92), invoiceId: id(91), existedAt: "2026-10-20T12:00:00Z", outstandingGross: wire("4032000"), netPence: 3360000, grossPence: 4032000 },
+    { id: binding.lineId, invoiceId: id(91), existedAt: "2026-10-22T12:00:00Z", outstandingGross: wire("96000"), netPence: 80000, grossPence: 96000 },
+  ], explicit: null, separateInvoice: null,
+});
+const illustrateAllocatedCatch = (rows: ReturnType<typeof mapRecoveryReceiptToLines>) => {
+  const q = sumRecoveryDeemedNet(rows, [binding.lineId]);
+  const raw = rawInput(q.numerator, q.denominator);
+  // An authoritative empty qualification inventory is assumed ONLY in this pure fixture.
+  // Real callers must prove completeness; zero is not a missing-proof fallback.
+  if (q.numerator === "0") raw.sources = [];
+  return derive(raw);
+};
+describe("SV6-12/16 pure dependency-bound scenarios", () => {
+  it("SV6-12 F5 deposit", () => {
+    const deposit = allocationFixture();
+    deposit.receipt.gross = wire("1200000");
+    deposit.receipt.effectiveAt = "2026-10-21T12:00:00Z"; // Before catch existence/lock.
+    const bytes = JSON.stringify(deposit);
+    const deposited = mapRecoveryReceiptToLines(deposit);
+    expect(deposited.map(row => row.lineId)).toEqual([id(92)]);
+    expect(sumRecoveryDeemedNet(deposited, [binding.lineId])).toEqual(wire("0"));
+    expect(illustrateAllocatedCatch(deposited).cumulativeFee.pence).toBe(0);
+    const later = allocationFixture();
+    later.receipt.gross = wire("1464000");
+    later.lines[0]!.outstandingGross = wire("2832000");
+    const rows = mapRecoveryReceiptToLines(later), savedBytes = JSON.stringify(rows);
+    expect(rows.find(row => row.lineId === binding.lineId)).toMatchObject({ rule: "pro_rata", gross: wire("48000"), net: wire("40000") });
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("40000"));
+    expect(result.cumulativeFee.pence).toBe(4000);
+    expect(JSON.stringify(rows)).toBe(savedBytes);
+    expect(JSON.stringify(deposit)).toBe(bytes);
+  });
+  it("SV6-12 F6 explicit non catch", () => {
+    const facts = allocationFixture();
+    facts.explicit = { sourceRef: "synthetic-remittance.non-catch.1", shares: [{ lineId: id(92), gross: wire("2400000") }] };
+    const bytes = JSON.stringify(facts), rows = mapRecoveryReceiptToLines(facts);
+    expect(rows).toEqual([{ lineId: id(92), rule: "explicit", sourceRef: "synthetic-remittance.non-catch.1", gross: wire("2400000"), net: wire("2000000") }]);
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("0"));
+    expect(result.cumulativeFee.pence).toBe(0);
+    expect(JSON.stringify(facts)).toBe(bytes);
+    // Negative control: same receipt without remittance uses the existing pro-rata rule.
+    facts.explicit = null;
+    expect(illustrateAllocatedCatch(mapRecoveryReceiptToLines(facts)).exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+  });
+  it("SV6-12 F7 separate invoice", () => {
+    const facts = allocationFixture();
+    facts.receipt.invoiceId = id(93); facts.receipt.gross = wire("96000");
+    facts.lines[1]!.invoiceId = id(93);
+    facts.separateInvoice = { invoiceId: id(93), sourceRef: "synthetic-separate-invoice.1" };
+    const bytes = JSON.stringify(facts), rows = mapRecoveryReceiptToLines(facts);
+    expect(rows).toEqual([{ lineId: binding.lineId, rule: "separate_invoice", sourceRef: "synthetic-separate-invoice.1", gross: wire("96000"), net: wire("80000") }]);
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(result.cumulativeFee.pence).toBe(8000);
+    expect(facts.lines[0]!.outstandingGross).toEqual(wire("4032000"));
+    expect(JSON.stringify(facts)).toBe(bytes);
+    // The unrelated main invoice's balance cannot affect the catch invoice.
+    facts.lines[0]!.outstandingGross = wire("1");
+    expect(illustrateAllocatedCatch(mapRecoveryReceiptToLines(facts))).toEqual(result);
+  });
+  it("SV6-16 shadow 30000 separates captures from paid catches", () => {
+    const raw = rawInput("50000"); raw.sources.push(independentEntry("30000"));
+    raw.captures[0]!.exactNet = wire("320000");
+    raw.captures.push({ ...raw.captures[0]!, captureId: id(61), sourceRevision: "final-review.1", exactNet: wire("40000") });
+    const bytes = JSON.stringify(raw), result = derive(raw);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(result.cumulativeFee).toEqual({ pence: 8000, currency: "GBP" });
+    expect(result.exactYoursBeforeVatAndTax).toEqual(wire("72000"));
+    expect(result.exactCapturedFeeFreeNet).toEqual(wire("360000"));
+    expect(result.capturedFee).toEqual({ pence: 0, currency: "GBP" });
+    expect(result.display).toEqual({ qualifyingPrincipal: { pence: 80000, currency: "GBP" }, capturedFeeFreeNet: { pence: 360000, currency: "GBP" }, yoursBeforeVatAndTax: { pence: 72000, currency: "GBP" } });
+    expect(result.label).toBe("Illustration — proposed policy; principal only");
+    expect(result.productionEnabled).toBe(false); expect(result.realExternalActions).toBe(0);
+    expect(result).not.toHaveProperty("found"); expect(result).not.toHaveProperty("postingDelta");
+    expect(JSON.stringify(raw)).toBe(bytes);
+    const capturesOnly = { ...raw, sources: [] };
+    expect(derive(capturesOnly).cumulativeFee.pence).toBe(0);
+    expect(derive(capturesOnly).exactCapturedFeeFreeNet).toEqual(wire("360000"));
+    // Billed but unpaid is not a qualified source. Never infer settlement from billing.
+    const unpaid = structuredClone(raw);
+    unpaid.sources[1]!.assessment.facts.facts.customer_payment_settled_and_allocated_to_that_line!.holds = false;
+    expect(() => deriveRecoveryFeeIllustration(unpaid as never)).toThrow(RecoveryFeeIllustrationError);
+    const missing = structuredClone(raw);
+    delete (missing.sources[1]!.assessment.facts.facts as Record<string, unknown>).customer_payment_settled_and_allocated_to_that_line;
+    expect(() => deriveRecoveryFeeIllustration(missing as never)).toThrow(RecoveryFeeIllustrationError);
+    for (const field of ["tenantId", "jobId", "lockId"] as const) {
+      const foreign = structuredClone(raw); foreign.captures[1]![field] = id(99);
+      expect(() => derive(foreign)).toThrow(RecoveryFeeIllustrationError);
+    }
   });
 });
