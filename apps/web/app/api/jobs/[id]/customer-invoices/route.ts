@@ -37,6 +37,12 @@ function failure(error: unknown, issuing = false) {
  if (status !== undefined) {
   return NextResponse.json({ code }, { status: issuing ? status : 400, headers: noStore });
  }
+ // Only business codes use the compatibility fallback; diagnostics and untyped
+ // lock refusals still cannot impersonate the typed final-check envelope.
+ const typedLockRefusals = ["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED"];
+ if (/^[A-Z][A-Z0-9_]*$/u.test(code) && !typedLockRefusals.includes(code)) {
+  return NextResponse.json({ code }, { status: code.includes("STALE") || code.includes("CONFLICT") ? 409 : 400, headers: noStore });
+ }
  // SQL diagnostics and other unexpected failures are never a public error code.
  return NextResponse.json({ code: "INTERNAL_SERVER_ERROR" }, { status: 500, headers: noStore });
 }

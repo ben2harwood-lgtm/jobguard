@@ -1646,3 +1646,43 @@ Logs: `/private/tmp/jg-sv5pre-r7-typecheck.log`, `jg-sv5pre-r7-lint-task-base.lo
 Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`. Only the test fixture file and this append are changed. PostgreSQL/browser CI, main-base lane handling, fresh exact-commit independent verdict, separate acceptance, D12/D13 and all production/release gates remain HOLD.
 
 Final deterministic verification: PASS `git diff --check`, exact two-file scope, unchanged assertions/expectations outside the assertion-free fixture helper, unchanged C244 SQL, unchanged historical receipt prefix, and commit-message file present. Source-only evidence; no database or independent-verdict claim.
+
+## catch-up 2 — C263 — 24 October 2026
+
+Builder working-tree repair for #189, starting from clean HEAD `ffe1bfafccb75d17010f557a16b5bc0620545f91` on `codex/sandbox/sv5pre-catchup`. Ben's C263 authorizes the customer-invoice expectation changes following dispatcher's report of CI run `40078766728` (three failing shared route cases). That CI report is supplied context, not a locally rerun CI result. Read AGENTS.md, BUILD_PLAN.md §10.2.6 and SV-4/SV-5, and `docs/contracts/final-account-lock-v1.md` / `sv5pre-completion-v1.md`.
+
+Changes are confined to the invoice route, its customer-invoice compatibility expectations in the shared route test, and this receipt append. The route's existing `publicFailures`, typed `FinalAccountLockError` 409 / `final-check-invoice-error.v1`, validation/SyntaxError `INVALID_INPUT` 400, non-Error fallback, authentication, practice-access precedence and no-store behavior are unchanged. Only the fallback gains handling for unlisted symbolic business codes: echo the code; `STALE` or `CONFLICT` gives 409, otherwise 400. In particular `STALE_REVISION` now gives 409. Diagnostics and the six typed-only invoice-lock refusals retain the existing sanitized 500 behavior when supplied as ordinary Errors, preserving every existing invoice-route test expectation.
+
+The single existing customer-invoices row now expects `INVALID_INPUT` for validation and 409 for stale/conflict business codes. Six customer-invoice-only cases appended to that file assert the exact typed lock envelope and no-store. Every original byte outside that row remains unchanged; every other route row and shared assertion is byte-identical. `customer-invoices/route.test.ts` is byte-identical to HEAD. No migration, backfill, grant, financial computation, approval path, provider integration, alert or production-release authorization changed. Earlier receipt bytes remain an unchanged prefix (original SHA-256 `95d1c777c6b132b2c4e50f250d78037361a363ec36842eba79879159c7f80860`).
+
+### Checks actually executed
+
+Installed dependencies used without installation/download. Node `v24.17.0`, pinned pnpm `10.28.1` via the existing `/private/tmp/jg-sv5pre-bin/pnpm` launcher on PATH. The initial system-pnpm focused-test launch stalled after a newer-pnpm warning and was interrupted; the pinned launcher completed the checks below. Every Vitest invocation uses `--maxWorkers=2`.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/lib/route-error-code.test.ts 'app/api/jobs/[id]/customer-invoices/route.test.ts'` | PASS, 2 files / 159 tests, including all unchanged invoice-route expectations |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 42 files / 1,026 tests |
+| `pnpm typecheck --concurrency=1` | PASS, 7 tasks (6 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL at lane boundary: temporary `codex/sandbox/sv5pre-catchup` branch matches zero registered lanes; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same unregistered temporary branch; no lane edit or bypass |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --concurrency=1` | PASS, all 7 package tasks; supplemental evidence, does not replace the failed root lint gate |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS, supplemental boundary checks after root lint stopped at lane gate |
+| `pnpm build --concurrency=1` | PASS, 7 tasks (6 cached); existing Turbo cache-write warnings nonfatal |
+| `pnpm openapi:check` | BLOCKED/exit 1, tsx CLI IPC socket `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, identical generator/check through the socket-free loader |
+| Selected tooling units (command below) | PASS, 24 tests |
+
+Other-package source units use `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'`. DB additionally excludes `test/free-port.test.ts`. API additionally excludes `src/final-account-lock.isolation.test.ts`, `src/sv5pre-invoice.http.test.ts`, `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-visit.http.test.ts`, and `src/auth/sso/action-paths.test.ts`, retaining the prior catch-up sandbox selection. No suite is made optional in CI. Web uses its existing configured e2e exclusion.
+
+Tooling command: `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs`. Git-writing lane/train fixture tests were not run under the dispatcher's no-Git-writes instruction.
+
+Logs and exact commands/results are under `/private/tmp/jg-sv5pre-catchup2-*`: `checks.py`, `results.json`, `focused.log`, `web.log`, `typecheck.log`, `lint.log`, `lanes.log`, `package-lint.log`, `build.log`, `openapi.log`, `openapi-loader.log`, `units.py`, `unit-results.json`, per-package `unit-*.log` and `unit-tools.log`.
+
+Full `pnpm test`, PostgreSQL integration/migration/worker suites and browser suites were NOT RUN: this sandbox cannot bind localhost or start PostgreSQL. GitHub CI after dispatcher's commit/push owns these mandatory executions and the main-base lane check on the registered PR branch. No fresh-install, database, browser or live-provider success is claimed. No AI prompt/model/parser changes; no live-model gate is implicated by this route-only repair. Independent exact-commit verdict, separate acceptance, D12/D13 and all existing real-data/production/release gates remain HOLD. This receipt is builder evidence, not independent review or task acceptance. No subagent, Git-writing command, commit, push, database startup or browser execution was performed.
+
+Intended conventional commit subject and body: `/private/tmp/jg-msg-sv5pre-catchup.txt`. Dispatcher owns commit and push after this turn.
+
+Other-package unit result: PASS, core 2,964; config 86; storage 2; ai 147; db 422; api 2,468; web 1,026. Total 7,115 source unit tests, plus 24 selected tooling tests. Focused 159 cases overlap the full web run. These selected source suites do not replace PostgreSQL/browser CI.
+
+Final deterministic preservation checks PASS: exact three-file scope; route bytes unchanged outside the fallback insertion; all original shared-test bytes outside the customer-invoices row unchanged; invoice-route tests unchanged; receipt append-only; HEAD unchanged; intended commit-message file present; `git diff --check` clean. No independent-verdict claim.
