@@ -2,14 +2,14 @@
   {
     "file": "packages/db/src/commands.ts",
     "line": 109,
-    "fingerprint": "3eeb0b5e7abed0eb28b197997542402f29f0ba55456e4487179aeccbb34ee2c8",
+    "fingerprint": "26b3bfbfb069fc2d67354cf044999c232a717f791cf6d0415fadf89a73c2a266",
     "reason": "Dismissal replay has a different literal family on only one OR branch; the command-id branch is not constrained.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/commands.ts",
     "line": 81,
-    "fingerprint": "d1db17834b4458e0c42d3d3402191adac4c798859b3e3ca3d8c13b0fffa2650c",
+    "fingerprint": "1de5d688dfc6c8cd637e250e296e899d9fd4a6ff9aa53fcfda7d5144171020b8",
     "reason": "Generic replay reads result using a runtime command family and an OR command-id branch; no non-advisory proof.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },

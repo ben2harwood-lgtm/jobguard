@@ -204,3 +204,64 @@ Final broader-unit completions:
 - Web cwd: `pnpm exec vitest run --maxWorkers=1`: **0; 867 tests / 40 files pass** (`web-final.log`), unit/adapter coverage, not browser journeys.
 - API cwd: `node --import tsx src/generate-openapi.ts --check`: **0** (`openapi-fallback.log`), actual source OpenAPI comparison without the tsx CLI IPC listener; no spec edited.
 - `node --check` both tools, `git diff --check`: **0**. Final working tree has only the guard, appended tests, smaller baseline and appended receipt modified. Remaining exact-head CI, real PostgreSQL/migrations/browser and independent acceptance gates are unchanged.
+
+
+## extra round: rebaseline after #312
+
+C261 catch-up order, 24 October 2026, PR #305 / CH6-CSG-01. Accepted head `72f38f0a`; clean merge of main `4b1a779008505c86ca85db78fb38eda412394fe4` is HEAD `9ecfbbf62be917a4e888684535548e025647a4a4`. Branch `codex/sandbox/ch6-csg-01-catchup`. Builder: Codex gpt-6.1-sol, medium reasoning. No sub-agents, Git writes, dependency downloads, commit or push. This is the ordered catch-up delta check, not a new review/acceptance or a claim against the repair-round cap.
+
+**HOLD: the commands.ts delta is repaired, but the ordered all-green gate cannot be met within commands.ts-only scope.** Local starting state differs from the reported four diagnostics: CLI produces 11 chain-specific unresolved records and 5 stale baseline records (16 diagnostics). Five existing pinned spots have drifted, all following #312's UUID-schema change. Only the two commands.ts fingerprints are authorized here. The other three pins remain untouched; no new unresolved edge is accepted. The scope discrepancy was raised to the dispatcher during work; no scope extension is assumed.
+
+### Source-inspected delta and decision
+
+Read current AGENTS.md, BUILD_PLAN §2 C1–C8 and CH-6, existing receipt/baseline, guard fingerprint/traversal/SQL evaluator, full commands.ts, and the reported chains through the fee-illustration application/controller, selective DB barrel, activation repository, demo seed and quote-delivery repository. Also inspected tenant-context and audit helpers. The guard traverses reached implementation modules at module level; reaching UserCommandDispatcher through activation or quote delivery therefore inspects dismissDecision too. This is not a demonstrated runtime advisory-to-money data flow.
+
+`git diff 72f38f0a HEAD -- packages/db/src/commands.ts` contains exactly one change: `const uuid = z.string().uuid()` becomes `const uuid = z.guid({ error: "Invalid uuid" })`. SQL, bound parameters, replay checks, dispatch, authorization, mutations and dismiss/reject handling are unchanged. At :109, the query reads request_hash/result with `command_id=$2 OR (command_type='finding.resolve' AND semantic_key=$3)`: the OR leaves one branch without a provable discriminator. The dismissal path still returns the prior receipt after request-hash validation, or records only dismissed/rejected resolution and operational audit with `authorizedAction:false`; it does not create an action authorization. At :81, generic replay still uses a runtime command family plus the OR command-id branch, validates request hash and succeeded status, and returns the previous result. Both remain the same previously reviewed unresolved receipt-helper patterns, **not CONFIRMED violations**.
+
+The fingerprint binds the enclosing UserCommandDispatcher class and transitive same-module declarations, including schemas referring to uuid. Its scope is broader than the query evaluator's inputs. A read-only in-memory experiment substituted the accepted commands.ts bytes into the current loaded project; it reproduced both old baseline fingerprints exactly. Thus the new UUID declaration explains both drifts even though neither query nor line number moved.
+
+Only these replacements were made, with the exact same reasons and line numbers:
+
+| Spot | Old fingerprint | New fingerprint |
+| --- | --- | --- |
+| commands.ts:109 | `3eeb0b5e7abed0eb28b197997542402f29f0ba55456e4487179aeccbb34ee2c8` | `26b3bfbfb069fc2d67354cf044999c232a717f791cf6d0415fadf89a73c2a266` |
+| commands.ts:81 | `d1db17834b4458e0c42d3d3402191adac4c798859b3e3ca3d8c13b0fffa2650c` | `1de5d688dfc6c8cd637e250e296e899d9fd4a6ff9aa53fcfda7d5144171020b8` |
+
+A deterministic assertion compares HEAD baseline to working baseline: same ordered set of all 13 file/line/reason/code spots, all non-commands entries byte-equivalent as parsed objects, only the two authorized fingerprints changed, no remaining commands.ts diagnostic, raw unresolved count 32, **zero confirmed**. Evidence: `/private/tmp/ch6-catchup-delta.log`. Guard and test source remain unchanged.
+
+### Checks actually run
+
+Installed dependencies only: Node v24.17.0, pnpm 10.28.1 through existing `/private/tmp/ch6-csg-01-bin/pnpm`. No clean-install claim. Turbo concurrency 1; Vitest one worker; build `CIRCLE_NODE_TOTAL=2`. Logs: `/private/tmp/ch6-catchup-<label>.log`.
+
+| Command | Actual result / log label |
+| --- | --- |
+| `node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard.test.mjs` | **1; 168/169 pass**. Sole failure: installed-source zero-diagnostic assertion on three out-of-scope pins (`targeted`). |
+| `node tools/commercial-integrity-current-source-guard.mjs` | **1; 42 roots, 6 diagnostics, 13 baseline entries**. Three unresolved plus three stale records; zero confirmed (`cli`). |
+| `pnpm typecheck --concurrency=1` | **0; 7 tasks, 5 cached** (`typecheck`). |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | **1**. Purity passes (231 files); lane fails: catch-up branch matches 0 registered lanes. Later lint stages do not run (`lint`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **1**, same missing catch-up lane (`lanes`). Lane config is outside this order and unchanged. |
+| `pnpm exec turbo run lint --concurrency=1` | **0; all 7 package lint tasks, none cached** (`package-lint`). This supplemental check does not replace root lint/lane failure. |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | **1; 294/295 pass**, same sole installed-source guard failure (`tools`). |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | **0; 7 tasks, 5 cached** (`build`). Existing workspace-root/CSS/cache IO warnings; no source repair. |
+| `pnpm openapi:check` | **1**, tsx CLI IPC `listen EPERM` before comparison (`openapi`). |
+| Core cwd: `pnpm exec vitest run src/ --maxWorkers=1` | **0; 2953 tests / 124 files** (`core`). |
+| Config cwd: same source-only command | **0; 86 tests / 5 files** (`config`). |
+| AI cwd: same source-only command | **0; 147 tests / 15 files**, synthetic/fake adapters, not live-model evaluation (`ai`). |
+| Storage cwd: same source-only command | **0; 2 tests / 1 file**, fake adapter (`storage`). |
+| DB cwd: same source-only command | **0; 216 tests / 25 files**, not PostgreSQL integration (`db-source`). |
+
+Remaining results are appended below. Root pnpm test (includes PostgreSQL suites), test:db, test:migrations and browser suites are reserved for GitHub CI as dispatched: this sandbox cannot start PostgreSQL or bind localhost. No test or mandatory CI requirement was changed or made optional.
+
+### Outstanding scope and handoff
+
+Remaining unresolved/stale pairs are `packages/db/src/extra-repository.ts:75` and `packages/db/src/site-visit-repository.ts:197/:205`. Read-only diffs against accepted head show only the same UUID declaration replacement in each of those files. They need separately authorized inspection/re-pinning; this order explicitly permits only commands.ts baseline edits. No new spot was added or accepted. No guard behavior, application code, tests, lane configuration, policy, migration, provider or production capability changed. No migration/backfill/rollback or operational alert change is needed. C1: no web workflow change.
+
+Intended commit message: `/private/tmp/jg-msg-ch6-csg-01-catchup.txt`. Dispatcher owns commit/push; exact-head CI, one independent delta verdict and separate acceptance remain required. This receipt is builder source-inspection and deterministic test evidence only. No independent verdict, technical acceptance, CH-6 completion, commercial approval or release is claimed.
+
+
+Catch-up check completions:
+
+- API cwd: `pnpm exec vitest run src/ --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/final-account-lock.isolation.test.ts`: **0; 2448 tests / 120 files** (`api-local`). These exclusions avoid known local listener/database suites; they remain mandatory in CI.
+- Web cwd: `pnpm exec vitest run --maxWorkers=1`: **0; 990 tests / 41 files** (`web`), unit/adapter tests, not browser journeys.
+- API cwd: `node --import tsx src/generate-openapi.ts --check`: **0** (`openapi-fallback`). Executes actual OpenAPI comparison without tsx CLI IPC; no generated spec edited.
+- `git diff --check`: **0**. Final status contains only the two authorized baseline fingerprint replacements and this appended receipt. Same 13 pinned spots and reasons; no application/guard/test behavior change. No scope extension was received before handoff. The missing lane and three other stale pins remain a HOLD.
