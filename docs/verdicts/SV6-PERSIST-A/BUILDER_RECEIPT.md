@@ -73,3 +73,39 @@ The dispatcher/reviewer must execute the real PostgreSQL tests and paired mutati
 Existing pure `recovery-attribution-persistence.test.ts` and `recovery-fee-illustration.test.ts` passed unchanged. The new storage tests reuse the schema fixture's ten facts and exact principal representation (without importing/registering the pure test suite) and persist every false conjunct individually. These cover storage subclaims only; they do not discharge those tests' upstream persisted/source holds. The earlier pure S6-05-F Q4/Q5/Q9 label/display/projection protection passed as an existing pure regression. SV6-BEN-Q4/Q5 persisted source separation/no-bill acceptance remains independently outstanding; no numeric policy, illustration history or complete value-receipt acceptance is asserted.
 
 Final working-tree-only inspection found 14 changed/new files, all within this lane's exact allowlist (including its own lane file); whitespace inspection including untracked files and `git diff --check` passed. This is a leaf working-tree inspection, **not** a pass of the official origin/main stacked lane check, which remains failed as recorded above.
+
+## R1 — C250 repair round 1, 24 October 2026
+
+Ordered/repaired head: `56499079d5e39f164255b913bb0a7741f558794b`. Working-tree changes only; no git writes, installs, commits or pushes. The repair is limited to the three ordered items and this receipt; product code and migration 0213 are unchanged.
+
+- LP0-17: added exactly the three 0213 routine records to `recorded.routines` (359 → 362). Migration-owned private append and trigger routines are unreachable with no runtime/PUBLIC/other EXECUTE; only the dependency-bound assess entry is runtime-executable/reachable. Owner, invoker/definer and search paths follow 0213. Definition digests remain explicitly unrecorded (`null`), as in adjacent additive records; no database-derived digest or live catalogue verification is claimed. No privilege entries, comparisons or grants were loosened.
+- Contractor upgrade: the repeat-migrate snapshot permits exactly `app.recovery_attribution_revision`, `app.recovery_attribution_command`, and `app.recovery_attribution_reassessment`, each empty and absent from the prior snapshot. Both first and repeated full migration results compare every predecessor row in full. Added only this test file to this piece's own lane.
+- Tenant isolation: added three real-PostgreSQL cases for cross-tenant, missing-session and pre-lock raw reads, each against populated revision/command/reassessment tables. Reads execute with `SET LOCAL ROLE jobguard_runtime`, never as the fixture owner. Each first proves authenticated owner visibility after lock. Pre-lock setup removes the lock with test-admin trigger bypass inside a rolled-back transaction, leaving populated rows so an empty fixture cannot mask a policy leak. Each case then requires empty reads; each of the three tables also has a transactional `ALTER POLICY attribution_read ... USING(true)` control requiring that identical assertion to fail, followed by an unmutated pass after rollback. This changes no shipped policy.
+
+### R1 actual checks (serial; all Vitest commands use `--maxWorkers=2`)
+
+Pinned cached pnpm 10.28.1 was used through `/private/tmp/jg-sv6-bin/pnpm`; no downloads. Log prefix below is `/private/tmp/jg-sv6-r1-`.
+
+| Command | Actual result / log suffix |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | Exit 0; 7 tasks successful, 2 cached. `typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | Exit 1; core purity passed, lane check rejects accepted parent SV6-01/SV6-05 files outside this lane. `lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same 12 parent-file exclusions; no broader allowance added. `lanes.log` |
+| `pnpm exec turbo run lint --concurrency=1` | Exit 0; 7 package tasks successful, 2 cached. `package-lint.log` |
+| `node tools/money-arithmetic-lint.mjs` and then `node tools/commercial-boundary-lint.mjs` | Each exit 0; ran serially to cover guards skipped by the root lane failure. `money-lint.log`, `commercial-lint.log` |
+| Serial `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 <up-to-three-source-files>` | Exit 0 across 59 batches: 171 source unit files / 3,415 tests passed (core/config/storage/ai/db, including migration discovery). `unit-tests.log`, `unit-summary.json` |
+| `node --test tools/*.test.mjs` | Exit 0; 122 passed. `tools-test.log` |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude '**/shadow-isolation.application.test.ts' --maxWorkers=2` | Exit 1; 119 files passed / 8 failed; 2,073 tests passed / 129 failed / 1 skipped. HTTP cases fail with socket `listen EPERM` and consequent null-port errors; the final-account isolation fixture also fails its free-port search before starting PostgreSQL. This broad source run is not a passing unit-suite claim. `api-unit.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | Exit 0; 40 files / 867 tests passed. `web-unit.log` |
+| `pnpm build --concurrency=1` | Exit 0; 7 tasks successful, 3 cached. `build.log` |
+| `pnpm openapi:check` | Exit 1; tsx CLI IPC socket `listen EPERM`. `openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same source check without CLI IPC. `openapi-loader.log` |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/recovery-attribution.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts` | Final exit 0. Initial run detected readonly fixture assignments; changed these to construct and parse a new revision, then reran successfully. `db-test-typecheck.log`, `db-test-typecheck-final.log` |
+| `pnpm --filter @jobguard/db exec vitest run test/lp-0-catalog.test.ts --maxWorkers=2` | Exit 0; 26 pure catalogue tests passed, no PostgreSQL. `lp0-unit.log` |
+| `git diff --check` | Exit 0. |
+
+### R1 database and mutation evidence — CI REQUIRED
+
+**NOT RUN locally:** the edited DB integration suites, LP0-17 live catalogue comparison, full database/migration suites, browser suites, and paired mutation-Y execution. The sandbox cannot bind localhost/start PostgreSQL. The new tests encode **unmutated pass → mutation-Y failure → rollback/unmutated pass**, separately for all three tables and all three denial cases; this is source-inspected and typechecked, not an executed mutation result. CI must execute `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/recovery-attribution.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/lp-0-authority-paths.integration.test.ts` and record the actual paired result. A full external mutation of 0213's runtime policy to `USING(true)` must make the normal negative read assertions fail. No claim that this mutation has been killed in a real DB run is made here.
+
+No schema migration, backwards-incompatible product change, operational alert or policy activation is introduced by R1. Existing source-adapter/release holds, exact-commit independent verdict and separate acceptance remain required. Intended dispatcher commit message: `/private/tmp/jg-msg-sv6-persist-a.txt`.
