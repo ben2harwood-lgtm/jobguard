@@ -65,14 +65,22 @@ it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seed
       for (const [label, query] of [["legacy", legacyAssignedJobsQuery], ["assigned-first", assignedJobsQuery]]) {
         const plan = (await db.$client.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`, args)).rows;
         console.log(`FLAKE-DIAG-1 ${label} EXPLAIN`, JSON.stringify(plan));
-        type Plan = { "Node Type": string; Alias?: string; "Actual Loops": number; Plans?: Plan[] };
+        type Plan = { "Node Type": string; "Function Name"?: string; "Actual Loops": number; Plans?: Plan[] };
         const loops = (node: Plan): number =>
-          (node["Node Type"] === "Function Scan" && node.Alias === "a" ? node["Actual Loops"] : 0)
+          (node["Node Type"] === "Function Scan" && node["Function Name"] === "ent3b_visit_authority" ? node["Actual Loops"] : 0)
           + (node.Plans ?? []).reduce((sum, child) => sum + loops(child), 0);
         authorityLoops.push(loops(plan[0]!["QUERY PLAN"][0].Plan as Plan));
       }
+      const assignedOrderCount = (await db.$client.query(`SELECT count(*)::int n
+        FROM app.work_order w
+        JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+        WHERE w.tenant_id=$1 AND EXISTS (
+          SELECT 1 FROM app.job_assignment assignment
+          WHERE (assignment.tenant_id,assignment.revision_id)=(c.tenant_id,c.revision_id) AND assignment.membership_id=$2
+        )`, args)).rows[0].n as number;
       expect(authorityLoops[0]).toBe(2000);
-      expect(authorityLoops[1]).toBeGreaterThan(0);
+      expect(assignedOrderCount).toBeGreaterThan(0);
+      expect(authorityLoops[1]).toBe(assignedOrderCount);
       expect(authorityLoops[1]).toBeLessThan(authorityLoops[0]!);
       const legacy = (await db.$client.query(legacyAssignedJobsQuery, args)).rows;
       const optimized = (await db.$client.query(assignedJobsQuery, args)).rows;

@@ -51,3 +51,24 @@ Before acceptance the coordinator must:
 2. Run ENT-11a and M4-1-S on both Playwright projects repeatedly after push, preserving trace/output. Local green unit checks do not replace this evidence.
 3. In a full scratch copy of the repair, replace only `apps/web/app/ui/proof-stage.tsx` with `git show aa8686cd^:apps/web/app/ui/proof-stage.tsx`, keeping the rewritten spec. Build there and run `M4-1-S.spec.ts --grep 'opens and manages'` on both projects. Attach its actual failing alert/focus output and verify the repaired component passes. The current receipt cannot claim the requested negative control was proved.
 4. Obtain new independent Claude verdicts bound to the dispatcher-created commit, then separate technical acceptance. Prior REPAIR verdicts and CI run 40034569775 are context supplied by the repair order, not new verification.
+
+## R3 — function-scan counter repair, 24 October 2026
+
+Uncommitted repair of PR #308 at HEAD `91def9691273472acc4b64c26d22f9e1eee60398`, responding to the single blocker reported by both Claude reviewers in the dispatch order. This is a builder receipt, not an independent verdict or acceptance. Only the Northside integration test and this receipt change.
+
+The EXPLAIN walker now identifies the authority scan by `"Function Name": "ent3b_visit_authority"`, independent of PostgreSQL's alias renaming. The optimized invocation count must equal the number of current work orders assigned to the switched operative, counted from tenant-scoped work-order/current-revision/assignment rows (58 in the dispatched seed evidence, not hard-coded). The count must be positive and smaller than the unchanged 2,000-call baseline. Complete ordered row equality, all 2,000 individual allowed/denied membership comparisons, the no-truncation assertion and the repository response comparison remain intact after this repaired assertion. Their execution on the repaired test still requires real PostgreSQL in CI; local unit results do not prove them.
+
+Checks ran one at a time using the existing temporary pnpm PATH shim and installed dependencies, with Turbo `--concurrency=1` and Vitest `--maxWorkers=2`. Sampled one-minute load was approximately 4–6, below 20; no load wait was required. Node `v24.17.0`, pnpm `10.28.1`. Logs: `/private/tmp/flake-diag-1-r3-*.log`.
+
+| Command | R3 result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | PASS: 7 packages, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | PASS: boundary checks and 7 packages, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS against origin/main, including working-tree files |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts'` | PASS: 638 tests in 72 files; socket-binding free-port test excluded |
+| `pnpm build --concurrency=1` | PASS: 7 packages, 4 cached, including production Next build |
+| `pnpm openapi:check` | BLOCKED before schema check: tsx CLI IPC listener receives `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS: same OpenAPI check without CLI IPC listener |
+| `git diff --check` | PASS |
+
+No runtime SQL, migrations, production behavior, authorization, commercial policy, dependencies or other tests changed. No new operational alerts or compatibility impacts; rollback is a source revert. No database or browser suite was started because the dispatcher identifies localhost/PostgreSQL as unavailable in this sandbox. After dispatcher commit/push, CI must run the repaired Northside PostgreSQL regression and retain its plans/counts and full equivalence results; exact-head independent review and separate acceptance remain pending. The dispatch order reports prior CI green for ENT-11a and M4-1-S; this receipt makes no new browser verification claim. No Git-writing commands or downloads were run. Intended commit message is `/private/tmp/jg-msg-flake-diag-1.txt`.
