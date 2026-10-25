@@ -3,7 +3,7 @@ import { MAX_MONEY_PENCE } from "./money.js";
 import { parseQuantity } from "./quantity.js";
 
 export const REVIEW_CONTRACT_VERSION = "proposal_review_v1" as const;
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const nullableCommercial = z.object({
   quantity: z.string().refine((value) => {
     try { parseQuantity(value); return true; } catch { return false; }
