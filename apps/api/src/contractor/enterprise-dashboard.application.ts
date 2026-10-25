@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { EnterpriseDashboardError } from "@jobguard/core";
 import { contractorSessionContext, EnterpriseDashboardRepository, type VerifiedTenantContext } from "@jobguard/db";
-const principalV1 = z.object({ sessionId: z.string().uuid() }).strict();
+const principalV1 = z.object({ sessionId: z.guid({ error: "Invalid uuid" }) }).strict();
 /** Internal read application; no HTTP route or UI. Input cannot select actor, tenant or grants. */
 export class EnterpriseDashboardApplication {
   constructor(private readonly pool: Pool) {}

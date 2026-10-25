@@ -15,7 +15,7 @@ const samlIdentityV1 = z.object({
   assertionId: z.string().min(1).max(200),
   requestId: z.string().min(1).max(256),
   subject: z.string().min(1).max(256),
-  email: z.string().email().max(320),
+  email: z.email({ error: "Invalid email" }).max(320),
   groups: z.array(z.string().min(1).max(256)).max(100),
 }).strict();
 export type SamlIdentity = z.infer<typeof samlIdentityV1>;
