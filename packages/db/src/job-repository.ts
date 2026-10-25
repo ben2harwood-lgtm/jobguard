@@ -4,7 +4,7 @@ import { z } from "zod";
 import { calculateNetLine, jobStatuses, money, MoneyError, parseQuantity, progressStages } from "@jobguard/core";
 import { nonnegativeMoneyPenceSchema } from "./commands.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-const uuid=z.string().uuid();
+const uuid=z.guid({ error: "Invalid uuid" });
 export const createJobV1=z.object({id:uuid.optional(),title:z.string().trim().min(1).max(200)});
 export const reserveProposalV1=z.object({id:uuid.optional(),scopeItemId:uuid.optional(),jobId:uuid,sourceHash:z.string().regex(/^[0-9a-f]{64}$/u),sourceReference:z.string().min(1).max(300)});
 export const confirmProposalV1=z.object({proposalId:uuid,jobId:uuid,revisionId:uuid.optional(),description:z.string().min(1).max(500),quantityDecimal:z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u),unit:z.string().min(1).max(40),unitPricePence:nonnegativeMoneyPenceSchema,totalPence:nonnegativeMoneyPenceSchema}).superRefine((input,context)=>{
@@ -17,7 +17,7 @@ export const confirmProposalV1=z.object({proposalId:uuid,jobId:uuid,revisionId:u
   else throw error;
  }
 });
-export const transitionJobV1=z.object({jobId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(jobStatuses),reason:z.string(),quoteVersionId:uuid.nullable().default(null),acceptedNetValuePence:nonnegativeMoneyPenceSchema.nullable().default(null),feePolicyVersion:z.string().min(1).max(80).nullable().default(null),recoveryCapPence:nonnegativeMoneyPenceSchema.nullable().default(null)});
+export const transitionJobV1=z.object({jobId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(jobStatuses),reason:z.string(),quoteVersionId:uuid.nullable().prefault(null),acceptedNetValuePence:nonnegativeMoneyPenceSchema.nullable().prefault(null),feePolicyVersion:z.string().min(1).max(80).nullable().prefault(null),recoveryCapPence:nonnegativeMoneyPenceSchema.nullable().prefault(null)});
 export const transitionProgressV1=z.object({jobId:uuid,scopeItemId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(progressStages),reason:z.string()});
 export type JobPermission="job:view"|"job:update"|"quote:edit"|"commercial:approve"|"finance:approve";
 export class JobRepositoryError extends Error{constructor(readonly code:"FORBIDDEN"|"NOT_FOUND"|"REVISION_CONFLICT"|"ILLEGAL_TRANSITION"){super(code)}}

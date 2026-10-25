@@ -11,7 +11,7 @@ export const workStateReadV1 = jobWorkStateReadV1;
 export class JobWorkStateRepository {
  constructor(private readonly pool:Pool) {}
  async read(context:VerifiedTenantContext,jobId:string,digest:string) {
-  if(!z.string().uuid().safeParse(jobId).success || !/^[a-f0-9]{64}$/u.test(digest))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+  if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || !/^[a-f0-9]{64}$/u.test(digest))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
   return withTenant(this.pool,context,async db=>{
    try {
     const row=(await db.$client.query<{result:unknown}>("SELECT app.ch4_read_work_facts($1,$2,$3) result",[context.tenantId,jobId,digest])).rows[0];

@@ -1044,3 +1044,115 @@ These are deterministic source/static check results, not independent model revie
 - Final predecessor `git diff --name-only` showed exactly the two issued repository paths. Status had only those two modifications and no untracked files. Full two-file diff inspected; `git diff --check` passed (exit 0).
 - Final byte/hash checks passed: original receipt is an exact 76,128-byte prefix; original three cases/hooks/imports remain byte-identical; all 14 predecessor source hashes still match the manifest; all 12 manifested files outside the two-file allowance and package/lock/shared provenance source remain unchanged. The own-test bytes remain exactly the compiler-tested SHA-256 above; no code edit followed that sole successful compilation.
 - Intended conventional dispatcher message is prepared at `/private/tmp/jg-msg-ch-4-c.txt`, subject `test(db): capture CH4 synthetic catalogue in required CI logs`. Work remains uncommitted for the stock dispatcher. Actual capture/required CI/log reconstruction/fresh full-head reviews/separate acceptance remain **NOT RUN / HOLD**. No additional local suite is authorized or claimed.
+
+
+## CH-4-C catch-up 1 — C267 / C261 (25 October 2026)
+
+Status: conflict resolved in working tree; validation HOLD. No behaviour change,
+independent verdict, technical acceptance, commit, push or merge completion is claimed.
+
+- Issued base HEAD: `14eca75074217fa82fb719c38cac8a997eec59ad` (#290).
+  The coordinator-started merge has `MERGE_HEAD` and `origin/main` at
+  `cdd1b29b75fcdc206e43e66dbd68d9f03c9b38fe`.
+- Only the conflict in `packages/db/test/serious-b5-upgrade.integration.test.ts`
+  was resolved. Both complete helper bodies are byte-identical to their respective
+  index stages. The expectation applies existing 0188/0192 and contractor-agreement
+  additions, then main's 0200 additions, then CH-4-C's 0201 exact additions.
+  Removing only the CH-4-C helper/comment and its wrapper call reproduces main's
+  entire file byte-for-byte. No rows, assertions or test expectations were weakened.
+- All migration numeric prefixes are unique. Main ends at
+  `0200_contractor_retained_workspace.sql`; this piece's sole
+  `0201_job_work_state_commands.sql` follows it and remains last. No migration
+  file, SQL byte, number or reference was changed.
+- This receipt append is the only other repository edit made by this catch-up.
+  The existing staged merge changes belong to the coordinator-started merge.
+  No git-writing command was run; the index remains unmerged until the dispatcher
+  stages the resolved file and completes the merge.
+
+### Sequential validation actually executed
+
+Node `v24.17.0`; cached pinned pnpm `10.28.1`; installed dependencies retained.
+The global pnpm launcher stalled and was cancelled; subsequent commands used a
+private temporary shim to the already-cached pnpm 10.28.1 entry point, including
+nested pnpm calls. No install or package download command was run.
+All check invocations ran one at a time; every Vitest invocation used
+`--maxWorkers=2`. Turbo typecheck/build reused two existing cached tasks each;
+these are cache replays, not fresh execution of those tasks.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | FAIL, exit 2: core `job-work-timing.ts` uses Zod 3 `ZodTypeDef`/generic types against installed Zod 4; cascading unknown-type errors include `jobs-on-the-go.ts`. |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1: core purity passed; lane gate refuses unregistered branch `codex/sandbox/ch-4-c-catchup` (zero matching lanes), before Turbo lint. |
+| `pnpm lint:lanes` | FAIL, exit 1: same unregistered branch. No lane override or registration change. |
+| `node --test tools/*.test.mjs` | PASS, exit 0: 126 tests. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, exit 0: 126 files, 2,968 tests. |
+| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | PASS, exit 0: 5 files, 86 tests. |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2` | PASS, exit 0: 1 file, 2 tests. |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | FAIL, exit 1: 12 failed / 3 passed files; 23 passed tests; unresolved `@jobguard/core` package build output. |
+| `pnpm --filter @jobguard/db exec vitest run src --maxWorkers=2` | FAIL, exit 1: 25 failed / 7 passed files; 58 passed tests; unresolved workspace package build outputs. Source unit tests only, no PostgreSQL integration suite. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` | FAIL, exit 1: 118 failed / 15 passed files; 3 failed / 353 passed tests; unresolved workspace package build outputs. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | FAIL, exit 1: 32 failed / 10 passed files; 12 failed / 187 passed tests; unresolved workspace package build outputs, including API recovery-case contracts. |
+| `pnpm build` | FAIL, exit 2: same core Zod 4 compiler errors; downstream build not reached. |
+| `pnpm openapi:check` | FAIL, exit 1: sandbox refuses tsx IPC socket with `listen EPERM`. |
+| From `apps/api`: `node --import tsx src/generate-openapi.ts --check` | FAIL, exit 1: socket-free fallback reaches module loading, then missing `@jobguard/db/dist/index.js`. No generated OpenAPI change. |
+| Source-preservation / migration-uniqueness / main-relative allowlist comparisons | PASS: both helpers exact; all main file bytes preserved as described; 0201 unique and ordered; all 43 feature paths allowed by intended `ch-4-c` lane. This allowlist comparison is not a passing branch lane check. |
+| `git diff --check` | PASS; no remaining conflict markers in the resolved file. |
+
+Logs retained in `/private/tmp/jg-ch4-catchup-{typecheck,lint,lanes,unit-tools,unit-core,unit-config,unit-storage,unit-ai,unit-db,unit-api,unit-web,build,openapi,openapi-direct}.log`.
+No package/dependency, lane configuration, production code or other test was changed
+to repair these failures. Database/migration and browser suites were not run under
+the dispatcher's stated PostgreSQL/socket restrictions; GitHub CI after dispatcher
+push must supply them. This is not a green validation receipt. All existing
+exact-head independent review, separate acceptance and release gates remain held.
+
+### Lane list
+
+Intended lane: `ch-4-c`, registered only for `codex/sandbox/ch-4-c`.
+Actual catch-up branch: `codex/sandbox/ch-4-c-catchup`, unregistered.
+Only catch-up edits: conflict file and this receipt. The merged working-tree
+feature delta against `origin/main` contains these 43 paths; a direct comparison
+with the intended lane's allowlist found zero out-of-lane paths:
+
+- `apps/api/openapi.json`
+- `apps/api/src/job-work-state-commands.test.ts`
+- `apps/api/src/job-work-state.application.test.ts`
+- `apps/api/src/job-work-state.application.ts`
+- `apps/api/src/job-work-state.contracts.ts`
+- `apps/api/src/job-work-state.controller.ts`
+- `apps/api/src/job-work-state.errors.ts`
+- `apps/api/src/job-work-state.http.test.ts`
+- `apps/api/src/watchdog-registry.test.ts`
+- `apps/api/src/workspace/application.ts`
+- `apps/web/app/api/jobs/[id]/work-state/route.test.ts`
+- `apps/web/app/api/jobs/[id]/work-state/route.ts`
+- `config/lanes/ch-4-c.json`
+- `docs/contracts/job-work-state-v1.md`
+- `docs/contracts/job-work-timing-v1.md`
+- `docs/contracts/lp-0-effective-privileges-v1.json`
+- `docs/ledger/CH-4-C.md`
+- `docs/verdicts/CH-4-C/BUILDER_RECEIPT.md`
+- `packages/core/src/index.ts`
+- `packages/core/src/job-work-state-commands.test.ts`
+- `packages/core/src/job-work-state.ts`
+- `packages/core/src/job-work-timing.test.ts`
+- `packages/core/src/job-work-timing.ts`
+- `packages/core/src/jobs-on-the-go.ts`
+- `packages/core/src/watchdog.ts`
+- `packages/db/migration-notes/0201_job_work_state_commands.md`
+- `packages/db/migrations/0201_job_work_state_commands.sql`
+- `packages/db/src/final-account-lock-repository.ts`
+- `packages/db/src/job-work-state-admission.ts`
+- `packages/db/src/job-work-state-repository.ts`
+- `packages/db/src/shadow-repository.ts`
+- `packages/db/src/watchdog.ts`
+- `packages/db/test/job-work-state-catalog.integration.test.ts`
+- `packages/db/test/job-work-state-command-fixtures.ts`
+- `packages/db/test/job-work-state-commands-boundaries.integration.test.ts`
+- `packages/db/test/job-work-state-commands-races.integration.test.ts`
+- `packages/db/test/job-work-state-commands-upgrade.integration.test.ts`
+- `packages/db/test/job-work-state-commands.integration.test.ts`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`
+- `packages/db/test/site-extra-evidence-routines.integration.test.ts`
+- `packages/db/test/watchdog-command-harness.ts`
+- `packages/db/test/watchdog-legacy-identities.integration.test.ts`
+- `packages/db/test/watchdog.integration.test.ts`
