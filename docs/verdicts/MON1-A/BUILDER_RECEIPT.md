@@ -432,3 +432,93 @@ or acceptance; exact-commit review and separate acceptance remain required.
 Final `git diff --check` passed. Intended conventional subject/body is in
 `/private/tmp/jg-msg-mon1-a.txt`. Final scope is the four parent-merge files
 plus this receipt; the LP-0 file adds exactly two rows beyond the parent.
+
+## catch-up onto 28416d1e
+
+25 October 2026, C261 / MON1-A-CATCHUP. Accepted leaf `a9dc9c42`;
+issued branch `codex/sandbox/mon1-a-catchup`. Dispatcher began merging caught-up
+MON1-S `948581f6` (MON1-L `1ed9eecb`, MON1-T `bad654e7`). Read repository
+AGENTS.md, BUILD_PLAN §§10.1.4–10.1.6, MON-1 and LP-0, admission contract and
+migration notes before editing. This receipt records builder/static/unit evidence,
+not an independent verdict or separate acceptance. No commit, staging, checkout,
+push, dependency download, database startup or browser startup performed.
+
+Resolved the sole content conflict in serious-b5-upgrade by retaining both complete
+helpers: the existing private 0210 admission routine and incoming 0200 retained
+contractor workspace routine. Their expected additions are merged in live catalogue
+order; the migration-specific calls still run 0200 before 0208/0209/0210.
+The Git index remains unmerged because .git is read-only; the dispatcher must stage
+the resolved working-tree file and conclude the merge.
+
+Zod 4 compatibility: own schemas contain no old three-argument ZodType annotation.
+Replaced `fixedMeterPlacesV1.unwrap().innerType().shape.jobs` with
+`fixedMeterPlacesV1.unwrap().shape.jobs`: refinements now live on the Zod 4 object.
+The exact parent jobs/job schemas are reused; strictness, transformations and
+validation predicates are unchanged. No product behavior, consumer wiring, grants,
+external action, alert or commercial policy changed. Admission remains held.
+
+0210 SQL and the DB held boundary are byte-identical to accepted `a9dc9c42`.
+Read-only directory/main inspection confirms main `28416d1e` tops out at
+`0201_job_work_state_commands.sql`, and directory discovery sorts 0209 before
+0210. No renumbering, new migration, table, backfill or rollback change. Actual
+fresh/upgrade execution is NOT RUN; existing forward-fix notes still apply.
+
+Exact catalogue rows added or preserved for the standing migration rule:
+
+- LP-0 `recorded.routines` already contains exactly one
+  `function:app.mon1_admit_place(uuid,uuid,text,uuid)` record. Retained without
+  duplication: jobguard_migration owner, invoker, search_path=pg_catalog,
+  unreachable, runtimeExecute/publicExecute false, otherExecute/staticWrites/
+  staticCalls empty, definitionSha256 null. This is source-inspected inventory,
+  not a live PostgreSQL capture. Existing owner protection entry also retained.
+- SERIOUS-B5 retains the exact `(app, mon1_admit_place,
+  "t uuid, j uuid, source_kind text, source_id uuid")` row and private-owner ACL
+  assertions, plus the incoming `(app, mon8_retained_contractor_workspace,
+  "s uuid, q jsonb")` row and all its owner/security/grant assertions. No prior
+  assertion removed or weakened.
+- Contractor-entitlement-upgrade adds `(app, mon1_admit_place,
+  "t uuid, j uuid, source_kind text, source_id uuid")` before
+  `mon1_capture_small_trip` in schema/name/identity-arguments order; expands only
+  that query's successor-name filter to include the new routine.
+- Tenancy adds the same exact signature row in an additive routine-catalogue
+  assertion, with owner jobguard_migration, prosecdef false,
+  proconfig ["search_path=pg_catalog"], runtime/meter/public false. Its existing
+  table RLS and ownership lists are unchanged: 0210 creates no tables.
+- Own lane allowlist already includes LP-0 and SERIOUS-B5; added exact paths
+  `packages/db/test/contractor-entitlement-upgrade.integration.test.ts` and
+  `packages/db/test/tenancy.integration.test.ts`. Shared files edited only for
+  the assigned additive coverage/conflict resolution. No guard weakened.
+
+Installed Node 24.17.0, cached pinned pnpm 10.28.1, Vitest 4.1.12, Zod 4.6.6.
+Commands used `PATH=/private/tmp/jg-sv5-guard-bin:$PATH` with login rewriting
+disabled; wrapper invokes cached pnpm.cjs, without install/download.
+Logs: `/private/tmp/jg-mon1-a-catchup-*.log`.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm build --concurrency=2` | PASS, 7 packages / 2 cached, 49.813s |
+| `pnpm typecheck --concurrency=2` | PASS, 7 packages / 2 cached |
+| `pnpm turbo run lint --concurrency=2` | PASS, all 7 packages |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL at lane guard: catch-up branch unregistered; core purity passes |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL: catch-up branch matches zero registered lanes; dispatcher integration gate remains |
+| `pnpm openapi:check` | FAIL: tsx CLI listen EPERM in sandbox |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check without CLI IPC listener |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-place-admission.test.ts src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts src/job-work-state.test.ts src/job-work-timing.test.ts src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts src/subscription-allocation.test.ts src/subscription-period.test.ts src/subscription-architecture.test.ts` | PASS, 11 files / 172 tests: MON1-A 31 plus parent/regression 141 |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-lifecycle-repository.test.ts test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS, 5 files / 51 tests: MON1-S 9 plus MON1-T companion 42 |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts test/meter-place-admission.integration.test.ts test/meter-place-admission-races.integration.test.ts test/meter-place-admission-upgrade.integration.test.ts` | PASS; compilation only |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS |
+| Read-only unit-source comparisons against accepted leaf / caught-up parent | PASS; all 16 focused unit files unchanged, counts/assertions retained |
+| `git diff --check`; conflict-marker scan over packages/apps/docs/config | PASS; working-tree content resolved |
+
+Build retained nonfatal Turbo cache IO and existing Next tracing/dependency/CSS
+warnings; none suppressed. Clean install/full root tests/live eval NOT RUN;
+no model/prompt change. PostgreSQL NOT RUN here. Reviewer/CI must execute
+lp-0-authority-paths, serious-b5-upgrade, contractor-entitlement-upgrade, tenancy,
+MON1-A/S/T integration suites and required migration/security/browser checks after
+dispatcher push. Static compilation/unit tests do not establish RLS, privileges,
+upgrade safety or positive atomic admission. Existing STOPs and release gates
+remain. Exact-commit independent delta verdict and separate acceptance remain
+pending the dispatcher's merge commit.
+
+Intended subject/body: `/private/tmp/jg-msg-mon1-a-catchup.txt`. Working-tree
+handoff only; dispatcher owns commit/push/merge.
