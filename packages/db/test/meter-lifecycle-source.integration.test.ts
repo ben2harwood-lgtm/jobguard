@@ -1,3 +1,4 @@
+import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeWorkFixture, createWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
@@ -6,10 +7,10 @@ import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 import { MeterLifecycleRepository } from "../src/meter-lifecycle-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 
-// Checked lifecycle functions run as jobguard_migration; no test-only source grants.
+// Checked lifecycle functions use the real bootstrap owner; no test-only source grants.
 describe("MON1-S normal-company source kernel, CI PostgreSQL only", () => {
  let f: WorkFixture;
- beforeAll(async () => { f = await createWorkFixture(); }, 60000);
+ beforeAll(async () => { f = await createWorkFixture(); const admin = await f.admin.connect(); try { await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); } }, 60000);
  afterAll(async () => closeWorkFixture(f));
  it("M1S-02 missing agreement fails closed, leaving no partial source or scope", async () => {
   const a = await meterCompany(f);

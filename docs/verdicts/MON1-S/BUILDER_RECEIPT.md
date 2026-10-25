@@ -570,3 +570,103 @@ This is builder evidence only; the single exact-commit independent delta verdict
 and separate acceptance remain pending. Logs:
 `/private/tmp/jg-mon1-s-run2-*.log`. Intended commit message:
 `/private/tmp/jg-msg-mon1-s-catchup.txt`.
+
+## extra round: structural shadow isolation
+
+25 October 2026. Ben explicitly authorized this extra repair before merge of PR
+#325, starting at `220a9959474c430dc9b031fd69c0c8a82b42416f` on
+`codex/sandbox/mon1-s`. Scope: H-MON1S-SHADOW-PRIV / AGENTS §5.14 / M1S-08.
+This is builder evidence, not independent verification or acceptance. No commit,
+push, merge, deployment or release was performed.
+
+### Change and permission reasoning
+
+- Chose the dedicated-owner option: invokers called by the existing runtime
+  would need broader runtime source grants. Existing `jobguard_meter` and
+  runtime privileges are preserved. New `jobguard_meter_owner` has the existing
+  restricted-role posture and holder checks, eleven source SELECT grants with
+  tenant-only SELECT policies, six lifecycle SELECT/INSERT grants and EXECUTE
+  on the pre-existing company-identity bridge. No shadow grant is introduced.
+- 0209 leaves all four lifecycle routines migration-owned SECURITY INVOKER;
+  runtime cannot use them until the administrative bootstrap atomically assigns
+  the dedicated owner and enables SECURITY DEFINER after migrations. Numbered
+  SQL does not attempt the previously failing ownership transfer. There is no
+  change to the four routines' business logic, snapshots, hashes or held results.
+- Reasoned through the actual `creates roles…` path: ensureRoles pre-creates and
+  checks the owner; migrations run as jobguard_migration; RESET ROLE restores
+  the CREATEROLE admin; finalization uses a pinned connection and a transaction.
+  The admin temporarily inherits migration ownership, can SET the target role,
+  and grants the target schema CREATE. It transfers each routine, removes schema
+  CREATE, restores its own original migration-membership options, and revokes
+  its explicit target-role grant. PostgreSQL 16's separately superuser-granted
+  ADMIN-only creator membership is preserved, rather than leaving an additional
+  self-granted holder behind. Rollback undoes every temporary change on failure.
+  Rerun handles already-owned routines. These requirements were checked against
+  [PostgreSQL 16 ALTER FUNCTION](https://www.postgresql.org/docs/16/sql-alterfunction.html)
+  and [GRANT](https://www.postgresql.org/docs/16/sql-grant.html); this is not an
+  executed PostgreSQL result.
+- Catalogue regression discovers every mon1_lifecycle routine and checks its
+  executing principal against all shadow relations, columns, owned sequences
+  and dedicated shadow schemas. The shared app schema necessarily has USAGE;
+  that conveys no shadow relation privilege. A rolled-back negative control
+  restores the old migration-owner principal and requires the same assertion
+  to reject all four routines. Additional rolled-back probes test schema,
+  sequence and column grants. **Old-head FAIL / repaired-head PASS on PostgreSQL
+  has NOT RUN here**; these controls are ready for the reviewer's embedded run.
+- LP-0 now records the owner, exact ACL additions, dedicated authority group,
+  role and policy expectations. Its setup invokes the same admin finalizer on
+  a pinned connection before taking the catalogue. The lane adds precisely
+  `packages/db/test/lp-0-catalog.ts` for that setup change. Existing catalogue
+  assertions are retained. Upgrade comparisons preserve every prior ACL entry
+  and policy, excluding only the explicitly added owner SELECT entries/policies;
+  a separate exact-grant/policy test verifies the entire addition independently.
+- Fresh installation, 0208 upgrade and second-database migration tests use the
+  admin finalizer; the real non-superuser bootstrap test exercises repeat runs,
+  exact ADMIN-only owner holders, removed transfer privileges and refusal of
+  an unexpected owner-role holder. All remain PostgreSQL CI proofs, not local
+  successes. Forward-fix/rollback guidance and the persistence contract were
+  updated. No new operational alert or commercial authority is introduced.
+
+### Commands actually run
+
+All substantive pnpm runs used the already cached pinned 10.28.1 CLI through
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`; Node is 24.17.0. No install was run.
+Logs: `/private/tmp/jg-mon1-s-extra-*.log`.
+
+| Check | Result |
+| --- | --- |
+| DB typecheck with all five package dist directories absent; restore in finally | PASS; exit 0, all five remained absent during the check |
+| `pnpm typecheck --concurrency=2 --force` | PASS; 7/7 packages, forced with no cached tasks |
+| `pnpm build --concurrency=2` | PASS twice, 7/7 packages; final run includes final administrative cleanup code |
+| `pnpm turbo run lint --concurrency=2` | PASS, 7/7 packages |
+| `LANE_BASE_REF=8d95874d pnpm lint:lanes` | PASS |
+| `LANE_BASE_REF=8d95874d node tools/lint.mjs` | PASS; purity, lane, money and commercial boundary checks |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL; inherited config/lanes/mon1-l.json and MON1-L receipt are outside this lane; package checks pass separately |
+| Core source unit suite, `--maxWorkers=2` | PASS; 129 files / 3,009 tests |
+| All 26 DB src unit files plus LP-0 catalogue unit file, `--maxWorkers=2` | FAIL on both runs; 250 pass, unchanged audit-checkpoint-handoff C-OPS-1 source scan exceeds its existing 5-second timeout |
+| Audit unit file alone, `--maxWorkers=2` | Same timeout; 70 pass, 1 fail. No assertion or timeout was changed |
+| MON1-S repository + LP-0 catalogue units, `--maxWorkers=2` | PASS; 2 files / 35 tests |
+| Bootstrap SQL trace, `--maxWorkers=2 -t 'bootstrap SQL trace'` | PASS; 4 mocked tests, 3 real DB tests skipped; not a PostgreSQL bootstrap proof |
+| Four lifecycle integration files, `--maxWorkers=2 -t '^$'` | Import/parse check only; 11 tests skipped, no DB proof |
+| `pnpm openapi:check` | Blocked: tsx launcher IPC listen EPERM |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS; same OpenAPI comparison without tsx's IPC launcher |
+| `git diff --check` | PASS |
+
+Initial default pnpm launchers were interrupted before typecheck/trace execution;
+all results above use the cached pinned CLI. The first trace import encountered
+stale generated core output; rebuilding dependencies resolved it and the final
+four trace tests pass. An initial lane check overlapped the temporary no-dist
+renames and saw those temporary paths; after restoring them, the assigned-base
+lane and boundary checks pass. No temporary dist directory remains. Existing
+nonfatal Turbo cache IO and Next tracing/CSS warnings are not suppressed.
+
+H-MON1S-SHADOW-PRIV is implemented but remains a verification hold until real
+PostgreSQL proves the old-principal negative control and repaired catalogue,
+fresh/0208-upgrade/second-database paths, real non-superuser bootstrap reruns,
+and LP-0 comparison. DB/migration/browser suites were not started in this
+no-localhost sandbox. The unchanged audit scan timeout, origin/main inherited
+lane differences, exact-commit RED verdict and separate acceptance remain
+explicit outstanding evidence. Earlier product, security, commercial and
+release holds remain. The builder does not accept its own work.
+
+Size: +411/−73 lines across 13 files; largest touched logic file: 690 lines (packages/db/test/lp-0-catalog.ts); new abstractions: one administrative finalizer, needed to transfer routine ownership outside numbered migrations and roll back temporary permissions.

@@ -32,6 +32,7 @@
         "packages/db/migration-notes/0207_meter_lifecycle_source.md",
         "packages/db/src/demo-bootstrap.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/lp-0-catalog.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
