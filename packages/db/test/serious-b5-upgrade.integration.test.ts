@@ -56,12 +56,49 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  return { rows, routines, relations, policies };
 }
+// Per C135 (SV5PRE): additive allowance for exactly the objects created by the final-check prerequisites migration (0204).
+// Its two invoice routines and lock_final_account are restated, not added: their existing catalogue rows still compare in full.
+async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["final_check_manifest", "final_check_manifest_source", "shadow_final_check_completion", "shadow_final_check_reveal_proof", "shadow_final_check_run_binding", "shadow_final_check_source_attempt"];
+ const indexNames = [
+  "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
+  "final_check_manifest_source_pkey", "final_check_manifest_source_tenant_id_job_id_manifest_id_up_key", "final_check_one_empty_descriptor",
+  "shadow_final_check_completion_pkey", "shadow_final_check_reveal_pro_tenant_id_job_id_run_id_signa_key", "shadow_final_check_reveal_proof_pkey",
+  "shadow_final_check_run_bindin_tenant_id_job_id_execution_id_key", "shadow_final_check_run_bindin_tenant_id_job_id_run_id_manif_key", "shadow_final_check_run_binding_pkey",
+  "shadow_final_check_source_att_tenant_id_job_id_manifest_id__key", "shadow_final_check_source_att_tenant_id_job_id_manifest_id_key1", "shadow_final_check_source_attempt_pkey"];
+ const routineIdentities = [
+  ["final_check_require_invoice_actor", "p_tenant uuid, p_job uuid, p_actor uuid"], ["final_check_require_worker", "p_tenant uuid, p_job uuid"],
+  ["guard_final_check_attempt", ""], ["guard_final_check_binding", ""], ["guard_final_check_generated_fact", ""], ["guard_final_check_manifest", ""], ["guard_final_check_result", ""],
+  ["publish_final_check_certificate", ""], ["require_authoritative_final_check", "p_tenant uuid, p_job uuid"], ["serialize_final_check_evidence", ""], ["serialize_final_check_invalidation", ""],
+  ["verify_final_check_run", "p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policyPairs = [["final_check_manifest", "shadow_proof"], ["final_check_manifest", "tenant_isolation"], ["final_check_manifest_source", "shadow_source"], ["final_check_manifest_source", "tenant_isolation"],
+  ["shadow_final_check_completion", "tenant_isolation"], ["shadow_final_check_reveal_proof", "shadow_proof"], ["shadow_final_check_reveal_proof", "tenant_isolation"],
+  ["shadow_final_check_run_binding", "shadow_proof"], ["shadow_final_check_run_binding", "tenant_isolation"], ["shadow_final_check_source_attempt", "shadow_proof"], ["shadow_final_check_source_attempt", "tenant_isolation"]];
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual([...policyPairs].sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
 // Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
 // Ruling 113 also extends it to ENT-8A-P's own live-prompt objects (livePromptAdditions).
 // Existing rows, routine privileges, relations and policies still compare in full.
 async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const livePrompt = await livePromptAdditions(before, after);
+ const finalCheck = await finalCheckAdditions(before, after);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -102,10 +139,10 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies], after.policies),
  };
 }
 // Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.

@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { exactPence, parseExactPence, serializeExactPence, sumExactPence, calculateCumulativeFee, mapRecoveryReceiptToLines } from "@jobguard/core";
 import { EvidencePackRepository } from "../src/evidence-pack-repository.js";
 import { PracticeFeedRepository } from "../src/practice-feed-repository.js";
+import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
 import { RecoveryAllocationRepository } from "../src/recovery-allocation-repository.js";
@@ -16,6 +17,7 @@ import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool
 import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
+import { issueHistoricalInvoice, prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
@@ -69,13 +71,16 @@ afterAll(async () => {
 
 async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false,
  baselineNet = 3360000, catchNet = 80000, accountNet = baselineNet + catchNet, paymentAmounts = combined ? [4128000] : [2400000,1728000],
- movementNames = combined ? ["receipt-41280"] : ["receipt-24000","receipt-17280"], bound = false, subset = false
+ movementNames = combined ? ["receipt-41280"] : ["receipt-24000","receipt-17280"], bound = false, subset = false, historical = false
 }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean; baselineNet?: number; catchNet?: number; accountNet?: number;
- paymentAmounts?: number[]; movementNames?: string[]; bound?: boolean; subset?: boolean } = {}) {
+ paymentAmounts?: number[]; movementNames?: string[]; bound?: boolean; subset?: boolean; historical?: boolean } = {}) {
   const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session), digest = auth.digest;
   const jobId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID();
   const draftId = randomUUID(), revisionId = randomUUID(), scopeId = randomUUID(), lineId = randomUUID(), catchLineId = randomUUID();
   const scoped = practiceMaterialPool(runtime, digest), invoices = new PracticeInvoiceRepository(scoped);
+  let earlierRevision = "";
+  // Per C135 the supplementary shape (S29) is built the real way: a final invoice on the first revision, then a supplementary on the second.
+  const headerNet = subset ? baselineNet + catchNet : accountNet;
   const db = await admin.connect();
   try {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
@@ -93,39 +98,24 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
       VALUES($1,$2,$3,$4,1,$5,4128000,'GBP','builder_attestation',$6,'Fictional customer','verbal',clock_timestamp())`, [randomUUID(), DEMO_TENANT_ID, jobId, quoteId, hash(quoteId), actor.membershipId]);
     await db.query("SELECT app.transition_job($1,$2,2,'live','switch_live',$3,3440000,'reference_fee_policy_v1',28200)", [DEMO_TENANT_ID, jobId, quoteId]);
     await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, DEMO_TENANT_ID, jobId]);
-    if (lateCatch) {
-      const earlierRevision = randomUUID();
+    if (lateCatch || subset) {
+      earlierRevision = randomUUID();
       await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
         VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',3360000,672000,4032000,false,'[]',clock_timestamp()-interval '1 day')`, [earlierRevision, DEMO_TENANT_ID, jobId, draftId, hash(earlierRevision), quoteId]);
       await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
         VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline before catch',3360000,1)`, [randomUUID(), DEMO_TENANT_ID, jobId, earlierRevision, scopeId, quoteRevisionId]);
     }
-    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at)
-      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$5,$6,'GBP','candidate_m1_standard_v1',$8,$9,$10,false,'[]',clock_timestamp()+CASE WHEN $7 THEN interval '1 day' ELSE interval '0 seconds' END)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch, accountNet, Math.floor((accountNet+2)/5), accountNet+Math.floor((accountNet+2)/5)]);
+    await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at,previous_revision_id)
+      VALUES($1,$2,$3,$4,CASE WHEN $7 THEN 2 ELSE 1 END,$5,$6,'GBP','candidate_m1_standard_v1',$8,$9,$10,false,'[]',clock_timestamp()+CASE WHEN $12 THEN interval '1 day' ELSE interval '0 seconds' END,$11)`, [revisionId, DEMO_TENANT_ID, jobId, draftId, hash(revisionId), quoteId, lateCatch || subset, headerNet, Math.floor((headerNet+2)/5), headerNet+Math.floor((headerNet+2)/5), subset ? earlierRevision : null, lateCatch]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Fictional baseline',$7,1)`, [lineId, DEMO_TENANT_ID, jobId, revisionId, scopeId, quoteRevisionId, baselineNet]);
     const catchScope = randomUUID();
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [catchScope, DEMO_TENANT_ID, jobId]);
     await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
       VALUES($1,$2,$3,$4,'baseline',$5,$5,$6,'Synthetic catch line',$7,2)`, [catchLineId, DEMO_TENANT_ID, jobId, revisionId, catchScope, quoteRevisionId, catchNet]);
-    await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId, lateCatch]);
+    await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, subset ? earlierRevision : revisionId, lateCatch]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
-  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
-    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
-  if (bound) {
-    await tq("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)", [DEMO_TENANT_ID,jobId,invoice.id,revisionId]);
-    // Same saved display-tax facts as the issued-invoice path; this fixture bypasses
-    // the unrelated Final Check setup to isolate allocation guards.
-    const selected = subset ? [{ id: catchLineId, net: catchNet }] : [{ id: lineId, net: baselineNet }, { id: catchLineId, net: catchNet }];
-    const tax = invoice.taxPence, totalWeight = selected.reduce((n,l)=>n+l.net,0);
-    const parts = selected.map(l=>({ ...l, tax: Number(BigInt(tax)*BigInt(l.net)/BigInt(totalWeight)), remainder: BigInt(tax)*BigInt(l.net)%BigInt(totalWeight) }));
-    const left = tax-parts.reduce((n,l)=>n+l.tax,0);
-    const rank = [...parts].sort((a,b)=>a.remainder===b.remainder ? a.id.localeCompare(b.id) : a.remainder>b.remainder ? -1 : 1);
-    for (let n=0;n<left;n++) rank[n]!.tax++;
-    for (const l of parts) await tq(`INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence)
-      SELECT tenant_id,job_id,$3,id,final_account_revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,$5,net_pence+$5 FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND id=$4`, [DEMO_TENANT_ID,jobId,invoice.id,l.id,l.tax]);
-  }
   const evidenceIds: string[] = [];
   for (let index = 0; index < 2; index++) {
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
@@ -138,6 +128,19 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
     await tq(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
+  }
+  // Set-up order only (per C135): the evidence above must exist before the lock, so terms, lock and checked completion come last.
+  const firstRevision = subset ? earlierRevision : revisionId;
+  // Per C204: `historical` is an invoice issued before any lock existed (never locked, no track), so evidence can still be added afterwards.
+  if (!historical) await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, firstRevision);
+  if (historical) await issueHistoricalInvoice(admin, DEMO_TENANT_ID, { jobId, finalAccountRevisionId: firstRevision, actorMembershipId: actor.membershipId });
+  let invoice = historical ? (await invoices.list(context, jobId)).at(-1)! : await invoices.issue(context, { jobId, finalAccountRevisionId: firstRevision, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
+  if (subset) {
+    await admin.query("UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId]);
+    const supplementary = await new FinalAccountLockRepository(scoped).issueInvoice(context, { jobId, actorMembershipId: actor.membershipId, commandId: randomUUID(),
+      finalAccountRevisionId: revisionId, expectedSourceHash: hash(revisionId), invoiceKind: "supplementary", recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
+    invoice = { ...invoice, id: supplementary.invoiceId, taxPence: supplementary.taxPence };
   }
   const cases = new RecoveryCaseRepository(scoped), packs = new EvidencePackRepository(scoped), views = [];
   for (const claim of [claim1, claim2]) {
@@ -208,6 +211,12 @@ async function remittance(f: Fixture, paymentId: string, lineId: string, grossPe
   return evidenceId;
 }
 
+// Per C135: after the final-account lock, new site evidence on a small-builder job is refused (POST_LOCK_WORK_REQUIRES_LINKED_JOB).
+// A remittance PNG names the invoice and payment, which only exist after the lock, so it cannot be created earlier.
+async function expectRemittanceRefused(f: Fixture, paymentId: string, lineId: string, grossPence: number) {
+ await expect(remittance(f,paymentId,lineId,grossPence)).rejects.toMatchObject({message:"POST_LOCK_WORK_REQUIRES_LINKED_JOB"});
+ expect((await admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2 AND object_key LIKE 'allocation-remittance/%'",[DEMO_TENANT_ID,f.jobId])).rows).toEqual([{n:0}]);
+}
 async function reverse(f: Fixture, allocationId: string, grossPence: number, creditNoteId?: string, remittanceEvidenceId?: string) {
   const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case1.id)!;
   const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId,
@@ -218,7 +227,10 @@ async function reverse(f: Fixture, allocationId: string, grossPence: number, cre
 
 
 it.each([false,true])("S28: penny-valued lines conserve issued tax (saved binding %s)", async bound => {
- const f=await fixture({ baselineNet:16001, catchNet:15999, bound, paymentAmounts:[38400], movementNames:["receipt-384"] });
+ const f=await fixture({ historical: !bound, baselineNet:16001, catchNet:15999, bound, paymentAmounts:[38400], movementNames:["receipt-384"] });
+ // Restore dc5721230's unbound fallback: the historical issuer saves no invoice-line binding.
+ expect((await admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND invoice_id=$2",[DEMO_TENANT_ID,f.invoiceId])).rows[0].n).toBe(bound ? 1 : 0);
+ expect((await admin.query("SELECT count(*)::int n FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[DEMO_TENANT_ID,f.invoiceId])).rows[0].n).toBe(bound ? 2 : 0);
  const view=await allocate(f,f.payment1,38400);
  expect(total(view.lines)).toEqual({ numerator:"32000",denominator:"1" });
  expect(total(view.lines.filter(l=>l.lineId===f.lineId))).toEqual({ numerator:"16001",denominator:"1" });
@@ -230,8 +242,8 @@ it("S29: supplementary composition excludes previously invoiced cumulative accou
  expect(view.lines).toHaveLength(1);
  expect(view.lines[0]).toMatchObject({ lineId:f.catchLineId,net:{numerator:"80000",denominator:"1"} });
 });
-it("S30: recorded remittance cannot be bypassed by omission or a direct artifact forgery", async () => {
- const f=await fixture(), source=await remittance(f,f.payment1,f.lineId,2400000);
+it("S30 (historical, unlocked): recorded remittance cannot be bypassed by omission or a direct artifact forgery", async () => {
+ const f=await fixture({ historical: true }), source=await remittance(f,f.payment1,f.lineId,2400000);
  const current=(await f.cases.listForMember(context,f.jobId,actor)).find(c=>c.id===f.case1.id)!;
  const cmd={version,action:"review",commandId:randomUUID(),caseId:current.id,paymentId:f.payment1,evidenceId:f.evidence1,expectedCaseRevision:current.revision,grossPence:2400000,remittanceEvidenceId:source};
  await repo().command(context,actor,f.digest,f.jobId,cmd);
@@ -245,8 +257,8 @@ it("S30: recorded remittance cannot be bypassed by omission or a direct artifact
  expect(view.lines.every(l=>l.rule==="explicit"&&l.sourceRef===source)).toBe(true);
  expect(total(view.lines.filter(l=>l.lineId===f.catchLineId))).toEqual({numerator:"0",denominator:"1"});
 });
-it("S31: later item credit cannot alter an earlier settled receipt denominator",async()=>{
- const f=await fixture({baselineNet:141000,catchNet:141000,paymentAmounts:[38400,300000],movementNames:["receipt-384","receipt-3000"]});
+it("S31 (historical, unlocked): later item credit cannot alter an earlier settled receipt denominator",async()=>{
+ const f=await fixture({historical:true,baselineNet:141000,catchNet:141000,paymentAmounts:[38400,300000],movementNames:["receipt-384","receipt-3000"]});
  const first=await allocate(f,f.payment1,38400), original=first.allocations[0]!;
  const source=await remittance(f,f.payment1,f.catchLineId,19200);
  const credit=await f.invoices.previewCredit(context,{jobId:f.jobId,invoiceId:f.invoiceId,netPence:16000,reason:"Later item credit"});
@@ -256,8 +268,8 @@ it("S31: later item credit cannot alter an earlier settled receipt denominator",
  expect(total(view.lines.filter(l=>l.paymentId===f.payment2&&l.lineId===f.catchLineId))).toEqual({numerator:"125000",denominator:"1"});
  expect(view.lines.some(l=>l.reversesId!==null)).toBe(true);
 });
-it("S32: invalidated original remittance does not block cancellation of immutable allocations",async()=>{
- const f=await fixture(),source=await remittance(f,f.payment1,f.lineId,2400000);
+it("S32 (historical, unlocked): invalidated original remittance does not block cancellation of immutable allocations",async()=>{
+ const f=await fixture({ historical: true }),source=await remittance(f,f.payment1,f.lineId,2400000);
  const view=await allocate(f,f.payment1,2400000,source), original=view.allocations[0]!;
  const before=(await admin.query("SELECT row_to_json(l)::text bytes FROM app.receipt_line_allocation l WHERE tenant_id=$1 AND allocation_id=$2",[DEMO_TENANT_ID,original.id])).rows;
  await tq("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,reason_code,actor_membership_id) VALUES($1,$2,$3,'verification_invalid',$4)",[randomUUID(),DEMO_TENANT_ID,source,actor.membershipId]);
@@ -266,6 +278,20 @@ it("S32: invalidated original remittance does not block cancellation of immutabl
  expect(total(reversed.lines)).toEqual({numerator:"0",denominator:"1"});
  const after=(await admin.query("SELECT row_to_json(l)::text bytes FROM app.receipt_line_allocation l WHERE tenant_id=$1 AND allocation_id=$2",[DEMO_TENANT_ID,original.id])).rows;
  for(const row of before) expect(after).toContainEqual(row);
+});
+it("S30: a post-lock remittance, needed to bypass or forge the recorded one, is refused at upload (per C135)",async()=>{
+ const f=await fixture();
+ await expectRemittanceRefused(f,f.payment1,f.lineId,2400000);
+});
+it("S31: a later item credit cannot be tied to a post-lock remittance, which is refused at upload (per C135)",async()=>{
+ const f=await fixture({baselineNet:141000,catchNet:141000,paymentAmounts:[38400,300000],movementNames:["receipt-384","receipt-3000"]});
+ const first=await allocate(f,f.payment1,38400);
+ expect(first.allocations[0]).toBeDefined();
+ await expectRemittanceRefused(f,f.payment1,f.catchLineId,19200);
+});
+it("S32: a post-lock remittance for an allocation is refused at upload, so there is no invalidated original to cancel around (per C135)",async()=>{
+ const f=await fixture();
+ await expectRemittanceRefused(f,f.payment1,f.lineId,2400000);
 });
 it("S28/S29 composition helper preserves invoker RLS and narrow execution grants",async()=>{
  const f=await fixture();
