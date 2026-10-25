@@ -74,7 +74,7 @@ const kindSchema = z.enum(commercialIntegrityV3Kinds);
 const snapshotShape = z.object({ version: z.literal("commercial-integrity-source-snapshot.v3"), tenantId: uuid, jobId: uuid, scopeId: id, family: z.literal("v3"), phase: z.enum(["pre_lock", "post_lock"]), kind: kindSchema, findingKey: z.string().min(1), profile: profileSchema, window: windowSchema,
  // Facts are a strict union; caller JSON/free text cannot become a source snapshot.
  facts: z.array(z.union([lockFactSchema, quoteSchema, z.object({ source: sourceSchema }).strict(), ordinarySchema.shape.activity.element, ordinarySchema.shape.workEvents.element, ordinarySchema.shape.assertions.element, catchSchema, publishedSchema.shape.completions.element, publishedSchema.shape.receipts.element, publishedSchema.shape.corrections.element, publishedSchema.shape.allocations.element])),
- compared: z.record(z.union([z.string(), z.number().int().safe(), z.boolean(), z.null()])),
+ compared: z.record(z.string(), z.union([z.string(), z.number().int().safe(), z.boolean(), z.null()])),
 }).strict();
 export const commercialIntegrityReviewSourceSnapshotV3Schema = snapshotShape;
 export type CommercialIntegrityReviewSourceSnapshotV3 = z.infer<typeof snapshotShape>;
