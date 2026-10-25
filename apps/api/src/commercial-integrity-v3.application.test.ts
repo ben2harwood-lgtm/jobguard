@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommercialIntegrityV3Application } from "./commercial-integrity-v3.application.js";
 import { PracticeAccess } from "./practice-access.js";
-import { PracticeAccessError } from "@jobguard/db";
-import { CommercialIntegrityV3Repository } from "../../../packages/db/dist/commercial-integrity-v3-repository.js";
-import { CommercialIntegrityPersistenceError } from "../../../packages/db/dist/commercial-integrity-v3-sources.js";
+import { PracticeAccessError, CommercialIntegrityV3Repository, CommercialIntegrityPersistenceError } from "@jobguard/db";
 import { integrityV3Failure } from "./commercial-integrity-v3.contracts.js";
 const job="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", session="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const context={tenantId:"cccccccc-cccc-4ccc-8ccc-cccccccccccc"};

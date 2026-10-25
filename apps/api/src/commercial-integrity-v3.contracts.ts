@@ -1,6 +1,5 @@
 import { z } from "zod";
-// Private source imports until the coordinator integrates CH6-C/P barrels.
-export { commercialIntegrityReviewV3Schema } from "../../../packages/core/dist/commercial-integrity-v3.js";
+export { commercialIntegrityReviewV3Schema } from "@jobguard/core";
 export const commercialIntegrityQueryV3 = z.object({ version: z.literal("commercial-integrity-query.v3").optional() }).strict();
 export const integrityFailureStatuses = {
  UNAUTHENTICATED: 401, NOT_FOUND: 404, SYNTHETIC_MODE_REQUIRED: 403,

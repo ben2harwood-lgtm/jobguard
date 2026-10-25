@@ -88,7 +88,7 @@ describe.sequential("CI-A07 real current authority at HTTP boundary",()=>{
  });
  it("persists exact feedback, rejects a wrong-job snapshot and rechecks expired/revoked session on replay",async()=>{
   const application=new CommercialIntegrityV3Application(fixture.runtime),view=await application.view(token,job,{}),finding=view.result.findings[0]!;
-  const { canonicalCommercialIntegritySnapshot }=await import(new URL("../../../packages/core/dist/commercial-integrity-v3.js",import.meta.url).href);
+  const { canonicalCommercialIntegritySnapshot }=await import("@jobguard/core");
   const review={version:"commercial-integrity-review.v3",commandId:randomUUID(),findingKey:finding.key,findingSnapshotHash:createHash("sha256").update(canonicalCommercialIntegritySnapshot(finding.sourceSnapshot)).digest("hex"),outcome:"dismissed_false_positive",explanation:"Fictional interim invoice."};
   const first=await request(app.getHttpServer()).post(`${prefix()}/v3/reviews`).set("Cookie",cookie()).send(review).expect(200);
   const replay=await request(app.getHttpServer()).post(`${prefix()}/v3/reviews`).set("Cookie",cookie()).send(review).expect(200);expect(replay.body).toEqual(first.body);
