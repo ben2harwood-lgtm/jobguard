@@ -1,6 +1,51 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/commercial-integrity/family": {
+      "get": {
+        "operationId": "CommercialIntegrityV3Controller_family",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current owned synthetic job integrity family",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
+    "/jobs/{id}/commercial-integrity/v3": {
+      "get": {
+        "operationId": "CommercialIntegrityV3Controller_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read persisted synthetic D11 v3 advisories without commercial effects",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
+    "/jobs/{id}/commercial-integrity/v3/reviews": {
+      "post": {
+        "operationId": "CommercialIntegrityV3Controller_review",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Persist exact-snapshot advisory feedback only",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/possible-extras": {
       "get": {
         "operationId": "EnterpriseLivePromptController_list",

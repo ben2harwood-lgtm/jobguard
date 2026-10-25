@@ -102,3 +102,83 @@ Intended commit subject/body: `/private/tmp/jg-msg-ch6-a.txt`.
 - `docs/verdicts/CH6-A/BUILDER_RECEIPT.md`
 
 No commit/push performed. The intended conventional commit message is written to `/private/tmp/jg-msg-ch6-a.txt` for the dispatcher. This receipt describes local source inspection and executed deterministic checks only; independent verification and technical acceptance have not occurred.
+
+## r1 — 25 October 2026 repair
+
+Repair against clean dispatcher merge `d4bd5de6` (CH6-A `cc59edd2` plus CH6-P
+r1 `6c21a91f`). Read the independent REPAIR verdict at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch6-a-claude-A-cc59edd2-20261025.md`;
+the issued relative `jg-runs/` directory is absent in this worktree. Read current
+AGENTS.md, BUILD_PLAN.md CH-6/§10.2.9 and CH6-P's r1 receipt. P's repair changes
+migration/fixture encoding, UUID inference and privilege inventories; its consumer
+API is unchanged, so no A application adaptation is necessary.
+
+### Repairs
+
+- BLOCKING 1: the HTTP test's `connect` spy passes callback calls straight through
+  to the original bound pool method. Promise connections retain the exact query
+  trace proxy. `finally` restores the spy, and an independent `afterEach` restores
+  mocks even if the test times out. The protected-facts read now sits inside the
+  protected `try`. Existing body/header/query-sequence/protected-fact assertions
+  are preserved; no product code changes for this defect.
+- Assigned H1: added exactly the Next and Nest v3 review keys from the original
+  receipt as `post_live_billing` in `packages/core/src/watchdog.ts`. Regenerated
+  `apps/api/openapi.json` with the existing generator. Added only these two paths
+  to this lane's allowlist and updated its ownership note.
+- LATER 6: the real HTTP test now compares family and view against direct calls
+  to the real application. Only per-read display `evaluatedAt` is normalized;
+  its presence/type and every other field remain checked. Execution awaits CI.
+- LATER 1 remains a transport-status follow-up; this repair keeps runtime error
+  handling unchanged. LATER 2 needs P/C snapshot/hash design work, LATER 3 awaits
+  shared barrel integration, LATER 4 needs a coordinated CI script change,
+  LATER 5 is a broader transport refactor, and LATER 7 is global auth ownership.
+  These are not claimed fixed. Existing shared facade/export and release holds
+  remain; this receipt is neither independent verification nor acceptance.
+
+### Executed checks
+
+Used the existing `/private/tmp/jg-ch6-a-bin/pnpm` wrapper for cached pnpm
+10.28.1, installed Node v24.17.0 and Vitest 4.1.11. No download/install, git write,
+commit, push, PR, database server or browser was performed. Logs are
+`/private/tmp/ch6-a-r1-*.log`.
+
+- `pnpm turbo run build --filter=@jobguard/api^... --concurrency=1`: PASS,
+  five dependency builds (`dependencies.log`).
+- `pnpm --filter @jobguard/api typecheck`: PASS (`api-typecheck.log`). This
+  includes compilation of the modified HTTP test; it is not PostgreSQL proof.
+- `pnpm --filter @jobguard/api lint`: PASS (`api-lint.log`).
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/watchdog-registry.test.ts`:
+  PASS, 148 tests / 3 files (`api-unit.log`); both registry failures repaired.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/commercial-integrity.application.test.ts src/commercial-integrity.audit.test.ts`:
+  PASS, 5 tests / 2 files (`api-regression.log`).
+- `pnpm --filter @jobguard/api openapi:generate` and `pnpm openapi:check`:
+  FAIL before generator execution, sandbox `listen EPERM` for tsx CLI IPC.
+  From apps/api, `node --import tsx src/generate-openapi.ts` then the same command
+  with `--check`: both PASS using the identical repository generator without
+  its CLI listener (`openapi-*-no-ipc.log`). Artifact adds only three v3 paths.
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` and
+  `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL on inherited CH4/MON1/CH6-C/P
+  changes outside this leaf, as before (`lint.log`, `lanes.log`). Root package
+  lint phase is not reached. No inherited paths were waived or added.
+- Deterministic working-tree-only path check using the real
+  `loadLanePolicy/selectLane/lanePathAllowed`: PASS (`working-paths.log`);
+  this does not replace full-range lane lint. `git diff --check`: PASS.
+
+The modified `commercial-integrity-v3.http.test.ts` is NOT RUN here: it starts
+real embedded PostgreSQL and HTTP listeners, prohibited by the issued sandbox
+constraints. Required reviewer/CI rerun:
+`pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/commercial-integrity-v3.http.test.ts`.
+Full DB/migrations/browser suites remain CI-only. No tests were weakened or
+silently made optional. No migration, role/grant, provider, commercial action,
+fee policy, model/prompt or new alert is introduced. All exact-head independent
+review, separate acceptance and production gates remain held.
+
+### r1 final verification
+
+- `pnpm build --concurrency=1`: PASS, all 7 packages including production Next
+  and Nest builds (`build.log`); denied Turbo cache writes remain warnings.
+- `pnpm turbo run lint typecheck --concurrency=1`: PASS, all 14 package checks
+  (`package-checks.log`), including core lint for the additive registry rows.
+- Final working-tree path check: PASS, all 5 changed paths belong to CH6-A.
+  Final `git diff --check`: PASS. Intended conventional commit subject/body:
+  `/private/tmp/jg-msg-ch6-a.txt`. Work left uncommitted for the dispatcher.
