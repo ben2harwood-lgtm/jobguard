@@ -5053,7 +5053,51 @@
             "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
           }
         },
-        "summary": "Read immutable synthetic work facts; interval and command policies held",
+        "summary": "Read immutable synthetic work facts",
+        "tags": [
+          "JobWorkState"
+        ]
+      },
+      "post": {
+        "operationId": "JobWorkStateController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Durable first command result; replay returns the same snapshot"
+          },
+          "400": {
+            "description": "INVALID_WORK_STATE_INPUT: strict versioned action required"
+          },
+          "404": {
+            "description": "NOT_FOUND: current owner/session authority required"
+          },
+          "409": {
+            "description": "State/revision conflict or unavailable capacity admission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site"
+          }
+        },
+        "summary": "Record owner-authorized synthetic work state",
         "tags": [
           "JobWorkState"
         ]

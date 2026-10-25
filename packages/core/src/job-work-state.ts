@@ -9,7 +9,7 @@ export const workFactTimeV1 = z.iso.datetime({ precision: 6, error: "Invalid dat
 export const closeReasonV1 = z.enum(["cancelled_by_customer", "abandoned", "completed_outside_jobguard", "other"]);
 const note = z.string().trim().min(1).max(2000);
 const command = { version: z.literal("job-work-state-command.v1"), commandId: uuid, expectedRevision: z.number().int().nonnegative().safe() };
-/** Schemas describe pending commands. No permission, execution or route is supplied here. */
+/** Input structure only; persisted command authority is checked in the SQL boundary. */
 export const jobWorkStateCommandV1 = z.discriminatedUnion("action", [
  z.object({ ...command, action: z.literal("finish") }).strict(),
  z.object({ ...command, action: z.literal("cancel_finish"), markerId: uuid }).strict(),
@@ -51,7 +51,7 @@ export function classifySiteSource(raw: unknown): { firstEvidence: boolean; acti
 }
 
 export class JobWorkStateError extends Error {
- constructor(readonly code: "INVALID_WORK_STATE_INPUT" | "WORK_FACT_IDENTITY_CONFLICT" | "WORK_STATE_FORBIDDEN" | "SYNTHETIC_MODE_REQUIRED" | "POST_LOCK_WORK_REQUIRES_LINKED_JOB" | "JOB_WORK_CLOSED") { super(code); this.name = "JobWorkStateError"; }
+ constructor(readonly code: "WORK_STATE_CONFLICT" | "JOB_NOT_LIVE" | "WORK_STATE_STALE_REVISION" | "CAPACITY_ADMISSION_UNAVAILABLE" | "INVALID_WORK_STATE_INPUT" | "WORK_FACT_IDENTITY_CONFLICT" | "WORK_STATE_FORBIDDEN" | "SYNTHETIC_MODE_REQUIRED" | "POST_LOCK_WORK_REQUIRES_LINKED_JOB" | "JOB_WORK_CLOSED") { super(code); this.name = "JobWorkStateError"; }
 }
 const canonicalEvent = (e: JobWorkStateEvent) => JSON.stringify([e.version, e.id, e.jobId, e.sequence, e.kind, e.factAt, e.recordedAt, e.sourceReceiptId, e.commandId, e.predecessorId, e.closeReason, e.closeNote]);
 export function orderWorkFacts(raw: readonly unknown[]): JobWorkStateEvent[] {
@@ -102,3 +102,18 @@ export const jobWorkStateReadV1 = z.object({
  links:z.array(z.object({id:uuid,predecessorJobId:uuid,successorJobId:uuid,linkedAt:workFactTimeV1}).strict()),
  lock:lockV1.nullable(),environment:z.literal("synthetic_demo"),realExternalActions:z.literal(0),
 }).strict();
+
+export const jobWorkStateMutationV1 = z.union([jobWorkStateCommandV1, jobLinkCommandV1.extend({action:z.literal("link")}).strict()]);
+/** Pure transition checks are not authentication, admission or command execution. */
+export function assertWorkStateTransition(raw: unknown,state: {finishedMarkerId:string|null;closedEventId:string|null}) {
+ const parsed=jobWorkStateCommandV1.safeParse(raw);
+ if(!parsed.success) throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+ const command=parsed.data;
+ if(command.action === "cancel_finish" && command.markerId !== state.finishedMarkerId) throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+ if(command.action === "reopen" && command.closeEventId !== state.closedEventId) throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+ if(command.action !== "reopen" && state.closedEventId !== null) throw new JobWorkStateError("JOB_WORK_CLOSED");
+ return command;
+}
+export function assertCompletedWorkResultOpen(closedEventId: string|null): void {
+ if(closedEventId !== null) throw new JobWorkStateError("JOB_WORK_CLOSED");
+}
