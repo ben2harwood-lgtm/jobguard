@@ -774,3 +774,24 @@ describe("migration and privilege catalog", () => {
     ]);
   });
 });
+
+// Dispatcher r1: additive routine inventory for 0227 (no new tables).
+it("0227 routines retain exact ownership and execution boundaries",async()=>{
+ const rows=(await admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,r.rolname owner,p.prosecdef,p.proconfig,
+ has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+ has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,
+ has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+ EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+ WHERE n.nspname='app' AND left(p.proname,4)='ch6_' ORDER BY p.proname`)).rows;
+ const identities=[
+  ["ch6_append_integrity_review_audit", "t uuid, j uuid, actor uuid, command_id uuid, request_hash text, snapshot_hash text"],
+  ["ch6_guard_integrity_review_receipt", ""],
+  ["ch6_integrity_authority", "t uuid, j uuid, digest text"],
+  ["ch6_integrity_canonical", "v jsonb"],
+  ["ch6_integrity_family", "t uuid, j uuid"],
+  ["ch6_integrity_source_fingerprint", "t uuid, j uuid, digest text, source_snapshot jsonb"],
+  ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb"],
+ ];
+ expect(rows).toEqual(identities.map(([proname,args])=>({proname,args,owner:"jobguard_migration",prosecdef:proname==="ch6_record_integrity_review",proconfig:["search_path=pg_catalog"],runtime:proname==="ch6_record_integrity_review",shadow:false,infrastructure:false,public:false})));
+});

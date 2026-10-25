@@ -37,3 +37,11 @@ rewrite results or delete audit history. Application rollback may stop calling t
 new writer while leaving the migration installed; no destructive SQL rollback is
 provided. Existing v1 readers/writers remain available. Source/policy holds are
 not migration failures and are never replaced by permissive defaults.
+
+Repair r1 (25 October): the ECMAScript trim set is encoded as ASCII hexadecimal
+UTF-8 bytes and decoded by `convert_from(decode(...,'hex'),'UTF8')` at execution.
+This removes CREATE FUNCTION's Unicode-escape conversion dependency on server
+encoding. The 25 original code points and the UTF-16 length check are unchanged.
+The own-step suite now explicitly creates a SQL_ASCII cluster and applies 0227
+with `check_function_bodies=on`; its UTF8 check covers all 25 trim characters and
+three non-trim neighbours. These PostgreSQL tests are NOT RUN in this sandbox.

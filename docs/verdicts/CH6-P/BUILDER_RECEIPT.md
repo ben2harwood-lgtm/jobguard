@@ -1,7 +1,7 @@
 # CH6-P — builder receipt (24 October 2026)
 
-**BUILT WITH HOLDS; NOT ACCEPTED; NOT MERGE-READY.** One construction pass; no
-independent repair round or model verdict. Builder: Codex. No self-acceptance.
+**BUILT WITH HOLDS; NOT ACCEPTED; NOT MERGE-READY.** Construction receipt retained below; see appended r1 repair and independent
+REPAIR verdict reference. Builder: Codex. No self-acceptance.
 No commit or push. Intended message: `/private/tmp/jg-msg-ch6-p.txt`.
 
 ## Authority and exact source frame
@@ -217,8 +217,11 @@ app.ch6_append_integrity_review_audit(uuid,uuid,uuid,uuid,text,text)
 app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)
 ```
 
-For **each** signature add inventory key
-`owner|routine|function:<signature>|jobguard_migration` in `a-owner-routines`.
+Correction from r1 review L2(a): add the owner inventory key **only** for the
+reachable writer,
+`owner|routine|function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)|jobguard_migration`
+in `a-owner-routines`. The six owner-only helpers emit no owner fact; adding
+those keys would make LP0-02 fail as stale.
 The sole new effective runtime ACL key is:
 `acl|routine|function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)|jobguard_runtime|EXECUTE|-`.
 Coordinator supplies its separately reviewed authority-path group; do not mark
@@ -248,3 +251,134 @@ No new alert subsystem; surfaced typed source/retry/conflict failures require no
 operational error handling. Privileged credential compromise and arbitrary dynamic
 module use are not claimed covered by local tests. Independent exact-commit verdicts,
 separate acceptance, final CI and all production/D11/G0–G5 gates remain held.
+
+## r1 — 25 October 2026 repair
+
+**REPAIR IMPLEMENTED; POSTGRESQL VERIFICATION HELD; NOT ACCEPTED.**
+Issued against head `96f8bca982db362e979850c9e2f0b3ab15d365b7`, base
+`c50faa2affbc7dc9f4a8ede5b921ab007a846df6`. Read the independent REPAIR verdict
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch6-p-claude-A-96f8bca9-20261025.md`
+(the order's relative `jg-runs/` path is absent here). No new independent verdict
+or acceptance is claimed for this working-tree repair. No commit, push or install.
+
+### Repairs and regression coverage
+
+- Blocking 1: 0227 replaces the Unicode-escape literal with ASCII hex decoded as
+  UTF-8 at execution. This preserves exactly U+0009–000D, U+0020, U+00A0, U+1680,
+  U+2000–200A, U+2028–2029, U+202F, U+205F, U+3000 and U+FEFF. The UTF-16 length
+  check stays intact. No new migration number, routine, table or privilege.
+- New SQL_ASCII own-step test explicitly sets `--encoding=SQL_ASCII`, asserts the
+  server encoding, enables `check_function_bodies`, applies 0227 and checks the
+  installed writer. A UTF8 regression checks all 25 original trim characters and
+  U+0085/U+180E/U+200B non-trim neighbours against ECMAScript trim.
+- Blocking 2: all three reported receipt INSERT fixtures now use
+  `$1::uuid::text`, preserving UUID inference. Existing CI-P03/P08/P09 assertions
+  remain intact. Their execution still requires the reviewer PostgreSQL run.
+- L1/L2(b,d): dispatcher-assigned additive inventory implemented below. Corrected
+  L2(a)'s wrong owner-key handoff in the original receipt. This does **not** close
+  L1's remaining LP0 effective-fact/group/authority-path integration or L2(c,e).
+- L2(c,e) trigger record and authority group remain coordinator work: the shared
+  JSON assignment is expressly `recorded.routines` additive rows only. Required
+  writer owner/ACL keys, authority path, card, source/test and trigger were not
+  silently marked reviewed or approved.
+- L3 global SHARE-lock concurrency remains a synthetic-only integration hold;
+  changing lock semantics is outside this narrow repair. L4 HTTP digest stripping
+  belongs to CH6-A; L5 public exports remain coordinator work; L6 baseline failures
+  are not changed. No browser workflow, policy, prompt or model changed.
+
+### Exact additive shared rows
+
+Seven entries added to `docs/contracts/lp-0-effective-privileges-v1.json`
+`recorded.routines`, in name order between the ch4 and claim entries:
+
+```text
+function:app.ch6_append_integrity_review_audit(uuid,uuid,uuid,uuid,text,text)
+function:app.ch6_guard_integrity_review_receipt()
+function:app.ch6_integrity_authority(uuid,uuid,text)
+function:app.ch6_integrity_canonical(jsonb)
+function:app.ch6_integrity_family(uuid,uuid)
+function:app.ch6_integrity_source_fingerprint(uuid,uuid,text,jsonb)
+function:app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)
+```
+
+Matching seven `(proname, identity_arguments)` expectations added to each of
+`serious-b5-upgrade.integration.test.ts`,
+`contractor-entitlement-upgrade.integration.test.ts` and
+`tenancy.integration.test.ts`, in PostgreSQL name order:
+
+```text
+ch6_append_integrity_review_audit | t uuid, j uuid, actor uuid, command_id uuid, request_hash text, snapshot_hash text
+ch6_guard_integrity_review_receipt | <empty>
+ch6_integrity_authority | t uuid, j uuid, digest text
+ch6_integrity_canonical | v jsonb
+ch6_integrity_family | t uuid, j uuid
+ch6_integrity_source_fingerprint | t uuid, j uuid, digest text, source_snapshot jsonb
+ch6_record_integrity_review | t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb
+```
+
+All expect migration ownership and `search_path=pg_catalog`; only the writer is
+SECURITY DEFINER/runtime-executable; helpers are owner-only. SERIOUS-B5 adds only
+these exact identities to its existing snapshot and checks the exact owner-only
+or owner+runtime ACLs, preserving predecessor comparisons. Tenancy and contractor
+files had table inventories rather than routine-addition lists; additive routine
+assertions were appended without changing the existing assertions. No table rows
+are needed. Added precisely these four dispatcher-assigned paths to CH6-P's own
+lane allowlist; no neighbouring lane was broadened. JSON definition hashes remain
+null pending real catalogue capture, consistent with the existing held mechanism.
+
+### r1 commands and actual results
+
+Used installed Node executables directly, as in the original receipt, avoiding the
+pnpm launcher's recorded registry resolution failure. Logs are in
+`/private/tmp/ch6-r1-*.log`; no mocked run is called PostgreSQL proof.
+
+- `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json`: PASS.
+- Same compiler for config/storage/ai/db/api: PASS (build); db `--noEmit`: PASS
+  (the package typecheck and lint implementation); web `--noEmit`: PASS.
+- From db: `node ../../node_modules/typescript/bin/tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/commercial-integrity-v3*.ts test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts`: PASS.
+- `LANE_BASE_REF=c50faa2a node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `LANE_BASE_REF=c50faa2a node tools/lint.mjs`: PASS (purity, lanes, money).
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: FAIL: includes inherited
+  CH4/MON1/CH6-C changes outside this leaf lane; no attempt to waive those paths.
+- `node --test tools/*.test.mjs`: PASS, 122 tests.
+- Core Vitest `run --maxWorkers=2 src`: PASS, 130 files / 3,047 tests.
+- DB explicit source-file Vitest selection: PASS, 26 files / 225 tests.
+- DB local family/architecture selector: PASS, four tests; one PostgreSQL test
+  filtered out, not executed.
+- Web Vitest `run --maxWorkers=2`: PASS, 41 files / 875 tests.
+- AI/config/storage Vitest: PASS, respectively 147 / 82 / 4 tests. AI is fixture
+  coverage, not a live approved-region model evaluation or release authorization.
+- API `node --import tsx src/generate-openapi.ts --check`: PASS.
+- API `node node_modules/@nestjs/cli/bin/nest.js build` from apps/api: PASS.
+  An earlier root-cwd invocation failed to locate the package-local CLI; corrected.
+- Web `node node_modules/next/dist/bin/next build`: PASS, production build.
+- Initial db selector `vitest run --maxWorkers=2 src` matched four `dbsrc`-named
+  integration files too: 30 files passed, four suites failed before PostgreSQL
+  startup with `no free port`. This was a selector mistake; no database started.
+  Re-ran explicit source files above, then the explicit non-integration selection.
+
+Mandatory reviewer reruns: all CH6-P integration suites (including new SQL_ASCII
+and UTF8 regressions), lp-0-authority-paths, serious-b5-upgrade,
+contractor-entitlement-upgrade, tenancy, original audit/tenancy regressions,
+`test:db` and `test:migrations`. PostgreSQL and browser journeys are NOT RUN here;
+no server can bind in this sandbox. The accidental integration selection is
+reported above rather than counted as an executed database check. Outstanding
+catalogue authority-group/fact integration may still keep LP0 suites red.
+
+Final r1 verification additions:
+
+- DB Vitest with explicit `rg --files src test -g '*.test.ts' -g '!*.integration.test.ts'`
+  selection: 48 files / 431 tests PASS; `test/free-port.test.ts` has two FAILs
+  because its required local listeners raise `listen EPERM 127.0.0.1`. It is not
+  weakened or excluded from CI. Overall local command did not pass.
+- API Vitest `run --maxWorkers=2 src`: 120 files / 2,089 tests PASS; nine files /
+  129 tests FAIL, 23 skipped and 129 listener errors, with sandbox `listen EPERM`
+  preventing framework HTTP tests. This is not a full API-suite pass.
+- Final `LANE_BASE_REF=c50faa2a node tools/lint.mjs`: PASS;
+  `git diff --check`: PASS.
+- Read-only Node comparison against HEAD's original Unicode literal: PASS,
+  identical 25 code points. Parsed JSON comparison against HEAD: PASS, removing
+  the seven new routine rows produces the exact prior document; no other shared
+  JSON sections changed. These are deterministic static checks, not PostgreSQL.
+- Intended conventional commit subject/body written to
+  `/private/tmp/jg-msg-ch6-p.txt`. Worktree changes left uncommitted for dispatcher.

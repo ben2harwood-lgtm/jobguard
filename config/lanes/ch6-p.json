@@ -19,7 +19,11 @@
         "docs/contracts/commercial-integrity-v3-persistence.md",
         "packages/db/migrations/0227_commercial_integrity_v3_receipts.sql",
         "packages/db/migration-notes/0227_commercial_integrity_v3_receipts.md",
-        "docs/verdicts/CH6-P/BUILDER_RECEIPT.md"
+        "docs/verdicts/CH6-P/BUILDER_RECEIPT.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
       ]
     }
   }

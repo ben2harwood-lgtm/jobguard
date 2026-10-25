@@ -13,10 +13,10 @@ import { freePort, closeTestPools } from "./pool-test-utils.js";
 export const tenant="11111111-1111-4111-8111-111111111111", member="d1500000-0000-4000-8000-000000000003", user="d1500000-0000-4000-8000-000000000001";
 export const actor={membershipId:member,identityUserId:user};
 export const migrationUrl=new URL("../migrations/0227_commercial_integrity_v3_receipts.sql",import.meta.url);
-export async function createIntegrityFixture(throughCurrent=true) {
+export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF8" | "SQL_ASCII" = "UTF8") {
  const dir=await mkdtemp(join(tmpdir(),"ch6-p-")),port=await freePort(59200,300),password=randomUUID();
  const logs:string[]=[];
- const pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
+ const pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C",`--encoding=${encoding}`],onLog:line=>logs.push(line)});
  await pg.initialise();await pg.start();
  const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"postgres"});
  if(throughCurrent)await migrate(admin);
@@ -98,7 +98,7 @@ export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<t
  const id=randomUUID(),command=randomUUID(),event=randomUUID();
  await withTenant(f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-   VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
+   VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::uuid::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
   await db.$client.query(`INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
    VALUES($1,$2,$3,$4,$5,repeat('a',64),repeat('a',64),repeat('a',64),repeat('a',64),'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1','synthetic_final_check_terms.v1',$6,clock_timestamp(),$7,$8)`,[tenant,x.job,id,x.revision,x.quote,member,command,event]);
   await appendAuditBatch(db,[{id:event,version:"audit.v1",actorRef:`membership:${member}`,eventType:"synthetic.ch6.lock_fixture",subjectType:"job",subjectRef:x.job,payload:{references:{jobId:x.job}}}]);
