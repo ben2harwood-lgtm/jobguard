@@ -3,7 +3,7 @@ import { z } from "zod";
 import { sha256 } from "@jobguard/core";
 import { loadEvidencePackSources, type EvidencePackSources } from "./evidence-pack-sources.js";
 import { authenticatePracticeSession, practiceOwnedJobsSql, PracticeAccessError } from "./practice-session.js";
-import { withTenant, type TenantTransaction } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import {
   heldEvidencePackV3Ports, createEvidencePackV3SourcePorts, EvidencePackV3DependencyError, EvidencePackV3SourceConflict,
   type EvidencePackV3Scope, type EvidencePackV3SourcePorts,
@@ -12,6 +12,30 @@ import {
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
 // A binding is valid only for its issuing transaction; a copied object is not authority.
 const bindings = new WeakMap<object, TenantTransaction>();
+
+/**
+ * Keep withTenant's context validation, local settings and cleanup unchanged.
+ * Like practiceMaterialPool, adapt only its exact BEGIN; isolation must precede
+ * even the tenant set_config query. This pool is local to the read snapshot.
+ */
+export function withEvidencePackV3Snapshot<T>(
+  pool: Pool, context: VerifiedTenantContext, work: (tx: TenantTransaction) => Promise<T>,
+): Promise<T> {
+  const snapshotPool = new Proxy(pool, { get(target, key) {
+    if (key === "connect") return async () => {
+      const client = await target.connect();
+      return new Proxy(client, { get(connection, property) {
+        if (property === "query") return (sql: string, values?: unknown[]) =>
+          connection.query(sql === "BEGIN" ? "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY" : sql, values);
+        const value = Reflect.get(connection, property);
+        return typeof value === "function" ? value.bind(connection) : value;
+      } });
+    };
+    const value = Reflect.get(target, key);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  return withTenant(snapshotPool, context, work);
+}
 export type EvidencePackV3VerifiedBinding = Readonly<{
   tenantId: string; caseId: string; jobId: string; locked: boolean;
 }>;
@@ -97,8 +121,7 @@ export async function prepareEvidencePackV3Sources(
   ports ??= createEvidencePackV3SourcePorts(pool, auth.context, auth.digest);
   const activePorts = ports;
   const snapshot = async () => {
-    const result = await withTenant(pool, auth.context, async tx => {
-      await tx.$client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+    const result = await withEvidencePackV3Snapshot(pool, auth.context, async tx => {
       const binding = await verifyEvidencePackV3Case(tx, auth.context.tenantId, caseId, auth.digest);
       if (binding.locked) return binding;
       return loadEvidencePackV3Sources(tx, binding, activePorts);
