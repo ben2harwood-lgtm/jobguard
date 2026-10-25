@@ -79,7 +79,7 @@ export class ImportContractError extends Error {
   constructor(public readonly code: "IMPORT_RESULT_SNAPSHOT_MISMATCH" | "INVALID_IMPORT_CONTRACT" | "IMPORT_INTENT_SNAPSHOT_MISMATCH" = "IMPORT_RESULT_SNAPSHOT_MISMATCH") { super(code); this.name = "ImportContractError"; }
 }
 
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+function parse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new ImportContractError("INVALID_IMPORT_CONTRACT");
   return parsed.data;
