@@ -99,5 +99,7 @@ export async function seedWorkPractice(f:WorkFixture) {
  });
  const sessionId=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,sessionId);
  const jobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string;
+ // C273: explicit synthetic disclosure acceptance is setup, before boundary snapshots.
+ await workTenant(f.runtime,DEMO_TENANT_ID,db=>db.query("SELECT app.accept_final_check_terms($1,$2,$3,'synthetic_final_check_terms.v1')",[DEMO_TENANT_ID,auth.membershipId,randomUUID()]));
  return {sessionId,jobId,auth};
 }

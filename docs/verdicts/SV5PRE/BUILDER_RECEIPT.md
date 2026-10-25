@@ -1686,3 +1686,50 @@ Intended conventional commit subject and body: `/private/tmp/jg-msg-sv5pre-catch
 Other-package unit result: PASS, core 2,964; config 86; storage 2; ai 147; db 422; api 2,468; web 1,026. Total 7,115 source unit tests, plus 24 selected tooling tests. Focused 159 cases overlap the full web run. These selected source suites do not replace PostgreSQL/browser CI.
 
 Final deterministic preservation checks PASS: exact three-file scope; route bytes unchanged outside the fallback insertion; all original shared-test bytes outside the customer-invoices row unchanged; invoice-route tests unchanged; receipt append-only; HEAD unchanged; intended commit-message file present; `git diff --check` clean. No independent-verdict claim.
+
+## catch-up 3 — C273 — 25 October 2026
+
+Builder working-tree repair for #189 from HEAD `7620a554` on `codex/sandbox/sv5pre-catchup`, with main `28416d1e` already merged. Read AGENTS.md, BUILD_PLAN.md §10.2.6 and SV-4/SV-5, and the final-account lock, completion and CH-4-C work-state contracts. No Git-writing command, install/download, database startup or browser suite was run.
+
+### Actual core failures and causes
+
+The requested `gh run view 40197368831 --log-failed` failed because the sandbox could not connect to api.github.com. The connected GitHub tool retrieved run jobs and core job **121181017295** logs. Those logs show **two**, not three, failures in `job-work-state-commands-boundaries.integration.test.ts`; the third is in the races file. Core reported 297 passed files / two failed files, 3,137 passed tests / three failed tests (plus one expected failure and two todo). These are retrieved prior-run results, not verification of this working tree.
+
+1. **Open result use retains existing lock and completed-check gates**, boundary file :58: expected `FINAL_ACCOUNT_LOCK_REQUIRED`, received `FORBIDDEN`. 0204 replaces 0201’s same-signature invoice routine. Its early session-scoped actor check rejects this owner fixture before CH-4-C’s documented lock/check refusals. Restored owner checks before/after the job wait, CH-4-C’s open-state gate after authenticated replay, then lock and authoritative check gates. Session-scoped authority remains mandatory on replay and before any new issue effect. The authoritative predicate retains latest failed/pending/missing-check refusal codes while additionally requiring the SV5PRE certificate and full proof.
+2. **Closed completed-result use refused and new completed check cannot bypass closure**, boundary file :62: setup’s bare completed-row INSERT throws `DISCLOSURE_TERMS_NOT_ACCEPTED`. Added explicit synthetic terms acceptance through the real owner routine in `seedWorkPractice`, before tests take snapshots. Further source inspection identifies another setup incompatibility: the same INSERT has no run/proof certificate, so SV5PRE intentionally refuses it as `FINAL_CHECK_NOT_COMPLETE` once terms are accepted. C273 currently permits fixture-file-only setup edits. Requested a bounded extension for this historical-row setup alone; no expectation or assertion has been changed. Do not bypass the publication trigger in shared fixture callbacks or permit uncertified completion in production.
+3. **Close versus check completion/reveal/invoice use serializes on the job**, `job-work-state-commands-races.integration.test.ts` :69: `backend 14764 did not reach lock wait` at `waitForJobLock` :42. The invoice iteration’s early session check returns `FORBIDDEN` before waiting for the concurrent close; it also lacks 0201’s subsequent closure gate. The repaired invoice routine waits on the job before extra session scope validation and checks open state after the committed close. The existing `A0_ch4_check_admission` trigger already locks the job and rejects closed check inserts before `a_final_check_completion`; it is unchanged. Database execution of this diagnosis remains owed to reviewer/CI.
+
+### Scope and preservation
+
+0204 is unmerged and repaired in place; 0201 is byte-identical. Compared both complete invoice bodies: differences are the stronger authoritative-check record/predicate and its check-ID references, session-authorized replay/new issuance, and the explanatory comment; all commercial line selection, amount arithmetic, source snapshots, PDF generation, effect writes and audit content are preserved. No grant, schema/table shape, historical row, backfill, provider, fee policy or alert changes. Already-applied candidates need an additive forward repair; never remove either gate or erase history.
+
+LP-0’s existing invoice protection row gains exactly the authoritative predicate and actor helper in staticCalls; `ch4_require_open` and owner checks remain. The definition hash was already null and remains explicitly uncaptured, pending real PostgreSQL catalogue capture. SERIOUS-B5 snapshot rows contain routine identity/owner/ACL/configuration, not function bodies; no matching expected row changes are needed. No CH-4-C or SV5PRE assertion/expected code has changed.
+
+The requested `config/lanes/sv5pre.json` did not exist: SV5PRE was still in the shared legacy register. Moved that exact own lane to the per-piece file, retaining its existing allow scope, adding this exact catch-up branch and the authorized shared fixture path. The per-piece format forbids granting the shared register itself, so its old self-grant is removed. Main-base lint now identifies only the legacy register removal as outside the per-piece lane; coordinator-owned lane migration approval/check handling remains needed. No checker bypass or widening to other lanes is introduced.
+
+### Checks
+
+Checks run one at a time through `/private/tmp/jg-sv5pre-catchup3-checks.py`, installed Node `v24.17.0` / cached pinned pnpm `10.28.1`, Turbo concurrency one, every Vitest invocation `--maxWorkers=2`. The runner waits in 30-second intervals if one-minute load exceeds 20. No package download/install. Exact commands, exits and logs are recorded in `/private/tmp/jg-sv5pre-catchup3-results.json` and `/private/tmp/jg-sv5pre-catchup3-*.log`. Final results appended below after execution.
+
+Full `pnpm test`, PostgreSQL integration/migration/worker suites and browser suites are NOT RUN: sandbox cannot bind localhost or start PostgreSQL. Required reviewer executions include both CH-4-C boundary **and race** files and all SV5PRE database suites, then the ordinary full CI gates. Source-only checks do not prove the SQL or historical fixture behavior. No changed prompt/model/parser, no live provider integration or independent review is claimed. Exact-commit independent verdict, separate acceptance, D12/D13 and all real-data/production/release gates remain HOLD.
+
+Final local check results:
+
+| Check | Actual result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | PASS, seven tasks (two cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL: only `config/agent-lane-assignments.json` lies outside the migrated per-piece lane; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same legacy-register migration restriction |
+| `pnpm exec turbo run lint --concurrency=1` | PASS, seven package tasks; supplemental, does not replace root lint |
+| Money/commercial boundary lint | PASS, both checks |
+| Selected tooling units | PASS, 24 tests; no Git-writing fixture tests run |
+| Source unit suites, `--maxWorkers=2` | PASS after build refresh: core 2,979; config 86; storage 2; AI 147; DB 422; API 2,482; web 1,034 (7,152 total) |
+| `pnpm build --concurrency=1` | PASS, seven tasks (three cached); existing cache-write/workspace-root warnings nonfatal |
+| `pnpm openapi:check` | BLOCKED/exit 1: tsx CLI IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check without CLI IPC listener |
+
+Initial API unit execution before build had seven failures across work-state command/registry tests due to stale compiled core/DB exports; rebuilding the unchanged workspace exports and rerunning the identical API selection passed all 2,482 tests. No source repair or expectation change was used for that result. Other source-unit commands exclude `**/*.integration.test.ts` and `**/dist/**`; DB additionally excludes `test/free-port.test.ts`; API retains the exact sandbox socket-suite exclusions listed in catch-up 2. Web retains its configured browser exclusion. These selections do not make any CI suite optional. Exact commands/exclusions are in the results JSON and runner. Observed one-minute load before checks stayed below 20 (maximum 11.24); no load wait was needed.
+
+The proposed, **unapplied** historical setup change is `/private/tmp/jg-sv5pre-catchup3-proposed-historical-setup.patch`: wrap only the pre-close historical check INSERT in the admin fixture’s transaction-local `session_replication_role='replica'`, matching the existing `boundaryLock` historical setup convention. The original INSERT and every assertion/expected code remain identical, and all current-guard refusal assertions run in later normal transactions. Applying it requires C273’s fixture-file-only restriction to be extended to this test setup plus its own lane path. No shared callback interception, default, trigger suppression or production completion exception has been added.
+
+**HOLD — do not commit.** The current working tree intentionally leaves that historical setup untouched pending the requested scope ruling; accepting terms alone would expose `FINAL_CHECK_NOT_COMPLETE` at that INSERT. The product rules themselves are preserved: old history may exist, but new uncertified completion must fail. A bounded historical fixture edit is needed, not a changed expectation. Main-base lane migration also requires coordinator handling because the checker refuses editing the legacy register from a per-piece lane. Do not treat either hold as green CI. Intended conventional commit subject/body, with this do-not-commit hold, is written to `/private/tmp/jg-msg-sv5pre-catchup.txt`. No commit or push has occurred.
