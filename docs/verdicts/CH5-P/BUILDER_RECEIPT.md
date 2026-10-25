@@ -252,3 +252,85 @@ message exists at `/private/tmp/jg-msg-ch5-p.txt`. All changes remain unstaged a
 uncommitted. Dispatcher owns subsequent commit/push; CI and independent verdicts
 must bind the resulting exact head. Executable admission and positive CH5-P
 acceptance remain STOP, not cleared by the green local checks.
+
+## r1
+
+25 October 2026. Repair against issued HEAD `c6c4ec97`; working-tree changes
+only, no commit/push. The named review
+`jg-runs/v5-ch5-p-claude-A-c6c4ec97-20261025.md` was absent both from this
+worktree and a filename search under the parent project. This repair follows the
+two blocking findings quoted in the dispatch. No independent verdict or technical
+acceptance is claimed.
+
+Exact additive catalogue/allowance rows:
+
+1. `docs/contracts/lp-0-effective-privileges-v1.json`, `recorded.routines`,
+   immediately after the existing `adopt_in_flight_job` overloads and before
+   `advance_audit_head`:
+   `{"identity":"function:app.adopt_in_flight_job_v3(uuid,uuid,text,uuid,uuid,jsonb)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]}`.
+   Static additive comparison against HEAD: **373 -> 374** routine records;
+   every prior row and its order preserved. The null definition digest follows
+   neighbouring additive entries; no live catalogue capture is claimed.
+2. `packages/db/test/serious-b5-upgrade.integration.test.ts`: the exact
+   `(app, adopt_in_flight_job_v3, t uuid, source_job_id uuid, session_digest text,
+   command_id uuid, authorization_id uuid, snapshot jsonb)` routine allowance,
+   applied after 0210's allowance in migration order. The new helper asserts one
+   new matching signature, migration ownership, SECURITY DEFINER,
+   `search_path=pg_catalog`, and owner-only EXECUTE, then merges that row at its
+   server catalogue position while retaining all predecessor expected values.
+   No existing assertion or allowance is removed or weakened.
+
+Standing migration line audited against all of 0224: **one new routine, zero new
+tables**. There are no matching rows to add in
+`contractor-entitlement-upgrade.integration.test.ts`: its successor comparison
+uses table-data snapshots only; its routine catalogue check compares immediately
+before/after its own 0198 migration, before 0224 runs. Likewise,
+`tenancy.integration.test.ts` has table RLS/guard/owner lists, no routine
+expected-additions list. Both files remain unchanged because 0224 adds no table.
+No privilege relation, migration SQL, lane policy or application code changed.
+The earlier shared-integration request for this routine is fulfilled by row 1
+above; its remaining unrelated requests and all executable-admission STOPs remain.
+
+Commands actually run (pnpm uses the pre-existing pinned 10.28.1 CLI via
+`PATH=/private/tmp/jg-ch5-p-bin:$PATH`; Node v24.17.0; no install/download):
+
+- `pnpm --filter @jobguard/db typecheck`: **exit 0**.
+- `pnpm --filter @jobguard/db lint`: **exit 0**.
+- `pnpm typecheck --concurrency=1`: **exit 0**, 7 tasks successful, 4 cached.
+- `pnpm build --concurrency=1`: **exit 0**, 7 tasks successful, 4 cached;
+  existing Next/webpack/CSS warnings and Turbo sandbox telemetry IO warning.
+- `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-ch5-p-r1-tests-tsconfig.json`:
+  **exit 0**, compiles the modified SERIOUS-B5 test and its dependencies; not DB
+  execution.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/job-import-v3.integration.test.ts -t 'CH5-P source-only'`:
+  **exit 0**, 11 passed; 3 PostgreSQL tests deselected by name (reported skipped).
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-import-v3.test.ts src/job-import.test.ts src/meter-place-admission.test.ts`:
+  **exit 0**, 48 passed across 3 files.
+- `node --test tools/*.test.mjs`: **exit 0**, 122 passed.
+- `pnpm openapi:check`: **exit 1**, tsx CLI cannot bind its local IPC pipe
+  (`listen EPERM`). Same generator/check executed without the CLI IPC server:
+  `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`:
+  **exit 0**, no generated file change.
+- `LANE_BASE_REF=5fc6453e pnpm lint:lanes`: **exit 1**, rejects exactly the
+  dispatcher-assigned additive shared paths
+  `docs/contracts/lp-0-effective-privileges-v1.json` and
+  `packages/db/test/serious-b5-upgrade.integration.test.ts`. The checked-in lane
+  allowlist does not contain this repair order's exception. No allowlist widening.
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: **exit 1**, core purity
+  passes; lane lint rejects inherited parent paths plus the assigned shared paths.
+  No remote fetch/freshness claim. Package lint is separately green.
+- `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`, static catalogue additive/order check,
+  and `git diff --check`: **exit 0**.
+
+Detailed logs: `/private/tmp/jg-ch5-p-r1-{typecheck,build,test-types,unit,core-unit,tools-unit,openapi,openapi-loader,lanes,lint}.log`.
+An initial system `pnpm --version` did not return promptly and was interrupted;
+all subsequent pnpm commands used the existing pinned CLI wrapper.
+
+NOT RUN: PostgreSQL, migrations, browser/listener suites or root `pnpm test`
+(which includes PostgreSQL). Dispatcher/reviewer must execute
+`lp-0-authority-paths`, `serious-b5-upgrade`, `contractor-entitlement-upgrade` and
+`tenancy` on PostgreSQL. Those four checks and an exact-result independent verdict
+remain pending. This repair supplies the two catalogue additions, not a database
+pass or complete CH5-P acceptance. Intended commit message rewritten at
+`/private/tmp/jg-msg-ch5-p.txt`; dispatcher owns commit/push.
