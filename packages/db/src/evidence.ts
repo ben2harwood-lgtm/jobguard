@@ -7,17 +7,17 @@ import { z } from "zod";
 import { sha256, type PrivateVersionedStorage, type StoredObject } from "@jobguard/storage";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
 
-const UUID = z.string().uuid();
+const UUID = z.guid({ error: "Invalid uuid" });
 const HASH = z.string().regex(/^[0-9a-f]{64}$/u);
 export const beginEvidenceUploadSchema = z.object({
-  id: UUID.optional(), jobId: UUID, scopeItemId: UUID.nullable().default(null), expectedSha256: HASH,
+  id: UUID.optional(), jobId: UUID, scopeItemId: UUID.nullable().prefault(null), expectedSha256: HASH,
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]), maximumBytes: z.number().int().positive().max(25_000_000),
-  retentionClass: z.enum(["transient_upload", "standard_evidence"]).default("transient_upload"),
-  deviceCapturedAt: z.coerce.date().nullable().default(null), expiresAt: z.coerce.date(),
+  retentionClass: z.enum(["transient_upload", "standard_evidence"]).prefault("transient_upload"),
+  deviceCapturedAt: z.coerce.date().nullable().prefault(null), expiresAt: z.coerce.date(),
 });
 export const finalizeEvidenceSchema = z.object({ commandId: UUID.optional(), uploadId: UUID, objectVersionId: z.string().min(1).max(1024),
   evidenceType: z.string().min(1).max(40) });
-export const evidenceAccessSchema = z.object({ evidenceId: UUID, jobId: UUID, scopeItemId: UUID.nullable(), expiresInSeconds: z.number().int().min(1).max(900).default(300) });
+export const evidenceAccessSchema = z.object({ evidenceId: UUID, jobId: UUID, scopeItemId: UUID.nullable(), expiresInSeconds: z.number().int().min(1).max(900).prefault(300) });
 export type EvidenceUpload = z.infer<typeof beginEvidenceUploadSchema> & { id: string; objectKey: string; serverReceivedAt: Date };
 
 export class EvidenceError extends Error {

@@ -259,6 +259,20 @@ async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) 
   routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
+// Standing ruling 113: only this exact new read-only signature extends the snapshot.
+async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const additions=after.routines.filter(r=>r.nspname==="app" && r.proname==="mon8_retained_contractor_workspace" && r.args==="s uuid, q jsonb");
+ expect(additions).toHaveLength(1);
+ expect(before.routines.some(r=>r.nspname==="app" && r.proname==="mon8_retained_contractor_workspace")).toBe(false);
+ expect(additions[0]).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog"]});
+ const grants=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+ ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+ FROM pg_proc p WHERE p.oid='app.mon8_retained_contractor_workspace(uuid,jsonb)'::regprocedure`)).rows;
+ expect(grants).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration","jobguard_runtime"]}]);
+ const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
+ return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -272,7 +286,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await workStateCommandAdditions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
+ const expected = await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before))));
  Object.assign(expected, await smallTripAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);

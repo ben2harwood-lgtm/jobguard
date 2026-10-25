@@ -327,3 +327,84 @@ introduced by these catalogue rows. Existing integration, predecessor, policy,
 exact-commit independent-review and separate-acceptance holds remain. No commit,
 index write, checkout, push, PR, deployment, PostgreSQL or browser process was
 performed. Conventional commit subject/body is in `/private/tmp/jg-msg-mon1-t.txt`.
+
+## catch-up onto 28416d1e
+
+25 October 2026, C261 / MON1-T-CATCHUP. Accepted piece head `153dd5b2`;
+dispatcher-started merge of main `28416d1e`. Builder evidence only; the dispatcher
+must finish the merge and obtain the exact-commit independent delta verdict.
+No commit, index write, push, PostgreSQL or browser process was performed.
+Used installed dependencies and cached pnpm 10.28.1 with Node 24.17.0; no install.
+
+Resolved `serious-b5-upgrade.integration.test.ts` by retaining both complete
+additive helpers and applying 0200's retained-workspace routine addition, 0201's
+work-state additions, then 0208's small-trip additions. All predecessor comparisons
+remain. Removed only the dead `origin !== "builder_logged"` / extra-origin insert
+branches from the race and upgrade fixtures, as carried from acceptance.
+MON1-T's three files retain all 22 expanded test cases and 89 `expect` calls;
+a read-only comparison against `153dd5b2` proves their only differences are those
+two dead lines. The related four-file non-PostgreSQL suite remains 42 tests.
+
+No own Zod-3-only annotation/API remains to change: `meter-small-trip.ts` uses
+inferred Zod output and its strict schema is unchanged. Own runtime source and
+0208 SQL are byte-identical to the accepted head. No production behavior,
+privilege, alert, commercial policy or public API change is introduced.
+
+Migration numbering: main's highest is `0201_job_work_state_commands.sql`;
+this piece retains `0208_meter_small_trip.sql`. The actual migration discovery
+function succeeds and ends `0199`, `0200`, `0201`, `0208`; no renumber occurred.
+This is source/discovery evidence, not a fresh PostgreSQL application proof.
+
+Standing-line catalogue accounting (schema/name/identity-argument order):
+
+- Newly added to `contractor-entitlement-upgrade.integration.test.ts` successor
+  expectations: `app.job_small_trip_event: []`,
+  `app.job_small_trip_observation: []`, and routine row
+  `{nspname:"app", proname:"mon1_capture_small_trip", args:"t uuid, j uuid, source_kind text, source_id uuid"}`.
+  The existing snapshot still compares every predecessor table; no exclusions.
+  Added this assigned shared file to MON1-T's lane allowlist.
+- Retained in SERIOUS-B5: those two tables, their seven constraint indexes,
+  both `tenant_isolation` policies and the exact same routine signature;
+  main's `mon8_retained_contractor_workspace(s uuid, q jsonb)` is also retained.
+  No additional 0208 catalogue rows were needed there.
+- Retained in tenancy: both table rows with
+  `relrowsecurity:true, relforcerowsecurity:true, guarded:true` and both owner
+  rows with `owner:"jobguard_migration"`; no new rows needed.
+- LP-0 `recorded.routines` already contains exactly one
+  `function:app.mon1_capture_small_trip(uuid,uuid,text,uuid)` record from the
+  accepted head; preserved, no duplicate added. It remains migration-owned,
+  invoker, `search_path=pg_catalog`, unreachable, no runtime/PUBLIC/other EXECUTE,
+  definition digest null (no database digest capture claimed). Existing two
+  SELECT facts, owner/RLS/policy/immutable-trigger rows remain unchanged.
+
+| Command actually run | Catch-up result |
+| --- | --- |
+| `pnpm typecheck` | PASS; all 7 packages, 4 cached |
+| `pnpm build --concurrency=2` | PASS; all 7 packages, 4 cached; nonfatal shared-cache EPERM and existing Next/CSS warnings |
+| `pnpm turbo run lint` | PASS; all 7 packages, none cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL solely at unregistered `codex/sandbox/mon1-t-catchup` branch; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL at the same branch registration; dispatcher uses registered piece branch |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS; 4 files, 42 tests |
+| `pnpm openapi:check` | FAIL; tsx IPC listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api, after DB build | PASS; same generator/check without tsx CLI socket |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-catchup-tsconfig.json` | FAIL; unchanged shared `job-work-state-fixtures.ts:45`, default `proofEvidenceTypeSchema.options[0]` inferred `string \| undefined` rather than `string`; file is identical to main. Extra compilation covers own and shared integration files; outside package production typecheck |
+| Read-only migration discovery, accepted-head source/assertion comparison, inventory presence, registered MON1-T path allowlist probe | PASS; scope probe covers all 13 paths versus main, not a lane verdict |
+
+The first socket-free OpenAPI attempt preceded completion of the DB build and
+failed on absent `packages/db/dist/index.js`; the post-build invocation above passed.
+Logs are `/private/tmp/jg-mon1-t-catchup-*.log`; supplemental test config is in
+`/private/tmp/jg-mon1-t-catchup-tsconfig.json`. The shared-fixture compilation
+failure is recorded, not fixed by weakening an assertion or changing an unassigned
+helper.
+
+PostgreSQL, fresh/upgrade migrations, LP-0 authority paths, SERIOUS-B5 upgrade,
+contractor-entitlement upgrade, tenancy, the three own integration files,
+`test:db`, `test:migrations` and browser suites: **NOT RUN**, per dispatcher.
+There are no separate own non-PostgreSQL unit files. Reviewer/CI must run the
+three own files with `--maxWorkers=2` (22 cases) and the four standing-line
+catalogue suites. Existing policy/release, exact-commit independent-review and
+separate-acceptance holds remain. This receipt does not accept the piece.
+
+Final catch-up verification: `git diff --check` PASS; no conflict markers remain in
+the resolved file. The merge index intentionally remains dispatcher-owned.
+Intended conventional commit subject/body: `/private/tmp/jg-msg-mon1-t-catchup.txt`.

@@ -7,7 +7,7 @@ import { z } from "zod";
  * This module cannot open a transaction or mint an admission token.
  */
 const admissionV1 = z.object({
- version: z.literal("job-work-place-admission.v1"), jobId: z.string().uuid(),
+ version: z.literal("job-work-place-admission.v1"), jobId: z.guid({ error: "Invalid uuid" }),
  action: z.enum(["reopen", "resume", "restart"]),
 }).strict();
 export async function admitWorkPlace(database: TenantTransaction, raw: z.infer<typeof admissionV1>): Promise<never> {
