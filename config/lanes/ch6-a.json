@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch6-a": {
+      "branches": [
+        "codex/sandbox/ch6-a"
+      ],
+      "receipt": "docs/verdicts/CH6-A/BUILDER_RECEIPT.md",
+      "note": "Issued CH6-A synthetic advisory API. C1: no page in this leaf; no browser spec. Real PostgreSQL/Nest HTTP proof CI only; shared composition, registry and OpenAPI remain coordinator holds.",
+      "allow": [
+        "apps/api/src/commercial-integrity-v3.boundary.test.ts",
+        "apps/api/src/commercial-integrity-v3.application.ts",
+        "apps/api/src/commercial-integrity-v3.contracts.ts",
+        "apps/api/src/commercial-integrity-v3.application.test.ts",
+        "apps/api/src/commercial-integrity-v3.controller.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/family/route.test.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/family/route.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/v3/route.test.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/v3/route.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/v3/reviews/route.test.ts",
+        "apps/web/app/api/jobs/[id]/commercial-integrity/v3/reviews/route.ts",
+        "apps/api/src/app.module.ts",
+        "docs/verdicts/CH6-A/BUILDER_RECEIPT.md",
+        "apps/api/src/commercial-integrity-v3.http.test.ts"
+      ]
+    }
+  }
+}
