@@ -103,3 +103,67 @@ The issued document is an A-only execution order; its wider draft supplies the p
 Root may append an accurate statement that the two required source documents were subsequently read and reconciled by Codex builder-support, with this note attached. Preserve the original unavailable-at-builder-time chronology, remaining C/catalogue/test holds, missing failing-first execution, and independent exact-commit review/acceptance requirements. Do not label this note an independent review or PASS.
 
 Done: source-authority read and bounded reconciliation. Not done: implementation change, runtime/database verification, C completion, verdict or acceptance. Decisions Ben needs now: None for this disabled source reconciliation. Next action: root incorporates this note after CLI completion, retaining all holds and the explicit eligibility completion requirement above.
+
+
+## Catch-up 1 — C261, 25 October 2026
+
+```yaml
+session:
+  order: MON-3-P-B-CATCHUP
+  date: 2026-10-25
+  builder: Codex
+  model: gpt-6.1-sol
+  reasoning_effort: medium
+  session_id: 01a17382-4d18-7dc2-a731-b5206d7148ab
+  branch: codex/sandbox/mon-3-p-b-catchup
+  builder_head: 91ff397e9a34dbbdd2af7600f42721aac608ae64
+  merged_main: 28416d1ea7e154f2353d56e28f30db34e06e36ab
+  delivery: working_tree_only
+  independent_verdict: pending_exact_dispatcher_commit
+```
+
+The model and effort above are the actual `turn_context` values in this session's local rollout record, not an inferred model family. Read the repository AGENTS.md, MON-3 build card and persistence contract, lane rules, migration/catalogue/upgrade sources, and the actual STANDING-MIGRATION-CATALOGUE-LINE.txt. This is a builder catch-up receipt, not independent review or acceptance. The two source PASSes named in the order apply to 91ff397e, not this uncommitted merge result.
+
+Resolved the three working-file conflicts additively: both core exports (free-first-job persistence and UTC datetime), both DB exports (the two trial repositories and retained contractor reader), and both LP-0 ACL entry blocks (six B entries plus four CH-4-C entries). Read-only comparison against index stages 2 and 3 confirms all original group/ACL entries remain unchanged in each side's relative order and both barrels retain all exports. Main's automatically merged updated routine records remain intact. Migration 0206 is byte-identical to B's HEAD and retains its reserved number. No product behavior, grants, provider route, schema/migration, authorization gate, or test assertion was weakened. Admission remains disabled pending C.
+
+Standing-line additions, exactly:
+
+- LP-0 `recorded.routines`, between mon2 and mon8 in name order: `app.mon3_admit(uuid,text,uuid,jsonb)`, `app.mon3_audit(uuid,uuid,uuid,text,text,text)`, `app.mon3_owner(uuid,text)`, `app.mon3_record_card_fixture(uuid,text,uuid,jsonb)`, `app.mon3_request_card(uuid,text,uuid,jsonb)`. These five records are source-inspected declarations only, using the existing null `definitionSha256` convention. Actual migrated catalogue extraction remains a CI/reviewer hold; no digest or PostgreSQL execution is invented.
+- Contractor entitlement upgrade's later-successor expected snapshot: only `app.trial_admission`, `app.trial_business_verification`, `app.trial_card_attempt`, `app.trial_card_result`, in name order, with empty initial rows. This is the only test edit. Its snapshot is a table-row snapshot; it has no later-routine catalogue expectation to extend.
+- SERIOUS-B5 already has the exact four-table/five-routine `trialAdmissionAdditions` integration; tenancy already has all four table RLS/guard and owner rows in name order. Inspected and preserved, with no further edits.
+- B's own `config/lanes/mon-3-p-b.json` now recognizes this exact catch-up branch and allows `packages/db/test/contractor-entitlement-upgrade.integration.test.ts`. All other shared files touched were already explicitly allowed. The legacy register is untouched; no allowance for main's unrelated files was added.
+
+Environment: supplied dependencies, Node v24.17.0 and cached pinned pnpm 10.28.1; no install or dependency change. No core/DB `dist/index.d.ts` existed at the pre-build typecheck. Nothing was removed. An initial typecheck used cached pnpm at the top level but reached the ambient child pnpm wrapper and stalled; interrupted after 24 seconds (two cached tasks only, not a successful check). All subsequent pnpm commands used `/private/tmp/mon3pb-catchup-bin/pnpm`, a task-local wrapper for the installed cached 10.28.1 binary. Checks were sequential; Vitest used `--maxWorkers=2`. Observed one-minute load was below 20 before heavy checks; the unit runner checks load before each package and waits if over 20.
+
+Actual final checks:
+
+| Check | Result |
+| --- | --- |
+| `pnpm typecheck`, before any build | PASS, 7 tasks; core/DB dist absent |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 at lane boundary after core purity PASS; in-progress merge counts main's staged files against B's lane |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1 for the same main-file range issue; requires post-commit dispatcher/CI rerun |
+| `pnpm exec turbo run lint` | PASS, 7 package tasks |
+| `node --test tools/*.test.mjs` | PASS, 295 tests |
+| Config unit suite | PASS, 5 files / 86 tests |
+| Storage unit suite | PASS, 1 file / 2 tests |
+| Core unit suite | PASS, 127 files / 2,972 tests |
+| AI unit suite, after build | PASS, 15 files / 147 tests; fixtures, no live model |
+| DB source/test unit suite, excluding integrations and dist | Exit 1: 49 files / 429 tests pass; only `test/free-port.test.ts` fails its two tests with localhost `listen EPERM` |
+| API source unit suite, excluding integrations and dist | Exit 1: 124 files / 2,495 tests pass, 23 skipped; 9 files / 129 tests fail with 129 server-bind `listen EPERM` errors |
+| Web unit suite | PASS, 42 files / 998 tests |
+| `pnpm build` | PASS, all 7 tasks, including Next production build |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC socket `listen EPERM` |
+| From apps/api: `node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check via direct loader; no OpenAPI diff |
+| LP-0 `parseInventory` and `pathCompleteness` via direct tsx loader | PASS, no path problems; source validation only |
+| `node tools/money-arithmetic-lint.mjs` | PASS |
+| `node tools/commercial-boundary-lint.mjs` | PASS |
+
+Unit invocation: each package ran `pnpm exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude 'e2e/**'`; the final DB/API source runs additionally excluded `**/dist/**`. All package runs were serial. The required pre-build AI/DB/API/web unit attempts failed on missing runtime dist imports (and the known bind restriction); those results are not passes. The first broad post-build DB/API attempts additionally discovered emitted dist test copies, causing duplicate execution and invalid source-path assertions. Corrected final source-only retries above replace those broad counts; no source, test expectations or configuration changed to obtain them. Root aggregate `pnpm test` was not used because it includes actual PostgreSQL suites; unit checks are reported separately.
+
+Detailed logs are in `/private/tmp/mon3pb-catchup-*.log`; final unit logs use `source-unit-packages-db`, `source-unit-apps-api`, `postbuild-unit-packages-ai`, `postbuild-unit-apps-web`, and the original `unit-` prefix for tools/config/storage/core. Turbo cache IO warnings did not prevent the final seven-task checks from succeeding. No clean-install, live integration, model review or acceptance claim is made.
+
+PostgreSQL/DB integration, migration/upgrade/tenancy/LP-0 authority paths and browser suites were NOT RUN, per dispatcher environment instructions. GitHub CI/reviewer must execute them, capture actual protection records and rerun range checks after the dispatcher stages/commits. No git-writing command, commit, push, provider action, browser run, subagent or independent verdict was performed. Git's index still marks the three files unmerged until the dispatcher stages the resolved working files. All original C/commercial/release gates remain holds.
+
+Final source/lane/conflict verification and intended commit message follow below.
+
+Final verification: PASS for B's six exact touched paths using the actual lane policy and `lanePathAllowed` (zero violations; separate from the failed official range check). AST inspection of typechecked src import/export/dynamic-import declarations found zero forbidden core/DB dist imports; test fixture strings were not treated as executable imports. `git diff --check` passed and the raw hidden-file-aware opening-marker grep found only pre-existing quoted command patterns in historical verdicts, not unresolved conflicts. The anchored opening/separator/closing marker-line scan found no unresolved markers outside Git/dependencies/build output. Intended commit subject/body: `/private/tmp/jg-msg-mon-3-p-b-catchup.txt`. Dispatcher owns staging, commit and CI; this catch-up remains unaccepted pending exact-commit review.

@@ -123,3 +123,4 @@ export * from "./contractor-entitlement-authority-repository.js";
 
 export * from "./free-first-job-repository.js";
 export * from "./free-first-job-card-repository.js";
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";

@@ -10,7 +10,7 @@ export class PracticeAccess {
  case(id: unknown) { return authorizePracticeJob(this.pool,this.sessionId,id,"case"); }
  async command(raw: unknown, action: "list" | "evaluate" | "dismiss") {
   const auth=await this.session();
-  const input=z.object({tenantId:z.string().uuid(),jobId:z.string().uuid().optional(),decisionId:z.string().uuid().optional()}).passthrough().safeParse(raw);
+  const input=z.object({tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }).optional(),decisionId:z.guid({ error: "Invalid uuid" }).optional()}).passthrough().safeParse(raw);
   if(input.success&&action==="list"&&input.data.tenantId===DEMO_EMPTY_TENANT_ID)return authenticatePracticeSession(this.pool,this.sessionId,DEMO_EMPTY_TENANT_ID);
   if(!input.success||input.data.tenantId!==auth.context.tenantId)throw new PracticeAccessError("NOT_FOUND");
   if(action==="dismiss")return authorizePracticeJob(this.pool,this.sessionId,input.data.decisionId,"decision");

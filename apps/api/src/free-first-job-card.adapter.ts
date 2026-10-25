@@ -4,7 +4,7 @@ import { FreeFirstJobError, freeFirstJobCardV1, parseFreeFirstJob } from "@jobgu
 /** Trusted test/scenario input only. Never expose this schema as a browser setup-completion request. */
 export const freeFirstJobCardFixtureV1 = z.object({
   version: z.literal("free-first-job-card-fixture.v1"), environment: z.literal("synthetic_demo"),
-  tenantId: z.string().uuid(), setupId: z.string().uuid(), fixtureCard: z.enum(["card_a", "card_b"]),
+  tenantId: z.guid({ error: "Invalid uuid" }), setupId: z.guid({ error: "Invalid uuid" }), fixtureCard: z.enum(["card_a", "card_b"]),
   outcome: z.enum(["requested", "completed", "redirect_only", "cancelled", "failed", "outcome_unknown"]),
 }).strict().readonly();
 
