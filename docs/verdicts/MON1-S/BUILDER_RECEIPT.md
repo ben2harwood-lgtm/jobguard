@@ -363,3 +363,124 @@ Build retains existing Turbo cache IO-permission, Next tracing-root, CSS and
 Nest/file-type/computed-dependency warnings. Logs:
 `/private/tmp/jg-mon1-s-review-repair2-*.log`.
 Intended conventional commit message: `/private/tmp/jg-msg-mon1-s.txt`.
+
+## catch-up onto 28416d1e
+
+25 October 2026; C261 / MON1-S-CATCHUP. Accepted head `cd1bfdec`,
+main `28416d1e`, caught-up parents MON1-L `1ed9eecb` and MON1-T `bad654e7`,
+combined by dispatcher in `8d95874d`. Resolved the dispatcher-started merge in
+place. No git write command, staging, commit, checkout, push, installation,
+PostgreSQL or browser startup. Dispatcher owns the merge index and final commit;
+the two resolved paths still appear unmerged in that read-only index.
+Node v24.17.0; existing pinned pnpm 10.28.1 through
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`. This is existing-install evidence.
+
+Read AGENTS.md, BUILD_PLAN.md §10.1.5–10.1.6 and MON-1, and the lifecycle and
+lifecycle-persistence v1 contracts. No product behavior, schema strictness,
+commercial policy, privilege or production gate changes.
+
+- Architecture conflict: preserve the complete seven-file dependency set from
+  both sides and MON1-S's source/compiled traversal path. The resolved file is
+  byte-identical to accepted MON1-S, retaining all purity assertions.
+- SERIOUS-B5 conflict: retain both complete additive helpers, closing each
+  function separately. Apply retained-workspace 0200, work-state 0201, trip 0208
+  and lifecycle 0209 additions. No predecessor snapshot exclusion or comparison
+  was removed. Both main's `mon8_retained_contractor_workspace(s uuid, q jsonb)`
+  row and all lifecycle rows remain.
+- Own repository generic now explicitly uses `z.ZodType<T, unknown>` like main.
+  The merged lifecycle core already has the Zod 4 form. Repository-wide search
+  found no remaining ZodTypeDef or three-argument ZodType annotation. All strict
+  schemas and parser behavior remain unchanged.
+- 0209 SQL is byte-identical to `cd1bfdec`. Actual compiled migration discovery
+  ends 0199, 0200, 0201 (main's highest), 0208, 0209, without duplicate numbers.
+  No renumber, new migration, backfill or rollback change was needed. This is
+  discovery evidence, not proof of fresh PostgreSQL application.
+- Added contractor upgrade expectations below, preserving full prior-row
+  equality and the existing 0208 rows. Added that shared path to MON1-S's own
+  lane allowlist and registered this exact catch-up branch there. Existing
+  SERIOUS-B5, tenancy and LP-0 paths were already in the own allowlist.
+
+Exact newly added rows, in schema/name/identity-argument order, in
+`packages/db/test/contractor-entitlement-upgrade.integration.test.ts`:
+
+```text
+app.meter_lifecycle_alert: []
+app.meter_lifecycle_computation: []
+app.meter_lifecycle_correction: []
+app.meter_lifecycle_day_ledger: []
+app.meter_lifecycle_place_binding: []
+app.meter_lifecycle_scope: []
+app.meter_lifecycle_source: []
+app.meter_lifecycle_source_ref: []
+{nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"}
+{nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"}
+{nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"}
+{nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"}
+```
+
+Standing-line inventory accounting: all eight table additions and four routine
+signatures above already exist in the retained SERIOUS-B5 helper, including its
+12 indexes, eight policies and exact owner/ACL/RLS checks. Tenancy already has
+all eight sorted table posture rows (`relrowsecurity:true`,
+`relforcerowsecurity:true`, `guarded:true`) and eight migration-owner rows.
+No duplicate rows were added to either list. LP-0 `recorded.routines` already
+contains exactly one of each of these four entries, preserved unchanged:
+
+```text
+function:app.mon1_lifecycle_actor(uuid,text,boolean)
+function:app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)
+function:app.mon1_lifecycle_read(uuid,text,uuid)
+function:app.mon1_lifecycle_rebuild(uuid,text,uuid)
+```
+
+All four remain migration-owned SECURITY DEFINER with pinned pg_catalog search
+path, no PUBLIC EXECUTE; actor executes only through meter, the other three
+through runtime. Existing static write/call inventories are retained; no live
+definition digest or transitive privilege proof is claimed.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm build --concurrency=2` | PASS; 7 packages, 2 cached, 52.391s |
+| `pnpm typecheck --concurrency=2` after build | PASS; 7 packages, 2 cached |
+| `pnpm turbo run lint --concurrency=2` | PASS; all 7 packages |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts` | PASS; 3 files / 41 tests |
+| Same three files plus `src/job-work-state.test.ts src/job-work-timing.test.ts src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts src/subscription-allocation.test.ts src/subscription-period.test.ts src/subscription-architecture.test.ts`, `--maxWorkers=2` | PASS; 10 files / 141 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-lifecycle-repository.test.ts test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS; 5 files / 51 tests (MON1-S 9 plus MON1-T's four-file companion suite 42) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL at lane stage on inherited merge paths outside MON1-S; core purity passes, package stage not reached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL on same inherited main/MON1-L/MON1-T paths; own newly assigned shared path is allowlisted |
+| `pnpm openapi:check` | FAIL; tsx CLI IPC listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS; same generator/check without CLI socket, exit 0 |
+| Installed tsc `--noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext` on the four own lifecycle integration files and the contractor-entitlement-upgrade, serious-b5-upgrade and tenancy integration files | PASS; static checking only |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS |
+| Read-only SQL-byte, migration-discovery, inventory-presence and test-source comparisons | PASS as detailed below |
+| `git diff --check`; conflict-marker scan | PASS; resolved working-tree content, index remains dispatcher-owned |
+
+Initial typecheck and repository-test attempts preceded core compilation and
+failed on absent core dist imports. After build, unchanged reruns pass. The
+initial DB command also named a nonexistent meter-small-trip unit file; MON1-T
+has no separate own non-PostgreSQL unit file, so the final command above uses
+its documented four-file companion suite. No passing database result is implied.
+An initial ad hoc comparison incorrectly required inherited MON1-S repairs to
+match the earlier MON1-L parent, then compared MON1-T's caught-up tests against
+pre-catch-up MON1-S. These probes failed; corrected comparisons establish:
+all three lifecycle core tests, the repository unit file and four lifecycle
+integration files are byte-identical to accepted MON1-S `cd1bfdec`; all three
+MON1-T integration files are byte-identical to caught-up `bad654e7`. Earlier
+MON1-S held-allowance/UUID assertions and compiled traversal fixes are retained.
+Test counts/assertions were not changed by this catch-up.
+
+PostgreSQL **NOT RUN**: reviewer/CI must run lp-0-authority-paths,
+serious-b5-upgrade, contractor-entitlement-upgrade, tenancy, all own lifecycle
+and trip suites, fresh/upgrade migrations, test:db and test:migrations. Browser
+suites NOT RUN under the supplied sandbox restriction. Full root tests, live
+model/provider runs and clean install NOT RUN; no model/prompt/native change.
+Build retains nonfatal Turbo cache IO permission and existing Next tracing-root,
+CSS and Nest/computed-dependency warnings; none suppressed. Root lane failure
+is recorded without widening scope to inherited files or weakening the guard.
+
+Existing source integration, clock, correction, trial, practice, commercial,
+security/release and separate acceptance holds remain. This is builder evidence,
+not an independent verdict or acceptance. Dispatcher must conclude the merge
+and obtain the single exact-commit delta check under C261. Logs:
+`/private/tmp/jg-mon1-s-catchup-*.log`. Intended commit subject/body:
+`/private/tmp/jg-msg-mon1-s-catchup.txt`.

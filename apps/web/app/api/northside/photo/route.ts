@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     requireOrigin(request);
     const { pool, member, role, sessionId } = await demoActor();
     const context: VerifiedTenantContext = await demoContext(pool, sessionId);
-    const body = parseDemoBody(z.object({ version: z.literal("northside-command.v1"), jobId: z.string().uuid(), description: z.string().trim().min(1).max(500), note: z.string().trim().min(1).max(5000) }).strict(), await bodyOf(request));
+    const body = parseDemoBody(z.object({ version: z.literal("northside-command.v1"), jobId: z.guid({ error: "Invalid uuid" }), description: z.string().trim().min(1).max(500), note: z.string().trim().min(1).max(5000) }).strict(), await bodyOf(request));
     if (role !== "operative") throw new DemoError("PERMISSION_DENIED", 403);
     const { jobId, description, note } = body;
     if (typeof jobId !== "string" || typeof description !== "string" || typeof note !== "string" || !/^[0-9a-f-]{36}$/iu.test(jobId) || !description.trim() || !note.trim()) throw new DemoError("INVALID_COMMAND", 422);

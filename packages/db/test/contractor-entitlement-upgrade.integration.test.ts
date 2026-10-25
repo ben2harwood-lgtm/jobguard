@@ -20,7 +20,29 @@ it("actual catalogs retain least privilege",async()=>{
  const routines=(await c.admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname IN('mon8_contractor_agreement_context','mon8_agreement_status_guard') ORDER BY p.proname`)).rows;
  expect(routines).toEqual([{proname:"mon8_agreement_status_guard",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],runtime:false,infrastructure:false,public:false},{proname:"mon8_contractor_agreement_context",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
 });
-it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(before);});
+it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,
+ "app.job_small_trip_event":[],
+ "app.job_small_trip_observation":[],
+ "app.meter_lifecycle_alert":[],
+ "app.meter_lifecycle_computation":[],
+ "app.meter_lifecycle_correction":[],
+ "app.meter_lifecycle_day_ledger":[],
+ "app.meter_lifecycle_place_binding":[],
+ "app.meter_lifecycle_scope":[],
+ "app.meter_lifecycle_source":[],
+ "app.meter_lifecycle_source_ref":[],
+ });
+ // 0208/0209 successor routines; catalogue order is schema, name, identity arguments.
+ expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='app' AND p.proname IN ('mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
+ {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
+ {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
+ {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
+ ]);
+});
 it("negative controls detect changed prior rows grants and shapes",async()=>{
  const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);
  const db=await c.admin.connect();
