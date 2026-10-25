@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-enterprise-boundaries-rootcause": {
+      "branches": [
+        "codex/ci-enterprise-boundaries-rootcause-20261025"
+      ],
+      "receipt": "docs/verdicts/CI-ENTERPRISE-BOUNDARIES-ROOTCAUSE/BUILDER_RECEIPT.md",
+      "note": "Bounded enterprise scanner root-cause repair; preserve every purity/import/kernel-reuse/BigInt assertion. No timeout-only bypass, production change or borrowed task identity.",
+      "allow": [
+        "packages/core/src/enterprise-domain/boundaries.test.ts",
+        "docs/verdicts/CI-ENTERPRISE-BOUNDARIES-ROOTCAUSE/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
