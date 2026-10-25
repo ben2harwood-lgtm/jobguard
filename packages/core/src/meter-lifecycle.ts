@@ -37,7 +37,7 @@ type Input = z.infer<typeof meterLifecycleInputV1>;
 export class MeterLifecycleError extends Error {
   constructor(readonly code: "INVALID_METER_LIFECYCLE_INPUT") { super(code); this.name = "MeterLifecycleError"; }
 }
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+function parse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const result = schema.safeParse(raw);
   if (!result.success) throw new MeterLifecycleError("INVALID_METER_LIFECYCLE_INPUT");
   return result.data;

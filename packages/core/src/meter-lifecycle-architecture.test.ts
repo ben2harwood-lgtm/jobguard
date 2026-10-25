@@ -3,7 +3,7 @@ const fileModule = "node:fs";
 const { readFileSync } = await import(fileModule) as { readFileSync(path: URL, encoding: "utf8"): string };
 it("M1L-09 transitive dependencies are pure core with no shadow, provider, DB or ambient clock", () => {
   const visited = new Set<string>();
-  const allowed = new Set(["meter-lifecycle.ts", "job-work-state.ts", "jobs-on-the-go.ts", "small-job-v3.ts", "money.ts", "rational.ts"]);
+  const allowed = new Set(["meter-lifecycle.ts", "job-work-state.ts", "jobs-on-the-go.ts", "job-work-timing.ts", "small-job-v3.ts", "money.ts", "rational.ts"]);
   function walk(file: URL) {
     if (visited.has(file.href)) return;
     visited.add(file.href);
