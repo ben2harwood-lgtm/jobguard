@@ -889,3 +889,145 @@ Checks ran one at a time using installed dependencies and the existing `/private
 - Read-only JSON comparison against HEAD: PASS, exactly 16 unique new routine records and all existing catalogue content unchanged. `git diff --check`: PASS. No integration or browser suite was attempted.
 
 Intended conventional commit subject and body are at `/private/tmp/jg-msg-sv5-181-green.txt` for the dispatcher. Only the two lane-allowed documentation files are authored in R6. Independent exact-commit verdict, separate acceptance, reviewer/CI LP0-17 and founder merge/release remain pending.
+
+
+## catch-up onto #189 2244cc7b
+
+25 October 2026 — SV5-181-CATCHUP. Builder: Codex, runtime-confirmed
+`gpt-6.1-sol`, effort `medium`. This records working-tree merge resolution,
+not independent review, acceptance or a committed candidate.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+project: JobGuard
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+surface: Codex
+repository: ben2harwood-lgtm/jobguard
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+branch: codex/sandbox/sv5-181-catchup
+starting_base_revision: 7e139e0b
+merge_parent_revision: 2244cc7b
+candidate_revision: uncommitted working tree; dispatcher owns index and commit
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: /Users/benharwood/.codex-ben2/sessions/2026/10/25/rollout-2026-10-25T16-33-51-01a173e9-4ad6-7b71-9a50-08d9dac17f96.jsonl (turn_context)
+allowed_files_ref: legacy sv-5 lane; exact catch-up paths listed below
+state: working-tree handoff; CI and exact-commit independent verdict pending
+reviewer: unknown
+review_evidence_ref: unknown
+ci_evidence_ref: unknown
+```
+
+The four conflicts retain both core exports and both sides' additive privilege
+entries, preserving the relative ordering within each conflict side. The
+contractor upgrade expects all six SV5PRE tables, all five SV-5 persistence
+tables and both MON1-T tables, and retains the exact small-trip routine check.
+The SERIOUS-B5 upgrade retains both parents' addition helper blocks byte for
+byte and composes their expectations in database catalogue order. Existing row,
+routine, relation, policy, grant and replay assertions remain in place.
+No application behavior, commercial authority or assertion value was changed
+beyond the authorised union of additions.
+
+Shared paths for #181's legacy `sv-5` lane (per the order, recorded here rather
+than editing `config/agent-lane-assignments.json`):
+
+- `packages/core/src/index.ts`
+- `docs/contracts/lp-0-effective-privileges-v1.json`
+- `packages/db/test/contractor-entitlement-upgrade.integration.test.ts`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`
+- `docs/verdicts/SV-5/BUILDER_RECEIPT.md`
+
+`0205_final_check.sql` is byte-identical to the accepted HEAD, SHA-256
+`f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`.
+The coordinator owns its renumber above 0237 after this handoff. No migration,
+backwards-compatibility change, abstraction or operational alert is introduced.
+No git add, commit, checkout, push or other repository Git write was performed.
+Dependencies were already installed; no packages were downloaded. Node is
+24.17.0; pnpm is the installed 10.28.1 launcher selected through
+`PATH=/private/tmp/jg-r1-pnpm-bin:$PATH`. The default launcher was interrupted
+(exit 130) after stalling; no installation was attempted.
+
+Validation results follow below. Logs use `/private/tmp/jg-sv5-catchup-*.log`.
+
+
+| Command (installed pnpm PATH above) | Result |
+|---|---|
+| `pnpm typecheck --concurrency=1 --force` | FAIL, exit 2; no package `dist` directories existed. Four TS2554 errors in unchanged `packages/db/src/final-check-repository.ts` at 7:604, 13:143, 13:188, 35:92: single-argument `z.record` calls against the incoming Zod 4 version. Four tasks passed before db stopped the graph; API/web not reached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1 --force` | FAIL, exit 1; core purity passed, then lane selection refused unregistered branch `codex/sandbox/sv5-181-catchup`. Package lint was not reached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1; same unregistered-branch diagnostic. Legacy register deliberately not edited. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS; 131 files, 3,026 tests. |
+| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | PASS; 5 files, 86 tests. |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2` | PASS; 1 file, 2 tests. |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | FAIL, exit 1; 12 failed files, 3 passed; 23 tests passed. Missing unbuilt `@jobguard/core` package entry. |
+| `pnpm --filter @jobguard/db exec vitest run --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=2` | FAIL, exit 1; 39 failed files, 9 passed; 86 tests passed. Missing unbuilt core/storage package entries. Socket-binding `free-port.test.ts` explicitly not run. |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude '**/*.integration.test.ts' --maxWorkers=2` | FAIL, exit 1; 125 failed files, 16 passed; 357 passed tests, 5 failed. Missing unbuilt core/db/config package entries, including all five test failures. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | FAIL, exit 1; 33 failed files, 10 passed; 76 tests passed. Missing unbuilt workspace package entries. |
+
+The pre-build test commands above were direct unit runs, not the root `pnpm test`
+(which includes PostgreSQL). A preliminary API `src` run was interrupted (130)
+and replaced by the explicit integration-excluding run; no database result is
+claimed. The initial `node --test tools/*.test.mjs` attempt overlapped the start
+of core units briefly due to a polling mistake, was interrupted (exit 1), and
+is not reported as a pass. Subsequent check invocations run one at a time.
+
+
+- `pnpm build --concurrency=1 --force`: FAIL (2), same four db TS2554
+  errors; four dependency builds succeeded, db stopped API/web builds. Artifacts
+  emitted by these builds enabled a separate post-build unit retry below.
+- `pnpm openapi:check`: FAIL (1), tsx CLI IPC `listen EPERM` in the sandbox.
+- `node --import tsx src/generate-openapi.ts --check` from `apps/api`: PASS
+  (0), the same generator/check through the socket-free loader; no snapshot edit.
+- `node --test --test-concurrency=2 tools/*.test.mjs`: PASS (0), 295 tests,
+  zero failures/skips. This supersedes the interrupted tooling run above.
+- Exact source comparison: both upgrade addition helper blocks retained byte
+  for byte from their respective merge parents; all four privilege conflict-side
+  blocks retained exactly and in order. A preliminary whole-parent JSON union
+  probe was overbroad and failed on an automatically merged existing routine's
+  definition hash; the final probe checks the actual conflict blocks only.
+
+Both Turbo attempts used `--force` with zero cache hits. Turbo reported shared
+cache I/O `Operation not permitted` warnings; no cache repair or download was
+attempted. These cache warnings did not cause the Zod compiler diagnostics.
+
+
+Post-build unit retries use the same direct Vitest commands, still sequential
+and `--maxWorkers=2`; logs are `*-postbuild-tests.log`:
+
+- AI: PASS (0), 15 files, 147 tests.
+- DB: FAIL (1), 71 passed files, 2 failed files; 644 passed tests, 2 failed.
+  Both failures are the existing C-OPS-1 transitive-import scan exceeding its
+  5,000ms timeout (source and emitted copy), rather than an assertion mismatch.
+  The default db discovery includes emitted `dist` source-test copies after
+  build; counts include those duplicates. No timeout, guard or test was changed.
+
+- API: FAIL (1), 131 passed files, 10 failed files; 2,514 passed tests,
+  133 failed, 1 skipped, and 133 unhandled errors. HTTP tests cannot listen
+  (`EPERM 0.0.0.0`; associated null-port errors); the non-integration-named
+  real-database isolation case could not allocate a port, and shadow isolation's
+  internal API build failed with four compiler errors. No database-isolation
+  or HTTP-listener pass is claimed.
+- Web: PASS (0), 43 files, 1,034 tests; no browser/e2e run.
+
+Final `git diff --check`: PASS. Repository conflict-marker scan (`rg` for
+`^<<<<<<<`, excluding dependency/generated directories): no matches (exit 1).
+No `../../core/dist` or `../../db/dist` imports were added. JSON parses, and
+0205's accepted SQL hash is unchanged. The four index entries remain unmerged
+until the dispatcher stages the working-tree resolutions; `.git` is untouched.
+
+Dedicated PostgreSQL, database catalogues/upgrade/migration suites and browser
+suites remain NOT RUN, per the dispatcher; GitHub CI must execute them after
+push and migration renumbering. No clean-install claim is made. The compiler
+and lane failures are holds, not green checks; no assertion, timeout, policy or
+lane checker was weakened to pass. Exact-commit independent verdict, separate
+acceptance and founder merge/release remain outstanding. This catch-up adds no
+production capability and does not change any existing release gate.
+
+Intended conventional commit subject/body:
+`/private/tmp/jg-msg-sv5-181-catchup.txt`.
+
+Size: +238/−11 lines across 5 files; largest touched logic file: 358 lines
+(including the upgrade test); new abstractions: none.
+Size is measured for the five authorised task paths against accepted HEAD
+`7e139e0b`; other already staged incoming paths are excluded from this size.

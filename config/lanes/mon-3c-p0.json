@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3c-p0": {
+      "branches": ["codex/sandbox/mon-3c-p0"],
+      "receipt": "docs/verdicts/MON-3C-P0/BUILDER_RECEIPT.md",
+      "note": "C264: documentation preparation only. C1 inapplicable: no runtime or web workflow. Own lane file is permitted by the validator's special rule, not a self-grant. B, clock, authority, conversion and enablement holds remain open.",
+      "allow": [
+        "docs/contracts/free-first-job-lifecycle-v1.md",
+        "docs/verdicts/MON-3C-P0/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

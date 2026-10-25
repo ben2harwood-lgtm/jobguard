@@ -61,7 +61,7 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
 async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["final_check_manifest", "final_check_manifest_source", "shadow_final_check_completion", "shadow_final_check_reveal_proof", "shadow_final_check_run_binding", "shadow_final_check_source_attempt"];
  const indexNames = [
-  "final_check_manifest_processing_identity", "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
+  "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
   "final_check_manifest_source_pkey", "final_check_manifest_source_tenant_id_job_id_manifest_id_up_key", "final_check_one_empty_descriptor",
   "shadow_final_check_completion_pkey", "shadow_final_check_reveal_pro_tenant_id_job_id_run_id_signa_key", "shadow_final_check_reveal_proof_pkey",
   "shadow_final_check_run_bindin_tenant_id_job_id_execution_id_key", "shadow_final_check_run_bindin_tenant_id_job_id_run_id_manif_key", "shadow_final_check_run_binding_pkey",
@@ -275,6 +275,53 @@ async function separableFinalCheckAdditions(prior: Awaited<ReturnType<typeof sna
  return { rows: { ...prior.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) }, routines: additive(prior.routines, routines, after.routines),
   relations: additive(prior.relations, relations, after.relations), policies: additive(prior.policies, policies, after.policies) };
 }
+// CH-4-C / ruling 113: 0201 creates eight routines and no tables, indexes or policies.
+// Replaced routines retain their complete predecessor catalogue rows in the comparison.
+async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [
+  ["ch4_admit_place", "t uuid, j uuid, action text"],
+  ["ch4_command_work_facts", "t uuid, j uuid, digest text"],
+  ["ch4_legacy_command_owned", "t uuid, cid uuid"],
+  ["ch4_link_post_lock_job", "t uuid, j uuid, digest text, input jsonb"],
+  ["ch4_record_work_state", "t uuid, j uuid, digest text, input jsonb"],
+  ["ch4_require_command_owner", "t uuid, j uuid, digest text"],
+  ["ch4_require_open", "t uuid, j uuid"],
+  ["ch4_work_state_command", "t uuid, j uuid, digest text, input jsonb"],
+ ];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
+// Dispatcher-assigned catalogue rows: only objects created by 0208.
+async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["job_small_trip_event", "job_small_trip_observation"];
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_capture_small_trip"
+  && r.args === "t uuid, j uuid, source_kind text, source_id uuid");
+ expect(routines).toHaveLength(1);
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
+ JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace
+ WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect(indexes).toHaveLength(7); // two primary keys and five UNIQUE constraints in 0208
+ const relations = after.relations.filter(r => r.nspname === "app" && [...tables, ...indexes].includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...tables, ...indexes].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname])).toEqual(tables.map(t => [t, "tenant_isolation"]));
+ for (const t of tables) expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
+  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+  return [...old, ...added].sort((a, b) => position(a) - position(b));
+ };
+ return { rows: { ...before.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) },
+  routines: additive(before.routines, routines, after.routines),
+  relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
+}
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -302,7 +349,8 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await separableFinalCheckAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before))));
+ const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
+ Object.assign(expected, await smallTripAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
