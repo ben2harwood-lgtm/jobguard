@@ -484,3 +484,89 @@ not an independent verdict or acceptance. Dispatcher must conclude the merge
 and obtain the single exact-commit delta check under C261. Logs:
 `/private/tmp/jg-mon1-s-catchup-*.log`. Intended commit subject/body:
 `/private/tmp/jg-msg-mon1-s-catchup.txt`.
+
+## catch-up run 2 (package imports)
+
+25 October 2026, C261 run 2 of 2. Base HEAD
+`948581f6966c59403e077a8e2287ed090c9b901c`; observed `origin/main`
+`28416d1ea7e154f2353d56e28f30db34e06e36ab`. Read the run-1 delta verdict
+`jg-runs/v5-mon1-s-claude-*-948581f6-*.md` and
+`jg-runs/HOLD-core-dist-imports-20261025.md` under
+`/Users/benharwood/.local/share/full-steam/`. Run-1 resolutions remain correct;
+its inherited static dist import was a CI-order defect, not an environment-only
+failure. The earlier after-build typecheck did not establish CI readiness.
+
+Append MON1-L's lifecycle export after the existing core barrel rows and replace
+MON1-S's sole relative core/dist import with `@jobguard/core`. Both assigned
+barrels are added to the MON1-S lane. Source inspection found no app importing
+MON1-S's DB modules, so `packages/db/src/index.ts` needs no export row and is
+unchanged. The persistence contract now documents the public import and ordering.
+No runtime algorithm, schema, migration, permission, fixture or test assertion
+changed. No commit, push, acceptance or release is performed.
+
+Tooling: installed Node `v24.17.0`, installed pnpm `10.28.1` invoked through
+`node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`.
+A temporary PATH shim makes nested pnpm calls use those same installed bytes.
+The initial bare `pnpm --version` wrapper failed trying to verify its version
+against the unreachable registry; no dependency installation was requested or
+completed. All checks below use the installed pinned executable.
+
+### No-dist proof (test-executed)
+
+`/private/tmp/jg-mon1-s-run2-nodist.py` moved **every** existing package dist
+(`ai`, `config`, `core`, `db`, `storage`) into a unique temporary directory.
+While all five were absent, it ran these commands and recorded their actual
+exit codes, then asserted no package dist had been created and restored every
+original directory in a `finally` block. Repeated after the final barrel-row
+ordering adjustment; both runs passed. No build ran during this proof, and the
+root run explicitly bypassed Turbo task caches.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | 0 | Source types resolve without dist |
+| `pnpm --filter @jobguard/db typecheck` | 0 | No TS2307 or cascading TS7006 errors |
+| `pnpm --filter @jobguard/api typecheck` | 0 | Source types resolve without dist |
+| `pnpm typecheck --concurrency=2 --force` | 0 | All 7 packages, 0 cached |
+
+Logs: `/private/tmp/jg-mon1-s-run2-nodist-{core,db,api,root}.log`.
+
+### Other checks (test-executed; limitations explicit)
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `pnpm build --concurrency=2` after restoring dist | 0 | All 7 packages |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | 0 | 129 files / 3,009 tests, including MON1-L |
+| `pnpm --filter @jobguard/db exec vitest run src/meter-lifecycle-repository.test.ts --maxWorkers=2` | 0 | MON1-S: 1 file / 9 tests |
+| Final post-proof `pnpm build --concurrency=2` | 0 | All 7 packages; original dist restored before build |
+| Final `pnpm --filter @jobguard/core exec vitest run src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts --maxWorkers=2` | 0 | MON1-L: 3 files / 41 tests |
+| Final `pnpm --filter @jobguard/db exec vitest run src/meter-lifecycle-repository.test.ts --maxWorkers=2` | 0 | MON1-S: 1 file / 9 tests |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | 1 | Core purity passed; lane stage fails on inherited MON1-L/MON1-T paths below; package stage not reached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same inherited path failures |
+| `pnpm turbo run lint --concurrency=2` | 0 | All 7 packages |
+| `pnpm openapi:check` | 1 | tsx CLI IPC listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | 0 | Same OpenAPI generator/check without CLI socket |
+| `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs` | 0 | Both passed |
+| `git diff --check` | 0 | No whitespace errors |
+
+The broad exploratory `pnpm --filter @jobguard/db exec vitest run src
+--maxWorkers=2` exited 1: Vitest also matched four `test/*dbsrc*` PostgreSQL
+integration files. Those four failed in port discovery (`no free port`), with
+30 other files / 249 tests passing and 18 skipped. No successful PostgreSQL
+execution is claimed. The exact MON1-S unit file above passes independently.
+A supplementary `LANE_BASE_REF=HEAD pnpm lint:lanes` exited 1 because the guard
+correctly refuses a self-comparison; it is not recorded as a pass.
+
+The origin/main lane failures name only inherited paths: `config/lanes/mon1-l.json`,
+`config/lanes/mon1-t.json`, `docs/contracts/meter-small-trip-v1.md`, MON1-L/MON1-T
+receipts, the 0208 migration/note, `packages/db/src/meter-small-trip.ts` and the
+three meter-trip integration files. No lane guard or inherited path was changed
+to hide them. Existing nonfatal Turbo cache IO, Next tracing-root/CSS and
+Nest dependency warnings remain unsuppressed.
+
+PostgreSQL lifecycle/trip/regression suites, migration and browser proofs remain
+for GitHub CI after the dispatcher pushes. All earlier clock, source integration,
+correction, practice, trial, security, commercial and release holds remain.
+This is builder evidence only; the single exact-commit independent delta verdict
+and separate acceptance remain pending. Logs:
+`/private/tmp/jg-mon1-s-run2-*.log`. Intended commit message:
+`/private/tmp/jg-msg-mon1-s-catchup.txt`.
