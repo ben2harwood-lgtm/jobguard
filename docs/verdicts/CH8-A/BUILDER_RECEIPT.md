@@ -252,3 +252,57 @@ native suite was run, per dispatcher/environment constraints and unchanged
 subsystems. Dispatcher owns CI checks after committing. No commit, push or PR
 performed. Intended conventional commit subject/body saved to
 `/private/tmp/jg-msg-ch8-a.txt`.
+
+## make PR green
+
+25 October 2026; dispatched local head `121936e4d5ca7bf5a5e5f773ec4e18a4af8eae0d`,
+including the dispatcher's merge of main `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`.
+Read AGENTS.md, BUILD_PLAN.md CH-8 and §§10.2.3–10.2.8, preparation contract,
+lane and existing receipt. Builder evidence only; no independent acceptance.
+
+No compatibility defect reproduced. CH8-A already uses Zod 4-compatible inferred
+types and public schema APIs; it contains no ZodTypeDef, private schema internals
+or one-argument z.record. All strict-object guards, fixture goldens, canonical
+bytes and existing assertions remain unchanged. No source/test/scanner, policy,
+dependency, migration or lane edit was needed. Only this receipt changes.
+
+Existing dependencies only: Node `v24.17.0` versus `.nvmrc` `24.15.0`; cached
+pnpm `10.28.1` via `PATH=/private/tmp/ch8-a-bin:$PATH`. No install or download;
+this is not a clean pinned-install claim. Moved all five existing `packages/*/dist`
+directories to `/private/tmp/ch8-a-green-dist/{core,config,storage,ai,db}` before
+core typecheck and the whole core suite. Build subsequently regenerated outputs.
+Logs: `/private/tmp/ch8-a-green-*.log`.
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @jobguard/core typecheck` with no package dist present | PASS, exit 0 |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | PASS, 3,077 tests across all 130 source test files; includes enterprise boundary scanner |
+| `pnpm --filter @jobguard/core lint` | PASS, exit 0 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0, base 5bcd5ede / head 121936e4 |
+| `node --test tools/*.test.mjs` | PASS, 295 tests; zero skipped |
+| `pnpm typecheck --concurrency=1` | PASS, exit 0; all 7 tasks, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | PASS, exit 0; all 7 tasks, 2 cached; includes unchanged purity, lane, money and commercial checks |
+| `pnpm openapi:check` | Sandbox EPERM creating tsx CLI IPC listener, before checker execution |
+| `node --import tsx src/generate-openapi.ts --check` in apps/api | PASS, exit 0; same checker without CLI IPC |
+| `pnpm build --concurrency=1` | PASS, exit 0; all 7 tasks, 2 cached |
+| `git diff --check` | PASS, exit 0 |
+
+Build retained existing Next workspace-root, Nest/load-esm dynamic-dependency and
+CSS warnings. Turbo reported nonfatal cache IO EPERM warnings. No warning was
+suppressed. Final working-tree scope check: this allowed receipt only.
+
+Read-only `gh pr checks 330` initially could not reach GitHub in the sandbox;
+the permitted escalated read succeeded. At observation, core/web were pending,
+secrets/dependency-review passed. `gh pr view 330 --json headRefOid,baseRefOid,state,url`
+reported remote head `ea5c131e083a105f23d137878156c6eadf0fd66c`, base 5bcd5ede.
+That remote head precedes this dispatched local merge; its CI is not evidence for
+121936e4. The three functional code/contract files have no diff between remote
+head and local merge. Dispatcher must push the local candidate and require its
+full CI, including PostgreSQL and browser suites. No listener or database started
+locally; full workspace tests needing those services remain CI-only.
+
+No commit, push, checkout, acceptance, enablement or release performed. Original
+producer/runtime/review holds remain. Intended commit subject/body is saved at
+`/private/tmp/jg-msg-ch8-a.txt`.
+
+Size: +54/−0 lines across 1 file; largest touched logic file: 0 lines (receipt only); new abstractions: none.
