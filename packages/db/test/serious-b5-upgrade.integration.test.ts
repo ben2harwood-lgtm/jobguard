@@ -63,6 +63,9 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const after = await snapshot();
  const livePrompt = await livePromptAdditions(before, after);
  const admission = await trialAdmissionAdditions(before, after);
+ const eligibility = after.routines.filter(r => r.nspname === "app" && r.proname === "mon3_read_eligibility");
+ expect(eligibility.map(r => r.proname)).toEqual(["mon3_read_eligibility"]);
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "mon3_read_eligibility")).toBe(false);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -104,7 +107,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  };
  return {
   rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...admission.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...admission.routines], after.routines),
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...admission.routines, ...eligibility], after.routines),
   relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...admission.relations], after.relations),
   policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...admission.policies], after.policies),
  };

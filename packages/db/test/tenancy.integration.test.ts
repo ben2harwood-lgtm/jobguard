@@ -762,3 +762,13 @@ describe("migration and privilege catalog", () => {
     ]);
   });
 });
+
+// MON-3C-ELIG adds no relation/policy. Only this exact checked routine is new.
+it("MON-3C-ELIG exact routine owner and execution grants", async () => {
+ const rows = (await admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,
+ has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+ has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+ EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0) public
+ FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure`)).rows;
+ expect(rows).toEqual([{proname:"mon3_read_eligibility",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
+});
