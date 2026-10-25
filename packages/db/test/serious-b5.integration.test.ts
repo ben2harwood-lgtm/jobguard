@@ -11,6 +11,7 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { addFixtureCapture, asFixtureTenant, closeLockFixture, createLockFixture, LOCK_HASH, LOCK_OWNER, prepareLock, seedAccount, type LockFixture } from "./final-account-lock.integration.test.js";
+import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { readInvoicePdf } from "./serious-b5-pdf-reader.js";
 
 let f: LockFixture;
@@ -152,11 +153,10 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
     VALUES(gen_random_uuid(),$1,$2,$3,'baseline',$4,$5,$6,$7,0,$8)`, [a.tenantId,a.jobId,a.revisionId,randomUUID(),a.scopeItemId,a.baselineId,`Fictional row ${n} (brackets) \\ literal`,n+1]);
   });
   const input = { jobId: a.jobId, finalAccountRevisionId: a.revisionId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), recipient: "practice-customer@example.invalid", issuedOn: "2026-10-16" };
+  // Set-up only (per C135): both paths now need the lock and a checked completion before the first issue.
+  const repo = await prepareLock(f, a); await repo.lock(a.context, a.input); await publishFixtureCompletion(f.shadow, f.admin, a.tenantId, a.jobId);
   if (kind === "legacy") await invoices.issue(a.context, input);
   else {
-   const repo = await prepareLock(f, a); await repo.lock(a.context, a.input);
-   const lockRow = (await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId])).rows[0];
-   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,'completed')", [a.tenantId,a.jobId,randomUUID(),lockRow.id,lockRow.cutoff]));
    await repo.issueInvoice(a.context, { ...input, expectedSourceHash: LOCK_HASH, invoiceKind: "final" });
   }
   const saved = (await f.admin.query("SELECT * FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId])).rows[0];

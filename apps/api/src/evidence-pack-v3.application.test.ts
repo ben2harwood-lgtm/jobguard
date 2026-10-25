@@ -133,3 +133,52 @@ it("malformed session digest fails before principal or source SQL (unit boundary
   await expect(source.verifyEvidencePackV3Case({ $client: { query } }, id, id, "forged")).rejects.toThrow("UNAUTHENTICATED");
   expect(query).not.toHaveBeenCalled();
 });
+
+it("C261 binds real public SV-5 services, gates disclosure on lock and verification, and requires the exact completed run", async () => {
+  const { bindEvidencePackV3LockReveal, createEvidencePackV3SourcePorts } = ports;
+  const { FinalAccountLockRepository } = await import(new URL("../../../packages/db/src/final-account-lock-repository.ts", import.meta.url).href);
+  const { FinalCheckRepository } = await import(new URL("../../../packages/db/src/final-check-repository.ts", import.meta.url).href);
+  const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+  const tenantId = "ab000000-0000-4000-8000-000000000001";
+  const jobId = "ab000000-0000-4000-8000-000000000002";
+  const lockId = "ab000000-0000-4000-8000-000000000003";
+  const runId = "ab000000-0000-4000-8000-000000000004";
+  const context = testTenantContext(tenantId), digest = "a".repeat(64);
+  const scope = { tenantId, jobId, caseId: jobId, visibleSourceRevision: "unbound" };
+  const lock = { id: lockId, tenantId, jobId };
+  const read = vi.spyOn(FinalAccountLockRepository.prototype, "read");
+  const verify = vi.spyOn(FinalAccountLockRepository.prototype, "verify");
+  const reveal = vi.spyOn(FinalCheckRepository.prototype, "read");
+  try {
+    const port = createEvidencePackV3SourcePorts({} as never, context, digest).lockReveal;
+    read.mockResolvedValue({ lock: null } as never);
+    await expect(port.requirePublishedBinding(scope)).rejects.toMatchObject({ hold: "HOLD-EP-SV5-BINDING" });
+    expect(verify).not.toHaveBeenCalled(); expect(reveal).not.toHaveBeenCalled();
+    read.mockResolvedValue({ lock } as never); verify.mockResolvedValue({ verified: false } as never);
+    await expect(port.requirePublishedBinding(scope)).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+    expect(reveal).not.toHaveBeenCalled();
+    verify.mockResolvedValue({ verified: true } as never);
+    for (const state of ["unlocked", "pending", "failed"] as const) {
+      reveal.mockResolvedValue({ state, items: [] });
+      await expect(port.requirePublishedBinding(scope)).rejects.toMatchObject({ hold: "HOLD-EP-SV5-BINDING" });
+    }
+    reveal.mockResolvedValue({ state: "completed", lockId: jobId, runId, items: [] });
+    await expect(port.requirePublishedBinding(scope)).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+    reveal.mockRejectedValueOnce(new Error("FINAL_CHECK_FORBIDDEN"));
+    await expect(port.requirePublishedBinding(scope)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+    const completed = { state: "completed" as const, lockId, runId, items: [] };
+    reveal.mockResolvedValue(completed);
+    await expect(port.requirePublishedBinding(scope)).resolves.toEqual({ lock, reveal: completed });
+    expect(read).toHaveBeenLastCalledWith(context, jobId);
+    expect(verify).toHaveBeenLastCalledWith(context, jobId);
+    expect(reveal).toHaveBeenLastCalledWith(context, jobId, digest);
+    read.mockClear(); reveal.mockClear();
+    await expect(port.requirePublishedBinding({ ...scope, tenantId: jobId })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+    expect(read).not.toHaveBeenCalled(); expect(reveal).not.toHaveBeenCalled();
+    // A foreign-job lock cannot grant access to the requested reveal either.
+    read.mockResolvedValue({ lock: { ...lock, jobId: tenantId } } as never);
+    await expect(bindEvidencePackV3LockReveal(context, digest, new FinalAccountLockRepository({} as never), new FinalCheckRepository({} as never)).requirePublishedBinding(scope))
+      .rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+    expect(reveal).not.toHaveBeenCalled();
+  } finally { vi.restoreAllMocks(); }
+});

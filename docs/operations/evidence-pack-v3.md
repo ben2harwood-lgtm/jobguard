@@ -106,3 +106,25 @@ sink validation, then run all planned source/command/consumer/migration suites
 and the full fresh journey in both browser projects. No hold is cleared by a
 fixture, source inspection, green unit run or this builder's receipt. Require
 independent exact-head reviews, CI and a separate acceptance actor.
+
+## C261 catch-up onto accepted SV-5
+
+The C261 catch-up supersedes the SV-5 candidate exclusion above. Preparation now
+installs `createEvidencePackV3SourcePorts` after authentication. For a locked
+owned case it closes the ordinary-source transaction before calling the public
+`FinalAccountLockRepository.read/verify` and `FinalCheckRepository.read` APIs.
+The reveal read receives the authenticated session digest and rechecks access.
+No reveal call occurs without a lock and successful verification. Only a
+completed reveal with that exact lock ID and a run ID satisfies the port; pending,
+failed, forbidden and mismatched results never become a clear check.
+
+Signature adaptation is entirely in CH8-V: the lock/reveal port takes its
+server-derived scope rather than a transaction and returns the actual accepted
+lock/reveal projections rather than `Promise<never>`. Producer APIs own separate
+transactions. This does not establish one coherent eight-section source snapshot,
+manifest inventory, disposition export, attribution or settlement mapping.
+After a successful binding, preparation still refuses with internal
+`HOLD-EP-SECTIONS` and the unchanged public dependency-held code. Before lock,
+the existing ordinary-only and held must-surface path is unchanged. The HTTP
+writer, must-surface producer, section bindings and downstream consumer gates
+remain held. No database, grant, worker registration or external action changes.

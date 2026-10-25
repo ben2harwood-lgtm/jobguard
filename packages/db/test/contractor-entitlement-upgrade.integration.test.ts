@@ -20,11 +20,14 @@ it("actual catalogs retain least privilege",async()=>{
  const routines=(await c.admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname IN('mon8_contractor_agreement_context','mon8_agreement_status_guard') ORDER BY p.proname`)).rows;
  expect(routines).toEqual([{proname:"mon8_agreement_status_guard",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],runtime:false,infrastructure:false,public:false},{proname:"mon8_contractor_agreement_context",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
 });
+// C239: 0204 owns the shared manifest; 0205 adds processing and result persistence.
+const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{
  const before=await snapshot(c.admin);
- // Exactly 0213's empty tables may extend the snapshot. Every predecessor row
+ // Exactly 0204/0205 and 0213 empty tables may extend the snapshot. Every predecessor row
  // still compares in full; unknown tables and populated additions fail.
  const additions={
+  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]])),
   "app.recovery_attribution_revision":[],
   "app.recovery_attribution_command":[],
   "app.recovery_attribution_reassessment":[],

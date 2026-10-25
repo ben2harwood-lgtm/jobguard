@@ -244,3 +244,101 @@ focused passing tests. Final workspace typecheck 17.849s, final package lint
 15.831s, final full build 36.335s; all seven tasks passed in each. Direct OpenAPI
 check passed. `git diff --check` passed after this receipt update. All 19 changed
 files are inside CH8-V's allowlist. Aggregate CH8-V/CH-8 acceptance remains HELD.
+
+## catch-up onto SV-5 7e139e0b
+
+25 October 2026. Issued CH8-V-CATCHUP, C261. Builder: Codex. Entry HEAD
+`18cc6867f857e24fe6eebe1a5e006f0151f53813`; the dispatcher had already started
+merging accepted SV-5 `7e139e0b325c020c07e69867ef12fcfe191d5528`. This section
+supersedes the original receipt's exclusion of the old SV-5 candidate. No new
+independent verdict, technical acceptance, commit, push or release is claimed.
+The dispatcher concludes the merge and returns the result to `codex/sandbox/ch8-v`.
+
+Resolved the seven issued files. Both controller registrations/imports and both
+core/database export lists are retained. The privilege contract keeps both sides'
+full rows unchanged; an additional deterministic comparison against index stages
+2 and 3 verified the group/fact/routine preservation. Upgrade tests compose the
+exact named SV-5/0200 additions with the exact 0213 attribution additions; existing
+predecessor rows, assertions and grants are preserved. The serious-B5 expected
+snapshot layers 0200, 0205 then 0213, rather than dropping either helper. OpenAPI
+is regenerated from the combined controllers, with both endpoint additions.
+No migration, business row, grant or producer implementation was edited here.
+
+CH8-V alone adapts its port to the actual public services:
+`FinalAccountLockRepository.read/verify` and `FinalCheckRepository.read`. The old
+transaction-taking `Promise<never>` signature now takes the server-derived scope
+and returns the accepted persisted lock and controlled reveal projections.
+The authenticated preparation factory installs the actual repositories; locked
+preparation closes its read-only source transaction before those APIs open their
+own transactions. It checks tenant/job identity, lock existence, verification,
+completed reveal, matching lock ID and a nonempty run ID. The reveal service gets
+the authenticated session digest and performs its own current authorization.
+No reveal call occurs before lock or on failed verification. No shadow worker,
+manifest query, credential, detection or commercial write is introduced.
+
+These public projections are not an eight-section export contract. Successful
+port binding reaches the existing section-mapping hold, now explicitly typed
+`HOLD-EP-SECTIONS`, with the same public dependency-held error. Pending/failed
+checks never become completed or clear; producer failures propagate. Must-surface,
+checked writer, section mapping, attribution/settlement export and consumer holds
+remain. No HTTP success or fee capability is enabled. The unlocked source path
+remains ordinary-only. Separate producer transactions are not claimed to establish
+a coherent whole-pack snapshot. Operational notes record this limitation.
+
+One C261 delta unit check was appended to the existing CH8-V application test
+file. It exercises the real factory/public classes with method doubles: no lock,
+failed verification, unlocked/pending/failed reveal, wrong lock, revoked-access
+failure, exact completed result, foreign tenant and foreign-job lock. It is
+unit evidence, not a PostgreSQL isolation or browser guarantee. No existing test
+assertion was weakened or deleted; no lane allowlist was expanded.
+
+Checks use installed dependencies only, Node v24.17.0 and cached pnpm 10.28.1 via
+`PATH=/private/tmp/ch8-a-bin:$PATH`. This is not a clean pinned-install claim.
+Logs: `/private/tmp/ch8-v-catchup-*.log`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core --filter @jobguard/db --filter @jobguard/api typecheck` | PASS initially and after final source/test changes: core, db and api |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL: only the expected unregistered `codex/sandbox/ch8-v-catchup` branch at the lane gate; purity passed first |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same expected branch-name failure; no bypass or registry edit |
+| `pnpm turbo run lint --concurrency=1` | PASS initially and after final source/test changes: all 7 packages (final 1m44.908s) |
+| `node tools/money-arithmetic-lint.mjs` | PASS |
+| `node tools/commercial-boundary-lint.mjs` | PASS |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/evidence-pack-v3.test.ts src/evidence-pack.test.ts src/final-check.test.ts src/final-check-completion.test.ts src/final-account-lock.test.ts` | PASS: 5 files, 120 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-c239.test.ts` | PASS: 1 file, 8 tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/evidence-pack.application.test.ts src/evidence-pack-v3.application.test.ts src/evidence-pack-v3.controller.test.ts src/final-check.application.test.ts src/final-check.controller.test.ts src/final-check.http.test.ts src/final-check.isolation.test.ts src/final-check.worker.test.ts src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/customer-invoice-sv5pre.filter.test.ts src/sv5pre-worker-registration.test.ts` | PASS: 12 files, 73 tests, including the C261 delta |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/recovery-cases/[id]/evidence-packs/route-v3.test.ts'` | PASS: 1 file, 2 tests |
+| `pnpm build --concurrency=1` | PASS initially and after final source/test changes: all 7 tasks (final 3m30.5s) |
+| `pnpm --filter @jobguard/api openapi:generate` / `pnpm openapi:check` | Both CLI invocations FAIL before execution: tsx IPC listen EPERM |
+| `node --import tsx src/generate-openapi.ts` then `node --import tsx src/generate-openapi.ts --check`, in apps/api | Both PASS, same repository generator/checker without CLI socket |
+| `git diff --check` and seven-file marker scan | PASS |
+
+Diagnostic attempts: the first direct generator invocation preceded the dependency
+build and failed on missing `@jobguard/db/dist/index.js`; it passed after build.
+A direct check launched at the workspace root could not resolve the API-local
+`tsx` dependency; the correct apps/api invocation passed. The adapter delta first
+passed in a temporary db unit file (9 tests with C239); it was moved into the
+existing CH8-V API test file before the final 73-test run. No temporary test remains.
+
+The initial API selection also included `final-account-lock.isolation.test.ts`,
+which contains a real-database suite despite its name. Its setup attempted port
+allocation and failed (`no free port in 58400..58650`); PostgreSQL never started,
+its database assertion did not execute, and the runner reported one skipped test.
+The corrected unit-only batch above passed. PostgreSQL integration/migrations/RLS
+and browser suites are NOT RUN; GitHub CI after the dispatcher pushes must supply
+them. This records the failed setup attempt, not a database pass. Existing build
+warnings about tracing roots/CSS and nonfatal Turbo cache-write EPERM remain.
+
+The seven paths remain unmerged in the read-only Git index by design, even though
+the working files are resolved. No `git add`, commit, checkout, push, package
+installation or download occurred. Intended conventional commit message:
+`/private/tmp/jg-msg-ch8-v-catchup.txt`. C261's one independent delta review and
+separate acceptance remain the dispatcher's handoff; this builder does not supply
+its own verdict. Aggregate CH8-V/CH-8 acceptance and all unrelated gates stay held.
+
+Final C261 handoff: 120 core + 8 database-package unit + 73 API + 2 Next transport
+= 203 passing tests on the final source/test layout. Final three-package typecheck,
+seven-package lint, seven-task build, direct OpenAPI check and `git diff --check`
+passed. Both conflicted upgrade test files also passed a TypeScript syntax-only
+transpile check; this is explicitly not their database acceptance. The index still
+reports seven UU paths until the dispatcher stages and commits the resolved files.

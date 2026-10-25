@@ -1,6 +1,51 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/final-check": {
+      "get": {
+        "operationId": "FinalCheckController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read lock-bound synthetic final-check result",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/dispositions": {
+      "post": {
+        "operationId": "FinalCheckController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/disputes": {
+      "get": {
+        "operationId": "FinalCheckController_disputes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read unresolved attribution disputes for this job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
     "/jobs/{id}/success-fee-attribution": {
       "get": {
         "operationId": "RecoveryAttributionController_get",

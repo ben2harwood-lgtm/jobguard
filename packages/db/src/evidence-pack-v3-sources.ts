@@ -5,7 +5,7 @@ import { loadEvidencePackSources, type EvidencePackSources } from "./evidence-pa
 import { authenticatePracticeSession, practiceOwnedJobsSql, PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction } from "./tenant-context.js";
 import {
-  heldEvidencePackV3Ports, EvidencePackV3SourceConflict,
+  heldEvidencePackV3Ports, createEvidencePackV3SourcePorts, EvidencePackV3DependencyError, EvidencePackV3SourceConflict,
   type EvidencePackV3Scope, type EvidencePackV3SourcePorts,
 } from "./evidence-pack-v3-ports.js";
 
@@ -68,9 +68,13 @@ export async function loadEvidencePackV3Sources(
 ): Promise<EvidencePackV3OrdinarySources> {
   if (bindings.get(binding) !== tx) throw new PracticeAccessError("NOT_FOUND");
   const { tenantId, jobId, caseId } = binding;
-  if (binding.locked) return ports.lockReveal.requirePublishedBinding(tx, {
-    tenantId, jobId, caseId, visibleSourceRevision: "unbound",
-  });
+  if (binding.locked) {
+    await ports.lockReveal.requirePublishedBinding({
+      tenantId, jobId, caseId, visibleSourceRevision: "unbound",
+    });
+    // Accepted lock/reveal projections cannot authorize unbound CH8-A sections.
+    throw new EvidencePackV3DependencyError("HOLD-EP-SECTIONS");
+  }
   const ordinary = await loadEvidencePackSources(tx, tenantId, caseId);
   if (uuid.parse(ordinary.jobId) !== jobId || ordinary.sources.some(source => uuid.parse(source.jobId) !== jobId)) {
     throw new PracticeAccessError("NOT_FOUND");
@@ -85,16 +89,30 @@ export async function loadEvidencePackV3Sources(
 /** Source preparation only. No export, pack row, approval, audit or send is written. */
 export async function prepareEvidencePackV3Sources(
   pool: Pool, sessionId: string | undefined, caseId: string, requestId: string,
-  ports: EvidencePackV3SourcePorts = heldEvidencePackV3Ports,
+  ports?: EvidencePackV3SourcePorts,
 ): Promise<EvidencePackV3OrdinarySources> {
   // Authenticate before parsing the requested subject/command to avoid an oracle.
   const auth = await authenticatePracticeSession(pool, sessionId);
   caseId = uuid.parse(caseId); requestId = uuid.parse(requestId);
-  const snapshot = () => withTenant(pool, auth.context, async tx => {
-    await tx.$client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
-    const binding = await verifyEvidencePackV3Case(tx, auth.context.tenantId, caseId, auth.digest);
-    return loadEvidencePackV3Sources(tx, binding, ports);
-  });
+  ports ??= createEvidencePackV3SourcePorts(pool, auth.context, auth.digest);
+  const activePorts = ports;
+  const snapshot = async () => {
+    const result = await withTenant(pool, auth.context, async tx => {
+      await tx.$client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+      const binding = await verifyEvidencePackV3Case(tx, auth.context.tenantId, caseId, auth.digest);
+      if (binding.locked) return binding;
+      return loadEvidencePackV3Sources(tx, binding, activePorts);
+    });
+    if ("locked" in result) {
+      // Producer APIs own their transactions. Do not hold a source transaction
+      // (or its pool connection) while invoking them. No content is read pre-lock.
+      await activePorts.lockReveal.requirePublishedBinding({
+        tenantId: result.tenantId, jobId: result.jobId, caseId: result.caseId, visibleSourceRevision: "unbound",
+      });
+      throw new EvidencePackV3DependencyError("HOLD-EP-SECTIONS");
+    }
+    return result;
+  };
   const before = await snapshot();
   const requestRef = await ports.mustSurface.requestCheck(before.scope, requestId);
   if (typeof requestRef !== "string" || !requestRef.length || requestRef.length > 4096) throw new EvidencePackV3SourceConflict();

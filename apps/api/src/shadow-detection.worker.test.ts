@@ -74,7 +74,7 @@ describe("SV-3 actual shared worker composition",()=>{
    vi.resetModules();await expect(import("./worker.js")).rejects.toThrow("TERMS_RELATION_UNAVAILABLE");expect(registered).not.toHaveBeenCalled();
    available=true;vi.resetModules();await import("./worker.js");expect(registered).toHaveBeenCalledTimes(1);
    const options=registered.mock.calls[0]![0] as unknown as {taskList:Record<string,(raw:unknown)=>Promise<void>>};
-   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence"]);
+   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check"]);
    await options.taskList.execute_outbox!({tenantId,actionId:jobId});expect(execute).toHaveBeenCalledWith(expect.objectContaining({tenantId}),jobId);
    await expect(options.taskList.detect_shadow_evidence!(task)).rejects.toThrow("SHADOW_TERMS_NOT_ACCEPTED");
    expect(queries.mock.calls.filter(([sql])=>sql.includes("FROM app.evidence_object"))).toHaveLength(0);
