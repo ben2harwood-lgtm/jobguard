@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch6-csg-01": {
+      "branches": ["codex/sandbox/ch6-csg-01"],
+      "receipt": "docs/verdicts/CH6-CSG-01/BUILDER_RECEIPT.md",
+      "note": "Standalone installed-v1 static advisory guard. C1: no web workflow; no browser spec introduced. No CH-6 parent completion or activation.",
+      "allow": [
+        "tools/commercial-integrity-current-source-guard.mjs",
+        "tools/commercial-integrity-current-source-guard.test.mjs",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "docs/verdicts/CH6-CSG-01/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
