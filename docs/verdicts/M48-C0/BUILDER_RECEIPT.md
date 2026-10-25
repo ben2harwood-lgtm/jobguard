@@ -111,3 +111,26 @@ Actually run after restoring all source guards (check runner `/private/tmp/jg-m4
 - PASS: final `git diff --check`; production source diff empty. Final changed paths are only the leaf test and this receipt, both in the lane allowlist.
 
 No PostgreSQL/database/migration/browser suites or services run, per dispatcher sandbox instruction; these remain with GitHub CI after dispatcher push. No clean-install, whole-repository test-suite, exact-final-head CI, independent r1 review, technical acceptance or release claim. No commit, add, checkout, push or PR command executed. Intended conventional commit subject/body written to `/private/tmp/jg-msg-m48-c0.txt` for dispatcher use.
+
+## make PR green
+
+25 October 2026; issued make-PR-green order for PR #332. Inspected clean HEAD `a57467527796fadfbcf11dcb06ec8af04f76f0af` on `codex/sandbox/m48-c0`, with `origin/main` at `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`. Read repository instructions, lane, source and tests, source contract, and applicable BUILD_PLAN §§10.2.8, 10.3.2 and M4-8-S. GitHub's commit-workflow lookup returned no runs for the supplied SHA; no remote CI-green claim is made.
+
+No compatibility repair was required: this leaf has no Zod 3 `ZodTypeDef` annotations, `._type`/`._def` access or obsolete `z.record` call signatures. Existing source compiles against the installed Zod 4.6.6. Production code, strictness, schema formats, tests, scanners and lane allowlist are unchanged. Only this lane-owned receipt is edited. No new abstraction, migration, interface, alert, provider, policy or behaviour change.
+
+Reused installed dependencies, Node v24.17.0 and cached pinned pnpm 10.28.1 through `/private/tmp/jg-m48-c0-green-bin/pnpm`, with `COREPACK_ENABLE_NETWORK=0`; no install or download. Before the direct core typecheck, moved all five existing `packages/*/dist` directories to `/private/tmp/jg-m48-c0-green-dist/<package>`. The direct core typecheck passed while all package dist directories were absent. The later successful build regenerated package outputs.
+
+Actually executed checks (logs `/private/tmp/jg-m48-c0-green-*.log`):
+
+- PASS: `pnpm --filter @jobguard/core typecheck`, without package dist outputs.
+- PASS: `pnpm --filter @jobguard/core lint`.
+- PASS: `pnpm typecheck --concurrency=1` — seven successful tasks, two cached.
+- PASS: `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` — purity, money boundary, lane checks and seven package tasks; two package tasks cached.
+- PASS: `LANE_BASE_REF=origin/main pnpm lint:lanes` — selects m48-c0 and the five original lane paths against the actual main merge-base.
+- First whole-core run, `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2`: 3,025 passed, two failed solely at the existing 5,000ms timeout (`receipt-allocation.test.ts:212` stress test and `enterprise-domain/boundaries.test.ts:27` scanner). It overlapped local compiler checks. An isolated scanner diagnostic while compiler work continued also timed out, without a scanner assertion failure. Neither scanner nor test timeout was changed.
+- PASS: repeat of the identical whole-core command after the other local checks completed — **3,027 tests / 130 files**, 23.76 seconds. No source, test, config, timeout or worker-limit edits between runs. Log: `/private/tmp/jg-m48-c0-green-core-tests-rerun.log`.
+- PASS: `pnpm build --concurrency=1` — seven successful tasks, two cached. Existing computed-import, workspace-root, CSS and sandbox cache-write warnings do not change the outcome.
+- `pnpm openapi:check` failed before generator execution because the sandbox denies the tsx CLI IPC socket (`listen EPERM`). PASS through the equivalent invocation from `apps/api`: `node --import tsx src/generate-openapi.ts --check` — same generator and check flag, no socket. Standard-script confirmation remains for CI.
+- PASS: `git diff --check` before and after receipt update; only this allowed receipt differs from the supplied head.
+
+No clean install, whole-repository test pass, database/migration/browser execution, live evaluation, exact-final-head CI, independent verdict, technical acceptance or release is claimed. Database/browser suites remain with GitHub CI after the dispatcher pushes, per the environment order. AI evaluation is inapplicable: no prompt, model, extraction, matching or gateway change. All prior source-design/B1 and release holds remain; this receipt does not amend acceptance or policy. No git write command, commit or push performed. Intended conventional commit subject/body written to `/private/tmp/jg-msg-m48-c0.txt`.
