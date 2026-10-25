@@ -8,6 +8,7 @@
       "allow": [
         "packages/core/src/job-source-intake.ts",
         "packages/core/src/job-source-intake.test.ts",
+        "packages/core/src/job-sources.ts",
         "docs/contracts/job-source-intake-v1.md",
         "docs/verdicts/SV7A-INT-C/BUILDER_RECEIPT.md"
       ]
