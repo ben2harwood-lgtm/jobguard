@@ -54,7 +54,7 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         allocations: readonly ReceiptLineAllocation[];
     };
     const originals = new Map<string, Original>(), current = new Map<string, {
-        line: typeof receiptAllocationV1._type.lines[number];
+        line: z.output<typeof receiptAllocationV1>["lines"][number];
         remaining: ExactPence;
     }>();
     const allocations: ReceiptLineAllocation[] = [], terms: ExactPence[] = [], sources: string[] = [];

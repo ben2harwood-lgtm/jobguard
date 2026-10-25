@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { beforeEach,describe,expect,it,vi } from "vitest";
 import { JobWorkStateApplication } from "./job-work-state.application.js";
-const { job,read }=vi.hoisted(()=>({job:vi.fn(),read:vi.fn()}));
+const { job,read,command }=vi.hoisted(()=>({job:vi.fn(),read:vi.fn(),command:vi.fn()}));
 vi.mock("./practice-access.js",()=>({PracticeAccess:class{job=job;}}));
-vi.mock("@jobguard/db",async importOriginal=>({...await importOriginal<Record<string,unknown>>(),JobWorkStateRepository:class{read=read;}}));
+vi.mock("@jobguard/db",async importOriginal=>({...await importOriginal<Record<string,unknown>>(),JobWorkStateRepository:class{read=read;command=command;}}));
 describe("CH-4 shared read application mapping (scripted boundary tests)",()=>{
  beforeEach(()=>{vi.clearAllMocks();process.env.JOBGUARD_ENV="synthetic_demo"});
  it("CH4-A20 authority is checked before any work-state query",async()=>{
@@ -24,4 +24,15 @@ describe("CH-4 shared read application mapping (scripted boundary tests)",()=>{
 it("CH4-A01 query authority fields are rejected after access and before persisted reads",async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";vi.clearAllMocks();job.mockResolvedValue({context:{tenantId:randomUUID()},digest:"a".repeat(64)});
  await expect(new JobWorkStateApplication({} as Pool).get(randomUUID(),{tenantId:randomUUID()})).rejects.toThrow("INVALID_WORK_STATE_INPUT");expect(read).not.toHaveBeenCalled();
+});
+
+it("practice mutation checks bound job ownership before repository execution",async()=>{
+ process.env.JOBGUARD_ENV="synthetic_demo";vi.clearAllMocks();
+ const id=randomUUID(),context={tenantId:randomUUID()},input={action:"close"};
+ job.mockRejectedValueOnce(new Error("NOT_FOUND"));
+ await expect(new JobWorkStateApplication({} as Pool).command(id,input)).rejects.toThrow("NOT_FOUND");
+ expect(job).toHaveBeenCalledWith(id);expect(command).not.toHaveBeenCalled();
+ job.mockResolvedValue({context,digest:"a".repeat(64)});command.mockResolvedValue({jobId:id});
+ await expect(new JobWorkStateApplication({} as Pool).command(id,input)).resolves.toEqual({jobId:id});
+ expect(command).toHaveBeenCalledWith(context,id,"a".repeat(64),input);
 });
