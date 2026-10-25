@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch5-e": {
+      "branches": [
+        "codex/sandbox/ch5-e"
+      ],
+      "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
+      "note": "C268 build-ahead on CH5-B 219a7a7a. DEPENDENCY-BOUND: P has no history writer and B has no accepted baseline map. C1: held internal boundaries only; no route/page/browser workflow; worker/sink composition coordinator-owned.",
+      "allow": [
+        "packages/db/src/imported-evidence-provenance-repository.ts",
+        "packages/db/src/imported-observation-reader.ts",
+        "packages/db/test/imported-evidence-provenance.integration.test.ts",
+        "packages/db/test/imported-observation-reader.integration.test.ts",
+        "apps/api/src/imported-shadow-source-adapter.ts",
+        "apps/api/src/imported-shadow-source-adapter.test.ts",
+        "docs/verdicts/CH5-E/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
