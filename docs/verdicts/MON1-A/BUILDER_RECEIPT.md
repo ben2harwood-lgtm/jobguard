@@ -522,3 +522,94 @@ pending the dispatcher's merge commit.
 
 Intended subject/body: `/private/tmp/jg-msg-mon1-a-catchup.txt`. Working-tree
 handoff only; dispatcher owns commit/push/merge.
+
+
+## catch-up run 2 (package imports)
+
+25 October 2026. C261 / MON1-A-CATCHUP run 2 of 2. Issued and inspected HEAD
+`42a9af15` contains run-1 `c00a17e3` and the dispatcher's edit-free merge of
+MON1-S package-import catch-up `220a9959`. Initial working tree clean. Read
+AGENTS.md, BUILD_PLAN MON-1, the admission contract, prior receipt and
+`/Users/benharwood/.local/share/full-steam/jg-runs/HOLD-core-dist-imports-20261025.md`
+(the named hold note is in the dispatcher shared directory, not this worktree).
+Builder evidence only; no independent model verdict or acceptance claimed.
+
+### Exact delta and scope finding
+
+Added the assigned `packages/core/src/index.ts` and `packages/db/src/index.ts`
+paths to `config/lanes/mon1-a.json`. No implementation, test, migration, package,
+lockfile or barrel content changed. In this exact supplied head the premise that
+MON1-A still owns static relative core/dist or db/dist imports does not hold:
+a TypeScript AST scan of all nine owned TypeScript files (excluding the newly
+assigned shared barrels) inspected 36 static import/export module specifiers and
+import-type nodes and found zero such references. Own core imports are local
+source modules; own DB boundary imports only Zod; own integration tests import
+source/fixture modules. No apps import either MON1-A admission module (repository
+source search). Consequently no import switch or additional barrel row is
+necessary or permitted by the order's “ONLY ... modules that apps import” scope.
+MON1-S's core meter-lifecycle row and `@jobguard/core` imports are already present
+and preserved. Private admission modules remain private; no speculative public
+exports or consumer wiring added. No tests deleted, skipped or weakened.
+
+### No-dist proof, then restore/build/unit proof
+
+Temporarily moved **every** existing `packages/*/dist` aside: ai, config, core,
+db and storage. Asserted the glob was empty before running these commands
+sequentially, directly through package scripts (no Turbo cache). Exit codes:
+
+| Command with all package dist directories absent | Exit code |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | 0 |
+| `pnpm --filter @jobguard/db typecheck` | 0 |
+| `pnpm --filter @jobguard/api typecheck` | 0 |
+
+All five original directories restored in a `finally` block before build and unit
+tests. Machine-readable results:
+`/private/tmp/jg-mon1-a-r2-no-dist-results.json`; moved directories held under
+`/private/tmp/jg-mon1-a-r2-dist-*` during the check. No dependency install or
+network/download command. Node 24.17.0, cached pinned pnpm 10.28.1, Vitest 4.1.12.
+Commands below use `PATH=/private/tmp/jg-sv5-guard-bin:$PATH` with login rewriting
+disabled (same cached pnpm wrapper as run 1). Logs:
+`/private/tmp/jg-mon1-a-r2-*.log`.
+
+| Command actually run after restoration | Result / exit code |
+| --- | --- |
+| `pnpm build --concurrency=2` | PASS / 0; 7 packages, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL / 1; core purity passes, lane guard rejects unregistered `codex/sandbox/mon1-a-catchup` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL / 1; same zero matching registered lanes; unchanged integration hold, no allowlist widening for inherited files |
+| `pnpm turbo run lint --concurrency=2` | PASS / 0; all 7 packages |
+| `pnpm openapi:check` | FAIL / 1; tsx CLI IPC listener gets sandbox EPERM |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS / 0; same generator/check, no CLI IPC listener |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-place-admission.test.ts src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts src/job-work-state.test.ts src/job-work-timing.test.ts src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts src/subscription-allocation.test.ts src/subscription-period.test.ts src/subscription-architecture.test.ts` | PASS / 0; 11 files, 172 tests; MON1-A, MON1-L and companion regressions |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-lifecycle-repository.test.ts test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS / 0; 5 files, 51 tests; MON1-S and companion regressions |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts test/meter-place-admission.integration.test.ts test/meter-place-admission-races.integration.test.ts test/meter-place-admission-upgrade.integration.test.ts` | PASS / 0; compilation only |
+| TypeScript AST scan of nine owned files; read-only serious-b5 comparison; migration ordering assertion; `git diff --check` | PASS / 0 |
+
+Build retains existing nonfatal Turbo cache IO and Next warnings; none suppressed.
+No changed prompt/model/schema or business behavior; eval/live-provider runs
+inapplicable to this metadata-only delta. Full root test suite, PostgreSQL,
+migration execution and browser suites NOT RUN: database/listener restrictions
+are as issued. CI after dispatcher push must supply required DB/browser evidence;
+static compilation does not establish database/catalog/RLS correctness.
+
+### Run-1 resolution and migration ordering recheck
+
+`packages/db/test/serious-b5-upgrade.integration.test.ts` is byte-identical to
+run-1 `c00a17e3` (read-only `git show` comparison). Both complete helpers remain:
+`with0200Additions` retains the exact retained-contractor routine and grants;
+`placeAdmissionAdditions` retains the exact private 0210 routine, owner, invoker,
+search-path and private-owner-only ACL assertions. Catalogue additions still sort
+by live catalogue position, and the test calls 0200 before 0208, 0209 and 0210.
+This confirms source preservation after merge, not executed upgrade proof.
+
+Current local `origin/main` is
+`01f040d6a714ef1a7b12606e648a33624428b246` (no fetch/freshness claim). Its highest
+migration is `0208_meter_small_trip.sql`. Directory discovery and lexical ordering
+assertions confirm `0208_meter_small_trip.sql` < `0209_meter_lifecycle_source.sql`
+< `0210_meter_place_admission.sql`. No migration changed, no backfill, no new
+rollback impact. Existing SQL STOPs, held admission, independent exact-commit
+delta verdict, separate acceptance and all release gates remain.
+
+Intended conventional subject/body written to
+`/private/tmp/jg-msg-mon1-a-catchup.txt`. Working-tree handoff only: no Git-writing
+commands, commit, staging, checkout, push or external messages performed.

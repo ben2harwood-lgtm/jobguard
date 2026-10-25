@@ -8,6 +8,8 @@
       "receipt": "docs/verdicts/MON1-A/BUILDER_RECEIPT.md",
       "note": "RED build-ahead decision 74. Pure synthetic capacity oracle; SQL admission STOP pending checked pre-mutation source, clock and coordinator lock-order handoffs. No consumer wiring. CI PostgreSQL proof required.",
       "allow": [
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
         "packages/core/src/meter-place-admission.ts",
         "packages/core/src/meter-place-admission.test.ts",
         "packages/db/src/meter-place-admission.ts",
