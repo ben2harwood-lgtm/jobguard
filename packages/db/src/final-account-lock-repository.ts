@@ -8,6 +8,7 @@ import {
 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
+export const FINAL_LOCK_UPLOAD_WAIT_MS = 5000;
 const uuid = z.guid({ error: "Invalid uuid" });
 const identity = { jobId: uuid, actorMembershipId: uuid };
 const lockInput = z.object({...identity,commandId:uuid,finalAccountRevisionId:uuid,expectedRevision:z.number().int().nonnegative().safe(),declarationVersion:z.literal(FINAL_ACCOUNT_DECLARATION_VERSION)}).strict();
@@ -17,10 +18,13 @@ const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisi
  expectedSourceHash: z.string().regex(/^[a-f0-9]{64}$/u), invoiceKind: z.enum(["final", "supplementary"]),
  recipient: z.email({ error: "Invalid email" }).regex(/@example\.invalid$/u), issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 }).strict();
-const knownCodes = new Set<string>(["FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND"]);
-function typed(error: unknown): never {
+const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
+function typed(error: unknown, uploadInFlight = false): never {
  const e = error as { message?: string; detail?: string };
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
+ // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.
+ // C204: only an evidence upload in flight is reported as such; any other holder of the job lock is a plain busy refusal.
+ if ((error as { code?: string }).code === "55P03") throw new FinalAccountLockError(uploadInFlight ? "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" : "FINAL_ACCOUNT_LOCK_BUSY");
  if (e.message === "STALE_OR_BLOCKED_FINAL_ACCOUNT") throw new FinalAccountLockError("STALE_REVISION");
  if (e.message && knownCodes.has(e.message)) throw new FinalAccountLockError(e.message as FinalAccountLockErrorCode, e.detail && uuid.safeParse(e.detail).success ? e.detail : undefined);
  throw error;
@@ -42,7 +46,8 @@ export type FinalAccountLockView = { captures: Array<{ id: string; description: 
 
 /** Request-scoped verified context only. No provider, shadow-table read or saved tenant authority. */
 export class FinalAccountLockRepository {
- constructor(private readonly pool: Pool) {}
+ /** lockWaitMs bounds how long locking waits for evidence uploads already in progress (default 5s). */
+ constructor(private readonly pool: Pool, private readonly lockWaitMs: number = FINAL_LOCK_UPLOAD_WAIT_MS) {}
  async read(context: VerifiedTenantContext, jobId: string): Promise<FinalAccountLockView> {
   uuid.parse(jobId);
   return withTenant(this.pool, context, async db => {
@@ -64,11 +69,23 @@ export class FinalAccountLockRepository {
  async lock(context: VerifiedTenantContext, raw: z.infer<typeof lockInput>): Promise<PersistedFinalAccountLock> {
   const input = parse(lockInput, raw);
   try { return await withTenant(this.pool, context, async db => {
+   // Evidence writes hold SHARE on the job; the lock takes UPDATE, so it waits for uploads already in progress and then sees them.
+   await db.$client.query("SELECT set_config('lock_timeout',$1,true)", [`${Math.trunc(this.lockWaitMs)}ms`]);
    const row = (await db.$client.query<any>(`SELECT l.*,r.source_hash locked_source_hash,to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') locked_at_text FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7) l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)`, [context.tenantId, input.jobId, input.actorMembershipId, input.commandId, input.finalAccountRevisionId, input.expectedRevision, input.declarationVersion])).rows[0]!;
    const snapshot = createFinalAccountLockSnapshot(row.snapshot);
    if (snapshot.digest !== row.snapshot_digest.trim() || snapshot.captureRegisterHash !== row.capture_register_hash.trim() || snapshot.lineSetHash !== row.line_set_hash.trim() || snapshot.scopeDispositionHash !== row.scope_disposition_hash.trim()) throw new FinalAccountLockError("FINAL_ACCOUNT_SOURCE_CHANGED");
    return lockProjection(row);
-  }); } catch (error) { return typed(error); }
+  }); } catch (error) {
+   if ((error as { code?: string }).code === "55P03") {
+    // The failed transaction is gone. Inspect only the shared upload marker for this verified tenant/job.
+    const inFlight = await this.pool.query<{ held: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_locks
+     WHERE locktype='advisory' AND classid=(hashtext('final_check_upload:'||$1::text)::bigint & 4294967295)::oid
+     AND objid=(hashtext($2::text)::bigint & 4294967295)::oid AND objsubid=2
+     AND mode='ShareLock' AND granted AND pid<>pg_backend_pid()) held`, [context.tenantId, input.jobId]).then(r => r.rows[0]?.held === true, () => false);
+    return typed(error, inFlight);
+   }
+   return typed(error);
+  }
  }
  async disposition(context: VerifiedTenantContext, raw: z.infer<typeof dispositionInput>) {
   const c = parse(dispositionInput, raw);
