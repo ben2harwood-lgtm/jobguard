@@ -1,3 +1,4 @@
+import { londonWorkDateV1, londonWorkDate, addWorkCalendarDays, workDay31Candidate } from "./job-work-timing.js";
 import { z } from "zod";
 import { isSmallJobV3 } from "./small-job-v3.js";
 import { workFactTimeV1 as sourceTimeV1 } from "./job-work-state.js";
@@ -27,45 +28,17 @@ export const meterMoneyV1 = z.object({
 }).strict().readonly();
 const principalMoney = meterMoneyV1.refine(value => value.pence >= 0);
 
-export const londonMeterDateV1 = z.string().regex(/^(?!0000)\d{4}-\d{2}-\d{2}$/u).refine(value => {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
-});
-const dateFormatter = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", timeZoneName: "longOffset",
-});
-
-/** Date construction always has an explicit validated input; never consults the current time. */
+export const londonMeterDateV1 = londonWorkDateV1;
 export function londonMeterDate(raw: unknown): string {
-  const at = parse(workFactTimeV1, raw);
-  const parts = dateFormatter.formatToParts(new Date(at));
-  const part = (name: string) => parts.find(value => value.type === name)!.value;
-  return parse(londonMeterDateV1, `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}`);
+ try { return londonWorkDate(raw); } catch { throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT"); }
 }
-
-function addCalendarDays(date: string, days: number): string {
-  const supplied = new Date(`${date}T00:00:00.000Z`);
-  supplied.setUTCDate(supplied.getUTCDate() + days);
-  return parse(londonMeterDateV1, supplied.toISOString().slice(0, 10));
+function addCalendarDays(date: string,days: number): string {
+ try { return addWorkCalendarDays(date,days); } catch { throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT"); }
 }
-
-export const meterDay31CandidateV1 = z.object({
-  version: z.literal("meter-day31-candidate.v1"), activatedAt: workFactTimeV1, date: londonMeterDateV1, at: workFactTimeV1,
-}).strict().readonly();
-
+export const meterDay31CandidateV1 = z.object({version:z.literal("meter-day31-candidate.v1"),activatedAt:workFactTimeV1,date:londonMeterDateV1,at:workFactTimeV1}).strict().readonly();
 export function meterDay31Candidate(raw: unknown) {
-  const activatedAt = parse(workFactTimeV1, raw);
-  const date = addCalendarDays(londonMeterDate(activatedAt), 30);
-  const utcMidnight = new Date(`${date}T00:00:00.000Z`);
-  // Retain the full offset, including historical minutes/seconds, rather than a clock hour.
-  const offsetName = dateFormatter.formatToParts(utcMidnight).find(part => part.type === "timeZoneName")!.value;
-  const offset = /^GMT(?:([+-])(\d{2}):(\d{2})(?::(\d{2}))?)?$/u.exec(offsetName);
-  if (!offset) throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT");
-  const seconds = (Number(offset[2] ?? 0) * 3600 + Number(offset[3] ?? 0) * 60 + Number(offset[4] ?? 0)) * (offset[1] === "-" ? -1 : 1);
-  utcMidnight.setUTCSeconds(utcMidnight.getUTCSeconds() - seconds);
-  return parse(meterDay31CandidateV1, {
-    version: "meter-day31-candidate.v1", activatedAt, date, at: utcMidnight.toISOString().replace(".000Z", ".000000Z"),
-  });
+ try { return parse(meterDay31CandidateV1,{...workDay31Candidate(raw),version:"meter-day31-candidate.v1"}); }
+ catch { throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT"); }
 }
 
 const suppliedJob = z.object({ tenantId: uuid, jobId: uuid, customerId: uuid, siteId: uuid, small: z.boolean() }).strict().readonly();

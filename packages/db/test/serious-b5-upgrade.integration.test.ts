@@ -249,6 +249,26 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
+// CH-4-C / ruling 113: 0201 creates eight routines and no tables, indexes or policies.
+// Replaced routines retain their complete predecessor catalogue rows in the comparison.
+async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [
+  ["ch4_admit_place", "t uuid, j uuid, action text"],
+  ["ch4_command_work_facts", "t uuid, j uuid, digest text"],
+  ["ch4_legacy_command_owned", "t uuid, cid uuid"],
+  ["ch4_link_post_lock_job", "t uuid, j uuid, digest text, input jsonb"],
+  ["ch4_record_work_state", "t uuid, j uuid, digest text, input jsonb"],
+  ["ch4_require_command_owner", "t uuid, j uuid, digest text"],
+  ["ch4_require_open", "t uuid, j uuid"],
+  ["ch4_work_state_command", "t uuid, j uuid, digest text, input jsonb"],
+ ];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -276,7 +296,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
+ const expected = await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before))));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
