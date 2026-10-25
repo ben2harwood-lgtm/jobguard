@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch6-j": {
+      "branches": [
+        "codex/sandbox/ch6-j"
+      ],
+      "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
+      "note": "Issued build-ahead CH6-J. Existing-page browser proof CI only; persisted source matrix held on CH6-A composition and source gates. No migration.",
+      "test": "apps/web/e2e/ch6-integrity-v3.spec.ts",
+      "allow": [
+        "apps/web/app/ui/commercial-integrity.tsx",
+        "apps/web/app/ui/commercial-integrity-v3.tsx",
+        "apps/web/app/ui/commercial-integrity-v3.test.tsx",
+        "apps/web/e2e/ch6-integrity-v3.spec.ts",
+        "apps/web/e2e/ch6-integrity-v3-helpers.ts",
+        "docs/verdicts/CH6-J/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
