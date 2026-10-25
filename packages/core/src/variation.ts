@@ -2,7 +2,7 @@ import { z } from "zod";
 import { money, type Money } from "./money.js";
 import { calculateNetLine, parseQuantity } from "./quantity.js";
 
-const uuid=z.string().uuid();
+const uuid=z.guid({ error: "Invalid uuid" });
 const hash=z.string().regex(/^[a-f0-9]{64}$/u);
 const decimal=/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
 export const aiRateSuggestionV1=z.object({kind:z.literal("ai_suggestion"),unitRatePence:z.number().int().nonnegative().nullable(),sourceLabel:z.string().min(1).max(160),sourceRef:z.string().min(1).max(300),sourceHash:hash,rateVersion:z.string().min(1).max(80)}).strict();

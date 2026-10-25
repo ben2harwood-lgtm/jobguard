@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { groupShadowProposals, observationV1, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
-const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.string().uuid(),
+const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.guid({ error: "Invalid uuid" }),
   proposals: z.array(z.unknown()).max(1000), observations: z.array(z.unknown()).max(500), captures: z.array(z.unknown()).max(1000) }).strict();
 export class ShadowDetectionError extends Error {
   constructor(readonly code: "INVALID_DETECTION_BATCH" | "DETECTION_BINDING_MISMATCH" | "DETECTION_REPLAY_CONFLICT") { super(code); }

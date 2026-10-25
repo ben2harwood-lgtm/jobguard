@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 import { customerTypes, jobPartiesSnapshotV1 } from "./job-parties.js";
 
@@ -51,7 +52,7 @@ export function preventionCompanyEligibleAtLatest(pinnedRevisionId: string, late
 }
 const factV1 = z.enum(["constraint", "no_record", "company_active", "company_attention", "feed_event", "no_event"]).nullable();
 const readingV1 = z.object({ kind: z.enum(preventionKinds), source: z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(100) }).strict(),
-  retrievedAt: z.string().datetime(), observedAt: z.string().datetime().nullable(), fact: factV1, evaluatedAt: z.string().datetime(),
+  retrievedAt: utcDatetimeV1, observedAt: utcDatetimeV1.nullable(), fact: factV1, evaluatedAt: utcDatetimeV1,
 }).strict();
 type Reading = z.infer<typeof readingV1>;
 function state(input: Reading, policy: StalenessPolicy): { status: "unknown" | "advisory" | "clear"; reason: "missing" | "stale" | "future" | "current" } {
@@ -77,22 +78,22 @@ export function evaluatePreventionFact(raw: Reading): PreventionResultV1 {
     policyVersion: policy.version, referenceOnly: true, maximumAgeMinutes: policy.maximumAgeMinutes[input.source.id] });
 }
 /** scenarioNow is capped at millisecond precision: Date.parse truncates and PostgreSQL works in microseconds, so both must see the same instant. */
-const base = { version: z.literal("prevention-command.v1"), commandId: z.string().uuid(), expectedBindingId: z.string().uuid(), scenarioNow: z.string().datetime().transform(value => new Date(Date.parse(value)).toISOString()), fixture: z.enum(["mixed", "fresh", "stale", "missing"]) };
+const base = { version: z.literal("prevention-command.v1"), commandId: z.guid({ error: "Invalid uuid" }), expectedBindingId: z.guid({ error: "Invalid uuid" }), scenarioNow: utcDatetimeV1.transform(value => new Date(Date.parse(value)).toISOString()), fixture: z.enum(["mixed", "fresh", "stale", "missing"]) };
 export const preventionCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("property") }).strict(),
   z.object({ ...base, action: z.literal("company") }).strict(),
   ...(["start_watch", "stop_watch", "evaluate_watch"] as const).map(action => z.object({ ...base, action: z.literal(action), expectedWatchRevision: z.number().int().nonnegative() }).strict()),
 ]);
 export type PreventionCommandV1 = z.infer<typeof preventionCommandV1>;
-export const preventionViewV1 = z.object({ version: z.literal("prevention-view.v1"), environment: z.literal("synthetic_demo"), jobId: z.string().uuid(), retrievedAt: z.string().datetime(),
+export const preventionViewV1 = z.object({ version: z.literal("prevention-view.v1"), environment: z.literal("synthetic_demo"), jobId: z.guid({ error: "Invalid uuid" }), retrievedAt: utcDatetimeV1,
   parties: jobPartiesSnapshotV1.nullable(), customerType: z.enum(customerTypes).nullable(),
-  payingParty: z.object({ name: z.string(), revisionId: z.string().uuid(), source: z.literal("Builder's saved paying-party record"), retrievedAt: z.string().datetime(), recordedAt: z.string().datetime() }).strict().nullable(),
+  payingParty: z.object({ name: z.string(), revisionId: z.guid({ error: "Invalid uuid" }), source: z.literal("Builder's saved paying-party record"), retrievedAt: utcDatetimeV1, recordedAt: utcDatetimeV1 }).strict().nullable(),
   companyEligibility: z.enum(["eligible", "not run — not a registered company"]), eligibilityPolicyVersion: z.literal("prevention-company-eligibility-reference.v1"),
   property: z.array(preventionResultV1), company: preventionResultV1.nullable(),
   watch: z.object({ enabled: z.boolean(), revision: z.number().int().nonnegative(), results: z.array(preventionResultV1) }).strict(), realExternalActions: z.literal(0),
 }).strict();
 export type PreventionViewV1 = z.infer<typeof preventionViewV1>;
-export const preventionCommandResultV1 = z.object({ version: z.literal("prevention-command-result.v1"), environment: z.literal("synthetic_demo"), commandId: z.string().uuid(), view: preventionViewV1, realExternalActions: z.literal(0) }).strict();
+export const preventionCommandResultV1 = z.object({ version: z.literal("prevention-command-result.v1"), environment: z.literal("synthetic_demo"), commandId: z.guid({ error: "Invalid uuid" }), view: preventionViewV1, realExternalActions: z.literal(0) }).strict();
 export class PreventionCheckError extends Error {
   constructor(readonly code: "INVALID_PREVENTION_COMMAND" | "FORBIDDEN" | "NOT_FOUND" | "PARTIES_REQUIRED" | "REVISION_CONFLICT" | "COMMAND_CONFLICT" | "NOT_REGISTERED_COMPANY" | "WATCH_NOT_STARTED" | "WATCH_ALREADY_STARTED" | "SYNTHETIC_ONLY") { super(code); this.name = "PreventionCheckError"; }
 }
