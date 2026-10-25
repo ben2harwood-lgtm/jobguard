@@ -1,0 +1,492 @@
+{
+  "version": "customer-portal-authority-cases.design.v1",
+  "purpose": "Synthetic adversarial test-vector specification only; never an authentication fixture",
+  "environment": "synthetic_demo",
+  "runtimeAuthority": false,
+  "executionStatus": "DESIGN_ONLY_NOT_RUN",
+  "issueBase": "cdd1b29b75fcdc206e43e66dbd68d9f03c9b38fe",
+  "candidateHeads": {
+    "A": "236f26ed5f9da40eeb9847d8acb574bbd00af24e",
+    "B": "91834b6f03b24d4f798cc61aaa3b081a91301e68"
+  },
+  "unresolvedPolicy": {
+    "issuerRole": null,
+    "revokerRole": null,
+    "lifetimeSeconds": null,
+    "purposes": null,
+    "replacementSemantics": null,
+    "credentialBridge": null,
+    "approvedPolicyVersion": null
+  },
+  "preconditions": [
+    "Merged and separately accepted A/B exact contracts",
+    "Issued selected persisted synthetic customer binding with actual tester provenance",
+    "Accepted source/consumer contracts and explicit separately reviewed security composition"
+  ],
+  "approvalSubjects": [
+    "quote",
+    "variation",
+    "stage"
+  ],
+  "cancellationReference": {
+    "version": "cancellation-kit.v1",
+    "templateVersion": "cancellation-template.synthetic.v1",
+    "templateSha256": "0838fd7d952073b9713db51509b4a478499cc93e7ea79c07a95dcdbe1e15f93e",
+    "label": "synthetic template, not reviewed (D06 v2)",
+    "pdfHash": "Per frozen quote artifact; no universal hash"
+  },
+  "messageReference": {
+    "fixture": "customer-message:exposed-wires.synthetic.v1",
+    "text": "There are exposed live wires beside the new socket.",
+    "sourceKind": "customer_request",
+    "citation": {
+      "start": 0,
+      "end": 51
+    },
+    "estimatedValuePence": null,
+    "qualification": "Accepted source/worker policy determines actual disclosure and permanent fee ineligibility"
+  },
+  "cases": [
+    {
+      "id": "AUTH-forged",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Alter credential bytes/digest or invent grant ID",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-absent",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Remove credential",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-expired",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Advance server clock to grant expiry, including exact boundary",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-revoked",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Revoke previously usable grant",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-tester-expired",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Expire actual tester session",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-tester-revoked",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Revoke actual tester session",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-foreign-tenant",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use valid grant for another tenant",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-wrong-job",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use same-tenant grant for another job",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-wrong-customer",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use same-tenant other customer",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-party-rebound",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Replace current party binding or revision",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-wrong-purpose",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use stage-only scope for quote or message",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-wrong-track",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use contractor actor/link for small-builder job",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-wrong-mode",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use synthetic grant in pilot_no_charge or production",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-missing-provenance",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Remove actual tester attribution",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-builder-confusion",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Supply ordinary builder/company owner or finance membership as customer",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "AUTH-switch-confusion",
+      "guard": "G-AUTH",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Use contractor practice switch or fictional name without persisted customer binding",
+      "expected": "Uniform unavailable refusal before informative existence lookup; zero customer business effects",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CURRENT-wait-revoke",
+      "guard": "G-CURRENT",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Revoke grant while command waits for lock",
+      "expected": "Fresh current-authority check under source locks; serialize valid prior commit or refuse entirely; no stale replay result",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CURRENT-wait-expire",
+      "guard": "G-CURRENT",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Expire tester/grant during lock wait",
+      "expected": "Fresh current-authority check under source locks; serialize valid prior commit or refuse entirely; no stale replay result",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CURRENT-wait-rebind",
+      "guard": "G-CURRENT",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Change party revision during lock wait",
+      "expected": "Fresh current-authority check under source locks; serialize valid prior commit or refuse entirely; no stale replay result",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CURRENT-replay-revoked",
+      "guard": "G-CURRENT",
+      "owner": "M5-AUTH",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Replay once-valid identical command after revocation",
+      "expected": "Fresh current-authority check under source locks; serialize valid prior commit or refuse entirely; no stale replay result",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "EXACT-quote",
+      "guard": "G-EXACT",
+      "owner": "M5-QUOTE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Change quote document ID/version/revision/hash/total/currency or expected job revision",
+      "expected": "Refuse exact-subject approval; retain original immutable history; no money, replacement proof or approval effect",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "EXACT-variation",
+      "guard": "G-EXACT",
+      "owner": "M5-VARIATION",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Change variation revision/hash/signed amount or withdraw/reject existing priced revision",
+      "expected": "Refuse exact-subject approval; retain original immutable history; no money, replacement proof or approval effect",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "EXACT-stage",
+      "guard": "G-EXACT",
+      "owner": "M5-STAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Change completion/scope/evidence link/hash/object version, invalidate/supersede, wrong type/job, pending/quarantined/missing original",
+      "expected": "Refuse exact-subject approval; retain original immutable history; no money, replacement proof or approval effect",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "COMMAND-identical",
+      "guard": "G-COMMAND",
+      "owner": "Q/V/S/M",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Retry identical command against future accepted persisted authority",
+      "expected": "Only after fresh authority checks, return original stored receipt; one business effect and audit",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "COMMAND-changed",
+      "guard": "G-COMMAND",
+      "owner": "Q/V/S/M",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Reuse command ID with changed actor/job/customer/target/text/family/policy",
+      "expected": "Conflict after current authority check; original receipt unchanged",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "COMMAND-concurrent",
+      "guard": "G-COMMAND",
+      "owner": "Q/V/S/M",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Submit identical and conflicting commands from two authorized clients",
+      "expected": "One accepted effect or typed conflict, no duplicate approval/audit",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "COMMAND-rollback",
+      "guard": "G-COMMAND",
+      "owner": "Q/V/S/M",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Force audit/receipt failure after domain write",
+      "expected": "Full transaction rollback; no orphan approval/source/evidence",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "SECRECY-token",
+      "guard": "G-SECRECY",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Attempt token insertion in logs/audit/errors/cache/persisted HTML/referrer-bearing URL",
+      "expected": "No credential/personal text leak; no informative scope enumeration; no-store success/refusal",
+      "requiredEvidence": "Persisted Next/Nest parity + audit/log/cache inspection CI"
+    },
+    {
+      "id": "SECRECY-personal",
+      "guard": "G-SECRECY",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Insert message/email/customer name into audit payload",
+      "expected": "No credential/personal text leak; no informative scope enumeration; no-store success/refusal",
+      "requiredEvidence": "Persisted Next/Nest parity + audit/log/cache inspection CI"
+    },
+    {
+      "id": "SECRECY-enumeration",
+      "guard": "G-SECRECY",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Compare absent, malformed, foreign and wrong-job authority responses",
+      "expected": "No credential/personal text leak; no informative scope enumeration; no-store success/refusal",
+      "requiredEvidence": "Persisted Next/Nest parity + audit/log/cache inspection CI"
+    },
+    {
+      "id": "MESSAGE-unknown",
+      "guard": "G-MESSAGE",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Edit exact safety text, change fixture key/kind or append instructions",
+      "expected": "Preserve valid original text as saved/unprocessed; no fabricated facts/price or approval",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "MESSAGE-binding",
+      "guard": "G-MESSAGE",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Substitute original bytes/hash/version/received time/upload/job/evidence type",
+      "expected": "Checked source writer/reader refuses invalid binding; no orphan record",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "MESSAGE-new-after-lock",
+      "guard": "G-MESSAGE",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Submit new message after immutable final-account lock",
+      "expected": "Refuse with actual linked-work guidance; no reopen or signal injection",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "MESSAGE-history",
+      "guard": "G-MESSAGE",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Read historical message or replay genuine identical authorized command after lock",
+      "expected": "Historical bytes/receipt preserved; freshly check authority; no new source",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "MESSAGE-text-consent",
+      "guard": "G-MESSAGE",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Send message saying I agree",
+      "expected": "Message/evidence only; no quote/variation/stage approval or meter activity",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "SHADOW-cardinality",
+      "guard": "G-SHADOW",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Vary zero/one/many hidden signals before lock",
+      "expected": "Identical builder response/headers/count/error/cache/control/query paths; no hidden-table query",
+      "requiredEvidence": "Real DB roles + query logs + persisted transport CI; no wall-clock equality claim"
+    },
+    {
+      "id": "SHADOW-safety",
+      "guard": "G-SHADOW",
+      "owner": "M5-MESSAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Feed exact accepted exposed-wires fixture twice through verified-source worker",
+      "expected": "One mandatory safety disclosure; permanently disclosed_before_lock/surfaced_early and fee-ineligible under accepted governing policy; no duplicate disclosure",
+      "requiredEvidence": "Accepted B + worker/sink PostgreSQL CI, not seeded intake success"
+    },
+    {
+      "id": "KIT-binding",
+      "guard": "G-KIT",
+      "owner": "B + M5-JOURNEY",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Mutate kit text/hash/template version/quote revision/document version/reference",
+      "expected": "Strict companion binding rejects; stale approval fails",
+      "requiredEvidence": "Candidate pure tests plus persisted quote/PDF compatibility CI"
+    },
+    {
+      "id": "KIT-legacy",
+      "guard": "G-KIT",
+      "owner": "B + M5-JOURNEY",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Reload/retry old saved quote without kit after integration",
+      "expected": "Exact old snapshot/PDF/hash unchanged; no retrofit",
+      "requiredEvidence": "Candidate pure tests plus persisted quote/PDF compatibility CI"
+    },
+    {
+      "id": "KIT-creation",
+      "guard": "G-KIT",
+      "owner": "B + M5-JOURNEY",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Create new synthetic quote via each actual creation path",
+      "expected": "Exact B companion persisted and rendered; PDF hash covers it; no send/charge",
+      "requiredEvidence": "Candidate pure tests plus persisted quote/PDF compatibility CI"
+    },
+    {
+      "id": "KIT-mode",
+      "guard": "G-KIT",
+      "owner": "B + M5-JOURNEY",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Request supplied kit outside server-selected synthetic_demo",
+      "expected": "Refuse synthetic kit attachment; no production facts",
+      "requiredEvidence": "Candidate pure tests plus persisted quote/PDF compatibility CI"
+    },
+    {
+      "id": "CONSUMER-side-fact",
+      "guard": "G-CONSUMER",
+      "owner": "M5-QUOTE/M5-VARIATION/M5-STAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Save customer side fact without approved activation/final-account reader",
+      "expected": "Cannot enable downstream business effect; preserve old row fingerprints and truthful current/history provenance",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CONSUMER-relabel",
+      "guard": "G-CONSUMER",
+      "owner": "M5-QUOTE/M5-VARIATION/M5-STAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Relabel builder attestation or actor membership as customer_authenticated",
+      "expected": "Cannot enable downstream business effect; preserve old row fingerprints and truthful current/history provenance",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "CONSUMER-proof",
+      "guard": "G-CONSUMER",
+      "owner": "M5-QUOTE/M5-VARIATION/M5-STAGE",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Try stage acknowledgement as proof verification, invoice/payment or fee authority",
+      "expected": "Cannot enable downstream business effect; preserve old row fingerprints and truthful current/history provenance",
+      "requiredEvidence": "PostgreSQL + real transport CI"
+    },
+    {
+      "id": "HTTP-cookies",
+      "guard": "G-TRANSPORT",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Send valid unrelated company session, both cookies, legacy jg_session shape or unbound practice cookie",
+      "expected": "Only exact approved method/path and selected persisted issuer/customer authority may proceed; uniform refusal otherwise; no-store",
+      "requiredEvidence": "Real production Next + guarded Nest same-diff parity CI; no successful mocks/guard replacement"
+    },
+    {
+      "id": "HTTP-origin",
+      "guard": "G-TRANSPORT",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Remove/change real Origin or CSRF; bypass Next and call Nest directly",
+      "expected": "Only exact approved method/path and selected persisted issuer/customer authority may proceed; uniform refusal otherwise; no-store",
+      "requiredEvidence": "Real production Next + guarded Nest same-diff parity CI; no successful mocks/guard replacement"
+    },
+    {
+      "id": "HTTP-method",
+      "guard": "G-TRANSPORT",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Call mutation on GET, wrong method/action, /auth business alias or undeclared route",
+      "expected": "Only exact approved method/path and selected persisted issuer/customer authority may proceed; uniform refusal otherwise; no-store",
+      "requiredEvidence": "Real production Next + guarded Nest same-diff parity CI; no successful mocks/guard replacement"
+    },
+    {
+      "id": "HTTP-injection",
+      "guard": "G-TRANSPORT",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Inject tenant/actor/customer/digest/mode/policy/time/result into strict public body",
+      "expected": "Only exact approved method/path and selected persisted issuer/customer authority may proceed; uniform refusal otherwise; no-store",
+      "requiredEvidence": "Real production Next + guarded Nest same-diff parity CI; no successful mocks/guard replacement"
+    },
+    {
+      "id": "HTTP-issuer",
+      "guard": "G-TRANSPORT",
+      "owner": "M5-HTTP",
+      "status": "DESIGN_ONLY_NOT_RUN",
+      "mutation": "Try customer credential on issuer read/issue/revoke; self-issue customer grant",
+      "expected": "Only exact approved method/path and selected persisted issuer/customer authority may proceed; uniform refusal otherwise; no-store",
+      "requiredEvidence": "Real production Next + guarded Nest same-diff parity CI; no successful mocks/guard replacement"
+    }
+  ]
+}
