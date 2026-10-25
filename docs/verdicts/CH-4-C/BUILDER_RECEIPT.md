@@ -1156,3 +1156,76 @@ with the intended lane's allowlist found zero out-of-lane paths:
 - `packages/db/test/watchdog-command-harness.ts`
 - `packages/db/test/watchdog-legacy-identities.integration.test.ts`
 - `packages/db/test/watchdog.integration.test.ts`
+
+
+## catch-up 2 — 25 October 2026 (C261 cap 2, final)
+
+Builder: Codex. Starting and unchanged Git HEAD: `11e54ef8`; branch
+`codex/sandbox/ch-4-c-catchup`. This section records the uncommitted working-tree
+repair ordered after jg-checks found Zod 3 typing left by #290 after main's
+Zod 4 upgrade (#312). Earlier catch-up results above remain historical.
+No staging, commit, checkout, merge, push, dependency install or download was run.
+Node `v24.17.0`, installed Zod `4.6.6`, cached pinned pnpm `10.28.1` via
+`PATH=/private/tmp/jg-ch4-catchup-bin:$PATH`; dependencies were retained.
+
+### Each change
+
+- `packages/core/src/job-work-timing.ts`: change the parse helper's
+  `z.ZodType<T, z.ZodTypeDef, unknown>` to `z.ZodType<T, unknown>`, exactly matching
+  main's helper in `jobs-on-the-go.ts`. Type-only correction; parsing and typed
+  failure behavior are unchanged.
+- `packages/db/src/job-work-state-admission.ts`: replace the one
+  `z.string().uuid()` job-ID validator with main's
+  `z.guid({ error: "Invalid uuid" })` pattern, as already used in
+  `job-work-state.ts` and the repository read path. This preserves the legacy
+  UUID shape policy through the Zod 4 upgrade.
+- `packages/db/src/job-work-state-repository.ts`: replace four remaining
+  `z.string().uuid()` calls with the same pattern: execute's job-ID and digest
+  checks, precheck actor selection, and membership-authority classification.
+  No authorization branch, SQL, lock, command or error mapping changed.
+- This receipt appends the catch-up 2 changes and actual validation evidence.
+
+Searched all 43 #290 paths from `git diff --name-only origin/main...HEAD` for
+`ZodTypeDef`, `.errors`, `z.string().uuid()` and `ZodType<` usages. The above were
+all remaining code changes needed. `.errors` matches were module filenames,
+not Zod error access; the old receipt mentions the historical compiler failure.
+Other `ZodType<T>` helpers are already valid under Zod 4. No dependency, runtime
+schema fields, migration, backfill, provider, prompt, policy, alert or lane
+configuration changed. Existing migration rollback/forward-fix notes still apply.
+
+### Sequential checks actually run
+
+Every check invocation ran one at a time; Vitest used `--maxWorkers=2`, and root
+Turbo checks used `--concurrency=1`. Individual core/db/api/web typechecks were
+also invoked separately, each with exit 0. No clean reinstall was attempted.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` | PASS, exit 0. |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0. |
+| `pnpm --filter @jobguard/api typecheck` | PASS, exit 0. |
+| `pnpm --filter @jobguard/web typecheck` | PASS, exit 0. |
+| `pnpm typecheck --concurrency=1` | PASS, exit 0: 7 tasks, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1: core purity passed; lane gate refuses unregistered `codex/sandbox/ch-4-c-catchup` (0 matching lanes), before package lint. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1: same unregistered branch; no override or registration edit. |
+| `pnpm build --concurrency=1` | PASS, exit 0: 7 tasks, 2 cached; fresh core/db/ai/api/web builds including Next production compilation. Turbo cache IO warnings and Next workspace-root warning did not fail the build. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS: 126 files, 2,968 tests. |
+| `pnpm --filter @jobguard/db exec vitest run src --maxWorkers=2` | FAIL: 4 failed / 29 passed files; 240 passed / 18 skipped tests. Substring filter also selected four `test/*dbsrc*.integration.test.ts` files; their port discovery fails under the sandbox. No PostgreSQL proof obtained. |
+| `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=2` | PASS: genuine source units only, 26 files, 221 tests. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` | FAIL: 9 failed / 124 passed files; 129 failed / 2,492 passed / 23 skipped tests, 129 reported errors. Real HTTP tests cannot bind (`listen EPERM`, then null server port); two embedded DB isolation suites fail port discovery. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS: 42 files, 998 tests. Unit suite, not browser evidence. |
+| `pnpm openapi:check` | FAIL, exit 1: tsx launcher IPC socket refused with `listen EPERM`. |
+| From `apps/api`: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0: same generator/check through socket-free launcher; no OpenAPI artifact edit. |
+| `pnpm exec turbo run lint --concurrency=1` | PASS, exit 0: all 7 package lint tasks freshly executed. Supplemental evidence only; root lane lint remains failed. |
+| `git diff --check` | PASS. |
+
+Logs: `/private/tmp/jg-ch4-catchup2-{typecheck-core,typecheck-db,typecheck-api,typecheck-web,typecheck,lint,lanes,build,unit-core,unit-db,unit-db-only,unit-api,unit-web,openapi,openapi-direct,lint-packages}.log`.
+
+The DB source filter's accidental integration selection is recorded above; no
+explicit database, migration or browser suite was invoked. PostgreSQL, HTTP socket
+and browser checks remain for GitHub CI after dispatcher push. The official lane
+checks also remain held until the dispatcher resolves branch registration. This
+is builder/test-executed evidence only, not an independent verdict or acceptance.
+Exact successor-commit independent review, separate acceptance and existing
+production release gates remain required. The dispatcher owns the commit/push;
+intended commit message is in `/private/tmp/jg-msg-ch-4-c-catchup.txt`.

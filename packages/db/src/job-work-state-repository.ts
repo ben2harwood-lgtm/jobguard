@@ -33,7 +33,7 @@ export class JobWorkStateRepository {
  /** SQL derives and rechecks authority, serializes work, and returns the durable first snapshot. */
  private async execute(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown,precheck?: (db:TenantTransaction)=>Promise<void>) {
   const input=jobWorkStateMutationV1.safeParse(raw);
-  if(!input.success || !z.string().uuid().safeParse(jobId).success || (!z.string().uuid().safeParse(digest).success && !/^[a-f0-9]{64}$/u.test(digest)))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+  if(!input.success || !z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || (!z.guid({ error: "Invalid uuid" }).safeParse(digest).success && !/^[a-f0-9]{64}$/u.test(digest)))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
   return withTenant(this.pool,context,async db=>{
    try {
     // Resume remains unavailable until MON-1-PLACES supplies capacity admission.
@@ -41,9 +41,9 @@ export class JobWorkStateRepository {
     if(precheck) {
      // Plain reads only: authenticate before the first business lock. Controlled
      // SQL repeats these checks after waits and before returning a stored replay.
-     const actor=z.string().uuid().safeParse(digest).success ? digest :
+     const actor=z.guid({ error: "Invalid uuid" }).safeParse(digest).success ? digest :
       (await db.$client.query<{membership_id:string}>("SELECT membership_id FROM app.authenticate_practice_session($1,$2)",[digest,context.tenantId])).rows[0]?.membership_id;
-     const membershipAuthority=z.string().uuid().safeParse(digest).success;
+     const membershipAuthority=z.guid({ error: "Invalid uuid" }).safeParse(digest).success;
      const owner=actor && (await db.$client.query<{allowed:boolean}>(
       (membershipAuthority ? "" : practiceOwnedJobsSql())+
       " SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.job_commercial_track c ON c.tenant_id=m.tenant_id WHERE m.tenant_id=$1 AND m.id=$4 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) AND c.job_id=$2 AND c.job_track='small_builder' AND c.environment='synthetic_demo'"+
