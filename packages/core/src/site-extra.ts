@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const reviewedText = (maximum: number) => z.string().min(1).max(maximum).refine(value => /\S/u.test(value));
 /** Job identity comes from the route; authority comes only from the persisted session and database. */
 export const logSiteExtraV1 = z.object({ version: z.literal("log-site-extra.v1"), commandId: uuid, note: reviewedText(5000), description: reviewedText(500) }).strict();

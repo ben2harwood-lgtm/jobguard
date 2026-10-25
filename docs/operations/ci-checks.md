@@ -11,7 +11,7 @@ The paused `integration/own-mind-reconciled-2026-08-21` belongs to `ben2harwood-
 1. The lane checker reads validated immutable GitHub event SHAs. PRs compare the merge base to the PR head; pushes compare the complete before/after range; first pushes inspect the tracked tree. Missing history, self-comparisons, checkout mismatches and unknown events fail rather than passing an empty substitute check. Renames check both old/new paths. Local runs additionally include staged, unstaged and untracked files.
 2. Lane policy has no default or blanket all-files grant. Actual task names and file locations are registered. Unknown/ambiguous branches and conflicting overrides fail. Main has an explicitly identified integration scope, not a PR fallback. The repair lane permits package manifests and named test/type configuration files, not arbitrary application-source or migration changes. Its regression assertion was updated to reflect the user-authorised dependency subtask while continuing to deny broad source access.
 3. The `dependency-review` job now runs a real pnpm vulnerability audit on PRs and main pushes, including private repositories and production/development/optional dependencies. Findings, registry failures and malformed/incomplete responses fail. No exclusions or severity waivers were added. This is not a licence, provenance or production-security certification.
-4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with two workers and no retries. Earlier mandatory suites remain enabled. Superseded CI runs are cancelled to avoid redundant execution.
+4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with one worker in CI and no retries. Earlier mandatory suites remain enabled. Workflow concurrency queues runs without cancelling an in-progress run.
 
 ## Dependency remediation
 
@@ -34,3 +34,24 @@ The original unretained local-test claim remains withdrawn. Only actual hosted l
 Read PR #15's latest pinned head SHA and its complete CI result. Do not infer success from an older commit or a plan. Record any independent review against the exact final diff. Keep main unchanged until the repository's independent-verdict and separate acceptance requirements are met; do not self-approve or fabricate a Claude verdict. After merge, verify the actual main-push run separately. This repair does not release the product or enable live users/providers.
 
 Primary references: https://pnpm.io/10.x/cli/audit ; https://docs.github.com/en/actions/reference/workflows-and-actions/contexts ; https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9 .
+
+## Concurrent checks and reruns (CI-SPLIT-1)
+
+The `core`, `web`, `secrets` and `dependency-review` jobs run concurrently:
+
+| Job | Checks |
+| --- | --- |
+| `core` | Frozen install, `pnpm typecheck`, `pnpm lint`, `pnpm test` (including the existing embedded-PostgreSQL tests). |
+| `web` | Frozen install, `pnpm build`, Playwright Chromium installation, `pnpm test:e2e` against the production build. |
+| `secrets` | Existing gitleaks scan. |
+| `dependency-review` | Existing dependency audit across all dependency scopes. |
+
+Both `core` and `web` print `git rev-parse HEAD` immediately after checkout and fail unless it equals the run's `github.sha`. Worker counts, retries, projects and timeouts in the test suites are unchanged. Each execution job has a 90-minute job limit.
+
+The required `checks` job always evaluates all four job results, including after failure or cancellation. It succeeds only when every result is exactly `success`; failure, cancelled, skipped, empty or missing results fail the gate. It has a five-minute limit, no checkout and no secrets.
+
+To retry a failed job, open the workflow run in GitHub Actions and choose **Re-run jobs → Re-run failed jobs**. GitHub reruns failed jobs and their dependent `checks` gate, keeping successful independent jobs. To select a specific failed job, use **Re-run this job** on that job; its dependent gate runs again too. A rerun re-tests the same recorded `github.sha` (for pull requests, the original merge candidate); it does not pick up a newer `main`. Check the printed candidate SHA in the job log.
+
+When `web` fails, its final upload step retains `apps/web/playwright-report/` and `apps/web/test-results/` as **playwright-evidence-<run_attempt>** for 14 days. Find it under **Artifacts** on the workflow run's summary page. Download and extract it to inspect the HTML report and retained failure traces (for example, `pnpm --filter @jobguard/web exec playwright show-trace <path-to-trace.zip>`). CI adds the HTML reporter with `open: "never"` alongside the list reporter; traces remain `retain-on-failure`. An early failure may produce no report or trace, in which case the upload warns about missing files.
+
+Local structural and shell tests do not prove hosted scheduling, artifact upload or full PostgreSQL/browser execution. GitHub CI evidence and an independent verdict bound to the exact final commit remain required before technical acceptance (AGENTS §5.13).

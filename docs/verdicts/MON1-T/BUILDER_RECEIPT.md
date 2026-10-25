@@ -1,0 +1,410 @@
+# MON1-T builder receipt — 23 October 2026
+
+**BUILD PREPARED; HOLD for integration, PostgreSQL CI, independent reviews and acceptance.**
+No commit, push, PR, merge, deployment, enablement, provider action, real data or spending.
+Ben owns merge; the dispatcher commits after builder exit. This is a builder run
+receipt, not an independent model verdict or acceptance.
+
+## Issuance and inspected baseline
+
+- Order: issued MON1-T, Build Speed Plan v5 wave 2, decision 74, 23 October 2026;
+  authorized build-ahead only. The issued branch/number override proposed draft names.
+- Worktree: `.worktrees/mon1-t`, branch `codex/sandbox/mon1-t`.
+- `git rev-parse HEAD`: `14eca75074217fa82fb719c38cac8a997eec59ad`.
+- `git rev-parse origin/main`: `dc5721230fd8aedbf2d9d0457789074b66b48765`.
+- Initial `git status --short`: clean. No tracked predecessor file was edited.
+- Base contains unmerged CH-4-C #290. Its presence is source evidence only, not
+  acceptance, merged ancestry or a cleared H-CH4/H-PREDECESSORS gate.
+- Read AGENTS.md, applicable BUILD_PLAN §10.1.6/MON-1 and parent contracts,
+  the workstate–meter–trial pack common §§1–2.5/holds and MON1-T draft,
+  MIGRATIONS.md migration instructions, and actual source/schema/test seams.
+- Verified existing names/paths: `approvePricedVariation`,
+  `BuilderCaptureRepository`, `FinalAccountCommandService`, `job_activation_terms`,
+  `variation_approval`, `final_account_lock`, `exceedsSmallJobTripThreshold`,
+  tenant transaction API, `test/lock-order-1.test.ts`,
+  `job-work-state-sources.integration.test.ts`,
+  `job-work-state-post-lock.integration.test.ts`,
+  `job-work-state-races.integration.test.ts`, `variation.integration.test.ts`,
+  `final-account.integration.test.ts`. New trip symbols/tables were proposed and
+  absent as expected; this leaf supplies them, without shared exports or consumers.
+
+## Delivered within the exact allowlist
+
+- `packages/db/migrations/0206_meter_small_trip.sql` and matching migration note.
+  Two immutable RLS tables, stable tenant/job trip identity, numbered observations,
+  source FKs/hashes, exact net and original/recorded timestamps. Private source
+  reconstruction and atomic audit append; no public/runtime EXECUTE or source trigger.
+- `packages/db/src/meter-small-trip.ts`: strict versioned Zod projection,
+  typed validation failures and `readSmallTrip(transaction, jobId)` for an existing
+  job-authorized transaction. No HTTP surface or independent authority grant.
+- Three own PostgreSQL test files: threshold, revisions, no-rebuild final-review
+  source, unapproved proposals, latching, delayed earlier source, invalidating late
+  omission hold, private concurrency/replay/rollback, lock-vs-approval both orders,
+  RLS/grants, read projection, preceding-schema upgrade and successor preservation.
+- `docs/contracts/meter-small-trip-v1.md`, exact lane `config/lanes/mon1-t.json`,
+  and this receipt. No shared barrel/catalog/migration runner/routing/source edits.
+
+Tests were prepared against the proposed seam during implementation, then refined
+against actual schema and function checks. The delegated builder owned only the
+three allowed test files; this was builder collaboration, not independent review.
+
+## Simplest proposed choices bound here
+
+1. Replay is SQL over immutable activation terms and approved revision facts;
+   no parallel final-account calculator or draft rebuild dependency.
+2. Source kinds are `activation` and `variation_approval`. Only originally small
+   jobs can trip, so persisted crossing sources are approvals. Source-bound latest
+   revision per variation is selected chronologically by `(created_at,id)`.
+3. Use server-default approval `created_at`, not caller-supplied `approved_at`;
+   preserve six-digit UTC in hashes and read output. Default transaction timestamps
+   and raw source-write privileges are a predecessor provenance limitation, not
+   proof against forged source rows. Exact integration timestamp authority remains
+   a STOP below; no historical source is rewritten or newly pinned here.
+4. Exact numeric intermediate totals, checked existing magnitude limit, strict
+   `>400000p`; omissions cannot remove a historical crossing. Replayed same source
+   hash adds nothing; late earlier crossing appends linked observation with same ID.
+5. Late facts removing/postponing a latched crossing raise
+   `SMALL_TRIP_RECONCILIATION_REQUIRED`, preserving history and smallness loss.
+6. Require existing tenant lock184 by inspecting pg_locks; never take it late.
+   Private invoker routine requires migration role and matching tenant context;
+   source owner authenticates/rechecks current authority before this call. Audit
+   allocation is last. No new broad role or source-table grant.
+7. Existing approval table lacks `(tenant,job,id)` unique key; use its tenant/source
+   FK plus checked job/revision binding, and existing composite revision/activation/
+   baseline FKs. Do not alter fingerprinted parents to create a new key.
+8. Fixtures intentionally seed activation parents in replica mode and original
+   fictional approval times. Trip routines/tables run with normal enforcement.
+   These are private foundation tests, never substituted for app-command journeys.
+
+## Local commands and actual results
+
+Runtime: Node `v24.17.0`. Existing cached pnpm `10.28.1` was invoked via
+`PATH=/private/tmp/jg-mon1-t-bin:$PATH`; its wrapper executes
+`/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`.
+No dependency installation/download was performed. Initial system pnpm invocations
+(`pnpm --filter @jobguard/db typecheck`, `pnpm --version`, and a version-manager
+configuration probe) hung before script execution and were interrupted (130).
+The cached pinned binary resolved this without changing repository configuration.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` (pinned binary) | PASS, exit 0; rerun after final source/test preparation |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-test-tsconfig.json` | PASS, exit 0; strict noEmit compilation of all three new integration files and imported helpers; package tsconfig otherwise excludes test/ |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lock-order-1.test.ts` | Initial FAIL: core dist not built; rerun after build PASS, 1 file / 4 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS, 2 files / 12 tests; supplied-input regression evidence only |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts` | PASS, 1 file / 38 tests; unchanged pure meter regression |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1: lane rejects inherited CH-4-C files against origin/main; core-purity phase PASS, 231 TS files with 7 pre-existing computed-import reports |
+| `pnpm lint:lanes` | FAIL, exit 1: same inherited CH-4-C range, not MON1-T file edits |
+| `LANE_BASE_REF=14eca75074217fa82fb719c38cac8a997eec59ad pnpm lint` (diagnostic) | FAIL, exit 1: linter explicitly refuses self-comparison; no substituted PASS claimed |
+| `pnpm exec turbo run lint --concurrency=2` | PASS, 7 tasks, 2 cache hits; package checks only, without replacing the requested failed lane gate |
+| `node tools/money-arithmetic-lint.mjs` | PASS, exit 0 |
+| `node tools/commercial-boundary-lint.mjs` | PASS, exit 0 |
+| `pnpm build --concurrency=2` | PASS, 7 tasks, 2 cache hits. Nonfatal shared-cache EPERM, Next workspace-root/CSS and Nest file-type dependency warnings reported |
+| `pnpm openapi:check` | FAIL, exit 1: tsx CLI IPC pipe listen EPERM in sandbox |
+| `node --import tsx apps/api/src/generate-openapi.ts --check` from root | FAIL: root has no tsx package resolution |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, exit 0; same generator/check, socket-free loader invocation |
+| `git diff --check` | PASS for tracked diff; new files additionally checked in final scope/whitespace inspection |
+| Node lane-policy check of issued-base tracked delta + untracked files using existing `loadLanePolicy`/`lanePathAllowed` | PASS; exact MON1-T working-tree paths only. This is a bounded scope check, not the failed main-range gate |
+
+The test builder additionally ran TypeScript transpileModule syntax checks on the
+three integration files, exit 0 with no diagnostics. This was parsing evidence,
+not database execution. Root strict test compilation above supplies type evidence.
+All Vitest commands use at most `--maxWorkers=2`; build/lint Turbo concurrency is 2.
+No PostgreSQL or browser suite was launched.
+
+## Acceptance mapping — written, NOT PostgreSQL-executed
+
+| ID | Prepared evidence and remaining boundary |
+| --- | --- |
+| M1T-01 | 399999/400000/400001, latest approved replacement and exact SQL arithmetic; CI pending |
+| M1T-02 | Later approved omission and unapproved revision keep stable event; CI pending |
+| M1T-03 | Test prepared for final-review fact without draft rebuild; reviewer A found its fixture fails before capture at 4026c3b5. r1 repairs fixture; PostgreSQL re-run pending. Actual source hook HOLD MON1-I |
+| M1T-04 | Draft/priced/rejected/withdrawn-only facts do not trip; unsupported price/payment/catch kinds refused; CI pending |
+| M1T-05 | Stable event, two immutable observations, microseconds, replay and invalidation hold; computation/statement correction uniqueness HOLD MON1-S/I |
+| M1T-06 | Overlapping source INSERT+capture, replay, earlier source concurrency and source/trip/audit rollback; authenticated command composition HOLD MON1-I |
+| M1T-07 | Private tenant-first lock/approval orders and delayed pre-lock source; actual source/lock command races and catch consumer proof HOLD MON1-I |
+| M1T-08 | Tenant/job/source, private EXECUTE, table privileges, caller amount/time absence, read validation; revoked session/owner and practice authority HOLD integration |
+| M1T-09 | No source API edits or trip responses introduced; actual integrated public output/UI proof HOLD MON1-I/R/J |
+| M1T-10 | Fresh fixture migrations and N-alone populated upgrade, grants/policies/rows/types and successors twice; PostgreSQL execution pending CI |
+
+## NOT RUN — required dispatcher/CI checks
+
+By issued restriction, PostgreSQL and browser suites are NOT RUN locally. The
+following draft commands remain required CI evidence after predecessors merge:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/meter-trip.integration.test.ts test/meter-trip-races.integration.test.ts test/meter-trip-upgrade.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/job-work-state-sources.integration.test.ts test/job-work-state-post-lock.integration.test.ts test/job-work-state-races.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/variation.integration.test.ts test/final-account.integration.test.ts
+```
+
+`pnpm test:db`, `pnpm test:migrations`, `pnpm test:e2e`, full `pnpm test` and full
+required GitHub CI: NOT RUN. Root test includes database suites; no socket-based
+subsystem was made optional. No browser spec belongs to this private no-route leaf
+(C1 reason in lane); affected integrated journey checks remain downstream mandatory.
+AI eval/live-model runs: NOT RUN / inapplicable; no prompt/model/extraction change.
+Clean install: NOT RUN; dependencies were preinstalled and downloads forbidden.
+
+## Every STOP and continuing hold
+
+- **STOP — lock-order interface:** coordinator must confirm authority precheck,
+  tenant184, authority recheck, ordered job/variation/source locks, receipt/result,
+  audit-last composition. Existing approval function audits internally; no late
+  trigger may acquire tenant184 or a job/business lock after that audit. Unit
+  lock-order results are not this missing integration proof.
+- **STOP — source timestamp provenance:** existing approval approved_at is supplied
+  by caller; created_at defaults to transaction start and raw source inserts can
+  supply it. MON1-I/source owner must bind trusted original server-fact provenance
+  and post-lock refusal under the accepted authority/lock interface. No new public
+  invocation exists until this is resolved; private fixtures do not clear it.
+- **STOP — coordinator consumer edits:** variation-repository.ts,
+  final-account-repository.ts and activation SQL/TS were untouched. MON1-I must wire
+  the seam inside each authoritative source transaction; this leaf cannot claim
+  an automatic product trip or source-API acceptance yet.
+- **STOP — correction consumers:** MON1-S/I must bind observation revision to new
+  source/computation and exactly one next-period correction with unchanged issued
+  statements. Negative correction and closed receiving-period holds remain.
+- **STOP — main-range lane check:** origin/main comparison includes inherited
+  CH-4-C changes and fails exact allowlist. No lane widening, shared policy edit,
+  base rewrite or scope-change workaround was used. Re-run after predecessor merge.
+- **STOP — database/catalog/upgrade/browser proof:** executable files are prepared
+  and typechecked, not PostgreSQL-executed. Shared catalogs are coordinator-owned.
+- **STOP — review/acceptance:** no candidate SHA exists because builder cannot
+  commit; Claude A/B and separate accepting actor bindings/evidence are not supplied.
+  Both exact-head verdicts, green CI and distinct acceptance are still required.
+
+Common draft holds retained verbatim by ID: **H-ISSUE** (this concrete order only
+binds build scope, branch, base and number; unspecified review/acceptance seats
+remain unbound), **H-PREDECESSORS**, **H-NORMATIVE**, **H-CH4**, **H-B**,
+**H-METER-CLOCK**, **H-TRIAL-CLOCK**, **H-CONVERSION**, **H-PRACTICE**, **H-HTTP**,
+**H-IDENTITY**, **H-ENABLE**, **H-EXTERNAL**, **H-CH4-Q01/Q03**, **H-REVIEW**,
+**H-LIVE**. Irrelevant trial/HTTP/provider operations are untouched, not approved.
+Original CH-1/CH-2/CH-3a/CH-4/SV-4 predecessor acceptance evidence remains with the
+dispatcher; build-ahead authorization does not assert it. D09 and all live monetary/
+region/retention/release gates remain. No parent MON-1/DEMO-S completion claimed.
+
+Backwards compatibility: additive only, no backfill/history rewrite, old readers
+ignore new objects. Operational change: private typed reconciliation/range/lock
+refusals and appended trip audit facts; no scheduled alert, worker or external action
+was installed. Forward-fix/rollback posture is in the same-stem migration note.
+
+
+## r1 (Claude A/B repair)
+
+Issued 23 October 2026 against `4026c3b50570f7caf82e91568ba13350088e1480`;
+build-ahead base remains CH-4-C `14eca750`. Read independent reviewer A's full
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-t-claude-A-4026c3b5-20261023.md`
+before editing. Only BLOCKING 1 is repaired here; B is still pending and the
+verdict's LATER items are not included in this round.
+
+Repair: the final-review fixture now inserts a matching synthetic
+`AddFinalReviewExtra` receipt in `processing`, an owner-bound `command` origin,
+and completes that receipt. Normal origin constraints and validation triggers
+remain enabled. Migration 0053 and every other migration are unchanged. This is
+fixture setup, not execution of the authenticated AddFinalReviewExtra workflow.
+M1T-03 retains both original assertions and additionally checks the persisted
+final-review kind, command provenance, exact receipt/actor/semantic key and the
+400001p observation linked to its approval. No test was removed or weakened.
+
+**Failure without fix checked:** reviewer A's actual embedded-PostgreSQL run on
+4026c3b5 recorded M1T-03 failing at `extra_origin_check1` (21/22 tests passed).
+Source inspection confirms reverting this fixture repair restores that rejected
+final_review/backfilled_synthetic_fixture combination. That is the existing
+regression test for this fix, now strengthened; no local PostgreSQL red/green or
+mutation execution is claimed. Dispatcher must confirm green after repair.
+
+Coverage correction: the original M1T-03 acceptance row above is corrected.
+At 4026c3b5 the final-review replay branch was **not exercised**, because setup
+failed. Reviewer A's 21 passing tests are independent local execution evidence
+for that head, not GitHub CI or evidence that this repaired worktree passes.
+The original command table remains a historical builder receipt.
+
+Commands for r1 used preinstalled pinned pnpm 10.28.1 through the existing
+`/private/tmp/jg-mon1-t-bin` wrapper; no install/download, git write, commit or push.
+
+| Command | r1 result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/db lint` | PASS, exit 0 |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-test-tsconfig.json` | PASS, exit 0; strict compilation includes all three own test files and imported helpers |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1; core purity passes, lane gate rejects inherited CH-4-C paths |
+| `pnpm lint:lanes` | FAIL, exit 1; inherited CH-4-C paths against origin/main, as reviewer A independently confirmed |
+| `pnpm build --concurrency=2` | PASS, exit 0; 7 tasks / 3 cached; nonfatal shared-cache EPERM and existing Next/CSS/Nest warnings |
+| `pnpm openapi:check` | FAIL, exit 1; tsx IPC listen EPERM |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, exit 0; socket-free invocation of the same check |
+
+PostgreSQL (including the leaf's three Vitest files, test:db and test:migrations)
+and browser suites: **NOT RUN**, per dispatcher sandbox restriction. This leaf
+has no separate non-PostgreSQL unit test files. No database suite is skipped or
+made optional in code. Required dispatcher re-run (maximum two workers):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/meter-trip.integration.test.ts test/meter-trip-races.integration.test.ts test/meter-trip-upgrade.integration.test.ts
+```
+
+All prior integration, catalog, predecessor, policy, review and acceptance holds
+remain. No migration, production behavior, privileges or commercial policy changed.
+
+Final r1 verification: `git diff --check` PASS. A read-only check using the existing
+`lanePathAllowed` against the current working-tree diff PASS: only
+`packages/db/test/meter-trip.integration.test.ts` and this receipt changed.
+This scope check does not replace the failed origin/main lane gate.
+Intended conventional commit subject/body saved to `/private/tmp/jg-msg-mon1-t.txt`.
+Build concurrency was 2; no Vitest workers or PostgreSQL/browser processes launched.
+
+## Dispatcher renumber (23 Oct)
+Migration renumbered 0206 -> 0208: 0206 belongs to MON-3-P-B (Codex coordinator). Mechanical rename of the SQL file, its note and references only; SQL body unchanged.
+
+## catalogue rows (dispatcher-assigned)
+
+Integration round issued 23 October 2026 on `6e5d5093339db6a88be5fc7408bb9b8511fa425e`,
+base CH-4-C `14eca75074217fa82fb719c38cac8a997eec59ad`. The dispatcher owns the
+shared catalogues and expressly assigned these additive edits. Read reviewer B's
+full report at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-t-claude-B-4026c3b5-20261023.md`,
+including LATER 2's tenancy/LP-0 catalogue prediction. The relative `jg-runs/`
+path supplied in the order was absent; the shared report path was available.
+Inspected migration 0208, BUILD_PLAN §10.1.6/MON-1 and §11.8/LP-0, the trip
+contract, catalogue derivation code, earlier additive snapshot helpers and
+read-only catalogue history (including ruling 113 examples).
+
+Delivered only 0208's own catalogue additions:
+
+- `tenancy.integration.test.ts`: two FORCE-RLS/tenant-policy rows and two
+  migration-owner rows, each in the existing PostgreSQL table-name order.
+- `lp-0-effective-privileges-v1.json`: two existing runtime SELECT facts, two
+  table-owner facts, one private invoker routine protection record, and two rows
+  each for recorded RLS, policies and immutable triggers. Existing groups classify
+  the read-only access and migration ownership. No EXECUTE fact or reachable
+  authority path is added: the new routine is migration-owned, unreachable to
+  runtime/PUBLIC/other roles and has no non-owner ACL; `deriveFacts` does not emit
+  an owner fact for such a routine. The routine's null definition digest denotes
+  source inspection only, following earlier additive records; no PostgreSQL digest
+  capture is claimed. Existing inventory metadata, groups, paths and rows remain.
+- `serious-b5-upgrade.integration.test.ts`: additive successor layer restricted to
+  the two named tables, their seven constraint indexes, two policies and exact
+  new function signature. Expected new table contents remain empty. Every prior
+  snapshot value and comparison is retained, ordered by existing catalogue
+  positions, following the earlier ruling-113 helpers.
+- Registered exactly those three shared files in `config/lanes/mon1-t.json`.
+  No migration, grant, application source, existing row or assertion was changed
+  or removed. A read-only subsequence comparison against HEAD proved every prior
+  line in all three shared files remains in order. No item required a STOP for a
+  non-additive expectation change.
+
+Used the existing pinned pnpm wrapper and installed dependencies; no download or
+install. Local checks are deterministic builder evidence, not a model verdict.
+
+| Command | Catalogue-round result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `pnpm --filter @jobguard/db lint` | PASS, exit 0 |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-catalogue-tsconfig.json` | PASS, exit 0; strict noEmit compilation of tenancy, SERIOUS-B5 upgrade and LP-0 catalogue tests and their imports |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS, 4 files / 42 tests |
+| Read-only `parseInventory` / `pathCompleteness` probe via `node --import tsx --input-type=module` from apps/api | PASS, exit 0; actual edited inventory parses and has no authority-path completeness gaps; initial root invocation failed because tsx is installed under apps/api |
+| Read-only predecessor-line preservation and inventory-delta probe | PASS; exact delta: four privilege/owner facts, one routine, two RLS/policy/trigger records each |
+| `LANE_BASE_REF=14eca750 pnpm lint:lanes` | PASS, exit 0; actual working-tree range including shared catalogue files |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL, exit 1; inherited CH-4-C files outside this lane, core purity passed |
+| `pnpm openapi:check` | FAIL, exit 1; tsx IPC socket listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, exit 0; socket-free invocation of the same OpenAPI check |
+| `pnpm typecheck` | PASS, exit 0; 7 tasks, 2 cached |
+| `LANE_BASE_REF=14eca750 pnpm lint` | PASS, exit 0; root checks and 7 package tasks, 2 cached |
+| `pnpm build --concurrency=2` | PASS, exit 0; 7 tasks, 3 cached; nonfatal shared-cache EPERM and existing Next/CSS/Nest warnings |
+| `git diff --check` and final `LANE_BASE_REF=14eca750 pnpm lint:lanes` | PASS, exit 0; only the three assigned shared files, own lane file and appended receipt differ from HEAD |
+
+PostgreSQL, tenancy/LP-0 integration, SERIOUS-B5 upgrade, `test:db`,
+`test:migrations` and browser suites: **NOT RUN**, as the dispatcher instructed.
+The dispatcher's reported two reviewer PASS verdicts and reviewer A's 22/22
+trip tests are prior-head evidence, not verification of this catalogue delta.
+Required reviewer/CI re-run on the dispatcher-created integrated commit:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/tenancy.integration.test.ts test/lp-0-grant-freeze.integration.test.ts test/lp-0-authority-paths.integration.test.ts test/serious-b5-upgrade.integration.test.ts
+```
+
+No new migration, compatibility behavior, grant, alert or commercial policy is
+introduced by these catalogue rows. Existing integration, predecessor, policy,
+exact-commit independent-review and separate-acceptance holds remain. No commit,
+index write, checkout, push, PR, deployment, PostgreSQL or browser process was
+performed. Conventional commit subject/body is in `/private/tmp/jg-msg-mon1-t.txt`.
+
+## catch-up onto 28416d1e
+
+25 October 2026, C261 / MON1-T-CATCHUP. Accepted piece head `153dd5b2`;
+dispatcher-started merge of main `28416d1e`. Builder evidence only; the dispatcher
+must finish the merge and obtain the exact-commit independent delta verdict.
+No commit, index write, push, PostgreSQL or browser process was performed.
+Used installed dependencies and cached pnpm 10.28.1 with Node 24.17.0; no install.
+
+Resolved `serious-b5-upgrade.integration.test.ts` by retaining both complete
+additive helpers and applying 0200's retained-workspace routine addition, 0201's
+work-state additions, then 0208's small-trip additions. All predecessor comparisons
+remain. Removed only the dead `origin !== "builder_logged"` / extra-origin insert
+branches from the race and upgrade fixtures, as carried from acceptance.
+MON1-T's three files retain all 22 expanded test cases and 89 `expect` calls;
+a read-only comparison against `153dd5b2` proves their only differences are those
+two dead lines. The related four-file non-PostgreSQL suite remains 42 tests.
+
+No own Zod-3-only annotation/API remains to change: `meter-small-trip.ts` uses
+inferred Zod output and its strict schema is unchanged. Own runtime source and
+0208 SQL are byte-identical to the accepted head. No production behavior,
+privilege, alert, commercial policy or public API change is introduced.
+
+Migration numbering: main's highest is `0201_job_work_state_commands.sql`;
+this piece retains `0208_meter_small_trip.sql`. The actual migration discovery
+function succeeds and ends `0199`, `0200`, `0201`, `0208`; no renumber occurred.
+This is source/discovery evidence, not a fresh PostgreSQL application proof.
+
+Standing-line catalogue accounting (schema/name/identity-argument order):
+
+- Newly added to `contractor-entitlement-upgrade.integration.test.ts` successor
+  expectations: `app.job_small_trip_event: []`,
+  `app.job_small_trip_observation: []`, and routine row
+  `{nspname:"app", proname:"mon1_capture_small_trip", args:"t uuid, j uuid, source_kind text, source_id uuid"}`.
+  The existing snapshot still compares every predecessor table; no exclusions.
+  Added this assigned shared file to MON1-T's lane allowlist.
+- Retained in SERIOUS-B5: those two tables, their seven constraint indexes,
+  both `tenant_isolation` policies and the exact same routine signature;
+  main's `mon8_retained_contractor_workspace(s uuid, q jsonb)` is also retained.
+  No additional 0208 catalogue rows were needed there.
+- Retained in tenancy: both table rows with
+  `relrowsecurity:true, relforcerowsecurity:true, guarded:true` and both owner
+  rows with `owner:"jobguard_migration"`; no new rows needed.
+- LP-0 `recorded.routines` already contains exactly one
+  `function:app.mon1_capture_small_trip(uuid,uuid,text,uuid)` record from the
+  accepted head; preserved, no duplicate added. It remains migration-owned,
+  invoker, `search_path=pg_catalog`, unreachable, no runtime/PUBLIC/other EXECUTE,
+  definition digest null (no database digest capture claimed). Existing two
+  SELECT facts, owner/RLS/policy/immutable-trigger rows remain unchanged.
+
+| Command actually run | Catch-up result |
+| --- | --- |
+| `pnpm typecheck` | PASS; all 7 packages, 4 cached |
+| `pnpm build --concurrency=2` | PASS; all 7 packages, 4 cached; nonfatal shared-cache EPERM and existing Next/CSS warnings |
+| `pnpm turbo run lint` | PASS; all 7 packages, none cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL solely at unregistered `codex/sandbox/mon1-t-catchup` branch; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL at the same branch registration; dispatcher uses registered piece branch |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/lock-order-1.test.ts src/meter-persistence.test.ts src/meter-repository.test.ts` | PASS; 4 files, 42 tests |
+| `pnpm openapi:check` | FAIL; tsx IPC listen EPERM in sandbox |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api, after DB build | PASS; same generator/check without tsx CLI socket |
+| `./node_modules/.bin/tsc -p /private/tmp/jg-mon1-t-catchup-tsconfig.json` | FAIL; unchanged shared `job-work-state-fixtures.ts:45`, default `proofEvidenceTypeSchema.options[0]` inferred `string \| undefined` rather than `string`; file is identical to main. Extra compilation covers own and shared integration files; outside package production typecheck |
+| Read-only migration discovery, accepted-head source/assertion comparison, inventory presence, registered MON1-T path allowlist probe | PASS; scope probe covers all 13 paths versus main, not a lane verdict |
+
+The first socket-free OpenAPI attempt preceded completion of the DB build and
+failed on absent `packages/db/dist/index.js`; the post-build invocation above passed.
+Logs are `/private/tmp/jg-mon1-t-catchup-*.log`; supplemental test config is in
+`/private/tmp/jg-mon1-t-catchup-tsconfig.json`. The shared-fixture compilation
+failure is recorded, not fixed by weakening an assertion or changing an unassigned
+helper.
+
+PostgreSQL, fresh/upgrade migrations, LP-0 authority paths, SERIOUS-B5 upgrade,
+contractor-entitlement upgrade, tenancy, the three own integration files,
+`test:db`, `test:migrations` and browser suites: **NOT RUN**, per dispatcher.
+There are no separate own non-PostgreSQL unit files. Reviewer/CI must run the
+three own files with `--maxWorkers=2` (22 cases) and the four standing-line
+catalogue suites. Existing policy/release, exact-commit independent-review and
+separate-acceptance holds remain. This receipt does not accept the piece.
+
+Final catch-up verification: `git diff --check` PASS; no conflict markers remain in
+the resolved file. The merge index intentionally remains dispatcher-owned.
+Intended conventional commit subject/body: `/private/tmp/jg-msg-mon1-t-catchup.txt`.
