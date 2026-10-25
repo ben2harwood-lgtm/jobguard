@@ -9,6 +9,8 @@
       "receipt": "docs/verdicts/MON1-S/BUILDER_RECEIPT.md",
       "note": "RED. Normal-company actual-source foundation only, decision 74 build ahead. C1: no HTTP/UI changes. Practice, trial, money projection, shared grants and subscription integration held; PostgreSQL proofs CI-only.",
       "allow": [
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
         "packages/db/src/meter-lifecycle-source.ts",
         "packages/db/src/meter-lifecycle-repository.ts",
         "packages/db/src/meter-lifecycle-repository.test.ts",
