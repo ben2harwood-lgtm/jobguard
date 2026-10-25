@@ -321,3 +321,53 @@ Final completions:
 
 - API cwd: `pnpm exec vitest run src/ --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/final-account-lock.isolation.test.ts`: **0; 2448 tests / 120 files** (`api-local`). Known local listener/database suites excluded here remain mandatory in CI.
 - `git diff --check`: **0**. Final diff assertion: only three authorized baseline fingerprint replacements plus appended run-2 receipt; all 13 spots/reasons preserved, other entries unchanged. Guard, test and application source are unchanged. No commit or push performed.
+
+## catch-up run 3 (after #308)
+
+CH6-CSG-01-CATCHUP, 25 October 2026. Ben authorized one additional catch-up and merge-first sequencing through the Track A+B dispatcher. Starting HEAD `7cd3770f` is the dispatcher's clean merge of main `cdd1b29b` (#308 included) into `f3aa7ebf`. Builder: Codex gpt-6.1-sol, medium reasoning. No sub-agents, Git write commands, dependency downloads, commit or push. Installed dependencies only: Node v24.17.0, pnpm 10.28.1 selected through existing `/private/tmp/ch6-csg-01-bin/pnpm`; no clean-install claim.
+
+### Source inspection and exact scope
+
+Read repository AGENTS.md, BUILD_PLAN §2.4 C1–C8 and CH-6, prior receipts, baseline/fingerprint implementation, and `git diff 4b1a7790 cdd1b29b -- packages/db/src/site-visit-repository.ts`. Unlike run 2's UUID drift, #308 changes the assigned-jobs query: it extracts `assignedJobsQuery` and adds a materialized current-assignment prefilter before the existing per-job authority check, ordering and 201-row limit.
+
+The new SQL directly reads only `app.work_order`, `app.work_order_current`, `app.job_assignment`, `app.job`, `app.work_order_revision` and `app.site_visit`. Its only application SQL function is `app.ent3b_visit_authority`. Source inspection traced that routine (0139) through `app.ent3a_extra_authority` (0135), `app.contractor_member_active` (0054), and `app.contractor_job_allowed`, `app.contractor_job_assigned`, `app.contractor_job_team` and `app.contractor_role_permits` (0110). These read membership/revocation, commercial-track, work-order/revision/assignment, team/org-unit and role-grant facts or evaluate literal permission mappings; none reads `commercial_integrity_*` tables or `commercial_integrity.*` receipts. The TypeScript `assignedJobs` → `read` → `decide` path uses `withTenant` (transaction-local tenant configuration) and `assertContractorGate(..., "member")` (membership/track gate); neither introduces advisory reads. Inspected tenant policies use tenant context, not advisory facts. The rewritten prefilter/read has no direct or helper-mediated advisory-fact reach. This is source inspection, not database execution or a universal stored-routine isolation proof.
+
+The two pinned statements remain `this.execute(context, actor, "start"/"complete", ...)` at **197 and 205**. Their line numbers therefore need no change. The fingerprint covers the enclosing class and transitive same-module inputs, including the rewritten read and extracted SQL, so both fingerprints require refreshing. The reasons and unresolved classification remain unchanged.
+
+| Spot | Old fingerprint | New fingerprint |
+| --- | --- | --- |
+| site-visit-repository.ts:197 | `edd95b0087a9a5602902d481a7b5ece185207f942b7f9c41907b86e3967b0e9f` | `568e30c1c68a1ee855278672bb32cbbeb6ffcb0b4524c54690cd91b502f93902` |
+| site-visit-repository.ts:205 | `0934a5ddf4618aae687a48fb9f00d27b08defe92181ffbdea9e1b852805d3705` | `f9cbfa6d598c4fe18d630905db62ec35bd1e0c7a7c8d9cc09df520d4cacd529a` |
+
+A deterministic comparison against HEAD verifies exactly two fingerprint changes, the same ordered 13 spots/lines/codes/reasons, and 11 other entries unchanged. Only this receipt and the baseline change. No guard, test, application behavior, lane, policy, migration, dependency or provider change. Invariants preserved: advisory separation, existing guard coverage, tenant isolation, authorization and durable replay. No migration/backfill/rollback, compatibility or alert change. C1: no changed web workflow.
+
+### Checks actually run
+
+Logs: `/private/tmp/ch6-run3-<label>.log`; command/result index: `/private/tmp/ch6-run3-results.json`. Turbo concurrency 1; Vitest one worker; build `CIRCLE_NODE_TOTAL=2`. Synthetic/fake-adapter tests are not live integration evidence.
+
+| Command | Actual result / log label |
+| --- | --- |
+| `node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard.test.mjs` | **0; 169/169 pass** (`targeted`). |
+| `node tools/commercial-integrity-current-source-guard.mjs` | **0; 42 protected roots, 0 diagnostics, 13 baselined cases; 0 unbaselined, 0 stale, 0 confirmed** (`cli`). |
+| `pnpm typecheck --concurrency=1` | **0; 7 tasks, 4 cached** (`typecheck`). |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | **1**, catch-up branch matches 0 registered lanes; purity passes, later lint stages not reached (`lint`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **1**, same branch mismatch (`lanes`). Per order, lane unchanged; dispatcher pushes to #305's registered branch. |
+| `pnpm exec turbo run lint --concurrency=1` | **0; 7/7 package lint tasks** (`package-lint`). |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | **Both 0**, supplemental root-lint stages (`money`, `boundary`). |
+| `node --test --test-concurrency=1 tools/*.test.mjs` | **0; 295/295 pass** (`tools`). |
+| `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1` | **0; 7 tasks, 4 cached** (`build`). Existing build/workspace/cache warnings; no source repair. |
+| `pnpm openapi:check` | **1**, tsx CLI IPC `listen EPERM` before comparison (`openapi`). |
+| API cwd: `node --import tsx src/generate-openapi.ts --check` | **0**, actual OpenAPI comparison without CLI IPC (`openapi-fallback`); no generated spec edited. |
+| Core cwd: `pnpm exec vitest run src/ --maxWorkers=1` | **0; 2953 tests / 124 files** (`core`). |
+| Config cwd: same source-only command | **0; 86 tests / 5 files** (`config`). |
+| AI cwd: same source-only command | **0; 147 tests / 15 files** (`ai`), synthetic/fake adapters; not live-model evaluation. |
+| Storage cwd: same source-only command | **0; 2 tests / 1 file** (`storage`), fake adapter. |
+| DB cwd: same source-only command | **0; 216 tests / 25 files** (`db`), not PostgreSQL integration. |
+| Web cwd: `pnpm exec vitest run --maxWorkers=1` | **0; 990 tests / 41 files** (`web`), unit/adapter tests, not browser journeys. |
+| API cwd: `pnpm exec vitest run src/ --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/final-account-lock.isolation.test.ts` | **0; 2448 tests / 120 files** (`api-local`). Known listener/database suites excluded only from this local run remain mandatory in CI. |
+
+`git diff --check`: **0**. Final scope assertion: only the two authorized fingerprint replacements plus this appended receipt; all 13 pins/reasons preserved, other 11 entries unchanged. Guard, tests and application sources unchanged.
+
+Root `pnpm test` (includes PostgreSQL suites), `test:db`, `test:migrations` and browser suites were not run locally: as dispatched, the sandbox cannot start PostgreSQL or bind localhost; these run in GitHub CI after push. Existing mandatory suites were not made optional. No prompt/model/extraction change; no new evaluation gate applies. No clean install or live-provider integration is claimed.
+
+Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch6-csg-01-catchup.txt`. Dispatcher owns commit/push and merge-first sequencing; Ben owns merge/release. Exact resulting-commit CI, the independent delta verdict and separate acceptance remain required. This receipt is builder source-inspection and deterministic-test evidence, not independent verification, technical acceptance, CH-6 completion, production activation or commercial approval. HEAD remains `7cd3770f`; no stage, commit, push or other Git write was performed.

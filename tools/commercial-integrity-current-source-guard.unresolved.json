@@ -65,14 +65,14 @@
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 197,
-    "fingerprint": "edd95b0087a9a5602902d481a7b5ece185207f942b7f9c41907b86e3967b0e9f",
+    "fingerprint": "568e30c1c68a1ee855278672bb32cbbeb6ffcb0b4524c54690cd91b502f93902",
     "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 205,
-    "fingerprint": "0934a5ddf4618aae687a48fb9f00d27b08defe92181ffbdea9e1b852805d3705",
+    "fingerprint": "f9cbfa6d598c4fe18d630905db62ec35bd1e0c7a7c8d9cc09df520d4cacd529a",
     "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
