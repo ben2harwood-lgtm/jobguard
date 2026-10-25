@@ -110,3 +110,31 @@ Logs are `/private/tmp/demo-p1-r1-{red-final,green,lint,lanes,package-lint,build
 Resource observations: 209 GiB free disk, memory reported 45% before repair checks and 37% during build preparation. Vitest used at most two workers and one named file per invocation; build concurrency was two. No worker agents spawned. Root lint prints eight computed-import notices: seven existing plus the explicit test-only URL import of the pure installed capture parser; no purity rule or exception list changed. These notices are reported by the existing lint rather than rejected, and do not constitute dependency/provenance verification by that scanner.
 
 All prior holds remain; reviewers must review the repaired commit after dispatcher commit. Intended conventional-commit subject/body saved to `/private/tmp/jg-msg-demo-p1.txt`. No commit, staging, checkout, push or PR command executed.
+
+## make PR green — 25 October 2026
+
+Issued repair order for PR #333. Inspected clean local HEAD `5e54c6579df37079f4e796b89566edd0691ab86d`, including dispatcher's edit-free merge of `origin/main` `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`. Read repository AGENTS.md, BUILD_PLAN.md DEMO-S acceptance/dependency card, existing task contract/receipt, lane and CI workflow. Installed Node v24.17.0, pinned pnpm 10.28.1, Zod 4.6.6. Existing dependencies only; no install/download, dependency or lockfile changes.
+
+No source repair was necessary: the owned production file is static documentation data; the owned test uses public Zod object/array APIs with all existing `.strict()` boundaries intact. No ZodTypeDef, `_type`, `_def`, old ZodType signature or single-argument record exists in either owned TypeScript file. The full package typecheck and whole unit suite pass against merged main. Only this existing lane receipt is edited; no lane expansion, scanner/test edits, behavior change, new abstraction, migration, compatibility impact, external action or alert.
+
+Before typechecks, moved **all five** existing `packages/*/dist` directories to `/private/tmp/demo-p1-green-dist-backup/{core,config,storage,ai,db}`. No package dist existed during the package and full uncached root typecheck/lint; build subsequently regenerated outputs. Backups remain outside the repository. Pinned commands use `COREPACK_ENABLE_NETWORK=0`. Initial root typecheck/lint attempts encountered a local launcher issue: Turbo selected globally installed pnpm 11.8.0 despite the parent Corepack invocation. A temporary `/private/tmp/demo-p1-pinned-bin/pnpm` launcher delegates to `/usr/local/bin/corepack pnpm`; prepending it to PATH fixes nested invocations without changing repository configuration. Final root checks force execution, avoiding cached evidence.
+
+| Command | Actual result |
+|---|---|
+| `pnpm --filter @jobguard/core typecheck` with all package dist absent | PASS, exit 0 |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, exit 0; **130 files / 3,061 tests**, including all 54 DEMO-P1 cases and enterprise shared boundary scanner |
+| `pnpm --filter @jobguard/core lint` with all package dist absent | PASS, exit 0 |
+| `pnpm typecheck --concurrency=2 --force` with all package dist absent | PASS, exit 0; 7/7 tasks, zero cached |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2 --force` | PASS, exit 0; purity/lane/money/commercial guards and 7/7 package tasks, zero cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0; actual branch/head/base comparison |
+| `node --test tools/*.test.mjs` | PASS, exit 0; 295 tests |
+| `pnpm build --concurrency=2 --force` | PASS, exit 0; 7/7 tasks, zero cached; Next production build completed |
+| `pnpm openapi:check` | Sandbox-blocked, exit 1: tsx CLI IPC socket `listen EPERM`, before generator execution |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | PASS, exit 0; same generator/check without CLI IPC socket |
+| `git diff --check` | PASS, exit 0; final working-tree scope check below |
+
+Logs: `/private/tmp/demo-p1-green-{core-typecheck,core-tests,core-lint,typecheck,lint,lanes,tools-tests,build,openapi,openapi-direct}.log`. Final typecheck/lint logs replace the initial launcher failures described above. Turbo reports sandbox cache-write IO warnings. A fresh pinned install was not performed. No PostgreSQL, migration, browser, full root test (which includes DB suites), restore, live-model or provider checks run here; DB/browser remain GitHub CI work as instructed. No prompt, model, extraction parser or schema behavior changed, so no new model evaluation is claimed.
+
+Read-only GitHub inspection: remote PR head remains `167ea3a08202f79e41b7821da557116261220583`, base `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`; local merged head has no workflow run. Existing CI run `40212189437` is in progress: web (including browser journeys), secrets and dependency-review succeeded; core typecheck/lint succeeded, core tests still in progress. This is remote older-candidate evidence only, not green CI for this unpushed local head. Dispatcher must commit/push and confirm all required CI on the resulting candidate. No GitHub mutation, commit, staging, checkout, push or merge performed. Independent verdict/acceptance and all existing product/release holds remain separate and unchanged. Intended conventional commit message is `/private/tmp/jg-msg-demo-p1.txt`.
+
+Final working-tree scope: `git diff --name-only` and `git status --short` show only this permitted receipt; `git diff --check` passes. Final lane check after receipt update passes. Build retains existing workspace-root/CSS/file-type and sandbox cache-write warnings; no build error.
