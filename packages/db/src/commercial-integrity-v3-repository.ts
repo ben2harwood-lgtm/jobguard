@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-// CH6-C public module; shared barrel integration belongs to the dispatcher. Build core first.
 import { canonicalCommercialIntegritySnapshot, commercialIntegrityReviewV3Schema, evaluateCommercialIntegrityV3,
- type CommercialIntegrityFamilyV1, type CommercialIntegrityV3Result, type CommercialIntegrityReviewV3 } from "../../core/dist/commercial-integrity-v3.js";
+ type CommercialIntegrityFamilyV1, type CommercialIntegrityV3Result, type CommercialIntegrityReviewV3 } from "@jobguard/core";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { authorizeIntegrityScope, canonicalIntegrityScope, CommercialIntegrityPersistenceError, readIntegrityFamily,

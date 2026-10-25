@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { TenantTransaction } from "./tenant-context.js";
 import { PracticeAccessError, practiceOwnedJobsSql } from "./practice-session.js";
-import type { CommercialIntegrityV3Input } from "../../core/dist/commercial-integrity-v3.js";
+import type { CommercialIntegrityV3Input } from "@jobguard/core";
 
 export type CommercialIntegrityActor = Readonly<{ membershipId: string; identityUserId: string }>;
 export type CommercialIntegrityScope = Readonly<{ tenantId: string; jobId: string; digest: string; actor: CommercialIntegrityActor }>;

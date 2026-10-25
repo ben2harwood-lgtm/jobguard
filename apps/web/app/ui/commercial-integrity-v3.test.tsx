@@ -1,8 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { IntegrityJourney, IntegrityV3Results, integritySnapshotHash, type IntegrityState, type IntegrityV3View } from "./commercial-integrity-v3";
-import { CommercialIntegrity } from "./commercial-integrity";
+import { CommercialIntegrityV3, IntegrityJourney, IntegrityV3Results, integritySnapshotHash, type IntegrityState, type IntegrityV3View } from "./commercial-integrity-v3";
 const job = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", tenant = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", other = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const time = "2026-10-20T12:00:00.000001Z", key = "ordinary-invoice";
 const family = (value = "v3") => ({ version: "commercial-integrity-family.v1", environment: "synthetic_demo", jobId: job, family: value, realExternalActions: 0 });
@@ -24,14 +23,14 @@ function setup(responses: unknown[] = [family(), fixture()]) {
 function ready(state: IntegrityState): IntegrityV3View { if (state.status !== "v3") throw Error("Expected ready v3"); return state.view; }
 describe("CH6-J authoritative family selection and no fixture flash", () => {
  it("renders loading without v1 values, findings or source identifiers", () => {
-  const markup = renderToStaticMarkup(<CommercialIntegrity jobId={job} />);
+  const markup = renderToStaticMarkup(<CommercialIntegrityV3 jobId={job} />);
   expect(markup).toContain("Loading recorded sources"); expect(markup).not.toMatch(/£|Frozen accepted|No checks|private-source/u);
  });
- it.each(["saved v1 draft", "activated v1"])("%s uses only the selected v1 route", async () => {
+ it("routes a server-selected v1 family to the v1 endpoint", async () => {
   const s = setup([family("v1"), legacy]); await s.journey.load(); expect(s.latest().status).toBe("v1");
   expect(s.request.mock.calls.map(c => c[0])).toEqual([`/api/jobs/${job}/commercial-integrity/family`, `/api/jobs/${job}/commercial-integrity`]);
  });
- it.each(["generated unactivated", "activated", "accepted imported"])("%s v3 uses the exact selected route with no-store", async () => {
+ it("routes a server-selected v3 family to the v3 endpoint with no-store", async () => {
   const s = setup(); await s.journey.load(); expect(s.latest().status).toBe("v3");
   expect(s.request.mock.calls.map(c => c[0])).toEqual([`/api/jobs/${job}/commercial-integrity/family`, `/api/jobs/${job}/commercial-integrity/v3`]);
   expect(s.request.mock.calls.every(c => (c as unknown as [string, RequestInit])[1].cache === "no-store")).toBe(true);
@@ -59,6 +58,12 @@ describe("CH6-J authoritative family selection and no fixture flash", () => {
   // Break reference sharing so tenant/scope faults test a disagreement rather than both changing together.
   if (fault === "tenant" || fault === "scope") { raw.result.findings[0]!.sourceSnapshot.tenantId = tenant; raw.result.findings[0]!.sourceSnapshot.scopeId = "private-session"; }
   const s = setup([family(), raw]); await s.journey.load(); expect(s.latest().status).toBe("error");
+ });
+ it("compares UUID scope references without case sensitivity", async () => {
+  const raw = fixture();
+  raw.result.findings[0]!.sourceReferences = [{ ...raw.result.findings[0]!.sourceReferences[0]!, scopeId: tenant.toUpperCase() }];
+  raw.result.findings[0]!.sourceSnapshot.scopeId = tenant;
+  const s = setup([family(), raw]); await s.journey.load(); expect(s.latest().status).toBe("v3");
  });
  it("invalidates a delayed response on job/session switch and never renders the old state", async () => {
   let release!: (r: Response) => void;

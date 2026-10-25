@@ -100,3 +100,54 @@ Affected invariants: AGENTS §§5.1/5.3/5.9/5.10/5.12/5.13/5.14, D11 advisory is
 Discovered later (coordinator backlog proposal; BUILD_PLAN.md is outside this lane): integrate the request-scoped CH6-A facade and core barrel row; regenerate stale OpenAPI; install two-phase shell session invalidation events; hand over authorised source-navigation and remaining CH6 source adapters; then execute persisted dismissal/restart/tenant/shadow differential browser/database acceptance. Keep these held instead of treating synthetic unit fixtures as source-production proof.
 
 Final-source production build repeat: **exit 0** (`CIRCLE_NODE_TOTAL=2 node_modules/.bin/next build > /private/tmp/ch6-j-build.log 2>&1`, apps/web). Final whitespace check: **exit 0**. All generated build outputs remain ignored; the final seven changed paths stay within the issued allowlist.
+
+## r1
+
+25 October 2026. Repair order `jg-orders/CH6-J-v5-r1.txt`; read independent Claude A REPAIR report `jg-runs/v5-ch6-j-claude-A-c9098678-20261025.md` in full. Starting/remaining HEAD `298120254404521929237dce27e2c60de30ce489` on `codex/sandbox/ch6-j`. This section supersedes conflicting implementation/validation claims above. No commit, push or PR; dispatcher owns the next commit, exact-head review and acceptance.
+
+### Repairs and scope
+
+- **B1:** restored `apps/web/app/ui/commercial-integrity.tsx` byte-for-byte from `origin/main`. Deterministic `git diff --exit-code origin/main -- apps/web/app/ui/commercial-integrity.tsx` exits 0. It reads the original v1 endpoint directly, uses server decision status and preserves main's activation/cap/filter/review behavior, including its existing initial fixture and optimistic feedback behavior. Those inherited behaviors are not claimed as v3 guarantees. No installed page imports the family-first journey. Only the standalone `CommercialIntegrityV3` seam uses it; installing v3 remains HELD on J-S1 composition.
+- **B2:** v3 web component imports the four existing public exports from `@jobguard/core`. CH6-A r2 already added the core/db barrel rows; no missing export or barrel edit needed. No deep dist imports remain in these web files.
+- The first no-dist proof also exposed two transitive deep imports in `packages/db/src/commercial-integrity-v3-repository.ts` and `commercial-integrity-v3-sources.ts`. Switched only those imports to `@jobguard/core` and removed the stale build-first comment. These are **cross-lane CH6-P file edits**, made under r1's “and anything similar” instruction because they directly prevented the required web proof. Dispatcher must serialize/coordinate these two import-only repairs with CH6-P; the CH6-J lane register has not been widened. No query, SQL, schema, posting, grant, repository behavior or migration change.
+- Updated CH6-J browser coverage to the repaired installed behavior: saved v1 sources/cap/empty state remain visible even while a direct family probe returns unavailable; UI requests stay on v1, including after reload and a new browser context. Existing `M1-16-S.spec.ts` and all its assertions remain unchanged. Removed the old spec's expectation that the installed page should show the broken family's 503 alert; that expectation contradicts r1. This does not claim the standalone v3 seam is installed or browser-tested. V3 source/dismissal, process restart and source-production acceptance remain HELD, not replaced by weaker claims.
+
+LATER disposition:
+
+1. Ordinary focus/pageshow/visibility events no longer reload/clear the v3 journey, review draft or uncertain retry identity. Job mount, explicit reload and explicit session events retain invalidation. Same-document shell session dispatch remains HELD J-H3; removal of incidental focus refresh does not implement it.
+2. Hard-coded installed D11 status removed with wrapper restoration; main uses the server status.
+3. `LegacyResults` was removed with wrapper restoration. No separate unit-render claim for that deleted component; unchanged M1-16-S remains the required v1 DOM regression, NOT RUN locally.
+4. Scope references compare canonical lower case; added a distinct mixed-case scope test. Existing malformed-scope rejection test retained.
+5. Second browser context uses Playwright's configured `baseURL`, not a hard-coded port.
+6. Spec name/comments now say new **browser context**; application-process restart proof remains HELD.
+7. Replaced duplicate scenario names with one explicit server-selected v1 routing case and one server-selected v3 routing case. The identical routing assertions remain; no producer classification coverage is implied. Added scope test brings focused coverage to 44 distinct cases (previous 46 included repeated identical routing bodies).
+8. Removed pageshow listener, eliminating mount-plus-pageshow duplicate load.
+
+React best-practices skill read and applied to changed TSX: checked effect dependencies/listener cleanup, keyed job lifecycle, request generations, accessible loading/dialog controls and existing bounded explanation. User-required package imports take precedence over the skill's generic advice about barrel imports. This is builder source inspection, not an independent model verdict.
+
+### Commands and results
+
+Installed dependencies used; no install/download requested. Node v24.17.0, pinned pnpm 10.28.1 invoked directly via `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. A temporary `/private/tmp/ch6-j-r1-bin/pnpm` launcher invokes that same cached binary; final recursive commands used `PATH="/private/tmp/ch6-j-r1-bin:$PATH"` to prevent Turbo's nested calls selecting the system launcher. No repository package-manager, lockfile or configuration changes.
+
+- No-dist attempt 1: moved every `packages/*/dist` aside, invoked cached pnpm `--filter @jobguard/web typecheck`: **exit 2**, four errors from the two transitive DB deep imports. All dist directories restored in `finally`.
+- **Final no-dist proof: exit 0.** After the two import fixes, moved `packages/ai/dist`, `packages/config/dist`, `packages/core/dist`, `packages/db/dist`, `packages/storage/dist` to sibling `dist.ch6-j-r1-backup` names; asserted no `packages/*/dist` existed; removed ignored `apps/web/tsconfig.tsbuildinfo` for a fresh check; ran `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/web typecheck` (the pinned `pnpm --filter @jobguard/web typecheck` command): **exit 0**. Every directory restored in `finally`. Exit recorded in `/private/tmp/ch6-j-r1-no-dist.exit`. This is typechecking against source, not a clean install or runtime test.
+- `pnpm --filter @jobguard/web lint`: **exit 0**; final repeat after browser assertion adjustment also exit 0 (`/private/tmp/ch6-j-r1-web-lint-final.log`).
+- Initial `pnpm --filter @jobguard/web test --maxWorkers=2`: **exit 1**, 44 files/905 tests passed, v3 suite could not load because restored old core dist lacked the merged public exports. Rebuilt dependencies through the real workspace build; no test weakened or skipped to address it.
+- Final `pnpm --filter @jobguard/web test --maxWorkers=2`: **exit 0, 45 files, 949 tests passed**, including all 44 CH6-J cases (`/private/tmp/ch6-j-r1-web-unit-final.log`). Synthetic unit evidence, not PostgreSQL/browser proof.
+- `LANE_BASE_REF=origin/main pnpm lint`: **exit 1**, core purity completed (240 files, existing computed-import reports); lane boundary stops the remaining Turbo lint phase (`/private/tmp/ch6-j-r1-root-lint.log`).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **exit 1**, inherited build-ahead producer changes outside CH6-J plus the two explicitly noted DB import repairs (`/private/tmp/ch6-j-r1-lanes.log`). No allowlist broadening or lane pass claimed. Working-tree changed paths are the five CH6-J UI/test files, this receipt, and those two DB import files.
+- Initial root typecheck/build invocations without the temporary pinned launcher stalled in nested system-pnpm calls and were interrupted. Tool returned 0 on interruption; this is **not** recorded as success. Initial logs `/private/tmp/ch6-j-r1-typecheck.log` and `ch6-j-r1-build.log` contain replayed cache output from other worktrees; those are not this run's executed checks.
+- Final `pnpm typecheck` with pinned launcher: **exit 0, 7/7 Turbo tasks successful**, four cached (`/private/tmp/ch6-j-r1-typecheck-pinned.log`).
+- Final `CIRCLE_NODE_TOTAL=2 pnpm build` with pinned launcher: **exit 0, 7/7 tasks successful**, two cached; web production compilation/type validation/static generation/route collection completed (`/private/tmp/ch6-j-r1-build-pinned.log`). `CIRCLE_NODE_TOTAL=2` limits Next static workers. Existing CSS compatibility, workspace-root and Nest/computed-dependency warnings remain; Turbo reports cache I/O EPERM warnings without failing the build. Final browser-only path assertion adjustment was subsequently typechecked by web lint.
+- `pnpm openapi:check`: **exit 1 before generator execution**, sandbox rejects the tsx CLI IPC socket (`listen EPERM`, `/private/tmp/ch6-j-r1-openapi.log`). Safe equivalent `node --import tsx src/generate-openapi.ts --check` in apps/api: **exit 0**, catalogue current (`/private/tmp/ch6-j-r1-openapi-node.log`). No generated catalogue edit.
+- `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs`, `git diff --check`: **exit 0** each. Read-only `git status`, `git rev-parse`, `git diff`, `git show`, source searches and review/contract reads completed. A broad file search was interrupted; a process diagnostic was denied (`ps: operation not permitted`); neither provides validation evidence.
+
+### Remaining gates and handoff
+
+**Browser NOT RUN. PostgreSQL/migrations NOT RUN.** No listener or PostgreSQL started. Both `M1-16-S.spec.ts` and `ch6-integrity-v3.spec.ts` must pass in CI in **mobile-360 and desktop**, and within the full required suite:
+
+```sh
+pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop --workers=1 ch6-integrity-v3.spec.ts M1-16-S.spec.ts
+```
+
+No screenshots, traces or CI result asserted. Current independent verdict remains REPAIR until the dispatcher commits and obtains a fresh exact-commit review. CI-J02's code regression is repaired by exact-main restoration; its browser acceptance remains unverified. J-S2 export hold is resolved by the merged parent. OpenAPI is locally checked via the equivalent Node invocation. J-S1 facade, ordinary source completeness, source navigation, explicit shell session integration, persisted v3 process-restart/tenant/shadow differential proof and separate acceptance remain HELD. No fee/meter/settlement/Final Check action enabled; no commercial external effect. Rollback is a source revert, with no migration/backfill. Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch6-j.txt` for the dispatcher.

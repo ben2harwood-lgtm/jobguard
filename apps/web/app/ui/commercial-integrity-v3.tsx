@@ -2,8 +2,7 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-// CH6-C's barrel is coordinator-owned; consume the same public module as A/P.
-import { canonicalCommercialIntegritySnapshot, commercialIntegrityFamilyV1Schema, commercialIntegrityReviewV3Schema, commercialIntegrityV3ResultSchema } from "../../../../packages/core/dist/commercial-integrity-v3.js";
+import { canonicalCommercialIntegritySnapshot, commercialIntegrityFamilyV1Schema, commercialIntegrityReviewV3Schema, commercialIntegrityV3ResultSchema } from "@jobguard/core";
 import { pounds } from "../lib/pounds";
 
 const uuid = z.string().uuid().transform(v => v.toLowerCase());
@@ -50,7 +49,7 @@ export class IntegrityJourney {
    if (family.family === "v1") this.set({ status: "v1", view: legacySchema.parse(raw) });
    else {
     const view = viewSchema.parse(raw);
-    if (view.jobId !== this.jobId || view.feedback.some(f => f.jobId !== this.jobId) || view.result.findings.some(f => f.sourceSnapshot.jobId.toLowerCase() !== this.jobId || f.sourceSnapshot.family !== "v3" || f.sourceSnapshot.findingKey !== f.key || f.sourceSnapshot.kind !== f.kind || f.window.start !== f.sourceSnapshot.window.start || f.window.end !== f.sourceSnapshot.window.end || f.sourceSnapshot.profile.version !== view.result.profileVersion || f.sourceReferences.some(s => s.tenantId.toLowerCase() !== f.sourceSnapshot.tenantId.toLowerCase() || s.scopeId !== f.sourceSnapshot.scopeId || (f.kind !== "related_sub2000_quotes_90_days" && s.jobId.toLowerCase() !== this.jobId)))) throw new Error(failure);
+    if (view.jobId !== this.jobId || view.feedback.some(f => f.jobId !== this.jobId) || view.result.findings.some(f => f.sourceSnapshot.jobId.toLowerCase() !== this.jobId || f.sourceSnapshot.family !== "v3" || f.sourceSnapshot.findingKey !== f.key || f.sourceSnapshot.kind !== f.kind || f.window.start !== f.sourceSnapshot.window.start || f.window.end !== f.sourceSnapshot.window.end || f.sourceSnapshot.profile.version !== view.result.profileVersion || f.sourceReferences.some(s => s.tenantId.toLowerCase() !== f.sourceSnapshot.tenantId.toLowerCase() || s.scopeId.toLowerCase() !== f.sourceSnapshot.scopeId.toLowerCase() || (f.kind !== "related_sub2000_quotes_90_days" && s.jobId.toLowerCase() !== this.jobId)))) throw new Error(failure);
     const snapshotHashes = Object.fromEntries(await Promise.all(view.result.findings.map(async f => [f.key, await integritySnapshotHash(f.sourceSnapshot)])));
     if (generation === this.generation) this.set({ status: "v3", view: { ...view, snapshotHashes } });
    }
@@ -92,11 +91,10 @@ export function useIntegrityJourney(jobId: string) {
   const current = new IntegrityJourney(jobId, setState); journey.current = current;
   const reload = () => { reset(); void current.load(); };
   const invalidate = () => { reset(); current.clear(); };
-  const visibility = () => { reset(); if (document.hidden) current.clear(); else void current.load(); };
-  reload(); window.addEventListener("focus", reload); window.addEventListener("pageshow", reload); document.addEventListener("visibilitychange", visibility);
+  reload();
   // Explicit hook for the shell's session reset; HttpOnly session handles never enter this component.
   window.addEventListener("jg:session-changing", invalidate); window.addEventListener("jg:session-changed", reload);
-  return () => { reset(); current.clear(); window.removeEventListener("focus", reload); window.removeEventListener("pageshow", reload); window.removeEventListener("jg:session-changing", invalidate); window.removeEventListener("jg:session-changed", reload); document.removeEventListener("visibilitychange", visibility); };
+  return () => { reset(); current.clear(); window.removeEventListener("jg:session-changing", invalidate); window.removeEventListener("jg:session-changed", reload); };
  }, [jobId]);
  useEffect(() => { if (review) textarea.current?.focus(); }, [review]);
  async function open(target: ReviewTarget, button: HTMLButtonElement, snapshot?: IntegrityV3View["result"]["findings"][number]["sourceSnapshot"]) {
@@ -135,7 +133,7 @@ function comparedText(key: string, value: unknown): string | null {
  const labels: Record<string, string> = { acceptedAt: "Recorded acceptance (UTC)", delayMicroseconds: "Reference delay (microseconds)", activation: "Recorded activation", lockState: "Recorded lock", activityKind: "Activity", basis: "Amount basis", distanceMicroseconds: "Quote separation (microseconds)", endpoint: "Window endpoint", cycles: "Linked cycles", minimumCycles: "Reference minimum cycles", payments: "Explicit payments", minimumPayments: "Reference minimum payments", disposition: "Published disposition", evidenceState: "Evidence state", correctionKind: "Correction type", cutoff: "Published cutoff (UTC)" };
  return labels[key] && (typeof value === "string" || typeof value === "number") ? `${labels[key]}: ${value}` : null;
 }
-/** Standalone seam for future page composition; the installed wrapper uses the same journey. */
+/** Family-first seam for future page composition; the installed v1 wrapper stays independent. */
 export function CommercialIntegrityV3({ jobId }: { jobId: string }) { return <V3Panel key={jobId.toLowerCase()} jobId={jobId.toLowerCase()} />; }
 function V3Panel({ jobId }: { jobId: string }) {
  const journey = useIntegrityJourney(jobId);
