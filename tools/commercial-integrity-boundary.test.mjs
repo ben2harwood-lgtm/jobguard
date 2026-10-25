@@ -1,9 +1,11 @@
 // CI-B controls are in-memory source mutations; they execute no application code.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { agreedV3Symbols, V3_SOURCE, createProject, loadRepoProject, checkCommercialIntegrityBoundary, isProtectedRoot } from './commercial-integrity-boundary.mjs';
+import { applyUnresolvedBaseline, agreedV3Symbols, V3_SOURCE, createProject, loadRepoProject, checkCommercialIntegrityBoundary, isProtectedRoot } from './commercial-integrity-boundary.mjs';
 
 const root = new URL('..', import.meta.url);
 const authority = 'packages/core/src/pricing.ts';
@@ -29,7 +31,8 @@ function bites(extra, code = forbidden, file = authority) {
   const d = ds.find(x => x.code === code && x.file === file);
   assert.ok(d, JSON.stringify(ds, null, 2));
   assert.ok(d.line > 0 && d.dependency.length > 0 && d.chain.includes(file));
-  assert.equal('fingerprint' in d, false);
+  if (code === unknown) assert.match(d.fingerprint, /^[a-f0-9]{64}$/u);
+  else assert.equal('fingerprint' in d, false);
 }
 
 test('CI-B01 complete accepted inventory and installed authority discovery', () => {
@@ -47,8 +50,9 @@ test('CI-B01 complete accepted inventory and installed authority discovery', () 
   for (const file of ['packages/core/src/fee.ts', 'packages/core/src/plan-entitlements.ts', 'packages/db/src/meter-repository.ts', 'packages/db/src/account-repository.ts', 'apps/api/src/subscription.application.ts']) assert.ok(p.roots.includes(file), file);
 });
 
-test('CI-B01 exact integrated source must have no forbidden or unresolved paths', () => {
+test('CI-B01 exact integrated source has zero violations, unbaselined edges and stale entries', () => {
   const ds = checkCommercialIntegrityBoundary(loadRepoProject(), agreedV3Symbols);
+  for (const code of [forbidden, sql, unknown, 'STALE_UNRESOLVED_BASELINE', 'INVALID_UNRESOLVED_BASELINE']) assert.equal(ds.filter(d => d.code === code).length, 0, code);
   assert.equal(ds.length, 0, `Source proof HOLD: ${ds.length} diagnostics. Run node tools/commercial-integrity-boundary.mjs for full paths.`);
 });
 
@@ -122,10 +126,11 @@ test('CI-B05 actual authority-source mutation is detected without executing it',
   const changed = createProject({ ...Object.fromEntries(p.texts), [file]: original + `\nimport { ${evaluator} as forbiddenAdvice } from "./commercial-integrity-v3.js"; export const newFee = forbiddenAdvice;` });
   assert.ok(checkCommercialIntegrityBoundary(changed).some(d => d.code === forbidden && d.file === file));
 });
-test('CLI fails with diagnostics and exit status agrees with API; no source hash assertions', () => {
+test('CLI exits zero for repository and exit status agrees with API', () => {
   const result = spawnSync(process.execPath, ['tools/commercial-integrity-boundary.mjs'], { encoding: 'utf8', timeout: 60_000 });
   assert.equal(result.error, undefined);
-  assert.equal(result.status, checkCommercialIntegrityBoundary(loadRepoProject()).length ? 1 : 0);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(checkCommercialIntegrityBoundary(loadRepoProject()), []);
   assert.match(result.stdout, /protected roots; \d+ diagnostics/u);
 });
 
@@ -165,3 +170,92 @@ test('CI-B03 indexing ordinary imported data is not computed module access', () 
   [authority]: 'import { prices } from "./money.js"; export const price = prices[key];',
   'packages/core/src/money.ts': 'export const prices = { one: 1 };',
 }));
+
+// r1: paired safe/unsafe controls exercise the finite evaluator before baselining.
+for (const [label, safe, unsafe] of [
+  ['finite literals', 'db.query(flag ? "SELECT id FROM app.job" : "SELECT id FROM app.quote");', 'db.query(flag ? "SELECT id FROM app.job" : "SELECT * FROM app.commercial_integrity_v3_feedback");'],
+  ['immutable constants', 'const table = "app.job"; const query = `SELECT * FROM ${table}`; db.query(query);', 'const table = "app.commercial_integrity_v3_feedback"; const query = `SELECT * FROM ${table}`; db.query(query);'],
+  ['static helpers', 'function select(table: string) { return `SELECT * FROM ${table}`; } db.query(select("app.job"));', 'function select(table: string) { return `SELECT * FROM ${table}`; } db.query(select("app.commercial_integrity_v3_feedback"));'],
+  ['immutable receipt parameters', 'const kind = "quote.create"; const params = [kind]; db.query("SELECT result FROM app.command_receipt WHERE command_type=$1", params);', 'const kind = "commercial_integrity.review.v3"; const params = [kind]; db.query("SELECT result FROM app.command_receipt WHERE command_type=$1", params);'],
+]) test(`r1 static resolution: ${label} proves ordinary SQL and detects advisory SQL`, () => {
+  clean({ [authority]: safe });
+  bites({ [authority]: unsafe }, sql);
+});
+for (const source of [
+  'let table = "app.job"; table = runtime; db.query(`SELECT * FROM ${table}`);',
+  'const params = ["quote.create"]; params[0] = runtime; db.query("SELECT result FROM app.command_receipt WHERE command_type=$1", params);',
+  'function select(table: string) { effect(); return `SELECT * FROM ${table}`; } db.query(select("app.job"));',
+  'const select = (table: string) => select(table); db.query(select("app.job"));',
+]) test(`r1 non-static inputs remain unresolved: ${source}`, () => bites({ [authority]: source }, unknown));
+
+const pin = ds => [...new Map(ds.filter(d => d.code === unknown).map(d => [d.fingerprint, {
+  code: d.code, file: d.file, line: d.line, fingerprint: d.fingerprint,
+  reason: 'Test fixture: runtime query text is outside the finite evaluator.',
+}])).values()];
+const unresolvedFixture = 'function helper() { return runtime; } const query = helper(); db.query(query);';
+test('r1 baseline permits only exact reviewed unresolved sites; new edge fails', () => {
+  const original = scan({ [authority]: unresolvedFixture });
+  const baseline = pin(original);
+  assert.equal(baseline.length, 1);
+  assert.deepEqual(applyUnresolvedBaseline(original, baseline), []);
+  const next = scan({ [authority]: unresolvedFixture + ' db.query(otherRuntime);' });
+  assert.ok(applyUnresolvedBaseline(next, baseline).some(d => d.code === unknown));
+});
+test('r1 removed or now-resolved sites make baseline stale', () => {
+  const baseline = pin(scan({ [authority]: unresolvedFixture }));
+  for (const source of ['', 'db.query("SELECT id FROM app.job");']) {
+    const ds = applyUnresolvedBaseline(scan({ [authority]: source }), baseline);
+    assert.equal(ds.filter(d => d.code === 'STALE_UNRESOLVED_BASELINE').length, 1);
+  }
+});
+test('r1 baseline never masks a confirmed violation, even at a pinned site', () => {
+  const baseline = pin(scan({ [authority]: unresolvedFixture }));
+  const changed = scan({ [authority]: unresolvedFixture.replace('return runtime', 'return "SELECT * FROM app.commercial_integrity_v3_feedback"') });
+  const ds = applyUnresolvedBaseline(changed, baseline);
+  assert.ok(ds.some(d => d.code === sql));
+  assert.ok(ds.some(d => d.code === 'STALE_UNRESOLVED_BASELINE'));
+  // Even a forged baseline matching a violation fingerprint cannot suppress it.
+  const forged = { ...changed.find(d => d.code === sql), fingerprint: baseline[0].fingerprint };
+  assert.ok(applyUnresolvedBaseline([forged], baseline).some(d => d.code === sql));
+});
+test('r1 fingerprints bind statement, unresolved helper and transitive declarations', () => {
+  const source = 'const upstream = runtime; function helper() { return upstream; } const query = helper(); db.query(query);';
+  const original = scan({ [authority]: source }), baseline = pin(original);
+  for (const changed of [source.replace('runtime', 'otherRuntime'), source.replace('return upstream', 'return opaque(upstream)'), source.replace('db.query(query)', 'db.query(query, args)')]) {
+    const ds = applyUnresolvedBaseline(scan({ [authority]: changed }), baseline);
+    assert.ok(ds.some(d => d.code === unknown));
+    assert.ok(ds.some(d => d.code === 'STALE_UNRESOLVED_BASELINE'));
+  }
+  // Line movement and unrelated declarations do not freeze the entire module.
+  assert.deepEqual(applyUnresolvedBaseline(scan({ [authority]: '\nconst unrelated = 1;\n' + source }), baseline), []);
+});
+test('r1 invalid, duplicate and violation-shaped baselines fail closed', () => {
+  const ds = scan({ [authority]: unresolvedFixture }), baseline = pin(ds);
+  for (const bad of [{}, [baseline[0], baseline[0]], [{ ...baseline[0], reason: '' }], [{ ...baseline[0], fingerprint: 'bad' }], [{ ...baseline[0], code: sql }]]) {
+    const result = applyUnresolvedBaseline(ds, bad);
+    assert.ok(result.some(d => d.code === 'INVALID_UNRESOLVED_BASELINE'));
+    assert.ok(result.some(d => d.code === unknown));
+  }
+});
+test('r1 real-source baseline has exactly one entry per remaining site', () => {
+  const p = loadRepoProject(), ds = checkCommercialIntegrityBoundary(p, agreedV3Symbols, { baseline: null });
+  assert.equal(ds.filter(d => d.code !== unknown).length, 0);
+  const sites = new Set(ds.map(d => JSON.stringify([d.file, d.fingerprint])));
+  assert.equal(p.unresolvedBaseline.length, sites.size);
+  assert.ok(p.unresolvedBaseline.every(e => sites.has(JSON.stringify([e.file, e.fingerprint])) && e.reason.trim()));
+});
+
+test('r1 missing, malformed and null on-disk baselines cannot disable the guard', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ch6-b-baseline-'));
+  try {
+    for (const [file, source] of Object.entries(base)) {
+      mkdirSync(dirname(join(dir, file)), { recursive: true });
+      writeFileSync(join(dir, file), source);
+    }
+    mkdirSync(join(dir, 'tools'));
+    for (const content of [undefined, 'null', '{}', '{']) {
+      if (content !== undefined) writeFileSync(join(dir, 'tools/commercial-integrity-boundary.unresolved.json'), content);
+      assert.ok(checkCommercialIntegrityBoundary(loadRepoProject(dir)).some(d => d.code === 'INVALID_UNRESOLVED_BASELINE'));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

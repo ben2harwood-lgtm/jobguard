@@ -1,0 +1,93 @@
+[
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/commands.ts",
+    "line": 109,
+    "fingerprint": "3eeb0b5e7abed0eb28b197997542402f29f0ba55456e4487179aeccbb34ee2c8",
+    "reason": "Dismissal replay has a different literal family on only one OR branch; the command-id branch is not constrained."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/commands.ts",
+    "line": 81,
+    "fingerprint": "d1db17834b4458e0c42d3d3402191adac4c798859b3e3ca3d8c13b0fffa2650c",
+    "reason": "Generic replay reads result using a runtime command family and an OR command-id branch; no non-advisory proof."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/demo-seed.ts",
+    "line": 70,
+    "fingerprint": "a01ff30712b12e9d4512a233dfd230c00bea349d125e362284c3978e7a04edde",
+    "reason": "Business boundary.execute(command) is a syntactically covered execute call with a runtime object, not a statically known SQL body."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/demo-seed.ts",
+    "line": 94,
+    "fingerprint": "63a981c5b89ae57de99b9346ef9667b12931e9a85c55f8379cd20bec6c1f85be",
+    "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/extra-repository.ts",
+    "line": 49,
+    "fingerprint": "4a70995db9c8594e2edcffefe28b29898ccdcd1a74e990639dfe0c6f3ea63bd1",
+    "reason": "Generic receipt replay reads result with runtime command-family parameters and OR command-id matching."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/extra-repository.ts",
+    "line": 75,
+    "fingerprint": "dc11aa0852c1e68d1a426c58034477060f5d9ab5c615fbd478143f69878ca7a6",
+    "reason": "Joined receipt result is selected without a statically resolved non-advisory command-type discriminator."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/practice-session.ts",
+    "line": 73,
+    "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
+    "reason": "Generic local query helper receives runtime sql/values parameters; callers are not specialized by runtime data flow."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/quote-delivery-repository.ts",
+    "line": 43,
+    "fingerprint": "136aa29f9987a83fecfb3fbcd15e228fda2cfef00c48c10321be9b648213d35f",
+    "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/quote-delivery-repository.ts",
+    "line": 44,
+    "fingerprint": "37b2e3c755e87f437c0ef4a0e74a6819762e126723c0809be9bba5be006aace5",
+    "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/site-visit-repository.ts",
+    "line": 197,
+    "fingerprint": "52964c187a3d63fadb5775348c5d16f86d65040dc289a145b6a5f0a8d74d13f2",
+    "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/site-visit-repository.ts",
+    "line": 205,
+    "fingerprint": "adf474242ad04527fb255dd1a98998670dd8f4cc2dc14e8a9cf1fe4fe13c3ea8",
+    "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/site-visit-repository.ts",
+    "line": 49,
+    "fingerprint": "48a17d6ef4d7713096ecfa59e7f8971099938ca2b955e4db8f31e3b4e68f34ff",
+    "reason": "Generic receipt replay reads result with a runtime discriminator and an unscoped OR command-id branch."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/subscription-executor.ts",
+    "line": 14,
+    "fingerprint": "6d06ef4e1ea57f5eb65bf754153483bf36573d734ff96c44d4f53fe4a2668561",
+    "reason": "Adapter.execute(work) receives runtime authorized work; broad terminal execute detection cannot prove a SQL boundary."
+  }
+]

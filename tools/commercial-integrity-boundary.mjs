@@ -1,7 +1,8 @@
 /** CH6-B v3 advisory-to-authority finite source guard.
- * Adapts CH6-CSG-01 resolver patterns inspected at 72f38f0a; never imports,
+ * Adapts CH6-CSG-01 resolver/baseline patterns inspected at 03907c5c; never imports,
  * changes or replaces the installed-v1 guard. No code, SQL or provider executes.
- * No hashes, byte freezes or unresolved-edge exemptions.
+ * Reviewed unresolved sites bind executable statements and their lexical inputs.
+ * A baseline never suppresses confirmed violations; no source byte freeze.
  * No execution/taint/SQL isolation claim.
  * Barrels resolve per symbol; reached implementation modules are deliberately
  * overapproximated at module level. Authority discovery is naming-based only.
@@ -10,6 +11,60 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { posix, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { createHash } from 'node:crypto';
+
+export const BASELINE_PATH = 'tools/commercial-integrity-boundary.unresolved.json';
+const fingerprintCache = new WeakMap();
+// Bind the enclosing executable construct and its transitive same-module inputs.
+// This includes unresolved helpers, not just successfully evaluated declarations.
+function fingerprint(node, dependency, checker) {
+  if(node && fingerprintCache.get(node)?.has(dependency)) return fingerprintCache.get(node).get(dependency);
+  let construct = node;
+  while (construct?.parent && !ts.isStatement(construct)) construct = construct.parent;
+  let owner = construct;
+  for (let n = construct; n?.parent; n = n.parent) {
+    if (ts.isFunctionLike(n) || ts.isClassDeclaration(n)) owner = n;
+  }
+  const visited = new Set(), inputs = [];
+  const collect = n => {
+    if (!n || visited.has(n)) return;
+    visited.add(n);
+    inputs.push([n.kind, n.getText()]);
+    const walk = x => {
+      if (ts.isIdentifier(x)) {
+        const d = checker.getSymbolAtLocation(x)?.valueDeclaration;
+        if (d && d.getSourceFile() === node.getSourceFile() && !(d.pos >= n.pos && d.end <= n.end)) collect(d);
+      }
+      ts.forEachChild(x, walk);
+    };
+    walk(n);
+  };
+  collect(owner);
+  const text = construct?.getText() ?? '';
+  let occurrence = 0;
+  if (construct) {
+    const count = n => {
+      if (n.getStart() >= construct.getStart()) return;
+      if (n.kind === construct.kind && n.getText() === text) occurrence++;
+      ts.forEachChild(n, count);
+    };
+    count(construct.getSourceFile());
+  }
+  const result=createHash('sha256').update(JSON.stringify([text, dependency, occurrence, inputs.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))])).digest('hex');
+  if(node) { if(!fingerprintCache.has(node)) fingerprintCache.set(node,new Map()); fingerprintCache.get(node).set(dependency,result); }
+  return result;
+}
+export function applyUnresolvedBaseline(diagnostics, entries) {
+  const key = d => JSON.stringify([d.code, d.file, d.fingerprint]);
+  const valid = Array.isArray(entries) && entries.every(e => e && e.code === 'UNRESOLVED_COVERED_EDGE' && typeof e.file === 'string' && Number.isInteger(e.line) && e.line > 0 && /^[a-f0-9]{64}$/u.test(e.fingerprint) && typeof e.reason === 'string' && e.reason.trim());
+  const failure = dependency => ({ code: 'INVALID_UNRESOLVED_BASELINE', file: BASELINE_PATH, line: 1, dependency, chain: [BASELINE_PATH] });
+  if (!valid || new Set(entries.map(key)).size !== entries.length) return [...diagnostics, failure('invalid or duplicate baseline entries')];
+  const allowed = new Set(entries.map(key));
+  const occurring = new Set(diagnostics.filter(d => d.code === 'UNRESOLVED_COVERED_EDGE').map(key));
+  return [...diagnostics.filter(d => d.code !== 'UNRESOLVED_COVERED_EDGE' || !allowed.has(key(d))),
+    ...entries.filter(e => !occurring.has(key(e))).map(e => ({ ...e, code: 'STALE_UNRESOLVED_BASELINE', dependency: e.reason, chain: [e.file] }))];
+}
+
 // CH6-C accepted module exports at f2db7eae7accbb81fb9c8d75c221c99d72ba362b.
 // Types stay in the inventory even though erased type uses are not runtime reads.
 export const V3_SOURCE = 'packages/core/src/commercial-integrity-v3.ts';
@@ -53,12 +108,17 @@ export function loadRepoProject(root = fileURLToPath(new URL('..', import.meta.u
     } catch { errors.push(f+': invalid package manifest'); }
   }
   const p = createProject(files); p.loadErrors = errors;
+  try {
+    const baseline = JSON.parse(readFileSync(join(root, BASELINE_PATH), 'utf8'));
+    p.unresolvedBaseline = Array.isArray(baseline) ? baseline : {};
+  }
+  catch { p.unresolvedBaseline = {}; }
   return p;
 }
 
-export function checkCommercialIntegrityBoundary(p, inventory = agreedV3Symbols) {
+export function checkCommercialIntegrityBoundary(p, inventory = agreedV3Symbols, { baseline = p.unresolvedBaseline } = {}) {
   const diagnostics = [], keys = new Set();
-  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain]}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
+  const emit = (code, file, node, dependency, chain) => { const line = node && p.sources.has(file) ? p.sources.get(file).getLineAndCharacterOfPosition(node.getStart()).line + 1 : 1; const d = {code,file,line,dependency,chain: [...chain], ...(code === 'UNRESOLVED_COVERED_EDGE' ? { fingerprint: fingerprint(node, dependency, p.checker) } : {})}; const k=JSON.stringify(d); if (!keys.has(k)) { keys.add(k); diagnostics.push(d); } };
   const unresolved = (f,n,d,c) => emit('UNRESOLVED_COVERED_EDGE',f,n,d,c);
   for (const err of p.loadErrors) unresolved(err.split(':')[0],null,err,[err.split(':')[0]]);
   for (const dir of DIRECTORIES) if (![...p.sources.keys()].some(f => f.startsWith(dir+'/'))) unresolved(dir,null,'missing required source directory',[dir]);
@@ -270,7 +330,7 @@ export function checkCommercialIntegrityBoundary(p, inventory = agreedV3Symbols)
       visit(s);
     }
   }
-  return diagnostics.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return (baseline == null ? diagnostics : applyUnresolvedBaseline(diagnostics, baseline)).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
 function inspectSql(node, query, params, value, file, chain, emit, unresolved, symbol, written) {
@@ -364,7 +424,7 @@ if(process.argv[1] && fileURLToPath(import.meta.url)===process.argv[1]) {
     const project=loadRepoProject(process.argv[2]);
     const diagnostics=checkCommercialIntegrityBoundary(project, agreedV3Symbols);
     for(const d of diagnostics) console.error(JSON.stringify(d));
-    console.log(`${project.roots.length} protected roots; ${diagnostics.length} diagnostics`);
+    console.log(`${project.roots.length} protected roots; ${diagnostics.length} diagnostics; ${Array.isArray(project.unresolvedBaseline) ? project.unresolvedBaseline.length : 0} baselined unresolved sites`);
     process.exitCode=diagnostics.length?1:0;
   } catch(error) { console.error(JSON.stringify({code:'UNRESOLVED_COVERED_EDGE',file:process.argv[2]??'.',line:1,dependency:String(error.message),chain:[process.argv[2]??'.']})); process.exitCode=1; }
 }
