@@ -23,6 +23,7 @@ export * from "./recovery.js";
 export * from "./recovery-case.js";
 export * from "./recovery-eligibility.js";
 export * from "./commercial-integrity.js";
+export * from "./commercial-integrity-v3.js";
 export * from "./job-import.js";
 
 export * from "./materials.js";

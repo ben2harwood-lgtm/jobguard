@@ -182,3 +182,96 @@ review, separate acceptance and production gates remain held.
 - Final working-tree path check: PASS, all 5 changed paths belong to CH6-A.
   Final `git diff --check`: PASS. Intended conventional commit subject/body:
   `/private/tmp/jg-msg-ch6-a.txt`. Work left uncommitted for the dispatcher.
+
+## r2
+
+25 October 2026; final C250 repair, inherited HEAD `b836f828`, branch
+`codex/sandbox/ch6-a`. Builder receipt only; **HOLD: the clean-checkout head is
+not green**. No commit, push, PR, independent model verdict or acceptance.
+
+### Changes
+
+Added CH6-C's v3 module export immediately after the existing core integrity
+export. Added CH6-P's repository export and its public persistence error after
+the existing db integrity repository export, in repository/source order. The
+repository supplies the stable public actor/feedback/stored-view types; internal
+source adapters remain internal as specified by CH6-P's integration handoff.
+Both shared barrel paths are now explicitly assigned in this lane's allowlist.
+All CH6-A relative dist imports now use `@jobguard/core` / `@jobguard/db`,
+including the dynamic import in the HTTP test. Removed the obsolete nominal
+context bridge; the exact verified context object still passes through unchanged,
+covered by the existing identity assertion. No test assertion was changed.
+No business behavior, migration, grant, commercial policy, provider, model,
+prompt or operational alert changed. CH6-J public names remain stable.
+
+### Clean-checkout typecheck evidence
+
+Reused installed dependencies, Node v24.17.0, cached pnpm 10.28.1 via
+`/private/tmp/jg-ch6-a-bin/pnpm`; no installation/download or lockfile change.
+`/private/tmp/jg-ch6-a-r2-clean.py` moved **all five** existing package dist
+folders (ai, config, core, db, storage) to a unique temporary directory and
+asserted that `packages/*/dist` remained absent before/after each command.
+It restored all five originals in `finally`; no build ran during this check.
+Logs: `/private/tmp/ch6-a-r2-clean-{core,db,api,root}.log`; machine receipt:
+`/private/tmp/ch6-a-r2-clean-results.json`.
+
+| Command with no packages/*/dist | Exit | Result |
+| --- | ---: | --- |
+| `pnpm --filter @jobguard/core typecheck` | 0 | PASS |
+| `pnpm --filter @jobguard/db typecheck` | 2 | Inherited CH6-P and MON1 imports below |
+| `pnpm --filter @jobguard/api typecheck` | 2 | Inherited CH6-P imports below; no CH6-A relative-dist error remains |
+| `pnpm typecheck --concurrency=1 --force` | 2 | Real uncached root check fails at db; downstream tasks cannot complete |
+
+Exposing the v3 repository through the barrel also exposes its existing source
+imports to consumers' source-based typechecks. Remaining missing modules:
+
+- `packages/db/src/commercial-integrity-v3-repository.ts:6` imports
+  `../../core/dist/commercial-integrity-v3.js`.
+- `packages/db/src/commercial-integrity-v3-sources.ts:4` imports the same module.
+- `packages/db/src/meter-lifecycle-source.ts:4` imports
+  `../../core/dist/meter-lifecycle.js` (the core barrel lacks that module).
+
+The db run reports nine errors, including consequent implicit-any errors; API
+reports four from the inherited CH6-P source modules. These paths are outside
+this issued lane's assignments. Asked the dispatcher whether to extend this
+import-only repair to CH6-P/MON1 and the meter barrel; no answer was available
+when this receipt was written. They remain unedited. AGENTS §1 and BUILD_PLAN
+§2.4 C8 require explicit task ownership and serialized shared edits; no allowlist
+waiver or test/config weakening was used to hide these failures.
+
+### Other executed checks
+
+`/private/tmp/jg-ch6-a-r2-checks.py` ran checks sequentially using cached pnpm
+with `COREPACK_ENABLE_NETWORK=0`. Logs `/private/tmp/ch6-a-r2-<label>.log`;
+results `/private/tmp/ch6-a-r2-check-results.json`. Restored dist folders were
+present for these checks; their passes do not supersede the clean-checkout failure.
+
+| Command | Exit | Result / log label |
+| --- | ---: | --- |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | 1 | Core purity PASS; lane rejects inherited CH6-C/P, MON1 etc. changes; package phase not reached (`lint`) |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same inherited full-range lane failure (`lanes`) |
+| `pnpm turbo run build --filter=@jobguard/api^... --concurrency=1` | 0 | Five dependency builds successful (`dependencies`) |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/watchdog-registry.test.ts` | 0 | 148 tests / 3 files (`api-unit`) |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/commercial-integrity.application.test.ts src/commercial-integrity.audit.test.ts` | 0 | 5 tests / 2 files (`api-regression`) |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/commercial-integrity-v3.test.ts` | 0 | 10 tests / 1 file (`core-unit`) |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/commercial-integrity-v3.boundaries.test.ts` | 0 | 9 tests / 1 file (`core-boundaries`) |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/commercial-integrity/v3/route.test.ts' 'app/api/jobs/[id]/commercial-integrity/v3/reviews/route.test.ts' 'app/api/jobs/[id]/commercial-integrity/family/route.test.ts'` | 0 | 30 tests / 3 files (`web-unit`) |
+| `pnpm turbo run lint --concurrency=1` | 0 | All seven package lint checks (`package-lint`) |
+| `pnpm build --concurrency=1` | 0 | All seven packages; Nest and production Next builds (`build`) |
+| `pnpm openapi:check` | 1 | tsx CLI IPC listener denied: `listen EPERM` (`openapi`) |
+| From apps/api: `node --import tsx src/generate-openapi.ts --check` | 0 | Same existing generator, no CLI listener; snapshot current (`openapi-no-ipc`) |
+
+Turbo cache-write permission warnings did not prevent package checks/builds.
+The real `loadLanePolicy/selectLane/lanePathAllowed` working-tree-only path
+inspection passed for every changed path; this is a deterministic scoped check,
+not a replacement for the failing full-range lane check. `git diff --check`
+passed. The intended conventional commit subject/body is written to
+`/private/tmp/jg-msg-ch6-a.txt` for dispatcher use.
+
+Full `pnpm test`, real PostgreSQL/migration suites and browser suites remain
+CI-only under dispatch. The touched HTTP test compiles in package lint/build but
+was **not executed**: it starts PostgreSQL and listeners prohibited in this
+sandbox. CI must execute it with `--maxWorkers=2`, alongside the existing parent
+DB suites. No test was deleted, skipped, weakened or made optional. Earlier
+composition, release, independent-verdict and separate-acceptance holds persist;
+the historical missing-barrel/context-bridge hold is resolved for this lane.

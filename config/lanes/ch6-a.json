@@ -6,8 +6,10 @@
         "codex/sandbox/ch6-a"
       ],
       "receipt": "docs/verdicts/CH6-A/BUILDER_RECEIPT.md",
-      "note": "Issued CH6-A synthetic advisory API. C1: no page in this leaf; no browser spec. Real PostgreSQL/Nest HTTP proof CI only; shared composition remains a coordinator hold. Repair r1 assigns the two v3 review registry rows and OpenAPI regeneration to this lane.",
+      "note": "Issued CH6-A synthetic advisory API. C1: no page in this leaf; no browser spec. Real PostgreSQL/Nest HTTP proof CI only; shared composition remains a coordinator hold. Repair r1 assigns the two v3 review registry rows and OpenAPI regeneration to this lane. Repair r2 assigns the J-S2 additive core and db v3 barrel exports and public-package import integration to this lane.",
       "allow": [
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
         "packages/core/src/watchdog.ts",
         "apps/api/openapi.json",
         "apps/api/src/commercial-integrity-v3.boundary.test.ts",
