@@ -220,3 +220,106 @@ hash after restoring the party pointer. Upgrade grant damage controls check that
 the deny-grant assertion fails, and compatible later-row insertion remains valid.
 Final `git diff --check` exited 0. Intended message exists at
 `/private/tmp/jg-msg-mon-3c-elig.txt`; the dispatcher must commit and obtain review.
+
+
+## Round 2 — C250 repair round 1 of 2, 25 October 2026
+
+```yaml
+session:
+  order: MON-3C-ELIG
+  round: 2
+  repair_round: 1
+  date: 2026-10-25
+  builder: Codex
+  model: GPT-6
+  model_identifier_evidence: "Session instructions identify GPT-6; no more specific serving-model identifier is exposed."
+  branch: codex/sandbox/mon-3c-elig
+  candidate_under_repair: 7d5c784a
+  catchup_merge_head: 0b523164
+  disposition: HOLD_PENDING_CI_AND_INDEPENDENT_REVIEW
+  independent_verdict: NOT_RUN
+  acceptance: NOT_GIVEN
+```
+
+This section supersedes round 1's dependency-head statement for this handoff.
+The dispatcher had already started merging B's final catch-up 0b523164
+(B 1f73a07c plus main 5bcd5ede). Only the issued contract repair, the one
+working-file conflict resolution and this receipt were changed in this round.
+No git-writing command was run; the index remains unmerged until the dispatcher
+stages the resolved file and commits. No subagent or independent review was run.
+
+LP0-17 repair is confined to `lp-0-effective-privileges-v1.json`: the advisory
+group now uses `helper`, the inventory's existing classification for read-only
+helper/predicate routines (including read-only SECURITY DEFINER functions).
+It remains advisory with no commercial authority. Its authority-path entry is
+immediately after `ap-mon3pb-disabled-foundation`, preserving B as the first
+path so the existing first-path-removal negative control still detects a missing
+authority path. No test was modified for the repair; the LP-0 test is unchanged.
+
+The contractor-entitlement upgrade conflict retains main's 0208 table rows
+`app.job_small_trip_event` and `app.job_small_trip_observation`, B's four trial
+foundation table rows, and both routine expectations: 0208
+`mon1_capture_small_trip(t uuid, j uuid, source_kind text, source_id uuid)` then
+0236 `mon3_read_eligibility(uuid,text,uuid)`. Existing predecessor assertions
+remain. Migration 0236 and all round 1 implementation files are unchanged.
+No new migration, privilege, external action, abstraction or `../../dist` import.
+
+Checks use the already installed Node v24.17.0 and cached pinned pnpm 10.28.1
+via `/private/tmp/mon3c-elig-bin/pnpm`; no install/download or clean-install claim.
+Checks ran sequentially; every Vitest invocation uses `--maxWorkers=2`.
+Workspace `dist` directories were moved to `/private/tmp/mon3c-elig-round2-dist`
+for the pre-build typecheck and restored afterward for unit package resolution.
+
+
+| Round 2 actual check | Result |
+| --- | --- |
+| `pnpm typecheck` with workspace dist absent | PASS, 7 tasks; 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1: core purity passes, then ELIG range includes inherited B paths outside ELIG's allowlist. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1: same dependency-range boundary failure; allowlist unchanged. |
+| `pnpm exec turbo run lint` | PASS, 7 package tasks; 2 cached. Does not replace root range lint. |
+| `node --test tools/*.test.mjs` (expanded file list) | PASS, 295 tests. |
+| Config unit suite | PASS, 5 files / 86 tests. |
+| Storage unit suite | PASS, 1 file / 2 tests. |
+| Core unit suite | PASS, 130 files / 3,011 tests. |
+| AI unit suite | PASS, 15 files / 147 fixture tests; no live model. |
+| DB unit suite | Exit 1: 48 files pass / 428 tests pass; two free-port tests fail with localhost `listen EPERM`; one unchanged audit-checkpoint test times out at 5,000ms. |
+| API unit suite | Exit 1: 124 files / 2,495 tests pass, 23 skipped; 9 files / 129 HTTP tests fail, with 129 server-bind `listen EPERM` errors. |
+| Web unit suite | PASS, 42 files / 998 tests. |
+| Isolated unchanged audit-checkpoint timeout retry | PASS, 1 test / 70 deselected; original timeout unchanged (test 4.94s). Initial timeout remains recorded. |
+
+Unit command in each package: `pnpm exec vitest run --maxWorkers=2 --exclude
+'**/*.integration.test.ts' --exclude 'e2e/**' --exclude '**/dist/**'`. Packages
+ran serially in config/storage/core/AI/DB/API/web order. The isolated retry used
+`pnpm --filter @jobguard/db exec vitest run --maxWorkers=2
+src/audit-checkpoint-handoff.test.ts -t 'all transitive request workspace sources'`.
+No implementation, test timeout, expected result or configuration changed for
+these checks. Root aggregate `pnpm test` was not run: it includes PostgreSQL
+suites, which the dispatcher explicitly assigns to CI in this sandbox.
+
+
+| Remaining round 2 check | Result |
+| --- | --- |
+| `pnpm build` | PASS, 7 tasks; 3 cached. Existing Next/CSS/file-type/workspace-root and sandbox cache-IO warnings remain. |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC `listen EPERM` before generator execution. |
+| From apps/api: `node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check through direct loader; no OpenAPI diff. |
+| `parseInventory` + `pathCompleteness` and explicit LP0-17 first-path-removal negative control via direct tsx loader | PASS, actual contract parsed, file references checked, helper kind and B/ELIG adjacency asserted; no PostgreSQL claim. |
+| `node tools/money-arithmetic-lint.mjs` | PASS. |
+| `node tools/commercial-boundary-lint.mjs` | PASS. |
+| `git diff --check`; conflict-marker inspection | PASS; resolved working file contains no markers. Index remains unmerged pending dispatcher staging. |
+
+An initial source-validator attempt from the repository root used `--import tsx`
+and failed because tsx is installed under apps/api, not the root. The successful
+retry used `--import ./apps/api/node_modules/tsx/dist/loader.mjs`; no dependency
+was added. Logs: `/private/tmp/mon3c-elig-r2-*.log`.
+
+Size: +122/−3 lines across 3 files; largest touched logic file: 52 lines; new abstractions: none.
+Size counts cover this receipt and contract repair relative to the incoming
+index, plus the conflict resolution relative to a1; unrelated staged catch-up
+files are excluded. The large inventory is declarative content, not new logic.
+
+Real PostgreSQL LP0-17, ELIG/upgrade/catalogue groups, mandatory database/migration
+and browser suites remain NOT RUN locally under the dispatcher's restrictions.
+The reviewer/CI must rerun them and official range lint after dispatcher handoff.
+No exact-commit independent verdict or separate acceptance is claimed. All prior
+admission, commercial and release holds remain. Intended conventional commit text
+is `/private/tmp/jg-msg-mon-3c-elig.txt`; dispatcher stages and commits the merge.
