@@ -1,8 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import EmbeddedPostgres from "embedded-postgres";
+import { Pool } from "pg";
+import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { randomUUID,createHash } from "node:crypto";
 import { beforeAll,afterAll,it,expect } from "vitest";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { actor,tenant,member,createIntegrityFixture,seedIntegrityJob,reviewFor,transaction,migrationUrl,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
+const trimPoints=[9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279];
 let f:IntegrityFixture;beforeAll(async()=>{f=await createIntegrityFixture(false);},120000);afterAll(async()=>{await f?.close();});
 it("CI-P09 own-step upgrade preserves populated old receipt/history/column types; successors twice preserve new receipt",async()=>{
  const x=await seedIntegrityJob(f),old=randomUUID();
@@ -29,13 +35,25 @@ it("CI-P09 own-step upgrade preserves populated old receipt/history/column types
 });
 
 it("0227 applies with check_function_bodies enabled on SQL_ASCII",async()=>{
- const ascii=await createIntegrityFixture(false,"SQL_ASCII");
+ // Installation only: practice-session issuance uses UTF8 normalization and is unrelated to 0227.
+ const dir=await mkdtemp(join(tmpdir(),"ch6-p-ascii-")),port=await freePort(59200,300),password=randomUUID();
+ const pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=SQL_ASCII"]});
+ const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"postgres",max:1});
  try {
-  expect((await ascii.admin.query("SHOW server_encoding")).rows[0].server_encoding).toBe("SQL_ASCII");
-  await ascii.admin.query("SET check_function_bodies=on");
-  await ascii.admin.query(await readFile(migrationUrl,"utf8"));
-  expect((await ascii.admin.query("SELECT to_regprocedure('app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)') IS NOT NULL installed")).rows[0].installed).toBe(true);
- }finally{await ascii.close();}
+  await pg.initialise();await pg.start();
+  expect((await admin.query("SHOW server_encoding")).rows[0].server_encoding).toBe("SQL_ASCII");
+  await admin.query("SET check_function_bodies=on");
+  for(const url of MIGRATION_URLS.filter(url=>url.pathname<migrationUrl.pathname))await admin.query(await readFile(url,"utf8"));
+  expect((await admin.query("SHOW check_function_bodies")).rows[0].check_function_bodies).toBe("on");
+  await admin.query(await readFile(migrationUrl,"utf8"));
+  expect((await admin.query("SELECT to_regprocedure('app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)') IS NOT NULL installed")).rows[0].installed).toBe(true);
+  const definition=(await admin.query("SELECT pg_get_functiondef('app.ch6_record_integrity_review(uuid,uuid,text,jsonb,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+  const trimExpression=definition.match(/btrim\(review->>'explanation',(convert_from\(decode\('[0-9a-f]+','hex'\),'UTF8'\))\)/)?.[1];
+  expect(trimExpression).toBeDefined();
+  // SQL_ASCII counts bytes; the driver decodes the returned UTF8 bytes into the actual trim characters.
+  const characters=(await admin.query(`SELECT ${trimExpression} characters`)).rows[0].characters as string;
+  expect([...characters].map(c=>c.codePointAt(0))).toEqual(trimPoints);
+ }finally{await closeTestPools(admin);await pg.stop();await rm(dir,{recursive:true,force:true});}
 },120000);
 
 it("0227 retains exactly the ECMAScript trim characters on UTF8",async()=>{
@@ -43,7 +61,7 @@ it("0227 retains exactly the ECMAScript trim characters on UTF8",async()=>{
  const encoded=sql.match(/btrim\(review->>'explanation',convert_from\(decode\('([0-9a-f]+)','hex'\),'UTF8'\)\)/)?.[1];
  expect(encoded).toBeDefined();
  const characters=Buffer.from(encoded!,"hex").toString("utf8");
- const points=[9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279];
+ const points=trimPoints;
  expect([...characters].map(c=>c.codePointAt(0))).toEqual(points);
  for(const point of [...points,133,6158,8203]){
   const input=String.fromCodePoint(point)+"explanation"+String.fromCodePoint(point);

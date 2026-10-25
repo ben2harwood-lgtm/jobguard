@@ -382,3 +382,105 @@ Final r1 verification additions:
   JSON sections changed. These are deterministic static checks, not PostgreSQL.
 - Intended conventional commit subject/body written to
   `/private/tmp/jg-msg-ch6-p.txt`. Worktree changes left uncommitted for dispatcher.
+
+## r2 — final C250 repair (25 October 2026)
+
+**REPAIRED IN WORKTREE; POSTGRESQL NOT RUN; NOT ACCEPTED.** Builder: Codex,
+GPT-6.1-sol, medium reasoning, as issued. HEAD remains
+`6c21a91fc37c3265e44f8bbb1ab6103da8fd92c1`, branch `codex/sandbox/ch6-p`,
+base `c50faa2affbc7dc9f4a8ede5b921ab007a846df6`. No commit, push or PR.
+
+Read the round-1 independent REPAIR response at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch6-p-claude-A-6c21a91f-20261025.md`
+(the relative `jg-runs/` path is not present in this worktree), AGENTS.md,
+BUILD_PLAN.md CH-6 / §10.2.9, the persistence contract, both LP-0 suites and their
+catalogue parser/derivation/path-completeness requirements. This r2 work has no
+independent verdict yet; the prior verdict does not cover this diff.
+
+### r2 changes and affected invariants
+
+- The SQL_ASCII regression now starts a bare embedded PostgreSQL database, pins
+  one admin connection, explicitly enables `check_function_bodies`, applies all
+  predecessors, checks that validation is still enabled, then applies 0227. It
+  issues no SQL_ASCII practice sessions or business fixtures. It asserts the
+  writer is installed and evaluates the trim-set expression from the installed
+  function definition, comparing the returned characters to all 25 exact
+  ECMAScript code points. SQL_ASCII counts bytes; decoding the returned UTF8
+  bytes in the driver lets this assertion compare characters correctly. The
+  existing UTF8 trim/non-trim cases retain their assertions and share that list.
+- The LP-0 inventory now includes the writer's exact migration-owner and runtime
+  EXECUTE keys, an authority-kind group and corresponding path, LP-4 / LP-6d
+  responsibilities, source and behavioral-test references, and explicit pending
+  verification. New rows sit in their matching alphabetical segments. The receipt
+  trigger is recorded beside the other command_receipt triggers with catalogue
+  event order `BEFORE INSERT/DELETE/UPDATE|O`.
+- All seven 0227 routines were inspected. The only other writer is the private
+  `ch6_append_integrity_review_audit`, already recorded as writing audit_event;
+  it has no runtime/public/other-role EXECUTE. Its owner-only path is documented
+  through the new writer group/path. The guard is the sole new trigger and is
+  now recorded. The remaining helpers only read/canonicalize. Owner-only,
+  schema-owner routines do not produce LP-0 capability facts, so no fictitious
+  owner/helper grants were added. Existing seven routine records are unchanged.
+- No product SQL, migration, grants, business data, policy, API or browser flow
+  changed. No backfill, new alert or rollback procedure is introduced by r2.
+  Tenant/actor binding, immutable receipts and operational audit authority remain
+  the affected invariants. No test was deleted or weakened. The explicitly
+  excluded MON1 contractor-entitlement repeat-migration failure is untouched.
+
+### r2 commands and actual results
+
+Dependencies were already installed; no install/download or lockfile change.
+Installed Node is `v24.17.0`. The pnpm launcher stalled even for
+`COREPACK_ENABLE_NETWORK=0 pnpm --version` and was interrupted; installed Node
+executables ran the real underlying scripts instead. Logs: `/private/tmp/ch6-r2-*.log`.
+
+- DB typecheck and package lint: PASS, each ran
+  `node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`.
+- Changed integration test static typecheck: PASS, from packages/db,
+  `node ../../node_modules/typescript/bin/tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/commercial-integrity-v3-upgrade.integration.test.ts`.
+- `LANE_BASE_REF=c50faa2a node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `LANE_BASE_REF=c50faa2a node tools/lint.mjs`: PASS.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: FAIL at lane comparison,
+  including inherited CH4/MON1/CH6-C paths outside this leaf's allowlist, as in r1.
+  The issued-base comparison passes; no allowlist was broadened.
+- `node --test tools/*.test.mjs`: PASS, 122 tests.
+- Core `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src`: PASS,
+  130 files / 3,047 tests. AI/config/storage same runner without a selector:
+  PASS, 147 / 82 / 4 tests respectively. These are fixtures, not a live-model run.
+- Web same Vitest runner: PASS, 41 files / 875 tests.
+- DB same Vitest runner with explicit `rg --files src test -g '*.test.ts' -g '!*.integration.test.ts'`
+  file selection: 48 files / 431 tests PASS; free-port.test.ts has two FAILs
+  (`listen EPERM 127.0.0.1`). Overall command FAILS because listeners are forbidden;
+  those tests remain mandatory and unchanged for CI. No PostgreSQL suite selected.
+- Build: PASS for core/config/storage/ai/db via the installed TypeScript compiler;
+  API via `node node_modules/@nestjs/cli/bin/nest.js build` from apps/api;
+  web via `node node_modules/next/dist/bin/next build` from apps/web.
+- Typecheck/package lint implementation for core/config/storage/ai/db/api/web:
+  PASS (`tsc -p <package>/tsconfig.json --noEmit`).
+- OpenAPI: PASS, from apps/api,
+  `node --import tsx src/generate-openapi.ts --check`.
+- Static inventory probe: PASS using the actual `loadReviewedInventory` parser
+  and `pathCompleteness` with repository file checks; exact writer keys, all seven
+  routine records and trigger row present. Removing the five new JSON rows yields
+  the exact HEAD document. Regex/decode check also preserves all 25 trim points.
+  First probe from repository root could not resolve package-local tsx; corrected
+  by running from apps/api. This is deterministic source verification, not a live
+  PostgreSQL catalogue comparison or independent review.
+
+PostgreSQL and browser suites: **NOT RUN**, as explicitly instructed for this
+sandbox. CI after dispatcher commit/push must run the repaired SQL_ASCII/UTF8
+upgrade tests, all CH6-P suites, both LP-0 suites, database/migration regressions
+and applicable browser suites. No claim that the next commit is fully green can
+be made before those runs. The MON1 repeat-migration failure remains a separately
+assigned pre-existing issue. Earlier product/source/release holds remain in force.
+
+Final r2 verification:
+
+- API `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src`: 120 files /
+  2,089 tests PASS; nine files / 129 tests FAIL, 23 skipped, 129 listener errors
+  (`listen EPERM 0.0.0.0`). The sandbox prevents these framework HTTP tests,
+  matching the recorded r1 limitation; this is not a full API-suite pass.
+- Final issued-base lane/full lint rerun and `git diff --check`: PASS.
+- Intended conventional commit subject/body is in `/private/tmp/jg-msg-ch6-p.txt`.
+  Exactly three files changed in r2: upgrade regression test, LP-0 JSON inventory,
+  and this receipt. Changes remain uncommitted for the dispatcher.
