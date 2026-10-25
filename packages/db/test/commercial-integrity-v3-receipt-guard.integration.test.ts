@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,it,expect } from "vitest";
 import { actor,tenant,member,createIntegrityFixture,seedIntegrityJob,reviewFor,transaction,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 let f:IntegrityFixture;beforeAll(async()=>{f=await createIntegrityFixture();},120000);afterAll(async()=>{await f?.close();});
-const insert=`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at) VALUES($1,$2,$3,$1::text,repeat('a',64),'succeeded','{}',$4,clock_timestamp())`;
+const insert=`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at) VALUES($1,$2,$3,$1::uuid::text,repeat('a',64),'succeeded','{}',$4,clock_timestamp())`;
 it("CI-P08 runtime cannot forge v3 even with spoofed role GUC, while unrelated/v1 insertion and updates survive",async()=>{
  for(const kind of ["commercial_integrity.review","unrelated.ch6.fixture"]){const id=randomUUID();await transaction(f.runtime,async db=>{await db.query(insert,[id,tenant,kind,member]);await db.query("UPDATE app.command_receipt SET result='{}' WHERE tenant_id=$1 AND command_id=$2",[tenant,id]);});}
  await expect(transaction(f.runtime,async db=>{await db.query("SELECT set_config('app.execution_role','jobguard_migration',true)");await db.query(insert,[randomUUID(),tenant,"commercial_integrity.review.v3",member]);})).rejects.toThrow("INTEGRITY_RECEIPT_CONTROLLED");
