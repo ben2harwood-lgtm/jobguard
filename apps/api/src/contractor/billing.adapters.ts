@@ -6,8 +6,8 @@ const settingsV1 = z.object({ version: z.literal("billing-fake-adapter.v1"), mod
   channel: z.enum(["fake_download", "fake_sftp", "fake_api"]),
   scenario: z.enum(["success", "retryable", "interruption", "unknown_accepted", "unknown_not_accepted", "unknown_unresolved"]),
 }).strict();
-const fakeActionV1 = z.object({ version: z.literal("outbound-action.v1"), id: z.string().uuid(),
-  authorizationId: z.string().uuid(), adapter: z.enum(["fake_download", "fake_sftp", "fake_api"]),
+const fakeActionV1 = z.object({ version: z.literal("outbound-action.v1"), id: z.guid({ error: "Invalid uuid" }),
+  authorizationId: z.guid({ error: "Invalid uuid" }), adapter: z.enum(["fake_download", "fake_sftp", "fake_api"]),
   providerEffectKey: z.string().min(1).max(300), actionType: z.literal("billing_export"),
   recipient: z.string().regex(/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.invalid$/u),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/u), immutableContent: z.string().max(5_000_000),
