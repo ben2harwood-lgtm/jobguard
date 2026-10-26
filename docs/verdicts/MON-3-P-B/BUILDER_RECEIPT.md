@@ -411,3 +411,78 @@ Candidate working-source SHA-256:
 Only these two source files and this existing receipt were written by this phase. Working source is resolved; Git's unmerged index entries remain for the dispatcher because no Git metadata writes/add/commit/merge/push are authorised. Approved source correction/history, config, registry, SQL, grants, roles, bootstrap, dependencies, migration filenames and archive remain untouched. No substantial complexity or new abstraction was introduced; no new simplicity observation on this delta continuation.
 
 **Dispatcher checkpoint candidate, not acceptance:** the authorised catalogue union and its narrow checks are complete. `NEWMAINfloor0237` remains a separate exact-path/renumber-authority HOLD; no `migration-renumber --write`, alternate number/path or archive action was attempted. Independent conflict-delta recheck must bind to the dispatcher's actual checkpoint, with all required CI against then-current main after exact renumber permission closes. PostgreSQL/catalogue/migration/browser assertions were not run locally and remain CI-only. No broad unchanged test/build rerun, installation, provider action, real data, spending, reviewer launch, technical acceptance, main merge or release. All earlier C/commercial/release gates persist.
+
+## Disjoint source renumber phase — 26 October 2026 — PARTIAL / MUST NOT INTEGRATE
+
+Same issued leaf `MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026`, exact saved session `01a178c2-94ec-7851-b87c-28066d4733f0`, original provenance `01a173c3-1af3-7791-bcec-984d2b202f16`, Gmail `~/.codex-ben2`, requested gpt-6.1-sol medium. Starting HEAD `ed14f9ea4090b97f25e2472cc22de503d56ccb46`; working tree and index initially clean. This phase preserves the completed catalogue union `80a6d1e7`, normal config `6519babc` and committed preservation archive `ed14f9ea`. Authority is the current issued disjoint phase, Ben's exact 15-path batch approval `msg_01a1793a-8fad-7813-b382-a8750b81b4e4` and supplied static proposal PASS manifest `a749a70f64b0b91129a759ac5c660077d45d047906c0a6137ae475effed67fab`. No metadata/approval action was repeated. This is a source run receipt, not a lane/catalogue PASS, independent verdict, CI result or acceptance.
+
+Read current repository AGENTS.md, applicable BUILD_PLAN build-loop/inherited criteria/free-first-job/MON-3 sections, affected SQL/note/contracts/upgrade test, migration discovery consumer and existing pure renumber helper. Retained prior full workflow/session/simplicity readings. Current BUILD_RULES/SIMPLICITY_RULE hashes remain exactly `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28` / `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+
+Parent admission evidence was read from inherited claim `claim-56850-2ff3efd439114539a630b4db8b00a751`: exact leaf/session/cwd, coding role, PID 56850, PGID 56858, admitted `2026-10-26T17:41:32.211358+00:00`; actual child boundary prompt SHA-256 `291c3fbfad02923cd5256d5dde2a24f771dd11dc33640f23f4c03e41d384ac62`, bound to the current rule hashes. Existing sole queue observation at `17:42:13.953449+00:00` explicitly lists this claim and `claim-56338-37ae246390ee43528af939ff87886324`, two coding workers, `dispatch_allowed=true`, no spare slots. Parent resource observation at `17:40:08.711402+00:00`: successful process observation, load `{ 4.70 5.75 7.19 }`, free memory 40%, build-node-count 2, free disk 105.27 GiB. No child ps claim, local re-admission, additional worker or heavy execution.
+
+Before either old path was removed, verified committed/live archive `archive/2026-10-26/mon3-0235-forward-preservation/original-0235.zip` SHA-256 `97eae7be5bd648ebb6b43e4905dd979919546557a01870bb1acfc79aed784b2c`, opened it with ZipFile and passed its CRC check. Its two members are precisely the old SQL and note paths. Each member equals both `git show HEAD:<old-path>` and the live original bytes. Original SQL: 16,202 bytes, SHA-256 `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8`; original note: 2,711 bytes, SHA-256 `114411533e11a94b16e22202d4341d3a11c2c56edaf3fb4af62593b9e6afcf1d`.
+
+Applied only the authorised source changes:
+
+- Moved SQL `0235_free_first_job_admission.sql` to `0240_free_first_job_admission.sql` byte-for-byte.
+- Moved the matching note and changed only its heading `# 0235` to `# 0240`. No bare-number body substitutions; the historical `applies 0235 alone` sentence remains under the heading/stems-only scope.
+- Replaced exactly the full old stem with the new stem in `docs/contracts/free-first-job-persistence-v1.md`, `docs/contracts/free-first-job-v1.md`, and `packages/db/test/free-first-job-admission-upgrade.integration.test.ts`, one occurrence per file. Bare numeric labels in contracts, ledger and historical comments remain unchanged; no semantic statement or assertion was rewritten.
+- Appended this existing receipt. One initial no-op receipt patch failed context matching and changed nothing; this append preserves all prior receipt bytes.
+
+Reused exported `planRenumber` as a pure mapping check with only the issued old path and an explicitly synthetic 0239 predecessor-floor input; it returns precisely the authorised 0240 path. This checks the specified mapping, not a real branch-wide allocation or reservation. The existing stem reference helper is nested inside the Git-staging writer, so used its identical `(?<![0-9a-z_])0235_free_first_job_admission(?![0-9a-z_])` boundary expression for the three permitted files. No new parser/framework or repository helper added; neither the broad selector nor `--write` was run.
+
+Actual cheap checks, all exit 0:
+
+| Check | Evidence and limits |
+| --- | --- |
+| Archive open/CRC and committed/live/member equality before removal | Both originals preserved exactly; archive itself equals committed bytes |
+| Destination precheck and existing pure planner | No existing 0240 SQL or note collision; exact issued mapping only |
+| Exact post-edit comparisons against HEAD/archive | SQL identical; note equals original plus heading change only; three files equal HEAD plus exact-stem replacement only |
+| TypeScript 5.8.3 `createSourceFile`, Latest target, TS ScriptKind | Zero parse diagnostics in the changed upgrade test; syntax only |
+| Actual `packages/db/src/migrate.ts` discovery via pinned Node native TS import | No migration-list problem; 114 discovered migrations; own 0240 exactly once, old 0235 absent; existing duplicate-number/directory guards executed, no PostgreSQL |
+| Actual Vitest 4.1.12 `list` on only the changed upgrade test, maxWorkers 2 | One test discovered, including `MON3 B UPGRADE-01 own migration only`; no test/hook/database execution |
+| Protected-source equality | Both completed union files, LP-0, own lane and all three forward-preservation archive files byte-identical to HEAD |
+| Working-tree allowlist and index checks | Exactly the seven expected source/removal/addition paths before receipt; no disallowed path; index empty |
+| `git diff --check` before receipt | PASS; final receipt-inclusive check follows |
+
+Pinned runtime remained `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node` with cached pnpm 10.28.1 and existing dependencies. Discovery command:
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:$PATH /private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --dir packages/db exec vitest list test/free-first-job-admission-upgrade.integration.test.ts --maxWorkers=2
+```
+
+Resulting non-receipt content hashes:
+
+| Path | SHA-256 |
+| --- | --- |
+| `packages/db/migrations/0240_free_first_job_admission.sql` | `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8` |
+| `packages/db/migration-notes/0240_free_first_job_admission.md` | `17528bdf248a45d1501d677814e07180ad40226fad70fe859e86ead6a0ee328f` |
+| `docs/contracts/free-first-job-persistence-v1.md` | `bcefc616e2f050ac2514151176198a2f71576f2dafabe952dde4ace2920ad072` |
+| `docs/contracts/free-first-job-v1.md` | `71dbf0f23aa15ccfa2f9d25a074b67b4766da45088a35c6422ea09c4c1b5ebd7` |
+| `packages/db/test/free-first-job-admission-upgrade.integration.test.ts` | `80ce999d235c42005149fab9e900c59e549f319e152229ad1c485510a14f57dc` |
+
+**Pending serialized LP-0 continuation / MUST NOT INTEGRATE:** `docs/contracts/lp-0-effective-privileges-v1.json` belongs to the active MON1-S editing phase and was not edited or staged, even in this worktree. Its SHA-256 remains `6d900ded358013f3262c65d3d8edc54f68a93e00e4a9aa02f139db0c224e7458`; precisely two old exact-stem source references remain, at lines 6 and 1291 (`a-mon3pb-disabled-foundation` authority group and `ap-mon3pb-disabled-foundation` authority path). They currently reference the deliberately removed old SQL path. The coordinator must confirm actual MON1 completion and release this single shared path before a bounded continuation updates it. This partial phase makes no lane/catalogue completeness claim.
+
+Exact-stem consumer search under packages/apps/docs/tools/config (excluding dependencies, dist, logs and historical verdicts) found only those two held LP-0 entries outside the permitted updates, plus retained old-path lane allowances. Historical receipt/archive references are preserved. No other active exact-stem consumer was found; no claim that all references migrated. Bare 0235 historical labels in the note, contract overview, SERIOUS-B5 comment and ledger remain outside exact-stem scope. All prior union checks remain preserved, with both union files unchanged. Fixed landing order remains SV5 0238 → MON1-S 0239 → MON3 0240; only the actual independent checker merges main.
+
+Stop after this bounded disjoint source phase. No Git metadata write/stage/commit/push/merge, config/archive/instruction edit, SQL semantic/grant change, reinstall/download, broad unchanged suite/build rerun, local PostgreSQL/browser, independent review or acceptance. Full mandatory database/browser/migration assertions remain CI-only. This is PARTIAL / MUST NOT INTEGRATE pending serialized LP-0 release/update, later exact-candidate checks/review and current-main CI. All C/commercial/real-data/release holds persist; no new simplicity observation or product-readiness claim.
+
+## Released serialized LP-0 continuation — 26 October 2026 — source complete, uncommitted
+
+Same issued leaf `MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026`, exact saved session `01a178c2-94ec-7851-b87c-28066d4733f0`, original provenance `01a173c3-1af3-7791-bcec-984d2b202f16`, Gmail route `~/.codex-ben2`, requested gpt-6.1-sol medium. HEAD remains `ed14f9ea4090b97f25e2472cc22de503d56ccb46`; the preceding eight-path partial source phase was present uncommitted and preserved. The current order records actual MON1 saved-session completion at `17:43:06.827Z` and explicitly releases the shared LP-0 path for these two references only. Ben approval `msg_01a1793a-8fad-7813-b382-a8750b81b4e4` and static proposal PASS manifest `a749a70f64b0b91129a759ac5c660077d45d047906c0a6137ae475effed67fab` remain the supplied authority. No repeat metadata, rename or approval action.
+
+Retained required repository/build/session/simplicity readings and checked current source, receipt, instruction identities and parent admission evidence. AGENTS SHA-256 remains `ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`; BUILD_PLAN `16b262d2f465868f5d5b349cb4d6830eae34b48162166343747200898bac0aa0`; current shared-rule hashes remain the exact issued identities above. Inspected LP-0's two affected source arrays and the existing `parseInventory`/`pathCompleteness` consumers. The prior write hold is released only by this continuation; historical partial/hold entries are preserved.
+
+Inherited managed admission claim `claim-58491-e64490d94b214fa698db18567b72fdc2` binds the exact leaf, session and worktree, coding role, PID 58491 / PGID 58501, UTC `2026-10-26T17:46:04.087769+00:00`, prompt SHA-256 `7c2089801988622703409b11c781908e8c3fd4be39ca9b44293f1258b52d00f0`, and current rules. Existing parent queue observation `17:46:03.951901+00:00` records `dispatch_allowed=true`, both source owners complete and no live coding claims before admission. Its resource record is timestamped `17:40:08.711402+00:00` with successful process observation, load `{ 4.70 5.75 7.19 }`, 40% free memory, build-node-count 2 and 105.27 GiB disk. These are parent records, not a child process observation. No alternate driver, child re-admission or heavy execution.
+
+Only `docs/contracts/lp-0-effective-privileges-v1.json` and this receipt were edited in this continuation. LP-0 is byte-for-byte HEAD plus exactly two bounded full-stem substitutions `0235_free_first_job_admission` → `0240_free_first_job_admission`, at JSON pointers `/groups/0/sources/0` and `/authorityPaths/0/sources/0` (lines 6 and 1291). Recursive comparison confirms identical key sets, types, array lengths and all other scalar values. All objects, routine identities/definitions, roles, privileges, recorded protections, groups, classifications and decisions are unchanged. Before SHA-256 `6d900ded358013f3262c65d3d8edc54f68a93e00e4a9aa02f139db0c224e7458`; after `f235106b07676d5381be144e1618b6e11eba01190a2772aa82a32f3d8872bd1e`.
+
+Actual checks:
+
+- Python exact-byte and recursive JSON comparisons: PASS, exactly the two source strings changed; `git diff --numstat` reports 2 added / 2 removed lines.
+- Actual existing `parseInventory` and `pathCompleteness` through pinned Node v24.15.0 and the installed tsx direct loader from `apps/api`: PASS, zero whole-inventory diagnostics, including both own paths now resolving to the existing 0240 SQL. No database starts or catalogue query. Initial combined command mistakenly ran its relative-path Python edit from `apps/api`, failed before writing, and the following parser correctly reported the two still-old missing paths. Corrected the edit working directory to the explicit repository root; final parser passed. No schema, test or validator was changed.
+- Hash checks: PASS for all seven previously recorded source hashes: 0240 SQL/note, both contracts, own upgrade test, and both completed parent-union test files. The prior SQL archive equality/minimal-note/syntax/migration-discovery/Vitest-discovery evidence remains preserved; unchanged passing discovery/suites were not repeated.
+- Tracked live-consumer scan under packages/apps/docs/contracts/tools, excluding dependency/dist paths: PASS, no old exact stem remains. Old-path config allowances and historical receipt/archive references intentionally remain; no broad numeric migration claim.
+- Config and all three committed forward-preservation archive files equal HEAD: PASS. Index empty: PASS. `git diff --check`: PASS before this appendix; final receipt-inclusive/footprint check follows.
+
+The serialized LP-0 source hold is now closed for the authorised two-reference delta, so the preceding partial marker is superseded only for source completion. No lane/catalogue PASS, actual RED verdict, CI completion, acceptance or integration is claimed. Current-main CI, actual independent conflict/renumber RED delta review and separate acceptance remain required against the dispatcher checkpoint. Fixed merge order remains SV5 0238 → MON1-S 0239 → MON3 0240; only the actual independent checker merges main. No Git metadata writes/staging/commit/push/merge, further source renames, semantic changes, broad test/build rerun, local DB/browser execution, spending, provider or release action. All previous C/commercial/real-data/release holds persist. Stop after source completion and return to dispatcher.
