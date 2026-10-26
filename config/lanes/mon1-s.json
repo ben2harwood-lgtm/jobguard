@@ -42,7 +42,8 @@
         "packages/db/migration-notes/0239_meter_lifecycle_source.md",
         "archive/2026-10-26/mon1-s-0209-forward-preservation/original-0209.zip",
         "archive/2026-10-26/mon1-s-0209-forward-preservation/MANIFEST.json",
-        "archive/2026-10-26/mon1-s-0209-forward-preservation/ACTIVITY.md"
+        "archive/2026-10-26/mon1-s-0209-forward-preservation/ACTIVITY.md",
+        "packages/db/test/meter-persistence.integration.test.ts"
       ]
     }
   }
