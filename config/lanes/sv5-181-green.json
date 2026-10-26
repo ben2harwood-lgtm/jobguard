@@ -23,7 +23,12 @@
         "packages/db/migration-notes/0205_final_check.md",
         "docs/contracts/final-check-v1.md",
         "docs/operations/final-check-recovery.md",
-        "packages/db/test/sv5pre-completion-access.integration.test.ts"
+        "packages/db/test/sv5pre-completion-access.integration.test.ts",
+        "packages/db/migrations/0238_final_check.sql",
+        "packages/db/migration-notes/0238_final_check.md",
+        "archive/2026-10-26/sv5-0205-forward-preservation/original-0205.zip",
+        "archive/2026-10-26/sv5-0205-forward-preservation/MANIFEST.json",
+        "archive/2026-10-26/sv5-0205-forward-preservation/ACTIVITY.md"
       ]
     }
   }
