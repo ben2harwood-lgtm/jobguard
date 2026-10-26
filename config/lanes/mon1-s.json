@@ -37,7 +37,12 @@
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/job-work-state-upgrade.integration.test.ts",
-        "packages/db/test/audit-export.integration.test.ts"
+        "packages/db/test/audit-export.integration.test.ts",
+        "packages/db/migrations/0239_meter_lifecycle_source.sql",
+        "packages/db/migration-notes/0239_meter_lifecycle_source.md",
+        "archive/2026-10-26/mon1-s-0209-forward-preservation/original-0209.zip",
+        "archive/2026-10-26/mon1-s-0209-forward-preservation/MANIFEST.json",
+        "archive/2026-10-26/mon1-s-0209-forward-preservation/ACTIVITY.md"
       ]
     }
   }
