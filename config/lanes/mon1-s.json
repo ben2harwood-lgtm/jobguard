@@ -35,7 +35,9 @@
         "packages/db/test/lp-0-catalog.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/test/tenancy.integration.test.ts",
-        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/job-work-state-upgrade.integration.test.ts",
+        "packages/db/test/audit-export.integration.test.ts"
       ]
     }
   }
