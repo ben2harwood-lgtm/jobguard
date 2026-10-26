@@ -805,3 +805,138 @@ finance, permission and release gate. No commit, push, PR, main merge or
 acceptance was performed by the builder.
 
 Size: +86/−3 lines across 3 files in this continuation; largest touched logic file: 409 lines; new abstractions: none (extended the existing policy comparison helper).
+
+## 26 October 2026 — current-main integration catch-up preflight
+
+Bounded order `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, C264/C266/C280;
+this is a delta catch-up, with no new simplicity observation. Source inspection
+and deterministic comparisons only; **HOLD for local execution setup, current-main
+GitHub CI and independent RED delta verdict**. No compatibility defect has been
+demonstrated, so the builder changed only this receipt.
+
+```yaml
+session_record_version: 1
+task_id: MON1-S-CATCHUP-CURRENT-MAIN-20261026
+project: JobGuard
+role: builder
+thread_id: 01a1788c-21e1-7012-9d6b-a031d6aaa817
+surface: codex-cli
+host: Ben's Mac
+authorised_route_ref: C266; /Users/benharwood/.codex-ben2
+repository: ben2harwood-lgtm/jobguard
+integration_target: main into codex/sandbox/mon1-s
+integration_target_revision: 319120a35f06a6db9223edc751b941d70f79a18d
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon1-s
+branch: codex/sandbox/mon1-s
+starting_base_revision: d922674470e6a9136823518fd863f5778983dc4f
+source_pin: d922674470e6a9136823518fd863f5778983dc4f
+candidate_revision: uncommitted merge; input tree d6d61eb1f26082c4df879b4d5864da15e5518a90
+last_validated_revision: input tree d6d61eb1f26082c4df879b4d5864da15e5518a90; static only
+allowed_files_ref: config/lanes/mon1-s.json; issued compatibility-only restriction
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md MON-1; both meter-lifecycle contracts
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: own rollout session_meta and turn_context, 2026-10-26T14:10:12.090Z
+last_completed_turn: unknown; first catch-up turn in progress at receipt preparation
+last_receipt_ref: this file, authorised B4/B5 continuation
+state: prepared merge source-inspected; execution setup held
+resumed_from_thread_id: none; distinct materially changed integration phase
+successor_reason: new bounded catch-up; source history retained, not reused or replaced
+preflight_ref: this section; /private/tmp/mon1-current-main-driver-20261026.sh
+result_id: unknown
+acknowledgement_ref: unknown
+ci_evidence_ref: unknown; current candidate CI required
+reviewer: unknown
+review_evidence_ref: unknown; independent RED comparison of both parents required
+accepting_actor: unknown
+acceptance_evidence_ref: unknown
+outstanding_holds: execution setup; remote refresh; current-main CI; RED delta review; existing product/release holds
+builder_finished_at: unknown at receipt preparation
+coordinator_acknowledged_at: unknown
+integrated_at: none
+merged_revision: none
+```
+
+Provenance: original source session `01a173ec-c191-74f0-99bb-c4e49c79a9db`,
+completed `2026-10-26T13:29:46.550Z` per issued order; its B1–B5 checkpoint is
+`d922674470e6a9136823518fd863f5778983dc4f`. Earlier source/catch-up history stays
+in this receipt and Git history. The legacy `mon1-s-catchup` checkout was not
+accessed. Original receipt prefix: 63,274 bytes, SHA-256
+`f353918f92ad0ec34b6791bdea23b8731f01d626c368548b527872d2518d0eba`.
+
+Read applicable AGENTS, BUILD_PLAN §2/C1–C8, §10.1.4–6/MON-1, both lifecycle
+contracts, current build rules, both 25 October handovers, session policy and
+simplicity rev 2. Current build-rules SHA-256:
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`;
+simplicity SHA-256:
+`6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+C280 supersedes old JobGuard caps; no cap/allowance helper was run.
+
+### Prepared input and actual checks
+
+- HEAD is the exact source pin; MERGE_HEAD is exact main above. The existing
+  dispatcher driver requires clean source/index and live remote source/main
+  equality before its no-ff/no-commit merge. Builder observed the prepared
+  merge, not that earlier remote execution. Builder `git ls-remote` failed:
+  `Could not resolve host: github.com`; no current remote success is claimed.
+- `git diff --cached --quiet d6d61eb1f26082c4df879b4d5864da15e5518a90`:
+  exit 0. `git ls-files -u`: empty. Initial unstaged diff: empty. No Git metadata
+  writes, staging, commit, push or merge command was executed by this builder.
+- Python/Git blob comparisons: PASS. Every existing allowlisted source path
+  equals the source parent and pinned merge tree. All 72 incoming staged paths
+  equal the main parent byte-for-byte. Both shared barrels, package manifests,
+  lockfile and runtime pin equal the source parent. The two historical 0207
+  allowlist paths do not exist at the source pin; no file was invented for them.
+- All B1–B5 hashes match the preceding receipt exactly (in order):
+  `8b54d115f26f35d431829581e456aa3351f3c7aef050a5a50ecb82beb5afbd68`,
+  `b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`,
+  `9e5f8b1c9191c2bf4bf22a8240612be7aba570ee1daa77a37c5325cb1a87ddaa`,
+  `38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`,
+  `06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+- Inspected lifecycle source/repository, their callers and tests, architecture
+  guard, ownership finalizer references and incoming executable delta. Main's
+  diary schema retains its UTF-16 length bound; CH-2 retains its authoritative
+  completion wait/assertion. New main core modules remain as merged. No changed
+  input to lifecycle code, its shared exports, SQL, grants or bootstrap needs a
+  manual resolution. Byte preservation is not behavioral execution evidence.
+- `git diff --cached --check`: FAIL (exit 2), inherited whitespace in the
+  main-parent MON-3C-CAL build/lint/typecheck/unit logs. Those bytes were confirmed
+  identical to main and left untouched outside this lane. Initial unstaged
+  `git diff --check`: PASS. Do not describe the full prepared diff as whitespace-clean.
+
+### Exact execution needs and dispatcher handoff
+
+Installed package metadata confirms TypeScript 5.8.3, Zod 4.6.6, Vitest 4.1.12
+and cached pnpm 10.28.1. `.nvmrc` pins Node 24.15.0; available
+`/usr/local/bin/node --version` reports 24.17.0. No alternative/global runtime,
+install, version change or package-manager fallback was attempted. TypeScript
+syntax/typecheck/build/test commands were NOT RUN on this new candidate: the
+order requires the pinned runtime. `ps` is denied (`operation not permitted`),
+so current process/load/memory/heavy-slot clearance cannot be verified here.
+The existing heavy-slot helper requires successful process observation; it was
+read, not launched into its waiting loop. No local PostgreSQL/browser assertion
+or broad/repeated B1–B5 suite was run.
+
+Admission files observed: this order's
+`claim-91343-9b8905931ba64ca5885fe6286a4b9bbc` and disjoint
+`WORKFLOW-RULES-ENFORCEMENT-20261026` claim
+`claim-90776-e99d0f6ebb774393a2d059e5db1938a3`. No claim was edited and no worker
+was launched. Actual owner reconciliation/capacity clearance remains the sole
+coordinator's responsibility; these files alone are not a fresh clearance.
+
+Normal dispatcher must refresh live heads, provide the configured runtime and
+fresh resource observations, then arrange the focused changed-input checks
+once under the existing gate. Preserve both parents and this input tree when
+recording the receipt-only merge candidate; its final tree will differ by this
+append. Dispatcher owns scoped merge commit and feature push. Current-main
+GitHub CI must prove PostgreSQL/browser guarantees, and one independent RED
+delta verdict must compare both parents on the exact committed candidate.
+Earlier CI/verdict/acceptance is not carried forward as PASS. All existing
+source/security/commercial/real-data/release holds remain. No new migrations,
+alerts, product changes or complexity were introduced; no acceptance is claimed.
+
+### Dispatcher execution setup resolved — 2026-10-26T14:22:18.175726+00:00
+
+Existing pinned runtime `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node` verified Node24.15.0; pnpm10.28.1. No installation, dependency or version change. The existing heavy-slot helper successfully observed processes/resources and admitted the single targeted check job. Core and DB package `typecheck` and `build` each PASS (four actual commands), with no local PostgreSQL/browser assertion and no unchanged B1–B5 suite repeated. Execution log SHA256 `bfbe4106bc1a0524975bc5ba0f7d8dc3109282bcef35b3722e14158206a9fc29`, private evidence `/private/tmp/mon1-current-main-focused-checks-20261026.log`. Prepared index still exactly d6d61eb1f26082c4df879b4d5864da15e5518a90 before staging this receipt. Inherited main-parent log whitespace is preserved as recorded above. Normal feature merge checkpoint/push follows; required current-main CI and actual independent RED delta review remain open. This dispatcher is not an accepting actor.
