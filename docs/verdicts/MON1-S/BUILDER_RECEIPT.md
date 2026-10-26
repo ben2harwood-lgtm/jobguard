@@ -1098,3 +1098,81 @@ coordinator may sequence MON3 next. Normal dispatcher checkpoint/feature push,
 current-main CI, independent RED delta review and separate acceptance remain
 outstanding. No Git stage/commit/push/merge, product acceptance, main merge,
 release, spending or real data. All existing source/security/release holds remain.
+
+## 26 October 2026 — approved MON1-A28/A29 role-posture regression repair
+
+Same bounded leaf `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, saved Gmail session
+`01a1788c-21e1-7012-9d6b-a031d6aaa817`. Authority: Ben's direct response
+“Approve exact repair and review” to coordinator question
+`call_c397d21d45974d89baea6109b53b4584`, following the same Claude checker's
+REPAIR amendment on pushed `1dabafe66fb7a79de75a7928d2a1ad9316548eef`.
+Issued CI evidence: core run `40371911865` versus main `a6778b4a` passes
+3184/3185 and rejects the obsolete role-absence expectation; that is supplied
+CI provenance, not a new local PostgreSQL result. Starting HEAD
+`e81e52db58eb99d748ddf794b8a51b3f4fba4f44` is the normal lane-only checkpoint;
+initial working tree clean. Its added path permission is installed, not edited
+by this builder. No new allowance, worker, review session or driver was launched.
+
+Retained required readings; refreshed current rules/simplicity and applicable
+AGENTS §5.1 / BUILD_PLAN MON-1. Their identities remain recorded unchanged.
+Inspected the full affected test, its fixture caller chain, 0239 role creation,
+`ensureRoles` and ownership-finalizer validators, the real PostgreSQL 16 bootstrap
+membership tests and lifecycle isolation assertions, and the persistence
+contract's ADMIN-only exception. The validators allow zero holders or the
+current creator's ADMIN-only membership (INHERIT/SET false); they forbid these
+roles being members of any other role. Reused those SQL patterns directly,
+without new helpers, runtime changes or incompatible membership rules.
+
+Changed ONLY the obsolete title and absence assertion in
+`packages/db/test/meter-persistence.integration.test.ts` (+17/−2 lines):
+
+- Both `jobguard_meter` and `jobguard_meter_owner` must exist, one row each,
+  with LOGIN, INHERIT, BYPASSRLS, SUPERUSER, CREATEDB, CREATEROLE and REPLICATION
+  all false, and no outgoing `pg_auth_members` membership.
+- Holder rows, if present, must exactly match the existing current-creator
+  ADMIN-only shape; runtime cannot be that holder. Explicit `pg_has_role`
+  USAGE and SET checks reject indirect runtime inheritance/assumption paths.
+- Both roles have no applicable privilege on any app `shadow_%` ordinary or
+  partitioned table, view, materialized view, foreign table or sequence:
+  table SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER, column
+  SELECT/INSERT/UPDATE/REFERENCES, sequence USAGE/SELECT/UPDATE are checked.
+- All earlier runtime-DML denial, FORCE RLS, fixture EXECUTE denial, nonempty
+  shadow inventory, runtime-shadow denial and other tenant/privacy assertions
+  remain byte-for-byte unchanged. The 0239 SQL, B1–B5/union source and every
+  other source file remain untouched. No protected fingerprint/code changed.
+
+Actual focused checks with installed Node 24.15.0, TypeScript 5.8.3 and cached
+pnpm 10.28.1, without installation or fallback:
+
+- PASS narrow `transpileModule` syntax diagnostics for the changed file.
+- PASS actual runner discovery:
+  `pnpm --filter @jobguard/db exec vitest list test/meter-persistence.integration.test.ts --maxWorkers=2`;
+  all 11 cases collected. No PostgreSQL hooks/assertions executed.
+- PASS synthetic evaluation of the exact added assertion block using mocked
+  catalogue results: 4 safe/no-holder/ADMIN-only probes accepted, 34 probes
+  rejected across both roles (missing role, every unsafe attribute/membership,
+  wrong holder/admin/INHERIT/SET, runtime USAGE/SET, shadow relation/sequence).
+  Initial ad hoc mock misrouted a nested SQL substring; corrected its routing
+  and reran the synthetic checks. This tests assertion sensitivity, not actual
+  PostgreSQL catalog semantics, query execution or tenant isolation.
+- PASS exact reverse reconstruction proves that replacing the added block
+  with the old assertion and restoring the title reproduces HEAD's full file.
+  PASS whitespace and exact two-path footprint checks; original receipt prefix
+  preserved. No broad build/typecheck or previously passing DB suite repeated.
+
+Original test SHA-256:
+`2b4c9bff668c980d7cc4b43e77b0065414c087d78e3342ea0439f1bb46f8d71d`.
+Candidate test SHA-256:
+`f0748b2cc79464c75675467dbfd80f6ca323f087500085a603c7b9d49215b307`.
+Earlier receipt prefix: 82,218 bytes, SHA-256
+`40e869ebc56ae7272545934ae829038f153226aee00143a1e57ddb01b1bb6cf1`.
+
+Parent admission/resource observation covers this continuation; no denied
+process observation was interpreted as zero, and no heavy execution was
+attempted. PostgreSQL/browser remain CI-only. Dispatcher next: normal scoped
+checkpoint/feature push, current-main exact-head CI executing this regression
+and dependent guards, same original Claude RED delta recheck, separate
+acceptance, then actual C282 checker merge only after all gates. No local DB
+PASS, new independent review, acceptance, Git metadata write, commit/push,
+main merge, live action, real data, spending or release is claimed. Existing
+holds remain. This is a delta repair, with no new simplicity observation.
