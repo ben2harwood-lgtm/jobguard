@@ -1020,3 +1020,81 @@ feature push, current-main GitHub CI and independent conflict-delta recheck.
 Required PostgreSQL/browser assertions remain CI-only. This is not acceptance
 or integration permission; all existing product/security/real-data/release
 holds remain. No Git metadata write, commit, push, main merge or release.
+
+## 26 October 2026 — approved 0209 → 0239 forward renumber
+
+Same bounded leaf/session `MON1-S-CATCHUP-CURRENT-MAIN-20261026` /
+`01a1788c-21e1-7012-9d6b-a031d6aaa817`. Starting clean HEAD
+`b39edde6c3aa2423624c0477b0645bfd6636e612`; earlier union `1aed0829`
+and main `a6778b4ae923ec15ba39377ee0c4ca2006f31040` retained. Authority:
+Ben `msg_01a1793a-8fad-7813-b382-a8750b81b4e4`, issued exact lane batch and
+independent static proposal manifest
+`a749a70f64b0b91129a759ac5c660077d45d047906c0a6137ae475effed67fab`.
+No approval/config/archive installation repeated. Current AGENTS/BUILD_PLAN
+identities remain unchanged; retained applicable contracts/session policy and
+refreshed current rules, simplicity, lane and actual migration consumers.
+This delta adds no simplicity observation or product acceptance claim.
+
+Before removing originals, opened committed archive
+`archive/2026-10-26/mon1-s-0209-forward-preservation/original-0209.zip`:
+SHA-256 `b0091e7103bfc66d136fccc07808bd22e2172c11f8ad8af142d7894dab158300`.
+ZIP CRC check passed, both members exactly equal HEAD originals and live bytes.
+Original SQL SHA-256
+`807d99fd25bcf4cadab35a4077dd4f378d25510fbab7ae596811d1b9f7b46a58`;
+original note `350dae84483bedd5bb2cc49ab86cd6f9894631b33d7722b1afc06e23a8e80b20`.
+Archive/config/instructions were not edited.
+
+Renamed SQL to `0239_meter_lifecycle_source.sql` byte-for-byte. Renamed note
+with only `# 0209` → `# 0239` heading change. Persistence contract and LP-0 JSON
+changed only the exact migration stem, not numbers embedded in fingerprints,
+ACLs, routine definitions or historical narrative. The two test consumers use
+the new filename; upgrade describe label now says own-0239. Discovery checks
+retain 0208 as a required earlier migration rather than immediate predecessor,
+because SV5 now intervenes. Existing 0207 absence check remains; source discovery
+also explicitly rejects the retired 0209 lifecycle filename. Upgrade still
+installs every predecessor, compares full preserved rows/types/ACL/policies,
+finalizes ownership, runs successors twice and tests the second database.
+B1–B5 corrections and union catalogue controls are preserved; no runtime or SQL
+semantics, permissions, expected error code or protected fingerprint changed.
+
+Checks actually executed using installed Node 24.15.0 at
+`/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin` and cached pnpm
+10.28.1; no install, global fallback, Git write or heavy execution:
+
+- PASS archive/committed/live equality before removal; SQL equality after rename;
+  note heading-only and contract/catalogue stem-only byte comparisons.
+- Inspected/reused `planRenumber` and `MIGRATION_PATH` from existing tooling.
+  Pure plan with the approved SV5 0238 predecessor reservation selects precisely
+  0239. Did not call the mutating renumber helper or `--write`.
+- PASS actual `MIGRATION_URLS` / `migrationListProblem` discovery, unique numbers,
+  exactly one 0239 and no old live 0209 file. Current local tail is
+  0208 / 0237 / 0239; the separate SV5 forward rename to 0238 is not in this
+  checkout yet. Required integration order remains SV5 0238 → MON1S 0239 →
+  MON3 0240, performed only by the independent C282 checker after its gates.
+- PASS TypeScript 5.8.3 syntax diagnostics for both changed tests; LP-0 JSON parse.
+  First direct import attempted unavailable root `tsx` and failed before checks;
+  corrected to Node 24's built-in TypeScript loading, which passed. No dependency
+  was added or substituted.
+- PASS actual runner: `pnpm --filter @jobguard/db exec vitest run
+  src/meter-lifecycle-repository.test.ts --maxWorkers=2 -t 'discovers lifecycle migration after repaired MON1-T on fresh installs'`:
+  1 pass, 8 unselected. Only changed discovery behavior executed.
+- PASS `pnpm --filter @jobguard/db exec vitest list
+  test/meter-lifecycle-upgrade.integration.test.ts --maxWorkers=2`: 2 cases
+  collected; PostgreSQL hooks/assertions NOT RUN. DB/browser remain CI-only.
+- PASS `git diff --check`; exact footprint/preservation checks recorded below.
+  No repeated build/typecheck/B1–B5 suites, heavy helper loop or new driver.
+  Parent-provided admission/resource observations are authority for this child;
+  no new claim or process count was manufactured in the sandbox.
+
+Candidate SHA-256: SQL remains `807d99fd25bcf4cadab35a4077dd4f378d25510fbab7ae596811d1b9f7b46a58`;
+note `0a65aaf867fb131df32d8efa56777d38598c240d8480b3a076fbf7a905860243`;
+repository test `e7f87906b044a57e4f78455383ef78b2086001fc0d010b2cf5a611601fbf206c`;
+upgrade test `7fa39c536efd1f54cf4666121e6f07d2e034779ae4acb9af210b5bd51c4f182e`.
+Earlier receipt prefix preserved: 77,095 bytes, SHA-256
+`28b5ac29353e49bbeb0d95f13dd70ec1546d1df6e5a9ac21ec0e4972471ddb56`.
+
+Source result only. Shared catalogue editing phase is complete for this leaf;
+coordinator may sequence MON3 next. Normal dispatcher checkpoint/feature push,
+current-main CI, independent RED delta review and separate acceptance remain
+outstanding. No Git stage/commit/push/merge, product acceptance, main merge,
+release, spending or real data. All existing source/security/release holds remain.

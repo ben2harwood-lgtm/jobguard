@@ -1,4 +1,4 @@
-# 0209 — normal-company lifecycle sources
+# 0239 — normal-company lifecycle sources
 
 Additive migration after 0208. Adds eight `app.meter_lifecycle_*` tables, isolated `jobguard_meter`, three checked lifecycle entrypoints and one private authentication bridge. No existing table/routine/row, grant or RLS policy is replaced. Eleven source tables receive additive SELECT grants and separate tenant-scoped SELECT policies for the dedicated lifecycle owner only. No practice schema, annual/trial entitlement, billable count or commercial side effect is enabled.
 

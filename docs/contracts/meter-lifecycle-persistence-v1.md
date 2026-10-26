@@ -28,4 +28,4 @@ Mid-period plan changes are explicitly unavailable in this foundation because MO
 
 CI must execute the four PostgreSQL files and preserved 0184/subscription regressions. No local PostgreSQL execution is claimed.
 
-Migration `0209_meter_lifecycle_source.sql` applies after MON1-T `0208_meter_small_trip.sql` on fresh install and predecessor upgrade; 0207 is reserved for CH-7-REST-C.
+Migration `0239_meter_lifecycle_source.sql` applies after MON1-T `0208_meter_small_trip.sql` on fresh install and predecessor upgrade; 0207 is reserved for CH-7-REST-C.
