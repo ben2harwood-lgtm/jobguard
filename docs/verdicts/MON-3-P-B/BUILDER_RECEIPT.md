@@ -197,8 +197,8 @@ Environment: existing dependencies, Node v24.17.0, cached pinned pnpm 10.28.1 th
 | Check | Actual result |
 | --- | --- |
 | `pnpm typecheck`, before any build | PASS, 7 tasks (2 cached) |
-| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1: core purity passed (240 TS files), lane boundary attributes incoming main files to B during the unresolved-index merge |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1: same incoming-main range issue; no unrelated lane permissions added |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1: core purity passed (240 TS files). Correction from independent delta review at 0b523164, relayed in the repair order: migration 0206 was below main's 0208; the earlier unresolved-merge-range diagnosis was incorrect |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1: migration ordering against main's 0208, per the independent delta review relayed in the repair order; no unrelated lane permissions added |
 | `pnpm exec turbo run lint` | PASS, 7 package tasks (2 cached) |
 | `node --test tools/*.test.mjs` | PASS, 295 tests |
 | Config units | PASS, 5 files / 86 tests |
@@ -219,3 +219,88 @@ Final exact comparison confirms the resolved test equals main's stage-3 source p
 No new migration, product behavior, permission, operational alert, backwards-compatibility change or release authority is introduced. Admission stays disabled pending C. DB integrations, real PostgreSQL catalogue/grant/RLS checks, migration upgrades and browser suites were NOT RUN under the dispatcher's sandbox instruction; the root aggregate `pnpm test` includes PostgreSQL and was replaced here by the explicitly reported unit selections, not claimed as passed. CI/reviewer must run those suites, extract actual protection records and rerun official lane checks after the dispatcher commits. All original C, commercial and real-data release holds persist. No new independent verdict or technical acceptance is claimed.
 
 Intended conventional commit subject/body is written to `/private/tmp/jg-msg-mon-3-p-b-catchup.txt`. No direct Git-writing command, package download, push, provider call, deployment, browser run or subagent was performed. Dispatcher owns staging, commit and CI; independent review/acceptance must bind to that resulting exact commit.
+
+## Bounded mechanical repair — coordinator allocation 0235, 25 October 2026
+
+```yaml
+session_record_version: 1
+task_id: MON-3-P-B-CATCHUP
+project: JobGuard
+role: builder
+thread_id: 01a173c3-1af3-7791-bcec-984d2b202f16
+resumed_from_thread_id: 01a173c3-1af3-7791-bcec-984d2b202f16
+authorised_route_ref: ~/.codex-ben2
+repository: /Users/benharwood/Claude/Projects/my-new-project
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3-p-b-catchup
+branch: codex/sandbox/mon-3-p-b-catchup
+source_pin: 0b523164a8300d89f0075a8df79598b721c9c979
+candidate_revision: uncommitted_working_tree_on_source_pin
+integration_target: origin/main
+integration_target_revision: 319120a35f06a6db9223edc751b941d70f79a18d
+allowed_files_ref: config/lanes/mon-3-p-b.json
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: local_saved_session_rollout_latest_turn_context
+state: repair_prepared_lane_check_hold
+review_evidence_ref: independent_delta_review_at_0b523164_as_relayed_by_coordinator_order
+accepting_actor: none
+acceptance_evidence_ref: none_for_this_uncommitted_repair
+outstanding_holds: old_0206_removal_paths_denied_by_updated_lane
+```
+
+Resumed this same issued leaf, without a new product task, merge or rebase. Before edits, `git status --short` showed only the coordinator-owned `config/lanes/mon-3-p-b.json` modification. HEAD was the exact source pin above; `git rev-parse origin/main` returned the full 40-character identity above. These are local refs, not a network refresh. Read current AGENTS.md, BUILD_PLAN MON-3 card, own contract/ledger and affected upgrade sources, current lane, and the mandatory simplicity rule rev 2. Earlier session-policy reading remains in this same saved session. Runtime model/effort were read from its latest local rollout `turn_context`; the authorised account route is coordinator-supplied, not a claim of a new authentication probe. Raw usage for this resumed turn is unavailable at receipt writing; no cache or allowance-saving claim.
+
+Verified the coordinator lane diff is exactly the two approved 0206-to-0235 migration/note path replacements against 0b523164. The builder did not alter that file. `git for-each-ref --format=%(refname) refs/remotes/origin` plus `git ls-tree -r --name-only <ref> packages/db/migrations` found no `0235_` migration in all 367 inspected local origin refs. Allocation 0235 is the current owner's instruction; no alternate number or other reservation was selected.
+
+Renamed `packages/db/migrations/0206_free_first_job_admission.sql` to `0235_free_first_job_admission.sql`, preserving all 16,202 SQL bytes. Renamed the matching migration note and updated its two number references. Other changes are only B's own migration references in its two contracts, own ledger, two LP-0 source paths, the upgrade suite's `own` filename, and SERIOUS-B5's comment. No assertion, expected catalogue row, permission, SQL control or runtime behavior was edited. Historical receipt entries retain their original 0206 chronology; this section supplies the current mapping. The sibling MON-3C-P0 lifecycle contract and MON1-T's 0208 note retain historical source-inspection/renumbering references and were untouched; neither is a runtime reference requiring a B scope expansion. No new complexity was introduced.
+
+**Correction of prior diagnosis:** the independent delta review at 0b523164, as relayed in this repair order, established migration ordering against main's 0208 as the lane failure cause. The earlier unresolved-merge-range explanation for that reviewed candidate was incorrect and is withdrawn; the catch-up 2 table rows above are corrected accordingly. This is attribution of the independent finding, not a new independent review by this builder. Earlier chronological receipts and test results do not establish acceptance of this repair.
+
+Verification actually executed:
+
+- Exact candidate byte comparison via Python: `original = subprocess.check_output(['git','show','0b523164a8300d89f0075a8df79598b721c9c979:packages/db/migrations/0206_free_first_job_admission.sql']); assert original == Path('packages/db/migrations/0235_free_first_job_admission.sql').read_bytes()` — exit 0. SHA-256 of both: `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8`. Per-file comparison also confirmed all other non-receipt edits equal only the approved reference substitutions/renames; coordinator lane contents remain unchanged by builder.
+- `git diff --check` — exit 0 after mechanical edits; final receipt-inclusive check follows below.
+- Fresh `os.getloadavg()` before lane lint: `(3.6787109375, 5.3828125, 5.47998046875)`; `memory_pressure | tail -2`: 44% free. Load was below the dispatch's 8 threshold. Used one acquired existing heavy slot with `HEAVY_SLOTS=2`, not two concurrent checks. The wrapper emitted sandbox `sysctl`/`ps` permission diagnostics; its pnpm child nevertheless executed. Those diagnostics mean a fresh node-count reading was not established here; the coordinator's supplied approved count was 2.
+- `HEAVY_SLOTS=2 LANE_BASE_REF=origin/main PATH=/private/tmp/mon3pb-catchup-bin:$PATH /Users/benharwood/.local/bin/heavy-slot mon3pb-0235-lanes pnpm lint:lanes > /private/tmp/mon3pb-0235-lanes.log 2>&1` — exit 1. Existing wrapper uses already cached pinned pnpm 10.28.1; no install/download. Lane checker reports precisely the two old removal paths: `packages/db/migration-notes/0206_free_first_job_admission.md` and `packages/db/migrations/0206_free_first_job_admission.sql`. The replacement-only lane update allows the destinations but denies removal of the originals. No check, policy or lane permission was changed to obtain a pass.
+
+**Precise hold / next actor:** coordinator must authorize/allow the two old 0206 removal paths alongside the already approved 0235 destinations in B's own lane, or supply its bounded handling of this rename. Builder leaves the approved lane update untouched and this repair uncommitted. Lane lint has run and failed; it is not described as resource-deferred. Its successful rerun is held on that coordinator-owned lane correction. No additional heavy checks are pending under this bounded order.
+
+No root suites, typecheck/build/unit reruns, PostgreSQL, migration execution, browser/Playwright, provider calls, package installation, commit, push, PR, dispatch-ledger edit, other-lane edit, global configuration or acceptance action was performed. Database/migration/browser verification remains for GitHub CI. Admission remains disabled pending C; all previous commercial, review and release gates persist. The existing intended-commit-message file `/private/tmp/jg-msg-mon-3-p-b-catchup.txt` exists and is left unchanged to preserve its authored content; coordinator owns the final commit message and candidate verification.
+
+Final receipt-inclusive `git diff --check`: PASS (exit 0). Worktree changes remain unstaged/uncommitted, including both 0235 destination files and the preserved coordinator-owned lane diff.
+
+## Approved lane-removal allowance rerun — 25 October 2026
+
+Same saved builder session `01a173c3-1af3-7791-bcec-984d2b202f16`, GPT-6.1 Sol Medium, coordinator-authorised `~/.codex-ben2` route. Revalidated worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3-p-b-catchup`, branch `codex/sandbox/mon-3-p-b-catchup`, HEAD `0b523164a8300d89f0075a8df79598b721c9c979`, local `origin/main` `319120a35f06a6db9223edc751b941d70f79a18d`. No fetch, merge or rebase. Existing uncommitted repair is preserved. Current simplicity rule is rev 2, unchanged from the preceding repair.
+
+Verified coordinator's lane bytes against HEAD: exactly two added 0235 destination rows, with the two original 0206 rows retained and every other byte unchanged. Relative to the preceding replacement-only lane, this restores precisely the two old removal allowances. Builder did not edit source or the lane. Exact uncommitted source identity, excluding this append-only receipt: `9f1864e2b9a7fde0bdc4fa5d800f615e67a2e60ddd02fe6abc6a0ff8e00c02b0`. This is SHA-256 of compact JSON (`separators=(',',':')`) of sorted `[path, content_sha256_or_null_if_removed]` pairs for `git ls-files --modified --others --exclude-standard -z`, deduplicated, excluding this receipt; 11 paths. It binds tracked changes, removals and both untracked 0235 destinations without claiming a committed candidate or review.
+
+Fresh resource observation at 19:33 local: `uptime` reported load averages `3.16, 5.17, 5.48`; `memory_pressure | tail -2` reported 49% free. Used the requested single existing slot, `HEAVY_SLOTS=1`. Existing cached-pnpm PATH wrapper selects pinned pnpm 10.28.1 without installation. Actual command:
+
+```sh
+PATH=/private/tmp/mon3pb-catchup-bin:$PATH HEAVY_SLOTS=1 LANE_BASE_REF=origin/main /Users/benharwood/.local/bin/heavy-slot mon3pb-0235-lanes pnpm lint:lanes > /private/tmp/mon3pb-0235-lanes-rerun.log 2>&1
+```
+
+Result: **exit 1**. The heavy-slot wrapper emitted sandbox `sysctl` and build-node-count `ps` permission diagnostics; its pnpm child executed. No fresh node-count success is claimed. Exact checker failure:
+
+```text
+Lane boundary FAILED: Migration order FAILED:
+"packages/db/migrations/0206_free_first_job_admission.sql" must be numbered above 0208, the highest migration already on the base
+Run node tools/migration-renumber.mjs --write after catching up with main (SQL bytes stay unchanged).
+```
+
+The prior removal-path denial is no longer the reported failure. This rerun still reports the old 0206 migration despite the uncommitted rename to 0235. No workaround, further renumber, source/lane/check change, staging or other check was attempted. Coordinator verification/handling of this exact migration-order failure remains the hold. Only the requested lane lint ran; no tests, typecheck/build, DB/migration execution, browser/Playwright or installation. Receipt append only; work remains uncommitted, unpushed, unintegrated and unaccepted, with no new review claim. Next actor: coordinator assesses this exact failure against the preserved uncommitted candidate.
+
+## Founder-authorised commit checkpoint attempt — 26 October 2026
+
+Same saved session and bounded leaf. Revalidated HEAD `0b523164a8300d89f0075a8df79598b721c9c979`, branch `codex/sandbox/mon-3-p-b-catchup`, and local `origin/main` `319120a35f06a6db9223edc751b941d70f79a18d`. The working changes were exactly the 12 paths authorised in the current checkpoint order; the index was initially empty. `git diff --check` passed (exit 0). Existing approved candidate source and coordinator lane contents were not changed. Normal Git configuration has no `core.hooksPath` override; default pre-commit, prepare-commit-msg, commit-msg and post-commit hook files were absent. No hook behavior was changed or bypassed.
+
+Attempted `git add --` with exactly these 12 explicit paths: `config/lanes/mon-3-p-b.json`, `docs/contracts/free-first-job-persistence-v1.md`, `docs/contracts/free-first-job-v1.md`, `docs/contracts/lp-0-effective-privileges-v1.json`, `docs/ledger/MON-3-P-B.md`, this receipt, both old 0206 migration/note paths, both new 0235 migration/note paths, `packages/db/test/free-first-job-admission-upgrade.integration.test.ts`, and `packages/db/test/serious-b5-upgrade.integration.test.ts`. Exit 128:
+
+```text
+fatal: Unable to create '/Users/benharwood/Claude/Projects/my-new-project/.git/worktrees/mon-3-p-b-catchup/index.lock': Operation not permitted
+```
+
+This is a sandbox filesystem denial before commit/hook execution, not a hook failure or missing founder authorisation. The writable worktree does not grant write access to the shared Git metadata directory. No escalation or alternate index/worktree was attempted. No commit was made, so the order's conditional post-commit lane lint was NOT RUN. No tests, typecheck/build, DB/migration execution, browser, install, push, PR, integration, merge, review or acceptance action occurred. Next actor: dispatcher with authorised writable Git metadata performs the exact checkpoint commit and then runs the required lane lint once. Existing source remains preserved; only this failure evidence was appended to the already-authorised receipt.

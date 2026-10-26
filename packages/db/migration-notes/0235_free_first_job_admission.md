@@ -1,4 +1,4 @@
-# 0206 — MON-3-P-B disabled fictional foundation
+# 0235 — MON-3-P-B disabled fictional foundation
 
 Four new forced-RLS, migration-owned immutable business side tables: `trial_business_verification`, `trial_card_attempt`, `trial_card_result`, `trial_admission`. Ten tenant-qualified PK/unique indexes, four tenant policies, eight mutation/truncate guards. Five new routines; no existing table gains a column and no routine is replaced. No backfill or existing commercial-history rewrite.
 
@@ -10,6 +10,6 @@ Admission always raises before commercial writes. Its unreachable checked transa
 
 Install transaction rollback is the recovery for a failed application. Once installed, preserve verified fixture/key/attempt/result history and use a reviewed additive forward fix; do not drop tables, reset keys, edit facts or implement retention/deletion policy here.
 
-Own upgrade proof installs all predecessors, snapshots populated named pre-existing columns with canonical `row_to_json` text, full types and PK identities, applies 0206 alone, compares, populates own setup facts, then applies later migrations twice. Rolled-back controls detect microsecond damage/retyping; added nullable columns, later function replacement and new rows pass. Admission has no populated success row because B deliberately cannot admit. PostgreSQL suites are NOT RUN locally; CI must establish actual fresh/upgrade/catalog/RLS/race behavior.
+Own upgrade proof installs all predecessors, snapshots populated named pre-existing columns with canonical `row_to_json` text, full types and PK identities, applies 0235 alone, compares, populates own setup facts, then applies later migrations twice. Rolled-back controls detect microsecond damage/retyping; added nullable columns, later function replacement and new rows pass. Admission has no populated success row because B deliberately cannot admit. PostgreSQL suites are NOT RUN locally; CI must establish actual fresh/upgrade/catalog/RLS/race behavior.
 
 Shared tenancy/SERIOUS-B5/export integration is proposed in `/private/tmp/SHARED-MON-3-P-B.patch`; LP-0 needs actual migrated-catalog extraction and review. No shared inventory is edited in-place. See task receipt for local commands and holds.

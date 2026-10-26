@@ -1,7 +1,7 @@
 # MON-3 free first job reference contract v1
 
 Status: synthetic preview, A's private key storage (actual migration 0194), and B's
-fictional verification/card persistence (0206). B admission is unconditionally disabled
+fictional verification/card persistence (0235). B admission is unconditionally disabled
 pending C; MON-3 remains incomplete. No production provider, charge, trial conversion,
 statement or settlement is authorized. The proposed D09 policy is not approved.
 The historical preview delivery and later supersessions are recorded below.
@@ -101,7 +101,7 @@ under Ben’s issued authority; it does not enable admission or settle B/C inter
 The old elapsed-day clock remains preview-only, never persisted billing authority.
 
 20 October supersession — MON-3-P-B adds disabled fictional verification/card persistence
-in actual migration `0206_free_first_job_admission.sql`; A's merged migration is
+in actual migration `0235_free_first_job_admission.sql`; A's merged migration is
 `0194_free_first_job_keys.sql` (historical 0192 references above are superseded).
 See `free-first-job-persistence-v1.md` for strict request/result boundaries, immutable
 business bindings, owner/session replay checks and the disabled activation seam.
