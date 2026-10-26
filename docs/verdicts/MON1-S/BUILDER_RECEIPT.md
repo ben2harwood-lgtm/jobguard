@@ -940,3 +940,83 @@ alerts, product changes or complexity were introduced; no acceptance is claimed.
 ### Dispatcher execution setup resolved — 2026-10-26T14:22:18.175726+00:00
 
 Existing pinned runtime `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node` verified Node24.15.0; pnpm10.28.1. No installation, dependency or version change. The existing heavy-slot helper successfully observed processes/resources and admitted the single targeted check job. Core and DB package `typecheck` and `build` each PASS (four actual commands), with no local PostgreSQL/browser assertion and no unchanged B1–B5 suite repeated. Execution log SHA256 `bfbe4106bc1a0524975bc5ba0f7d8dc3109282bcef35b3722e14158206a9fc29`, private evidence `/private/tmp/mon1-current-main-focused-checks-20261026.log`. Prepared index still exactly d6d61eb1f26082c4df879b4d5864da15e5518a90 before staging this receipt. Inherited main-parent log whitespace is preserved as recorded above. Normal feature merge checkpoint/push follows; required current-main CI and actual independent RED delta review remain open. This dispatcher is not an accepting actor.
+## 26 October 2026 — PR189 current-main union continuation
+
+Same saved Gmail builder session `01a1788c-21e1-7012-9d6b-a031d6aaa817`,
+bounded leaf `MON1-S-CATCHUP-CURRENT-MAIN-20261026`. Authority: checker ACK
+`mon1-s-8b6961dd-needs-catchup`, ACKS.tsv, `2026-10-26T14:53:22Z`, and issued
+two-path continuation. C280 remains in force; no round-cap request or new
+simplicity observation. Retained applicable readings; refreshed current rules,
+simplicity, applicable AGENTS/MON-1 sections, both parent versions of the test,
+its snapshot/catalogue fixture and relevant ownership-finalizer context.
+AGENTS and BUILD_PLAN identities remain the previously recorded hashes.
+
+Dispatcher-prepared parents: source/HEAD
+`8b6961dd77ee341e3d41f16ab5301ab72a1211da`, incoming/MERGE_HEAD
+`a6778b4ae923ec15ba39377ee0c4ca2006f31040`. Merge base is
+`319120a35f06a6db9223edc751b941d70f79a18d`. Exactly one unmerged index path:
+`packages/db/test/contractor-entitlement-upgrade.integration.test.ts`; stages
+1/2/3 are `40948f8db2eeefd2bbe24a245412c052ce7e50bf`,
+`aedec136457aa4056727a63ce6b28a846464ebe2`,
+`453282837c98760c1823882fb82233930e13fc65`. Builder did not stage or alter this
+index; the dispatcher must mark the worktree resolution resolved. No final
+merge tree/commit exists yet, and live remote equality was not reverified here.
+
+Resolved only that file: retain main's six named Final Check tables and exact
+snapshot assertions after each of the two migration calls; add all eight
+feature lifecycle tables. Retain feature's five exact routine identity rows,
+including the small-trip routine, in schema/name/identity-arguments order.
+Both parents' full predecessor snapshot, least-privilege assertions and
+row/grant/shape negative controls survive unchanged. No exclusions, expected
+error codes, fingerprints, SQL, grants, roles, bootstrap or migrations changed.
+
+Actual checks (synthetic source/import checks, not PostgreSQL evidence):
+
+- PASS: exact full-file reconstruction from main plus source's eight table
+  rows and ordered routine query/rows equals the resolved file byte-for-byte.
+  No conflict markers remain in that file. All bytes outside the additive
+  union and explanatory successor comment equal the corresponding parent.
+- PASS: all nonblank feature-added lines versus merge base survive in each
+  B1–B5 file; the initially missing-base-file diagnostic was handled as an
+  absent predecessor file, then all five comparisons completed successfully.
+  Those files were not edited by the builder. B1 and B3 also retain main's
+  automatically merged additions, so their full hashes have legitimately changed.
+- PASS: TypeScript 5.8.3 `transpileModule` syntax diagnostics for this one test,
+  using installed pinned Node `v24.15.0` from
+  `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`.
+- PASS: same pinned Node with cached pnpm 10.28.1,
+  `--filter @jobguard/db exec vitest list test/contractor-entitlement-upgrade.integration.test.ts --maxWorkers=2`:
+  six cases discovered, exit 0. Discovery/import only; no hooks or PostgreSQL
+  assertions executed. `git diff --check -- <resolved test>` passes.
+- Process observation `/bin/ps -axo pid=` remains denied. Heavy execution
+  clearance is unavailable; no heavy helper loop or test run was launched.
+  No core/DB build/typecheck or unchanged B1–B5 suite was repeated; no install.
+
+SHA-256 of the conflicted test's parent bytes and resolved candidate:
+
+- Source: `025dd895b89502a50e14a18d76b1ed048636ebab14c070e5e9355dd070dd3c00`.
+- Main: `f35c317122b47ae06808b55a2f12198b34bbaed3192d8fcab23a9b58f5d912d2`.
+- Resolved: `863bc3b3c16ce21e7af3943fba282a907aba55d89f29cef1b792b9344c58afa4`.
+
+Current B1–B5 hashes, respectively:
+`6557582af03e724f8063ee57cd5febe989c9691a492c0809b8e0c8b1063f33e1`,
+`b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`,
+`a833705aba377f0fe05bd383a86dc39760561eabf7bdbb6ec20acbd4cf16bbbf`,
+`38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`,
+`06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+
+Current managed coding claim is `claim-24322-57122a9c7b4a43b4bfbaed8925c01a0f`;
+its child boundary records this exact leaf/cwd/saved session, prompt hash
+`ff7d5f7c065aae7f8c6067cd894001e1797827eae27acab8ae30982b559fc39f`,
+and current rules/simplicity hashes `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28` /
+`6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No worker, reviewer or driver was launched here. Coordinator retains global
+capacity/owner reconciliation. Only the authorised test and this receipt were
+edited. Original receipt bytes are preserved; prior length 71,982 and SHA-256
+`a6dc637f652740d46f420d12290c05d0fa73f9acdbd7d965d4dc653bb048a55e`.
+
+Return resolved source for dispatcher staging, scoped two-parent commit and
+feature push, current-main GitHub CI and independent conflict-delta recheck.
+Required PostgreSQL/browser assertions remain CI-only. This is not acceptance
+or integration permission; all existing product/security/real-data/release
+holds remain. No Git metadata write, commit, push, main merge or release.
