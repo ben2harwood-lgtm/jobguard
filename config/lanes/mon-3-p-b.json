@@ -42,7 +42,12 @@
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "archive/2026-10-26/mon3-0206-renumber-preservation/original-0206.zip",
         "archive/2026-10-26/mon3-0206-renumber-preservation/MANIFEST.json",
-        "archive/2026-10-26/mon3-0206-renumber-preservation/ACTIVITY.md"
+        "archive/2026-10-26/mon3-0206-renumber-preservation/ACTIVITY.md",
+        "packages/db/migrations/0240_free_first_job_admission.sql",
+        "packages/db/migration-notes/0240_free_first_job_admission.md",
+        "archive/2026-10-26/mon3-0235-forward-preservation/original-0235.zip",
+        "archive/2026-10-26/mon3-0235-forward-preservation/MANIFEST.json",
+        "archive/2026-10-26/mon3-0235-forward-preservation/ACTIVITY.md"
       ]
     }
   }
