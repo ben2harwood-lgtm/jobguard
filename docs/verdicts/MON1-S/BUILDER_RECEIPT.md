@@ -670,3 +670,138 @@ explicit outstanding evidence. Earlier product, security, commercial and
 release holds remain. The builder does not accept its own work.
 
 Size: +411/−73 lines across 13 files; largest touched logic file: 690 lines (packages/db/test/lp-0-catalog.ts); new abstractions: one administrative finalizer, needed to transfer routine ownership outside numbered migrations and roll back temporary permissions.
+
+## 26 October 2026 — B1–B3 in-lane bookkeeping repair (partial)
+
+Continues the existing MON1-S session at `820ef530554b9a80f5ace7559d98070debdd9a4f`,
+under the issued C264/C266/C280 scope. Read assigned AGENTS, BUILD_PLAN MON-1,
+the persistence contract, current SIMPLICITY_RULE rev 2 and the complete checker
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-s-claude-A-820ef530-20261025.md`,
+including its final repair note. This is a delta repair, not an initial review;
+no new LATER / SIMPLICITY finding is issued.
+
+Preflight: registered branch `codex/sandbox/mon1-s`, clean working tree, HEAD and
+cached origin branch both `820ef530554b9a80f5ace7559d98070debdd9a4f`; cached
+origin/main `319120a35f06a6db9223edc751b941d70f79a18d`. Read-only `git ls-remote`
+for both live heads failed because github.com could not resolve. These are cached
+identities, not verified current remote heads. Actual Node is 24.17.0; .nvmrc/CI
+pin 24.15.0. Used the existing cached pnpm 10.28.1 CLI directly; no install,
+runtime change, shared Git metadata write or dispatch of another worker occurred.
+
+Changed facts only:
+
+- B1: added exactly `owner|rel:table|app.subscription_agreement_revision|jobguard_migration`
+  in `a-mon1s-lifecycle`. Every other JSON fact is unchanged.
+- B2: both upgrade ACL projections use `coalesce(relacl, acldefault('r', relowner))`.
+  The exact existing meter-owner exclusion and every other assertion remain.
+- B3: SERIOUS-B5 retains migrate-only setup and explicitly expects all four
+  lifecycle routines to be migration-owned invokers, with the existing exact
+  grantors, executors and pinned search path. It records the six lifecycle-table
+  owner INSERT/SELECT ACLs and eight existing tenant policies' third role.
+  The eleven source SELECT ACLs/policies and the company-actor EXECUTE addition
+  are now part of the exact expected snapshot. Original ACLs are retained plus
+  the single owner SELECT entry; subscription/trip tables created after the
+  predecessor snapshot use explicit baseline ACLs. Their three source policies
+  are captured by the existing subscription/trip collectors and validated with
+  the other eight, avoiding duplicate expected rows. Source-policy roles,
+  permissiveness, SELECT command, tenant predicate and null WITH CHECK are exact.
+  Existing row/hash, FORCE RLS, policy, rejection and full-snapshot comparisons
+  remain. Reused the existing ACL conversion and ordered additive helpers;
+  no production SQL, bootstrap, role, permission or generic filter was changed.
+
+Actual focused checks (no local PostgreSQL/browser execution):
+
+- TypeScript `transpileModule` syntax diagnostics: PASS for both changed tests.
+- JSON parse, unique keys and exact B1 entry/group: PASS. The existing
+  `loadReviewedInventory` parser also passes via the installed tsx loader.
+- Static baseline comparison: PASS; JSON differs only by B1, B2 differs only by
+  the two symmetric default-ACL expressions, and SERIOUS-B5's eleven explicit
+  source identities match unchanged 0209 SQL. Retained RLS/snapshot assertions
+  and the exact four permitted paths were checked.
+- Actual repository runner discovery:
+  `pnpm --filter @jobguard/db exec vitest list test/meter-lifecycle-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts --maxWorkers=2`
+  passes and discovers all three upgrade cases. Collection/import only; their
+  PostgreSQL assertions were NOT RUN. No heavy test, broad Turbo run, timeout
+  increase or repeat of an unchanged passing suite was performed.
+- `git diff --check`: PASS.
+
+B4 (`job-work-state-upgrade.integration.test.ts`) and B5
+(`audit-export.integration.test.ts`) remain HELD for their proper reserved
+two-path allowance and are untouched. This four-file phase is deliberately
+PARTIAL / MUST NOT INTEGRATE; it does not complete or accept the five-item
+candidate. After the authorised B4/B5 continuation, current-main required CI
+(including real PostgreSQL upgrades/catalogues and applicable browser proofs)
+and independent RED delta review remain required. All product, permission,
+real-data, release and independent-acceptance holds remain. No commit, push,
+PR, merge or product-acceptance request was made.
+
+Size: +114/−10 lines across 4 files; largest touched logic file: 398 lines (packages/db/test/serious-b5-upgrade.integration.test.ts); new abstractions: none.
+
+## 26 October 2026 — authorised B4/B5 continuation, same MON1-S leaf
+
+Continues saved session `01a173ec-c191-74f0-99bb-c4e49c79a9db`. Verified branch
+`codex/sandbox/mon1-s` at issued HEAD `291991ac4b94c3c26c5ee328c46e605be66ad523`.
+That commit changes only the lane config, adding exactly the two test paths;
+no lane edit was made here. Authority: Ben's 13:08:08.402Z approval,
+`msg_01a17853-5052-7d21-a239-17e69beaae05`, and this bounded continuation.
+Reread the current simplicity rule, applicable AGENTS §§5.1/5.13/5.14, BUILD_PLAN
+MON-1, lane allowance, receipt and the checker's B4/B5 notes. Simplicity rev 2
+SHA-256: `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. C280 RED delta review remains required; this continuation
+is not an initial review and adds no LATER / SIMPLICITY observation.
+
+The three B1–B3 source files retain their previously recorded bytes; their
+SHA-256 values were checked, without rerunning their passing checks:
+
+- `docs/contracts/lp-0-effective-privileges-v1.json`:
+  `8b54d115f26f35d431829581e456aa3351f3c7aef050a5a50ecb82beb5afbd68`
+- `packages/db/test/meter-lifecycle-upgrade.integration.test.ts`:
+  `b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`:
+  `9e5f8b1c9191c2bf4bf22a8240612be7aba570ee1daa77a37c5325cb1a87ddaa`
+
+Changed only these two test files and this appended receipt:
+
+- B4 / CH4-A24 records six complete `meter_lifecycle_source_read` policy rows
+  on `final_account_lock`, `job`, `job_activation`, `job_activation_terms`,
+  `job_party_binding`, `membership`. Each is PERMISSIVE, SELECT, only
+  jobguard_meter_owner, exact tenant predicate, null WITH CHECK. The existing
+  comparator accepts these rows only in its post-successor call. Its default
+  remains the original policies for the own-migration and widening controls;
+  both sides sort by name to avoid host/database collation differences. The
+  full old-table filter and every isolation/refusal/data/type assertion remain.
+  SHA-256: `38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`.
+- B5 / MO5-e records exactly ten reviewed difference strings: five SELECT grants
+  to jobguard_meter_owner and five named policies on `app.job`,
+  `app.job_activation`, `app.job_activation_terms`, `app.job_party_binding`,
+  `app.membership`. The existing privilege-fact reader/comparator and its
+  negative controls remain unchanged. No prefix filter or generic exemption.
+  SHA-256: `06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+
+Actual focused checks, using existing Node 24.17.0 and cached pnpm 10.28.1
+(.nvmrc/CI still pin Node 24.15.0; no runtime/dependency change):
+
+- TypeScript transpileModule syntax diagnostics: PASS for both affected files.
+- Static synthetic execution of the changed B4 helper: exact six rows pass;
+  missing row, extra policy, changed predicate, and the original unapproved
+  stage-policy widening control reject. These are synthetic comparator checks,
+  not PostgreSQL permission evidence.
+- Existing B5 comparator with synthetic facts: exact five SELECT grants and
+  five policies produce precisely the ten expected differences; missing source
+  and extra UPDATE privilege reject. Comparator source unchanged.
+- `pnpm --filter @jobguard/db exec vitest list test/job-work-state-upgrade.integration.test.ts test/audit-export.integration.test.ts --maxWorkers=2`:
+  PASS; actual runner imports/collects 12 cases (CH4-A24 plus 11 audit-export
+  cases). Discovery only; no PostgreSQL/browser assertions executed.
+- B1–B3 source hashes preserved; previous receipt prefix preserved byte-for-byte.
+  `git diff --check`: PASS. No broad Turbo, heavy suite, local DB, timeout
+  increase, repeated passing B1–B3 suite, or shared Git metadata write.
+
+The earlier B4/B5 path hold is superseded by this exact allowance and source
+repair. All five repair items now have source corrections ready for the
+dispatcher's scoped checkpoint; this is NOT technical/product acceptance or
+integration permission. Exact-current-main required GitHub CI, including real
+PostgreSQL/browser assertions, and independent RED delta review of the complete
+five-item candidate remain outstanding. Preserve every real-data, privacy,
+finance, permission and release gate. No commit, push, PR, main merge or
+acceptance was performed by the builder.
+
+Size: +86/−3 lines across 3 files in this continuation; largest touched logic file: 409 lines; new abstractions: none (extended the existing policy comparison helper).
