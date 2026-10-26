@@ -7,7 +7,7 @@ import {MIGRATION_URLS,migrate} from "../src/migrate.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
-const own='0205_final_check.sql';const tables=['job','evidence_object','final_account_revision','final_account_line','final_account_lock','final_check_manifest','final_check_manifest_source','shadow_signal_classification','shadow_signal_disposition','recovery_case'];
+const own='0238_final_check.sql';const tables=['job','evidence_object','final_account_revision','final_account_line','final_account_lock','final_check_manifest','final_check_manifest_source','shadow_signal_classification','shadow_signal_disposition','recovery_case'];
 const ident=(s:string)=>`"${s.replaceAll('"','""')}"`;
 type Snapshot={columns:Array<{name:string;type:string}>;keys:string[];identities:string[];bytes:string[]};
 async function columns(db:Pick<PoolClient,'query'>,table:string){return (await db.query("SELECT attname name,format_type(atttypid,atttypmod) type FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum",[`app.${table}`])).rows as Snapshot['columns'];}

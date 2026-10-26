@@ -1,4 +1,4 @@
-# 0205 — SV-5 synthetic final-check processing on 0204
+# 0238 — SV-5 synthetic final-check processing on 0204
 
 C239: 0204 owns `final_check_manifest` and `final_check_manifest_source`, including their columns, keys, generated-source triggers, RLS, policies and grants. 0205 adds nullable manifest processing metadata, an all-or-none metadata constraint and two qualified constraints; existing manifest rows retain every original value. No source column or protection changes. Five owner-only append-only processing/attempt/run/reveal/disposition tables and seven exact EXECUTE grants support #181. The separate processing inventory retains unsupported unlinked supplier/capture sources without changing 0204's upload-only inventory or source count.
 
