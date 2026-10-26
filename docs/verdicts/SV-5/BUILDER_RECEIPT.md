@@ -1410,3 +1410,126 @@ Size for this renumber continuation: +147/−6 lines across 7 logical files (two
 ### Coordinator verification — 26 October 2026, focused DB typecheck
 
 After the completed source worker released ownership, the coordinator ran the previously blocked `pnpm --filter @jobguard/db typecheck` through the normal `heavy-slot` gate under Node 24.15.0. Exit 0; the four Zod 4 compatibility calls now typecheck. This is deterministic typecheck evidence, not PostgreSQL execution, independent RED review, acceptance or integration. SQL/archive byte identity and note-heading-only change were separately verified. Current-main CI and actual independent checker gates remain required.
+
+
+## 26 October 2026 — independent RED delta repair: restore expected index
+
+Same bounded leaf `SV5-181-CATCHUP`, same saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`. No successor, account change or new
+worker. The original order already requires the union of both final-check
+expected-addition rows. This repairs its dropped non-conflicting expectation;
+it adds no product behavior and weakens no assertion.
+
+The preceding attempt held on `ORIG_HEAD.lock` sandbox denial and left clean
+`ac8a403b479cc9d4b5c160479cb6544dd2da1493` unchanged. The coordinator parent
+then performed the exact ordinary fast-forward before this launch. This turn
+verified a clean canonical HEAD
+`e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be`, tree
+`ff4078d9c9e7a8a3854cad6544804e37007c1514`, and no `MERGE_HEAD` before edits.
+Its parents remain main `92d7564580d057d1c88a626e2c040356959b08a4` and source
+`ac8a403b479cc9d4b5c160479cb6544dd2da1493`. No Git mutation was retried or
+performed by this builder turn; all canonical metadata unions are preserved.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+turn_id: 01a17a81-c0dd-71b1-8c06-4fd8ad88b2fb
+authorised_route_ref: C266; ~/.codex-ben2; Gmail per issued order
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+source_pin: e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: saved rollout turn_context at 2026-10-26T23:18:07.488Z
+allowed_files_ref: issued original-task repair; serious-b5 upgrade test and append-only SV-5 receipt
+candidate_revision: uncommitted one-string restoration plus this receipt appendix
+state: source prepared; serious-b5 CI and same-checker independent delta pending
+```
+
+Authority/reason: actual independent Claude Opus 5.5 RED delta verdict
+`REPAIR e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be`, BLOCKING 1 and final
+checker repair note, at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv5-claude-A-e9c55a4d-20261026.md`.
+Review SHA-256:
+`e98cd180d4e916e36ef13c3be762fb29c48c90938f05176a276b90ee51af3475`.
+The missing `final_check_manifest_processing_identity` is still created by
+0238:19 as a UNIQUE constraint. Restore only that exact string at the start of
+`finalCheckAdditions.indexNames`, as accepted `7e139e0b` contains it. All other
+source bytes, assertions, expected codes and LATER items remain unchanged.
+
+The current AGENTS, BUILD_PLAN, BUILD_RULES, SIMPLICITY_RULE and canonical
+CODEX_SESSION_POLICY identities match the previously recorded readings. Those
+readings are retained; inherited C1–C8, the SV-5 card, applicable contract,
+current receipt, changed source/constraint and actual review were refreshed.
+Current shared rule hashes remain
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`
+and `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No new simplicity note is added on this delta repair.
+
+### Exact source diff against e9c55a4d
+
+```diff
+diff --git a/packages/db/test/serious-b5-upgrade.integration.test.ts b/packages/db/test/serious-b5-upgrade.integration.test.ts
+index 93e826b8..8bbd7b25 100644
+--- a/packages/db/test/serious-b5-upgrade.integration.test.ts
++++ b/packages/db/test/serious-b5-upgrade.integration.test.ts
+@@ -61,7 +61,7 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
+ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+  const tables = ["final_check_manifest", "final_check_manifest_source", "shadow_final_check_completion", "shadow_final_check_reveal_proof", "shadow_final_check_run_binding", "shadow_final_check_source_attempt"];
+  const indexNames = [
+-  "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
++  "final_check_manifest_processing_identity", "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
+   "final_check_manifest_source_pkey", "final_check_manifest_source_tenant_id_job_id_manifest_id_up_key", "final_check_one_empty_descriptor",
+   "shadow_final_check_completion_pkey", "shadow_final_check_reveal_pro_tenant_id_job_id_run_id_signa_key", "shadow_final_check_reveal_proof_pkey",
+   "shadow_final_check_run_bindin_tenant_id_job_id_execution_id_key", "shadow_final_check_run_bindin_tenant_id_job_id_run_id_manif_key", "shadow_final_check_run_binding_pkey",
+
+```
+
+SHA-256 identities:
+
+- Test before: `fb5399db2a317f19a4483c92b246167ddbe8e495e1537c9eafea2050bce53b31`.
+- Test candidate: `49110e0ac42f20d97cc89b3a8cfe3a681a9c68e4b898f7af19527827432843de`.
+- Unchanged original receipt prefix before this append:
+  `586a0ac6b2a4021c0a0896880e9105e3bc9d2272487e63ef135152e061cc416d`.
+
+### Actual commands/results and remaining gates
+
+- Read-only `git rev-parse HEAD`, `git status --porcelain=v1`,
+  `git rev-parse -q --verify MERGE_HEAD`, and tree comparison: PASS for exact
+  clean e9c/no merge. No fetch, merge, reset, checkout or Git metadata write.
+- `python3 -`: restored one string on one existing line, after proving the
+  same prefix exists in accepted `7e139e0b` and is absent in canonical e9c.
+  PASS; no other source mutation.
+- Pinned Node 24.15.0 `node --input-type=module -`, using installed TypeScript
+  5.8.3 `transpileModule`: zero syntax diagnostics. An initial supplemental
+  probe then failed its hard-coded expected literal count of 16 (observed 17).
+  This was a probe assumption, not a product assertion or PostgreSQL result;
+  no production source was changed in response.
+- Corrected deterministic probe, same pinned Node command: PASS. TypeScript AST
+  proves the candidate array equals accepted `7e139e0b` exactly, equals the
+  canonical array with only the restored name prepended, and has unique names.
+  Literal counts are 16 before and 17 after; the review's stated 15/16 counts
+  are not used as replacement expectations. The corresponding SQL constraint
+  and the full sorted-array equality assertion remain present. No live index
+  count is claimed.
+- Exact source comparison: PASS, candidate equals canonical source with one
+  exact replacement on one line. Only the test and append-only receipt differ;
+  frozen migrations/archive/catalogue, metadata unions, compatibility fix,
+  config and all other tracked bytes remain canonical.
+- `git diff --check`: PASS. Source and receipt hashes are reported at handoff.
+- No product PostgreSQL/browser suites or broad passing suites were rerun.
+  Deterministic probes are not execution of the serious-b5 regression. No
+  test-runner workers, new driver, setup/download or permission change.
+
+The serious-b5 real PostgreSQL regression must execute in CI, including later
+assertions previously masked by this mismatch. The same actual independent
+checker must record the delta verdict for the checkpointed candidate. All
+required CI must be green against current main; separate acceptance and the
+authorized main merge remain external gates. Prior review evidence and the
+coordinator's earlier DB typecheck do not accept this repair. No builder commit,
+push, PR, queue edit, cross-chat message, acceptance or main merge was performed.
+
+Size: +124/−1 lines across 2 files; largest touched logic file: 358 lines; new abstractions: none.
