@@ -26,7 +26,7 @@ const routes = [
   { name: "jobs/[id]/relevance-inbox/decisions/[decisionId]/route.ts", load: () => import("../api/jobs/[id]/relevance-inbox/decisions/[decisionId]/route.js"), validationCode: "INVALID_INBOX", action: "", method: "POST", mainStatus: (code: string) => code==="JOB_NOT_FOUND"?404:code==="JOB_NOT_LIVE"?409:code==="IDEMPOTENCY_CONFLICT"?409:code.includes("NOT_FOUND")?404:400 },
   { name: "jobs/[id]/relevance-inbox/[action]/route.ts", load: () => import("../api/jobs/[id]/relevance-inbox/[action]/route.js"), validationCode: "INVALID_INBOX", action: "seed", method: "POST", mainStatus: (code: string) => code==="JOB_NOT_FOUND"?404:code==="JOB_NOT_LIVE"?409:code.includes("CONFLICT")?409:400 },
   { name: "jobs/[id]/final-account/route.ts", load: () => import("../api/jobs/[id]/final-account/route.js"), validationCode: "DATABASE_UNAVAILABLE", action: "", method: "POST", mainStatus: (code: string) => code.includes("STALE")?409:400 },
-  { name: "jobs/[id]/customer-invoices/route.ts", load: () => import("../api/jobs/[id]/customer-invoices/route.js"), validationCode: "DATABASE_UNAVAILABLE", action: "", method: "POST", mainStatus: (code: string) => code.includes("STALE")?409:400 },
+  { name: "jobs/[id]/customer-invoices/route.ts", load: () => import("../api/jobs/[id]/customer-invoices/route.js"), validationCode: "INVALID_INPUT", action: "", method: "POST", mainStatus: (code: string) => code.includes("STALE")||code.includes("CONFLICT")?409:400 },
   { name: "jobs/[id]/customer-invoices/[invoiceId]/credit-notes/route.ts", load: () => import("../api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/route.js"), validationCode: "DATABASE_UNAVAILABLE", action: "", method: "POST", mainStatus: (code: string) => code.includes("STALE")||code.includes("EXCEEDS")?409:400 },
   { name: "jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview/route.ts", load: () => import("../api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview/route.js"), validationCode: "DATABASE_UNAVAILABLE", action: "", method: "POST", mainStatus: (code: string) => code.includes("EXCEEDS")?409:400 },
   { name: "jobs/[id]/readiness/[action]/route.ts", load: () => import("../api/jobs/[id]/readiness/[action]/route.js"), validationCode: "INVALID_READINESS", action: "plan", method: "POST", mainStatus: (code: string) => code==="JOB_NOT_FOUND"?404:code==="JOB_NOT_LIVE"||code==="IDEMPOTENCY_CONFLICT"?409:code.includes("CONFLICT")?409:400 },
@@ -83,5 +83,18 @@ describe.each(routes)("route status compatibility: $name", ({ load, validationCo
       if (response.status === 409) conflicts++;
     }
     expect(conflicts).toBe(codes.filter(code => mainStatus(code) === 409).length);
+  });
+});
+
+// Customer invoice lock refusals have their own versioned contract under C263.
+describe("customer-invoices typed lock envelope", () => {
+  it.each(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED"] as const)("returns the lock envelope for %s", async code => {
+    const { FinalAccountLockError } = await import("@jobguard/core");
+    state.error = new FinalAccountLockError(code);
+    const { POST } = await import("../api/jobs/[id]/customer-invoices/route.js");
+    const response = await POST(new Request("https://app.invalid/api", { method: "POST", body: "{}" }), { params: Promise.resolve({ id: "job" }) });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ version: "final-check-invoice-error.v1", code });
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

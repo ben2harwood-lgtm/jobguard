@@ -304,3 +304,110 @@ fatal: Unable to create '/Users/benharwood/Claude/Projects/my-new-project/.git/w
 ```
 
 This is a sandbox filesystem denial before commit/hook execution, not a hook failure or missing founder authorisation. The writable worktree does not grant write access to the shared Git metadata directory. No escalation or alternate index/worktree was attempted. No commit was made, so the order's conditional post-commit lane lint was NOT RUN. No tests, typecheck/build, DB/migration execution, browser, install, push, PR, integration, merge, review or acceptance action occurred. Next actor: dispatcher with authorised writable Git metadata performs the exact checkpoint commit and then runs the required lane lint once. Existing source remains preserved; only this failure evidence was appended to the already-authorised receipt.
+
+## Current-main bounded integration preflight — 26 October 2026 — HOLD
+
+```yaml
+session_record_version: 1
+task_id: MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026
+project: JobGuard
+role: builder
+thread_id: 01a178c2-94ec-7851-b87c-28066d4733f0
+resumed_from_thread_id: none
+original_provenance_thread_id: 01a173c3-1af3-7791-bcec-984d2b202f16
+successor_reason: explicitly issued distinct bounded current-main integration phase; preserve original multi-leaf history as provenance only
+surface: codex-cli
+authorised_route_ref: ~/.codex-ben2
+repository: /Users/benharwood/Claude/Projects/my-new-project
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3-p-b-catchup
+branch: codex/sandbox/mon-3-p-b-catchup
+source_pin: 7629431d7e346057bb7fc3ffa9a09cecb6b57344
+starting_base_revision: 7629431d7e346057bb7fc3ffa9a09cecb6b57344
+integration_target: dispatcher-prepared MERGE_HEAD
+integration_target_revision: a6778b4ae923ec15ba39377ee0c4ca2006f31040
+candidate_revision: no new source candidate; dispatcher-prepared conflicted working tree preserved
+allowed_files_ref: current order's two exact upgrade tests and this existing receipt; config/lanes/mon-3-p-b.json unchanged
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md sections 2 and 10.1/MON-3; current issued union-only order
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: ~/.codex-ben2/sessions/2026/10/26/rollout-2026-10-26T15-09-40-01a178c2-94ec-7851-b87c-28066d4733f0.jsonl turn_context
+turn_id: 01a178c2-9e15-7271-a31a-eca54b1e392c
+admission_claim_ref: /Users/benharwood/.local/share/full-steam/codex-queue/admission/claim-32471-c87f0d3a754a425cadfa081126a6402e.json
+state: held_before_source_mutation_required_process_observation_denied
+review_evidence_ref: order reports JGchecker ACKS 26 October 14:53:22 mechanical RED delta PASS for source 7629431d; no new verdict claimed
+accepting_actor: none
+acceptance_evidence_ref: none_for_this_phase
+outstanding_holds: process_observation_admission; unresolved_union_conflicts; NEWMAINfloor0237_separate_renumber_authority; exact_candidate_independent_delta_recheck; current_main_CI; prior_C_commercial_release_gates
+```
+
+Read repository AGENTS.md, applicable BUILD_PLAN build-loop/inherited criteria/free-first-job/MON-3 contracts, existing receipt (including prior failures and holds), persistence contract, ledger and own lane. Read current BUILD_RULES.md, SIMPLICITY_RULE.md rev 2, CODEX_SESSION_POLICY.md, WORKING_AGREEMENT.md and both 25 October coordinator handovers. Source/runtime configuration inspected: root and DB package manifests and DB Vitest configuration. The installed manifest pins Vitest 4.1.12, TypeScript 5.8.3 and pnpm 10.28.1. Requested runtime remains `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`; it was not executed in this held phase. No installation/download.
+
+Current authority SHA-256 identities match the issued order: BUILD_RULES `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`; SIMPLICITY_RULE `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. This is a fresh bounded session, not a resume of the original saved history. No child, reviewer, timer or new worker was launched.
+
+Read-only preflight actually executed: `git rev-parse HEAD`, `git rev-parse MERGE_HEAD`, `git branch --show-current`, and `git diff --name-only --diff-filter=U`. Parents and branch are the exact values above; exactly the two authorised test paths are unmerged. Existing unrelated staged main integration is dispatcher-owned and preserved. Inspected the contractor upgrade source and the SERIOUS-B5 catalogue/conflict sections: the latter conflict joins the admission additions with main's final-check additions. No resolution or assertion change was made. Both-parent preservation, marker removal, TypeScript syntax and actual Vitest discovery are **NOT RUN**; no source candidate is ready for independent recheck.
+
+Required admission attempted exactly once, before source mutation:
+
+```text
+python3 /Users/benharwood/.local/share/full-steam/build-policy.py run MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026 /usr/bin/true
+exit 75
+HOLD: [Errno 1] Operation not permitted: '/bin/ps'
+```
+
+The inherited claim path above exists in the environment; it does not turn the denied process observation into a successful admission. The read-only queue observation was stamped `2026-10-26T15:09:36.079972+00:00`, with `dispatch_allowed=true`, count 0 and no active local claims recorded there. Those are supplied observations, not a fresh process census by this builder. No retry, waiting loop, alternative process helper or gate bypass. The denied observation is returned once to the dispatcher through this receipt and final handoff; builder has no authority to edit the protected sole-coordinator queue.
+
+Read-only SHA-256/byte comparisons against HEAD passed for every protected 0235/archive file:
+
+| Path | SHA-256 |
+| --- | --- |
+| `packages/db/migrations/0235_free_first_job_admission.sql` (16,202 bytes) | `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8` |
+| `packages/db/migration-notes/0235_free_first_job_admission.md` | `114411533e11a94b16e22202d4341d3a11c2c56edaf3fb4af62593b9e6afcf1d` |
+| `archive/2026-10-26/mon3-0206-renumber-preservation/original-0206.zip` | `24cbb1afe7f9da2fccfedfd4e39b6346b2bd913bfcfd7f277b27ecd4bf5d7de5` |
+| `archive/2026-10-26/mon3-0206-renumber-preservation/MANIFEST.json` | `44f84181531b89553c603720bd287b4b44b95084dc478acf9efb99771011258e` |
+| `archive/2026-10-26/mon3-0206-renumber-preservation/ACTIVITY.md` | `f96f48a3ad279c76fda7c603b189ec4fa1d5b56f814c697447cb8512c1931b6f` |
+
+Unresolved working-file hashes at preflight: contractor upgrade `a4fb7f497b4084eacd0cede045e9cc4d5e8543dcf339db42208811667da38a4a`; SERIOUS-B5 upgrade `a6fccf9aab06368cea15f63cc512e57bd78695ef69bb05e3ffbe11a33d4be14a`. These bind the held conflicted inputs, not a completed union. This phase changes only this receipt. Approved config/archive/source history and source correction remain preserved; no Git metadata write, add, commit, merge, push, registry, SQL, grants, roles, bootstrap, instructions or dependencies changed.
+
+**Exact dispatcher hold:** required `/bin/ps` observation is sandbox-denied, so source resolution and targeted syntax/discovery checks remain unperformed. Separately, `NEWMAINfloor0237` remains held for exact renumber permission; this order authorises no renumber, new path or archive, and `migration-renumber --write` was not attempted. No unchanged passing suite/build was repeated. DB/browser/migration assertions remain CI-only; after authorised conflict resolution and separate renumber closure, actual independent conflict-delta recheck and all required CI against current main remain mandatory. No acceptance, main merge, release, real data, spending or successful admission is claimed. All prior C/commercial/release holds persist. No new simplicity observation on this delta phase.
+
+## Same-session admitted continuation — 26 October 2026 — union candidate prepared
+
+Resumed exact saved session `01a178c2-94ec-7851-b87c-28066d4733f0` for the same `MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026` leaf. Original provenance remains `01a173c3-1af3-7791-bcec-984d2b202f16`; the preceding held-turn appendix is preserved. HEAD remains `7629431d7e346057bb7fc3ffa9a09cecb6b57344`, MERGE_HEAD remains `a6778b4ae923ec15ba39377ee0c4ca2006f31040`, and branch/worktree/scope remain as recorded above. No new driver, coding worker or admission was started inside this worker.
+
+The continuation explicitly clarified that the parent dispatcher satisfies local-driver admission and supplies the fresh successful process/resource observation; the child must not re-admit itself. Read the actual inherited claim `/Users/benharwood/.local/share/full-steam/codex-queue/admission/claim-37609-e0d3a04d7f524fc89aa2fb5efec4f73f.json`: exact leaf, role `coding`, PID 37609, PGID 37627, UTC `2026-10-26T17:19:09.656279+00:00`. Its recorded child boundary binds this exact session/cwd, prompt SHA-256 `95729ff0f107802ec4fa603406dd82c1c5bf3193a93aa37a785610fafdd66332`, and both unchanged current-rule hashes recorded above. Read the existing queue's parent observation at `2026-10-26T17:19:09.459673+00:00`: `dispatch_allowed=true`, `process_observation_success=true`, load `{ 9.47 14.96 11.97 }`, 59% free memory, build-node-count 2, 89.78 GiB free disk; no coding owners/claims before this admission, with excluded read-only infrastructure explicitly identified. These are actual parent records, not a successful child `/bin/ps` claim. The old child denial is retained as historical evidence; the clarified parent boundary permits this continuation. No heavy suite was run (the parent load is above the separate heavy threshold).
+
+Retained prior required readings and revalidated current instruction identities and task/source/session/queue state. BUILD_RULES and SIMPLICITY_RULE hashes remain identical to the issued order; current AGENTS SHA-256 is `ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`. Inspected both parent diffs, both affected test sources and their snapshot/fixture consumers before completing the union. No new semantic conflict was found beyond the issued additive catalogue overlap.
+
+Resolved only the two authorised working-source paths:
+
+- Contractor entitlement upgrade equals main's complete file plus only B's four empty `trial_admission`, `trial_business_verification`, `trial_card_attempt`, `trial_card_result` expectations in that order. Main's six-table final-check allowance, comparisons after each migration pass, exact 0208 routine signature and all prior denial/catalogue/negative-control assertions remain intact.
+- SERIOUS-B5 upgrade equals main's complete file plus B's byte-identical `trialAdmissionAdditions` helper, its call, and its four rows/routines/relations/policies spreads alongside main's final-check spreads. The existing additive comparator still inserts at PostgreSQL server catalogue positions. Both complete helper inventories, expected routine identities, index counts, privilege/owner/RLS/policy checks and predecessor comparisons remain unchanged. No wildcard exemption or expected error-code change.
+
+Actual narrow checks, all exit 0:
+
+| Check | Result |
+| --- | --- |
+| Python exact reconstruction against `git show HEAD:<path>` and `git show MERGE_HEAD:<path>` | Both files equal precisely main plus the named B additions above; B's helper is byte-identical to HEAD |
+| Anchored opening/separator/closing conflict-marker scan of both changed test files | Zero marker lines |
+| `git diff --check --` the two exact test paths | PASS |
+| Pinned Node binary `--version`; cached pinned pnpm CLI `--version` | `v24.15.0`; `10.28.1` |
+| TypeScript 5.8.3 `createSourceFile` with TS ScriptKind and Latest target on exactly these two files | Zero parse diagnostics; syntax only, not semantic typechecking |
+| Actual installed Vitest 4.1.12 `list` via pinned Node/pnpm, exact two file filters, `--maxWorkers=2` | Discovered exactly those two files: 6 contractor tests and 1 SERIOUS-B5 test; no tests/hooks/PostgreSQL executed |
+| 0235 SQL/note and three preserved archive files compared with source HEAD | All byte-identical, retaining the hashes in the preceding appendix |
+
+Exact discovery command (working directory is the recorded worktree):
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:$PATH /private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --dir packages/db exec vitest list test/contractor-entitlement-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts --maxWorkers=2
+```
+
+Candidate working-source SHA-256:
+
+- `packages/db/test/contractor-entitlement-upgrade.integration.test.ts`: `b8bbe1dec7936882d4713548c7bf986f666db807e9b85c2b8c5da3fadeda7399`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`: `ad1cbe74a8fbdb8a9b1fffe2f4b36dd8ae8e1e066202df2738fecf12b1600990`
+
+Only these two source files and this existing receipt were written by this phase. Working source is resolved; Git's unmerged index entries remain for the dispatcher because no Git metadata writes/add/commit/merge/push are authorised. Approved source correction/history, config, registry, SQL, grants, roles, bootstrap, dependencies, migration filenames and archive remain untouched. No substantial complexity or new abstraction was introduced; no new simplicity observation on this delta continuation.
+
+**Dispatcher checkpoint candidate, not acceptance:** the authorised catalogue union and its narrow checks are complete. `NEWMAINfloor0237` remains a separate exact-path/renumber-authority HOLD; no `migration-renumber --write`, alternate number/path or archive action was attempted. Independent conflict-delta recheck must bind to the dispatcher's actual checkpoint, with all required CI against then-current main after exact renumber permission closes. PostgreSQL/catalogue/migration/browser assertions were not run locally and remain CI-only. No broad unchanged test/build rerun, installation, provider action, real data, spending, reviewer launch, technical acceptance, main merge or release. All earlier C/commercial/release gates persist.
