@@ -130,3 +130,62 @@ merged_revision: unknown
 ## Parent dependency-backed validation 2026-10-27T21:41:58.888087+00:00
 
 Actual original child terminal EXIT0 and group_gone at21:38:07, nohelpers; managed parent18989 collected EXIT0. Saved UUID01a17f46-5d1e-7182-a3b6-265745e032ed bound after terminal. Normal pinned Node24.15.0/pnpm10.28.1 frozen install --ignore-scripts EXIT0 (477packages, lockfile unchanged). Normal heavy-slot turbo run build --filter=@jobguard/api... --concurrency=2 EXIT0 (6tasks,2cached); normal heavy-slot pnpm --filter @jobguard/web typecheck EXIT0. Actual Playwright --list newfaultspec plus UIWIRE-15.spec.ts and VALUE-1.spec.ts --project=mobile-360 --project=desktop EXIT0:8tests/3files. This proves runner discovery, not browser execution. Source and original regression/test/package/lock bytes verified unchanged by setup, diff whitespace EXIT0. Browser/DB suites reserved for full CI. Candidate remains not acceptance-ready and must not integrate; publication for required CI may proceed through normal caller gates. No test red/green/browser/independent-review/fullCI/acceptance/merge/release claim. Parent has not repaired or widened product source.
+
+## Same-session CI repair — 2026-10-27T22:08:21Z issued continuation
+
+**PARTIAL: both bounded fixes implemented; final browser/CI verification remains a parent gate. This is not acceptance.** This appendix supersedes the earlier source/check state without rewriting historical evidence.
+
+Preflight: exact saved UUID `01a17f46-5d1e-7182-a3b6-265745e032ed` resumed; CODEX_THREAD_ID and saved turn_context at `2026-10-27T22:08:23.991Z` confirm same UUID/cwd and gpt-6.1-sol medium. Starting HEAD is issued `eab541e8973939161c6a7014ea8930941e788d84`, initial worktree clean. Main `25a3cb76` is the parent-reported target; parent must refresh current main before CI/integration. Original source remains `6284859131377eb6f59ebee0864743fa51dbecb0`. No branch change, rebase, Git write, helper, new session or account fallback. Parent retains 339 → 341 integration order.
+
+Read current AGENTS.md, required BUILD_PLAN C1–C8/UIWIRE-15 sections, existing receipt and instructions; override/CANON/repository session-policy files remain absent. Reread NGL session/working agreements. BUILD_RULES SHA-256 `1c951ba6fe2c611f65db4b6cbf6be496a6e4c82c00e95bfac1fd26ec536c5ca6` and SIMPLICITY_RULE SHA-256 `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6` match issued rules. Read actual queue note `managed-child-parent-responsibilities-20261027` in full-steam `jg-runs/v5-eight-claude-reviews-20261020-state.json`: parent owns normal admission/managed child and gated operations; no nested ceremonial run or queue mutation.
+
+Independently inspected exact component, own spec, existing M4-1-S lines 11–35 and layout banner. Verified retained ZIP `out/ci-40589091154-playwright-12774217448.zip` SHA-256 `b8877f169fe5690f9cdc1d3dbdcbfc30c4c3c27084e2e5311d90c3e765fac163`. Narrow reads of four error-context.md files show (both viewports): M4 journey heading marked active while withheld-payment button exists, and new completed-journey failure has both named global sandbox note and duplicate fee-panel paragraph. No network headers/cookies were read or printed. CI 40589091154 / web 122488306157 remains the actual failing baseline, not a passing or locally reproduced run.
+
+Changes:
+
+- Own new spec scopes banner checks to role `note`, exact name `Practice sandbox notice`, with exact text and separate visibility assertion. No `.first()`, hidden text or removed banner check.
+- Component records whether a particular request was initiated by its own button. Automatic failures announce via existing role=alert, without focusing. Requested failures focus the error only while focus is still on the retry control or the body (the fallback when rendering removed the previously focused button). A user focused on another control retains focus. Request generation/job/status guards are unchanged.
+- Moved own error-heading focus assertion from automatic initial failure to an actual requested failure; retained the retry keyboard/focus/44px/overflow checks. Added a real-backend/fault-only regression following M4's held proof GET 503: background failure preserves withheld-payment keyboard focus; own keyboard retry focuses its error; a user moving to the workbench during a delayed retry keeps that newer focus. GET-only recovery is asserted. No success API mock, end-state seed or business mutation added to recovery.
+- Mechanically verified completion/next-step/success JSX bytes unchanged relative to eab541e. Existing M4-1-S, UIWIRE-15, VALUE-1, lockfile, AGENTS and lane config bytes remain identical to HEAD. No backend, money, auth/session/tenant or timeout changes.
+
+First useful repair coding: `2026-10-27T22:09:41.169Z` (saved custom_tool_call writing own regression before component repair). Original first useful source work remains `2026-10-27T21:32:53.276Z`.
+
+Actual checks, all from `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/uiwire-15-read-recovery`:
+
+| Check | Exit | Meaning |
+| --- | --- | --- |
+| Pinned Node `--check apps/web/e2e/UIWIRE-15-READ-RECOVERY.spec.ts` after writing regression | 0 | Syntax only, no browser execution. |
+| Pinned Node + installed TypeScript transpileModule for component TSX and own spec, diagnostics enabled | 0 | Both syntax/transpile checks pass; not semantic typecheck. No files emitted. |
+| Pinned Node/pnpm `--filter @jobguard/web exec playwright test --list UIWIRE-15-READ-RECOVERY.spec.ts UIWIRE-15.spec.ts VALUE-1.spec.ts M4-1-S.spec.ts --project=mobile-360 --project=desktop` | 0 | Final runner/import discovery: 26 tests/4 files; 6 instances of own 3 tests. Output in issued resume out/playwright-list.txt. No setup, server or browser executed. |
+| `git diff --check` | 0 | Whitespace clean. |
+| Python exact-byte comparison using git show HEAD | 0 | Successful business rendering/logic and listed untouched regression/config/instruction/lock bytes preserved. |
+| `/bin/ps -axo pid= >/dev/null` | 127 | `operation not permitted`; resource/process observation unavailable in this child. |
+
+Dependencies now exist from parent setup (historical missing-dependency result no longer applies). Semantic typecheck not started: normal heavy/resource gate cannot be established with denied process observation. No workaround, local browser/DB run, heavy gate loop, install or global mutation. Full lint/test/build/eval/openapi/DB/migration/security/lane CI not rerun here; parent owns current-main validation. No post-repair browser pass, screenshots or traces claimed.
+
+Exact source/test candidate identities:
+
+- `apps/web/app/ui/practice-journey.tsx` SHA-256 `1b96f84b91979c8a872fde90ba6ea9b99c591655a098ed7d0810ea0fd4ac80cc`; Git blob `d177e448d9e5c818fdd28743cd7497eff3c7bae9`.
+- `apps/web/e2e/UIWIRE-15-READ-RECOVERY.spec.ts` SHA-256 `40ed32c9611e6d26b5fc251d83082544c34f4f04d204669aeba207e8c74d6b90`; Git blob `365fb86e2e8322289247fcb0b8edf8da71e449ea`.
+
+Full repair diff and all three changed-file SHA-256/Git blobs, including appended receipt, are in `/Users/benharwood/.local/share/astra-fanout/UIWIRE-15-READ-RECOVERY/resume-20261027T220821Z.9NTQSM/out/candidate.diff` and `file-hashes.json`. Receipt hash recorded externally to avoid self-hash. Saved usage observation in same output uses `payload.info.total_token_usage` and `last_token_usage` raw fields; cumulative sample precedes final response, not final billing or savings. Actual allowance and final counters unknown.
+
+Parent handoff after positive child terminal and source/roots/resource revalidation:
+
+```sh
+cd /Users/benharwood/Claude/Projects/my-new-project/.worktrees/uiwire-15-read-recovery
+/Users/benharwood/.local/bin/heavy-slot UIWIRE-15-READ-RECOVERY-typecheck env PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/usr/bin:/bin /private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/web typecheck
+```
+
+In CI only, with production Next build, actual PostgreSQL and pinned tools:
+
+```sh
+pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop --workers=1 UIWIRE-15-READ-RECOVERY.spec.ts UIWIRE-15.spec.ts VALUE-1.spec.ts M4-1-S.spec.ts
+```
+
+Then all existing required current-main CI, actual delta-only independent check under prior C280 classification, separate acceptance and actual independent C282 merge in 339 → 341 order. No release. No new simplicity observation (recheck only); original nonblocking note retained. Builder precheck is not acceptance. Resume this exact saved UUID for any same-leaf repair.
+
+Session continuation delta: source_pin now eab541e8973939161c6a7014ea8930941e788d84; candidate_revision uncommitted repair (external hash manifest); resumed_from_thread_id same UUID; state PARTIAL pending gated typecheck and actual CI/delta review/acceptance; builder_finished_at `2026-10-27T22:12:55.546263+00:00`; coordinator acknowledgement/integration/merge for this repair unknown.
+
+
+Parent verification 2026-10-27: exact repair child claim78236-077a7c81 EXIT0/group78246 gone, parent exec74126 EXIT0 verified. Gated pinned web semantic typecheck completed EXIT0 after actual child terminal. Existing M4/UIWIRE15/VALUE1 tests and package/lock bytes match eab541e8. Browser recovery and unchanged regression results remain pending required CI; no acceptance, integration or release.

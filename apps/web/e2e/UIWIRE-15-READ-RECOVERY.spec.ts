@@ -37,7 +37,8 @@ await button.click();try{await expect(form.getByLabel("Description",{exact:true}
 import type { Route } from "@playwright/test";
 async function recoveryAccess(page:Page){
  const journey=page.getByTestId("uiwire15-journey");
- await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toBeVisible();
+ await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");
+ await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toBeVisible();
  const retry=journey.getByRole("button",{name:"Try checking saved progress again",exact:true});
  await expect(retry).toBeVisible();
  // Enter keyboard modality before checking the visible focus ring.
@@ -74,7 +75,6 @@ await requested;
  await expect(journey.getByTestId("uiwire15-continue")).toHaveCount(0);
  release();
 await expect(journey.getByRole("alert")).toContainText("could not be checked");
-await expect(journey.getByRole("heading",{name:"Saved progress could not be checked",exact:true})).toBeFocused();
 await recoveryAccess(page);
  await page.unroute(endpoint);
  // Explicitly faulty HTTP/JSON/schema and wrong-job responses, never success fixtures.
@@ -94,6 +94,7 @@ await route.fulfill({response,json:{...data,jobId:crypto.randomUUID()}})},
   await page.route(endpoint,fault);
 await journey.getByRole("button",{name:"Try checking saved progress again",exact:true}).click();
   await expect(journey.getByRole("alert")).toBeVisible();
+await expect(journey.getByRole("heading",{name:"Saved progress could not be checked",exact:true})).toBeFocused();
 await expect(journey.getByTestId("journey-customer-balance")).toHaveCount(0);
 await page.unroute(endpoint,fault);
  }
@@ -179,7 +180,8 @@ await expect(page.getByRole("heading",{name:"Final account",exact:true})).toBeVi
 await expect(page.getByTestId("final-gross")).toHaveText("£1,320.00");
 await expect(page.getByTestId("invoice-artifact-hash")).toHaveText(artifactHash!);
 await expect(page.getByTestId("customer-invoice-number")).toHaveText(invoiceNumber!);
-await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toBeVisible();
+await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");
+ await expect(page.getByRole("note",{name:"Practice sandbox notice",exact:true})).toBeVisible();
 // The receipt UI records exact component-format GBP values: partial £500 then the £820 remainder.
 await page.getByTestId("uiwire12-receipt-amount").fill("500.00");
 await click(page,"Record practice receipt");
@@ -236,4 +238,42 @@ await expect(journey.getByText("You finished this practice job",{exact:true})).t
 await enterQuote(page);
 await expect(page.getByTestId("invoice-artifact-hash")).toHaveText(artifactHash!);
 await expect(page.getByTestId("customer-invoice-number")).toHaveText(invoiceNumber!);
+});
+
+// Regression for the actual M4-1-S focus failure: late proof errors must leave
+// the recovery workbench's keyboard target alone. Business reads remain real;
+// only proof GETs are held and explicitly failed.
+test("late background and abandoned requested checks preserve workbench focus",async({page})=>{
+ let releaseProof!:()=>void;
+ const proofGate=new Promise<void>(resolve=>{releaseProof=resolve});
+ let gate=proofGate;
+ await page.route("**/api/jobs/*/proof",async route=>{
+  if(route.request().method()!=="GET")return route.continue();
+  await gate;await route.fulfill({status:503,json:{code:"PROOF_UNAVAILABLE"}});
+ });
+ await openReview(page);
+ for(const name of ["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await click(page,`Accept ${name}`);
+ await click(page,"Dismiss Replace shelves");await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");
+ await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");await click(page,"Confirm scope");
+ await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+ const journey=page.getByTestId("uiwire15-journey"),workbench=B(page,"Open £320 withheld payment");
+ await expect(workbench).toBeEnabled();await B(page,"Open materials-320 overcharge").focus();await page.keyboard.press("Tab");
+ await expect(workbench).toBeFocused();
+ releaseProof();
+ await expect(page.locator("#work-proof").getByRole("alert")).toHaveText("This proof record could not load. Try again.");
+ await expect(journey.getByRole("alert")).toContainText("could not be checked");await expect(workbench).toBeFocused();
+ expect(await workbench.evaluate(element=>element.matches(":focus-visible")&&getComputedStyle(element).outlineStyle!=="none")).toBe(true);
+ await recoveryAccess(page);
+ const writes:string[]=[];page.on("request",request=>{if(request.url().includes("/api/")&&request.method()!=="GET")writes.push(request.method())});
+ // A keyboard-requested retry that fails still focuses its own error.
+ await journey.getByRole("button",{name:"Try checking saved progress again",exact:true}).press("Enter");
+ await expect(journey.getByRole("heading",{name:"Saved progress could not be checked",exact:true})).toBeFocused();
+ // If the user moves away while that requested read is pending, preserve the
+ // newer focus choice too, rather than treating the old click as permanent ownership.
+ let releaseRetry!:()=>void;gate=new Promise<void>(resolve=>{releaseRetry=resolve});
+ await journey.getByRole("button",{name:"Try checking saved progress again",exact:true}).press("Enter");
+ await expect(journey.getByRole("status")).toContainText("Checking saved progress");
+ await B(page,"Open materials-320 overcharge").focus();await page.keyboard.press("Tab");await expect(workbench).toBeFocused();
+ releaseRetry();await expect(journey.getByRole("alert")).toContainText("could not be checked");await expect(workbench).toBeFocused();
+ expect(writes).toEqual([]);
 });

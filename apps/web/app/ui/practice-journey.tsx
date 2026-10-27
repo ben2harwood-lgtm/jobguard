@@ -11,7 +11,7 @@ const proofView = z.object({
 });
 type Snapshot = { proofComplete: boolean; variationsApproved: boolean; invoiceIssued: boolean; balancePence: number; feePrepared: boolean; realExternalActions: 0 };
 type ReadState = { jobId: string; status: string } & (
- { phase: "loading" | "failed" } | { phase: "ready"; snapshot: Snapshot }
+ { phase: "loading" } | { phase: "failed"; userInitiated: boolean } | { phase: "ready"; snapshot: Snapshot }
 );
 
 // Absence is allowed only for the named endpoint's documented lifecycle response.
@@ -28,8 +28,8 @@ export function PracticeJourney({ jobId, status }: { jobId: string; status: stri
  const [state, setState] = useState<ReadState>({ jobId, status, phase: "loading" });
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
  const currentJob = useRef({ jobId, status }); currentJob.current = { jobId, status };
- const errorHeading = useRef<HTMLHeadingElement>(null);
- const load = useCallback(async () => {
+ const errorHeading = useRef<HTMLHeadingElement>(null), retryButton = useRef<HTMLButtonElement>(null);
+ const load = useCallback(async (userInitiated = false) => {
   const request = ++generation.current;
   activeRequest.current?.abort();
   const controller = new AbortController(); activeRequest.current = controller;
@@ -55,13 +55,18 @@ export function PracticeJourney({ jobId, status }: { jobId: string; status: stri
     invoiceIssued: !!invoice, balancePence: invoice?.balancePence ?? 0, feePrepared: !!fee, realExternalActions: proof?.realExternalActions ?? 0,
    } });
   } catch {
-   if (isCurrent()) setState({ jobId, status, phase: "failed" });
+   if (isCurrent()) setState({ jobId, status, phase: "failed", userInitiated });
   }
  }, [jobId, status]);
  useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); }; }, [load]);
  const phase = state.jobId === jobId && state.status === status ? state.phase : "loading";
- useEffect(() => { if (phase === "failed") errorHeading.current?.focus(); }, [phase]);
- const retry = <button type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load()}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
+ useEffect(() => {
+  // Automatic reads announce through the alert without taking focus. A requested
+  // check owns focus only while the user has not moved to another control.
+  if (phase === "failed" && state.phase === "failed" && state.userInitiated &&
+   (document.activeElement === retryButton.current || document.activeElement === document.body)) errorHeading.current?.focus();
+ }, [phase, state]);
+ const retry = <button ref={retryButton} type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load(true)}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
  if (phase !== "ready" || state.phase !== "ready") return <section className="journey-progress" aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>
   {phase === "failed" ? <div role="alert"><h2 ref={errorHeading} tabIndex={-1}>Saved progress could not be checked</h2><p>Earlier progress may be out of date. Balance, next step and completion are unavailable until a fresh check succeeds.</p></div> : <p role="status">Checking saved progress… Balance and completion are not yet known.</p>}
