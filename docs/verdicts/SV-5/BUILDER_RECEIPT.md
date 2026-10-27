@@ -1533,3 +1533,144 @@ coordinator's earlier DB typecheck do not accept this repair. No builder commit,
 push, PR, queue edit, cross-chat message, acceptance or main merge was performed.
 
 Size: +124/−1 lines across 2 files; largest touched logic file: 358 lines; new abstractions: none.
+
+
+## 27 October 2026 — exact approved shadow catalogue correction
+
+Same bounded leaf `SV5-181-CATCHUP`, same saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`, one thread. The serious-b5 restoration
+is already complete at `20cf032da0725cc051c6d11b76cf16048f003239` and was not
+repeated. Preflight verified clean exact metadata HEAD
+`5bb38e51cfdc6e63633fd37e872d4d2567e945e3`, a descendant of 20cf, with no
+`MERGE_HEAD`. The parent completed/pushed/checked/released that metadata
+prerequisite and synchronized this cwd per the issued order; this builder made
+no Git mutation or metadata repair.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+turn_id: 01a17bef-0d1d-73e3-8c17-a67824af3fd7
+authorised_route_ref: C266; ~/.codex-ben2; Gmail per issued order
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+source_pin: 5bb38e51cfdc6e63633fd37e872d4d2567e945e3
+prior_product_source: 20cf032da0725cc051c6d11b76cf16048f003239
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: saved rollout turn_context at 2026-10-27T05:57:07.900Z
+allowed_files_ref: exact issued shadow-catalog candidate plus append-only SV-5 receipt
+candidate_revision: uncommitted exact approved test and this receipt appendix
+state: source prepared; exact-input database CI and distinct independent delta pending
+```
+
+### Exact approval and metadata provenance
+
+Direct human decision:
+`/Users/benharwood/.local/share/frm-directors/command-center/decisions/jobguard-sv5-shadow-catalog-grants-2026-10-27.json`.
+Verified `status: decided`, `answer: Approve exact 7`,
+`decided_at: 1793079833.6638389`; approval covers both this exact protected-test
+candidate and the single permitted lane path. Decision SHA-256:
+`93af39e2373191676d2d8b0bb70105e56f61914258223b491243169c8ec635ae`.
+
+Independent PLAN PASS reference:
+`~/.local/share/full-steam/jg-runs/v5-sv5-shadow-approval-plan-20261027.md`,
+SHA-256 `baee912917e66c97764299e5e9e841e6047cd0f2d31640b833606130c92cd08d`.
+Security assessment:
+`~/.local/share/full-steam/jg-runs/v5-sv5-grants-assessment-20cf032d-20261027.md`,
+SHA-256 `eb8d20b4db78dfd6082ac1fd9933179d40d0783d94468c3decaa9490e196e53d`.
+These are proposal/assessment evidence, not a delta verdict or acceptance for
+this installed candidate. Their scratch results are not builder-executed tests.
+
+Frozen manifest `/private/tmp/sv5-shadow-grants-approval-20261027/manifest.json`:
+SHA-256 `4f5d933722959c4aa95db92302a82c893c96238999291616b89685e70bb1f81c`.
+Live `config/agent-lane-assignments.json` matches approved SHA-256
+`bed683df8bb87c75f1b5c2cff4dd6831f09727054da27f8629cf77b83894c4df`;
+`lanes['sv-5'].allow` contains `packages/db/test/shadow-catalog.integration.test.ts`.
+The config is untouched by this builder. No instruction/registry amendment or
+new admission was created here.
+
+Current AGENTS, BUILD_PLAN, canonical session policy, shared BUILD_RULES and
+full simplicity identities match the retained readings. Applicable C1–C8,
+SV-5/final-check and shadow contracts remain governing; the shadow persistence
+role table and reviewed exception, actual source/candidate/setup hooks, runner
+config/CLI and current approval facts were refreshed. Shared rule hashes remain
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`
+and `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No optional LATER edit or new simplicity observation is included.
+
+### Applied source and exact hashes
+
+Only `packages/db/test/shadow-catalog.integration.test.ts` is replaced with the
+full reviewed bytes from the existing preferred candidate
+`/private/tmp/sv5-shadow-grants-approval-20261027/shadow-catalog.candidate.ts.txt`.
+The canonical fallback was not needed. No adaptation/reformatting was applied.
+The candidate records exactly seven known signatures and their sole executor,
+pins migration ownership/SECURITY DEFINER/search path, rejects PUBLIC and
+same-name overloads, and adds actual-login permission denials in the product
+test. All other DW1–DW4 controls remain as in the exact approved proposal.
+No SQL, actual grant, runtime behavior, other test, config or dependency changes.
+
+- Test baseline SHA-256:
+  `0ee8767ffdf773e515b679cb964dfa6f8b3ee511164cf2521978c221f1b3d455`.
+- Exact installed candidate SHA-256:
+  `d1d82f27131647a1803e2d4dc7e90f1bd031ee02aabcf57081b0f7d2429950dc`.
+- Frozen proposal diff SHA-256:
+  `3d2f69ab164fcb27eb685d43a3b788a0fcc5dee72f580c4c6ec2ccde9099585b`.
+  The canonical `jg-runs/sv5-grants-proposal-20261027/proposal.diff` matches;
+  regenerating the baseline/candidate unified body with its frozen header
+  reproduces the entire reviewed diff byte-for-byte. Git's own header format
+  is not substituted for that frozen proposal format.
+- Existing receipt prefix before append SHA-256:
+  `86e5edec8524663a7e554bdc3a0bcb6a58fbc491cbed6d37508f6392c2906c84`.
+
+### Actual checks and limits
+
+All commands use the explicit issued cwd and existing installed dependencies.
+Node is the pinned `v24.15.0` at
+`/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`; pnpm uses the
+established 10.28.1 launcher in `/private/tmp/jg-r1-pnpm-bin`.
+
+- Read-only Git clean HEAD/ancestry/no-MERGE preflight and SHA-256/JSON checks:
+  PASS. Candidate baseline, metadata, direct decision and manifest match all
+  issued pins before mutation.
+- `python3 -`: frozen proposal hash/body equality, then `Path.write_bytes` of
+  the exact candidate into its sole authorized test path: PASS. Result remains
+  byte-identical to the candidate, with source diff +32/−2 lines.
+- Pinned `node --input-type=module -`: installed TypeScript 5.8.3
+  `transpileModule` reports zero syntax diagnostics; `resolveModuleName` using
+  actual db tsconfig options resolves all non-builtin imports, and Node builtin
+  imports are recognized. PASS for all 10 import declarations. This is static
+  import resolution, not runtime module execution or full typechecking.
+- Inspected the actual db package scripts and `vitest.config.ts`, installed
+  Vitest CLI definitions and `pnpm --filter @jobguard/db exec vitest list --help`
+  (exit 0). Vitest 4.1.12 explicitly supports static discovery; no speculative
+  command or database hook override was introduced.
+- Actual repository runner command, exit 0:
+
+  `PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/private/tmp/jg-r1-pnpm-bin:$PATH pnpm --filter @jobguard/db exec vitest list test/shadow-catalog.integration.test.ts --staticParse --staticParseConcurrency=1 --maxWorkers=1 --json`
+
+  It discovered six cases from the actual test file: migration registration;
+  shadow table/column/sequence/view isolation; pinned routine/helper catalogue;
+  inherited PUBLIC/explicit role grants; credentials/role/policy/RLS refusal;
+  and mutation/append-only protection. Static parse does not execute the test
+  file or its database hooks. **Six discovered, zero executed**; no database
+  pass is claimed. Concurrency and maximum workers are explicitly limited to 1.
+- `git diff --check`: PASS. Exact candidate hash, receipt prefix and two-path
+  footprint rechecked before handoff.
+- No scratch 6/6, five-mutation or four-prelock probe rerun; no product DB or
+  browser execution, broad Turbo suite, install/download, provider call or new
+  driver. Required runtime DB evidence remains CI-only.
+
+Outstanding: exact-input `shadow-catalog.integration.test.ts` on real PostgreSQL
+and full required CI green against CURRENT main; independent delta reviewer
+must be distinct from the original scratch proposal author; separate
+coordinator acceptance; only the designated actual C282 checker performs the
+main merge. The fixed SV5 → MON1S → MON3 order and every other release gate
+remain. No builder commit, push, PR, main merge, queue edit, cross-chat send,
+acceptance, real-data action or spending was performed. Two authored files are
+left unstaged/uncommitted for the normal parent checkpoint/publication.
+
+Size: +173/−2 lines across 2 files; largest touched logic file: 145 lines; new abstractions: none.
