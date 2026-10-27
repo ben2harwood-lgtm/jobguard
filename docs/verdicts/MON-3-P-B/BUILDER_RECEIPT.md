@@ -486,3 +486,59 @@ Actual checks:
 - Config and all three committed forward-preservation archive files equal HEAD: PASS. Index empty: PASS. `git diff --check`: PASS before this appendix; final receipt-inclusive/footprint check follows.
 
 The serialized LP-0 source hold is now closed for the authorised two-reference delta, so the preceding partial marker is superseded only for source completion. No lane/catalogue PASS, actual RED verdict, CI completion, acceptance or integration is claimed. Current-main CI, actual independent conflict/renumber RED delta review and separate acceptance remain required against the dispatcher checkpoint. Fixed merge order remains SV5 0238 → MON1-S 0239 → MON3 0240; only the actual independent checker merges main. No Git metadata writes/staging/commit/push/merge, further source renames, semantic changes, broad test/build rerun, local DB/browser execution, spending, provider or release action. All previous C/commercial/real-data/release holds persist. Stop after source completion and return to dispatcher.
+
+## Pinned current-main catch-up — 27 October 2026 — source prepared, runner gate held
+
+Same issued leaf `MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026`, original Gmail LOCAL CLI saved UUID `01a178c2-94ec-7851-b87c-28066d4733f0`, requested gpt-6.1-sol medium; original provenance `01a173c3-1af3-7791-bcec-984d2b202f16`. Existing cwd-only worktree and roots retained. Starting clean HEAD `27df2e8611936fe4a1b513411cb1560c1931cba5`; pinned current main `25a3cb763c4f8f04354f102c3f333c4bba318c97`; actual merge base `a6778b4ae923ec15ba39377ee0c4ca2006f31040`. Order attributes the request to actual C282 checker ACK `MON-3-P-B-CATCHUP-NEEDED-25a3cb76` at 21:47:39. No new session/helper, allocation, renumber, registration or metadata installation. No competing writer was inferred from an idle count; parent supplies serialized ownership clearance.
+
+Read/revalidated actual repository AGENTS and applicable BUILD_PLAN MON-3/C1–C8, existing receipt, pinned parent/base source versions, existing inventory validators/comparator fixtures and upgrade snapshot helpers; read current BUILD_RULES/full simplicity rule and NGL WORKING_AGREEMENT/CODEX_SESSION_POLICY. AGENTS SHA-256 remains `ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`; BUILD_PLAN `16b262d2f465868f5d5b349cb4d6830eae34b48162166343747200898bac0aa0`. Current rules SHA-256 `1c951ba6fe2c611f65db4b6cbf6be496a6e4c82c00e95bfac1fd26ec536c5ca6`; simplicity `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. C280 actual same-checker RED delta, full current-main CI, separate acceptance and C282 main-merge ownership remain required; no round cap, release or acceptance authority is inferred.
+
+Actual inherited managed claim `claim-95699-321fcc164c61492fb7ebaa4459157c14`, PID 95699, PGID 95708, binds this exact native leaf/session/cwd/roots, gmail-codex/codex-a route and actual child prompt hash `842643ffcd3631f0d36701335952727f678ba3419c735d3f86c0122d43337fad`, current rules, bindings hash `adb61db29d518f49dfdd94d2aebf98f628572379360cabf64e5ea711bec108ee` and runtime manifest `bb8457c16279dc970fcaea1a09a46ad72e6a079e43d09014194f32d5f7b444d6`. Existing parent queue schema 3 / `runtime-eight-role-20261027` observation at `22:33:48.116783Z` records `dispatch_allowed=true`, no unresolved owners, successful process observation, load 2.22, free memory 58%, disk 90.775 GiB, node count 2, heavy jobs/test workers 0 before admission. No external route activation or child re-admission.
+
+Only three authorised paths are changed, with receipt append-only:
+
+1. LP-0: line-level three-way additive union, preserving raw parent object bytes/formatting. Result is EXACT pinned main after inserting the candidate's 13 complete object lines: one MON3 group, six owner/ACL entries, one authority path, five recorded routine objects. Removing those 13 byte-identical candidate lines reconstructs pinned main byte-for-byte. No duplicate IDs/keys/identities, no manually generated fingerprints or changed privileges. Main's nonconflicting `mon1_company_actor` recorded revision and its remaining recorded catalogue additions are retained verbatim from main; candidate inherited base values are not asserted as a conflicting new revision. The approved 0240 source references persist.
+2. Contractor upgrade: FINAL working file equals candidate HEAD plus only main's eight exact `app.meter_lifecycle_*: []` lines in the expected object, immediately before the existing four exact MON3 trial lines. All candidate assertions, error codes, timeouts, negative controls and helper references are byte-unchanged. Main's other already-approved test changes remain for normal PR merging; no unrelated main files were copied. An initial computed full-file union also included those main test updates, but the final working diff was narrowed to the specifically authorised single eight-row insertion before handoff. The effective PR test reconstruction (pinned main plus the unchanged four trial rows) preserves every main assertion and hashes to `ae19682eb9ef42878ad5c635bd3bceb91cca778e901cf555ca938cb422408fa9`.
+3. This existing receipt only; prior authored chronology preserved. No Git metadata write/merge/rebase/checkout/add/commit/push.
+
+Exact inventory counts (base / candidate / main / union):
+
+| Inventory | Counts | Candidate additions preserved |
+| --- | --- | --- |
+| groups | 61 / 62 / 63 / 64 | 1 |
+| entries | 1213 / 1219 / 1287 / 1293 | 6 |
+| authorityPaths | 36 / 37 / 37 / 38 | 1 |
+| recorded routines | 381 / 386 / 401 / 406 | 5 |
+
+Python parsed/keyed comparisons verify every main value plus each unchanged candidate addition, exact counts and uniqueness; all remaining JSON content reconstructs main exactly. No parent-added row removed or weakened. Table expectations retain the eight distinct main meter rows plus all four candidate trial rows, each `[]`.
+
+Actual checks/results:
+
+- Pinned `git show` HEAD/main/base inspection and exact union byte/JSON count checks: exit 0. An initial diagnostic summary hit a TypeError when treating recorded RLS string rows as objects; it wrote nothing. Narrowed exact byte reconstruction covers those unchanged/main rows without that assumption.
+- JSON parse and existing `parseInventory` through installed tsx direct loader with pinned Node v24.15.0: exit 0. Existing `pathCompleteness`: exit 0, zero diagnostics using existing candidate paths plus pinned-main `git ls-tree` paths as a read-only effective-PR view. This does not assert missing main files exist in this branch or execute a migration.
+- Direct existing parser negative probes reject duplicate group and duplicate entry: exit 0. These are static parser probes, NOT a test-runner verdict.
+- Final protected test TypeScript 5.8.3 syntax: exit 0; no semantic typecheck claimed.
+- Actual Vitest 4.1.12 discovery, cached pnpm 10.28.1, exact contractor upgrade file, `--maxWorkers=2`: exit 0; six tests, including `negative controls detect changed prior rows grants and shapes`, discovered. No hooks/tests/database executed. This discovery preceded narrowing the working diff to only eight expectation lines; no test declarations changed.
+- `git diff --check`: exit 0 before receipt append. Final exact footprint/receipt-inclusive check follows. Working non-receipt numstat: LP-0 +133/-1; contractor upgrade +8/-0. The LP-0 deletion is main's unchanged approved recorded-routine replacement, not an invented new fingerprint.
+- SQL0240 equals HEAD, SHA-256 `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8`. Starting tree was clean; modified/untracked path enumeration remains limited to the three issued paths, so all other source/tests/contracts/migrations/config/archive files remain unchanged. Index stays empty.
+
+**Runner HOLD:** from this exact worktree, `/bin/ps -axo pid=` was denied by the child sandbox (`zsh: operation not permitted: /bin/ps`; exit 127 for the combined command after successful source/syntax work). A denied process observation is unavailable, not zero. Existing heavy-slot requires its own successful process/load observations and otherwise waits; it was NOT started into a waiting loop. Thus the relevant runner negative-control suite was NOT RUN here. No workaround or broad suite rerun. DB/browser tests remain CI-only. Direct source/parser checks and discovery are not substitutes for that missing runner result.
+
+Exact parent command after this child has positively terminated, in the existing worktree, for the outstanding narrow runner check (preserve normal heavy-slot admission):
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:$PATH HEAVY_SLOTS=2 /Users/benharwood/.local/bin/heavy-slot mon3-current-main-lp0 /private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --dir packages/db exec vitest run test/lp-0-catalog.test.ts --maxWorkers=2
+```
+
+Actual cheap discovery command already executed (do not repeat absent a new reason):
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:$PATH /private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --dir packages/db exec vitest list test/contractor-entitlement-upgrade.integration.test.ts --maxWorkers=2
+```
+
+Final working-source SHA-256: LP-0 `76064d1ad5a8111b9aa2b651ac9bedd3b7c78d7c280ab958126b45214c7936b1`; contractor upgrade `b5f7fe70c3dbb41f1d24eccca2c4595acf48791c01723388551ce754f8caa85a`. Receipt hash is returned separately after writing to avoid self-reference.
+
+Source prepared for parent publication and actual existing-reviewer delta/current-main CI, with the precise runner HOLD above. No commit, publication, independent verdict, acceptance, integration, push, main merge or release claimed. No new helper/report/output directory, runtime/hook/instruction/lane change, grant semantics, finance/allocation/tenant behavior or SQL change. No new simplicity observation on this delta continuation. Existing C/commercial/real-data/release gates and exact saved source ownership remain. Only the parent publishes; only the actual independent checker merges main.
+
+
+Parent gate completion 2026-10-27: exact original01a178c2 task completed22:37:33; managedclaim95699 EXIT0 and processgroup95708gone, parentexec29598 EXIT0 verified. Normal heavy-slot actual Vitest test/lp-0-catalog.test.ts --maxWorkers=2 EXIT0, 26/26 tests including comparator negative controls, 958ms. Existing parser/discovery/sourceunion/SQLbyteidentity evidence preserved. No DB/browser execution or independent review/acceptance claimed. Exact3path catchup is for publication and same original RED reviewer delta; currentmainfullCI/separateacceptance/C282 mandatory. Preserve339->341->342 landing priority; this migration is not released.
