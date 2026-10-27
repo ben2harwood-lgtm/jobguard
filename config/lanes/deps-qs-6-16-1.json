@@ -6,10 +6,11 @@
         "codex/sandbox/deps-qs-6-16-1"
       ],
       "receipt": "docs/verdicts/DEPS-QS-6-16-1/BUILDER_RECEIPT.md",
-      "note": "AGENTS3 securitypatch/C8 prerequisite; no webworkflow introduced, fullCI preserves existing browser/DB. Exact qs override+lock only.",
+      "note": "AGENTS3 securitypatch/C8 prerequisite; no webworkflow introduced, fullCI preserves existing browser/DB. Proposed combined scope: exact qs override+lock and only the enterprise boundaries scanner test timeout of 30000ms; assertions unchanged.",
       "allow": [
         "package.json",
         "pnpm-lock.yaml",
+        "packages/core/src/enterprise-domain/boundaries.test.ts",
         "docs/verdicts/DEPS-QS-6-16-1/BUILDER_RECEIPT.md"
       ]
     }
