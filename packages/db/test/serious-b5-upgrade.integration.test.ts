@@ -41,7 +41,8 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
  const relations = after.relations.filter(r => relationKeys.includes(`${r.nspname}.${r.relname}`));
  expect(relations.map(r => `${r.nspname}.${r.relname}`).sort()).toEqual([...relationKeys].sort());
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
- expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual([...tables.map(t => [t, "tenant_isolation"]),
+  ["subscription_agreement_revision", "meter_lifecycle_source_read"]].sort());
  const rows: Record<string, unknown> = Object.fromEntries(tables.map(t => [`app.${t}`, []]));
  rows[`control_plane.${catalogue}`] = [
   { version: "subscription_pricing_policy_v4", plan: "Solo", terms_version: "subscription_terms_v1", monthly_pence: 2900, included: 4, extras_cap: 1, maximum_pence: 4900, annual_enabled: false },
@@ -309,7 +310,8 @@ async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) 
  const relations = after.relations.filter(r => r.nspname === "app" && [...tables, ...indexes].includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...tables, ...indexes].sort());
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
- expect(policies.map(p => [p.tablename, p.policyname])).toEqual(tables.map(t => [t, "tenant_isolation"]));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.flatMap(t =>
+  [[t, "meter_lifecycle_source_read"], [t, "tenant_isolation"]]).sort());
  for (const t of tables) expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
@@ -321,6 +323,106 @@ async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) 
  return { rows: { ...before.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) },
   routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
+}
+// 0209 exact additions, including source grants/policies. This fixture migrates
+// only: lifecycle routines remain invokers until the administrative finalizer.
+async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["meter_lifecycle_scope", "meter_lifecycle_source", "meter_lifecycle_source_ref", "meter_lifecycle_computation",
+  "meter_lifecycle_day_ledger", "meter_lifecycle_place_binding", "meter_lifecycle_correction", "meter_lifecycle_alert"];
+ const indexNames = [...tables.map(t => `${t}_pkey`), "meter_lifecycle_scope_tenant_id_kind_key",
+  "meter_lifecycle_source_tenant_id_scope_id_command_id_key", "meter_lifecycle_source_tenant_id_scope_id_period_start_revi_key",
+  "meter_lifecycle_computation_tenant_id_scope_id_source_id_key"];
+ const identities = [
+  ["mon1_lifecycle_actor", "t uuid, digest text, mutation boolean"],
+  ["mon1_lifecycle_capture", "t uuid, digest text, command uuid, start_day date, expected integer"],
+  ["mon1_lifecycle_read", "t uuid, digest text, computation uuid"],
+  ["mon1_lifecycle_rebuild", "t uuid, digest text, p_source uuid"],
+ ];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ const role = (await f.admin.query(`SELECT rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolreplication,rolbypassrls
+  FROM pg_roles WHERE rolname='jobguard_meter'`)).rows;
+ expect(role).toEqual([{ rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false,
+  rolinherit: false, rolreplication: false, rolbypassrls: false }]);
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ const aclItems = async (acl: unknown) => (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [acl])).rows[0].acl as string[];
+ for (const r of routines) {
+  expect(r.proowner).toBe(owner);
+  expect(r.prosecdef).toBe(false);
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  expect((await aclItems(r.proacl)).sort()).toEqual(["jobguard_migration=X/jobguard_migration",
+   `${r.proname === "mon1_lifecycle_actor" ? "jobguard_meter" : "jobguard_runtime"}=X/jobguard_migration`].sort());
+ }
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
+ JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace
+ WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort()); // eight primary keys and four UNIQUE constraints in 0209
+ const relations = after.relations.filter(r => r.nspname === "app" && [...tables, ...indexes].includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...tables, ...indexNames].sort());
+ for (const r of relations) {
+  expect(r.relowner).toBe(owner);
+  if (tables.includes(r.relname)) {
+   expect(r.relrowsecurity).toBe(true);
+   expect(r.relforcerowsecurity).toBe(true);
+   const privileges = r.relname === "meter_lifecycle_place_binding" || r.relname === "meter_lifecycle_correction" ? "r" : "ar";
+   expect((await aclItems(r.relacl)).sort()).toEqual(["jobguard_migration=arwdDxt/jobguard_migration", `jobguard_meter=${privileges}/jobguard_migration`,
+    ...(privileges === "ar" ? ["jobguard_meter_owner=ar/jobguard_migration"] : [])].sort());
+  }
+ }
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const p of policies) {
+  expect((await f.admin.query("SELECT $1::name[]::text[] roles", [p.roles])).rows[0].roles.sort()).toEqual(["jobguard_meter", "jobguard_meter_owner", "jobguard_migration"]);
+  expect(p.permissive).toBe("PERMISSIVE");
+  expect(p.cmd).toBe("ALL");
+  expect(p.qual).toBe("(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)");
+  expect(p.with_check).toBe(p.qual);
+ }
+ // Source rows already captured by the subscription/trip additions above
+ // must match these exact grants too. All other predecessor ACLs gain only r.
+ const sourceTables = ["membership", "subscription_agreement_revision", "job_activation", "job_activation_terms", "job", "job_party_binding", "job_work_state_event", "final_account_lock", "job_small_trip_event", "job_small_trip_observation", "job_link"];
+ const laterSources = ["subscription_agreement_revision", "job_small_trip_event", "job_small_trip_observation"];
+ const expectedRelations = await Promise.all(before.relations.map(async r => {
+  if (r.nspname !== "app" || !sourceTables.includes(r.relname)) return r;
+  const base = laterSources.includes(r.relname)
+   ? ["jobguard_migration=arwdDxt/jobguard_migration", ...(r.relname === "subscription_agreement_revision" ? [] : ["jobguard_runtime=r/jobguard_migration"])]
+   : (await f.admin.query("SELECT coalesce($1::aclitem[],acldefault('r',$2::oid))::text[] acl", [r.relacl,r.relowner])).rows[0].acl as string[];
+  expect(base).not.toContain("jobguard_meter_owner=r/jobguard_migration");
+  const relacl = (await f.admin.query("SELECT $1::text[]::aclitem[] acl", [[...base,"jobguard_meter_owner=r/jobguard_migration"]])).rows[0].acl;
+  return { ...r, relacl };
+ }));
+ expect(expectedRelations.filter(r => r.nspname === "app" && sourceTables.includes(r.relname))).toHaveLength(11);
+ const expectedRoutines = await Promise.all(before.routines.map(async r => {
+  if (r.nspname !== "app" || r.proname !== "mon1_company_actor" || r.args !== "t uuid, digest text") return r;
+  expect(await aclItems(r.proacl)).toEqual(["jobguard_migration=X/jobguard_migration"]);
+  const proacl = (await f.admin.query("SELECT $1::text[]::aclitem[] acl", [["jobguard_migration=X/jobguard_migration","jobguard_meter_owner=X/jobguard_migration"]])).rows[0].acl;
+  return { ...r, proacl };
+ }));
+ expect(expectedRoutines.filter(r => r.nspname === "app" && r.proname === "mon1_company_actor" && r.args === "t uuid, digest text")).toHaveLength(1);
+ const sourcePolicies = after.policies.filter(p => p.schemaname === "app" && sourceTables.includes(p.tablename) && p.policyname === "meter_lifecycle_source_read");
+ expect(sourcePolicies.map(p => p.tablename).sort()).toEqual([...sourceTables].sort());
+ for (const p of sourcePolicies) {
+  expect((await f.admin.query("SELECT $1::name[]::text[] roles", [p.roles])).rows[0].roles).toEqual(["jobguard_meter_owner"]);
+  expect(p.permissive).toBe("PERMISSIVE");
+  expect(p.cmd).toBe("SELECT");
+  expect(p.qual).toBe("(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)");
+  expect(p.with_check).toBeNull();
+ }
+ const newSourcePolicies = sourcePolicies.filter(p => !laterSources.includes(p.tablename));
+ expect(before.policies.filter(p => p.schemaname === "app" && laterSources.includes(p.tablename) && p.policyname === "meter_lifecycle_source_read")).toEqual(sourcePolicies.filter(p => laterSources.includes(p.tablename)));
+ for (const p of newSourcePolicies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ for (const t of tables) expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
+  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+  return [...old, ...added].sort((a, b) => position(a) - position(b));
+ };
+ return { rows: { ...before.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) },
+  routines: additive(expectedRoutines, routines, after.routines),
+  relations: additive(expectedRelations, relations, after.relations), policies: additive(before.policies, [...policies, ...newSourcePolicies], after.policies) };
 }
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -351,6 +453,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await migrate(f.admin);
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
+ Object.assign(expected, await lifecycleSourceAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

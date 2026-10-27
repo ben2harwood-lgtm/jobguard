@@ -25,12 +25,24 @@ const finalCheckTables=["final_check_manifest","final_check_manifest_source","sh
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
  "app.job_small_trip_event":[],
  "app.job_small_trip_observation":[],
+ "app.meter_lifecycle_alert":[],
+ "app.meter_lifecycle_computation":[],
+ "app.meter_lifecycle_correction":[],
+ "app.meter_lifecycle_day_ledger":[],
+ "app.meter_lifecycle_place_binding":[],
+ "app.meter_lifecycle_scope":[],
+ "app.meter_lifecycle_source":[],
+ "app.meter_lifecycle_source_ref":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
- // 0208 successor routine; catalogue order is schema, name, identity arguments.
+ // 0208/0209 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname='mon1_capture_small_trip' ORDER BY 1,2,3`)).rows).toEqual([
+ WHERE n.nspname='app' AND p.proname IN ('mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
  {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
+ {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
+ {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
  ]);
 });
 it("negative controls detect changed prior rows grants and shapes",async()=>{

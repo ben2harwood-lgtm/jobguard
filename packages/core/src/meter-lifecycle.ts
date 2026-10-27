@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { jobWorkStateEventV1, orderWorkFacts, projectWorkFacts, workFactTimeV1 } from "./job-work-state.js";
-import { computeSmallPlaceAllowance, groupSuppliedMeterPlaces, londonMeterDate, londonMeterDateV1, meterDay31Candidate } from "./jobs-on-the-go.js";
+import { groupSuppliedMeterPlaces, londonMeterDate, londonMeterDateV1, meterDay31Candidate } from "./jobs-on-the-go.js";
 
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
 // Normalize locally before CH-4 replay compares identities and canonical content.
@@ -103,10 +103,8 @@ export function projectMeterDays(raw: unknown): MeterLifecycleDaysV1 {
       small: job.activation.small && !(job.trip && job.trip.at <= job.asOf && londonMeterDate(job.trip.at) <= date) }));
     // All supplied jobs grouped for diagnostics only. No assertion they count on this date.
     const candidatePlaces = groupSuppliedMeterPlaces({ version: "meter-fixed-places.v1", date, jobs: classifications }).places;
-    const candidateAllowance = computeSmallPlaceAllowance({ version: "meter-small-allowance.v1", plan: input.plan,
-      rawPlaces: candidatePlaces.length, smallPlaces: candidatePlaces.filter(place => place.small).length });
     days.push({ date, status: "held" as const, holds: ["H-METER-CLOCK"], places: null, countedPlaces: null,
-      classifications, candidatePlaces, candidateAllowance: { ...candidateAllowance, countedPlaces: null } });
+      classifications, candidatePlaces, candidateAllowance: { version: "meter-small-allowance-result.v1" as const, rawPlaces: null, freeSmallPlaces: null, countedPlaces: null } });
     const calendar = new Date(`${date}T00:00:00.000Z`);
     calendar.setUTCDate(calendar.getUTCDate() + 1);
     date = calendar.toISOString().slice(0, 10);
@@ -120,5 +118,5 @@ export type MeterLifecycleDaysV1 = {
   days: { date: string; status: "held"; holds: string[]; places: null; countedPlaces: null;
     classifications: { tenantId: string; jobId: string; customerId: string; siteId: string; small: boolean }[];
     candidatePlaces: ReturnType<typeof groupSuppliedMeterPlaces>["places"];
-    candidateAllowance: Omit<ReturnType<typeof computeSmallPlaceAllowance>, "countedPlaces"> & { countedPlaces: null } }[];
+    candidateAllowance: { version: "meter-small-allowance-result.v1"; rawPlaces: null; freeSmallPlaces: null; countedPlaces: null } }[];
 };
