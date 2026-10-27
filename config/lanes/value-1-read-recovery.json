@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "value-1-read-recovery": {
+      "branches": [
+        "codex/sandbox/value-1-read-recovery"
+      ],
+      "receipt": "docs/verdicts/VALUE-1-READ-RECOVERY/BUILDER_RECEIPT.md",
+      "note": "Approved-plan C7/VALUE1 request lifecycle only; byte-identical money expressions/contracts/old tests; conditional NONRED preissue ACK22:03:53.",
+      "allow": [
+        "apps/web/app/ui/job-value.tsx",
+        "apps/web/e2e/VALUE-1-READ-RECOVERY.spec.ts",
+        "docs/verdicts/VALUE-1-READ-RECOVERY/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
