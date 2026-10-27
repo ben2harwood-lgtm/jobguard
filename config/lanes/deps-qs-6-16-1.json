@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-qs-6-16-1": {
+      "branches": [
+        "codex/sandbox/deps-qs-6-16-1"
+      ],
+      "receipt": "docs/verdicts/DEPS-QS-6-16-1/BUILDER_RECEIPT.md",
+      "note": "AGENTS3 securitypatch/C8 prerequisite; no webworkflow introduced, fullCI preserves existing browser/DB. Exact qs override+lock only.",
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "docs/verdicts/DEPS-QS-6-16-1/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
