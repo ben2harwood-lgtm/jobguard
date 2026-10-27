@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { NorthsidePractice } from "./northside-practice";
 import { pounds } from "../lib/pounds";
@@ -11,13 +11,23 @@ async function post(url: string, body: unknown) { const r = await fetch(url, { m
 /** The practice hub: start the generated contractor, see counted facts, reset to a new run. */
 export function NorthsideHub() {
   const [summary, setSummary] = useState<Summary | null>(null), [signedOut, setSignedOut] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading…");
+  const [loading, setLoading] = useState(false), [loadFailed, setLoadFailed] = useState(false);
+  const loadAlert = useRef<HTMLParagraphElement>(null);
   const load = useCallback(async () => {
+    setLoading(true); setError(""); setStatus("Loading…");
+    try {
     const r = await fetch("/api/northside", { cache: "no-store" });
     if (r.status === 401) { setSignedOut(true); setSummary(null); setStatus("No practice is running yet."); return; }
-    if (!r.ok) { setError("The practice could not be loaded."); return; }
-    setSignedOut(false); setSummary(await r.json()); setStatus("Loaded from the stored practice");
+    if (!r.ok && r.status < 500) { setLoadFailed(false); setError("The practice could not be loaded."); return; }
+    if (!r.ok) throw new Error("The practice could not be loaded.");
+    const stored = await r.json();
+    setSignedOut(false); setSummary(stored); setLoadFailed(false); setStatus("Loaded from the stored practice");
+    } catch {
+      setLoadFailed(true); setError("The practice could not be loaded."); setStatus("Practice not loaded.");
+    } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (loadFailed && error && !loading) loadAlert.current?.focus(); }, [loadFailed, error, loading]);
   async function start(first: boolean) {
     setBusy(true); setError("");
     try {
@@ -42,7 +52,8 @@ export function NorthsideHub() {
     <h1>{f?.companyName ?? "Northside Property Services"} <span className={styles.pill}>generated, fictional</span></h1>
     <p className={styles.note} data-testid="northside-label">Practice data only. Every address ends in .invalid and nothing is sent. A reset starts a new run and keeps the earlier audit records.</p>
     <p role="status" data-testid="northside-status">{status}</p>
-    {error && <p role="alert" className={styles.error}>{error}</p>}
+    {error && <p role="alert" className={styles.error} ref={loadAlert} tabIndex={-1}>{error}</p>}
+    {loadFailed && <button disabled={loading} onClick={() => void load()}>Try again</button>}
     {signedOut && <section className={styles.card}><h2>No practice running</h2><button disabled={busy} onClick={() => void start(true)}>Start Northside practice</button></section>}
     {summary && <>
       {summary.seeded && <NorthsidePractice />}
