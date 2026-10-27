@@ -193,7 +193,7 @@ test("hub GET fault injections: aborted transport, 503 and malformed JSON recove
         else await route.fulfill({ status: 200, contentType: "application/json", body: '{"broken":' });
       });
       await page.reload();
-      const alert = page.getByRole("alert");
+      const alert = page.getByRole("alert").filter({ hasText: /^The practice could not be loaded\.$/ });
       const retry = page.getByRole("button", { name: "Try again", exact: true });
       await expect(alert).toBeVisible();
       await expect(alert).toHaveText("The practice could not be loaded.");

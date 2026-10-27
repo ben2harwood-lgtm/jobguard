@@ -158,3 +158,67 @@ Builder wrapper EXIT0, no helpers; positive normal claim local_wait EXIT0/group_
 Caller ran the same pinned web typecheck through normal heavy-slot on a surface with successful process observation: EXIT0. Web lint script is exactly the same `tsc -p tsconfig.json --noEmit`; this one successful invocation covers both identical scripts, without repeating it. Caller then ran heavy-slot `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/dist/pnpm.cjs exec turbo run build --filter=@jobguard/web...`: EXIT0, seven successful tasks; log in existing managed output coordinator-build.log. Existing Nest/load-esm dynamic dependency warning appeared; build passed. No configuration change or optional check.
 
 Syntax, both-project Playwright discovery and byte-preservation were completed by builder; actual browser/database/full security and regression CI remain NOT RUN here. Source-inspected final2path delta preserves401/start/POST helper/rendered mutation region and existing test bytes. Candidate classification provisionally non-RED under C280: no API/auth/session/role/tenant/hidden-state code change. New alert/retry presentation only. No Claude candidate verdict or technical acceptance claimed. The separate plan PASS7233 is not a product PASS. Caller commits the exact candidate to its own branch for required CI; main merge remains exclusively C282 independent checker, only after all current-main CI and separate acceptance.
+
+Coordinator same-session CI repair prelaunch 2026-10-27T13:46:37.328685+00:00: frozen install EXIT0 (offline prerequisite failure preserved in queue); lockfile unchanged; source2blobs match main; own metadata+receipt only. Runtime account helper PASS; resources {"utc": "2026-10-27T13:46:37.328685+00:00", "host": "Bens-MacBook-Pro-2.local", "process_observation_success": true, "load": 4.34, "free_memory_percent": 48, "disk_gib": 93.72460174560547, "node_count": 2, "heavy_jobs": 0, "test_workers": 0}; process evidence /private/tmp/northside-admission-observation-20261027/processes-134637.txt. Exact saved session01a17d21-5734-74c2-b4e4-e3aa29325a02; same output and roots, no fresh fallback.
+
+Coordinator same-session CI repair prelaunch 2026-10-27T17:58:22.883089+00:00: frozen install EXIT0 (offline prerequisite failure preserved in queue); lockfile unchanged; source2blobs match main; own metadata+receipt only. Runtime account helper PASS; resources {"utc": "2026-10-27T17:58:22.883089+00:00", "host": "Bens-MacBook-Pro-2.local", "process_observation_success": true, "load": 4.06, "free_memory_percent": 52, "disk_gib": 93.70957946777344, "node_count": 2, "heavy_jobs": 0, "test_workers": 0}; process evidence /private/tmp/northside-admission-observation-20261027/processes-175822.txt. Exact saved session01a17d21-5734-74c2-b4e4-e3aa29325a02; same output and roots, no fresh fallback.
+
+
+### Same-session CI locator repair — 2026-10-27T18:00:07.970246+00:00
+
+**PARTIAL: one-line repair prepared; typecheck admission held; corrected CI pending.**
+
+Resumed exact UUID `01a17d21-5734-74c2-b4e4-e3aa29325a02`, same worktree/branch and original write roots, ~/.codex-ben2, actual gpt-6.1-sol medium. Actual repair turn UUID `01a17e83-b0d3-7722-88f5-a81c773d85d4`. Header and managed child-boundary evidence: `/Users/benharwood/.local/share/astra-fanout/ENT-11A-HUB-GET-RECOVERY-20261027/resume-20261027T175841Z.ByZuDc/log.txt`; claim `claim-27339-d19bdc32e8df4ed99b819f8dbdac4c25`, prompt SHA-256 `b0f257a9e4839a790498a41d5c717b5c119822e590604d058b2b7ffba54074b2`. No new session, account, helper, queue writer or release authority.
+
+Preflight: HEAD `f4db33fd59c9a492271e9d7c329029ef0a3707a3`, branch `codex/sandbox/ent-11a-hub-get-recovery`, local origin/main `1155602cd8f83f9abfce13307706fae69dae97b0`. Existing coordinator receipt additions were the only initial working changes and are preserved. Current shared rules/KIS reread and hashes match the issued prompt and previous receipt. AGENTS and entry supplement/session-policy identities refreshed; applicable C1/C6/C7/C8 and ENT-11a source/tests inspected. Worktree has no CANON; parent policy remains available at the original repository path. Queue schema 3 / runtime-eight-role-20261027, dispatch allowed, unresolved owners empty; exact saved-session child boundary confirmed. No coordinator state modified.
+
+Evidence: `/private/tmp/northside-pr339-web-failed-20261027.log` lines 1548–1564 and 1579–1595 show BOTH viewport failures at `ENT-11a.spec.ts:198`. The two matching alerts are (1) `<p role="alert" tabindex="-1">The practice could not be loaded.</p>` and (2) empty Next `<div role="alert" aria-live="assertive" id="__next-route-announcer__"></div>`. This is locator ambiguity, with the intended load alert present. No production defect requiring expanded scope established. CI 40498229686 core/realDB success and web/checks failure remain the pre-repair result, not a repaired-candidate pass.
+
+Only test change: qualify `page.getByRole("alert")` with `.filter({ hasText: /^The practice could not be loaded\.$/ })`. Anchored exact error text selects the intended semantic alert and excludes the empty route announcer. Every visibility, text, focus, failure/loading/success status, zero-POST, retry, keyboard/focus-visible, dimensions, overflow, banner, persisted-facts and reload assertion remains byte-identical. No `.first()`, count loosening, skips, production/auth/401/403/POST or protected changes. No new complexity or simplicity observation on this delta recheck.
+
+Candidate spec SHA-256: `9f855aaa1a33c7d8dce24112652dfcd331a8ea23abd6e9f2ac04f1e5f1c192c7`. Candidate remains uncommitted repair atop `f4db33fd59c9a492271e9d7c329029ef0a3707a3`; no new commit identity claimed. Files changed by this repair: `apps/web/e2e/ENT-11a.spec.ts` and this own receipt only.
+
+Checks (actual runtime Node v24.17.0, same coordinator-recorded approved deviation; explicit installed pnpm 10.28.1, no install):
+
+| Check | Exit | Result |
+| --- | --- | --- |
+| TypeScript `transpileModule` spec syntax preflight | 0 | PASS |
+| `zsh -n /Users/benharwood/.local/bin/heavy-slot` | 0 | PASS |
+| `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/dist/pnpm.cjs --version` | 0 | 10.28.1 |
+| `/Users/benharwood/.local/bin/heavy-slot ENT-11A-HUB-GET-RECOVERY-repair-typecheck node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/dist/pnpm.cjs --filter @jobguard/web typecheck` | 75 | HOLD: admission ancestor process observation unavailable; remain held. Typecheck did not start; no bypass. |
+| `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/dist/pnpm.cjs --filter @jobguard/web exec playwright test --list --workers=2 --project=mobile-360 --project=desktop ENT-11a.spec.ts` | 0 | Eight entries; repaired test discovered in BOTH projects. Discovery only. |
+| `git diff --check` | 0 | PASS |
+| Exact Python comparison to HEAD | 0 | Entire spec equals HEAD with just the one locator substitution; production hub byte-identical to HEAD. |
+
+No local DB/browser execution. No passing build repeated: production source unchanged, as instructed. Full required CI on corrected input/current main remains mandatory, including real PostgreSQL and `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop ENT-11a.spec.ts`. No CI rerun initiated here. No independent review, acceptance, commit, push, merge or release performed.
+
+Usage snapshot from `/Users/benharwood/.codex-ben2/sessions/2026/10/27/rollout-2026-10-27T11-31-39-01a17d21-5734-74c2-b4e4-e3aa29325a02.jsonl`, event_msg/token_count payload.info (raw field names below). `total_token_usage` is session cumulative; `last_token_usage` is the latest emitted sample, not a final repair-turn total. Do not sum these or infer subscription savings. Final turn totals, quota change, acknowledgement/integration timestamps and resume-to-first-useful-work duration remain unknown at receipt time.
+
+```json
+{
+  "timestamp": "2026-10-27T17:59:30.882Z",
+  "info": {
+    "total_token_usage": {
+      "input_tokens": 2090615,
+      "cached_input_tokens": 1885056,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 12531,
+      "reasoning_output_tokens": 1731,
+      "total_tokens": 2103146
+    },
+    "last_token_usage": {
+      "input_tokens": 128962,
+      "cached_input_tokens": 128000,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 259,
+      "reasoning_output_tokens": 21,
+      "total_tokens": 129221
+    },
+    "model_context_window": 475000
+  }
+}
+```
+
+Exact next action: caller completes the held targeted typecheck on an admitted surface, commits/pushes this bounded correction under existing authority, then runs full CI for the changed candidate. Require current-main green CI, C280 independent classification/review as applicable and separate acceptance before C282 independent-checker merge. This builder precheck is not acceptance.
+
+Coordinator repair follow-up 2026-10-27T18:01:19.255861+00:00: actual original saved-session wrapper EXIT0/group_gone at18:00:12Z. Caller ran targeted web typecheck through normal heavy-slot with successful process observation: EXIT0; this also covers identical lint script. Builder syntax, exact one-line preservation and both-project test discovery PASS. Existing production bytes and all assertions preserved. No local DB/browser or repeated build. This exact new input is committed/pushed for full required current-main CI; not accepted/integrated/released.
