@@ -8,6 +8,7 @@
       "receipt": "packages/db/migration-notes/0304_stored_receipt_case_allocation.md",
       "note": "M4-8-S part 2 / PR #383 round 3: fix generated-job parameter typing, retain serializable receipt commands locally while restoring the pinned practice bridge, union exact installed-table expectations, strengthen stale-watermark refusal, and refresh only the existing demo-seed unresolved fingerprint. Database execution remains in CI. This lane metadata file is implicitly owned.",
       "allow": [
+        "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/receipt-line-allocation.application.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/receipt-line-allocation-source-v1.md",
@@ -20,6 +21,7 @@
         "packages/db/src/stored-receipt-case-allocation-repository.ts",
         "packages/db/src/stored-receipt-migration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-races.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
