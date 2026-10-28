@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sha256 } from "./evidence-pack.js";
 import { logSiteExtraV1 } from "./site-extra.js";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const lowerHash = z.string().regex(/^[0-9a-f]{64}$/u);
 const canonicalId = (value: string): string => { if (!uuid.safeParse(value).success) throw new RangeError("invalid id"); return value.toLowerCase(); };
 /** UTF-8 byte-length framing, as merged `extraOriginHashV1` uses: NULL = N; text = S<byteLength>:<text>; */

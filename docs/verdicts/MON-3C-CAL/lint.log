@@ -1,0 +1,38 @@
+
+> jobguard@ lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal
+> node tools/lint.mjs && turbo run lint
+
+Unverifiable computed module names, reported not refused (8):
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/enterprise-baseline.test.ts:84:36: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/jobs-on-the-go.test.ts:155:36: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/meter-lifecycle-architecture.test.ts:3:32: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/offline-contract.test.ts:73:34: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/recovery-allocation.test.ts:189:36: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/site-extra-pricing.test.ts:11:102: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/subscription-allocation.test.ts:15:34: dynamic import with a computed module name cannot be verified
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core/src/subscription-architecture.test.ts:7:32: dynamic import with a computed module name cannot be verified
+Core purity passed (240 TypeScript files).
+Lane boundary FAILED: Missing branch or self-comparison range; refusing a misleading pass.
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: /usr/local/bin/node tools/agent-lane-boundary-lint.mjs
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/tools/lint.mjs:3:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:633:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 43892,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v24.17.0
+ ELIFECYCLE  Command failed with exit code 1.

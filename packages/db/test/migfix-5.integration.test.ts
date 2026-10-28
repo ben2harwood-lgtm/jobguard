@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, addFixtureCapture, asFixtureTenant, LOCK_OWNER, LOCK_HASH, type LockFixture } from "./final-account-lock.integration.test.js";
+import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
 
 // MIGFIX-5 (0166): the lock refuses an account assembled before the latest approved variation, and partial
 // credit notes conserve the ORIGINAL invoice net and VAT. The legacy-issuer guard and real PDF bytes are held
@@ -12,6 +13,8 @@ type Account = Awaited<ReturnType<typeof seedAccount>>;
 const REV2_HASH = "b".repeat(64);
 
 async function appendCheck(f: LockFixture, a: Account, status: "pending" | "failed" | "completed") {
+  // Set-up only (per C135): a completed check now needs a verified run, so publish one through the checked fixture path.
+  if (status === "completed") { await publishFixtureCompletion(f.shadow, f.admin, a.tenantId, a.jobId); return; }
   const row = (await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0];
   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)", [a.tenantId, a.jobId, randomUUID(), row.id, row.cutoff, status]));
 }
