@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { adoptJobV3, jobPartiesImportV3, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
+import { adoptJobV3, jobPartiesImportV3, type AdoptJobV3 } from "@jobguard/core";
 
 /** Server-owned fictional input only; never a real-file ingestion or evidence adapter. */
 export const IMPORT_V3_FIXTURE_ID = "fictional-extension-v3";

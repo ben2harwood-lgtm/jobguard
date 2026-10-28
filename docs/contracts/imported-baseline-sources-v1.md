@@ -63,3 +63,8 @@ hold/error/refusal functions and DB reader/scope only. No export is installed by
 this leaf. No routes, OpenAPI, activation/final-account/lock or reserved branches
 are inspected or edited for compatibility work. Auth tests authored for real
 PostgreSQL are CI-only; scripted unit evidence is not database verification.
+
+PR #386 integration CI repair: the combined branch exports only the existing
+`ImportedBaselineSourceError` and `requireImportedBaselineSource` through
+`@jobguard/core`, whose source type declarations work before a build. This
+preserves the typed refusal; no successful DTO or reader is exposed by this export.

@@ -1,3 +1,77 @@
+## CI repair try 3 (last) — 28 October 2026, 23:30 UTC run
+
+CH-5 / CH5-E, PR #386, RED. Trace source:
+`~/.local/share/full-steam/codex-runs/ch5-e-ci-traces-2330.txt`.
+Started clean at e66cf8778f756948e6cbe45c099c8df590f0dba8, with main
+199f9f54542ed44139c175836e8796bd03dfad1d already merged; no pending
+conflicts. Shared LP-0, SERIOUS-B5, entitlement and tenancy expectations remain
+byte-identical to that merged HEAD, retaining both sides' rows and assertions.
+
+Failures and repairs:
+
+1. PostgreSQL positive invoiced import failed in mutation.lock with permission
+   denied for app.job. Runtime intentionally lacks UPDATE permission required
+   for SELECT FOR UPDATE. Use the existing transaction advisory-lock pattern,
+   scoped to tenant and import source job, before command receipt/audit locks.
+   Keep all authentication/snapshot checks and the definer SQL writer's row lock.
+   No grants or exception lists changed. The existing duplicate/replay and
+   permission/isolation PostgreSQL test remains unchanged and mandatory in CI.
+2. Desktop and mobile CH-5 browser journeys never found the Imported job receipt.
+   Both invoke that same invoiced adoption path; repair its permission failure
+   above. No UI, browser assertions or timeouts were changed. Browser verification
+   must run in CI; these traces alone do not prove the repaired journeys pass.
+3. The 0323 upgrade test named 0301 as its predecessor although merged SV-7A
+   introduced 0303. Assert the exact current predecessor basename
+   0303_job_source_intake.sql. All row/type/security assertions and successor
+   migrations remain enforced; no broader regex or relaxed assertion added.
+4. Clean DB typecheck failed TS2307 on three relative core/dist imports, with a
+   cascading any-to-never error. Use @jobguard/core's existing source-types /
+   built-runtime package contract. Job import symbols were already exported;
+   add only the two existing baseline refusal symbols needed by its internal
+   DB reader. No successful projection, new DTO or provider behavior added.
+
+Strengthened the existing source-only invoiced mutation/replay regression to
+execute lock before mutate, emulate the runtime row-lock permission boundary,
+assert scoped advisory-lock arguments/order, and deny revoked sessions before
+locking. Restoring the original row-lock line temporarily makes this regression
+fail with the original permission error (mutation exit 1); source restored in
+finally. Log: /tmp/ch5-e-try3-lock-mutation.log. This scripted check is not
+PostgreSQL concurrency or privilege proof.
+
+Checks actually run with installed pnpm 10.28.1, at most two workers:
+
+- DB Vitest test/job-import-v3.integration.test.ts, --maxWorkers=1, name filter
+  'source-only application boundary': 12 passed; 3 PostgreSQL cases deselected.
+- DB Vitest test/imported-baseline-sources.integration.test.ts, --maxWorkers=1,
+  name filter 'scripted': 9 passed; 2 PostgreSQL cases deselected.
+- Core Vitest src/job-import-v3.test.ts and src/imported-baseline-sources.test.ts,
+  --maxWorkers=1: 20 passed.
+- API Vitest src/job-import-v3.application.test.ts,
+  src/imported-shadow-source-adapter.test.ts and src/job-source.controller.test.ts,
+  --maxWorkers=1: 12 passed. Total focused local passes: 53.
+- DB tsc -p tsconfig.json --noEmit: passed.
+- Core build (tsc): passed.
+- API tsc -p tsconfig.json --noEmit: passed.
+- DB source and both modified test suites compile via existing repository tsc
+  with /tmp/ch5-e-try3-typecheck.json: passed. Compiler file inventory confirms
+  core/src/job-import-v3.ts and core/src/imported-baseline-sources.ts resolve
+  from source declarations, not generated dist declarations. Log:
+  /tmp/ch5-e-try3-typecheck.log.
+- LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs: passed.
+- Exact shared-list/main LP-0 union, 52-path lane payload plus own lane,
+  migration predecessor, conflict-marker and git diff --check checks: passed.
+
+All 137 migration SQL files match starting HEAD byte-for-byte, including
+0323/0324; no SQL bug was implicated. No CASE inside a PL/pgSQL IF condition
+occurs in those two migrations, so no SQL edit is needed. No test weakened,
+skipped in source or exception widened. No Git writes, dependency downloads,
+PostgreSQL startup, listener, real data, provider, money or release actions.
+
+Router owns commit/push and the final CI run. PostgreSQL/migration and desktop /
+mobile CH-5 browser suites are unexecuted here and remain required CI gates.
+This is a RED repair and builder verification, not an independent review.
+Ready commit message: /tmp/ch5-e-20261028T233042Z-commit-msg.txt.
+
 ## SV-7A intake catch-up — 28 October 2026, 22:49 UTC run
 
 CH-5 / CH5-E, PR #386, RED. Catch-up only; no new behavior.

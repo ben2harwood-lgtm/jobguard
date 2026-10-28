@@ -117,3 +117,5 @@ export * from "./enterprise-dashboard-stored-billing.js";
 export * from "./subscription-plan-view.js";
 export * from "./job-import-v3.js";
 export * from "./meter-today.js";
+
+export { ImportedBaselineSourceError, requireImportedBaselineSource } from "./imported-baseline-sources.js";

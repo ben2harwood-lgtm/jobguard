@@ -6,7 +6,7 @@
         "codex/sandbox/ch5-e"
       ],
       "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
-      "note": "CH-5 combined inherited payload and PR #386 catch-up to SV-7A intake (#354), main d461c008. RED. Preserve both workspace capabilities and union exact shared catalogue expectations. Incoming main paths retain their existing lane owners. Migrations 0323/0324 and all existing SQL bytes unchanged.",
+      "note": "CH-5 combined inherited payload, PR #386 RED CI repair try 3: preflight advisory serialization without runtime UPDATE, exact 0303 predecessor, source-resolved core imports. Current main merged; shared expectation unions retained; migration SQL bytes unchanged. Exact PR payload paths only.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
