@@ -12,7 +12,8 @@
         "packages/db/src/final-check-practice-readers.test.ts",
         "packages/db/test/final-check-practice-readers.integration.test.ts",
         "packages/db/migrations/0274_final_check_practice_readers.sql",
-        "packages/db/migration-notes/0274_final_check_practice_readers.md"
+        "packages/db/migration-notes/0274_final_check_practice_readers.md",
+        "docs/contracts/final-check-v1.md"
       ]
     }
   }
