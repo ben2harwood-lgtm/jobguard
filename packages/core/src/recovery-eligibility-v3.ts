@@ -6,11 +6,11 @@ import { createEligibilityFacts, evaluateRecoveryEligibility } from "./shadow-do
 export const recoveryEligibilityFixtureV3 = z.enum(["F14","F15","F16-partial","F16-full","F17","F18","F19","F20","F21","F22"]);
 export type RecoveryEligibilityFixtureV3 = z.infer<typeof recoveryEligibilityFixtureV3>;
 export const recoveryEligibilityCommandV3 = z.object({
- version:z.literal("recovery-eligibility-command.v3"), action:z.literal("review"), commandId:z.string().uuid(), caseId:z.string().uuid(),
+ version:z.literal("recovery-eligibility-command.v3"), action:z.literal("review"), commandId:z.guid({ error: "Invalid uuid" }), caseId:z.guid({ error: "Invalid uuid" }),
  expectedCaseRevision:z.number().int().positive(), expectedReviewRevision:z.number().int().nonnegative(), fixture:recoveryEligibilityFixtureV3,
 }).strict();
 export const recoveryEligibilityFactsV3 = z.object({
- version:z.literal("recovery-eligibility-facts.v3"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),caseId:z.string().uuid(),
+ version:z.literal("recovery-eligibility-facts.v3"),environment:z.literal("synthetic_demo"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),caseId:z.guid({ error: "Invalid uuid" }),
  fixture:recoveryEligibilityFixtureV3,payer:z.enum(["not_insurer","insurer_unmarked","insurer_customer_own"]),settlement:z.enum(["settled","pending","unverified"]),paymentTiming:z.enum(["before_opening","after_opening"]),sourceRef:z.string().min(1).max(300),
  // Ruling 130 option B: server-derived and OPTIONAL. Absent means no persisted fee-terms approval exists for the case; terms never gate a review.
  termsTiming:z.enum(["before_settlement","after_settlement"]).optional(),

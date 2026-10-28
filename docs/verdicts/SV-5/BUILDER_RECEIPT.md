@@ -846,3 +846,831 @@ Final checks and handoff:
 - Migration SHA-256: incoming 0204 `1813bf44d914e19dccf5cbd1519433d0a9a2b3f69d5484b654e7265849387b98`; unchanged 0205 `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`. There is no additional R5 migration or backfill, rollback change, provider action or release activation. The upstream forward-fix policy remains applicable.
 
 The obsolete R4 quarantine scenario is replaced under C244. PostgreSQL behavior/catalogue/migration tests, browser suites and socket-dependent failures require GitHub CI after the dispatcher commits/pushes. Fresh exact-commit independent verdicts, separate acceptance and founder merge/release remain required; this builder records no acceptance or independent model verdict. The order cites R4 A/B verdicts on `2170b226`; they do not constitute review of this uncommitted candidate. Intended conventional commit subject/body is written to `/private/tmp/jg-msg-sv5-181-green.txt`.
+
+
+## R6 — LP-0 routine inventory only (24 October 2026)
+
+Order: Ben-allowed extra round, card `jobguard-sv5-extra-round-lp0-20261024`, starting at `5da4b0b9` with hold `H-SV5-LP0-17`. Adds exactly the 16 missing 0205 routine protection records consumed by LP0-17. The 0204 prerequisite routine records and the seven 0205 non-owner EXECUTE grant/owner facts already exist. All existing inventory rows, freeze rules and test expectations are preserved. Only this receipt and the existing lane-allowed JSON catalogue are changed; no lane extension is needed.
+
+All 16 routines are owned by `jobguard_migration` and have PUBLIC EXECUTE revoked. In the table, owner-only means no non-owner EXECUTE grant and `reachable: false`; shadow/runtime mean the named role has EXECUTE and `reachable: true`, as defined by `readProtectionRecord`. Trigger invocation is distinct from direct EXECUTE reachability. Ownership, SECURITY DEFINER, search path, trigger return type and static writes/calls are source-inspected against 0205; 0204 helper identities were checked as already present. `definitionSha256` is null for these new records because no live `pg_get_functiondef` digest was obtained in this sandbox; it is not a fabricated database hash.
+
+| Routine signature | Non-owner EXECUTE |
+| --- | --- |
+| `app.final_check_context(uuid)` | Owner-only |
+| `app.final_check_worker(uuid,uuid)` | Owner-only |
+| `app.final_check_builder(uuid,uuid,text,boolean)` | Owner-only |
+| `app.append_final_check_audit(uuid,text,uuid,text,jsonb)` | Owner-only |
+| `app.read_final_check_manifest(uuid,uuid,uuid)` | `jobguard_shadow` |
+| `app.final_check_freeze_processing_inventory()` | Owner-only |
+| `app.begin_final_check(uuid,uuid,text,text)` | `jobguard_shadow` |
+| `app.record_final_check_source_result(uuid,uuid,uuid,uuid,uuid,jsonb)` | `jobguard_shadow` |
+| `app.complete_final_check(uuid,uuid,uuid,jsonb)` | `jobguard_shadow` |
+| `app.read_final_check_reveal(uuid,uuid,text)` | `jobguard_runtime` |
+| `app.record_final_check_disposition(uuid,uuid,text,jsonb)` | `jobguard_runtime` |
+| `app.read_final_check_disputes(uuid,uuid,text)` | `jobguard_runtime` |
+| `app.final_check_post_lock_link()` | Owner-only |
+| `app.final_check_guard_fact()` | Owner-only |
+| `app.final_check_guard_manifest()` | Owner-only |
+| `app.final_check_refuse_held_case()` | Owner-only |
+
+No migration, backfill, privilege change, external action, operational alert or backwards-compatibility change. Rollback is removal of these 16 records. PostgreSQL LP0-17/catalogue verification and database/browser suites remain assigned to reviewer/GitHub CI: this sandbox cannot bind localhost or start PostgreSQL. This receipt is builder evidence, not an independent verdict or acceptance; hold H-SV5-LP0-17 remains pending reviewer/CI evidence. No commit, push, merge or release was performed.
+
+Checks and handoff results follow.
+
+Checks ran one at a time using installed dependencies and the existing `/private/tmp/jg-r1-pnpm-bin` launcher; no downloads or install attempted. Runtime: Node `v24.17.0`.
+
+- `pnpm typecheck --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=1`: FAIL at inherited lane boundaries after the core purity check (`/private/tmp/jg-sv5-r6-lint.log`).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL, the same 94 refused paths already enumerated in R5 (`/private/tmp/jg-sv5-r6-lanes.log`); a source comparison confirmed every refused path was in R5's list and neither R6-edited file was refused. No allowlist changes.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts`: PASS, 26 tests in one file (`/private/tmp/jg-sv5-r6-lp0-unit.log`). Comparator unit tests do not establish live PostgreSQL catalogue correctness.
+- `pnpm turbo run lint --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-package-lint.log`). `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs`: PASS (`/private/tmp/jg-sv5-r6-money.log`, `/private/tmp/jg-sv5-r6-commercial.log`).
+- `pnpm build --concurrency=1`: PASS, seven tasks (`/private/tmp/jg-sv5-r6-build.log`).
+- `pnpm openapi:check`: FAIL, tsx launcher IPC `listen EPERM` (`/private/tmp/jg-sv5-r6-openapi.log`). Same generator via `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS (`/private/tmp/jg-sv5-r6-openapi-direct.log`).
+- Read-only JSON comparison against HEAD: PASS, exactly 16 unique new routine records and all existing catalogue content unchanged. `git diff --check`: PASS. No integration or browser suite was attempted.
+
+Intended conventional commit subject and body are at `/private/tmp/jg-msg-sv5-181-green.txt` for the dispatcher. Only the two lane-allowed documentation files are authored in R6. Independent exact-commit verdict, separate acceptance, reviewer/CI LP0-17 and founder merge/release remain pending.
+
+
+## catch-up onto #189 2244cc7b
+
+25 October 2026 — SV5-181-CATCHUP. Builder: Codex, runtime-confirmed
+`gpt-6.1-sol`, effort `medium`. This records working-tree merge resolution,
+not independent review, acceptance or a committed candidate.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+project: JobGuard
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+surface: Codex
+repository: ben2harwood-lgtm/jobguard
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+branch: codex/sandbox/sv5-181-catchup
+starting_base_revision: 7e139e0b
+merge_parent_revision: 2244cc7b
+candidate_revision: uncommitted working tree; dispatcher owns index and commit
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: /Users/benharwood/.codex-ben2/sessions/2026/10/25/rollout-2026-10-25T16-33-51-01a173e9-4ad6-7b71-9a50-08d9dac17f96.jsonl (turn_context)
+allowed_files_ref: legacy sv-5 lane; exact catch-up paths listed below
+state: working-tree handoff; CI and exact-commit independent verdict pending
+reviewer: unknown
+review_evidence_ref: unknown
+ci_evidence_ref: unknown
+```
+
+The four conflicts retain both core exports and both sides' additive privilege
+entries, preserving the relative ordering within each conflict side. The
+contractor upgrade expects all six SV5PRE tables, all five SV-5 persistence
+tables and both MON1-T tables, and retains the exact small-trip routine check.
+The SERIOUS-B5 upgrade retains both parents' addition helper blocks byte for
+byte and composes their expectations in database catalogue order. Existing row,
+routine, relation, policy, grant and replay assertions remain in place.
+No application behavior, commercial authority or assertion value was changed
+beyond the authorised union of additions.
+
+Shared paths for #181's legacy `sv-5` lane (per the order, recorded here rather
+than editing `config/agent-lane-assignments.json`):
+
+- `packages/core/src/index.ts`
+- `docs/contracts/lp-0-effective-privileges-v1.json`
+- `packages/db/test/contractor-entitlement-upgrade.integration.test.ts`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`
+- `docs/verdicts/SV-5/BUILDER_RECEIPT.md`
+
+`0205_final_check.sql` is byte-identical to the accepted HEAD, SHA-256
+`f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`.
+The coordinator owns its renumber above 0237 after this handoff. No migration,
+backwards-compatibility change, abstraction or operational alert is introduced.
+No git add, commit, checkout, push or other repository Git write was performed.
+Dependencies were already installed; no packages were downloaded. Node is
+24.17.0; pnpm is the installed 10.28.1 launcher selected through
+`PATH=/private/tmp/jg-r1-pnpm-bin:$PATH`. The default launcher was interrupted
+(exit 130) after stalling; no installation was attempted.
+
+Validation results follow below. Logs use `/private/tmp/jg-sv5-catchup-*.log`.
+
+
+| Command (installed pnpm PATH above) | Result |
+|---|---|
+| `pnpm typecheck --concurrency=1 --force` | FAIL, exit 2; no package `dist` directories existed. Four TS2554 errors in unchanged `packages/db/src/final-check-repository.ts` at 7:604, 13:143, 13:188, 35:92: single-argument `z.record` calls against the incoming Zod 4 version. Four tasks passed before db stopped the graph; API/web not reached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1 --force` | FAIL, exit 1; core purity passed, then lane selection refused unregistered branch `codex/sandbox/sv5-181-catchup`. Package lint was not reached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, exit 1; same unregistered-branch diagnostic. Legacy register deliberately not edited. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS; 131 files, 3,026 tests. |
+| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | PASS; 5 files, 86 tests. |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2` | PASS; 1 file, 2 tests. |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | FAIL, exit 1; 12 failed files, 3 passed; 23 tests passed. Missing unbuilt `@jobguard/core` package entry. |
+| `pnpm --filter @jobguard/db exec vitest run --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=2` | FAIL, exit 1; 39 failed files, 9 passed; 86 tests passed. Missing unbuilt core/storage package entries. Socket-binding `free-port.test.ts` explicitly not run. |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude '**/*.integration.test.ts' --maxWorkers=2` | FAIL, exit 1; 125 failed files, 16 passed; 357 passed tests, 5 failed. Missing unbuilt core/db/config package entries, including all five test failures. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | FAIL, exit 1; 33 failed files, 10 passed; 76 tests passed. Missing unbuilt workspace package entries. |
+
+The pre-build test commands above were direct unit runs, not the root `pnpm test`
+(which includes PostgreSQL). A preliminary API `src` run was interrupted (130)
+and replaced by the explicit integration-excluding run; no database result is
+claimed. The initial `node --test tools/*.test.mjs` attempt overlapped the start
+of core units briefly due to a polling mistake, was interrupted (exit 1), and
+is not reported as a pass. Subsequent check invocations run one at a time.
+
+
+- `pnpm build --concurrency=1 --force`: FAIL (2), same four db TS2554
+  errors; four dependency builds succeeded, db stopped API/web builds. Artifacts
+  emitted by these builds enabled a separate post-build unit retry below.
+- `pnpm openapi:check`: FAIL (1), tsx CLI IPC `listen EPERM` in the sandbox.
+- `node --import tsx src/generate-openapi.ts --check` from `apps/api`: PASS
+  (0), the same generator/check through the socket-free loader; no snapshot edit.
+- `node --test --test-concurrency=2 tools/*.test.mjs`: PASS (0), 295 tests,
+  zero failures/skips. This supersedes the interrupted tooling run above.
+- Exact source comparison: both upgrade addition helper blocks retained byte
+  for byte from their respective merge parents; all four privilege conflict-side
+  blocks retained exactly and in order. A preliminary whole-parent JSON union
+  probe was overbroad and failed on an automatically merged existing routine's
+  definition hash; the final probe checks the actual conflict blocks only.
+
+Both Turbo attempts used `--force` with zero cache hits. Turbo reported shared
+cache I/O `Operation not permitted` warnings; no cache repair or download was
+attempted. These cache warnings did not cause the Zod compiler diagnostics.
+
+
+Post-build unit retries use the same direct Vitest commands, still sequential
+and `--maxWorkers=2`; logs are `*-postbuild-tests.log`:
+
+- AI: PASS (0), 15 files, 147 tests.
+- DB: FAIL (1), 71 passed files, 2 failed files; 644 passed tests, 2 failed.
+  Both failures are the existing C-OPS-1 transitive-import scan exceeding its
+  5,000ms timeout (source and emitted copy), rather than an assertion mismatch.
+  The default db discovery includes emitted `dist` source-test copies after
+  build; counts include those duplicates. No timeout, guard or test was changed.
+
+- API: FAIL (1), 131 passed files, 10 failed files; 2,514 passed tests,
+  133 failed, 1 skipped, and 133 unhandled errors. HTTP tests cannot listen
+  (`EPERM 0.0.0.0`; associated null-port errors); the non-integration-named
+  real-database isolation case could not allocate a port, and shadow isolation's
+  internal API build failed with four compiler errors. No database-isolation
+  or HTTP-listener pass is claimed.
+- Web: PASS (0), 43 files, 1,034 tests; no browser/e2e run.
+
+Final `git diff --check`: PASS. Repository conflict-marker scan (`rg` for
+`^<<<<<<<`, excluding dependency/generated directories): no matches (exit 1).
+No `../../core/dist` or `../../db/dist` imports were added. JSON parses, and
+0205's accepted SQL hash is unchanged. The four index entries remain unmerged
+until the dispatcher stages the working-tree resolutions; `.git` is untouched.
+
+Dedicated PostgreSQL, database catalogues/upgrade/migration suites and browser
+suites remain NOT RUN, per the dispatcher; GitHub CI must execute them after
+push and migration renumbering. No clean-install claim is made. The compiler
+and lane failures are holds, not green checks; no assertion, timeout, policy or
+lane checker was weakened to pass. Exact-commit independent verdict, separate
+acceptance and founder merge/release remain outstanding. This catch-up adds no
+production capability and does not change any existing release gate.
+
+Intended conventional commit subject/body:
+`/private/tmp/jg-msg-sv5-181-catchup.txt`.
+
+Size: +238/−11 lines across 5 files; largest touched logic file: 358 lines
+(including the upgrade test); new abstractions: none.
+Size is measured for the five authorised task paths against accepted HEAD
+`7e139e0b`; other already staged incoming paths are excluded from this size.
+
+
+## 26 October 2026 — same-leaf Zod 4 compatibility correction
+
+Issued leaf remains `SV5-181-CATCHUP`, saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`. Preflight found a clean working
+tree at `1a48b9fc26542cee2e3355e18e09528334a563e6` on
+`codex/sandbox/sv5-181-catchup`. The original catch-up section above is retained
+verbatim: accepted #181 source `7e139e0b`, incoming #189 source `2244cc7b`.
+This continuation does not rewrite that provenance.
+
+The issued continuation reports that the actual independent checker merged
+prerequisite PR #189 at `a6778b4ae923ec15ba39377ee0c4ca2006f31040`, releasing
+the former dependency hold. That is authority supplied by the order, not a
+builder-performed merge or independent verdict on this new candidate.
+C264/C266/C280 and current rule identities apply. Current-main synchronization,
+checkpointing, focused CI and actual independent RED delta review remain
+dispatcher/checker phases. Migration-floor 0237 and release holds are unchanged.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+project: JobGuard
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+surface: existing saved Codex session; no new child session launched
+host: local Mac
+authorised_route_ref: C266; ~/.codex-ben2; Gmail per issued order
+repository: ben2harwood-lgtm/jobguard
+integration_target: dispatcher-owned current-main CI; no builder synchronization
+integration_target_revision: unknown; not inferred from prerequisite merge
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+branch: codex/sandbox/sv5-181-catchup
+starting_base_revision: 1a48b9fc26542cee2e3355e18e09528334a563e6
+source_pin: 1a48b9fc26542cee2e3355e18e09528334a563e6
+candidate_revision: uncommitted four-call compatibility correction plus receipt appendix
+last_validated_revision: source SHA-256 recorded below; syntax and focused mocked-validator evidence only
+allowed_files_ref: issued continuation; packages/db/src/final-check-repository.ts and this receipt only
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md SV-5; final-check-v1.md; current BUILD_RULES.md; CODEX_SESSION_POLICY.md; SIMPLICITY_RULE.md
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: /Users/benharwood/.codex-ben2/sessions/2026/10/25/rollout-2026-10-25T16-33-51-01a173e9-4ad6-7b71-9a50-08d9dac17f96.jsonl; turn_context at 2026-10-26T15:01:06.809Z
+turn_id: 01a178ba-b5b1-7041-add9-6fb2d2c160dc
+last_completed_turn: prior 25 October catch-up handoff; exact turn ID unknown
+last_receipt_ref: docs/verdicts/SV-5/BUILDER_RECEIPT.md
+state: source candidate prepared; gated DB typecheck and dispatcher review pending
+resumed_from_thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+successor_reason: none; same bounded leaf and saved session
+preflight_ref: this appendix
+result_id: unknown
+acknowledgement_ref: unknown
+ci_evidence_ref: unknown
+reviewer: unknown for this candidate
+review_evidence_ref: unknown
+accepting_actor: unknown
+acceptance_evidence_ref: unknown
+outstanding_holds: process-gated DB typecheck; current-main CI; actual independent RED delta review; all existing release and migration-floor holds
+builder_finished_at: recorded by final handoff; no acceptance implied
+coordinator_acknowledged_at: unknown
+integrated_at: unknown
+merged_revision: unknown for this candidate
+```
+
+Current readings refreshed: repository AGENTS, BUILD_PLAN's SV-5 task,
+final-check contract, current shared rules and full simplicity text, session
+policy and working agreement, original receipt/current catch-up section,
+affected repository source, source reader, worker/application callers, C239 and
+integration fixture shapes, tenant-context helper and implementation.
+The following SHA-256 identities bind the readings and candidate:
+
+| Path | SHA-256 |
+|---|---|
+| `AGENTS.md` | `ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1` |
+| `BUILD_PLAN.md` | `16b262d2f465868f5d5b349cb4d6830eae34b48162166343747200898bac0aa0` |
+| `~/.local/share/full-steam/BUILD_RULES.md` | `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28` |
+| `Next Gen Learning Platform/docs/workflow/SIMPLICITY_RULE.md` | `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6` |
+| `Next Gen Learning Platform/docs/workflow/CODEX_SESSION_POLICY.md` | `a94c77d6a649d0af87fb02e2dbb4db753bb3c1853ca5275871f3ba8f8e29ff8e` |
+| `docs/verdicts/SV-5/BUILDER_RECEIPT.md` before this append | `fb7433c7a5cbf0f8d71b62e49fa242b6b87472b9d48127916973d8aa3285b18b` |
+| `packages/db/src/final-check-repository.ts` at source pin | `e97577807684183d2351427f4dcb8822a18ae3cb9b8c6fffc72814b8735b1d91` |
+| `packages/db/src/final-check-repository.ts` candidate | `5c818f5c613168438aac95634ef11003826303eb3a90ed66927ce961afe75d7b` |
+| `apps/api/src/final-check.worker.test.ts` reused manifest fixture | `7515a7f40ead92e8dd05501deb4f504de03b0cb6db6dc8963ac823630a2184d0` |
+| `packages/db/test/final-check-c239.test.ts` reused fake-pool pattern | `f5c1be4f82be54859c56fdf83919d0d3c3f80894bfad9120823cdc7ef94f7189` |
+| `packages/db/test/tenant-context-test-utils.ts` reused helper | `95688c37569263027bc579e605e1666180688ddaacf08777a13f6a318a78e6c7` |
+
+Only four `z.record(z.unknown())` expressions become
+`z.record(z.string(),z.unknown())`: manifest baseline, reveal items,
+post-lock items and disputes. This preserves the intended string-keyed,
+unknown-value record contract under Zod 4's required key/value signature.
+It does not narrow unknown values or enumerate allowed keys. Strict enclosing
+objects, source/result checks, enum/UUID/hash parsing, optionality, typed refusal
+mapping, verified context, tenant transaction, SQL and authorization are unchanged.
+A final source comparison requires the candidate to equal the pinned source
+with exactly those four substitutions; no formatting or other source edit.
+
+### Executed focused evidence and limits
+
+- Initial read-only `git status --short`: clean; `git rev-parse HEAD`:
+  exact issued source pin. No Git metadata write.
+- Installed runtime used for both successful probes: Node `v24.15.0` from
+  `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`;
+  installed pnpm launcher `/private/tmp/jg-r1-pnpm-bin/pnpm` reports
+  `10.28.1`. TypeScript `5.8.3`, Zod `4.6.6`; no install/download.
+- `git diff --check`: PASS after correction.
+- `/bin/ps -axo pid=`: DENIED, shell exit 127,
+  `operation not permitted: /bin/ps`. No successful child-process observation,
+  build-node count, load/memory admission or heavy slot is claimed. Per the
+  order, this gate was not retried and the DB typecheck was not launched.
+- Dispatcher execution need: with the pinned Node/pnpm PATH, run
+  `~/.local/bin/heavy-slot SV5-181-CATCHUP pnpm --filter @jobguard/db typecheck`
+  under the existing valid admission/process/resource gates. This is a handoff
+  requirement, not permission to bypass or alter the gate.
+- First lightweight probe invocation used an incorrect
+  `../../../apps/api/node_modules/tsx/dist/loader.mjs` path from
+  `packages/db`: exit 1, `ERR_MODULE_NOT_FOUND`, no assertions executed.
+  The corrected existing-loader path is in the exact command below.
+- Corrected in-process probe below: PASS, exit 0, zero syntax diagnostics and
+  44 acceptance/refusal checks through the actual source repository methods.
+  It reuses the existing worker test's `manifest()` fixture through the
+  installed TypeScript parser, the existing `testTenantContext` helper and
+  C239's fake-pool pattern. It checks all four record positions with empty,
+  populated and mixed unknown-value records; rejects null/array/scalar records;
+  preserves strict envelopes, invalid enum/UUID/hash refusals, optional
+  post-lock fields and refusal of a copied, non-genuine context.
+  One Node process; no test-runner workers, PostgreSQL or sockets. This is
+  mocked-validator evidence, not a PostgreSQL or independent-review result.
+- Separate in-process record equivalence probe: PASS, exit 0. The installed
+  `zod/v3` one-argument `record(unknown())` and Zod 4
+  `record(string(),unknown())` have matching acceptance/rejection and parsed
+  outputs for eight representative shapes: empty object, the existing reveal
+  item's signal/description shape, a record containing empty/numeric-string
+  keys and null/boolean/string/number/array/nested/undefined values, then null,
+  array, boolean, number and string invalid records. No prior passing suite was
+  rerun; this separate check addresses intended predecessor record semantics.
+- DB typecheck: NOT RUN, process/resource gate unavailable. Full type-level
+  correctness and removal of all four TS2554 diagnostics remain for the
+  dispatcher's focused check. No broad Turbo/core/API/socket suite rerun.
+  PostgreSQL and browser suites remain CI-only.
+
+Exact successful syntax/repository-shape probe (cwd `packages/db`):
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/private/tmp/jg-r1-pnpm-bin:$PATH node --import ../../apps/api/node_modules/tsx/dist/loader.mjs --input-type=module - <<'JS'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { FinalCheckRepository } from './src/final-check-repository.ts';
+import { testTenantContext } from './test/tenant-context-test-utils.ts';
+const require=createRequire(import.meta.url),ts=require('typescript');
+const source=readFileSync('src/final-check-repository.ts','utf8');
+const syntax=ts.transpileModule(source,{fileName:'final-check-repository.ts',reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}});
+assert.equal((syntax.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error).length,0);
+// Reuse the existing worker test's manifest fixture without starting its runner.
+const fixtureSource=readFileSync('../../apps/api/src/final-check.worker.test.ts','utf8');
+const ast=ts.createSourceFile('final-check.worker.test.ts',fixtureSource,ts.ScriptTarget.Latest,true);
+const fixture=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='manifest');
+assert.ok(fixture);
+const fixtureJs=ts.transpileModule(fixture.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
+const tenantId='11111111-1111-4111-8111-111111111111',jobId='18000000-0000-4000-8000-000000000002',manifestId='18000000-0000-4000-8000-000000000003';
+const fixtureManifest=Function('jobId','manifestId','DEMO_TENANT_ID',fixtureJs+';return manifest();')(jobId,manifestId,tenantId);
+const context=testTenantContext(tenantId),digest='a'.repeat(64),statements=[];
+let payload;
+const client={query:async(sql)=>{statements.push(sql);return {rows:sql.startsWith('SELECT app.')?[{result:payload}]:[]};},release:()=>{}};
+const repo=new FinalCheckRepository({connect:async()=>client});
+let checks=0;
+async function accept(value,operation){payload=value;assert.deepEqual(await operation(),value);checks++;}
+async function reject(value,operation){payload=value;await assert.rejects(operation);checks++;}
+await accept(fixtureManifest,()=>repo.begin(context,jobId));
+await accept({state:'unlocked',items:[]},()=>repo.read(context,jobId,digest));
+await accept({state:'completed',items:[]},()=>repo.read(context,jobId,digest));
+await accept([],()=>repo.disputes(context,jobId,digest));
+const fixtureRecord={signalId:jobId,description:'Outside tap',comparisons:{baselineItemIds:[jobId],captureIds:[],lockedLineIds:[manifestId]}};
+const records=[{},fixtureRecord,{'':null,'123':false,text:'synthetic',number:123,list:[null,1],nested:{ok:true},optional:undefined}];
+for(const record of records){
+ const m=structuredClone(fixtureManifest);m.comparisons.baseline=[record];
+ await accept(m,()=>repo.manifest(context,jobId,manifestId));
+ await accept({state:'completed',items:[record]},()=>repo.read(context,jobId,digest));
+ await accept({state:'completed',items:[],postLockItems:[record]},()=>repo.read(context,jobId,digest));
+ await accept([record],()=>repo.disputes(context,jobId,digest));
+}
+for(const invalid of [null,[],false,1,'invalid']){
+ const m=structuredClone(fixtureManifest);m.comparisons.baseline=[invalid];
+ await reject(m,()=>repo.manifest(context,jobId,manifestId));
+ await reject({state:'completed',items:[invalid]},()=>repo.read(context,jobId,digest));
+ await reject({state:'completed',items:[],postLockItems:[invalid]},()=>repo.read(context,jobId,digest));
+ await reject([invalid],()=>repo.disputes(context,jobId,digest));
+}
+await reject({...fixtureManifest,unexpected:true},()=>repo.manifest(context,jobId,manifestId));
+await reject({...fixtureManifest,comparisons:{...fixtureManifest.comparisons,unexpected:true}},()=>repo.manifest(context,jobId,manifestId));
+await reject({state:'completed',items:[],unexpected:true},()=>repo.read(context,jobId,digest));
+await reject({state:'invalid',items:[]},()=>repo.read(context,jobId,digest));
+await reject({...fixtureManifest,id:'invalid'},()=>repo.manifest(context,jobId,manifestId));
+await reject({state:'completed',items:[],postLockItems:null},()=>repo.read(context,jobId,digest));
+const count=statements.length;
+await assert.rejects(()=>repo.read({...context},jobId,digest),{code:'INVALID_TENANT_CONTEXT'});checks++;
+await assert.rejects(()=>repo.read(context,jobId,'invalid'));checks++;
+assert.equal(statements.length,count);
+console.log(JSON.stringify({node:process.version,typescript:ts.version,zod:require('zod/package.json').version,syntaxDiagnostics:0,repositoryShapeChecks:checks,fixture:'apps/api/src/final-check.worker.test.ts manifest()',pool:'existing c239-style fake; no PostgreSQL or sockets',testWorkers:0}));
+JS
+```
+
+No SQL, migration/name, grant, route, claim, test expectation, dependency,
+instruction or lane registration was changed. Merged catalogue additions and
+the original receipt prefix remain intact. The 0205 SQL SHA-256 remains
+`f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303`.
+No commit, push, main merge, review/acceptance, provider action, real data,
+release or spending was performed or authorized by this result.
+
+Exact separate record-equivalence command (cwd `packages/db`; distinct from the
+44 repository checks above):
+
+```sh
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/private/tmp/jg-r1-pnpm-bin:$PATH node --input-type=module - <<'JS'
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require=createRequire(import.meta.url),{z}=require('zod'),{z:v3}=require('zod/v3');
+const prior=v3.record(v3.unknown()),current=z.record(z.string(),z.unknown());
+const shapes=[{}, {signalId:'18000000-0000-4000-8000-000000000002',description:'Outside tap'}, {'':null,'123':false,text:'synthetic',number:123,list:[null,1],nested:{ok:true},optional:undefined},null,[],false,1,'invalid'];
+for(const shape of shapes){const a=prior.safeParse(shape),b=current.safeParse(shape);assert.equal(b.success,a.success);if(a.success&&b.success)assert.deepEqual(b.data,a.data);}
+console.log('PASS: 8 representative record shapes match shipped Zod v3 one-argument acceptance/rejection and parsed output; Node '+process.version);
+JS
+PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/private/tmp/jg-r1-pnpm-bin:$PATH pnpm --version
+```
+
+Final deterministic source/path probe: PASS, exact four substitutions only;
+original receipt is an unchanged prefix; only the two issued paths differ from
+`1a48b9fc26542cee2e3355e18e09528334a563e6`. All original LP-0 catalogue JSON,
+contractor/SERIOUS-B5 additions, 0205 SQL and lane register bytes match that pin.
+A trailing blank line in this new appendix was found by `git diff --check` and
+removed before handoff; final whitespace check passes. No gate was retried.
+
+Size: +236/−3 lines across 2 files; largest touched logic file: 36 lines; new abstractions: none.
+
+
+## 26 October 2026 — approved 0205 to 0238 source-only renumber
+
+Same issued leaf `SV5-181-CATCHUP`, saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`; no new session, worker or driver.
+The pre-existing four-call Zod correction and every byte of the prior receipt
+are preserved. Original #181/#189 catch-up provenance above remains unchanged.
+
+Authority supplied by the issued continuation: actual direct Ben reply
+17:20:43, “Approve exact batch and private review”,
+`call_e44157438fe342b6813a4063a59bcc5a`, and actual private Claude PASS bound
+to frozen manifest
+`a749a70f64b0b91129a759ac5c660077d45d047906c0a6137ae475effed67fab`.
+The approved mapping is SV5 0238 first, MON1S 0239, MON3 0240. This builder
+performs only SV5's exact mapping; nothing allocates another number or changes
+another leaf. That proposal approval is not acceptance or an independent RED
+delta verdict on this working-tree candidate.
+
+Preflight HEAD is archive-only commit
+`c3b3b2b0b0ebfdd9cb362e1c9ec350925ce16ced`, following the normal config
+commit `83024c52b8e06a2bf78f1e5cd865e306588a3995`. Both are ancestors of
+HEAD, and the archive is already committed before removal of either old path.
+Initial working changes were only the prior Zod correction and prior receipt.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+turn_id: 01a17943-4af5-7c21-bb18-8e7606f656cc
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: existing saved rollout; turn_context at 2026-10-26T17:30:17.778Z
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+starting_base_revision: c3b3b2b0b0ebfdd9cb362e1c9ec350925ce16ced
+original_catchup_source: 1a48b9fc26542cee2e3355e18e09528334a563e6
+candidate_revision: uncommitted source-only renumber; prior compatibility correction retained
+allowed_files_ref: issued exact mapping and approved config/lanes/sv5-181-green.json
+state: candidate ready for dispatcher checkpoint; DB typecheck and current-main CI/review remain pending
+result_branch: sv5-181-green; dispatcher-owned; builder did not change branches
+```
+
+Read identities for AGENTS, BUILD_PLAN, current BUILD_RULES, full simplicity
+rule and session policy match the preceding continuation's recorded hashes.
+The earlier confirmed readings are retained. Refreshed changed facts include
+the approved lane paths, committed archive/manifest/activity, current receipt,
+migration renumber helper, own note, test references, catalogue source links and
+migration discovery/transaction-envelope code. Parent admission supplies the
+current worker launch observations; no inner coding admission was created.
+
+### Exact changes and preservation
+
+- Move `packages/db/migrations/0205_final_check.sql` to
+  `packages/db/migrations/0238_final_check.sql`, byte for byte.
+- Move `packages/db/migration-notes/0205_final_check.md` to
+  `packages/db/migration-notes/0238_final_check.md`; change only the leading
+  heading label `# 0205 —` to `# 0238 —`. All note prose remains unchanged.
+- Apply the existing helper's exact-stem boundary pattern
+  `(?<![0-9a-z_])0205_final_check(?![0-9a-z_])` in four lane paths: one
+  filename reference each in final-check-upgrade, final-check-access and
+  final-check-c239 tests, and two catalogue source links in LP-0 JSON.
+  No assertion, expected code, grant or catalogue row is added/removed/changed
+  apart from those filename links.
+- Preserve inherited `0237_final_check_prerequisites.sql`, all other
+  migrations, both lane configs, archive contents, historical ledger/receipt
+  references and `packages/db/src/final-check-repository.ts`.
+  No instructions, registry, dependency or unrelated code is edited.
+
+| Path / identity | SHA-256 |
+|---|---|
+| Existing live `config/lanes/sv5-181-green.json`, unchanged | `afb70c9287e470e1d50c6ec2aedd252939eb3140611196488a0c3de58b00aa21` |
+| Committed `archive/2026-10-26/sv5-0205-forward-preservation/original-0205.zip`, unchanged | `00aa76ddc29b0fb1290efc7ada257cb24caa97ce316a82072b5131b415bcd310` |
+| Original SQL / new `packages/db/migrations/0238_final_check.sql` | `f0eb3019c873bb4caacdc99e4a6be92c87a261a75321d9d45c7790de174ad303` |
+| Archived original `0205_final_check.md` | `3d2512436a3f35a59eb461166204c1b41ccf47b73124cd61ff09ff43b1653f5d` |
+| New `packages/db/migration-notes/0238_final_check.md` | `e922d772a1ffa1fbf9e50d3efa081068564ef836acf226499c41794c1465d93a` |
+| `packages/db/test/final-check-upgrade.integration.test.ts` | `b7312d952daedf6a1a596a943b1df58e3abce82d3ed08d998bd6b93933146f82` |
+| `packages/db/test/final-check-access.integration.test.ts` | `ecf99565db530f97c64909d589dd9b695f332cab011a312687ee96546f765802` |
+| `packages/db/test/final-check-c239.test.ts` | `632da26bdfa4e85c21874667e567a933fad71a562b2f62e55645f34abf274fc6` |
+| `docs/contracts/lp-0-effective-privileges-v1.json` | `373f0988f3fd36b4edd6d3dbff4ffca2a393471dff0e140e8309c9d8d32c113f` |
+| Prior Zod correction source, unchanged | `5c818f5c613168438aac95634ef11003826303eb3a90ed66927ce961afe75d7b` |
+| Prior receipt prefix before this append, unchanged | `88cec282ad8f87a9ec33dc34d92977bce49c2f42f4eed983013a305e0a6fb2ea` |
+
+### Commands actually run, results and limits
+
+- Read-only Git status/HEAD/ancestry, file hashes and Python
+  `zipfile.ZipFile.testzip()` plus byte comparisons: PASS. Before either old
+  path was removed, the committed ZIP opened and both named members matched
+  the exact working originals and archive manifest hashes. ZIP/config hashes
+  match the issued values. No archive was changed or newly deleted.
+- Local source and locally available `origin/main` floors both equal 0237;
+  no pre-existing 0238+ source collision. Parent already verified remote
+  freshness/no collision per the order; this builder makes no new network or
+  independent remote-freshness claim. No local drift was observed.
+- Pinned Node `v24.15.0` command `node --check tools/migration-renumber.mjs`:
+  PASS. Inspected helper's clean-worktree and Git-staging behavior.
+  `--write` and automatic Git-based migration selection were NOT RUN.
+- Pinned `node --input-type=module -` imported the existing pure
+  `planRenumber` and passed only the approved own 0205 SQL path, with other
+  current directory paths as the base. Assertion: exactly one plan entry,
+  0205 to 0238. PASS; inherited 0237 was never selected as an own migration.
+- `python3 -`: source-only `Path.rename` for the two approved moves,
+  leading note-label replacement, and boundary-matched stem replacements in
+  the four named paths. PASS. No Git staging or metadata write.
+- Pinned `node --input-type=module -`: existing TypeScript 5.8.3
+  `transpileModule` on the three changed test files: zero syntax diagnostics.
+  Catalogue JSON parsing: PASS. New SQL matches the existing runner's leading
+  `BEGIN;` / trailing `COMMIT;` transaction-envelope checks: PASS.
+  This is lexical/envelope evidence, not a PostgreSQL grammar/execution result.
+- `python3 -`: post-move archived-original and exact substitution comparison:
+  PASS. SQL bytes/hash unchanged; note heading-only delta; reference counts
+  1/1/1/2; old live paths absent; exactly one 0238+ file, the approved SQL.
+  Prior receipt and Zod source hashes preserved. 0237, registry, archive
+  manifest/activity and config remain equal to committed bytes.
+- Pinned
+  `node --import ./apps/api/node_modules/tsx/dist/loader.mjs --input-type=module -`
+  imported actual `MIGRATION_URLS`: PASS. 0238 is discovered once, after
+  unchanged 0237; 0205 is absent; 0238 is the final entry. No database connection.
+- `git diff --check`: PASS after source changes; final receipt also checked.
+- `/bin/ps -axo pid= >/dev/null`: DENIED, shell exit 127,
+  `operation not permitted: /bin/ps`. One attempt in this continuation;
+  no gate retry or fallback. DB typecheck remains NOT RUN here.
+  Dispatcher execution need with pinned Node/pnpm PATH and valid existing
+  admission/process/resource gates:
+  `~/.local/bin/heavy-slot SV5-181-CATCHUP pnpm --filter @jobguard/db typecheck`.
+- No 44/8 Zod proof rerun, broad Turbo/core/API/socket suite, PostgreSQL or
+  browser suite. No test-runner workers were started. PostgreSQL/browser
+  execution remains GitHub CI-only. No downloads/setup or new driver.
+
+Working-tree moves remain unstaged, including the two new destination files.
+Normal dispatcher scoped checkpoint/result push/current-main CI, actual
+independent RED delta review and separate acceptance remain required.
+There was no builder commit/push/branch change, main merge, acceptance, release,
+real-data/provider action or spending. Only the exact approved path operation
+is released; all other product, migration and release gates remain in force.
+
+The first final bookkeeping probe failed before execution because a Python byte
+literal contained a Unicode dash; its corrected form encodes the string.
+A new trailing blank line in this appendix was removed before the final
+whitespace check. Neither issue changed production source or gate evidence.
+
+Size for this renumber continuation: +147/−6 lines across 7 logical files (two filesystem renames); largest touched logic file: 49 lines; new abstractions: none. The preceding compatibility correction is excluded from this phase's size.
+
+
+### Coordinator verification — 26 October 2026, focused DB typecheck
+
+After the completed source worker released ownership, the coordinator ran the previously blocked `pnpm --filter @jobguard/db typecheck` through the normal `heavy-slot` gate under Node 24.15.0. Exit 0; the four Zod 4 compatibility calls now typecheck. This is deterministic typecheck evidence, not PostgreSQL execution, independent RED review, acceptance or integration. SQL/archive byte identity and note-heading-only change were separately verified. Current-main CI and actual independent checker gates remain required.
+
+
+## 26 October 2026 — independent RED delta repair: restore expected index
+
+Same bounded leaf `SV5-181-CATCHUP`, same saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`. No successor, account change or new
+worker. The original order already requires the union of both final-check
+expected-addition rows. This repairs its dropped non-conflicting expectation;
+it adds no product behavior and weakens no assertion.
+
+The preceding attempt held on `ORIG_HEAD.lock` sandbox denial and left clean
+`ac8a403b479cc9d4b5c160479cb6544dd2da1493` unchanged. The coordinator parent
+then performed the exact ordinary fast-forward before this launch. This turn
+verified a clean canonical HEAD
+`e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be`, tree
+`ff4078d9c9e7a8a3854cad6544804e37007c1514`, and no `MERGE_HEAD` before edits.
+Its parents remain main `92d7564580d057d1c88a626e2c040356959b08a4` and source
+`ac8a403b479cc9d4b5c160479cb6544dd2da1493`. No Git mutation was retried or
+performed by this builder turn; all canonical metadata unions are preserved.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+turn_id: 01a17a81-c0dd-71b1-8c06-4fd8ad88b2fb
+authorised_route_ref: C266; ~/.codex-ben2; Gmail per issued order
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+source_pin: e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: saved rollout turn_context at 2026-10-26T23:18:07.488Z
+allowed_files_ref: issued original-task repair; serious-b5 upgrade test and append-only SV-5 receipt
+candidate_revision: uncommitted one-string restoration plus this receipt appendix
+state: source prepared; serious-b5 CI and same-checker independent delta pending
+```
+
+Authority/reason: actual independent Claude Opus 5.5 RED delta verdict
+`REPAIR e9c55a4d5a864ba2fd1ef6f97ac85fdb2fffd7be`, BLOCKING 1 and final
+checker repair note, at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-sv5-claude-A-e9c55a4d-20261026.md`.
+Review SHA-256:
+`e98cd180d4e916e36ef13c3be762fb29c48c90938f05176a276b90ee51af3475`.
+The missing `final_check_manifest_processing_identity` is still created by
+0238:19 as a UNIQUE constraint. Restore only that exact string at the start of
+`finalCheckAdditions.indexNames`, as accepted `7e139e0b` contains it. All other
+source bytes, assertions, expected codes and LATER items remain unchanged.
+
+The current AGENTS, BUILD_PLAN, BUILD_RULES, SIMPLICITY_RULE and canonical
+CODEX_SESSION_POLICY identities match the previously recorded readings. Those
+readings are retained; inherited C1–C8, the SV-5 card, applicable contract,
+current receipt, changed source/constraint and actual review were refreshed.
+Current shared rule hashes remain
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`
+and `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No new simplicity note is added on this delta repair.
+
+### Exact source diff against e9c55a4d
+
+```diff
+diff --git a/packages/db/test/serious-b5-upgrade.integration.test.ts b/packages/db/test/serious-b5-upgrade.integration.test.ts
+index 93e826b8..8bbd7b25 100644
+--- a/packages/db/test/serious-b5-upgrade.integration.test.ts
++++ b/packages/db/test/serious-b5-upgrade.integration.test.ts
+@@ -61,7 +61,7 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
+ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+  const tables = ["final_check_manifest", "final_check_manifest_source", "shadow_final_check_completion", "shadow_final_check_reveal_proof", "shadow_final_check_run_binding", "shadow_final_check_source_attempt"];
+  const indexNames = [
+-  "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
++  "final_check_manifest_processing_identity", "final_check_manifest_pkey", "final_check_manifest_tenant_id_job_id_id_key", "final_check_manifest_tenant_id_job_id_id_lock_id_evidence_c_key", "final_check_manifest_tenant_id_job_id_lock_id_key",
+   "final_check_manifest_source_pkey", "final_check_manifest_source_tenant_id_job_id_manifest_id_up_key", "final_check_one_empty_descriptor",
+   "shadow_final_check_completion_pkey", "shadow_final_check_reveal_pro_tenant_id_job_id_run_id_signa_key", "shadow_final_check_reveal_proof_pkey",
+   "shadow_final_check_run_bindin_tenant_id_job_id_execution_id_key", "shadow_final_check_run_bindin_tenant_id_job_id_run_id_manif_key", "shadow_final_check_run_binding_pkey",
+
+```
+
+SHA-256 identities:
+
+- Test before: `fb5399db2a317f19a4483c92b246167ddbe8e495e1537c9eafea2050bce53b31`.
+- Test candidate: `49110e0ac42f20d97cc89b3a8cfe3a681a9c68e4b898f7af19527827432843de`.
+- Unchanged original receipt prefix before this append:
+  `586a0ac6b2a4021c0a0896880e9105e3bc9d2272487e63ef135152e061cc416d`.
+
+### Actual commands/results and remaining gates
+
+- Read-only `git rev-parse HEAD`, `git status --porcelain=v1`,
+  `git rev-parse -q --verify MERGE_HEAD`, and tree comparison: PASS for exact
+  clean e9c/no merge. No fetch, merge, reset, checkout or Git metadata write.
+- `python3 -`: restored one string on one existing line, after proving the
+  same prefix exists in accepted `7e139e0b` and is absent in canonical e9c.
+  PASS; no other source mutation.
+- Pinned Node 24.15.0 `node --input-type=module -`, using installed TypeScript
+  5.8.3 `transpileModule`: zero syntax diagnostics. An initial supplemental
+  probe then failed its hard-coded expected literal count of 16 (observed 17).
+  This was a probe assumption, not a product assertion or PostgreSQL result;
+  no production source was changed in response.
+- Corrected deterministic probe, same pinned Node command: PASS. TypeScript AST
+  proves the candidate array equals accepted `7e139e0b` exactly, equals the
+  canonical array with only the restored name prepended, and has unique names.
+  Literal counts are 16 before and 17 after; the review's stated 15/16 counts
+  are not used as replacement expectations. The corresponding SQL constraint
+  and the full sorted-array equality assertion remain present. No live index
+  count is claimed.
+- Exact source comparison: PASS, candidate equals canonical source with one
+  exact replacement on one line. Only the test and append-only receipt differ;
+  frozen migrations/archive/catalogue, metadata unions, compatibility fix,
+  config and all other tracked bytes remain canonical.
+- `git diff --check`: PASS. Source and receipt hashes are reported at handoff.
+- No product PostgreSQL/browser suites or broad passing suites were rerun.
+  Deterministic probes are not execution of the serious-b5 regression. No
+  test-runner workers, new driver, setup/download or permission change.
+
+The serious-b5 real PostgreSQL regression must execute in CI, including later
+assertions previously masked by this mismatch. The same actual independent
+checker must record the delta verdict for the checkpointed candidate. All
+required CI must be green against current main; separate acceptance and the
+authorized main merge remain external gates. Prior review evidence and the
+coordinator's earlier DB typecheck do not accept this repair. No builder commit,
+push, PR, queue edit, cross-chat message, acceptance or main merge was performed.
+
+Size: +124/−1 lines across 2 files; largest touched logic file: 358 lines; new abstractions: none.
+
+
+## 27 October 2026 — exact approved shadow catalogue correction
+
+Same bounded leaf `SV5-181-CATCHUP`, same saved Gmail session
+`01a173e9-4ad6-7b71-9a50-08d9dac17f96`, one thread. The serious-b5 restoration
+is already complete at `20cf032da0725cc051c6d11b76cf16048f003239` and was not
+repeated. Preflight verified clean exact metadata HEAD
+`5bb38e51cfdc6e63633fd37e872d4d2567e945e3`, a descendant of 20cf, with no
+`MERGE_HEAD`. The parent completed/pushed/checked/released that metadata
+prerequisite and synchronized this cwd per the issued order; this builder made
+no Git mutation or metadata repair.
+
+```yaml
+session_record_version: 1
+task_id: SV5-181-CATCHUP
+role: builder
+thread_id: 01a173e9-4ad6-7b71-9a50-08d9dac17f96
+turn_id: 01a17bef-0d1d-73e3-8c17-a67824af3fd7
+authorised_route_ref: C266; ~/.codex-ben2; Gmail per issued order
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv5-181-catchup
+source_pin: 5bb38e51cfdc6e63633fd37e872d4d2567e945e3
+prior_product_source: 20cf032da0725cc051c6d11b76cf16048f003239
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: saved rollout turn_context at 2026-10-27T05:57:07.900Z
+allowed_files_ref: exact issued shadow-catalog candidate plus append-only SV-5 receipt
+candidate_revision: uncommitted exact approved test and this receipt appendix
+state: source prepared; exact-input database CI and distinct independent delta pending
+```
+
+### Exact approval and metadata provenance
+
+Direct human decision:
+`/Users/benharwood/.local/share/frm-directors/command-center/decisions/jobguard-sv5-shadow-catalog-grants-2026-10-27.json`.
+Verified `status: decided`, `answer: Approve exact 7`,
+`decided_at: 1793079833.6638389`; approval covers both this exact protected-test
+candidate and the single permitted lane path. Decision SHA-256:
+`93af39e2373191676d2d8b0bb70105e56f61914258223b491243169c8ec635ae`.
+
+Independent PLAN PASS reference:
+`~/.local/share/full-steam/jg-runs/v5-sv5-shadow-approval-plan-20261027.md`,
+SHA-256 `baee912917e66c97764299e5e9e841e6047cd0f2d31640b833606130c92cd08d`.
+Security assessment:
+`~/.local/share/full-steam/jg-runs/v5-sv5-grants-assessment-20cf032d-20261027.md`,
+SHA-256 `eb8d20b4db78dfd6082ac1fd9933179d40d0783d94468c3decaa9490e196e53d`.
+These are proposal/assessment evidence, not a delta verdict or acceptance for
+this installed candidate. Their scratch results are not builder-executed tests.
+
+Frozen manifest `/private/tmp/sv5-shadow-grants-approval-20261027/manifest.json`:
+SHA-256 `4f5d933722959c4aa95db92302a82c893c96238999291616b89685e70bb1f81c`.
+Live `config/agent-lane-assignments.json` matches approved SHA-256
+`bed683df8bb87c75f1b5c2cff4dd6831f09727054da27f8629cf77b83894c4df`;
+`lanes['sv-5'].allow` contains `packages/db/test/shadow-catalog.integration.test.ts`.
+The config is untouched by this builder. No instruction/registry amendment or
+new admission was created here.
+
+Current AGENTS, BUILD_PLAN, canonical session policy, shared BUILD_RULES and
+full simplicity identities match the retained readings. Applicable C1–C8,
+SV-5/final-check and shadow contracts remain governing; the shadow persistence
+role table and reviewed exception, actual source/candidate/setup hooks, runner
+config/CLI and current approval facts were refreshed. Shared rule hashes remain
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`
+and `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No optional LATER edit or new simplicity observation is included.
+
+### Applied source and exact hashes
+
+Only `packages/db/test/shadow-catalog.integration.test.ts` is replaced with the
+full reviewed bytes from the existing preferred candidate
+`/private/tmp/sv5-shadow-grants-approval-20261027/shadow-catalog.candidate.ts.txt`.
+The canonical fallback was not needed. No adaptation/reformatting was applied.
+The candidate records exactly seven known signatures and their sole executor,
+pins migration ownership/SECURITY DEFINER/search path, rejects PUBLIC and
+same-name overloads, and adds actual-login permission denials in the product
+test. All other DW1–DW4 controls remain as in the exact approved proposal.
+No SQL, actual grant, runtime behavior, other test, config or dependency changes.
+
+- Test baseline SHA-256:
+  `0ee8767ffdf773e515b679cb964dfa6f8b3ee511164cf2521978c221f1b3d455`.
+- Exact installed candidate SHA-256:
+  `d1d82f27131647a1803e2d4dc7e90f1bd031ee02aabcf57081b0f7d2429950dc`.
+- Frozen proposal diff SHA-256:
+  `3d2f69ab164fcb27eb685d43a3b788a0fcc5dee72f580c4c6ec2ccde9099585b`.
+  The canonical `jg-runs/sv5-grants-proposal-20261027/proposal.diff` matches;
+  regenerating the baseline/candidate unified body with its frozen header
+  reproduces the entire reviewed diff byte-for-byte. Git's own header format
+  is not substituted for that frozen proposal format.
+- Existing receipt prefix before append SHA-256:
+  `86e5edec8524663a7e554bdc3a0bcb6a58fbc491cbed6d37508f6392c2906c84`.
+
+### Actual checks and limits
+
+All commands use the explicit issued cwd and existing installed dependencies.
+Node is the pinned `v24.15.0` at
+`/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`; pnpm uses the
+established 10.28.1 launcher in `/private/tmp/jg-r1-pnpm-bin`.
+
+- Read-only Git clean HEAD/ancestry/no-MERGE preflight and SHA-256/JSON checks:
+  PASS. Candidate baseline, metadata, direct decision and manifest match all
+  issued pins before mutation.
+- `python3 -`: frozen proposal hash/body equality, then `Path.write_bytes` of
+  the exact candidate into its sole authorized test path: PASS. Result remains
+  byte-identical to the candidate, with source diff +32/−2 lines.
+- Pinned `node --input-type=module -`: installed TypeScript 5.8.3
+  `transpileModule` reports zero syntax diagnostics; `resolveModuleName` using
+  actual db tsconfig options resolves all non-builtin imports, and Node builtin
+  imports are recognized. PASS for all 10 import declarations. This is static
+  import resolution, not runtime module execution or full typechecking.
+- Inspected the actual db package scripts and `vitest.config.ts`, installed
+  Vitest CLI definitions and `pnpm --filter @jobguard/db exec vitest list --help`
+  (exit 0). Vitest 4.1.12 explicitly supports static discovery; no speculative
+  command or database hook override was introduced.
+- Actual repository runner command, exit 0:
+
+  `PATH=/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin:/private/tmp/jg-r1-pnpm-bin:$PATH pnpm --filter @jobguard/db exec vitest list test/shadow-catalog.integration.test.ts --staticParse --staticParseConcurrency=1 --maxWorkers=1 --json`
+
+  It discovered six cases from the actual test file: migration registration;
+  shadow table/column/sequence/view isolation; pinned routine/helper catalogue;
+  inherited PUBLIC/explicit role grants; credentials/role/policy/RLS refusal;
+  and mutation/append-only protection. Static parse does not execute the test
+  file or its database hooks. **Six discovered, zero executed**; no database
+  pass is claimed. Concurrency and maximum workers are explicitly limited to 1.
+- `git diff --check`: PASS. Exact candidate hash, receipt prefix and two-path
+  footprint rechecked before handoff.
+- No scratch 6/6, five-mutation or four-prelock probe rerun; no product DB or
+  browser execution, broad Turbo suite, install/download, provider call or new
+  driver. Required runtime DB evidence remains CI-only.
+
+Outstanding: exact-input `shadow-catalog.integration.test.ts` on real PostgreSQL
+and full required CI green against CURRENT main; independent delta reviewer
+must be distinct from the original scratch proposal author; separate
+coordinator acceptance; only the designated actual C282 checker performs the
+main merge. The fixed SV5 → MON1S → MON3 order and every other release gate
+remain. No builder commit, push, PR, main merge, queue edit, cross-chat send,
+acceptance, real-data action or spending was performed. Two authored files are
+left unstaged/uncommitted for the normal parent checkpoint/publication.
+
+Size: +173/−2 lines across 2 files; largest touched logic file: 145 lines; new abstractions: none.
