@@ -10,6 +10,7 @@
         "apps/web/app/ui/contractor-billing.tsx",
         "apps/web/app/ui/contractor-billing.test.tsx",
         "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.actions.test.ts",
         "apps/api/src/contractor/billing.controller.ts",
         "apps/api/openapi.json",
         "packages/db/src/contractor-billing-repository.ts",
