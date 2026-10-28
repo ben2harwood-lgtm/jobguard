@@ -5,14 +5,17 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED MON-1 parts 4-5, PR #388 catch-up after M4-9-S #380 merged: union main and MON-1 exports and shared privilege/upgrade expectations. Preserve existing fixture repairs; migration 0305 and SQL bytes unchanged. Database and browser suites run in GitHub CI.",
+      "note": "RED MON-1 parts 4-5, PR #388 CI repair. Verify exact tenant serializer SQL/order/bindings at access boundaries; preserve both SERIOUS-B5 additions. Current-photo fixtures use PostgreSQL transaction time rather than millisecond-truncated JS timestamps, preserving activation-before-evidence validation and all grace/cap assertions. PostgreSQL/browser execution remains GitHub CI.",
       "allow": [
         "apps/api/src/evidence-pack-v3.application.test.ts",
         "apps/api/src/job-parties.application.test.ts",
         "apps/api/src/job-work-state-capacity.test.ts",
         "apps/api/src/job-work-state.errors.ts",
+        "apps/api/src/job-work-state.isolation.test.ts",
         "apps/api/src/meter-today.application.ts",
         "apps/api/src/meter-work-state.application.test.ts",
+        "apps/api/src/practice-session.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "apps/api/src/workspace/index.ts",
         "apps/web/app/api/meter/jobs/[id]/work-state/route.test.ts",
         "apps/web/app/api/meter/jobs/[id]/work-state/route.ts",

@@ -105,12 +105,23 @@ it.each(methods)("$name refuses missing, invented and stranger sessions before b
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  for(const scenario of ["missing","invented",...(["CaptureApplication.capture","MaterialApplication.addRate","FeeIllustrationApplication.whatIf"].includes(entry.name)?[]:["stranger"])]){
   const session=scenario==="missing"?undefined:"18000000-0000-4000-8000-000000000001";
-  const query=vi.fn(async(sql:string)=>({rows:scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]:[]}));
+  const query=vi.fn(async(sql:string, _values?: unknown[])=>({rows:scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]:[]}));
   const connect=vi.fn(async()=>({query,release:vi.fn()}));
   const app=new (entry.ctor as any)({query,connect},session);
   await expect(Promise.resolve().then(()=>entry.invoke(app,session))).rejects.toThrow(scenario==="stranger"?"NOT_FOUND":"UNAUTHENTICATED");
   if(scenario!=="stranger")expect(connect).not.toHaveBeenCalled();
-  for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+  const lockSql="SELECT pg_advisory_xact_lock(hashtextextended($1,184))";
+  const calls=query.mock.calls;
+  for(let i=0;i<calls.length;i++) {
+   const [sql,values]=calls[i]!;
+   if(sql===lockSql) {
+    expect(scenario).toBe("stranger");
+    expect(values).toEqual([body.tenantId]);
+    expect(calls[i-1]).toEqual(["SELECT set_config('app.tenant_id', $1, true)",[body.tenantId]]);
+    expect(calls[i+1]![0]).toMatch(/practice_session_digest/);
+   } else expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+  }
+  expect(calls.filter(([sql])=>sql===lockSql)).toHaveLength(scenario==="stranger"?calls.filter(([sql])=>sql==="BEGIN").length:0);
  }
 });
 

@@ -23,7 +23,8 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
    await expect(page.getByTestId("jobs-on-the-go")).toHaveText(`${n} of 4 jobs on the go`);
   };
   await count(0);
-  await insertPhoto(f,a,new Date().toISOString()); await count(1);
+  // PostgreSQL transaction time preserves activation-before-photo ordering at microsecond precision.
+  await insertPhoto(f,a,"now"); await count(1);
   const session = await (await page.request.get("/api/auth/session")).json();
   const send = (jobId: string, data: unknown, tenantId=a.tenantId) => page.request.post(`/api/meter/jobs/${jobId}/work-state`, {
    headers: { origin: new URL(page.url()).origin, "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId }, data });
@@ -49,12 +50,12 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
   // Four more distinct accepted jobs fill Solo; a real reopen admits grace.
   for(let i=0;i<4;i++) {
    const job=await seedWorkJob(f,a.tenantId); await activateMeterJob(f,job);
-   await insertPhoto(f,job,new Date().toISOString());
+   await insertPhoto(f,job,"now");
   }
   const sixth=await seedWorkJob(f,a.tenantId); await activateMeterJob(f,sixth);
   const graceClosed=await command(sixth.jobId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action:"close",reason:"other",note:"Fictional pause before grace"});
   await command(sixth.jobId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:1,action:"reopen",closeEventId:graceClosed.events[0]!.id});
-  await insertPhoto(f,sixth,new Date().toISOString());
+  await insertPhoto(f,sixth,"now");
   await count(6);
   await expect(page.getByText("Today's count reaches the grace place.",{exact:false})).toBeVisible();
   await expect(page.getByTestId("next-job-price")).toHaveText("Further places need a move to Builder.");

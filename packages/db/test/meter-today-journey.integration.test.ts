@@ -22,7 +22,10 @@ it("real site evidence and work commands refresh the screen; replay and foreign 
  const revisions=async()=>Number((await f.admin.query("SELECT count(*) n FROM app.meter_lifecycle_source WHERE tenant_id=$1",[a.tenantId])).rows[0].n);
  expect(await revisions()).toBe(1);
  await Promise.all([read(),read()]); expect(await revisions()).toBe(1);
- await insertPhoto(f,a,new Date().toISOString());
+ // PostgreSQL transaction time preserves activation-before-photo ordering at microsecond precision.
+ await insertPhoto(f,a,"now");
+ const photoTimes=await f.admin.query("SELECT e.fact_at>=a.activated_at ordered FROM app.job_work_state_event e JOIN app.job_activation a ON (a.tenant_id,a.job_id)=(e.tenant_id,e.job_id) WHERE e.tenant_id=$1 AND e.job_id=$2",[a.tenantId,a.jobId]);
+ expect(photoTimes.rows).toEqual([{ordered:true}]);
  expect((await read()).countedPlaces).toBe(1);
  expect(await revisions()).toBe(2); await read(); expect(await revisions()).toBe(2);
  const raw={version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:1,action:"finish"};
