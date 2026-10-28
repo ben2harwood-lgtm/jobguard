@@ -58,30 +58,39 @@ export class EnterpriseFeeRepository {
         (await db.$client.query("SELECT app.ef_read($1,$2) result", [session, derivationId])).rows[0].result as EnterpriseFeeDerivationRead);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  private async call<T>(context: VerifiedTenantContext, session: string, sql: string, values: unknown[]): Promise<T> {
-    if (!z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
-    try { return await withTenant(this.pool, context, async db => (await db.$client.query(sql, [session, ...values])).rows[0].result as T); }
-    catch (error) { enterpriseFeeDatabaseFailure(error); }
+  private parse<T extends z.ZodType>(schema: T, raw: unknown, session: string): z.infer<T> {
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    return parsed.data;
   }
-  private parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
-    const parsed = schema.safeParse(raw); if (!parsed.success) throw new EnterpriseFeeError("INVALID_FEE_INPUT"); return parsed.data;
+  async prepareStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ statementId: string; replayed: boolean }> {
+    const input = this.parse(enterpriseFeePrepareStatementV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_prepare_statement($1,$2,$3) result", [session, input.commandId, input.period])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  prepareStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
-    const input = this.parse(enterpriseFeePrepareStatementV1, raw);
-    return this.call<{ statementId: string; replayed: boolean }>(context, session, "SELECT app.ef_prepare_statement($1,$2,$3) result", [input.commandId, input.period]);
+  async disputeStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ disputeId: string; replayed: boolean }> {
+    const input = this.parse(enterpriseFeeDisputeStatementV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_dispute_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.reasonCode])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  disputeStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
-    const input = this.parse(enterpriseFeeDisputeStatementV1, raw);
-    return this.call<{ disputeId: string; replayed: boolean }>(context, session, "SELECT app.ef_dispute_statement($1,$2,$3,$4) result", [input.commandId, input.statementId, input.reasonCode]);
+  async approveStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ authorizationId: string; replayed: boolean }> {
+    const input = this.parse(enterpriseFeeApproveStatementV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_approve_statement($1,$2,$3,$4,$5,$6) result",
+          [session, input.commandId, input.statementId, input.contentHash, input.totalDeltaPence, input.expiresAt])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  approveStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
-    const input = this.parse(enterpriseFeeApproveStatementV1, raw);
-    return this.call<{ authorizationId: string; replayed: boolean }>(context, session, "SELECT app.ef_approve_statement($1,$2,$3,$4,$5,$6) result",
-      [input.commandId, input.statementId, input.contentHash, input.totalDeltaPence, input.expiresAt]);
-  }
-  readStatement(context: VerifiedTenantContext, session: string, statementId: string) {
-    if (!z.guid().safeParse(statementId).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
-    return this.call<EnterpriseFeeStatementRead>(context, session, "SELECT app.ef_read_statement($1,$2) result", [statementId]);
+  async readStatement(context: VerifiedTenantContext, session: string, statementId: string): Promise<EnterpriseFeeStatementRead> {
+    if (!z.guid().safeParse(statementId).success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_read_statement($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeeStatementRead);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
   postStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
     const input = this.parse(enterpriseFeePostStatementV1, raw);

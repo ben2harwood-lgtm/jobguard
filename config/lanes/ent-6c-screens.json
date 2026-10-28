@@ -3,7 +3,8 @@
   "lanes": {
     "ent-6c-screens": {
       "branches": [
-        "codex/sandbox/ent-6c-screens"
+        "codex/sandbox/ent-6c-screens",
+        "codex/sandbox/ent-6c-screens-r"
       ],
       "note": "ENT-6 part: read-only billing projection and reconciliation screen over the ENT-6B read route (stacked on #240). Display only; no new write path.",
       "allow": [
