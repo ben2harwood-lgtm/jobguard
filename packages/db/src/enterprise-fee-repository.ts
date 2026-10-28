@@ -13,6 +13,17 @@ export const enterpriseFeeDisputeStatementV1 = z.object({ version: z.literal("en
   reasonCode: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u) }).strict();
 export const enterpriseFeeApproveStatementV1 = z.object({ version: z.literal("enterprise-fee-approve-statement.v1"), commandId: z.guid(), statementId: z.guid(),
   contentHash: z.string().regex(/^[0-9a-f]{64}$/u), totalDeltaPence: z.number().int().refine(Number.isSafeInteger), expiresAt: z.iso.datetime({ offset: true }) }).strict();
+/** ENT-7c: finance posts an approved revision by presenting the exact authorisation its approval created. */
+export const enterpriseFeePostStatementV1 = z.object({ version: z.literal("enterprise-fee-post-statement.v1"), commandId: z.guid(), statementId: z.guid(), authorizationId: z.guid() }).strict();
+/** ReconcileExportedDuplicate: explicit finance approval; amounts come only from stored billing facts. */
+export const enterpriseReconcileExportedDuplicateV1 = z.object({ version: z.literal("enterprise-reconcile-exported-duplicate.v1"),
+  commandId: z.guid(), jobId: z.guid(), duplicateId: z.guid(), canonicalId: z.guid() }).strict()
+  .refine(x => x.duplicateId !== x.canonicalId);
+export type EnterpriseDuplicateCorrection = { correctionId: string; linkId: string; contentHash: string; replayed: boolean;
+  corrections: { runId: string; exportLineId: string; source: string; invoiceNumber: string; externalInvoiceLineId: string;
+    kind: "credit_instruction"; netPence: { numerator: string; denominator: string }; grossPence: number }[] };
+export type EnterpriseFeePosting = { id: string; kind: "accrual" | "compensation"; agreementVersionId: string; amountPence: number; compensatesFeeId: string | null;
+  environment: "synthetic_demo"; lines: { account: string; debitPence: number; creditPence: number }[] };
 export type EnterpriseFeeStatementRead = {
   id: string; period: string; revision: number; predecessorId: string | null; contentHash: string; totalDeltaPence: number;
   sections: { agreementVersionId: string; derivationId: string; cumulativeFeePence: number; priorNetPostedPence: number; deltaPence: number }[];
@@ -86,6 +97,28 @@ export class EnterpriseFeeRepository {
     try {
       return await withTenant(this.pool, context, async db =>
         (await db.$client.query("SELECT app.ef_read_statement($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeeStatementRead);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  async postStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ statementId: string; replayed: boolean; journals?: number }> {
+    const input = this.parse(enterpriseFeePostStatementV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  async reconcileExportedDuplicate(context: VerifiedTenantContext, session: string, raw: unknown): Promise<EnterpriseDuplicateCorrection> {
+    const input = this.parse(enterpriseReconcileExportedDuplicateV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_reconcile_exported_duplicate($1,$2,$3,$4,$5) result",
+          [session, input.commandId, input.jobId, input.duplicateId, input.canonicalId])).rows[0].result as EnterpriseDuplicateCorrection);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  async readPostings(context: VerifiedTenantContext, session: string, statementId: string): Promise<EnterpriseFeePosting[]> {
+    if (!z.guid().safeParse(statementId).success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_read_postings($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeePosting[]);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
 }
