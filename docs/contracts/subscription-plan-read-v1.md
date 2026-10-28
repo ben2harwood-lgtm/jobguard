@@ -1,12 +1,12 @@
-# MON-2A plan/subscription screen read v1 (P1, P2, C2)
+# MON-2A plan/subscription screen and actions v1 (C2/C3)
 
-Synthetic made-up companies only. RED: company sign-in and money presentation. This slice adds a read-only `/plans` screen, not acceptance, plan changes, issuing, collection or a provider. C3 browser journey remains a later piece; MON-2B and all production/commercial release gates remain closed. No migration or new database grants.
+Synthetic made-up companies only. RED: company sign-in and money presentation. The `/plans` screen reads persisted periods and supports explicit terms acceptance, upgrades, downgrade requests and approved simulated settlement. Statement issue remains internal to the engine; MON-2B and all production/commercial release gates remain closed. No migration or new database grants.
 
 ## Authority and transport
 
-The screen calls only C1's existing `GET /api/subscriptions/current`, with same-origin credentials and `cache: no-store`. The C1 response is `Cache-Control: no-store`; no company read is stored in local storage or a shared cache. Every read re-enters current company authority and the persisted SQL session check. A practice cookie alone is insufficient. Ben's 28 October ruling is recorded in merged PR #362 (`ea5d7b1b`): exact subscription routes use the real email-code company session, checked before the practice shortcut; other money paths retain their existing rules. P1/P2/C2 do not amend that boundary. The sign-in link goes to `/sign-in`.
+The screen calls C1's existing `GET /api/subscriptions/current` and `POST /api/subscriptions/commands`, with same-origin credentials and `cache: no-store`. The C1 response is `Cache-Control: no-store`; no company read is stored in local storage or a shared cache. Every read re-enters current company authority and the persisted SQL session check. A practice cookie alone is insufficient. Ben's 28 October ruling is recorded in merged PR #362 (`ea5d7b1b`): exact subscription routes use the real email-code company session, checked before the practice shortcut; other money paths retain their existing rules. P1/P2/C2 do not amend that boundary. The sign-in link goes to `/sign-in`.
 
-401/403 show company sign-in guidance; other HTTP, network, JSON or projection failures show unavailable, without figures, raw errors or returned private details. Initial loading renders no company figures. The screen sends no command, tenant selector, payment claim, plan selection or annual-enable override. Existing C1 command authorization is unchanged.
+401/403 show company sign-in guidance; other HTTP, network, JSON or projection failures show unavailable, without figures, raw errors or returned private details. Initial loading renders no company figures. The screen retains the company whose terms were displayed, refreshes CSRF before each action, and refuses lost membership. Existing C1 exact-path authorization is unchanged.
 
 ## Consumed C1 data
 
@@ -16,7 +16,7 @@ The screen calls only C1's existing `GET /api/subscriptions/current`, with same-
 | --- | --- |
 | agreements | tenant_id, id, revision, plan, cadence, anchor_day, maximum_pence, effective_date |
 | periods | tenant_id, id, period_start, period_end, agreement_revision, principal_pence, maximum_pence |
-| statements | tenant_id, id, period_id, namespace, amount_pence, currency, hypothetical |
+| statements | tenant_id, id, period_id, namespace, amount_pence, currency, hypothetical, artifact_hash (optional for older read fixtures) |
 | work | tenant_id, id, statement_id, amount_pence, environment |
 | attempts | tenant_id, id, work_id |
 | results | tenant_id, id, work_id, outcome, environment |
@@ -61,3 +61,16 @@ New P2 tests pass the existing engine's results through the display, rather than
 | Builder 8 places, 1 of 31 days | £69.65 |
 
 Validation is targeted core tests plus web loader/static-render tests. These are deterministic checks, not independent RED review or browser evidence. Full required CI and the independent RED review against the router's exact committed head remain required before merge.
+
+## C2 public actions and C3 journey
+
+The command envelope remains `subscription-http-command.v1` with a UUID `commandId`. The application accepts only these strict `subscription-command.v1` actions:
+
+- `accept` and `change`: plan (Solo/Builder), monthly cadence, original anchor day, termsVersion `subscription_terms_v1`, catalogueVersion `subscription_pricing_policy_v4`, the selected plan's exact maximumPence (4900/16900), and expectedRevision. The server hashes this exact selection together with the authenticated tenant; clients cannot supply an approval hash or actor.
+- `approve_simulation`: statementId, expectedRevision, exact contentHash and amountPence from the persisted statement. SQL checks the statement belongs to this company and matches the approved artifact and amount.
+
+Internal issue, apply-change, execution and result-recording commands are not public actions. Only the server's existing no-network synthetic adapter records simulated settlement. The executor claims work after approval commits. Fresh execution command IDs allow the SQL attempt check to reject simultaneous claims; replay reads durable attempts and never retries an attempted/unknown outcome. The response remains the original approved command receipt, and the screen reloads persisted facts before showing settlement. A redirect never settles anything.
+
+The existing SQL engine owns London dates, original-anchor periods, monthly maximums, cumulative exact arithmetic, revision locking and replays. Upgrades take effect today where the engine permits; downgrade requests remain pending until the next boundary and a fresh capacity/approval check. Issued periods remain immutable. These actions create no live obligations or provider calls, and do not open any other money path to company sign-in.
+
+C3 extends the existing email-code browser journey (avoiding additional shared identity-request budget): accept Solo, upgrade to Builder, request a boundary downgrade, load a CI-only historical synthetic period, explicitly approve its exact payment and reload its simulated settlement. PostgreSQL tests exercise real repository execution, duplicate approvals/claims, cross-company statements, upgrade races and downgrade boundary races. Browser and PostgreSQL execution require CI; deterministic local results are recorded in the commit/PR handoff.
