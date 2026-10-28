@@ -10,6 +10,12 @@ export const finalCheckDispositionV1 = z.object({
  referenceId:uuid.nullable(),
 }).strict().refine(v=>["already_included","in_original_scope"].includes(v.answer)||v.referenceId===null);
 export type FinalCheckDisposition = z.infer<typeof finalCheckDispositionV1>;
+/** "Yes, this was extra work": creates only an unpriced catch variation; the server checks everything else. */
+export const finalCheckCatchV1 = z.object({
+ version:z.literal("final-check.catch.v1"), commandId:uuid, lockId:uuid, runId:uuid, signalId:uuid,
+ expectedSignalRevision:z.number().int().nonnegative().safe(),
+}).strict();
+export type FinalCheckCatch = z.infer<typeof finalCheckCatchV1>;
 export const finalCheckTaskV1 = z.object({version:z.literal("final-check.task.v1"),jobId:uuid,manifestId:uuid}).strict();
 export class FinalCheckError extends Error {
  constructor(readonly code:"INVALID_FINAL_CHECK_INPUT"|"FINAL_CHECK_FORBIDDEN"|"FINAL_CHECK_PENDING"|"FINAL_CHECK_SOURCE_CHANGED"|"FINAL_CHECK_FAILED"|"IDEMPOTENCY_CONFLICT"|"STALE_REVISION"|"FINAL_ACCOUNT_LOCK_REQUIRED"){super(code);}

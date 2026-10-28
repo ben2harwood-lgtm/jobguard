@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Pool } from "pg";
-import { FinalCheckError, finalCheckDispositionV1, type FinalCheckDisposition, type FinalCheckOutcome } from "@jobguard/core";
+import { FinalCheckError, finalCheckCatchV1, finalCheckDispositionV1, type FinalCheckDisposition, type FinalCheckOutcome } from "@jobguard/core";
 import { withTenant,type VerifiedTenantContext } from "./tenant-context.js";
 const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/u);
 const sourceV1=z.object({id:uuid,evidenceId:uuid.nullable(),sourceKind:z.string(),sourceRef:uuid,objectVersionId:z.string().nullable(),sha256:hash.nullable(),receivedAt:z.string(),inputHash:hash,processable:z.boolean(),input:z.unknown(),status:z.enum(["pending","failed","unsupported","zero_result","detected"])}).strict();
@@ -32,5 +32,8 @@ export class FinalCheckRepository{
  async reconcile(context:VerifiedTenantContext,jobId:string,manifestId:string,classifications:readonly FinalCheckClassification[]){return this.call(context,"SELECT app.complete_final_check($1,$2,$3,$4::jsonb) result",[uuid.parse(jobId),uuid.parse(manifestId),JSON.stringify(classifications)]);}
  async read(context:VerifiedTenantContext,jobId:string,digest:string):Promise<FinalCheckView>{return viewV1.parse(await this.call(context,"SELECT app.read_final_check_reveal($1,$2,$3) result",[uuid.parse(jobId),hash.parse(digest)]));}
  async disposition(context:VerifiedTenantContext,jobId:string,digest:string,raw:FinalCheckDisposition){const p=finalCheckDispositionV1.safeParse(raw);if(!p.success)throw new FinalCheckError("INVALID_FINAL_CHECK_INPUT");return this.call(context,"SELECT app.record_final_check_disposition($1,$2,$3,$4::jsonb) result",[uuid.parse(jobId),hash.parse(digest),JSON.stringify(p.data)]);}
+ async confirmCatch(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown){const p=finalCheckCatchV1.safeParse(raw);if(!p.success)throw new FinalCheckError("INVALID_FINAL_CHECK_INPUT");return this.call(context,"SELECT app.confirm_final_check_catch($1,$2,$3,$4::jsonb) result",[uuid.parse(jobId),hash.parse(digest),JSON.stringify(p.data)]);}
+ /** Practice-only run request (Q6): leaves identifiers for the worker; no shadow work here. */
+ async requestRun(context:VerifiedTenantContext,jobId:string,digest:string){return this.call(context,"SELECT app.request_final_check_run($1,$2,$3) result",[uuid.parse(jobId),hash.parse(digest)]);}
  async disputes(context:VerifiedTenantContext,jobId:string,digest:string){return z.array(z.record(z.string(),z.unknown())).parse(await this.call(context,"SELECT app.read_final_check_disputes($1,$2,$3) result",[uuid.parse(jobId),hash.parse(digest)]));}
 }
