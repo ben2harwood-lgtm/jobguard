@@ -23,7 +23,7 @@ const saved: { f: Fixture; input: Record<string, unknown>; approval: Record<stri
 async function preview(f: Fixture, caseId: string) {
   // Shared evidence fixture has claim revisions but no opening events. Populate
   // the historical opening fact before pursuit, as the existing journey does.
-  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,encode(sha256(convert_to($4::text,'UTF8')),'hex'))", [randomUUID(), f.tenantId, f.jobId, caseId, randomUUID()]);
+  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,encode(sha256(convert_to($6,'UTF8')),'hex'))", [randomUUID(), f.tenantId, f.jobId, caseId, randomUUID(), caseId]);
   const ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` }, packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime);
   const pack = await packs.generate(ctx, caseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(ctx, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);

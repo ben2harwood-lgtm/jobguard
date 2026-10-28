@@ -24,12 +24,15 @@ beforeAll(async () => {
   await admin.query(`CREATE ROLE pursuit_login LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO pursuit_login`);
   runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_login", password, database: "postgres", max: 4 });
 });
+// The shared evidence fixture has claim revisions but no opening event; current case reads need one, as the journey records.
+const opened = (f: { tenantId: string; jobId: string }, caseId: string) => admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,encode(sha256(convert_to($6,'UTF8')),'hex'))", [randomUUID(), f.tenantId, f.jobId, caseId, randomUUID(), caseId]);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 it.each([null, "reference_fee_policy_v1"])("%s: NullPolicyWithheldPursuitRefused / V1PolicyWithheldPursuitRefused", async policy => {
   const f = await seedEvidencePackFixture(admin), ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
   if (policy === null) { // Negative historical shape only, never a conversion or approval route.
     const db = await admin.connect(); try { await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role=replica"); await db.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL,recovery_cap_pence=NULL WHERE tenant_id=$1 AND id=$2", [f.tenantId, f.jobId]); await db.query("COMMIT"); } finally { db.release(); }
   }
+  await opened(f, f.customerCaseId); await opened(f, f.caseId);
   const packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime), pack = await packs.generate(ctx, f.customerCaseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(ctx, f.customerCaseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
   const before = await counts(), ready = await repo.read(ctx, f.customerCaseId);
@@ -53,6 +56,7 @@ it.each([null, "reference_fee_policy_v1"])("%s: NullPolicyWithheldPursuitRefused
 
 it("CaseConcurrency: new v1 pursuit waits for the existing case key, then refuses with complete rollback", async () => {
   const f = await seedEvidencePackFixture(admin), ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
+  await opened(f, f.customerCaseId); await opened(f, f.caseId);
   const packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime), pack = await packs.generate(ctx, f.customerCaseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(ctx, f.customerCaseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
   const before = await counts(), ready = await repo.read(ctx, f.customerCaseId), lock = await admin.connect();
