@@ -1,3 +1,7 @@
+import "reflect-metadata";
+import { QuoteController } from "./quote/quote.controller.js";
+import { Test } from "@nestjs/testing";
+import { IDENTITY_APPLICATION } from "./auth/identity-http.js";
 import { describe,it,expect,vi,afterEach } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
 import { ApplicationAuthGuard } from "./auth/application-auth.guard.js";
@@ -5,10 +9,15 @@ import { FreeFirstJobLifecycleController } from "./free-first-job-lifecycle.cont
 import { FreeFirstJobLifecycleApplication } from "./free-first-job-lifecycle.application.js";
 import { FreeFirstJobPersistenceError } from "@jobguard/db";
 import type { IdentityApplication } from "./auth/identity.application.js";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 const old=process.env.JOBGUARD_ENV;afterEach(()=>{vi.restoreAllMocks();if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;});
 function context(path:string){return {switchToHttp:()=>({getRequest:()=>({path,headers:{cookie:'jobguard_session=fictional',origin:'https://fixture.invalid','x-tenant-id':'company','x-csrf-token':'csrf'}})})} as unknown as ExecutionContext;}
 describe('MON-3 HTTP boundary',()=>{
+ it('boots the trial controller through Nest injection without emitted type metadata',async()=>{
+  const module=await Test.createTestingModule({controllers:[FreeFirstJobLifecycleController,QuoteController],providers:[{provide:Pool,useValue:{}},{provide:IDENTITY_APPLICATION,useValue:()=>({})}]}).compile();
+  try{expect(module.get(FreeFirstJobLifecycleController)).toBeInstanceOf(FreeFirstJobLifecycleController);expect(module.get(QuoteController)).toBeInstanceOf(QuoteController);}
+  finally{await module.close();}
+ });
  it('permits only the new normal-session trial and activation paths after authenticating the principal',async()=>{
   process.env.JOBGUARD_ENV='synthetic_demo';const identity={context:vi.fn(async()=>({}))} as unknown as IdentityApplication;
   const guard=new ApplicationAuthGuard(()=>identity);

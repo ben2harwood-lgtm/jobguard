@@ -8,7 +8,7 @@ import type { IdentityApplication } from "./auth/identity.application.js";
 @ApiTags("trial")
 @Controller("jobs/:id")
 export class FreeFirstJobLifecycleController {
- constructor(private readonly pool:Pool,@Inject(IDENTITY_APPLICATION) private readonly identity:()=>IdentityApplication){}
+ constructor(@Inject(Pool) private readonly pool:Pool,@Inject(IDENTITY_APPLICATION) private readonly identity:()=>IdentityApplication){}
  private async run(request:IdentityHttpRequest,jobId:string,action:"read"|"command"|"activate",raw?:unknown){
   try{
    const credentials={sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin};

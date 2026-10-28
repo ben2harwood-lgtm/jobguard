@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,describe,it,expect } from "vitest";
 import { createWorkFixture,closeWorkFixture,meterCompany,verifyBusiness,requestCard,recordCard,resultFixture,workTenant,type WorkFixture } from "./free-first-job-admission-fixtures.js";
 import { keyParent,snapshot,store } from "./free-first-job-keys-fixtures.js";
-import { seedWorkJob } from "./job-work-state-fixtures.js";
+import { prepareWorkAccount, seedWorkJob } from "./job-work-state-fixtures.js";
 import { FreeFirstJobLifecycleRepository } from "../src/free-first-job-lifecycle-repository.js";
 import { exactTarget, firstTrialFixture as first } from "./free-first-job-lifecycle-fixtures.js";
+import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
+import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 describe("MON-3 END source persistence, company isolation and races",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture();},60000);afterAll(async()=>closeWorkFixture(f));
  it("starts from the immutable activation and retains sources without changing keys or Final Check",async()=>{
@@ -22,6 +24,54 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
    await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
    await expect(repo.read(a.context,a.digest,a.jobId)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
+ });
+ it("real lock and close triggers capture exact trial sources once; reopen cannot restore the free trial",async()=>{
+  const a=await first(f),lockRepo=new FinalAccountLockRepository(f.runtime),workRepo=new JobWorkStateRepository(f.runtime);
+  const scopeId=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].id as typeof a.scopeId;
+  const account=await prepareWorkAccount(f,{...a,scopeId});
+  await lockRepo.acceptTerms(a.context,{actorMembershipId:a.actorId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
+  await lockRepo.disposition(a.context,{jobId:a.jobId,actorMembershipId:a.actorId,commandId:randomUUID(),scopeItemId:scopeId,disposition:'done'});
+  const input={jobId:a.jobId,actorMembershipId:a.actorId,commandId:randomUUID(),finalAccountRevisionId:account.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
+  // No trigger bypass: both commands must commit, and their AFTER triggers must capture.
+  await expect(lockRepo.lock(a.context,{...input,finalAccountRevisionId:randomUUID()})).rejects.toThrow('STALE_REVISION');
+  const locked=await lockRepo.lock(a.context,input);
+  expect(await lockRepo.lock(a.context,input)).toEqual(locked);
+  const sources=async()=>(await f.admin.query(`SELECT s.trial_id,s.source_id,s.job_id,s.kind,
+   CASE WHEN s.kind='lock' THEN s.effective_at=l.locked_at ELSE s.effective_at=e.fact_at END exact_time
+   FROM app.trial_end_source s LEFT JOIN app.final_account_lock l ON(l.tenant_id,l.job_id,l.id)=(s.tenant_id,s.job_id,s.source_id)
+   LEFT JOIN app.job_work_state_event e ON(e.tenant_id,e.job_id,e.id)=(s.tenant_id,s.job_id,s.source_id)
+   WHERE s.tenant_id=$1 ORDER BY s.kind`,[a.tenantId])).rows;
+  expect(await sources()).toEqual([{trial_id:a.trialId,source_id:locked.id,job_id:a.jobId,kind:'lock',exact_time:true}]);
+  const close={version:'job-work-state-command.v1',commandId:randomUUID(),expectedRevision:0,action:'close',reason:'completed_outside_jobguard',note:'Fictional completion'};
+  const closed=await workRepo.command(a.context,a.jobId,a.actorId,close),event=closed.events.at(-1)!;
+  expect(event.kind).toBe('closed');
+  expect(await workRepo.command(a.context,a.jobId,a.actorId,close)).toEqual(closed);
+  await expect(workRepo.command(a.context,a.jobId,a.actorId,{...close,note:'Changed fictional completion'})).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+  const captured=[{trial_id:a.trialId,source_id:event.id,job_id:a.jobId,kind:'close',exact_time:true},{trial_id:a.trialId,source_id:locked.id,job_id:a.jobId,kind:'lock',exact_time:true}];
+  expect(await sources()).toEqual(captured);
+  const reopened=await workRepo.command(a.context,a.jobId,a.actorId,{version:'job-work-state-command.v1',commandId:randomUUID(),expectedRevision:closed.events.length,action:'reopen',closeEventId:event.id});
+  expect(reopened.events.at(-1)?.kind).toBe('reopened');
+  expect(await sources()).toEqual(captured);
+  const old=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV='synthetic_demo';
+  try{
+   const repo=new FreeFirstJobLifecycleRepository(f.runtime),view=await repo.read(a.context,a.digest,a.jobId);
+   expect(view.timeline?.active).toBe(false);
+   const b=await meterCompany(f);
+   await expect(repo.read(b.context,b.digest,a.jobId)).rejects.toThrow('FREE_FIRST_JOB_ACCESS_DENIED');
+  }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
+  // Reopening cannot mutate the bill the lock bound, nor can it reverse an end fact.
+  expect((await lockRepo.read(a.context,a.jobId)).lock).toEqual(locked);
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId]))).rejects.toThrow();
+  for(const table of ['platform_statement','journal','recovery_fee_journal','action_outbox']){
+   expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[a.tenantId])).rows[0].n).toBe(0);
+  }
+ });
+ it("closing another job or another company cannot end the trial",async()=>{
+  const a=await first(f),otherJob=await seedWorkJob(f,a.tenantId),b=await meterCompany(f),repo=new JobWorkStateRepository(f.runtime);
+  for(const target of [otherJob,b]){
+   await repo.command(target.context,target.jobId,target.actorId,{version:'job-work-state-command.v1',commandId:randomUUID(),expectedRevision:0,action:'close',reason:'other',note:'Fictional unrelated closure'});
+  }
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_end_source WHERE tenant_id=ANY($1::uuid[])",[[a.tenantId,b.tenantId]])).rows[0].n).toBe(0);
  });
  it("two first admissions cannot create two trials even with disjoint fixture keys",async()=>{
   const a=await meterCompany(f),verification=await verifyBusiness(f,a);

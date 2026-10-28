@@ -4,16 +4,7 @@
     "/jobs/{id}/trial": {
       "get": {
         "operationId": "FreeFirstJobLifecycleController_read",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -26,16 +17,7 @@
       },
       "post": {
         "operationId": "FreeFirstJobLifecycleController_command",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -47,9 +29,67 @@
         ]
       }
     },
-    "/contractor/jobs/{id}/possible-extras": {
+    "/jobs/{id}/success-fee-attribution": {
       "get": {
-        "operationId": "EnterpriseLivePromptController_list",
+        "operationId": "RecoveryAttributionController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic proposed principal-only attribution history; current qualification held",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAttributionController_post",
+        "parameters": [],
+        "responses": {
+          "503": {
+            "description": "Execution held pending accepted source, authorization and audit dependencies"
+          }
+        },
+        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      }
+    },
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing": {
+      "get": {
+        "operationId": "BillingController_read",
         "parameters": [
           {
             "name": "id",
@@ -59,7 +99,182 @@
               "format": "uuid",
               "type": "string"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted immutable export artifacts, current allocation runs, quarantine history and delivery status"
+          }
+        },
+        "summary": "Read persisted synthetic contractor billing and reconciliation",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{batchId}/download": {
+      "get": {
+        "operationId": "BillingController_download",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact persisted CSV after approved fake download delivery",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{action}": {
+      "post": {
+        "operationId": "BillingController_write",
+        "parameters": [
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "export",
+                "import",
+                "approve-delivery",
+                "advance-delivery"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check": {
+      "get": {
+        "operationId": "FinalCheckController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read lock-bound synthetic final-check result",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/dispositions": {
+      "post": {
+        "operationId": "FinalCheckController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/runs": {
+      "post": {
+        "operationId": "FinalCheckController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Practice only: ask the worker to run the final check for this locked job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/disputes": {
+      "get": {
+        "operationId": "FinalCheckController_disputes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read unresolved attribution disputes for this job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras": {
+      "get": {
+        "operationId": "EnterpriseLivePromptController_list",
+        "parameters": [
           {
             "name": "after",
             "required": false,
@@ -77,6 +292,15 @@
               "minimum": 1,
               "maximum": 100,
               "type": "number"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -96,7 +320,7 @@
         "operationId": "EnterpriseLivePromptController_detail",
         "parameters": [
           {
-            "name": "id",
+            "name": "promptId",
             "required": true,
             "in": "path",
             "schema": {
@@ -105,7 +329,7 @@
             }
           },
           {
-            "name": "promptId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -361,7 +585,7 @@
         "operationId": "EnterpriseLivePromptController_confirm",
         "parameters": [
           {
-            "name": "id",
+            "name": "promptId",
             "required": true,
             "in": "path",
             "schema": {
@@ -370,7 +594,7 @@
             }
           },
           {
-            "name": "promptId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -440,7 +664,7 @@
         "operationId": "EnterpriseLivePromptController_dismiss",
         "parameters": [
           {
-            "name": "id",
+            "name": "promptId",
             "required": true,
             "in": "path",
             "schema": {
@@ -449,7 +673,7 @@
             }
           },
           {
-            "name": "promptId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -510,24 +734,7 @@
     "/jobs/{id}/diary": {
       "get": {
         "operationId": "JobSourceController_diary",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "job-diary-read.v1: immutable original text, exact evidence binding and standing notice"
@@ -542,24 +749,7 @@
     "/jobs/{id}/customer-messages": {
       "get": {
         "operationId": "JobSourceController_messages",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "customer-message-read.v1: named fictional customer and separate actual tester attribution"
@@ -589,16 +779,7 @@
     "/contractor/practice/workers/{workerId}/acting-as": {
       "post": {
         "operationId": "PracticeWorkerSwitchController_start",
-        "parameters": [
-          {
-            "name": "workerId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -682,16 +863,7 @@
     "/auth/scim/{connectionId}/deactivations": {
       "post": {
         "operationId": "ScimController_deactivate",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -1071,20 +1243,20 @@
         "operationId": "SiteExtraPricingController_sorItems",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
             "name": "q",
             "required": true,
             "in": "query",
             "description": "1 to 80 characters after trimming",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -1104,15 +1276,6 @@
       "get": {
         "operationId": "SiteExtraPricingController_orderCheck",
         "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
           {
             "name": "orderLine",
             "required": false,
@@ -1135,6 +1298,15 @@
             "required": true,
             "in": "query",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -1229,7 +1401,7 @@
         "operationId": "SiteVisitController_complete",
         "parameters": [
           {
-            "name": "id",
+            "name": "visitId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1238,7 +1410,7 @@
             }
           },
           {
-            "name": "visitId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -1591,16 +1763,7 @@
     "/auth/sso/{connectionId}/start": {
       "get": {
         "operationId": "SsoController_view",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "sso-admin-view.v1; tenant scoped; current admin and CSRF required"
@@ -1613,16 +1776,7 @@
       },
       "post": {
         "operationId": "SsoController_start",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -1739,16 +1893,7 @@
     "/auth/sso/{connectionId}/callback": {
       "post": {
         "operationId": "SsoController_callback",
-        "parameters": [
-          {
-            "name": "connectionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -1795,16 +1940,7 @@
     "/contractor/audit-exports": {
       "get": {
         "operationId": "AuditExportController_list",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -1859,16 +1995,7 @@
     "/recovery-cases/{id}/follow-ups": {
       "get": {
         "operationId": "RecoveryFollowUpController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -1881,16 +2008,7 @@
       },
       "post": {
         "operationId": "RecoveryFollowUpController_schedule",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -1905,24 +2023,7 @@
     "/recovery-cases/{id}/follow-ups/{followUpId}/commands": {
       "post": {
         "operationId": "RecoveryFollowUpController_command",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "followUpId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -1937,16 +2038,7 @@
     "/recovery-cases/{id}/messages": {
       "get": {
         "operationId": "RecoveryMessageController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -1959,16 +2051,7 @@
       },
       "post": {
         "operationId": "RecoveryMessageController_preview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -1983,24 +2066,7 @@
     "/recovery-cases/{id}/messages/{messageId}/commands": {
       "post": {
         "operationId": "RecoveryMessageController_command",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "messageId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2015,24 +2081,7 @@
     "/jobs/{id}/prevention-checks": {
       "get": {
         "operationId": "PreventionCheckController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "401": {
             "description": "Missing or invalid practice session"
@@ -2050,32 +2099,7 @@
     "/jobs/{id}/prevention-checks/{action}": {
       "post": {
         "operationId": "PreventionCheckController_command",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "action",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -2227,16 +2251,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "requested_tenant_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
+              "format": "uuid"
             }
           }
         ],
@@ -2278,16 +2293,7 @@
     "/sandbox/runs/{id}": {
       "get": {
         "operationId": "SandboxController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2301,16 +2307,7 @@
     "/sandbox/runs/{id}/reset": {
       "post": {
         "operationId": "SandboxController_reset",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2324,16 +2321,7 @@
     "/sandbox/runs/{id}/archive": {
       "post": {
         "operationId": "SandboxController_archive",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2347,16 +2335,7 @@
     "/sandbox/runs/{id}/advance": {
       "post": {
         "operationId": "SandboxController_advance",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2370,24 +2349,7 @@
     "/jobs/{id}/quotes": {
       "get": {
         "operationId": "QuoteController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2400,24 +2362,7 @@
       },
       "post": {
         "operationId": "QuoteController_save",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2432,24 +2377,7 @@
     "/jobs/{id}/quotes/acceptance": {
       "get": {
         "operationId": "QuoteController_acceptance",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2462,24 +2390,7 @@
       },
       "post": {
         "operationId": "QuoteController_accept",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2494,24 +2405,7 @@
     "/jobs/{id}/quotes/acceptance/disposition": {
       "post": {
         "operationId": "QuoteController_disposition",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2526,24 +2420,7 @@
     "/jobs/{id}/quotes/activation": {
       "get": {
         "operationId": "QuoteController_activation",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2556,24 +2433,7 @@
       },
       "post": {
         "operationId": "QuoteController_activate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2588,24 +2448,7 @@
     "/jobs/{id}/quotes/preview": {
       "post": {
         "operationId": "QuoteController_preview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2620,24 +2463,7 @@
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2650,24 +2476,7 @@
       },
       "post": {
         "operationId": "VariationController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2685,32 +2494,7 @@
     "/decisions": {
       "get": {
         "operationId": "DecisionsController_list",
-        "parameters": [
-          {
-            "name": "x-jobguard-verified-tenant",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "jobId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2724,16 +2508,7 @@
     "/decisions/evaluate": {
       "post": {
         "operationId": "DecisionsController_evaluate",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2747,16 +2522,7 @@
     "/decisions/resolve": {
       "post": {
         "operationId": "DecisionsController_resolve",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2770,24 +2536,7 @@
     "/jobs/{id}/proof": {
       "get": {
         "operationId": "ProofController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2799,24 +2548,7 @@
       },
       "post": {
         "operationId": "ProofController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2880,24 +2612,7 @@
     "/jobs/{id}/fee-illustration": {
       "get": {
         "operationId": "FeeIllustrationController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2910,24 +2625,7 @@
       },
       "post": {
         "operationId": "FeeIllustrationController_create",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2942,24 +2640,7 @@
     "/jobs/{id}/fee-illustration/what-if": {
       "post": {
         "operationId": "FeeIllustrationController_whatIf",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -2974,24 +2655,7 @@
     "/jobs/{id}/final-account": {
       "get": {
         "operationId": "FinalAccountController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3004,24 +2668,7 @@
       },
       "post": {
         "operationId": "FinalAccountController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3036,24 +2683,7 @@
     "/jobs/{id}/customer-invoices": {
       "get": {
         "operationId": "CustomerInvoiceController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3066,24 +2696,7 @@
       },
       "post": {
         "operationId": "CustomerInvoiceController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3098,32 +2711,7 @@
     "/jobs/{id}/customer-invoices/{invoiceId}/pdf": {
       "get": {
         "operationId": "CustomerInvoiceController_pdf",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3137,32 +2725,7 @@
     "/jobs/{id}/customer-invoices/{invoiceId}/credit-notes": {
       "get": {
         "operationId": "CustomerInvoiceController_creditView",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3174,32 +2737,7 @@
       },
       "post": {
         "operationId": "CustomerInvoiceController_credit",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3213,32 +2751,7 @@
     "/jobs/{id}/customer-invoices/{invoiceId}/credit-notes/preview": {
       "post": {
         "operationId": "CustomerInvoiceController_preview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3252,32 +2765,7 @@
     "/jobs/{id}/customer-invoices/{invoiceId}/receipts": {
       "get": {
         "operationId": "CustomerInvoiceController_receipts",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3289,32 +2777,7 @@
       },
       "post": {
         "operationId": "CustomerInvoiceController_receipt",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3328,32 +2791,7 @@
     "/jobs/{id}/customer-invoices/{invoiceId}/receipts/reversals": {
       "post": {
         "operationId": "CustomerInvoiceController_reverse",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "invoiceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3367,24 +2805,7 @@
     "/jobs/{id}/materials": {
       "get": {
         "operationId": "MaterialController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3397,24 +2818,7 @@
       },
       "post": {
         "operationId": "MaterialController_requirement",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3429,16 +2833,7 @@
     "/material-rates": {
       "post": {
         "operationId": "MaterialController_rate",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3453,24 +2848,7 @@
     "/jobs/{id}/value": {
       "get": {
         "operationId": "ValueController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3485,24 +2863,7 @@
     "/jobs/{id}/purchase-orders": {
       "get": {
         "operationId": "PurchaseOrderController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3517,24 +2878,7 @@
     "/jobs/{id}/purchase-orders/revisions": {
       "post": {
         "operationId": "PurchaseOrderController_revise",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3599,24 +2943,7 @@
     "/jobs/{id}/purchase-orders/placement": {
       "post": {
         "operationId": "PurchaseOrderController_place",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3681,24 +3008,7 @@
     "/jobs/{id}/supplier-documents": {
       "get": {
         "operationId": "SupplierDocumentController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3713,24 +3023,7 @@
     "/jobs/{id}/supplier-documents/intake": {
       "post": {
         "operationId": "SupplierDocumentController_intake",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3795,24 +3088,7 @@
     "/jobs/{id}/supplier-documents/receipts": {
       "post": {
         "operationId": "SupplierDocumentController_receipt",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3849,24 +3125,7 @@
     "/jobs/{id}/supplier-documents/facts/confirm": {
       "post": {
         "operationId": "SupplierDocumentController_confirm",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3903,24 +3162,7 @@
     "/jobs/{id}/supplier-matches": {
       "get": {
         "operationId": "SupplierMatchController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3933,24 +3175,7 @@
       },
       "post": {
         "operationId": "SupplierMatchController_create",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -3987,24 +3212,7 @@
     "/jobs/{id}/supplier-matches/corrections": {
       "post": {
         "operationId": "SupplierMatchController_correct",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4041,24 +3249,7 @@
     "/jobs/{id}/recovery-cases": {
       "get": {
         "operationId": "RecoveryCaseController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4071,24 +3262,7 @@
       },
       "post": {
         "operationId": "RecoveryCaseController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4103,24 +3277,7 @@
     "/jobs/{id}/recovery-cases/terms": {
       "post": {
         "operationId": "RecoveryCaseController_terms",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4135,24 +3292,7 @@
     "/jobs/{id}/recovery-cases/eligibility": {
       "post": {
         "operationId": "RecoveryCaseController_eligibility",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4167,24 +3307,7 @@
     "/jobs/{id}/things-to-check": {
       "get": {
         "operationId": "ThingsToCheckController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4199,24 +3322,7 @@
     "/jobs/{id}/things-to-check/evaluate": {
       "post": {
         "operationId": "ThingsToCheckController_evaluate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4253,24 +3359,7 @@
     "/jobs/{id}/things-to-check/review": {
       "post": {
         "operationId": "ThingsToCheckController_review",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4307,24 +3396,7 @@
     "/jobs/{id}/things-to-check/supersede-bill": {
       "post": {
         "operationId": "ThingsToCheckController_supersede",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4361,24 +3433,7 @@
     "/jobs/{id}/readiness": {
       "get": {
         "operationId": "ReadinessController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4393,24 +3448,7 @@
     "/jobs/{id}/readiness/plan": {
       "post": {
         "operationId": "ReadinessController_plan",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4447,24 +3485,7 @@
     "/jobs/{id}/readiness/advance": {
       "post": {
         "operationId": "ReadinessController_advance",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4501,24 +3522,7 @@
     "/jobs/{id}/relevance-inbox": {
       "get": {
         "operationId": "InboxRelevanceController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4533,24 +3537,7 @@
     "/jobs/{id}/relevance-inbox/seed": {
       "post": {
         "operationId": "InboxRelevanceController_seed",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4587,24 +3574,7 @@
     "/jobs/{id}/relevance-inbox/budget": {
       "post": {
         "operationId": "InboxRelevanceController_budget",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4619,32 +3589,7 @@
     "/jobs/{id}/relevance-inbox/{decisionId}/dismiss": {
       "post": {
         "operationId": "InboxRelevanceController_dismiss",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "decisionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4681,24 +3626,7 @@
     "/jobs/{id}/commercial-integrity": {
       "get": {
         "operationId": "CommercialIntegrityController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4713,24 +3641,7 @@
     "/jobs/{id}/commercial-integrity/reviews": {
       "post": {
         "operationId": "CommercialIntegrityController_review",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4745,16 +3656,7 @@
     "/recovery-cases/{id}/evidence-packs": {
       "get": {
         "operationId": "EvidencePackController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4767,16 +3669,7 @@
       },
       "post": {
         "operationId": "EvidencePackController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4791,24 +3684,7 @@
     "/recovery-cases/{id}/evidence-packs/{packId}/attachment-approval": {
       "post": {
         "operationId": "EvidencePackController_approve",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "packId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -4823,24 +3699,7 @@
     "/recovery-cases/{id}/evidence-packs/{packId}/inspect": {
       "get": {
         "operationId": "EvidencePackController_inspect",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "packId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4855,24 +3714,7 @@
     "/recovery-cases/{id}/evidence-packs/{packId}/download": {
       "get": {
         "operationId": "EvidencePackController_download",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "packId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4901,32 +3743,7 @@
     "/contractor": {
       "get": {
         "operationId": "ContractorController_read",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resource",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -4990,14 +3807,6 @@
               "format": "uuid",
               "type": "string"
             }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -5014,16 +3823,7 @@
     "/contractor/work-order-imports": {
       "get": {
         "operationId": "WorkOrderController_overview",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -5060,14 +3860,6 @@
               "format": "uuid",
               "type": "string"
             }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -5093,14 +3885,6 @@
               "format": "uuid",
               "type": "string"
             }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -5117,16 +3901,7 @@
     "/contractor/sor-versions": {
       "get": {
         "operationId": "WorkOrderController_sorVersions",
-        "parameters": [
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -5163,14 +3938,6 @@
               "format": "uuid",
               "type": "string"
             }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -5196,14 +3963,6 @@
               "format": "uuid",
               "type": "string"
             }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -5226,16 +3985,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "requested_tenant_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
+              "format": "uuid"
             }
           }
         ],
@@ -5257,16 +4007,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "requested_tenant_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
+              "format": "uuid"
             }
           }
         ],
@@ -5290,8 +4031,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "format": "uuid",
-              "type": "string"
+              "format": "uuid"
             }
           }
         ],
@@ -5326,15 +4066,6 @@
         "operationId": "PracticeFeedController_get",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "cursor",
             "required": false,
             "in": "query",
@@ -5351,6 +4082,15 @@
               "minimum": 1,
               "maximum": 50,
               "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -5829,15 +4569,6 @@
         "operationId": "PracticeFactsController_get",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "cursor",
             "required": false,
             "in": "query",
@@ -5854,6 +4585,15 @@
               "minimum": 1,
               "maximum": 50,
               "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -6073,24 +4813,7 @@
     "/jobs/{id}/final-account/lock": {
       "get": {
         "operationId": "FinalAccountLockController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -6103,24 +4826,7 @@
       },
       "post": {
         "operationId": "FinalAccountLockController_lock",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -6135,24 +4841,7 @@
     "/jobs/{id}/final-account/dispositions": {
       "post": {
         "operationId": "FinalAccountLockController_disposition",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -6167,24 +4856,7 @@
     "/jobs/{id}/final-account/terms": {
       "post": {
         "operationId": "FinalAccountLockController_terms",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -6199,24 +4871,7 @@
     "/jobs/{id}/final-account/review-extras": {
       "post": {
         "operationId": "FinalAccountLockController_extra",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -6662,24 +5317,7 @@
     "/jobs/{id}/work-state": {
       "get": {
         "operationId": "JobWorkStateController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
@@ -6692,24 +5330,7 @@
       },
       "post": {
         "operationId": "JobWorkStateController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cookie",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "201": {
             "description": "Durable first command result; replay returns the same snapshot"

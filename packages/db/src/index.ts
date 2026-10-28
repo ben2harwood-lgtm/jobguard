@@ -109,6 +109,9 @@ export * from "./job-source-observation-reader.js";
 export * from "./job-source-fixtures.js";
 export * from "./enterprise-dashboard-repository.js";
 export * from "./practice-worker-switch-repository.js";
+export * from "./contractor-billing-repository.js";
+export * from "./enterprise-fee-repository.js";
+export * from "./contractor-billing-delivery.js";
 
 export * from "./meter-persistence.js";
 export * from "./meter-repository.js";
@@ -130,3 +133,10 @@ export { ContractorRetainedReadRepository } from "./contractor-retained-read-rep
 export * from "./free-first-job-eligibility-repository.js";
 
 export * from "./free-first-job-lifecycle-repository.js";
+export * from "./recovery-attribution-repository.js";
+export * from "./final-check-repository.js";
+export * from "./final-check-source-reader.js";
+
+export * from "./meter-today-repository.js";
+export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
+export * from "./enterprise-baseline-repository.js";

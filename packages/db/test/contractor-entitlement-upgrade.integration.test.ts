@@ -20,8 +20,8 @@ it("actual catalogs retain least privilege",async()=>{
  const routines=(await c.admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname IN('mon8_contractor_agreement_context','mon8_agreement_status_guard') ORDER BY p.proname`)).rows;
  expect(routines).toEqual([{proname:"mon8_agreement_status_guard",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],runtime:false,infrastructure:false,public:false},{proname:"mon8_contractor_agreement_context",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
 });
-// Per C135: the later SV5PRE migration adds exactly these six empty tables; every pre-existing row still compares in full.
-const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt"];
+// C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
+const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
  "app.job_small_trip_event":[],
  "app.job_small_trip_observation":[],
@@ -40,12 +40,46 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.trial_business_verification":[],
  "app.trial_card_attempt":[],
  "app.trial_card_result":[],
+ "app.enterprise_baseline_batch":[],
+ "app.enterprise_baseline_team":[],
+ "app.billing_allocation_run":[],
+ "app.billing_application_event":[],
+ "app.billing_export_batch":[],
+ "app.billing_export_delivery":[],
+ "app.billing_export_line":[],
+ "app.billing_fact":[],
+ "app.billing_line_match":[],
+ "app.billing_quarantine":[],
+ "app.billing_status_import":[],
+ "app.contractor_receipt_line_allocation":[],
+ "app.receipt_allocation_fact_command":[],
+ "app.receipt_allocation_fact_line":[],
+ "app.receipt_allocation_fact_review":[],
+ "app.receipt_allocation_fact_revision":[],
+ "app.receipt_allocation_fact_source":[],
+ "app.enterprise_agreement_version":[],
+ "app.enterprise_fee_contribution":[],
+ "app.enterprise_fee_derivation":[],
+ "app.enterprise_fee_statement":[],
+ "app.enterprise_fee_statement_approval":[],
+ "app.enterprise_fee_statement_dispute":[],
+ "app.enterprise_fee_statement_section":[],
+ "app.platform_enterprise_fee":[],
+ "app.platform_enterprise_fee_line":[],
+ "app.recovery_attribution_revision":[],
+ "app.recovery_attribution_command":[],
+ "app.recovery_attribution_reassessment":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
- // 0208 successor routine; catalogue order is schema, name, identity arguments.
+ // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname='mon1_capture_small_trip' ORDER BY 1,2,3`)).rows).toEqual([
+ WHERE n.nspname='app' AND p.proname IN ('mon1_admit_place','mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
+ {nspname:"app",proname:"mon1_admit_place",args:"t uuid, j uuid, source_kind text, source_id uuid"},
  {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
+ {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
+ {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
  ]);
  // 0236 successor routine follows 0208; preserve both additive catalogue expectations.
  expect((await c.admin.query("SELECT proname FROM pg_proc WHERE oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure")).rows).toEqual([{proname:"mon3_read_eligibility"}]);

@@ -1,3 +1,4 @@
+import { seedSubscriptionPeriod } from "./subscription-period-fixture";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 const origin="http://127.0.0.1:3000";
 // The session cookie is Secure. Chromium sends it to http://127.0.0.1, but Playwright's APIRequestContext (the `request`
@@ -35,6 +36,38 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  const real=await page.request.post("/api/auth/request",{headers:{origin},data:{version:"identity-request.v1",email:"person@example.com",purpose:"signup"}});expect(real.status()).toBe(403);expect(await real.json()).toEqual({code:"IDENTITY_ROUTE_BLOCKED"});
  const elevation=await page.request.post("/api/auth/request",{headers:{origin},data:{version:"identity-request.v1",email,purpose:"signup",role:"admin"}});expect(elevation.status()).toBe(400);
  const session=await api(page,"/api/auth/session");expect(session.status).toBe(200);
+ // The plans screen must forward this company session's CSRF token and tenant, not fall back to practice sign-in.
+ await page.goto("/plans");
+ await expect(page.getByRole("heading",{name:"Solo and Builder",exact:true})).toBeVisible();
+ await expect(page.getByRole("region",{name:"Your subscription",exact:true})).toContainText("No accepted subscription agreement.");
+ await expect(page.getByRole("link",{name:"Company sign-in",exact:true})).toHaveCount(0);
+ // MON-2A C2/C3: the same entered-code company session explicitly accepts terms and changes plans.
+ const consent=page.getByRole("checkbox",{name:/I accept these monthly terms/});
+ await expect(page.getByRole("button",{name:"Accept monthly terms"})).toBeDisabled();
+ await consent.check();await page.getByRole("button",{name:"Accept monthly terms"}).click();
+ const subscription=page.getByRole("region",{name:"Your subscription",exact:true});
+ await expect(subscription).toContainText("Solo · monthly");
+ await page.getByLabel("Plan",{exact:true}).selectOption("Builder");await consent.check();
+ await page.getByRole("button",{name:"Approve upgrade to Builder"}).click();
+ await expect(subscription).toContainText("Builder · monthly");await expect(subscription).toContainText("£169.00");
+ await page.getByLabel("Plan",{exact:true}).selectOption("Solo");await consent.check();
+ await page.getByRole("button",{name:"Request downgrade to Solo"}).click();
+ await expect(page.getByRole("status")).toContainText("Downgrade requested for");
+ await expect(subscription).toContainText("Builder · monthly");
+ await seedSubscriptionPeriod(tenant!,cookie.value);await page.reload();
+ const payment=page.getByRole("button",{name:/Approve simulated payment of/});
+ await expect(payment).toContainText("£69.00");
+ // No Origin/CSRF-free action, and no arbitrary settlement command, can use the company cookie.
+ const headers={"x-csrf-token":session.body.csrfToken,"x-tenant-id":tenant!};
+ const envelope={version:"subscription-http-command.v1",commandId:crypto.randomUUID(),command:{version:"subscription-command.v1",kind:"record_simulation",workId:crypto.randomUUID(),resultId:crypto.randomUUID(),expectedRevision:2,outcome:"settled"}};
+ expect((await api(page,"/api/subscriptions/commands",{method:"POST",headers,data:envelope})).status).toBe(400);
+ expect((await api(page,"/api/subscriptions/commands",{method:"POST",headers:{"x-tenant-id":tenant!},data:envelope})).status).not.toBe(201);
+ expect((await api(page,"/api/subscriptions/current",{headers:{...headers,"x-tenant-id":crypto.randomUUID()}})).status).not.toBe(200);
+ await payment.click();await expect(page.getByRole("region",{name:"Subscription periods"})).toContainText("Simulated settlement — no real money paid");
+ await expect(payment).toHaveCount(0);await page.reload();
+ await expect(page.getByRole("region",{name:"Subscription periods"})).toContainText("Simulated settlement — no real money paid");
+ await page.goto("/sign-in");
+ await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
  const wrongTenant=await api(page,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":crypto.randomUUID()},data:{version:"identity-invitation.v1",email:"invitee@practice.invalid",requested_tenant_id:tenant,role:"foreman"}});expect(wrongTenant.status).toBe(403);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  // Jobs still uses its separately scoped demo session; returning to identity preserves its own tenant.
