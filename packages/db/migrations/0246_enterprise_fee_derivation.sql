@@ -110,34 +110,13 @@ END $$;
 ALTER FUNCTION app.ef_actor(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.ef_actor(uuid) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 
--- Finance-only, synthetic-only, authority first. Lock order matches billing writes (0243 cb_authority):
--- organisation fence (shared) -> tenant billing lock -> agreement derivation lock -> agreement row -> actor -> audit head last.
--- Amounts are never supplied by the caller: every figure is recomputed here from stored facts.
-CREATE FUNCTION app.ef_derive(p_session uuid,p_command uuid,p_agreement uuid,p_period text) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid; a uuid; ag app.enterprise_agreement_version; existing app.enterprise_fee_derivation;
- cutoff timestamptz; req text; qrows jsonb; inputs jsonb; ih text; acc numeric[]:=ARRAY[0::numeric,1::numeric];
- c record; d uuid:=gen_random_uuid(); fee bigint; seq bigint; prev text; ts timestamptz; ph text; eh text; payload jsonb;
+-- The single source of a derivation's inputs: the qualifying stored facts for one agreement version and month, and
+-- their fingerprint. Derivation records from it; statement approval (ENT-7b) re-reads it to refuse changed facts.
+-- Private: called only from the checked routines, never by the runtime directly.
+CREATE FUNCTION app.ef_inputs(t uuid,ag app.enterprise_agreement_version,p_period text) RETURNS jsonb
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
+DECLARE cutoff timestamptz; qrows jsonb; inputs jsonb; p_agreement uuid:=ag.id;
 BEGIN
- IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'FEE_GATE_CLOSED' USING ERRCODE='42501'; END IF;
- t:=nullif(current_setting('app.tenant_id',true),'')::uuid; a:=app.ef_actor(p_session);
- IF p_command IS NULL OR p_agreement IS NULL OR p_period IS NULL OR p_period !~ '^[2-9][0-9]{3}-(0[1-9]|1[0-2])$' THEN RAISE EXCEPTION 'INVALID_FEE_INPUT' USING ERRCODE='22023'; END IF;
-
- PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
- PERFORM pg_advisory_xact_lock(hashtextextended(t::text,618));
- PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||p_agreement::text||':'||p_period,746));
- SELECT * INTO ag FROM app.enterprise_agreement_version WHERE tenant_id=t AND id=p_agreement FOR SHARE;
- IF ag.id IS NULL THEN RAISE EXCEPTION 'FEE_NOT_FOUND' USING ERRCODE='P0002'; END IF;
- PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a FOR SHARE;
- IF NOT coalesce(app.contractor_member_active(a),false) THEN RAISE EXCEPTION 'EXTRA_FORBIDDEN' USING ERRCODE='42501'; END IF;
-
- req:=app.final_lock_hash(jsonb_build_object('command','DeriveEnterpriseFee','agreement',p_agreement,'period',p_period));
- SELECT * INTO existing FROM app.enterprise_fee_derivation WHERE tenant_id=t AND command_id=p_command;
- IF existing.id IS NOT NULL THEN
-  IF existing.request_hash<>req THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
-  RETURN jsonb_build_object('derivationId',existing.id,'replayed',true);
- END IF;
-
  -- Calendar month in Europe/London; cumulative principal is everything recorded before the cut-off.
  cutoff:=((p_period||'-01 00:00:00')::timestamp+interval '1 month') AT TIME ZONE 'Europe/London';
  IF ag.effective_from>=cutoff THEN RAISE EXCEPTION 'INVALID_FEE_INPUT' USING ERRCODE='22023'; END IF;
@@ -166,7 +145,40 @@ BEGIN
  inputs:=jsonb_build_object('agreement',ag.id,'agreementHash',ag.content_hash,'period',p_period,
   'cutoff',to_char(cutoff AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'rows',(SELECT coalesce(jsonb_agg(jsonb_build_array(x->>'allocation_id',x->>'n',x->>'dd')),'[]'::jsonb) FROM jsonb_array_elements(qrows) x));
- ih:=app.final_lock_hash(inputs);
+ RETURN jsonb_build_object('rows',qrows,'hash',app.final_lock_hash(inputs),'cutoff',to_char(cutoff AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
+END $$;
+ALTER FUNCTION app.ef_inputs(uuid,app.enterprise_agreement_version,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ef_inputs(uuid,app.enterprise_agreement_version,text) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+
+-- Finance-only, synthetic-only, authority first. Lock order matches billing writes (0243 cb_authority):
+-- organisation fence (shared) -> tenant billing lock -> agreement derivation lock -> agreement row -> actor -> audit head last.
+-- Amounts are never supplied by the caller: every figure is recomputed here from stored facts.
+CREATE FUNCTION app.ef_derive(p_session uuid,p_command uuid,p_agreement uuid,p_period text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; a uuid; ag app.enterprise_agreement_version; existing app.enterprise_fee_derivation;
+ cutoff timestamptz; req text; qrows jsonb; fx jsonb; ih text; acc numeric[]:=ARRAY[0::numeric,1::numeric];
+ c record; d uuid:=gen_random_uuid(); fee bigint; seq bigint; prev text; ts timestamptz; ph text; eh text; payload jsonb;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'FEE_GATE_CLOSED' USING ERRCODE='42501'; END IF;
+ t:=nullif(current_setting('app.tenant_id',true),'')::uuid; a:=app.ef_actor(p_session);
+ IF p_command IS NULL OR p_agreement IS NULL OR p_period IS NULL OR p_period !~ '^[2-9][0-9]{3}-(0[1-9]|1[0-2])$' THEN RAISE EXCEPTION 'INVALID_FEE_INPUT' USING ERRCODE='22023'; END IF;
+
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,618));
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||p_agreement::text||':'||p_period,746));
+ SELECT * INTO ag FROM app.enterprise_agreement_version WHERE tenant_id=t AND id=p_agreement FOR SHARE;
+ IF ag.id IS NULL THEN RAISE EXCEPTION 'FEE_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a FOR SHARE;
+ IF NOT coalesce(app.contractor_member_active(a),false) THEN RAISE EXCEPTION 'EXTRA_FORBIDDEN' USING ERRCODE='42501'; END IF;
+
+ req:=app.final_lock_hash(jsonb_build_object('command','DeriveEnterpriseFee','agreement',p_agreement,'period',p_period));
+ SELECT * INTO existing FROM app.enterprise_fee_derivation WHERE tenant_id=t AND command_id=p_command;
+ IF existing.id IS NOT NULL THEN
+  IF existing.request_hash<>req THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+  RETURN jsonb_build_object('derivationId',existing.id,'replayed',true);
+ END IF;
+
+ fx:=app.ef_inputs(t,ag,p_period); qrows:=fx->'rows'; ih:=fx->>'hash'; cutoff:=(fx->>'cutoff')::timestamptz;
  SELECT * INTO existing FROM app.enterprise_fee_derivation WHERE tenant_id=t AND agreement_version_id=p_agreement AND period=p_period AND input_hash=ih;
  IF existing.id IS NOT NULL THEN RETURN jsonb_build_object('derivationId',existing.id,'replayed',true); END IF;
 
