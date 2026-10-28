@@ -1191,7 +1191,6 @@
 {"key":"owner|routine|function:app.ef_dispute_statement(uuid,uuid,uuid,text)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.ef_approve_statement(uuid,uuid,uuid,text,bigint,timestamp with time zone)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.ef_read_statement(uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.ef_posted_net(uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.ef_post_statement(uuid,uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.ef_read_postings(uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.cb_delivery(uuid,uuid,uuid,jsonb)|jobguard_migration","group":"a-owner-routines"},
