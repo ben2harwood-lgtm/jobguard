@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-test-o": {
+      "branches": [
+        "codex/sandbox/sv7a-test-o"
+      ],
+      "note": "RED SV-7A Test O DB proof on the checked intake writer (PR 354): a diary note omitted at lock is revealed by the Final Check. Test only.",
+      "allow": [
+        "packages/db/test/job-source-test-o.integration.test.ts"
+      ]
+    }
+  }
+}
