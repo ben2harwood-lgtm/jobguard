@@ -33,7 +33,6 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
  };
  return <section id="final-check" className={styles.panel} aria-labelledby="final-check-title" aria-busy={busy} data-testid="final-check-reveal">
   <h2 id="final-check-title">JobGuard's final check</h2>
-  <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
   {error && <p role="alert">{error}</p>}
   {read && <>
    <p role="status" data-testid="final-check-status">{revealStatus(read)}</p>
