@@ -22,7 +22,8 @@ Solo additions beyond six committed places are refused with a plain message.
 Same customer/site grouping and small allowances come from stored server facts.
 Builder remains unblocked; first evidence and automatic trips are never refused
 because of the cap. Legacy live imports without accepted activation/small-trip
-terms remain explicitly `CAPACITY_ADMISSION_UNAVAILABLE`; their amount is never
+terms make the snapshot unavailable, and admission explicitly refuses with
+`CAPACITY_ADMISSION_UNAVAILABLE`; unrelated source writes still commit. Their amount is never
 used to guess classification or omit them from a capacity decision. Missing
 agreements and shared practice-company admission remain refused.
 
@@ -42,8 +43,8 @@ runtime table grant, credential, supplied count, billing action or issued-period
 edit. Administrative finalization assigns the same narrow owner. The prior
 stored counted reader and its stale-source refusal remain tested separately.
 
-The browser journey reads the real authenticated screen after real repository
-photo/work commands. Parent activations and the historical seven-day boundary
+The browser journey reads the real authenticated screen after photo source
+events and authenticated work-command HTTP requests. Parent activations and the historical seven-day boundary
 are explicit synthetic fixtures; there is no backdating API or fake meter route.
 It proves start, finish tail, stop, restart, replay, real grace admission, seventh
 place refusal and cross-company command denial. Disabled shared-practice
@@ -63,3 +64,20 @@ An independent RED review and required green CI remain merge gates.
 Forward fix only. Preserve immutable ledger/history. If admission must be disabled,
 restore the private refusal and disable new work commands with a new migration.
 Keep stale counted reads refused. Never turn a cached counter into bill authority.
+
+## Repair round 1
+
+Unknown live-import capacity now returns an unavailable snapshot from refresh
+rather than raising inside unrelated AFTER triggers. Admission alone rejects
+that snapshot; no cached or partial count authorizes a new place. The regression
+suite adopts a real fictional job without activation terms and exercises checked
+subscription acceptance, Solo-to-Builder change, finish/replay, close, ongoing
+photo activity and a real final-account SQL lock, while admission still refuses.
+Site-activity admission is limited to actual activation-backed restarts.
+
+MON1-J drives the new authenticated synthetic normal-company work-command HTTP
+route from the browser, alongside real meter reads. Source snapshots are reused
+by deterministic tenant/date/input keys rather than appended on every GET.
+The public final-account SQL routine takes 184 before job/variation/audit locks,
+so direct SQL entry does not rely on the refresh trigger to acquire it late.
+Required real-PostgreSQL and browser runs remain CI work in this sandbox.

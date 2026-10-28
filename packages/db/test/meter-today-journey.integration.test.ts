@@ -19,8 +19,12 @@ it("real site evidence and work commands refresh the screen; replay and foreign 
  const reader = new MeterTodayRepository(f.runtime), commands = new JobWorkStateRepository(f.runtime);
  const read = () => reader.read(a.context,a.digest);
  expect(await read()).toMatchObject({countedPlaces:0,plan:"Solo"});
+ const revisions=async()=>Number((await f.admin.query("SELECT count(*) n FROM app.meter_lifecycle_source WHERE tenant_id=$1",[a.tenantId])).rows[0].n);
+ expect(await revisions()).toBe(1);
+ await Promise.all([read(),read()]); expect(await revisions()).toBe(1);
  await insertPhoto(f,a,new Date().toISOString());
  expect((await read()).countedPlaces).toBe(1);
+ expect(await revisions()).toBe(2); await read(); expect(await revisions()).toBe(2);
  const raw={version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:1,action:"finish"};
  const finished=await commands.command(a.context,a.jobId,a.actorId,raw);
  expect((await read()).countedPlaces).toBe(1); // finishing keeps the seven-day tail

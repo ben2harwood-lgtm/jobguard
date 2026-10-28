@@ -5,10 +5,15 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED: MON-1 parts 4-5; real committed-place admission and authenticated fresh-source meter display, migration 0305. Synthetic parents and historical boundary fixtures; real repository commands and browser meter reads. PostgreSQL/browser CI and independent RED review required.",
+      "note": "RED repair round 1: MON-1 parts 4-5. Unknown imports cannot poison source writes; admission remains unavailable. Browser HTTP work commands, source reuse and early SQL final lock. PostgreSQL/browser execution and exact-head independent RED review required.",
       "allow": [
         "apps/api/src/job-work-state-capacity.test.ts",
         "apps/api/src/job-work-state.errors.ts",
+        "apps/api/src/meter-today.application.ts",
+        "apps/api/src/meter-work-state.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.ts",
+        "apps/web/app/lib/meter-server.ts",
         "apps/web/app/meter/meter-screen.test.tsx",
         "apps/web/app/ui/job-work-state.tsx",
         "apps/web/e2e/MON1-J.spec.mts",
@@ -19,6 +24,7 @@
         "packages/db/migration-notes/0305_meter_work_admission.md",
         "packages/db/migrations/0305_meter_work_admission.sql",
         "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/index.ts",
         "packages/db/src/job-work-state-repository.ts",
         "packages/db/src/meter-lifecycle-repository.test.ts",
         "packages/db/src/meter-today-repository.test.ts",
@@ -28,6 +34,7 @@
         "packages/db/src/tenant-context.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/meter-import-refresh.integration.test.ts",
         "packages/db/test/meter-journey-fixtures.ts",
         "packages/db/test/meter-today-journey.integration.test.ts",
         "packages/db/test/meter-today.integration.test.ts",

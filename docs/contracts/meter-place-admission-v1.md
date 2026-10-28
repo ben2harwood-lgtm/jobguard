@@ -69,7 +69,7 @@ replays verify the stored result; mismatches refuse the entire command.
 Normal-company accepted activations are supported. Shared practice aggregation,
 missing agreements and legacy live imports without accepted activation/trip terms
 remain refused. MON1-J captures checked normal-company lifecycle facts on each
-authenticated owner read using `mon1_today_source`, then applies the existing
+authenticated owner read using `mon1_today_source` (reusing unchanged inputs), then applies the existing
 approved pure day counter for the screen. It takes no client counts or clock.
 The legacy `mon1_fresh_counted_meter_today` still refuses stale stored sources
 with `METER_UNAVAILABLE`.
@@ -85,8 +85,36 @@ session/authority checks after waiting. Missing terms, unsupported live imports,
 shared practice, non-owner fresh captures and an in-period plan change still refuse.
 Admins retain their prior checked read of an already-fresh stored projection;
 stale or absent stored data still refuses for them. Reads may append a
-new source revision; command retries remain durable replays of their first result.
+new source revision when inputs or the London date change; command retries remain
+durable replays of their first result.
 
-MON1-J browser coverage uses real repository commands and the real authenticated
-meter HTTP/UI path, with explicit synthetic activation parents and historical
-clock fixtures. It does not claim a normal-company job-command browser UI.
+MON1-J browser coverage uses authenticated work-command HTTP requests and the
+real meter HTTP/UI path, with explicit synthetic activation parents, photo
+sources and historical clock fixtures. It does not claim a normal-company job-command browser UI.
+
+## Repair round 1: term-less imports and browser commands
+
+A term-less live adoption makes the committed snapshot unavailable: refresh
+returns no snapshot and does not throw. Place admission still rejects that
+result, so an older stored count cannot authorize new work. Subscription
+accept/change, final-account lock, finish/close and continuing site activity do
+not depend on knowing the imported job's capacity. The meter screen continues
+to display its existing unavailable message for unsupported imported sources;
+no partial count or guessed classification is presented. Site activity checks
+admission only when an activation-backed job actually restarts after stopping.
+New legacy live-import admissions remain refused once a subscription exists.
+
+The browser now sends work commands through the synthetic normal-company meter
+HTTP boundary with verified session, origin, CSRF and server-derived membership.
+The same checked repository handles finish, resume, close and reopen. Activation
+parents and photo sources remain explicit fictional fixtures; the meter response
+and work-command HTTP responses are real. The historical London-day fixture is
+not exposed as an API. Source keys bind the tenant, London date, agreement and
+builder lifecycle facts. Identical repeated reads reuse the checked capture;
+a changed event, lock, trip, observation, link, activation or agreement creates
+a new one. A new London date also refreshes midnight deadlines. The public
+final-account lock routine acquires tenant lock 184 before its business locks,
+including when called without withTenant. No fee or payment authority is added.
+
+Grace upgrade Decision delivery and immediate Builder track-review Decision
+creation remain unimplemented follow-up; this repair does not claim them.

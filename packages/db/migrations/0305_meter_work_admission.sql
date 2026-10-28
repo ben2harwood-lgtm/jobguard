@@ -19,10 +19,10 @@ DECLARE e record; state text:='pre'; anchor timestamptz; finished timestamptz;
 BEGIN
  IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RETURN false; END IF;
  -- Include a final sentinel to apply deadlines before returning the current state.
- FOR e IN SELECT kind,fact_at,id FROM app.job_work_state_event
+ FOR e IN SELECT kind,fact_at,id,sequence FROM app.job_work_state_event
   WHERE tenant_id=t AND job_id=j AND fact_at<=cutoff AND recorded_at<=cutoff
-  UNION ALL SELECT '__now',cutoff,'ffffffff-ffff-4fff-bfff-ffffffffffff'::uuid
-  ORDER BY fact_at,id LOOP
+  UNION ALL SELECT '__now',cutoff,'ffffffff-ffff-4fff-bfff-ffffffffffff'::uuid,9223372036854775807::bigint
+  ORDER BY fact_at,sequence,id LOOP
   LOOP
    quiet:=NULL; tail:=NULL; due:=NULL; stop_due:=true;
    IF state='counting' THEN quiet:=(((anchor AT TIME ZONE 'Europe/London')::date+30)::timestamp AT TIME ZONE 'Europe/London'); END IF;
@@ -82,12 +82,13 @@ BEGIN
  SELECT * INTO agreement FROM app.subscription_agreement_revision ar WHERE ar.tenant_id=t AND ar.effective_date<=today
  ORDER BY ar.effective_date DESC,ar.revision DESC LIMIT 1;
  IF agreement.id IS NULL THEN RETURN stored; END IF;
- -- Legacy imports have no accepted activation/small-trip binding. Never guess
- -- their capacity from an attested amount or silently omit them from a plan.
+ -- Unknown import capacity is an unavailable snapshot, not a failure of the
+ -- source write. Only ch4_admit_place may refuse this result; subscriptions,
+ -- locks, finish/close and automatic source events must still commit.
  IF EXISTS(SELECT 1 FROM app.job j WHERE j.tenant_id=t AND j.provenance='imported' AND j.status='live' AND j.practice_session_digest IS NULL
   AND EXISTS(SELECT 1 FROM app.job_commercial_track ct WHERE ct.tenant_id=t AND ct.job_id=j.id AND ct.job_track='small_builder' AND ct.environment='synthetic_demo')
   AND NOT EXISTS(SELECT 1 FROM app.job_activation_terms terms WHERE terms.tenant_id=t AND terms.job_id=j.id))
- THEN RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'; END IF;
+ THEN RETURN stored; END IF;
  WITH base AS (
   SELECT a.job_id,a.activated_at,b.customer_id,b.site_id,terms.small_job initial_small,
    a.id source_id,terms.id terms_id,b.id binding_id
@@ -172,6 +173,15 @@ DO $$ DECLARE original text; changed text; BEGIN
  EXECUTE changed;
 END $$;
 
+-- Direct SQL callers do not pass through withTenant. Serialize final-account
+-- locks before their job/variation/audit locks, rather than from the AFTER hook.
+DO $$ DECLARE original text; changed text; BEGIN
+ original:=pg_get_functiondef('app.lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)'::regprocedure);
+ changed:=regexp_replace(original,'BEGIN'||chr(10),'BEGIN'||chr(10)||' PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text,184));'||chr(10));
+ IF changed=original THEN RAISE EXCEPTION 'unexpected final account lock definition'; END IF;
+ EXECUTE changed;
+END $$;
+
 -- Implicit restarts go through the same check before the ledger event is stored.
 -- First site evidence is an automatic event and must never be refused (§10.1.4).
 CREATE FUNCTION app.mon1_admit_work_event() RETURNS trigger
@@ -180,6 +190,10 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text,184));
  IF NEW.kind='site_activity' AND NOT EXISTS(SELECT 1 FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND id=NEW.id)
   AND EXISTS(SELECT 1 FROM app.subscription_agreement_revision WHERE tenant_id=NEW.tenant_id)
+  -- Continuing site work adds no place. Legacy imports without activation
+  -- facts remain unclassified; their activity cannot authorize new capacity.
+  AND EXISTS(SELECT 1 FROM app.job_activation a WHERE a.tenant_id=NEW.tenant_id AND a.job_id=NEW.job_id
+   AND NOT app.mon1_work_committed(NEW.tenant_id,NEW.job_id,a.activated_at,clock_timestamp()))
   AND EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=NEW.tenant_id AND x.id=NEW.job_id AND x.practice_session_digest IS NULL)
  THEN PERFORM app.ch4_admit_place(NEW.tenant_id,NEW.job_id,'restart'); END IF;
  RETURN NEW;
@@ -268,6 +282,7 @@ GRANT EXECUTE ON FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) TO jobgu
 CREATE FUNCTION app.mon1_today_source(t uuid,digest text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; today date; start_day date; anchor integer; expected integer; captured jsonb;
+ source_key uuid; existing app.meter_lifecycle_source;
 BEGIN
  actor:=app.mon1_lifecycle_actor(t,digest,false);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));
@@ -290,10 +305,34 @@ BEGIN
   WHERE a.tenant_id=t AND j.practice_session_digest IS NULL
   AND NOT EXISTS(SELECT 1 FROM app.job_activation_terms terms WHERE (terms.tenant_id,terms.job_id,terms.activation_id)=(t,a.job_id,a.id)))
  THEN RAISE EXCEPTION 'METER_UNAVAILABLE'; END IF;
+ -- Same facts on the same London day reuse the checked capture. No wall-clock
+ -- timestamp or random identity participates; midnight changes the key so day-31,
+ -- finish tails and quiet stops are recomputed. Every dependency is tenant scoped.
+ SELECT substr(encode(sha256(convert_to(jsonb_build_object(
+  'recipe','mon1-today-source.v1','tenant',t,'date',today,'periodStart',start_day,
+  'agreements',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.revision) FROM app.subscription_agreement_revision x WHERE x.tenant_id=t AND x.effective_date<=today),
+  'activations',(SELECT jsonb_agg(jsonb_build_object('activation',to_jsonb(a),'terms',to_jsonb(terms),'binding',to_jsonb(b)) ORDER BY a.id)
+   FROM app.job_activation a JOIN app.job j ON(j.tenant_id,j.id)=(a.tenant_id,a.job_id)
+   JOIN app.job_activation_terms terms ON(terms.tenant_id,terms.job_id,terms.activation_id)=(a.tenant_id,a.job_id,a.id)
+   JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(a.tenant_id,a.job_id,a.party_binding_id)
+   WHERE a.tenant_id=t AND a.activated_at<=clock_timestamp() AND j.practice_session_digest IS NULL),
+  'events',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM app.job_work_state_event x JOIN app.job j ON(j.tenant_id,j.id)=(x.tenant_id,x.job_id) WHERE x.tenant_id=t AND x.recorded_at<=clock_timestamp() AND j.practice_session_digest IS NULL),
+  'locks',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM app.final_account_lock x WHERE x.tenant_id=t),
+  'trips',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM app.job_small_trip_event x WHERE x.tenant_id=t),
+  'observations',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM app.job_small_trip_observation x WHERE x.tenant_id=t AND x.recorded_at<=clock_timestamp()),
+  'links',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM app.job_link x WHERE x.tenant_id=t AND x.linked_at<=clock_timestamp())
+ )::text,'UTF8')),'hex'),1,32)::uuid INTO source_key;
+ SELECT s.* INTO existing FROM app.meter_lifecycle_source s JOIN app.meter_lifecycle_scope scope
+ ON(scope.tenant_id,scope.id)=(s.tenant_id,s.scope_id)
+ WHERE s.tenant_id=t AND scope.kind='normal_company' AND s.command_id=source_key;
+ IF existing.id IS NOT NULL THEN
+  captured:=app.mon1_lifecycle_rebuild(t,digest,existing.id);
+  RETURN jsonb_build_object('date',today::text,'stored',captured);
+ END IF;
  SELECT coalesce(max(s.revision),0) INTO expected FROM app.meter_lifecycle_source s
  JOIN app.meter_lifecycle_scope scope ON (scope.tenant_id,scope.id)=(s.tenant_id,s.scope_id)
  WHERE s.tenant_id=t AND scope.kind='normal_company' AND s.period_start=start_day;
- captured:=app.mon1_lifecycle_capture(t,digest,gen_random_uuid(),start_day,expected);
+ captured:=app.mon1_lifecycle_capture(t,digest,source_key,start_day,expected);
  RETURN jsonb_build_object('date',((captured#>>'{source,asOf}')::timestamptz AT TIME ZONE 'Europe/London')::date::text,'stored',captured);
 END $$;
 ALTER FUNCTION app.mon1_today_source(uuid,text) OWNER TO jobguard_migration;

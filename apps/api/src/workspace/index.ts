@@ -98,3 +98,5 @@ export * from "../contractor/billing.application.js";
 export * from "../meter-today.application.js";
 export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
+
+export { jobWorkStateFailure } from "../job-work-state.errors.js";

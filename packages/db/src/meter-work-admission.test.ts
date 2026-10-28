@@ -33,3 +33,19 @@ it("admission consumes a synchronously refreshed stored ledger; source changes r
  expect(admission).toContain("stored.jobs,stored.plan,stored.agreement_id,stored.london_date");
  expect(admission).toContain("RAISE EXCEPTION 'METER_PROJECTION_MISMATCH'");
 });
+
+it("unknown imports make refresh unavailable without throwing; only admission refuses", () => {
+ const refresh=migration.slice(migration.indexOf('CREATE FUNCTION app.mon1_refresh_work_ledger'),migration.indexOf('CREATE OR REPLACE FUNCTION app.ch4_admit_place'));
+ expect(refresh).toContain("THEN RETURN stored; END IF;");
+ expect(refresh).not.toContain("RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'");
+ expect(migration).toContain("IF ledger.source_hash IS NULL THEN RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'");
+ expect(migration).toContain("AND NOT app.mon1_work_committed(NEW.tenant_id,NEW.job_id,a.activated_at,clock_timestamp())");
+});
+it("source reuse keys include tenant, London date and builder source changes; SQL final lock takes 184 early", () => {
+ expect(migration).toContain("'recipe','mon1-today-source.v1','tenant',t,'date',today");
+ for(const field of ['agreements','activations','events','locks','trips','observations','links'])expect(migration).toContain(`'${field}',(SELECT`);
+ expect(migration).toContain("captured:=app.mon1_lifecycle_rebuild(t,digest,existing.id)");
+ expect(migration).toContain("captured:=app.mon1_lifecycle_capture(t,digest,source_key,start_day,expected)");
+ expect(migration).toContain("pg_advisory_xact_lock(hashtextextended(p_tenant::text,184))");
+ expect(migration).toContain("ORDER BY fact_at,sequence,id LOOP");
+});

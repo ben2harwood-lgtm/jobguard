@@ -180,7 +180,8 @@ describe("MON-1 work admission attacks", () => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.job SET provenance='imported' WHERE tenant_id=$1 AND id=$2",[b.tenantId,b.jobId]);
   });
-  await expect(workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return db.query("SELECT app.mon1_refresh_work_ledger($1)",[b.tenantId]);})).rejects.toThrow("CAPACITY_ADMISSION_UNAVAILABLE");
+  expect(await workTenant(f.admin,b.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");return (await db.query("SELECT (app.mon1_refresh_work_ledger($1)).source_hash hash",[b.tenantId])).rows[0].hash;})).toBeNull();
+  await expect(command(b,"resume",0)).rejects.toThrow("CAPACITY_ADMISSION_UNAVAILABLE");
  });
  it("distinct activation terms race for the last Solo grace place under the tenant serializer", async () => {
   const a=await company(5),b=await seedWorkJob(f,a.tenantId);
@@ -223,6 +224,7 @@ describe("MON-1 work admission attacks", () => {
    {facts:[],cutoff:"2026-10-31T00:00:00.000000Z"},
    {facts:[first],cutoff:"2026-11-04T00:00:00.000000Z"},
    {facts:[first,finish],cutoff:"2026-10-30T00:00:00.000000Z"},
+   {facts:[first,{kind:"finished_on_site",at:first.at}],cutoff:"2026-10-12T00:00:00.000000Z"},
    {facts:[first,finish,{kind:"finished_cancelled",at:"2026-10-25T12:00:00.000000Z"}],cutoff:"2026-10-30T00:00:00.000000Z"},
    {facts:[first,{kind:"site_activity",at:"2026-11-04T00:00:00.000000Z"}],cutoff:"2026-11-04T00:00:00.000000Z"},
    {facts:[first,{kind:"site_activity",at:"2026-11-04T00:00:00.000001Z"}],cutoff:"2026-11-04T00:00:00.000001Z"},
@@ -231,7 +233,8 @@ describe("MON-1 work admission attacks", () => {
   for(const scenario of cases) {
    const a=await seedWorkJob(f), seen=new Map<string,string>();
    const facts=scenario.facts.map((fact,i)=>{
-    const id=randomUUID(),site=['first_site_evidence','site_activity'].includes(fact.kind);
+    const tied=scenario.facts.length===2 && scenario.facts[0]!.at===scenario.facts[1]!.at;
+    const id=tied ? (i===0?'ffffffff-ffff-4fff-bfff-ffffffffffff':'00000000-0000-4000-8000-000000000001') : randomUUID(),site=['first_site_evidence','site_activity'].includes(fact.kind);
     const target=fact.kind==='finished_cancelled'?'finished_on_site':fact.kind==='reopened'?'closed':null;
     const event={version:'job-work-state-event.v1',id,jobId:a.jobId,sequence:i+1,kind:fact.kind,factAt:fact.at,recordedAt:fact.at,
      sourceReceiptId:site?randomUUID():null,commandId:site?null:randomUUID(),predecessorId:target?seen.get(target)!:null,
