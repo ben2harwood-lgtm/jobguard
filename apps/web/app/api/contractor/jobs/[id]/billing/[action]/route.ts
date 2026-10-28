@@ -12,7 +12,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string;ac
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new ContractorBillingError("MODE_FORBIDDEN");
   const {id,action}=await context.params,session=(await cookies()).get("jg_session")?.value,app=new BillingApplication(syntheticPool());
   let raw:unknown;try{raw=await request.json();}catch{throw new ContractorBillingError("BILLING_INVALID");}
-  const result=action==="export"?await app.finalise(session,id,raw):action==="import"?await app.import(session,id,raw):action==="approve-delivery"?await app.approveDelivery(session,id,raw):(()=>{throw new ContractorBillingError("BILLING_INVALID");})();
+  const result=action==="export"?await app.finalise(session,id,raw):action==="import"?await app.import(session,id,raw):action==="approve-delivery"?await app.approveDelivery(session,id,raw):action==="advance-delivery"?await app.advance(session,id,raw):(()=>{throw new ContractorBillingError("BILLING_INVALID");})();
   return NextResponse.json(result,{headers});
  }catch(e){const f=billingHttpFailure(e);return NextResponse.json(f.body,{status:f.status,headers});}
 }
