@@ -5,7 +5,7 @@ import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { createLockFixture,closeLockFixture,seedAccount } from "./recovery-attribution-fixture.js";
 import { proofBefore,proofColumns,proofDifferences } from "./upgrade-proof-utils.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-const own="0251_success_fee_v3.sql";
+const own="0302_success_fee_v3.sql";
 let f:Awaited<ReturnType<typeof createLockFixture>>;
 beforeAll(async()=>{f=await createLockFixture(false);},120000);
 afterAll(async()=>{if(f)await closeLockFixture(f);});
