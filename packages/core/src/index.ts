@@ -110,3 +110,6 @@ export { utcDatetimeV1 } from "./datetime.js";
 
 export * from "./meter-lifecycle.js";
 export * from "./subscription-plan-view.js";
+
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
