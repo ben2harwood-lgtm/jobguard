@@ -43,14 +43,20 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.billing_quarantine":[],
  "app.billing_status_import":[],
  "app.contractor_receipt_line_allocation":[],
+ "app.receipt_allocation_fact_command":[],
+ "app.receipt_allocation_fact_line":[],
+ "app.receipt_allocation_fact_review":[],
+ "app.receipt_allocation_fact_revision":[],
+ "app.receipt_allocation_fact_source":[],
  "app.enterprise_agreement_version":[],
  "app.enterprise_fee_contribution":[],
  "app.enterprise_fee_derivation":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
- // 0208/0209 successor routines; catalogue order is schema, name, identity arguments.
+ // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname IN ('mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
+ WHERE n.nspname='app' AND p.proname IN ('mon1_admit_place','mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
+ {nspname:"app",proname:"mon1_admit_place",args:"t uuid, j uuid, source_kind text, source_id uuid"},
  {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
  {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
  {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
