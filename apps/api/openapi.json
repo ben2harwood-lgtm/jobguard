@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
     "/jobs/{id}/final-check": {
       "get": {
         "operationId": "FinalCheckController_get",
