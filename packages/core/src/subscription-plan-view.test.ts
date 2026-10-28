@@ -104,3 +104,11 @@ describe("MON-2A P2 plan screen projection", () => {
     expect(() => subscriptionPounds(value)).toThrow();
   });
 });
+
+it("C2 preserves the exact statement approval binding and rejects a malformed hash", () => {
+  const raw=fixture();
+  const withHash={...raw,statements:raw.statements.map(s=>({...s,artifact_hash:"a".repeat(64)}))};
+  expect(view(withHash)).toMatchObject({revision:1,periods:[{statementId:id(4),contentHash:"a".repeat(64),amount:{pence:8900,currency:"GBP"}}]});
+  expect(()=>view({...raw,statements:raw.statements.map(s=>({...s,artifact_hash:"forged"}))})).toThrow();
+  expect(view(raw).periods[0]!.contentHash).toBeUndefined();
+});
