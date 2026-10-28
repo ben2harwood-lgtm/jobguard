@@ -31,6 +31,21 @@
         ]
       }
     },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
     "/jobs/{id}/final-check/disputes": {
       "get": {
         "operationId": "FinalCheckController_disputes",

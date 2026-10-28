@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { answerLabels, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem } from "./final-check-reveal-view";
+import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem } from "./final-check-reveal-view";
 import styles from "./practice-receipts.module.css";
 
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
@@ -22,11 +22,12 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  }, [jobId]);
  useEffect(() => { setRead(null); void load(); return () => { epoch.current++; }; }, [load]);
- const answer = async (revealed: RevealItem, choice: RevealAnswer, referenceId: string | null) => {
+ const answer = async (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => {
   if (!read || busy) return;
   setBusy(true); setError("");
   try {
-   const response = await fetch(`/api/jobs/${jobId}/final-check/dispositions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(dispositionCommand(read, revealed, choice, referenceId, crypto.randomUUID())) });
+   const [path, body] = choice === "extra_work" ? ["catches", catchCommand(read, revealed, crypto.randomUUID())] : ["dispositions", dispositionCommand(read, revealed, choice, referenceId, crypto.randomUUID())];
+   const response = await fetch(`/api/jobs/${jobId}/final-check/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
    if (!response.ok) setError(response.status === 409 ? "This item changed. The saved check has been reloaded; answer again." : "The answer was refused. Nothing was changed.");
   } catch { setError("The result is unknown. The saved check has been reloaded; check it before answering again."); }
   await load();
@@ -49,7 +50,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
  </section>;
 }
 
-function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: FinalCheckRead; busy: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer, referenceId: string | null) => Promise<void> }) {
+function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: FinalCheckRead; busy: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => Promise<void> }) {
  const [choice, setChoice] = useState<RevealAnswer>("already_included");
  const choices = referenceChoices(choice, read.lockedLines ?? []);
  const [reference, setReference] = useState("");
@@ -60,8 +61,8 @@ function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: 
   <ul aria-label="Evidence and dates">{(revealed.evidence ?? []).map(e => <li key={e.id}>{e.source ?? "Evidence"} received {when(e.receivedAt)}{e.evidenceAfterLock ? " (after the lock: not fee-eligible)" : ""}</li>)}</ul>
   <p>Checked against {revealed.comparisons.lockedLineIds.length} locked lines and {revealed.comparisons.baselineItemIds.length} original quote items: no match found.</p>
   {revealed.disposition ? <p data-testid="final-check-disposition">Your answer: {dispositionLabels[revealed.disposition] ?? revealed.disposition}</p> : <>
-   <button type="button" disabled>Yes — this was extra work</button>
-   <p>Turning a catch into extra work waits on a decision about when its case is created. Nothing is charged.</p>
+   <button type="button" disabled={busy} onClick={() => void onAnswer(revealed, "extra_work", null)}>Yes — this was extra work</button>
+   <p>This adds it to your extras as a draft for you to price and approve. Nothing is charged until your customer approves.</p>
    <div className={styles.actions}>
     <div className={styles.field}><label htmlFor={select}>Or answer</label><select id={select} value={choice} disabled={busy} onChange={e => { setChoice(e.target.value as RevealAnswer); setReference(""); }}>{answers.map(a => <option key={a} value={a}>{answerLabels[a]}</option>)}</select></div>
     {needsReference && <div className={styles.field}><label htmlFor={ref}>{choice === "already_included" ? "Which locked line?" : "Which original quote item?"}</label>

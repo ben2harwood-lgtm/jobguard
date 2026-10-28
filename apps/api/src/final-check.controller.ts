@@ -12,6 +12,8 @@ export class FinalCheckController{
  get(@Param("id")id:string,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).get(id));}
  @Post("dispositions") @ApiOperation({summary:"Record a non-confirming synthetic final-check answer"})
  disposition(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).disposition(id,body));}
+ @Post("catches") @ApiOperation({summary:"Confirm a revealed item as extra work: creates only an unpriced catch variation"})
+ catch(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).confirmCatch(id,body));}
  @Get("disputes") @ApiOperation({summary:"Read unresolved attribution disputes for this job"})
  disputes(@Param("id")id:string,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).disputes(id));}
 }
