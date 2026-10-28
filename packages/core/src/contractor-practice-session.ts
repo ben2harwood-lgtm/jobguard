@@ -3,7 +3,7 @@ import { z } from "zod";
 export const CONTRACTOR_PRACTICE_SESSION_CEILING_DAYS = 7;
 export const contractorPracticeSessionRevokeV1 = z.object({ version: z.literal("contractor-practice-session-revoke.v1") }).strict();
 export const contractorPracticeSessionRevokedV1 = z.object({
- version: z.literal("contractor-practice-session-revoked.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0), revokedAt: z.string().datetime({ precision: 6 }),
+ version: z.literal("contractor-practice-session-revoked.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0), revokedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }),
 }).strict();
 export const contractorPracticeSessionErrorCodes = ["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "INVALID_COMMAND", "PRACTICE_SESSION_UNAVAILABLE"] as const;
 export type ContractorPracticeSessionErrorCode = typeof contractorPracticeSessionErrorCodes[number];

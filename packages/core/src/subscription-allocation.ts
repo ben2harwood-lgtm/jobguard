@@ -5,7 +5,7 @@ import { divideRounded } from "./rational.js";
 import { parseSubscription, subscriptionPlanV1, SubscriptionError } from "./subscription.js";
 
 export const subscriptionAttributionRuleV1 = "canonical-place-and-job.v1" as const;
-export const subscriptionAllocationDayV1 = fixedMeterPlacesV1.unwrap().innerType().omit({version:true}).extend({
+export const subscriptionAllocationDayV1 = z.object(fixedMeterPlacesV1.unwrap().shape).omit({version:true}).extend({
   version: z.literal("subscription-allocation-day.v1"), plan: subscriptionPlanV1,
   sourceRevision: z.number().int().safe().positive(),
 }).strict().refine(v => new Set(v.jobs.map(job => job.tenantId)).size <= 1);
@@ -58,7 +58,7 @@ export function allocateSubscriptionPennies(raw: unknown) {
 
 export const subscriptionCorrectionDispositionV1 = z.object({
   principalPence:pence,maximumPence:pence,
-  corrections:z.array(z.object({correctionId:z.string().uuid().transform(v => v.toLowerCase()),pence:z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE)}).strict()),
+  corrections:z.array(z.object({correctionId:z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase()),pence:z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE)}).strict()),
 }).strict().refine(v => v.principalPence <= v.maximumPence && new Set(v.corrections.map(c=>c.correctionId)).size === v.corrections.length);
 
 /** Positive corrections share remaining cap, in canonical source identity order.

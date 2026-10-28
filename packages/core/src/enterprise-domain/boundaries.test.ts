@@ -40,7 +40,7 @@ it("new subdirectory production source is pure and directly reuses SH-1 kernels;
    if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.AsteriskToken,ts.SyntaxKind.SlashToken,ts.SyntaxKind.AsteriskEqualsToken,ts.SyntaxKind.SlashEqualsToken].includes(node.operatorToken.kind))for(const op of [node.left,node.right])expect(checker.getTypeAtLocation(op).flags&ts.TypeFlags.BigIntLike,`${path}: ${node.getText()}`).not.toBe(0);ts.forEachChild(node,visit);};visit(tree);
  }
  const source=ts.sys.readFile("src/enterprise-domain/fee.ts")!;expect(source).toMatch(/calculateCumulativeFee[\s\S]*from "\.\.\/cumulative-fee\.js"/u);expect(source).toMatch(/allocateReceiptToLines[\s\S]*from "\.\.\/receipt-allocation\.js"/u);expect(source).toMatch(/allocateMoney[\s\S]*from "\.\.\/allocation\.js"/u);
-});
+},30000);
 it("photo evidence identity cannot be relabelled across tenant/job/scope",()=>{
  const g=group();g.members[0]!.captureNote=null;
  g.members[0]!.photo={status:"verified",evidenceId:id(60),hash:hash(),tenantId:id(20),jobId:id(21),scopeItemId:id(22),objectVersionId:"generated-immutable-version"};

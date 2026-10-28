@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 
 export class FreeFirstJobError extends Error {
@@ -5,15 +6,15 @@ export class FreeFirstJobError extends Error {
     super(code); this.name = "FreeFirstJobError";
   }
 }
-export function parseFreeFirstJob<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function parseFreeFirstJob<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new FreeFirstJobError("INVALID_FREE_FIRST_JOB_INPUT");
   return parsed.data;
 }
 const environment = z.literal("synthetic_demo");
-const id = z.string().uuid();
+const id = z.guid({ error: "Invalid uuid" });
 const opaque = z.string().min(1).max(200).regex(/^[\x21-\x7e]+$/u);
-const instant = z.string().datetime().refine(value => {
+const instant = utcDatetimeV1.refine(value => {
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value && value >= "2000" && value < "9999";
 }, "Canonical millisecond UTC instant required for the reference preview");

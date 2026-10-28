@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
+import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { migrate, MIGRATION_URLS } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
@@ -415,7 +416,7 @@ const groupSchema = z.object({
   status: z.enum(["existing_exception", "approved_current"]),
   target,
   cards: z.array(cardId),
-  responsibilities: z.record(cardId, z.string().min(8)),
+  responsibilities: z.partialRecord(cardId, z.string().min(8)),
   downstream: z.string().min(8),
   path: z.string().optional(),
   alsoPaths: z.array(z.string()).optional(),
@@ -429,7 +430,7 @@ const authorityPathSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(12),
   cards: z.array(cardId).min(1),
-  responsibilities: z.record(cardId, z.string().min(8)),
+  responsibilities: z.partialRecord(cardId, z.string().min(8)),
   sources: z.array(z.string().min(3)).min(1),
   tests: z.array(z.string().min(3)).min(1),
   gaps: z.array(z.string()),
@@ -671,6 +672,8 @@ export async function startLp0Database(portBase: number): Promise<Lp0Database> {
   await control.query(`CREATE DATABASE ${databaseName}`); await control.end();
   const admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: databaseName, max: 4 });
   await migrate(admin);
+  const bootstrap = await admin.connect();
+  try { await finalizeMeterLifecycleOwnership(bootstrap); } finally { bootstrap.release(); }
   const { Client } = await import("pg");
   return {
     port, databaseName, admin, dir, migrationNames: MIGRATION_URLS.map(u => u.pathname.split("/").at(-1)!),
