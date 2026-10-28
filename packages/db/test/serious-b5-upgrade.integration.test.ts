@@ -221,7 +221,7 @@ async function receiptFactAdditions(before: Awaited<ReturnType<typeof snapshot>>
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
-// ENT-9C (0285): exactly two owner-only historical tables and three checked routines.
+// ENT-9C (0296): exactly two owner-only historical tables and three checked routines.
 async function baselineAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["enterprise_baseline_batch", "enterprise_baseline_team"];
  const identities = [

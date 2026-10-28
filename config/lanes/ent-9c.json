@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/ent-9c"
       ],
-      "note": "ENT-9 next part (ENT-9C), RED: stored synthetic baseline history and scoped billed/paid reads from ENT-6. No fee figures, routes, screens, signals or releases. Migration 0285. CI database checks and independent RED review required.",
+      "note": "ENT-9 next part (ENT-9C), RED: stored synthetic baseline history and scoped billed/paid reads from ENT-6. No fee figures, routes, screens, signals or releases. Migration 0296. CI database checks and independent RED review required.",
       "allow": [
         "apps/api/src/contractor/enterprise-baseline.application.ts",
         "apps/api/src/contractor/enterprise-dashboard-stored.application.test.ts",
@@ -15,8 +15,8 @@
         "packages/core/src/enterprise-dashboard-stored-billing.test.ts",
         "packages/core/src/enterprise-dashboard-stored-billing.ts",
         "packages/core/src/index.ts",
-        "packages/db/migration-notes/0285_enterprise_baseline.md",
-        "packages/db/migrations/0285_enterprise_baseline.sql",
+        "packages/db/migration-notes/0296_enterprise_baseline.md",
+        "packages/db/migrations/0296_enterprise_baseline.sql",
         "packages/db/src/enterprise-baseline-repository.ts",
         "packages/db/src/enterprise-dashboard-queries.ts",
         "packages/db/src/enterprise-dashboard-repository.ts",

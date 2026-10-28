@@ -10,8 +10,8 @@ let f: WorkFixture;
 const name = (url: URL) => url.pathname.split("/").at(-1)!;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => { await closeWorkFixture(f); });
-it("0285 upgrades populated pre-existing state without changing rows, catalog privileges or existing routines; reruns are idempotent", async () => {
-  const own = MIGRATION_URLS.findIndex(u => name(u) === "0285_enterprise_baseline.sql");
+it("0296 upgrades populated pre-existing state without changing rows, catalog privileges or existing routines; reruns are idempotent", async () => {
+  const own = MIGRATION_URLS.findIndex(u => name(u) === "0296_enterprise_baseline.sql");
   expect(own).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, own)) {
@@ -36,7 +36,7 @@ it("0285 upgrades populated pre-existing state without changing rows, catalog pr
   await migrate(f.admin); await migrate(f.admin);
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
 }, 300000);
-it("0285 is discovered on a fresh install and repeated migration succeeds", async () => {
+it("0296 is discovered on a fresh install and repeated migration succeeds", async () => {
   const fresh = await createWorkFixture(false);
   try {
     await migrate(fresh.admin); await migrate(fresh.admin);
