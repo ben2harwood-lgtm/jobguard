@@ -179,3 +179,28 @@ describe("M48-C0 factual contracts", () => {
   });
 
 });
+
+describe("B1 reviewer carries", () => {
+  it("canonicalizes UUIDs and refuses a mixed-case self reversal", () => {
+    const lower = "abcdefab-abcd-4abc-8abc-abcdefabcdef";
+    const input = { ...row(), lineAllocationId: lower.toUpperCase() };
+    expect(source.parse(input).lineAllocationId).toBe(lower);
+    expect(source.safeParse({ ...input, direction: "reversal", gross: fraction("-48000"),
+      net: fraction("-40000"), reversesLineAllocationId: lower }).success).toBe(false);
+  });
+  it("keeps an unevidenced reversal and holds cash even when earlier receipt evidence exists", () => {
+    const reversal = { ...row(), lineAllocationId: other, direction: "reversal", gross: fraction("-48000"),
+      net: fraction("-40000"), reversesLineAllocationId: id, evidence: [] };
+    expect(source.safeParse(reversal).success).toBe(true);
+    const saved = { revision: 1, sourceHash: hash, rows: [row(), reversal], holds: [] };
+    expect(snapshot.safeParse(saved).success).toBe(false);
+    expect(snapshot.safeParse({ ...saved, holds: ["REVERSED_MOVEMENT"] }).success).toBe(true);
+    for (const evidence of [[], row().evidence]) {
+      const input = { ...view(), rows: [row(), { ...reversal, evidence }] };
+      expect(status(input)).toBe("source_held");
+      expect(viewSchema.safeParse(input).success).toBe(false);
+      expect(viewSchema.safeParse({ ...input, status: "source_held", holds: ["REVERSED_MOVEMENT"] }).success).toBe(true);
+    }
+    expect(source.safeParse({ ...row(), evidence: [] }).success).toBe(false);
+  });
+});
