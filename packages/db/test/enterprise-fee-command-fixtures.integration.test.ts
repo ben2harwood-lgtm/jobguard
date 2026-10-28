@@ -230,11 +230,21 @@ it("Self-check: wrong locked export revision and oversized amounts cannot create
   const line = view.exports.find(e => e.id === batch.batchId)!.artifact.lines[0]!;
   const badInvoice = t.w.event("invoiced", { amount: amount(15000), composition: { declared: amount(15000), lines: [{ externalInvoiceLineId: "wrong-revision", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...amount(15000),
     match: { exportLineId: line.exportLineId, jobId: line.jobId, extraId: line.extraId, scopeItemId: line.scopeItemId, revisionId: randomUUID(), revisionHash: line.revisionHash } }] } });
-  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([badInvoice])); await pay(t, 15000);
-  expect((await t.w.repo.read(t.w.ctx, t.w.session, t.w.s.jobId)).quarantine).toHaveLength(1);
-  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([badInvoice])); const payment = await pay(t, 15000);
+  const facts = (await c.admin.query<{ id: string; source_event_id: string }>(
+    "SELECT id, source_event_id FROM app.billing_fact WHERE tenant_id=$1 AND job_id=$2", [t.w.w.p.tenantId, t.w.s.jobId])).rows;
+  const invoiceFact = facts.find(f => f.source_event_id === badInvoice.sourceEventId)!;
+  const paymentFact = facts.find(f => f.source_event_id === payment.sourceEventId)!;
+  const held = await t.w.repo.read(t.w.ctx, t.w.session, t.w.s.jobId);
+  // Ingest rejects the match; projection also holds the invoice and the payment without a valid invoice.
+  expect([...held.quarantine].sort((a, b) => a.reason.localeCompare(b.reason))).toEqual([
+    { fact_id: invoiceFact.id, reason: "COMPOSITION_REQUIRED" },
+    { fact_id: invoiceFact.id, reason: "INVALID_COMPOSITION_OR_MATCH" },
+    { fact_id: paymentFact.id, reason: "INVOICE_REQUIRED" },
+  ]);
+  expect(await derive(t)).toMatchObject({ qualifyingPrincipal: exact(0), cumulativeFeePence: 0, contributions: [] });
   expect(await code(t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("paid", { amount: { netPence: 1000000000001, vatPence: 0, grossPence: 1000000000001 } })])))).toBe("BILLING_INVALID");
-  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+  expect(await derive(t)).toMatchObject({ qualifyingPrincipal: exact(0), cumulativeFeePence: 0, contributions: [] });
   // Try the SQL entrypoint too, bypassing the application's Zod schema. It must quarantine the oversized line.
   const tooLarge = { netPence: 1000000000001, vatPence: 0, grossPence: 1000000000001 };
   const directInvoice = t.w.event("invoiced", { invoiceNumber: "fictional-oversized", amount: tooLarge, composition: { declared: tooLarge,
@@ -246,7 +256,7 @@ it("Self-check: wrong locked export revision and oversized amounts cannot create
     await db.$client.query("SELECT app.cb_complete($1,$2,$3,$4::jsonb)", [t.w.session,t.w.s.jobId,cmd.commandId,JSON.stringify(r)]);
   });
   expect((await c.admin.query("SELECT match_valid FROM app.billing_fact WHERE tenant_id=$1 AND source_event_id=$2", [t.w.w.p.tenantId,directInvoice.sourceEventId])).rows).toEqual([{ match_valid: false }]);
-  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+  expect(await derive(t)).toMatchObject({ qualifyingPrincipal: exact(0), cumulativeFeePence: 0, contributions: [] });
 });
 it("Self-check: posting command IDs bind the exact statement and authorization, including zero-result replays", async () => {
   const t = await setup(5); await invoice(t, { [t.w.s.extraId]: 5 }); await pay(t, 5); await derive(t);
