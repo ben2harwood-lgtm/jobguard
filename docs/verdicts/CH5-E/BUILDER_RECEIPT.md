@@ -1,3 +1,50 @@
+## Pending main merge conflict resolution — 28 October 2026, 22:21 UTC run
+
+CH-5 / CH5-E, PR #386, RED; catch-up only, no new behavior.
+HEAD is f35be1f8cf90df43cfe937ef80cda950b1566edf; MERGE_HEAD and
+origin/main are 6329be99619e3795da6d2e07d832296269748ee1 (M4-9-S #380).
+Resolved all four conflicted working files, keeping both pieces' controller
+registration, application composition, OpenAPI endpoints and LP-0 entries.
+Each resolved file equals its existing HEAD content: the preceding catch-up had
+already prepared the combined content before this actual Git merge was begun.
+
+Verified every incoming-main LP-0 entry and recorded privilege fact remains
+exactly present. Group source/test lists retain main entries plus CH-5 entries.
+SERIOUS-B5 retains main's exact two M4-9-S routine identities and adds only
+CH-5's existing 0323/0324 expectations; entitlement and tenancy differences from
+main are only the existing job_import_v3 expectations. Both migration filenames
+and bytes match HEAD exactly; no SQL was edited. The lane lists exactly the 52
+PR payload paths against origin/main, with its own lane file implicitly allowed.
+No worthwhile simplification applies to this conflict-only catch-up.
+
+Actual local checks (installed tools, no package downloads):
+
+- Pinned pnpm 10.28.1 DB Vitest, maxWorkers=2: lp-0-catalog.test.ts and
+  audit-export-privilege-comparator.test.ts: 44 passed.
+- Pinned pnpm API Vitest, maxWorkers=2: job-import-v3.application.test.ts,
+  imported-shadow-source-adapter.test.ts, success-fee.application.test.ts:
+  19 passed.
+- Installed tsc: apps/api/tsconfig.json --noEmit and existing
+  /tmp/ch5-e-r2-test-typecheck.json --noEmit: passed.
+- From apps/api, node --import tsx src/generate-openapi.ts --check: passed.
+- Exact main inventory/lane comparisons, SQL byte comparison and conflict-marker
+  scan: passed. git diff --check: passed.
+- Stock LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs:
+  failed while merge is pending because its committed ancestry still counts
+  incoming M4-9-S files as CH-5 changes. No lane widening; the direct comparison
+  against origin/main matches the lane exactly. Router must rerun after recording
+  this merge.
+- The initial PATH pnpm command emitted an incompatible-version warning and was
+  interrupted before tests started; the successful suites used the existing
+  pinned /private/tmp/jg-ch5-p-bin/pnpm instead.
+
+Router handoff: stage the four resolved files and lane/receipt updates, finish
+this existing merge, then rerun the stock lane check and GitHub CI. Git still
+reports four unmerged index entries because .git is read-only here; all working
+file conflict markers are resolved. Database and browser execution remain for
+GitHub CI. Existing RED-pass is reported by the brief, not a new builder review.
+No Git writes, PostgreSQL startup, listener, real data, provider or money action.
+
 ## Catch-up to M4-9-S / PR #380 — 28 October 2026
 
 CH-5 / CH5-E, PR #386, RED. Catch-up only; no new product behavior.
