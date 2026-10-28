@@ -6,7 +6,7 @@
         "codex/sandbox/m4-9-s"
       ],
       "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
-      "note": "RED M4-9-S / PR #380 catch-up only after #372 ENT-9C and #379 MON-4A. Preserve both sides of shared expectation lists and exports. Migration 0302 SQL bytes unchanged; no new behaviour. Prior RED pass reported by router; database/browser checks remain GitHub CI work.",
+      "note": "RED M4-9-S / PR #380 catch-up only after #376 MON-1 day ledger 0300 and #384 ENT-9 dashboards. Preserve both sides of shared expectation lists and exports. Migration 0302 SQL bytes unchanged; no new behaviour. Prior RED pass reported by router; database/browser checks remain GitHub CI work.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
