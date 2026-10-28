@@ -28,7 +28,8 @@
         "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/meter-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/meter-today.integration.test.ts",
-        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-origin.integration.test.ts"
       ]
     }
   }
