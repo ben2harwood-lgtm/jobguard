@@ -72,3 +72,44 @@ Follow-up results: 32 tests passed across evidence-pack-v3.application.test.ts,
 evidence-pack-v3.controller.test.ts and evidence-pack.application.test.ts with maxWorkers=2.
 Core/db TypeScript builds and API TypeScript no-emit check passed. git diff --check passed.
 No unresolved merge paths or conflict markers were found. No DB/browser suite was run locally.
+
+## PR #389 catch-up after #381 merged — 28 October 2026
+
+RED — CH-8 part 2, BUILD_PLAN.md §10.4. This is only a merge catch-up;
+no new behaviour or aggregate CH-8 completion is claimed. The issued brief
+reports the prior RED pass; this entry is builder validation of the catch-up.
+
+Resolved the two remaining export-barrel conflicts by retaining both branches'
+exports. All shared expectation/privilege files already match origin/main
+8e80dabda2de93ccd094ec65acda2568a0b9ff91 exactly, including LP-0,
+SERIOUS-B5, contractor entitlement, tenancy and the effective-privileges contract.
+All migration SQL and notes from main are byte-identical to main; the only
+additional migration and note are 0306_evidence_pack_v3. Migration 0306 SQL
+is byte-identical to the branch HEAD, SHA-256
+5d0a300b27bf74601c37296009414da15a96c6f10e14eea6f0c0bd6a0b82dea8.
+The existing ch8-rest lane lists exactly the payload paths differing from main;
+its own lane file is implicitly permitted. Updated only its catch-up note.
+
+Local validation, installed Node v24.17.0 and Vitest 4.1.12, maxWorkers=2,
+three named files per Vitest invocation:
+
+- packages/core: node_modules/.bin/vitest run --maxWorkers=2
+  src/evidence-pack-v3.test.ts src/evidence-pack-v3-assembly.test.ts
+  src/evidence-pack.test.ts — PASS, 99 tests.
+- apps/api: node_modules/.bin/vitest run --maxWorkers=2
+  src/evidence-pack-v3.application.test.ts src/evidence-pack-v3.controller.test.ts
+  src/evidence-pack-v3.worker.test.ts — PASS, 25 tests.
+- Installed tsc -p tsconfig.json builds in packages/core and packages/db — PASS.
+- Installed tsc -p tsconfig.json --noEmit in packages/db and apps/api — PASS.
+- Existing lane validator exports applied to working-tree diff against main:
+  exact payload path coverage and migration order — PASS, 27 paths including
+  the implicitly permitted lane file. This is not the committed-range CI check;
+  the pending merge index still contains main's changes until router staging.
+- git diff --check and final working-tree conflict-marker scan — PASS.
+
+No Git write, download/install, PostgreSQL start, browser suite, localhost
+listener, real data, money, provider or release action occurred. Database,
+migration and browser suites remain for GitHub CI after router push. The
+read-only index still reports two unmerged paths; the router must stage the
+resolved working files and complete the pending merge. Ready commit message:
+/tmp/ch8-rest-20261028T211109Z-commit-msg.txt.
