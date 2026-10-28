@@ -342,7 +342,7 @@ describe("CH-2 command coverage and lock order", () => {
     }
     expect(found.length).toBeGreaterThan(25);
     assertClassified(found, jobMutationRegistry);
-    expect(found.sort()).toEqual(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).sort());
+    expect(found.sort()).toEqual([...new Set(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).map(key => key.replace(/#[^#]+$/u, "")))].sort());
   });
   it("new public mutations in watchdog modules cannot omit classification and the guard", async () => {
     for(const file of new Set(watchdogCommandGuards.map(entry=>entry.file))) {
@@ -379,11 +379,22 @@ describe("CH-2 command coverage and lock order", () => {
     const afterAudit = body.split("appendAuditBatch(").slice(1).join("");
     expect(afterAudit).not.toMatch(/FOR (?:UPDATE|SHARE)|pg_advisory_xact_lock/u);
   });
+  it("CH-4 finish/cancel retain SHARE locks and serialize facts before checking revision", async () => {
+    const sql = await readFile(new URL("packages/db/migrations/0201_job_work_state_commands.sql", root), "utf8");
+    const body = sql.slice(sql.indexOf("CREATE FUNCTION app.ch4_work_state_command("), sql.indexOf("CREATE FUNCTION app.ch4_record_work_state("));
+    expect(body).toContain("IF action IN('finish','cancel_finish') THEN\n  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;\n ELSE\n  PERFORM 1 FROM app.job WHERE tenant_id=t AND id IN(j,successor) ORDER BY id FOR UPDATE;");
+    const serializer = body.indexOf("pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,144))");
+    expect(serializer).toBeGreaterThan(-1);
+    expect(serializer).toBeLessThan(body.indexOf("IF expected<>revision"));
+    const storage = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.ch4_storage_integrity()"), sql.indexOf("CREATE FUNCTION app.ch4_require_open("));
+    expect(storage).toContain("IF NEW.kind IN('finished_on_site','finished_cancelled') THEN\n    PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;");
+    expect(body.slice(body.indexOf("SET CONSTRAINTS"))).not.toMatch(/FOR (?:UPDATE|SHARE)|pg_advisory_xact_lock/u);
+  });
   it("documents 409 without removing earlier successful responses", async () => {
     const spec=JSON.parse(await readFile(new URL("apps/api/openapi.json",root),"utf8"));
     for(const [key,phase] of Object.entries(jobMutationRegistry)) {
       if(!key.startsWith("nest:")||phase!=="watchdog_live_only")continue;
-      const path=key.slice(5).replace(/:([A-Za-z0-9]+)/gu,"{$1}");
+      const path=key.slice(5).replace(/#[^#]+$/u, "").replace(/:([A-Za-z0-9]+)/gu,"{$1}");
       const responses=spec.paths[path]?.post?.responses;
       expect(responses,path).toBeDefined();
       expect(responses["201"],path).toBeDefined();

@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as exactMoney from "./cumulative-fee.js";
 import { attributionPredicates } from "./shadow-domain/attribution.js";
 import { recoveryFeeIllustrationInputV1, recoveryFeeIllustrationOutputV1, deriveRecoveryFeeIllustration, RecoveryFeeIllustrationError } from "./recovery-fee-illustration.js";
+import { mapRecoveryReceiptToLines, sumRecoveryDeemedNet, type RecoveryReceiptFacts } from "./recovery-allocation.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const binding = { tenantId: id(1), jobId: id(2), workId: id(3), lineId: id(4), lockId: id(5) };
@@ -262,5 +264,254 @@ describe("SV6-05 pure illustration", () => {
     }
     expect(() => derive({ ...rawInput(), policyBundleRef: "unapproved" })).toThrow();
     expect(recoveryFeeIllustrationOutputV1.safeParse({ ...fractional, tax: 1 }).success).toBe(false);
+  });
+});
+
+// Build-ahead pure checks only: persisted SV6-08 and SV6-09 figures remain dependency-bound.
+describe("SV6-08/09 saved attribution consumption", () => {
+  it("SV6-08 coalesced work and assessment history cannot duplicate principal", () => {
+    const original = rawInput();
+    const entry = original.sources[0]!;
+    // Several tenant/job-bound citations for the same canonical work are not more principal.
+    for (const n of [70, 71, 72]) entry.assessment.sourceManifest.push({
+      ...entry.assessment.sourceManifest[0]!, sourceId: id(n), sourceHash: "d".repeat(64),
+    });
+    const first = derive(original);
+    expect(first.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(first.cumulativeFee.pence).toBe(8000);
+    expect(first.sourceReferences).toHaveLength(1);
+    const firstBytes = JSON.stringify(first), originalBytes = JSON.stringify(original);
+
+    // A new reviewed revision replaces the contribution. It is never added to its predecessor.
+    const revised = independentEntry("60000");
+    Object.assign(revised, JSON.parse(JSON.stringify(revised)
+      .replaceAll(id(103), id(3)).replaceAll(id(104), id(4)).replaceAll(id(106), id(6))));
+    revised.assessment.revision = 2;
+    // Fixture inference starts with null; the wire schema validates the real predecessor below.
+    const assessment = { ...revised.assessment, previousAssessmentId: id(7), sourceRevision: "sources.2" };
+    const qualification = { ...revised.qualification, currentSourceRevision: "sources.2", source: {
+      ...revised.qualification.source, assessmentRevision: 2, sourceRevision: "sources.2",
+    } };
+    const current = { ...revised, assessment, qualification };
+    const latest = derive({ ...original, sources: [current] });
+    expect(latest.exactQualifyingPrincipal).toEqual(wire("60000"));
+    expect(latest.cumulativeFee.pence).toBe(6000);
+    expect(latest.sourceReferences.map(s => s.assessmentId)).toEqual([id(107)]);
+    for (const sources of [[entry, current], [current, entry]])
+      expect(() => derive({ ...original, sources })).toThrow(RecoveryFeeIllustrationError);
+    expect(JSON.stringify(first)).toBe(firstBytes);
+    expect(JSON.stringify(original)).toBe(originalBytes);
+
+    // Each independent uniqueness guard matters even with otherwise distinct current records.
+    for (const kind of ["assessment", "review", "allocation"] as const) {
+      const other = independentEntry();
+      if (kind === "assessment") Object.assign(other, JSON.parse(JSON.stringify(other).replaceAll(id(107), id(7))));
+      if (kind === "review") other.qualification.source.reviewId = id(10);
+      if (kind === "allocation") {
+        other.qualification.source.lineAllocationIds = [id(28)];
+        other.assessment.sourceManifest.push({ ...other.assessment.sourceManifest[8]!, sourceId: id(28) });
+      }
+      expect(() => derive({ ...original, sources: [entry, other] }), kind).toThrow(RecoveryFeeIllustrationError);
+    }
+    // A separate canonical work really does contribute, so blanket rejection cannot pass.
+    expect(derive({ ...original, sources: [entry, independentEntry("60000")] }).exactQualifyingPrincipal)
+      .toEqual(wire("140000"));
+  });
+
+  it("SV6-09 illustration consumes saved allocations without reallocating or rounding them", () => {
+    // Deliberately unreduced saved F4 rational: parsing/consumption preserves its two strings.
+    const raw = rawInput("4000000", "86");
+    const source = raw.sources[0]!.qualification.source;
+    source.lineAllocationIds.push(id(80));
+    raw.sources[0]!.assessment.sourceManifest.push({
+      ...raw.sources[0]!.assessment.sourceManifest[8]!, sourceId: id(80),
+    });
+    const bytes = JSON.stringify(raw);
+    const parsed = recoveryFeeIllustrationInputV1.parse(raw);
+    expect(parsed.sources[0]!.qualification).toMatchObject({ source: {
+      exactRemainingPrincipal: wire("4000000", "86"), lineAllocationIds: [id(28), id(80)],
+    } });
+    const sum = vi.spyOn(exactMoney, "sumExactPence");
+    try {
+      const output = deriveRecoveryFeeIllustration(parsed);
+      expect(sum.mock.calls.some(([values]) => values.length === 1 &&
+        values[0]!.numerator === 4000000n && values[0]!.denominator === 86n)).toBe(true);
+      expect(output.exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+      expect(output.cumulativeFee.pence).toBe(4651);
+      expect(output.display.qualifyingPrincipal).toBeNull();
+      expect(output.sourceReferences[0]!.lineAllocationIds).toEqual([id(28), id(80)]);
+      expect(JSON.stringify(raw)).toBe(bytes);
+      expect(parsed.sources[0]!.assessment.remainingPrincipal).toEqual(wire("4000000", "86"));
+    } finally { sum.mockRestore(); }
+
+    const mismatch = rawInput("2000000", "43");
+    mismatch.sources[0]!.qualification.source.exactRemainingPrincipal = wire("2000001", "43");
+    expect(() => derive(mismatch)).toThrow(RecoveryFeeIllustrationError);
+    const missing = rawInput();
+    missing.sources[0]!.qualification.source.lineAllocationIds = [id(90)];
+    expect(() => derive(missing)).toThrow(RecoveryFeeIllustrationError);
+    const noProof = rawInput(); noProof.sources[0]!.qualification.source.lineAllocationIds = [];
+    expect(() => derive(noProof)).toThrow();
+  });
+});
+
+describe("SV6-11-17 pure acceptance", () => {
+  it("SV6-11 cumulative exact principal is rounded once", () => {
+    // Owner-supplied current exact values only: no raw receipt allocation in this lane.
+    const f4 = rawInput("2000000", "43");
+    const before = JSON.stringify(f4);
+    const result = derive(f4);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+    expect(result.cumulativeFee).toEqual({ pence: 4651, currency: "GBP" });
+    expect(JSON.stringify(f4)).toBe(before);
+
+    // Same work, two saved allocation references, same current cumulative Q as one receipt.
+    const split = rawInput("2000000", "43");
+    split.sources[0]!.qualification.source.lineAllocationIds.push(id(80));
+    split.sources[0]!.assessment.sourceManifest.push({ ...split.sources[0]!.assessment.sourceManifest[8]!, sourceId: id(80) });
+    expect(derive(split).exactQualifyingPrincipal).toEqual(result.exactQualifyingPrincipal);
+    expect(derive(split).cumulativeFee).toEqual(result.cumulativeFee);
+    expect(derive(split).sourceReferences[0]!.lineAllocationIds).toEqual([id(28), id(80)]);
+
+    // Independent current contributions also sum exactly before the single rounding step.
+    const pieces = rawInput("1000000", "43");
+    const second = independentEntry("1000000");
+    second.assessment.remainingPrincipal = wire("1000000", "43");
+    second.qualification.source.exactRemainingPrincipal = wire("1000000", "43");
+    pieces.sources.push(second);
+    expect(derive(pieces).exactQualifyingPrincipal).toEqual(result.exactQualifyingPrincipal);
+    expect(derive(pieces).cumulativeFee).toEqual(result.cumulativeFee); // per-piece rounding would be 4652p
+    expect(derive({ ...pieces, sources: [...pieces.sources].reverse() }).cumulativeFee).toEqual(result.cumulativeFee);
+    const smallPieces = rawInput("5"); smallPieces.sources.push(independentEntry("10"));
+    expect(derive(smallPieces).cumulativeFee).toEqual(derive(rawInput("15")).cumulativeFee);
+    const twoFivePence = rawInput("5"); twoFivePence.sources.push(independentEntry("5"));
+    expect(derive(twoFivePence).exactQualifyingPrincipal).toEqual(wire("10"));
+    expect(derive(twoFivePence).cumulativeFee.pence).toBe(1);
+    expect(["5", "15", "25"].map(q => derive(rawInput(q)).cumulativeFee.pence)).toEqual([0, 2, 2]);
+  });
+
+  it("SV6-17 v3 has no cap credit or subscription offset", () => {
+    // Literal expected fees straddle the old £79 credit and exceed its example cap.
+    for (const [q, fee] of [["5", 0], ["100", 10], ["79000", 7900], ["80000", 8000], ["1000000", 100000]] as const) {
+      const result = derive(rawInput(q));
+      expect(result.cumulativeFee).toEqual({ pence: fee, currency: "GBP" });
+      expect(result.exactQualifyingPrincipal).toEqual(wire(q));
+      for (const field of ["cap", "base", "baseFee", "planCredit", "creditUsed", "subscriptionOffset", "settledPlanPrincipal"])
+        expect(result).not.toHaveProperty(field);
+    }
+    const empty = rawInput(); empty.sources = []; empty.captures = [];
+    expect(derive(empty).cumulativeFee.pence).toBe(0);
+    // Every legacy/offset input is refused, even when zero: never accepted and ignored.
+    for (const field of ["cap", "base", "baseFee", "planCredit", "creditUsed", "subscriptionOffset", "settledPlanPrincipal", "acceptedNet"]) {
+      for (const value of [0, 6900, 7900]) {
+        const raw = { ...rawInput(), [field]: value };
+        expect(recoveryFeeIllustrationInputV1.safeParse(raw).success, field).toBe(false);
+        expect(() => deriveRecoveryFeeIllustration(raw as never), field).toThrow(RecoveryFeeIllustrationError);
+      }
+      expect(recoveryFeeIllustrationOutputV1.safeParse({ ...derive(rawInput()), [field]: 0 }).success, field).toBe(false);
+    }
+    const captures = rawInput(); captures.captures[0]!.exactNet = wire("1000000");
+    expect(derive(captures).cumulativeFee.pence).toBe(8000);
+    // The unchanged merged fee.test.ts / fee-what-if.test.ts exercise v1 separately.
+  });
+});
+
+// Pure synthetic fixtures only: these are not persisted commands or settlement proof.
+// Exercise the existing owner kernel; the illustration consumes its exact results unchanged.
+const allocationFixture = (): RecoveryReceiptFacts => ({
+  version: "recovery-receipt-facts.v1", environment: "synthetic_demo", direction: "receipt", compositionComplete: true,
+  receipt: { id: id(90), invoiceId: id(91), gross: wire("2400000"), effectiveAt: "2026-10-23T12:00:00Z", sourceRef: "synthetic-receipt.1" },
+  lines: [
+    { id: id(92), invoiceId: id(91), existedAt: "2026-10-20T12:00:00Z", outstandingGross: wire("4032000"), netPence: 3360000, grossPence: 4032000 },
+    { id: binding.lineId, invoiceId: id(91), existedAt: "2026-10-22T12:00:00Z", outstandingGross: wire("96000"), netPence: 80000, grossPence: 96000 },
+  ], explicit: null, separateInvoice: null,
+});
+const illustrateAllocatedCatch = (rows: ReturnType<typeof mapRecoveryReceiptToLines>) => {
+  const q = sumRecoveryDeemedNet(rows, [binding.lineId]);
+  const raw = rawInput(q.numerator, q.denominator);
+  // An authoritative empty qualification inventory is assumed ONLY in this pure fixture.
+  // Real callers must prove completeness; zero is not a missing-proof fallback.
+  if (q.numerator === "0") raw.sources = [];
+  return derive(raw);
+};
+describe("SV6-12/16 pure dependency-bound scenarios", () => {
+  it("SV6-12 F5 deposit", () => {
+    const deposit = allocationFixture();
+    deposit.receipt.gross = wire("1200000");
+    deposit.receipt.effectiveAt = "2026-10-21T12:00:00Z"; // Before catch existence/lock.
+    const bytes = JSON.stringify(deposit);
+    const deposited = mapRecoveryReceiptToLines(deposit);
+    expect(deposited.map(row => row.lineId)).toEqual([id(92)]);
+    expect(sumRecoveryDeemedNet(deposited, [binding.lineId])).toEqual(wire("0"));
+    expect(illustrateAllocatedCatch(deposited).cumulativeFee.pence).toBe(0);
+    const later = allocationFixture();
+    later.receipt.gross = wire("1464000");
+    later.lines[0]!.outstandingGross = wire("2832000");
+    const rows = mapRecoveryReceiptToLines(later), savedBytes = JSON.stringify(rows);
+    expect(rows.find(row => row.lineId === binding.lineId)).toMatchObject({ rule: "pro_rata", gross: wire("48000"), net: wire("40000") });
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("40000"));
+    expect(result.cumulativeFee.pence).toBe(4000);
+    expect(JSON.stringify(rows)).toBe(savedBytes);
+    expect(JSON.stringify(deposit)).toBe(bytes);
+  });
+  it("SV6-12 F6 explicit non catch", () => {
+    const facts = allocationFixture();
+    facts.explicit = { sourceRef: "synthetic-remittance.non-catch.1", shares: [{ lineId: id(92), gross: wire("2400000") }] };
+    const bytes = JSON.stringify(facts), rows = mapRecoveryReceiptToLines(facts);
+    expect(rows).toEqual([{ lineId: id(92), rule: "explicit", sourceRef: "synthetic-remittance.non-catch.1", gross: wire("2400000"), net: wire("2000000") }]);
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("0"));
+    expect(result.cumulativeFee.pence).toBe(0);
+    expect(JSON.stringify(facts)).toBe(bytes);
+    // Negative control: same receipt without remittance uses the existing pro-rata rule.
+    facts.explicit = null;
+    expect(illustrateAllocatedCatch(mapRecoveryReceiptToLines(facts)).exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+  });
+  it("SV6-12 F7 separate invoice", () => {
+    const facts = allocationFixture();
+    facts.receipt.invoiceId = id(93); facts.receipt.gross = wire("96000");
+    facts.lines[1]!.invoiceId = id(93);
+    facts.separateInvoice = { invoiceId: id(93), sourceRef: "synthetic-separate-invoice.1" };
+    const bytes = JSON.stringify(facts), rows = mapRecoveryReceiptToLines(facts);
+    expect(rows).toEqual([{ lineId: binding.lineId, rule: "separate_invoice", sourceRef: "synthetic-separate-invoice.1", gross: wire("96000"), net: wire("80000") }]);
+    const result = illustrateAllocatedCatch(rows);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(result.cumulativeFee.pence).toBe(8000);
+    expect(facts.lines[0]!.outstandingGross).toEqual(wire("4032000"));
+    expect(JSON.stringify(facts)).toBe(bytes);
+    // The unrelated main invoice's balance cannot affect the catch invoice.
+    facts.lines[0]!.outstandingGross = wire("1");
+    expect(illustrateAllocatedCatch(mapRecoveryReceiptToLines(facts))).toEqual(result);
+  });
+  it("SV6-16 shadow 30000 separates captures from paid catches", () => {
+    const raw = rawInput("50000"); raw.sources.push(independentEntry("30000"));
+    raw.captures[0]!.exactNet = wire("320000");
+    raw.captures.push({ ...raw.captures[0]!, captureId: id(61), sourceRevision: "final-review.1", exactNet: wire("40000") });
+    const bytes = JSON.stringify(raw), result = derive(raw);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("80000"));
+    expect(result.cumulativeFee).toEqual({ pence: 8000, currency: "GBP" });
+    expect(result.exactYoursBeforeVatAndTax).toEqual(wire("72000"));
+    expect(result.exactCapturedFeeFreeNet).toEqual(wire("360000"));
+    expect(result.capturedFee).toEqual({ pence: 0, currency: "GBP" });
+    expect(result.display).toEqual({ qualifyingPrincipal: { pence: 80000, currency: "GBP" }, capturedFeeFreeNet: { pence: 360000, currency: "GBP" }, yoursBeforeVatAndTax: { pence: 72000, currency: "GBP" } });
+    expect(result.label).toBe("Illustration — proposed policy; principal only");
+    expect(result.productionEnabled).toBe(false); expect(result.realExternalActions).toBe(0);
+    expect(result).not.toHaveProperty("found"); expect(result).not.toHaveProperty("postingDelta");
+    expect(JSON.stringify(raw)).toBe(bytes);
+    const capturesOnly = { ...raw, sources: [] };
+    expect(derive(capturesOnly).cumulativeFee.pence).toBe(0);
+    expect(derive(capturesOnly).exactCapturedFeeFreeNet).toEqual(wire("360000"));
+    // Billed but unpaid is not a qualified source. Never infer settlement from billing.
+    const unpaid = structuredClone(raw);
+    unpaid.sources[1]!.assessment.facts.facts.customer_payment_settled_and_allocated_to_that_line!.holds = false;
+    expect(() => deriveRecoveryFeeIllustration(unpaid as never)).toThrow(RecoveryFeeIllustrationError);
+    const missing = structuredClone(raw);
+    delete (missing.sources[1]!.assessment.facts.facts as Record<string, unknown>).customer_payment_settled_and_allocated_to_that_line;
+    expect(() => deriveRecoveryFeeIllustration(missing as never)).toThrow(RecoveryFeeIllustrationError);
+    for (const field of ["tenantId", "jobId", "lockId"] as const) {
+      const foreign = structuredClone(raw); foreign.captures[1]![field] = id(99);
+      expect(() => derive(foreign)).toThrow(RecoveryFeeIllustrationError);
+    }
   });
 });

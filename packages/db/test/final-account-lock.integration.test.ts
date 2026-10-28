@@ -77,7 +77,7 @@ export async function addFixtureCapture(f: LockFixture, a: Awaited<ReturnType<ty
 export async function insertFixtureOriginalEvidence(pool: Pool, tenantId: string, jobId: string, scopeItemId: string, evidence: string, objectVersion: string) {
  const upload = randomUUID();
  await asFixtureTenant(pool, tenantId, async db => {
-  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, tenantId, jobId, scopeItemId, `synthetic/${evidence}`, LOCK_HASH]);
+  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())`, [upload, tenantId, jobId, scopeItemId, `synthetic/${evidence}`, LOCK_HASH, objectVersion]); // set-up only (per C135): its verified object means the upload is verified, so the lock's pending-photo refusal does not apply
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
    VALUES($1,$2,$3,$4,$5,'original','photo',$6,$7,$8,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, tenantId, upload, jobId, scopeItemId, `synthetic/${evidence}`, objectVersion, LOCK_HASH]);
  });

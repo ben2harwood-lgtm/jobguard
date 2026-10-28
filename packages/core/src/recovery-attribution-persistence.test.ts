@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { attributionPredicates, qualifiesAttribution } from "./shadow-domain/attribution.js";
+import { matchBuilderCapture, captureStates } from "./shadow-domain/capture.js";
+import { disclosureRoutes } from "./shadow-domain/types.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 import { recoveryAttributionRevisionV1, recoveryAttributionCommandV1, qualifyingRecoverySourceV1, parseRecoveryAttributionCommand, RecoveryAttributionError, currentAttributionQualificationV1, attributionReviewResultV1 } from "./recovery-attribution-persistence.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -214,5 +216,74 @@ describe("SV6-01 persistence boundary", () => {
     expect(attributionReviewResultV1.safeParse(result).success).toBe(true);
     expect(attributionReviewResultV1.safeParse({ ...result, productionEnabled: true }).success).toBe(false);
     expect(qualifyingRecoverySourceV1.safeParse({ ...current(), exactRemainingPrincipal: { numerator: "0", denominator: "1" } }).success).toBe(false);
+  });
+});
+
+// These are pure source-contract checks. They do not authenticate a caller or read PostgreSQL.
+describe("SV6-02–04 pure attribution guards", () => {
+  it("SV6-02 each failed conjunct prevents positive qualification", () => {
+    expect(recoveryAttributionRevisionV1.safeParse(fixture()).success).toBe(true);
+    for (const key of attributionPredicates) {
+      const raw = fixture();
+      raw.facts.facts[key]!.holds = false;
+      expect(recoveryAttributionRevisionV1.safeParse(raw).success, `${key}: forged positive`).toBe(false);
+      expect(recoveryAttributionRevisionV1.safeParse({ ...raw, reasonCodes: [key] }).success, `${key}: positive label with excluded reasons`).toBe(false);
+      const excluded = { ...raw, assessmentOutcome: "excluded", reasonCodes: [key] };
+      const parsed = recoveryAttributionRevisionV1.parse(excluded);
+      expect(qualifiesAttribution(parsed.facts), key).toBe(false);
+      expect(parsed.remainingPrincipal).toEqual(raw.remainingPrincipal);
+      for (const missing of [undefined, null, {}, { ...raw.facts.facts[key], holds: undefined }, { ...raw.facts.facts[key], sourceRef: undefined }]) {
+        const incomplete = { ...raw, facts: { ...raw.facts, facts: { ...raw.facts.facts, [key]: missing } } };
+        expect(recoveryAttributionRevisionV1.safeParse(incomplete).success, `${key}: missing proof`).toBe(false);
+      }
+      const unresolvable = fixture();
+      unresolvable.sourceManifest = unresolvable.sourceManifest.filter(s => s.sourceId !== unresolvable.facts.facts[key]!.sourceRef);
+      expect(recoveryAttributionRevisionV1.safeParse(unresolvable).success, `${key}: absent source`).toBe(false);
+    }
+  });
+  it("SV6-03 captures and ambiguous matches remain fee free", () => {
+    const candidate = { version: "shadow-match.v1", tenantId: binding.tenantId, jobId: binding.jobId, scopeArea: "garden", description: "Outside tap fitted", dateCompatibility: "compatible", valueCompatibility: "compatible", ruleVersion: "builder-favourable-match.v1" };
+    const rows = [
+      { kind: "baseline", state: null, predicate: "absent_from_accepted_scope" },
+      ...captureStates.map(state => ({ kind: "log_extra", state, predicate: "absent_from_builder_captures_at_lock" })),
+      { kind: "final_review", state: null, predicate: "absent_from_locked_final_account" },
+    ] as const;
+    for (const row of rows) for (const dateCompatibility of ["compatible", "unknown"]) for (const valueCompatibility of ["compatible", "unknown"]) {
+      const capture = { version: "shadow-capture.v1", tenantId: binding.tenantId, jobId: binding.jobId, id: id(80), scopeItemId: id(81), revisionId: id(82), serverRecordedAt: "2026-10-01T00:00:00Z", valuePence: null, kind: row.kind, state: row.state, scopeArea: "garden", description: "Tap", recordedPhase: "pre_lock", aiStructured: true, sourceRef: id(83) };
+      const before = JSON.stringify(capture);
+      const result = matchBuilderCapture({ ...candidate, dateCompatibility, valueCompatibility }, [capture]);
+      expect(result.outcome, `${row.kind}/${row.state}/${dateCompatibility}/${valueCompatibility}`).toBe(row.kind === "baseline" ? "already_in_original_scope" : "builder_captured");
+      expect(result.references).toEqual([{ id: capture.id, sourceRef: capture.sourceRef }]);
+      expect(JSON.stringify(capture)).toBe(before);
+      // Compose the existing matching outcome with the recorded predicate; the source reader remains dependency-bound.
+      const raw = fixture();
+      raw.facts.facts[row.predicate]!.holds = result.outcome === "unmatched";
+      expect(recoveryAttributionRevisionV1.safeParse(raw).success).toBe(false);
+      expect(qualifiesAttribution(recoveryAttributionRevisionV1.parse({ ...raw, assessmentOutcome: "excluded", reasonCodes: [row.predicate] }).facts)).toBe(false);
+      for (const field of ["tenantId", "jobId"] as const) {
+        expect(matchBuilderCapture(candidate, [{ ...capture, [field]: id(99) }]).outcome).toBe("unmatched");
+      }
+    }
+  });
+  it("SV6-04 disclosure and evidence timing cannot be rehabilitated into a fee", () => {
+    for (const reason of ["disclosed_before_lock", "surfaced_early", "evidence_after_lock", "pre_adoption_evidence"]) {
+      for (const route of reason === "disclosed_before_lock" || reason === "surfaced_early" ? disclosureRoutes : [null]) {
+        const raw = fixture();
+        const exclusion = { version: "shadow-ineligibility.v1", reason, sourceRef: id(20), at: "2026-10-01T00:00:00Z", disclosureRoute: route };
+        const dispute = { ...exclusion, reason: "attribution_disputed", sourceRef: id(21), disclosureRoute: null };
+        const review = { version: "shadow-dispute-review.v1", ...binding, resolution: "confirmed_extra", sourceRef: id(26) };
+        for (const reviewed of [false, true]) {
+          const facts = { ...raw.facts, exclusions: reviewed ? [exclusion, dispute] : [exclusion], disputeReview: reviewed ? review : null };
+          expect(recoveryAttributionRevisionV1.safeParse({ ...raw, facts }).success, `${reason}/${route}/${reviewed}`).toBe(false);
+          const excluded = recoveryAttributionRevisionV1.parse({ ...raw, facts, assessmentOutcome: "excluded", reasonCodes: [reason] });
+          expect(qualifiesAttribution(excluded.facts)).toBe(false);
+          expect(excluded.facts.exclusions[0]).toEqual(exclusion);
+          // A later revision and confirmation cannot clear the recorded exclusion.
+          const later = recoveryAttributionRevisionV1.parse({ ...excluded, assessmentId: id(90), revision: 2, previousAssessmentId: raw.assessmentId, sourceRevision: "sources.2", facts: { ...facts, revisionId: id(90) } });
+          expect(qualifiesAttribution(later.facts)).toBe(false);
+          expect(excluded.revision).toBe(1);
+        }
+      }
+    }
   });
 });
