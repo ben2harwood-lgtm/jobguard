@@ -136,7 +136,7 @@ it("malformed session digest fails before principal or source SQL (unit boundary
 
 it.each([false, true])("snapshot mode precedes tenant/source queries and releases its client (failure=%s)", async fail => {
   const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
-  const context = testTenantContext(id), statements: Array<{ sql: string; values?: unknown[] }> = [];
+  const context = testTenantContext(id), statements: Array<{ sql: string; values: unknown[] | undefined }> = [];
   const query = vi.fn(async (sql: string, values?: unknown[]) => {
     statements.push({ sql, values });
     return { rows: [], rowCount: 0 };
