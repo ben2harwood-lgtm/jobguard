@@ -57,7 +57,9 @@ jobs:
       - uses: actions/setup-node@v4.0.3
         with: { node-version: 24.15.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec turbo run build --filter=@jobguard/db...
+      # DB tests also import built API/AI output outside the DB dependency graph.
+      # This closure matches every build task in the original root test graph.
+      - run: pnpm exec turbo run build --filter=@jobguard/api...
       - run: pnpm --filter @jobguard/db test --shard=${{ matrix.shard }}/4
   core:
     needs: [core-checks, core-db]

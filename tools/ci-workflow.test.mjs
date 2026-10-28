@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 // Only the workflow's two-space job blocks and eight-space run blocks are needed.
@@ -117,7 +118,7 @@ test("DB and browser matrices cover all four shards without fail-fast or test se
   assert.equal(root.scripts.test, "node --test tools/*.test.mjs && turbo run test");
   assert.ok(jobs["core-checks"].includes("run: node --test tools/*.test.mjs\n"));
   assert.ok(jobs["core-checks"].includes("run: pnpm exec turbo run test --filter='!@jobguard/db'\n"));
-  assert.ok(jobs["core-db"].includes("run: pnpm exec turbo run build --filter=@jobguard/db...\n"));
+  assert.ok(jobs["core-db"].includes("run: pnpm exec turbo run build --filter=@jobguard/api...\n"));
   assert.ok(jobs["core-db"].includes("run: pnpm --filter @jobguard/db test --shard=${{ matrix.shard }}/4\n"));
   const db = JSON.parse(readFileSync(new URL("../packages/db/package.json", import.meta.url)));
   assert.equal(db.scripts.test, "vitest run --passWithNoTests --maxWorkers=1");
@@ -125,4 +126,40 @@ test("DB and browser matrices cover all four shards without fail-fast or test se
   assert.match(playwright, /retries: 0/);
   assert.match(playwright, /workers: 1/);
   for (const project of ["mobile-360", "desktop"]) assert.ok(playwright.includes(`name: "${project}"`));
+});
+
+
+test("each DB and browser shard builds its workspace prerequisites before testing", () => {
+  const commands = {
+    "core-db": ["pnpm exec turbo run build --filter=@jobguard/api...", "pnpm --filter @jobguard/db test --shard=${{ matrix.shard }}/4"],
+    "web-shards": ["pnpm build", "pnpm test:e2e --shard=${{ matrix.shard }}/4"],
+  };
+  for (const [job, [build, runTests]] of Object.entries(commands)) {
+    const steps = jobs[job].split(/^      - /m).slice(1);
+    const installIndex = steps.findIndex((step) => step.startsWith("run: pnpm install --frozen-lockfile\n"));
+    const buildIndex = steps.findIndex((step) => step.startsWith(`run: ${build}\n`));
+    const testIndex = steps.findIndex((step) => step.includes(`run: ${runTests}\n`));
+    assert.ok(installIndex >= 0 && buildIndex > installIndex && testIndex > buildIndex, `${job}: install, build, then test`);
+    assert.doesNotMatch(steps[buildIndex], /if:|continue-on-error/);
+  }
+
+  // Compare actual Turbo graphs so a narrowed shard build cannot silently drop
+  // any prerequisite that the original unpartitioned root test command built.
+  function plan(args) {
+    const result = spawnSync(fileURLToPath(new URL("../node_modules/.bin/turbo", import.meta.url)), ["run", ...args, "--dry=json"], {
+      cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8",
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout).tasks.filter((task) => task.task === "build")
+      .map(({ taskId, command, dependencies }) => ({ taskId, command, dependencies: [...dependencies].sort() }))
+      .sort((a, b) => a.taskId.localeCompare(b.taskId));
+  }
+  const original = plan(["test"]);
+  assert.ok(original.some((task) => task.taskId === "@jobguard/api#build"));
+  assert.ok(original.some((task) => task.taskId === "@jobguard/ai#build"));
+  assert.deepEqual(plan(["build", "--filter=@jobguard/api..."]), original);
+  const browser = plan(["build"]);
+  assert.deepEqual(browser.filter((task) => task.taskId !== "@jobguard/web#build"), original);
+  assert.ok(browser.some((task) => task.taskId === "@jobguard/web#build"));
 });
