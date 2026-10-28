@@ -351,5 +351,64 @@ describe("SV6-08/09 saved attribution consumption", () => {
     expect(() => derive(missing)).toThrow(RecoveryFeeIllustrationError);
     const noProof = rawInput(); noProof.sources[0]!.qualification.source.lineAllocationIds = [];
     expect(() => derive(noProof)).toThrow();
+
+describe("SV6-11-17 pure acceptance", () => {
+  it("SV6-11 cumulative exact principal is rounded once", () => {
+    // Owner-supplied current exact values only: no raw receipt allocation in this lane.
+    const f4 = rawInput("2000000", "43");
+    const before = JSON.stringify(f4);
+    const result = derive(f4);
+    expect(result.exactQualifyingPrincipal).toEqual(wire("2000000", "43"));
+    expect(result.cumulativeFee).toEqual({ pence: 4651, currency: "GBP" });
+    expect(JSON.stringify(f4)).toBe(before);
+
+    // Same work, two saved allocation references, same current cumulative Q as one receipt.
+    const split = rawInput("2000000", "43");
+    split.sources[0]!.qualification.source.lineAllocationIds.push(id(80));
+    split.sources[0]!.assessment.sourceManifest.push({ ...split.sources[0]!.assessment.sourceManifest[8]!, sourceId: id(80) });
+    expect(derive(split).exactQualifyingPrincipal).toEqual(result.exactQualifyingPrincipal);
+    expect(derive(split).cumulativeFee).toEqual(result.cumulativeFee);
+    expect(derive(split).sourceReferences[0]!.lineAllocationIds).toEqual([id(28), id(80)]);
+
+    // Independent current contributions also sum exactly before the single rounding step.
+    const pieces = rawInput("1000000", "43");
+    const second = independentEntry("1000000");
+    second.assessment.remainingPrincipal = wire("1000000", "43");
+    second.qualification.source.exactRemainingPrincipal = wire("1000000", "43");
+    pieces.sources.push(second);
+    expect(derive(pieces).exactQualifyingPrincipal).toEqual(result.exactQualifyingPrincipal);
+    expect(derive(pieces).cumulativeFee).toEqual(result.cumulativeFee); // per-piece rounding would be 4652p
+    expect(derive({ ...pieces, sources: [...pieces.sources].reverse() }).cumulativeFee).toEqual(result.cumulativeFee);
+    const smallPieces = rawInput("5"); smallPieces.sources.push(independentEntry("10"));
+    expect(derive(smallPieces).cumulativeFee).toEqual(derive(rawInput("15")).cumulativeFee);
+    const twoFivePence = rawInput("5"); twoFivePence.sources.push(independentEntry("5"));
+    expect(derive(twoFivePence).exactQualifyingPrincipal).toEqual(wire("10"));
+    expect(derive(twoFivePence).cumulativeFee.pence).toBe(1);
+    expect(["5", "15", "25"].map(q => derive(rawInput(q)).cumulativeFee.pence)).toEqual([0, 2, 2]);
+  });
+
+  it("SV6-17 v3 has no cap credit or subscription offset", () => {
+    // Literal expected fees straddle the old £79 credit and exceed its example cap.
+    for (const [q, fee] of [["5", 0], ["100", 10], ["79000", 7900], ["80000", 8000], ["1000000", 100000]] as const) {
+      const result = derive(rawInput(q));
+      expect(result.cumulativeFee).toEqual({ pence: fee, currency: "GBP" });
+      expect(result.exactQualifyingPrincipal).toEqual(wire(q));
+      for (const field of ["cap", "base", "baseFee", "planCredit", "creditUsed", "subscriptionOffset", "settledPlanPrincipal"])
+        expect(result).not.toHaveProperty(field);
+    }
+    const empty = rawInput(); empty.sources = []; empty.captures = [];
+    expect(derive(empty).cumulativeFee.pence).toBe(0);
+    // Every legacy/offset input is refused, even when zero: never accepted and ignored.
+    for (const field of ["cap", "base", "baseFee", "planCredit", "creditUsed", "subscriptionOffset", "settledPlanPrincipal", "acceptedNet"]) {
+      for (const value of [0, 6900, 7900]) {
+        const raw = { ...rawInput(), [field]: value };
+        expect(recoveryFeeIllustrationInputV1.safeParse(raw).success, field).toBe(false);
+        expect(() => deriveRecoveryFeeIllustration(raw as never), field).toThrow(RecoveryFeeIllustrationError);
+      }
+      expect(recoveryFeeIllustrationOutputV1.safeParse({ ...derive(rawInput()), [field]: 0 }).success, field).toBe(false);
+    }
+    const captures = rawInput(); captures.captures[0]!.exactNet = wire("1000000");
+    expect(derive(captures).cumulativeFee.pence).toBe(8000);
+    // The unchanged merged fee.test.ts / fee-what-if.test.ts exercise v1 separately.
   });
 });
