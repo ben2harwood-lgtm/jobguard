@@ -8,7 +8,7 @@ const answers = Object.keys(answerLabels) as RevealAnswer[];
 
 /** Reveal and non-confirming answers after the lock. "Yes, extra work" waits on SV-5 Q2. */
 export function FinalCheckReveal({ jobId }: { jobId: string }) {
- const [read, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState("");
+ const [read, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
  const currentJob = useRef(jobId), epoch = useRef(0);
  currentJob.current = jobId;
  const load = useCallback(async () => {
@@ -22,6 +22,16 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  }, [jobId]);
  useEffect(() => { setRead(null); void load(); return () => { epoch.current++; }; }, [load]);
+ // Practice only: the worker runs the check; this page just asks and then re-reads.
+ const requestRun = async () => {
+  if (busy) return;
+  setBusy(true); setError("");
+  try {
+   const response = await fetch(`/api/jobs/${jobId}/final-check/runs`, { method: "POST" });
+   if (response.ok) setRequested(true); else setError("The practice check could not be requested.");
+  } catch { setError("The request may not have been saved. Try again."); }
+  await load();
+ };
  const answer = async (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => {
   if (!read || busy) return;
   setBusy(true); setError("");
@@ -37,6 +47,10 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   {error && <p role="alert">{error}</p>}
   {read && <>
    <p role="status" data-testid="final-check-status">{revealStatus(read)}</p>
+   {read.state === "pending" && read.lockId && <p>
+    <button type="button" disabled={busy} onClick={() => void requestRun()}>Run the final check (practice)</button>
+    {requested && <span data-testid="final-check-run-requested"> Asked for. It takes about a minute; then load the saved final check.</span>}
+   </p>}
    {read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} onAnswer={answer}/>)}
    {(read.postLockItems ?? []).length > 0 && <>
     <h3>Found after the lock</h3>

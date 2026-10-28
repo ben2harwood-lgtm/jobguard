@@ -93,3 +93,44 @@ test("K (fixture-seeded): Already included must name a locked line and leaves th
   await expect(page.getByTestId("final-check-item").getByTestId("final-check-disposition")).toHaveText("Your answer: Already included in a locked line");
   expect(JSON.stringify((await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`), "Re-read lock")).lock)).toBe(lock);
 });
+
+/** Live job with its generated proof photo, final account assembled, terms, dispositions and lock, all through the app. */
+async function lockedPracticeJob(page: Page) {
+  await openLiveWatchdogJob(page);
+  const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!, tenantId = "11111111-1111-4111-8111-111111111111";
+  await jsonResult(page.request.post("/api/decisions", { data: { version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId, jobId } }), "Evaluate proof requirement");
+  const proofPath = `/api/jobs/${jobId}/proof`, initial = await jsonResult(page.request.get(proofPath), "Read proof requirement");
+  const proof = (data: Record<string, unknown>) => jsonResult(page.request.post(proofPath, { data: { version: "practice-proof-command.v1", commandId: randomUUID(), ...data } }), "Proof step");
+  const selected = await proof({ action: "select_generated", scopeItemId: initial.scopeItemId, fixture: "completion-photo" });
+  const finalized = await proof({ action: "finalize", uploadId: selected.upload.id, objectVersionId: selected.upload.objectVersionId });
+  await proof({ action: "complete", evidenceId: finalized.upload.evidenceId, scopeItemId: initial.scopeItemId });
+  const path = `/api/jobs/${jobId}/final-account`;
+  const account = (await jsonResult(page.request.post(path, { data: { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: 0 } }), "Assemble")).account;
+  await jsonResult(page.request.post(`${path}/terms`, { data: { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" } }), "Accept terms");
+  await withSyntheticShadow(tenantId, async (_shadow, admin) => {
+    await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 ON CONFLICT(tenant_id,job_id) DO NOTHING", [tenantId, jobId]);
+    const scope = (await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'", [tenantId, jobId, account.id])).rows;
+    for (const item of scope) await jsonResult(page.request.post(`${path}/dispositions`, { data: { version: "final-account.disposition.v1", commandId: randomUUID(), scopeItemId: item.scope_item_id, disposition: "done" } }), "Disposition");
+  });
+  await jsonResult(page.request.post(`${path}/lock`, { data: { version: "final-account.lock.v1", commandId: randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: "final_account_declaration.v1" } }), "Lock");
+  return { jobId, tenantId };
+}
+
+test("D (practice run): a photo of work in the original quote is reconciled, never revealed", async ({ page }) => {
+  test.setTimeout(240_000);
+  const { jobId, tenantId } = await lockedPracticeJob(page);
+  await page.goto(`/jobs/${jobId}#final-check`);
+  const panel = page.getByTestId("final-check-reveal");
+  await expect(panel.getByTestId("final-check-status")).toHaveText("Running JobGuard's final check");
+  await panel.getByRole("button", { name: "Run the final check (practice)", exact: true }).click();
+  await expect(panel.getByTestId("final-check-run-requested")).toBeVisible();
+  // The worker discovers requests once a minute, then freezes, examines, reconciles and publishes.
+  await expect.poll(async () => (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state, { timeout: 180_000, intervals: [5_000] }).toBe("completed");
+  await page.reload();
+  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+  await expect(page.getByTestId("final-check-item")).toHaveCount(0);
+  await withSyntheticShadow(tenantId, async (_shadow, admin) => {
+    const outcomes = (await admin.query("SELECT c.outcome FROM app.shadow_signal_classification c JOIN app.shadow_commercial_signal s ON (s.tenant_id,s.job_id,s.id)=(c.tenant_id,c.job_id,c.signal_id) WHERE c.tenant_id=$1 AND c.job_id=$2", [tenantId, jobId])).rows.map(r => r.outcome);
+    expect(outcomes).toEqual(["already_in_original_scope"]);
+  });
+});

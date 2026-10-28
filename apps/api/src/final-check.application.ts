@@ -9,6 +9,7 @@ export class FinalCheckApplication{
  async get(jobId:string){const auth=await this.access.job(jobId);const view=await this.repo.read(auth.context,jobId,auth.digest);return {...view,message:view.state==="completed"?(view.items.length===0?FINAL_CHECK_EMPTY_TEXT:null):view.state==="failed"?null:FINAL_CHECK_RUNNING_TEXT};}
  async disposition(jobId:string,raw:unknown){const auth=await this.access.job(jobId);const command=parseFinalCheckDisposition(raw);return this.repo.disposition(auth.context,jobId,auth.digest,command);}
  async confirmCatch(jobId:string,raw:unknown){const auth=await this.access.job(jobId);return this.repo.confirmCatch(auth.context,jobId,auth.digest,raw);}
+ async requestRun(jobId:string){const auth=await this.access.job(jobId);return this.repo.requestRun(auth.context,jobId,auth.digest);}
  async disputes(jobId:string){const auth=await this.access.job(jobId);return this.repo.disputes(auth.context,jobId,auth.digest);}
 }
 /** One HTTP mapping for Nest and Next: forbidden 403, conflicts 409, everything else typed 400. */

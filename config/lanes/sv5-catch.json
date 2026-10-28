@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/sv5-catch"
       ],
-      "note": "RED SV-5 Q2 (Ben 28 Oct): 'Yes, this was extra work' creates only an unpriced jobguard_catch variation via one checked routine (0254); no case, price, approval or claim. The case on the builder's priced approval is a separate PR.",
+      "note": "RED SV-5 Q2 (Ben 28 Oct): 'Yes, this was extra work' creates only an unpriced jobguard_catch variation via one checked routine (0254); no case, price, approval or claim. The case on the builder's priced approval is a separate PR. Plus the Q6 practice run (0256): owner request routine, worker-only practice ports and tasks, e2e worker in practice-only mode, Test D.",
       "allow": [
         "packages/db/migrations/0254_final_check_catch.sql",
         "packages/db/migration-notes/0254_final_check_catch.md",
@@ -24,7 +24,16 @@
         "apps/web/app/ui/final-check-reveal-view.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/migrations/0255_final_check_catch_case.sql",
-        "packages/db/migration-notes/0255_final_check_catch_case.md"
+        "packages/db/migration-notes/0255_final_check_catch_case.md",
+        "packages/db/migrations/0256_final_check_practice_run.sql",
+        "packages/db/migration-notes/0256_final_check_practice_run.md",
+        "packages/db/src/shadow-detection-repository.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/app/api/jobs/[id]/final-check/runs/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/runs/route.test.ts",
+        "apps/web/e2e/global-setup.ts",
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/api/src/shadow-detection.worker.test.ts"
       ]
     }
   }
