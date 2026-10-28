@@ -14,7 +14,7 @@ export class SubscriptionApplication {
  async command(session:unknown,commandId:string,raw:unknown){
   return this.current(session,async (credentials,digest)=>{
    const context=await resolveVerifiedTenantContext(this.authority.provider,credentials,this.authority.allowedOrigin);
-   if(!z.string().uuid().safeParse(commandId).success)throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
+   if(!z.guid({ error: "Invalid uuid" }).safeParse(commandId).success)throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
    return this.repository.command(context,digest,commandId,parseSubscriptionCommand(raw));
   });
  }

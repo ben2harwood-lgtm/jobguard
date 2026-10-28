@@ -1,3 +1,4 @@
+import { publishInvoiceFixtureCompletion } from "./helpers/customer-invoice-journey";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { finishDispositionsAndTerms, prepareLockJob, seedManySignals, withSyntheticShadow } from "./helpers/final-account-lock-journey";
@@ -109,7 +110,7 @@ test("DW7: another lock or cutoff cannot complete this job's check in commands o
   const own=locks.find(row=>row.job_id===fixture.jobId)!,foreign=locks.find(row=>row.job_id===other.jobId)!;
   for(const [lockId,cutoff] of [[foreign.id,foreign.cutoff],[own.id,own.wrong_cutoff]])
    await expect(shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,fixture.jobId,randomUUID(),lockId,cutoff])).rejects.toMatchObject({code:'23503'});
-  await shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,other.jobId,randomUUID(),foreign.id,foreign.cutoff]);
+  await publishInvoiceFixtureCompletion(shadow,admin,fixture.tenantId,other.jobId,{lockId:foreign.id,cutoff:foreign.cutoff});
  });
  await page.goto(`/jobs/${fixture.jobId}#final-account-title`);
  const panel=page.getByTestId('lock-bound-invoices');await expect(panel.getByRole('alert')).toHaveText('FINAL_CHECK_NOT_COMPLETE');

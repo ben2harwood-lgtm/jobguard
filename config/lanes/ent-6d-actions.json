@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-6d-actions": {
+      "branches": [
+        "codex/sandbox/ent-6d-actions"
+      ],
+      "note": "ENT-6 part 2 (stacked on #348): export, status import, exact delivery approval and retry/reconcile actions on the billing screen; read gains the job's client contract ids and each delivery's outbox action id.",
+      "allow": [
+        "apps/web/app/ui/contractor-billing.tsx",
+        "apps/web/app/ui/contractor-billing.test.tsx",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.actions.test.ts",
+        "apps/api/src/contractor/billing.controller.ts",
+        "apps/api/openapi.json",
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/test/contractor-billing-delivery.integration.test.ts",
+        "apps/api/src/contractor/billing.application.ts",
+        "apps/api/src/contractor/billing.advance.test.ts"
+      ]
+    }
+  }
+}

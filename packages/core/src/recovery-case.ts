@@ -196,15 +196,15 @@ export function assertRecoverySources(input: Readonly<{
 }
 
 export const recoveryCaseCommandV1 = z.discriminatedUnion("action", [
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("open"), commandId:z.string().uuid(),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("open"), commandId:z.guid({ error: "Invalid uuid" }),
     caseType:recoveryCaseTypeV1, claimedNetPence:z.number().int().positive().max(1_000_000_000_000),
     counterparty:z.string().trim().min(1).max(120), book:z.enum(["supplier_cost", "builder_customer"]),
     sourceType:z.enum(["supplier_documents", "customer_invoice"]), sourceRefs:z.array(z.string().trim().min(1).max(160)).min(1).max(6),
     reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.literal(0) }).strict(),
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("amend_claim"), commandId:z.string().uuid(),
-    caseId:z.string().uuid(), claimedNetPence:z.number().int().positive().max(1_000_000_000_000), reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("transition"), commandId:z.string().uuid(),
-    caseId:z.string().uuid(), eventType:recoveryEventTypeV1, amountPence:z.number().int().positive().max(1_000_000_000_000).optional(),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("amend_claim"), commandId:z.guid({ error: "Invalid uuid" }),
+    caseId:z.guid({ error: "Invalid uuid" }), claimedNetPence:z.number().int().positive().max(1_000_000_000_000), reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("transition"), commandId:z.guid({ error: "Invalid uuid" }),
+    caseId:z.guid({ error: "Invalid uuid" }), eventType:recoveryEventTypeV1, amountPence:z.number().int().positive().max(1_000_000_000_000).optional(),
     reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
 ]);
 export type RecoveryCaseCommand = z.infer<typeof recoveryCaseCommandV1>;

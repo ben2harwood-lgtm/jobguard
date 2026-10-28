@@ -169,3 +169,82 @@ Intended conventional commit subject/body: `/private/tmp/jg-msg-ch9-s.txt`.
 
 Final `git diff --check`: PASS. Final local lane check: PASS. Only the four
 permitted files listed above are modified; HEAD remains 253cfea5.
+
+## make PR green
+
+25 October 2026, issued make-PR-green order for PR #331. Inspected the clean
+working tree at `264c862be769bf6cccdc53e3614e5b35bd7e02f9`, containing the
+dispatcher's merge of cached `origin/main`
+`5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`. Read AGENTS.md, BUILD_PLAN.md
+CH-9 and SH-1, the candidate contract, lane and existing receipt. Preinstalled
+Node 24.17.0, cached pnpm 10.28.1, TypeScript 5.8.3, Zod 4.6.6 and Vitest
+4.1.12; no install or download.
+
+No production or test change was justified by source inspection: this lane
+has no ZodTypeDef/three-parameter ZodType, `_type`, `_def` or z.record call.
+It already uses z.infer and strict objects. Its remainder subtraction and
+formatting division/remainder use bigint. It neither calculates fees nor
+allocates receipts, so adding SH-1 fee/allocation calls would introduce new
+behaviour. The shared enterprise scanner examines five enterprise-domain
+files, none belonging to CH9-S; it does not scan value-v3.ts. No scanner,
+timeout, configuration, schema strictness, test assertion or lane was changed.
+
+Initial targeted run of enterprise boundaries and value-v3 tests passed
+62/62. With all five packages/*/dist directories moved intact to
+`/private/tmp/ch9-s-dist-1tmotz2e`, the first whole-core run passed 3063/3064
+tests (129/130 files); the sole failure was the enterprise scanner exceeding
+its existing 5000ms timeout (6215ms), with no money/import assertion failure.
+An isolated repeat during concurrent compiler work likewise timed out
+(5613ms). Both runs used --maxWorkers=2 and unchanged test timeouts. Logs:
+`/private/tmp/ch9-s-green-core-tests.log` and
+`/private/tmp/ch9-s-green-boundaries-no-dist.log`. These are deterministic
+builder checks, not independent model review or GitHub CI evidence.
+
+After compiler/lint tasks completed, the whole-core suite was rerun alone,
+with packages/*/dist still absent, without changing any test, timeout or
+source: **130/130 files, 3064/3064 tests PASS**, exit 0, 34.97s.
+`/private/tmp/ch9-s-green-core-tests-serial.log` contains the result. Thus the
+reported scanner rule passes on this exact production/test source; the
+observed failures were timeouts during concurrent compiler work. This does
+not assert the cause of the remote CI failure without its logs or guarantee
+remote timing.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --concurrency=2` with packages/*/dist absent | PASS, exit 0; 7/7 tasks, 2 cache hits. Core, DB, AI, API and web executed. |
+| `pnpm --filter @jobguard/core typecheck` with packages/*/dist absent | PASS, exit 0; direct uncached package command. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | PASS, exit 0; purity, lane, money and commercial scanners plus 7/7 package lint tasks (2 cache hits). Core lint executed. Log `/private/tmp/ch9-s-green-lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0, base 5bcd5ede / head 264c862b; all six branch paths allowed. |
+| `pnpm --filter @jobguard/core exec vitest run src/enterprise-domain/boundaries.test.ts src/value-v3.test.ts --maxWorkers=2` | PASS, 62/62, exit 0 (initial dist-present run). |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | First run: 3063 pass, one scanner timeout; standalone rerun: **3064/3064 PASS**, exit 0, no dist present. |
+
+No clean-install claim. Turbo emitted sandbox cache-write IO warnings; checks
+ran to completion. No DB, migrations or browser suites started: the dispatch
+assigns PostgreSQL/localhost checks to GitHub CI. No AI prompt/model or schema
+change, so no new AI evaluation requirement. Existing source-binding, S02/S07,
+release, independent exact-commit review and separate acceptance holds remain.
+Only this lane's existing receipt is modified; no substantial new complexity,
+behaviour/interface change, migration, provider call or operational alert. No
+Git write, commit or push.
+
+Final build/OpenAPI evidence:
+
+- `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1`: PASS, exit 0, all
+  7/7 packages including complete Next production build and 41 static pages.
+  Existing workspace-root, CSS and dynamic dependency warnings; sandbox
+  cache-write warnings. Log `/private/tmp/ch9-s-green-build.log`. Rebuilt
+  ignored dist outputs are present; original outputs remain intact in the
+  temporary backup cited above.
+- `pnpm openapi:check`: blocked, exit 1, tsx CLI IPC listen EPERM in this
+  sandbox (`/private/tmp/ch9-s-green-openapi.log`).
+- `node --import tsx src/generate-openapi.ts --check` from apps/api: PASS,
+  exit 0; same committed OpenAPI comparison without CLI IPC, log
+  `/private/tmp/ch9-s-green-openapi-loader.log`.
+- Final `git diff --check` and `LANE_BASE_REF=origin/main pnpm lint:lanes`:
+  PASS. Only this existing receipt changed. Intended conventional commit
+  subject/body written to `/private/tmp/jg-msg-ch9-s.txt`.
+
+Local runnable checks are green on unchanged production/test source. Remote
+CI green is not claimed: dispatcher must rerun it on the pushed exact head.
+No change to shared scanner timing is authorized by this lane, and no
+unrelated mitigation was introduced.
