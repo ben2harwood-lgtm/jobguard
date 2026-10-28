@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/ent-7c"
       ],
-      "note": "ENT-7c RED catch-up onto main: migration 0298 fee posting, compensation and unchanged-next-month regression; synthetic only.",
+      "note": "ENT-7c RED PR #359 catch-up onto current main: union shared expectation lists only; migration 0298 SQL unchanged; synthetic only.",
       "allow": [
         "packages/db/migrations/0298_enterprise_fee_posting.sql",
         "packages/db/migration-notes/0298_enterprise_fee_posting.md",
