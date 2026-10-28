@@ -583,7 +583,8 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   "meter_lifecycle_day_ledger", "meter_lifecycle_place_binding", "meter_lifecycle_correction", "meter_lifecycle_alert"];
  const indexNames = [...tables.map(t => `${t}_pkey`), "meter_lifecycle_scope_tenant_id_kind_key",
   "meter_lifecycle_source_tenant_id_scope_id_command_id_key", "meter_lifecycle_source_tenant_id_scope_id_period_start_revi_key",
-  "meter_lifecycle_computation_tenant_id_scope_id_source_id_key"];
+  // 0300 replaces the source-only UNIQUE with source + recipe, preserving both projections.
+  "meter_lifecycle_computation_tenant_id_scope_id_source_id_re_key"];
  const identities = [
   ["mon1_lifecycle_actor", "t uuid, digest text, mutation boolean"],
   ["mon1_lifecycle_capture", "t uuid, digest text, command uuid, start_day date, expected integer"],
