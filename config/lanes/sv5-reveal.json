@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-reveal": {
+      "branches": [
+        "codex/sandbox/sv5-reveal"
+      ],
+      "note": "RED SV-5 reveal and non-confirming disposition screen over the existing final-check API; 0247 restates the reveal read adding locked lines only. No catch/case creation (Q2 held), no worker scheduling (Q6 open).",
+      "allow": [
+        "packages/db/migrations/0247_final_check_reveal_lines.sql",
+        "packages/db/migration-notes/0247_final_check_reveal_lines.md",
+        "packages/db/src/final-check-repository.ts",
+        "packages/db/test/final-check-reveal-lines.integration.test.ts",
+        "packages/db/test/final-check-access.integration.test.ts",
+        "apps/api/src/final-check.application.ts",
+        "apps/api/src/final-check.controller.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/final-check/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/disputes/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/dispositions/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/dispositions/route.test.ts",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/SV-5.spec.ts"
+      ]
+    }
+  }
+}
