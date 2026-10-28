@@ -43,6 +43,11 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.billing_quarantine":[],
  "app.billing_status_import":[],
  "app.contractor_receipt_line_allocation":[],
+ "app.receipt_allocation_fact_command":[],
+ "app.receipt_allocation_fact_line":[],
+ "app.receipt_allocation_fact_review":[],
+ "app.receipt_allocation_fact_revision":[],
+ "app.receipt_allocation_fact_source":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
