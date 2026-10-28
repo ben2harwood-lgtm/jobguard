@@ -6,7 +6,7 @@
         "codex/sandbox/sv6-persist-b"
       ],
       "receipt": "docs/verdicts/SV6-PERSIST-B/BUILDER_RECEIPT.md",
-      "note": "Synthetic history HTTP boundary and adversarial storage tests stacked on 56499079. Source-backed command/review/audit/reassessment prerequisites remain dependency-bound. No migration or UI.",
+      "note": "RED SV-6 persist-b (SV-5/SV-6 finish-list rows), PR #373: catch-up only. Preserve recovery attribution and main Final Check catch/run handlers. No new behaviour, test-expectation changes or migration; earlier PASS retained, GitHub CI pending.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",

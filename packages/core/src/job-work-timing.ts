@@ -38,9 +38,9 @@ export const workDay31CandidateV1 = z.object({
   version: z.literal("job-work-day31-candidate.v1"), activatedAt: workFactTimeV1, date: londonWorkDateV1, at: workFactTimeV1,
 }).strict().readonly();
 
-export function workDay31Candidate(raw: unknown) {
-  const activatedAt = parse(workFactTimeV1.refine(value => !value.startsWith("0000-")), raw);
-  const date = addWorkCalendarDays(londonWorkDate(activatedAt), 30);
+/** 00:00 Europe/London at the start of a London calendar date, as a fact-time instant (DST-aware). */
+export function londonMidnight(date: string): string {
+  parse(londonWorkDateV1, date);
   const utcMidnight = new Date(`${date}T00:00:00.000Z`);
   // Retain the full offset, including historical minutes/seconds, rather than a clock hour.
   const offsetName = dateFormatter.formatToParts(utcMidnight).find(part => part.type === "timeZoneName")!.value;
@@ -48,9 +48,13 @@ export function workDay31Candidate(raw: unknown) {
   if (!offset) throw new WorkTimingError("INVALID_WORK_TIMING_INPUT");
   const seconds = (Number(offset[2] ?? 0) * 3600 + Number(offset[3] ?? 0) * 60 + Number(offset[4] ?? 0)) * (offset[1] === "-" ? -1 : 1);
   utcMidnight.setUTCSeconds(utcMidnight.getUTCSeconds() - seconds);
-  return parse(workDay31CandidateV1, {
-    version: "job-work-day31-candidate.v1", activatedAt, date, at: utcMidnight.toISOString().replace(".000Z", ".000000Z"),
-  });
+  return utcMidnight.toISOString().replace(".000Z", ".000000Z");
+}
+
+export function workDay31Candidate(raw: unknown) {
+  const activatedAt = parse(workFactTimeV1.refine(value => !value.startsWith("0000-")), raw);
+  const date = addWorkCalendarDays(londonWorkDate(activatedAt), 30);
+  return parse(workDay31CandidateV1, { version: "job-work-day31-candidate.v1", activatedAt, date, at: londonMidnight(date) });
 }
 
 

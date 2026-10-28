@@ -1,4 +1,9 @@
-# M4-9-S — synthetic success fee boundary (0218)
+# M4-9-S — synthetic success fee boundary (0302)
+
+28 October 2026 catch-up: the migration is now `0302_success_fee_v3.sql`
+(previously 0218, then 0251), with unchanged SQL bytes. The 0218 references
+below describe its original number; deploy 0302 for this branch. Existing
+dependency refusals and release gates remain unchanged.
 
 24 October 2026. Reference policy remains proposed. This is an incomplete,
 dependency-bound implementation, not a fee-posting capability or acceptance of

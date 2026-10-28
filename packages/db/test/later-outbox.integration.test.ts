@@ -13,6 +13,7 @@ import {
   EvidencePackRepository,
   FakeRecoveryMessageAdapter,
   RecoveryMessageRepository,
+  RecoveryCaseTermsRepository,
   appendOutboundAction,
   ingestProviderEvent,
   migrate,
@@ -22,6 +23,8 @@ import {
   type OutboundAction,
   type OutboundAdapter,
   type SafeTelemetry} from "../src/index.js";
+
+import { recoveryCaseTermsHash } from "@jobguard/core";
 
 const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
@@ -37,6 +40,55 @@ let infrastructure: Pool;
 let databaseDir: string;
 let sequence = 1;
 const adminCredential = randomUUID(), runtimeCredential = randomUUID(), infrastructureCredential = randomUUID();
+
+/** Fixture-only exact activation inputs; the existing v3 routine checks the
+ * owner, accepted document, authorization and lifecycle before binding v3. */
+async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
+  const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
+  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
+  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
+  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
+  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+}
+
+/** Local current-schema recipe: replace exactly the primary fixture's first
+ * v1 switch, after its accepted document/acceptance exist. All other SQL passes
+ * through unchanged; the v3 activation itself supplies the commercial track. */
+async function seedPursuitFixture() {
+  let primaryJob: string | undefined, switches = 0, tracks = 0;
+  const setup = new Proxy(admin, { get(pool, property) {
+    if (property !== 'connect') { const value = Reflect.get(pool, property, pool); return typeof value === 'function' ? value.bind(pool) : value; }
+    return async () => {
+      const client = await pool.connect();
+      return new Proxy(client, { get(target, key) {
+        if (key !== 'query') { const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value; }
+        return async (sql: string, values?: unknown[]) => {
+          const args = values ? [...values] : undefined;
+          if (sql === 'SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)' && args?.[4] === 'switch_live' && args[6] === 1880000) {
+            expect(args.slice(2)).toEqual([2, 'live', 'switch_live', args[5], 1880000, 'reference_fee_policy_v1', 28200]);
+            expect(switches++).toBe(0);
+            primaryJob = String(args[1]);
+            const document = (await target.query('SELECT id FROM app.quote_document_version WHERE tenant_id=$1 AND job_id=$2', [args[0], primaryJob])).rows;
+            expect(document).toEqual([{ id: args[5] }]);
+            return activatePursuitFixture(target, String(args[0]), primaryJob, Number(args[2]));
+          }
+          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')" && args?.[1] === primaryJob) {
+            expect(tracks++).toBe(0);
+            const bound = await target.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', args);
+            expect(bound.rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);
+            return bound;
+          }
+          return target.query(sql, args);
+        };
+      } });
+    };
+  } });
+  const seeded = await seedEvidencePackFixture(setup);
+  expect({ switches, tracks, primaryJob }).toEqual({ switches: 1, tracks: 1, primaryJob: seeded.jobId });
+  return seeded;
+}
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-later-outbox-"));
@@ -141,12 +193,17 @@ const events = async (id: string) => withTenant(runtime, context, async db =>
 describe("LATER-B9 PostgreSQL outcome guarantees", () => {
   it("ruling 112 owner retry delivers once after definite failure while automatic execution honours back-off", async () => {
     await installLegacySyntheticPartyFixtures(admin);
-    const fixture = await seedEvidencePackFixture(admin);
+    const fixture = await seedPursuitFixture();
     const ctx = testTenantContext(fixture.tenantId);
     const actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
     const caseId = fixture.customerCaseId;
     await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
       [randomUUID(), fixture.tenantId, fixture.jobId, caseId, randomUUID(), hash(`open:${caseId}`)]);
+    await new RecoveryCaseTermsRepository(runtime).approve(ctx, fixture.jobId, {
+      version: 'recovery-case-terms-command.v1', action: 'approve', commandId: randomUUID(), caseId,
+      termsVersion: 'synthetic_recovery_fee_terms.v1', feePolicyVersion: 'reference_fee_policy_v3',
+      eligibilityPolicyVersion: 'reference_recovery_eligibility_policy_v3', termsHash: recoveryCaseTermsHash(caseId),
+    }, { membershipId: fixture.memberId, identityUserId: fixture.identityId });
     const packs = new EvidencePackRepository(runtime), messages = new RecoveryMessageRepository(runtime);
     const pack = await packs.generate(ctx, caseId, { commandId: randomUUID() }, actor.actorRef);
     await packs.approveAttachment(ctx, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
