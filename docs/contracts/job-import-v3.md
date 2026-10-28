@@ -202,3 +202,32 @@ is still outstanding, rather than being simulated as an actual Final Check resul
 
 Current-main product rules and the supplied SIMPLE_LOOP supersede the old build
 coordination/acceptance text above. RED review and CI are pending on this candidate.
+
+## 28 October CH-5 part 2: checked company admission and catch refusal
+
+Migration 0328 supersedes the earlier live-admission hold for authenticated normal
+companies only. `JobImportV3Repository` uses the existing company identity verifier
+and MON-1 `ch4_admit_place` inside the command transaction; a pure oracle is never
+a permit. Legacy persisted baselines and v3 adoption snapshots now classify
+imports for committed capacity. Invoiced imports stay zero. Solo receives its
+sixth chargeable grace place and the next addition returns `PLAN_LIMIT_REACHED`;
+Builder stays unblocked and its existing adoption audit records `track_review_due`
+beyond thirteen places, together with the committed-source hash. Approved monthly
+maxima and prior v1 terms are untouched. Shared practice live imports still refuse.
+
+The company journey at `/meter/jobs/:id/imports` uses the ordinary identity,
+membership, origin and CSRF bridge, through `/api/meter/jobs/:id/import-v3/:action`.
+The existing practice routes remain practice scoped. `job-import-source.v1`
+releases only an authorized binding ID. Admission does not implement the separate
+counted-day/period imported-source adapter: that reader remains unavailable rather
+than supplying a zero bill. Adoption's server time supplies the ordinary start
+anchor, with no import holiday or historical attestation backdate.
+
+The catch command is strict `import-catch-command.v1` with command UUID and exact
+persisted baseline UUID. After authenticating and loading the durable import it
+always returns HTTP 409 `ATTRIBUTION_UNAVAILABLE`: “The imported catch cannot be
+assessed until SV-6 attribution is connected. No catch, allocation or fee has been
+created.” Repeated requests and reversal/allocation/locked-bill overrides cannot
+reach a writer or hidden input. This is the requested dependency refusal, not a
+persisted attribution, fee illustration or successful Final Check. SV-6 wiring,
+historical evidence ingestion and imported final-account compatibility remain held.

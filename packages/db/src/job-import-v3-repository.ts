@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { adoptJobV3, assertImportIntentV3, assertImportResultV3, importActionHashV3, jobPartiesImportV3, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
+import { adoptJobV3, assertImportIntentV3, assertImportResultV3, importActionHashV3, jobPartiesImportV3, jobImportSourceV1, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
 import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
 import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
@@ -13,8 +13,11 @@ const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 export const importPreviewRequestV3 = z.object({ version: z.literal("job-import-preview.v3"), expectedBindingId: uuid,
   fixtureId: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,99}$/u), lifecyclePoint: z.enum(["live", "invoiced"]) }).strict();
 export class JobImportV3Error extends Error {
-  constructor(readonly code: "FORBIDDEN" | "INVALID_IMPORT" | "REVISION_CONFLICT" | "IMPORT_HISTORY_ADAPTER_REQUIRED" | "METER_PLACE_SOURCE_HANDOFF_HELD" | "EXACT_IMPORT_AUTHORIZATION_MISMATCH" | "SYNTHETIC_MODE_REQUIRED" | "COMMAND_CONFLICT" | "IMPORT_ALREADY_ADOPTED" | "NOT_FOUND") { super(code); this.name = "JobImportV3Error"; }
+  constructor(readonly code: "FORBIDDEN" | "INVALID_IMPORT" | "REVISION_CONFLICT" | "IMPORT_HISTORY_ADAPTER_REQUIRED" | "METER_PLACE_SOURCE_HANDOFF_HELD" | "EXACT_IMPORT_AUTHORIZATION_MISMATCH" | "SYNTHETIC_MODE_REQUIRED" | "COMMAND_CONFLICT" | "IMPORT_ALREADY_ADOPTED" | "NOT_FOUND" | "CAPACITY_ADMISSION_UNAVAILABLE" | "METER_UPGRADE_REQUIRED" | "ATTRIBUTION_UNAVAILABLE" | "PLAN_LIMIT_REACHED") { super(code); this.name = "JobImportV3Error"; }
 }
+export const IMPORT_CATCH_HOLD_REASON = "The imported catch cannot be assessed until SV-6 attribution is connected. No catch, allocation or fee has been created.";
+const admissionOutcome = z.object({ sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), outcome: z.enum(["admitted", "grace_place", "track_review_due"]) }).strict();
+const sharedPracticeTenant = "11111111-1111-4111-8111-111111111111";
 function syntheticOnly(): void {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new JobImportV3Error("SYNTHETIC_MODE_REQUIRED");
 }
@@ -23,9 +26,21 @@ function admissionUnavailable(): never {
   throw new JobImportV3Error(meterPlaceAdmissionHold.code);
 }
 async function owned(db: TenantTransaction, tenantId: string, digest: string, jobId: string, expectedActor?: string): Promise<string> {
-  const principal = (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.authenticate_practice_session($1,$2)", [digest, tenantId])).rows[0];
+  let principal: { membership_id: string } | undefined;
+  try {
+    principal = (await db.$client.query<{ membership_id: string }>(tenantId === sharedPracticeTenant
+    ? "SELECT membership_id FROM app.authenticate_practice_session($1,$2)"
+    : "SELECT app.ch5_import_actor($2,$1) membership_id", [digest, tenantId])).rows[0];
+  } catch (error) {
+    if (error instanceof Error && ["METER_FORBIDDEN", "FORBIDDEN"].includes(error.message)) throw new JobImportV3Error("FORBIDDEN");
+    throw error;
+  }
   if (!principal || (expectedActor !== undefined && uuid.parse(principal.membership_id) !== uuid.parse(expectedActor))) throw new JobImportV3Error("FORBIDDEN");
-  const found = await db.$client.query(`${practiceOwnedJobsSql()} SELECT id FROM practice_owned_job WHERE id=$2`, [tenantId, jobId, digest]);
+  const found = tenantId === sharedPracticeTenant
+    ? await db.$client.query(`${practiceOwnedJobsSql()} SELECT id FROM practice_owned_job WHERE id=$2`, [tenantId, jobId, digest])
+    : await db.$client.query(`SELECT j.id FROM app.job j JOIN app.membership m ON m.tenant_id=j.tenant_id
+      WHERE j.tenant_id=$1 AND j.id=$2 AND j.practice_session_digest IS NULL AND m.id=$3 AND m.role='owner'
+       AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`, [tenantId, jobId, principal.membership_id]);
   if (!found.rowCount) throw new JobImportV3Error("FORBIDDEN");
   return uuid.parse(principal.membership_id);
 }
@@ -49,15 +64,23 @@ function previewIntent(input: ReturnType<typeof jobPartiesImportV3.parse>) {
   return { version: "job-import-preview.v3", expectedBindingId: input.expectedBindingId, fixtureId: input.fixtureId, lifecyclePoint: input.lifecyclePoint };
 }
 
-/** Synthetic invoiced imports persist; live imports require the atomic MON-1 handoff. */
+/** Synthetic company imports use atomic MON-1 admission; shared practice live imports stay unavailable. */
 export class JobImportV3Repository {
   constructor(private readonly pool: Pool) {}
+  async source(context: VerifiedTenantContext, digest: string, sourceJobId: string) {
+    syntheticOnly(); digestSchema.parse(digest); sourceJobId = uuid.parse(sourceJobId);
+    return withTenant(this.pool, context, async db => {
+      await owned(db, context.tenantId, digest, sourceJobId);
+      const row = (await db.$client.query<{ binding_id: string }>("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, sourceJobId])).rows[0];
+      return jobImportSourceV1.parse({ version: "job-import-source.v1", bindingId: row?.binding_id ?? null });
+    });
+  }
   async preview(context: VerifiedTenantContext, digest: string, sourceJobId: string, request: unknown) {
     syntheticOnly(); digestSchema.parse(digest); sourceJobId = uuid.parse(sourceJobId);
     return withTenant(this.pool, context, async db => {
       const result = await snapshot(db, context.tenantId, digest, sourceJobId, request);
       return { version: "job-import-preview-result.v3" as const, snapshot: result.snapshot, previewHash: result.previewHash,
-        availability: result.snapshot.lifecyclePoint === "live" ? meterPlaceAdmissionHold : { status: "available", reason: "imported_at_invoiced_stage", countedPlaces: 0 }, environment: "synthetic_demo" as const, realExternalActions: 0 as const,
+        availability: result.snapshot.lifecyclePoint === "live" ? (context.tenantId === sharedPracticeTenant ? meterPlaceAdmissionHold : { status: "checked_on_adoption", reason: "ordinary_start_rule" }) : { status: "available", reason: "imported_at_invoiced_stage", countedPlaces: 0 }, environment: "synthetic_demo" as const, realExternalActions: 0 as const,
         notice: "Practice sandbox — synthetic data; nothing is sent or charged" };
     });
   }
@@ -83,8 +106,8 @@ export class JobImportV3Repository {
       if (row.public_request_hash !== publicHash) throw new JobImportV3Error("COMMAND_CONFLICT");
       return assertImportResultV3(prepared.snapshot, row.result);
     });
-    // A live request must still stop before any receipt or approval; no pure oracle is a permit.
-    if (prepared.snapshot.lifecyclePoint === "invoiced") { const result = await prior(); if (result) return result; }
+    // Durable replays return their original identities; current authority is checked first.
+    { const result = await prior(); if (result) return result; }
     return new UserCommandDispatcher(this.pool).dispatch(context, {
       version: "command.v1", commandId: prepared.input.commandId, commandType: "job.adopt_in_flight_v3",
       semanticKey: `import-v3:${prepared.input.commandId}`, actorMembershipId: prepared.actorId, subjectType: "job", subjectRef: targetId,
@@ -93,6 +116,8 @@ export class JobImportV3Repository {
     }, new AdoptInFlightJobV3Mutation(context.tenantId, digest, sourceJobId, prepared.input, prepared.snapshot)).catch(async error => {
       if (error instanceof CommandError && error.code === "COMMAND_CONFLICT") { const result = await prior(); if (result) return result; }
       if (error instanceof Error && error.message === "IMPORT_ALREADY_ADOPTED") throw new JobImportV3Error("IMPORT_ALREADY_ADOPTED");
+      if (error instanceof Error && error.message === "CAPACITY_ADMISSION_UNAVAILABLE") throw new JobImportV3Error("CAPACITY_ADMISSION_UNAVAILABLE");
+      if (error instanceof Error && error.message === "METER_UPGRADE_REQUIRED") throw new JobImportV3Error("PLAN_LIMIT_REACHED");
       throw error;
     });
   }
@@ -100,19 +125,34 @@ export class JobImportV3Repository {
     syntheticOnly(); digestSchema.parse(digest); importedJobId = uuid.parse(importedJobId);
     return withTenant(this.pool, context, async db => {
       await owned(db, context.tenantId, digest, importedJobId);
-      const row = (await db.$client.query<{ snapshot: unknown; result: unknown; adopted_at: Date }>(
-        "SELECT snapshot,result,adopted_at FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND session_digest=$3",
+      const row = (await db.$client.query<{ snapshot: unknown; result: unknown; adopted_at: Date; admission?: { outcome?: string; sourceHash?: string } }>(
+        `SELECT snapshot,result,adopted_at,(SELECT jsonb_build_object('outcome',e.payload#>>'{references,capacityOutcome}','sourceHash',e.payload#>>'{hashes,meterSourceHash}')
+          FROM app.audit_event e WHERE e.tenant_id=$1 AND e.subject_type='job' AND e.subject_ref=($2::uuid)::text AND e.event_type='job.imported_baseline_attested' LIMIT 1) admission
+          FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND session_digest=$3`,
         [context.tenantId, importedJobId, digest])).rows[0];
       if (!row) throw new JobImportV3Error("NOT_FOUND");
       return { version: "job-import-read.v3" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, result: assertImportResultV3(row.snapshot, row.result), snapshot: adoptJobV3.parse(row.snapshot), adoptedAt: row.adopted_at.toISOString(),
-        meter: { countedPlaces: 0 as const, reason: "imported_at_invoiced_stage" as const },
+        meter: adoptJobV3.parse(row.snapshot).lifecyclePoint === "invoiced"
+          ? { countedPlaces: 0 as const, reason: "imported_at_invoiced_stage" as const }
+          : { reason: "ordinary_start_rule" as const, admission: row.admission?.outcome ? admissionOutcome.parse(row.admission) : null },
+        catchAvailability: { status: "unavailable" as const, code: "ATTRIBUTION_UNAVAILABLE" as const, reason: IMPORT_CATCH_HOLD_REASON },
         lineageLabel: "Builder-attested imported baseline — weaker lineage than a customer-accepted quote" };
     });
+  }
+  async assessCatch(context: VerifiedTenantContext, digest: string, importedJobId: string, raw: unknown): Promise<never> {
+    // Authenticate and read the durable import first. This result never varies
+    // with hidden sources, a lock, receipts or attribution-table contents.
+    const stored = await this.read(context, digest, importedJobId);
+    const input = z.object({ version: z.literal("import-catch-command.v1"), commandId: uuid, baselineId: uuid }).strict().safeParse(raw);
+    if (!input.success) throw new JobImportV3Error("INVALID_IMPORT");
+    if (input.data.baselineId !== stored.result.baselineId) throw new JobImportV3Error("REVISION_CONFLICT");
+    throw new JobImportV3Error("ATTRIBUTION_UNAVAILABLE");
   }
 }
 
 /** Recheck current session and approved content before receipt/replay. No nested transaction. */
 export class AdoptInFlightJobV3Mutation implements CommandMutation<Record<string, unknown>> {
+  private admission: z.infer<typeof admissionOutcome> | undefined;
   constructor(private readonly tenantId: string, private readonly digest: string, private readonly sourceJobId: string,
     private readonly request: unknown, private readonly approvedSnapshot: unknown) {}
   private async check(db: TenantTransaction, command: ConsequentialCommand) {
@@ -131,22 +171,24 @@ export class AdoptInFlightJobV3Mutation implements CommandMutation<Record<string
   }
   async lock(db: TenantTransaction, command: ConsequentialCommand): Promise<void> {
     await this.check(db, command);
-    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live") return admissionUnavailable();
+    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live" && this.tenantId === sharedPracticeTenant) return admissionUnavailable();
     // Serialize duplicate imports before receipt and audit locks. SQL reuses this row lock.
     await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [this.tenantId, this.sourceJobId]);
   }
   async mutate(db: TenantTransaction, command: ConsequentialCommand): Promise<Record<string, unknown>> {
     await this.check(db, command);
-    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live") return admissionUnavailable();
+    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live" && this.tenantId === sharedPracticeTenant) return admissionUnavailable();
     const row = (await db.$client.query<{ result: unknown }>("SELECT app.adopt_invoiced_job_v3($1,$2,$3,$4,$5,$6::jsonb,$7) result",
       [this.tenantId, this.sourceJobId, this.digest, command.commandId, command.authorizationId,
         JSON.stringify(this.approvedSnapshot), importPublicRequestHashV3(this.tenantId, this.digest, this.sourceJobId, this.request)])).rows[0];
+    const wrapped = z.object({ result: z.unknown(), admission: admissionOutcome }).strict().safeParse(row?.result);
+    if (wrapped.success) { this.admission = wrapped.data.admission; return assertImportResultV3(this.approvedSnapshot, wrapped.data.result); }
     return assertImportResultV3(this.approvedSnapshot, row?.result);
   }
   auditEvents(result: Record<string, unknown>, command: ConsequentialCommand) {
     return [{ id: randomUUID(), version: "audit.v1" as const, actorRef: `membership:${command.actorMembershipId}`,
       eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: String(result.jobId),
-      payload: { references: { sourceJobId: this.sourceJobId, baselineId: String(result.baselineId) },
-        hashes: { baselineHash: String(result.actionHash) }, classifications: { action: "commercial" as const } } }];
+      payload: { references: { sourceJobId: this.sourceJobId, baselineId: String(result.baselineId), ...(this.admission ? { capacityOutcome: this.admission.outcome } : {}) },
+        hashes: { baselineHash: String(result.actionHash), ...(this.admission ? { meterSourceHash: this.admission.sourceHash } : {}) }, classifications: { action: "commercial" as const } } }];
   }
 }

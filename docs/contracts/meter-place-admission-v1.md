@@ -55,3 +55,76 @@ operations card deduplication remain unimplemented, not implied by oracle labels
 No route/UI/browser workflow belongs to this leaf. MON1-I and CH-5/SV-7A own
 consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
+
+
+## MON-1 remainder, migration 0305
+
+The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
+Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
+refresh of `meter_work_ledger` before admission and after source mutation. The
+ledger stores committed membership, not touched-day billing counts. No caller
+receives a reusable permit or can supply projected numbers. Source fingerprint
+replays verify the stored result; mismatches refuse the entire command.
+
+Normal-company accepted activations are supported. Shared practice aggregation,
+missing agreements and legacy live imports without accepted activation/trip terms
+remain refused. MON1-J captures checked normal-company lifecycle facts on each
+authenticated owner read using `mon1_today_source` (reusing unchanged inputs), then applies the existing
+approved pure day counter for the screen. It takes no client counts or clock.
+The legacy `mon1_fresh_counted_meter_today` still refuses stale stored sources
+with `METER_UNAVAILABLE`.
+Administrative bootstrap assigns its narrow owner and retires the older runtime
+reader in the same transaction. No financial action is introduced.
+
+The fresh display does not persist a second counted computation or issue billing
+facts. The stored period-ledger writer remains the existing meter-role path;
+closed/issued periods are untouched. This avoids a runtime ledger-write grant,
+another credential, or a duplicate SQL counting engine. Normal-company owner
+reads capture immutable source revisions under tenant lock 184, with current
+session/authority checks after waiting. Missing terms, unsupported live imports,
+shared practice, non-owner fresh captures and an in-period plan change still refuse.
+Admins retain their prior checked read of an already-fresh stored projection;
+stale or absent stored data still refuses for them. Reads may append a
+new source revision when inputs or the London date change; command retries remain
+durable replays of their first result.
+
+MON1-J browser coverage uses authenticated work-command HTTP requests and the
+real meter HTTP/UI path, with explicit synthetic activation parents, photo
+sources and historical clock fixtures. It does not claim a normal-company job-command browser UI.
+
+## Repair round 1: term-less imports and browser commands
+
+A term-less live adoption makes the committed snapshot unavailable: refresh
+returns no snapshot and does not throw. Place admission still rejects that
+result, so an older stored count cannot authorize new work. Subscription
+accept/change, final-account lock, finish/close and continuing site activity do
+not depend on knowing the imported job's capacity. The meter screen continues
+to display its existing unavailable message for unsupported imported sources;
+no partial count or guessed classification is presented. Site activity checks
+admission only when an activation-backed job actually restarts after stopping.
+New legacy live-import admissions remain refused once a subscription exists.
+
+The browser now sends work commands through the synthetic normal-company meter
+HTTP boundary with verified session, origin, CSRF and server-derived membership.
+The same checked repository handles finish, resume, close and reopen. Activation
+parents and photo sources remain explicit fictional fixtures; the meter response
+and work-command HTTP responses are real. The historical London-day fixture is
+not exposed as an API. Source keys bind the tenant, London date, agreement and
+builder lifecycle facts. Identical repeated reads reuse the checked capture;
+a changed event, lock, trip, observation, link, activation or agreement creates
+a new one. A new London date also refreshes midnight deadlines. The public
+final-account lock routine acquires tenant lock 184 before its business locks,
+including when called without withTenant. No fee or payment authority is added.
+
+Grace upgrade Decision delivery and immediate Builder track-review Decision
+creation remain unimplemented follow-up; this repair does not claim them.
+
+## CH-5 part 2, migration 0328
+
+Committed admission now includes verified imported baselines and v3 adoption
+snapshots, using their server adoption/receive anchor and immutable customer/site
+binding. Invoiced imports do not enter the committed source. Unknown imports still
+make admission unavailable; classified imports no longer block unrelated starts.
+The checked v3 writer invokes the existing MON-1 admission routine atomically.
+This does not enable the independent imported counted-day/period source reader,
+which continues to refuse rather than zero-fill unsupported bill inputs.

@@ -22,8 +22,8 @@ type ScriptedImportPool = {
 export function scriptedImportPool(): ScriptedImportPool {
   const state = { authenticated: true, owns: true, actor: M, binding: { ...parties } };
   const query = vi.fn<ScriptQuery>(async (sql: string, _values?: unknown[]) => {
-    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [], rowCount: 0 };
-    if (sql.includes("authenticate_practice_session")) return { rows: state.authenticated ? [{ membership_id: state.actor }] : [], rowCount: state.authenticated ? 1 : 0 };
+    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config") || sql.startsWith("SELECT pg_advisory_xact_lock")) return { rows: [], rowCount: 0 };
+    if ((sql.includes("authenticate_practice_session") || sql.includes("ch5_import_actor"))) return { rows: state.authenticated ? [{ membership_id: state.actor }] : [], rowCount: state.authenticated ? 1 : 0 };
     if (sql.includes("FROM practice_owned_job WHERE")) return { rows: state.owns ? [{ id: J }] : [], rowCount: state.owns ? 1 : 0 };
     if (sql.includes("FROM app.job_party_current")) return { rows: [state.binding], rowCount: 1 };
     if (sql.includes("FROM app.job_import_v3")) return { rows: [], rowCount: 0 };

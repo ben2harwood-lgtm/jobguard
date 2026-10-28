@@ -15,7 +15,7 @@ describe("CH5-P own 0323 upgrade, no adoption persistence claimed — CI only", 
     const own = "0323_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
     expect(index).toBeGreaterThan(0);
     // Assert the actual predecessor under current main rather than the obsolete build-ahead base.
-    expect(MIGRATION_URLS[index - 1]?.pathname).toMatch(/0301_meter_today_read.sql$/u);
+    expect(MIGRATION_URLS[index - 1]?.pathname).toMatch(/0305_meter_work_admission.sql$/u);
     await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for (const url of MIGRATION_URLS.slice(0, index)) {
       await f.admin.query(await readFile(url, "utf8"));

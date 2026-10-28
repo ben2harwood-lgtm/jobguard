@@ -30,10 +30,9 @@ it("CH-5 0324 preserves existing job rows and v1 baseline fields, then repeats m
   const before = await proofBefore(f.admin, ["app.job", "app.imported_job_baseline", "app.job_party_binding", "app.command_receipt"]);
   await migrate(f.admin); await migrate(f.admin);
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
-  // The new cap-free shape remains restricted to invoiced jobs; historical
-  // cap compatibility must not make a live cap-free imported baseline valid.
-  await expect(f.admin.query("UPDATE app.job SET recovery_cap_pence=NULL WHERE id=$1", [legacyV3])).rejects.toThrow("job_baseline_shape");
-  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
+  // 0328 additionally admits live v3 imports through the checked writer. This
+  // upgrade still preserves the original historical cap exactly.
+  expect((await f.admin.query("SELECT recovery_cap_pence::int cap FROM app.job WHERE id=$1", [legacyV3])).rows[0].cap).toBe(1500);
   const posture = (await f.admin.query(`SELECT relrowsecurity,relforcerowsecurity,
     has_table_privilege('jobguard_runtime',oid,'SELECT') readable,
     has_table_privilege('jobguard_runtime',oid,'INSERT') insertable,

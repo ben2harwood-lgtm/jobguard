@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/parties/import-v3/source": {
+      "get": {
+        "operationId": "JobImportV3Controller_source",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned source job binding for the synthetic import screen",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3/catch": {
+      "post": {
+        "operationId": "JobImportV3Controller_assessCatch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Refuse an imported catch until the persisted SV-6 attribution adapter is connected",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",
@@ -25,7 +55,7 @@
             "description": ""
           }
         },
-        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "summary": "Import a fictional v3 job; company live imports use checked capacity admission",
         "tags": [
           "job-import-v3"
         ]

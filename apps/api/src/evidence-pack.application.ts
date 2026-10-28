@@ -1,8 +1,9 @@
 import { PracticeAccess } from "./practice-access.js";
 import type { Pool } from "pg";
 import { EvidencePackRepository, practiceMaterialPool } from "@jobguard/db";
+import { EvidencePackV3HeldError } from "./evidence-pack.errors.js";
 import {
-  evidencePackApprovalCommandV1, evidencePackCommandV1, evidencePackIdV1, evidencePackInspectionQueryV1} from "./evidence-pack.contracts.js";
+  evidencePackAttachmentCommand, evidencePackGenerationCommand, evidencePackIdV1, evidencePackInspectionQueryV1} from "./evidence-pack.contracts.js";
 
 export class EvidencePackApplication {
   constructor(private readonly pool: Pool) {}
@@ -23,14 +24,19 @@ export class EvidencePackApplication {
 
   async generate(sessionId: string | undefined, caseId: string, raw: unknown) {
     const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
-    const { version: _version, ...command } = evidencePackCommandV1.parse(raw);
+    const parsed = evidencePackGenerationCommand.parse(raw);
+    // No v3 artifact may fall through to the legacy runtime-writable writer.
+    if (parsed.version === "evidence-pack-command.v3") throw new EvidencePackV3HeldError();
+    const { version: _version, ...command } = parsed;
     await repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
     return this.list(sessionId, caseId);
   }
 
   async approveAttachment(sessionId: string | undefined, caseId: string, packId: string, raw: unknown) {
     const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
-    const { version: _version, ...command } = evidencePackApprovalCommandV1.parse(raw);
+    const parsed = evidencePackAttachmentCommand.parse(raw);
+    if (parsed.version === "evidence-pack-attachment-approval.v3") throw new EvidencePackV3HeldError();
+    const { version: _version, ...command } = parsed;
     await repo.approveAttachment(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), command, actorRef);
     return this.list(sessionId, caseId);
   }
