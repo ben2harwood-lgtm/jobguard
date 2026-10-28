@@ -1,6 +1,145 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing": {
+      "get": {
+        "operationId": "BillingController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted immutable export artifacts, current allocation runs, quarantine history and delivery status"
+          }
+        },
+        "summary": "Read persisted synthetic contractor billing and reconciliation",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{batchId}/download": {
+      "get": {
+        "operationId": "BillingController_download",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact persisted CSV after approved fake download delivery",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{action}": {
+      "post": {
+        "operationId": "BillingController_write",
+        "parameters": [
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "export",
+                "import",
+                "approve-delivery",
+                "advance-delivery"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
     "/jobs/{id}/final-check": {
       "get": {
         "operationId": "FinalCheckController_get",

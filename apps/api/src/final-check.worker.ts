@@ -1,4 +1,4 @@
-import { FinalCheckError,finalCheckTaskV1,checkSourceCompletion } from "@jobguard/core";
+import { FinalCheckError,finalCheckTaskV1,checkSourceCompletion,isBuilderCaptureNotScanned } from "@jobguard/core";
 import type { VerifiedTenantContext,FinalCheckManifest,FinalCheckSourceResult } from "@jobguard/db";
 export interface FinalCheckWorkerPorts{
  read(context:VerifiedTenantContext,request:{version:"final-check.task.v1";jobId:string;manifestId:string}):Promise<FinalCheckManifest>;
@@ -16,7 +16,7 @@ export class FinalCheckWorker{
   const manifest=await this.ports.read(context,p.data);
   if(manifest.comparisons.tenantId!==context.tenantId||manifest.comparisons.jobId!==p.data.jobId||manifest.id!==p.data.manifestId)throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
   for(const source of manifest.sources){
-   if(source.status==="zero_result"||source.status==="detected")continue;
+   if(source.status==="zero_result"||source.status==="detected"||isBuilderCaptureNotScanned(source))continue;
    let result:FinalCheckSourceResult;
    try{result=await this.ports.process(context,manifest,source);}catch{result={version:"final-check.source-result.v1",inputHash:source.inputHash,status:"failed",failureCode:"PROCESSING_FAILED",signalIds:[]};}
    // Separate port transaction preserves failed attempts before throwing or retrying.

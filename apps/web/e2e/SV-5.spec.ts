@@ -49,6 +49,8 @@ async function revealedJob(page: Page) {
     await jsonResult(page.request.post(`${path}/lock`, { data: { version: "final-account.lock.v1", commandId: randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: "final_account_declaration.v1" } }), "Lock");
     const m = (await shadow.query("SELECT app.begin_final_check($1,$2,'shadow-detection.v1','final-check.reconciliation.v1') result", [tenantId, jobId])).rows[0].result;
     for (const source of m.sources) {
+      // The job's own walk-it text is listed as builder capture, never scanned (0264).
+      if (source.sourceKind === "builder_capture_not_scanned" && source.evidenceId === null) continue;
       const signalIds = source.evidenceId === evidenceId ? [signalId] : [];
       await shadow.query("SELECT app.record_final_check_source_result($1,$2,$3,$4,$5,$6::jsonb)", [tenantId, jobId, m.id, source.id, randomUUID(),
         JSON.stringify({ version: "final-check.source-result.v1", inputHash: source.inputHash, status: signalIds.length ? "detected" : "zero_result", failureCode: null, signalIds })]);

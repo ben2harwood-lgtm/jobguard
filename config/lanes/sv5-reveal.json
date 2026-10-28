@@ -7,8 +7,8 @@
       ],
       "note": "RED SV-5 reveal and non-confirming disposition screen over the existing final-check API; 0247 restates the reveal read adding locked lines only. No catch/case creation (Q2 held), no worker scheduling (Q6 open).",
       "allow": [
-        "packages/db/migrations/0247_final_check_reveal_lines.sql",
-        "packages/db/migration-notes/0247_final_check_reveal_lines.md",
+        "packages/db/migrations/0262_final_check_reveal_lines.sql",
+        "packages/db/migration-notes/0262_final_check_reveal_lines.md",
         "packages/db/src/final-check-repository.ts",
         "packages/db/test/final-check-reveal-lines.integration.test.ts",
         "packages/db/test/final-check-access.integration.test.ts",
