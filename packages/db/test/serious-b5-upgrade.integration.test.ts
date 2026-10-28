@@ -527,6 +527,26 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
+// C248/C249: one added guard; C238 retains its exact identity and privileges.
+async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
+ expect(additions).toHaveLength(1);
+ expect(before.routines.some(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition')).toBe(false);
+ expect(additions[0]).toMatchObject({prosecdef:true,proconfig:['search_path=pg_catalog, app']});
+ const guards=(await f.admin.query(`SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='app.evidence_upload'::regclass
+  AND tgfoid='app.guard_post_lock_upload_transition()'::regprocedure ORDER BY tgname`)).rows;
+ expect(guards).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O'}]);
+ const acl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid IN ('app.guard_post_lock_upload_transition()'::regprocedure,'app.serialize_final_check_evidence()'::regprocedure)`)).rows;
+ expect(acl).toEqual(Array.from({length:2},()=>({owner:'jobguard_migration',executors:['jobguard_migration']})));
+ const restated=(rows:typeof before.routines)=>rows.filter(r=>r.nspname==='app' && r.proname==='serialize_final_check_evidence' && r.args==='');
+ expect(restated(before.routines)).toHaveLength(1);
+ expect(restated(after.routines)).toEqual(restated(before.routines));
+ const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
+ return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -544,6 +564,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
  Object.assign(expected, await placeAdmissionAdditions(expected));
+ Object.assign(expected, await with0245Additions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
