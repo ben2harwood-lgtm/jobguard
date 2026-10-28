@@ -24,6 +24,7 @@
         "packages/db/migration-notes/0297_job_source_intake.md",
         "packages/db/migrations/0297_job_source_intake.sql",
         "packages/db/src/job-source-repository.ts",
+        "packages/db/src/watchdog.test.ts",
         "packages/db/src/watchdog.ts",
         "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/job-source-intake.integration.test.ts",
