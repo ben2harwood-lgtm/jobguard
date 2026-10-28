@@ -12,7 +12,7 @@ import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
-const name = "0207_recovery_pursuit_terms_required.sql", password = randomUUID();
+const name = "0240_recovery_pursuit_terms_required.sql", password = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const position = MIGRATION_URLS.findIndex(url => basename(fileURLToPath(url)) === name);
 const tables = ["app.job", "app.recovery_case", "app.recovery_claim_revision", "app.recovery_case_event", "app.recovery_message", "app.recovery_message_event", "app.recovery_message_approval", "app.recovery_message_sink", "app.command_receipt", "app.decision", "app.decision_resolution", "app.action_authorization", "app.action_outbox", "app.action_attempt", "app.audit_event"];

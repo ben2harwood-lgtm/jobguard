@@ -8,8 +8,8 @@
       "receipt": "docs/verdicts/CH-7-REST-C/BUILDER_RECEIPT.md",
       "note": "RED; build-ahead on exact #298 head 98a7a805; non-v3 withheld pursuit guard only; CI and independent exact-head gates remain.",
       "allow": [
-        "packages/db/migrations/0207_recovery_pursuit_terms_required.sql",
-        "packages/db/migration-notes/0207_recovery_pursuit_terms_required.md",
+        "packages/db/migrations/0240_recovery_pursuit_terms_required.sql",
+        "packages/db/migration-notes/0240_recovery_pursuit_terms_required.md",
         "packages/db/test/recovery-pursuit-terms.integration.test.ts",
         "packages/db/test/recovery-pursuit-terms-upgrade.integration.test.ts",
         "packages/db/test/recovery-case-terms.integration.test.ts",
