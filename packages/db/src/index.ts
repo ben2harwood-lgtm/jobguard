@@ -135,4 +135,6 @@ export { ContractorRetainedReadRepository } from "./contractor-retained-read-rep
 export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
 export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
 
+export * from "./meter-today-repository.js";
+export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 export * from "./enterprise-baseline-repository.js";
