@@ -1,6 +1,6 @@
 # 0244 — private place-admission held boundary
 
-Applies after 0209. Adds only `app.mon1_admit_place(uuid,uuid,text,uuid)` owned by
+Applies after 0239 (MON1-S lifecycle source; renumbered from 0209 on main). Adds only `app.mon1_admit_place(uuid,uuid,text,uuid)` owned by
 jobguard_migration, SECURITY INVOKER, fixed pg_catalog search path, no PUBLIC,
 runtime, meter, infrastructure or shadow execution. No rows, tables, policies,
 grants on existing objects, backfill or business effects. Existing tenant tables
