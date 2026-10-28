@@ -1,7 +1,8 @@
 /** Single SELECT snapshot: current session, membership, dashboard grants, job AND operative scope precede aggregation.
+ * Billing joins only matched exported lines after ENT-6's full-invoice allocation, at the same snapshot.
  * Output is an allowlist; no contact, free text, credential, provider or commercial command is selected.
  */
-const enterpriseDashboardCtes = `
+export const enterpriseDashboardSourceSql = `
 WITH actor AS MATERIALIZED (
  SELECT s.* FROM app.contractor_session($1::uuid) s
  WHERE s.tenant_id=$2::uuid AND s.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid
@@ -96,26 +97,12 @@ WITH actor AS MATERIALIZED (
  JOIN app.membership m ON(m.tenant_id,m.id)=(v.tenant_id,v.membership_id)
  LEFT JOIN app.closeout_answer a ON(a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
  WHERE v.completed_at IS NOT NULL AND EXISTS(SELECT 1 FROM covered_subjects cs WHERE(cs.tenant_id,cs.job_id,cs.membership_id)=(v.tenant_id,v.job_id,v.membership_id))
-)`;
-export const enterpriseDashboardSourceSql = enterpriseDashboardCtes + `
+)
 SELECT EXISTS(SELECT 1 FROM grants) authorized,
  jsonb_build_object('version','enterprise-dashboard-facts.v1','cutoff',to_char(statement_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM extra_json),'[]'::jsonb),'closeouts',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM closeout_json),'[]'::jsonb),'billing',jsonb_build_object('status','held','prerequisite','ENT-6B')) facts,
  jsonb_build_object('version','enterprise-signal-facts.v1','extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM signal_extra),'[]'::jsonb),
-  'orderLines',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM order_json),'[]'::jsonb),'billedVariations','[]'::jsonb,'closeouts','[]'::jsonb,'outlierPolicy',NULL) signals
-`;
-/** Same shared tenant gate as the existing contractor reads; administration/imports take its exclusive counterpart. */
-export const enterpriseDashboardScopeLockSql = "SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))";
-
-/** Reuse the exact job/operative intersection, and read ENT-6's stored latest allocation run.
- * Join only matched exported lines AFTER full-invoice allocation. No invoice composition or other
- * operatives' identifiers leave SQL. Runs and their lines are read in the same statement snapshot.
- */
-export const enterpriseDashboardBillingSourceSql = enterpriseDashboardCtes + `
-SELECT EXISTS(SELECT 1 FROM grants) authorized,
- jsonb_build_object('version','enterprise-dashboard-facts.v1','cutoff',to_char(statement_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-  'extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM extra_json),'[]'::jsonb),
-  'closeouts','[]'::jsonb,'billing',jsonb_build_object('status','held','prerequisite','ENT-6B')) facts,
+  'orderLines',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM order_json),'[]'::jsonb),'billedVariations','[]'::jsonb,'closeouts','[]'::jsonb,'outlierPolicy',NULL) signals,
  coalesce((SELECT jsonb_agg(jsonb_build_object(
   'jobId',e.job_id,'extraId',e.variation_id,'exportLineId',l.id,'revisionId',l.revision_id,'runId',r.id,
   'factId',f.id,'inputHash',r.input_hash,'lineId',m.external_invoice_line_id,
@@ -135,3 +122,5 @@ SELECT EXISTS(SELECT 1 FROM grants) authorized,
  AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE(n.tenant_id,n.predecessor_id)=(r.tenant_id,r.id))
  ),'[]'::jsonb) billing
 `;
+/** Same shared tenant gate as the existing contractor reads; administration/imports take its exclusive counterpart. */
+export const enterpriseDashboardScopeLockSql = "SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))";

@@ -3,7 +3,7 @@ import type { BillingStatus, BillingAllocation } from "@jobguard/core";
 import { z } from "zod";
 import { EnterpriseDashboardError, dashboardParse, dashboardQueryV1, dashboardFactsV1, projectEnterpriseDashboard, projectStoredDashboardBilling, enterpriseSignals, enterpriseSignalFactsV1, dashboardPeriodContains } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-import { enterpriseDashboardSourceSql, enterpriseDashboardBillingSourceSql, enterpriseDashboardScopeLockSql } from "./enterprise-dashboard-queries.js";
+import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from "./enterprise-dashboard-queries.js";
 
 /** ENT-6B must supply full composition and exact allocation references bound to the same source snapshot.
  * No fake/empty successful implementation is wired. The supplied-fact core projector confers no authority.
@@ -25,7 +25,7 @@ export class EnterpriseDashboardRepository {
     return withTenant(this.pool, context, async db => {
       await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
       const row = (await db.$client.query<{ authorized: boolean; facts: unknown; billing: unknown }>(
-        enterpriseDashboardBillingSourceSql, [sessionId, context.tenantId])).rows[0];
+        enterpriseDashboardSourceSql, [sessionId, context.tenantId])).rows[0];
       if (!row?.authorized) throw new EnterpriseDashboardError("NOT_FOUND");
       const facts = dashboardParse(dashboardFactsV1, row.facts);
       for (const [key, value] of Object.entries(query.filters)) {
