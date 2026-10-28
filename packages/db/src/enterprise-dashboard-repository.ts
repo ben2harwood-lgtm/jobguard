@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import type { BillingStatus, BillingAllocation } from "@jobguard/core";
 import { z } from "zod";
-import { EnterpriseDashboardError, dashboardParse, dashboardQueryV1, dashboardFactsV1, projectEnterpriseDashboard, projectStoredDashboardBilling, enterpriseSignals, enterpriseSignalFactsV1, dashboardPeriodContains } from "@jobguard/core";
+import { EnterpriseDashboardError, dashboardParse, dashboardQueryV1, dashboardFactsV1, projectEnterpriseDashboard, projectStoredDashboardBilling, enterpriseSignalFactsV1 } from "@jobguard/core";
+import { scopedEnterpriseSignals } from "./enterprise-dashboard-signals.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from "./enterprise-dashboard-queries.js";
 
@@ -49,9 +50,7 @@ export class EnterpriseDashboardRepository {
         if (!visible) throw new EnterpriseDashboardError("NOT_FOUND");
       }
       const report = projectEnterpriseDashboard(facts, query), signalFacts = dashboardParse(enterpriseSignalFactsV1, row.signals);
-      const extras = new Set(report.contributions.flatMap(c => c.extraIds)), jobs = new Set(report.contributions.map(c => c.jobId));
-      const signals = enterpriseSignals({ ...signalFacts, extras: signalFacts.extras.filter(e => extras.has(e.extraId)),
-        orderLines: signalFacts.orderLines.filter(l => jobs.has(l.jobId) && dashboardPeriodContains(l.at, query.from, query.until)) });
+      const signals = scopedEnterpriseSignals(facts, query, signalFacts);
       return { report, signals };
     });
   }
