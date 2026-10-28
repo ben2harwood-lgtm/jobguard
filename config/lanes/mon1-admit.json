@@ -12,6 +12,7 @@
         "apps/api/src/meter-today.application.ts",
         "apps/api/src/meter-work-state.application.test.ts",
         "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.test.ts",
         "apps/web/app/api/meter/jobs/[id]/work-state/route.ts",
         "apps/web/app/lib/meter-server.ts",
         "apps/web/app/meter/meter-screen.test.tsx",

@@ -10,8 +10,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try { raw = await request.json(); }
   catch { return NextResponse.json({ code: "INVALID_WORK_STATE_INPUT" }, { status: 400, headers }); }
   try {
-    const credentials = { ...await identityCredentials(request),
-      origin: request.headers.get("origin") ?? identityApplication().allowedOrigin };
+    if (request.headers.get("origin") !== identityApplication().allowedOrigin) {
+      return NextResponse.json({ version: "meter-today-error.v1", code: "ORIGIN_FORBIDDEN" }, { status: 403, headers });
+    }
+    const credentials = await identityCredentials(request);
     return NextResponse.json(await meterWorkApplication().command(credentials, (await params).id, raw), { status: 201, headers });
   } catch (error) {
     if (error instanceof WatchdogError) return NextResponse.json({ code: error.code },

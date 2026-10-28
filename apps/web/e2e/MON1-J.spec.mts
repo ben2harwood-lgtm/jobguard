@@ -26,7 +26,7 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
   await insertPhoto(f,a,new Date().toISOString()); await count(1);
   const session = await (await page.request.get("/api/auth/session")).json();
   const send = (jobId: string, data: unknown, tenantId=a.tenantId) => page.request.post(`/api/meter/jobs/${jobId}/work-state`, {
-   headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId }, data });
+   headers: { origin: new URL(page.url()).origin, "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId }, data });
   const command = async (jobId: string, data: unknown) => {
    const response=await send(jobId,data); expect(response.status()).toBe(201); return response.json();
   };
@@ -66,7 +66,7 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
   const other=await meterCompany(f);
   const foreign=await send(a.jobId,finish,other.tenantId);
   expect(foreign.status()).toBe(403);
-  const badCsrf=await page.request.post(`/api/meter/jobs/${a.jobId}/work-state`,{headers:{"x-tenant-id":a.tenantId,"x-csrf-token":"x".repeat(24)},data:finish});
+  const badCsrf=await page.request.post(`/api/meter/jobs/${a.jobId}/work-state`,{headers:{origin:new URL(page.url()).origin,"x-tenant-id":a.tenantId,"x-csrf-token":"x".repeat(24)},data:finish});
   expect(badCsrf.status()).toBe(403);
   await count(6);
  } finally { await runtime.end(); await admin.end(); }
