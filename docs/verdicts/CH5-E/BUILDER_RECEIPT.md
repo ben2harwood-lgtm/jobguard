@@ -1,3 +1,44 @@
+## SV-7A intake catch-up — 28 October 2026, 22:49 UTC run
+
+CH-5 / CH5-E, PR #386, RED. Catch-up only; no new behavior.
+HEAD: e47c694f3ce1c0324dd62bb29ac764deba90c33a.
+MERGE_HEAD / origin/main: d461c00839d5b431e442706f8a03ec1c5b713bd5
+(SV-7A intake, PR #354). Existing RED-pass is reported by the task brief;
+these checks are builder verification, not a new independent review.
+
+Resolved both working-file conflict blocks: workspace composition retains the
+CH-5 imports application and main's SV-7A intake method; SERIOUS-B5 applies both
+invoicedImportAdditions and sourceIntakeAdditions, preserving their complete
+existing assertions and the 0323 routine assertions. LP-0 already merged cleanly:
+verified exact entries and recorded routines from both parents, with group lists
+unioned. Entitlement and tenancy remain byte-identical to HEAD and differ from
+main only by the existing job_import_v3 expectations. No SQL edits: all 136
+existing migration SQL files match HEAD byte-for-byte (including 0323/0324),
+and incoming 0303 matches main exactly. Lane allowlist remains exactly the 52
+PR payload paths relative to main; its own lane file is implicitly allowed.
+Updated the existing lane note without widening its allowlist. No substantial
+new complexity or worthwhile simplification within this conflict-only catch-up.
+
+Local checks actually run with installed pnpm 10.28.1, Node v24.17.0:
+
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lp-0-catalog.test.ts test/audit-export-privilege-comparator.test.ts`: 44 passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/job-import-v3.application.test.ts src/imported-shadow-source-adapter.test.ts src/job-source.controller.test.ts`: 12 passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/api exec tsc -p tsconfig.json --noEmit`: passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/db exec tsc -p /tmp/ch5-e-r2-test-typecheck.json --noEmit`: passed (existing config targets SERIOUS-B5 upgrade suite; compilation only).
+- From apps/api, `node --import tsx src/generate-openapi.ts --check`: passed.
+- Read-only parent inventory comparisons, exact lane inventory, SQL byte checks,
+  conflict-marker scan and `git diff --check`: passed.
+- Initial PATH `pnpm --version` emitted a configuration warning and stalled;
+  interrupted it, then used the installed pinned wrapper for all checks above.
+
+At most two test/check workers ran at once. No package downloads, Git writes,
+PostgreSQL startup, listeners, real data, providers, money or release actions.
+Router must stage the two resolved files and lane/receipt updates and finish the
+pending merge; read-only .git leaves the two index entries marked unmerged here.
+Rerun the normal lane check after recording the merge. Database, migration,
+browser and full required suites remain GitHub CI gates after router push.
+Commit message: /tmp/ch5-e-20261028T224959Z-commit-msg.txt.
+
 ## Pending main merge conflict resolution — 28 October 2026, 22:21 UTC run
 
 CH-5 / CH5-E, PR #386, RED; catch-up only, no new behavior.
