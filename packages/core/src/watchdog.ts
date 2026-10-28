@@ -18,6 +18,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/payment-fees": "post_live_billing",
+  "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
   "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.

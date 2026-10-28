@@ -136,3 +136,5 @@ export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError
 export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
 
 export * from "./enterprise-baseline-repository.js";
+
+export * from "./payment-fee-repository.js";

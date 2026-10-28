@@ -457,6 +457,7 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
  const indexNames=["recovery_attribution_revision_pkey","ra_revision_subject_revision","ra_revision_subject_id","recovery_attribution_command_pkey","recovery_attribution_reassessment_pkey"];
  const routineIdentities=[
   ["recovery_attribution_immutable",""],
+  ["recovery_attribution_sources","t uuid, j uuid, p jsonb, actor uuid"],
   ["append_recovery_attribution","p_document jsonb, p_actor uuid, p_command jsonb, p_cause text, p_source text"],
   ["assess_recovery_attribution","p_job uuid, p_session text, p_command jsonb"],
  ];
@@ -757,6 +758,39 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
  const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
+// MON-4A 0325: enumerate only the two new immutable tables and five routines.
+async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const tables=["payment_fee_statement","payment_fee_command"];
+ const indexes=["payment_fee_statement_pkey","pf_stmt_job","pf_stmt_receipt","payment_fee_command_pkey"];
+ const identities=[
+  ["payment_fee_receipt_sources","t uuid, j uuid, payment uuid, actor uuid"],
+  ["payment_fee_actor","j uuid, d text"],["payment_fee_current","t uuid, j uuid, s uuid, actor uuid"],
+  ["read_payment_fees","j uuid, d text"],["write_payment_fee","j uuid, d text, p jsonb"],
+ ];
+ const routines=after.routines.filter(r=>r.nspname==="app"&&identities.some(([name,args])=>r.proname===name&&r.args===args));
+ expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
+ for(const r of routines){
+  expect(r.proconfig).toEqual(["search_path=pg_catalog, app"]);
+  const exposed=["read_payment_fees","write_payment_fee"].includes(r.proname);
+  expect(r.prosecdef).toBe(exposed);
+  const acl=(await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl;
+  expect(acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration",...(exposed?["jobguard_runtime=X/jobguard_migration"]:[])].sort());
+  expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
+ }
+ const relations=after.relations.filter(r=>r.nspname==="app"&&[...tables,...indexes].includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...tables,...indexes].sort());
+ for(const t of tables){
+  expect(before.rows).not.toHaveProperty(`app.${t}`);expect(after.rows[`app.${t}`]).toEqual([]);
+  const relation=relations.find(r=>r.relname===t)!;expect(relation.relrowsecurity).toBe(true);expect(relation.relforcerowsecurity).toBe(true);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[relation.relacl])).rows[0].acl).toEqual(["jobguard_migration=arwdDxt/jobguard_migration"]);
+ }
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"payment_fee_tenant"]).sort());
+ for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -778,6 +812,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await attributionAdditions(expected));
  Object.assign(expected, await catchAdditions(expected));
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
+ Object.assign(expected, await paymentFeeAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
