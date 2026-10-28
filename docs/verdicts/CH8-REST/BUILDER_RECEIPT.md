@@ -196,3 +196,30 @@ after router push. No Git writes were performed. The two unmerged index entries
 must be staged by the router with the resolved working-tree files before the
 merge commit. This records builder checks, not a new independent RED review.
 Commit message: /tmp/ch8-rest-20261028T220936Z-commit-msg.txt.
+
+
+## PR #389 CI repair, try 2 — 28 October 2026
+
+The supplied CI traces contained five failures, all catalogue expectation omissions or naming:
+
+- Tenancy RLS and ownership assertions omitted the four app evidence-pack-v3 tables. Both exact
+  lists now include all four with enabled/forced RLS, a check policy and migration ownership.
+- SERIOUS-B5 expected the unshortened generated request UNIQUE index name. It now pins PostgreSQL's
+  actual `evidence_pack_v3_request_tenant_id_job_id_case_id_command_i_key` name.
+- LP0-17 omitted nine 0306 routine protection records. All nine exact signatures and source-inspected
+  protection facts are recorded, including owner-only helpers and worker-only routines. Prior records,
+  grant entries, authority paths and exception groups remain unchanged. No digest verification is claimed.
+- The shadow catalogue's exact callable list omitted the three worker entrypoints explicitly granted
+  in 0306. It now enumerates them; emergency-access expectations remain unchanged.
+
+No runtime behaviour or migration SQL changed. The worktree had no unresolved merge conflicts.
+0306 has no CASE expression in an IF condition; its CASE expressions are in SELECT statements.
+The lane file exactly covers changed paths against origin/main.
+
+Executed: DB TypeScript noEmit passed; installed Vitest with maxWorkers=2 passed lp-0-catalog,
+audit-export-privilege-comparator and verify-evidence-pack-cli (3 files, 49 tests); reviewed inventory
+parsed successfully with 468 unique routine records; git diff --check passed; all migration SQL bytes
+compare equal to HEAD. The direct inventory-parser attempt initially encountered stale core dist from
+before SV-7A; rebuilding core with installed TypeScript resolved it and the parser then passed.
+PostgreSQL/integration/browser suites were not run in this sandbox and remain for GitHub CI.
+These are deterministic/source checks, not a new independent RED review.

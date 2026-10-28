@@ -741,9 +741,10 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const tables = ["evidence_pack_v3", "evidence_pack_v3_approval", "evidence_pack_v3_check", "evidence_pack_v3_request"];
+ // PostgreSQL shortens generated constraint-name components to fit its identifier limit.
  const indexNames = ["evidence_pack_v3_pkey", "evidence_pack_v3_tenant_id_job_id_case_id_id_key",
   "evidence_pack_v3_approval_pkey", "evidence_pack_v3_check_pkey", "evidence_pack_v3_request_pkey",
-  "evidence_pack_v3_request_tenant_id_job_id_case_id_command_id_key"];
+  "evidence_pack_v3_request_tenant_id_job_id_case_id_command_i_key"];
  const identities = [
   ["canonical_evidence_pack_v3", "v jsonb"], ["evidence_pack_v3_owner", "t uuid, c uuid, d text"],
   ["evidence_pack_v3_ordinary", "t uuid, c uuid"], ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean"],
