@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-deepmerge": {
+      "branches": [
+        "codex/sandbox/deps-deepmerge"
+      ],
+      "note": "Clear GHSA-gcqx-w48m-w2h4 (deepmerge 4.3.1, no patched version) by removing @nestjs/cli's unused fork-ts-checker-webpack-plugin (webpack mode only; api builds with tsc). No audit exception.",
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml"
+      ]
+    }
+  }
+}
