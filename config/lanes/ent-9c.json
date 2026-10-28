@@ -11,6 +11,7 @@
         "apps/api/src/contractor/enterprise-dashboard-stored.application.test.ts",
         "apps/api/src/contractor/enterprise-dashboard.application.ts",
         "docs/contracts/enterprise-dashboard-stored-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/core/src/enterprise-dashboard-stored-billing.test.ts",
         "packages/core/src/enterprise-dashboard-stored-billing.ts",
         "packages/core/src/index.ts",
@@ -20,8 +21,11 @@
         "packages/db/src/enterprise-dashboard-queries.ts",
         "packages/db/src/enterprise-dashboard-repository.ts",
         "packages/db/src/index.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/enterprise-baseline-upgrade.integration.test.ts",
-        "packages/db/test/enterprise-dashboard-stored.integration.test.ts"
+        "packages/db/test/enterprise-dashboard-stored.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
       ]
     }
   }

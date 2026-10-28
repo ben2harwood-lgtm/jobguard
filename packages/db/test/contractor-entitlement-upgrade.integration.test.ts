@@ -33,6 +33,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_scope":[],
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
+ "app.enterprise_baseline_batch":[],
+ "app.enterprise_baseline_team":[],
  "app.billing_allocation_run":[],
  "app.billing_application_event":[],
  "app.billing_export_batch":[],
