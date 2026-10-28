@@ -19,7 +19,7 @@ export class EnterpriseDashboardRepository {
   constructor(private readonly pool: Pool) {}
   async read(context: VerifiedTenantContext, sessionId: string, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new EnterpriseDashboardError("MODE_FORBIDDEN");
-    if (!z.string().uuid().safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
+    if (!z.guid({ error: "Invalid uuid" }).safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
     const query = dashboardParse(dashboardQueryV1, raw);
     return withTenant(this.pool, context, async db => {
       await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);

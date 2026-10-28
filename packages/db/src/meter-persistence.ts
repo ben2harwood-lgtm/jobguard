@@ -7,7 +7,7 @@ export class MeterPersistenceError extends Error {
 // The parent and db currently pin different Zod patch releases. Cross the
 // boundary through safeParse, rather than nesting foreign Zod implementation types.
 export const meterLondonDateV1=z.string().refine(value=>londonMeterDateV1.safeParse(value).success);
-const fixtureId=z.string().uuid().transform(value=>value.toLowerCase());
+const fixtureId=z.guid({ error: "Invalid uuid" }).transform(value=>value.toLowerCase());
 const fixtureJob=z.object({tenantId:fixtureId,jobId:fixtureId,customerId:fixtureId,siteId:fixtureId,small:z.boolean()}).strict();
 /** Explicit synthetic facts only; this schema does not decide held lifecycle/trial endpoints. */
 export const meterFixtureV1 = z.object({
@@ -18,7 +18,7 @@ export const meterFixtureV1 = z.object({
 
 export function projectMeterFixture(tenantId: string, raw: unknown) {
  try {
-  tenantId = z.string().uuid().parse(tenantId).toLowerCase();
+  tenantId = z.guid({ error: "Invalid uuid" }).parse(tenantId).toLowerCase();
   const supplied = meterFixtureV1.parse(raw);
   const input = { ...supplied, days: supplied.days.map(day => ({ ...day, jobs: [...day.jobs].sort((a,b)=>a.jobId.localeCompare(b.jobId)) })).sort((a,b)=>a.date.localeCompare(b.date)) };
   const ledger = input.days.map(day => {

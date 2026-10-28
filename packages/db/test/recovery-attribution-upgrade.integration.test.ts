@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { createLockFixture, closeLockFixture, seedAccount, type LockFixture } from "./recovery-attribution-fixture.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-const own="0213_recovery_attribution.sql";
+const own="0249_recovery_attribution.sql";
 const tables=["recovery_attribution_revision","recovery_attribution_command","recovery_attribution_reassessment"];
 const indexes=["recovery_attribution_revision_pkey","ra_revision_subject_revision","ra_revision_subject_id","recovery_attribution_command_pkey","recovery_attribution_reassessment_pkey"];
 const routines=["recovery_attribution_immutable","append_recovery_attribution","assess_recovery_attribution"];
