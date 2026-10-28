@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 /** ENT-10d real PostgreSQL 16 tests. NOT RUN (sandbox cannot start PostgreSQL / a browser). */
 import { createHash, randomUUID } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -53,6 +54,7 @@ async function requestSigninCode(provider:PersistedAuthProvider,email:string) {
 }
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
+ await seedActiveContractorAgreement(admin,principal.tenantId);
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
  const sessionToken=randomUUID(),csrfToken=randomUUID(),sessionId=randomUUID();
  await admin.query("INSERT INTO identity.user_email VALUES($1,$2)",[email,principal.identityUserId]);

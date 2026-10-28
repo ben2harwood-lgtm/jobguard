@@ -33,7 +33,7 @@ function failure(error: unknown): never {
   throw new ExtraApprovalError("DATABASE_UNAVAILABLE", { cause: error });
 }
 
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const reason = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u);
 const pence = z.number().int().min(1).max(1_000_000_000_000);
 const common = { commandId: uuid, jobId: uuid };
@@ -46,11 +46,11 @@ export const rejectExtraV1 = z.object({ version: z.literal("reject-extra.v1"), .
 export const withdrawExtraV1 = z.object({ version: z.literal("withdraw-extra.v1"), ...common, extraId: uuid, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
 export const markDuplicateV1 = z.object({ version: z.literal("mark-duplicate.v1"), ...common, duplicateId: uuid, canonicalId: uuid }).strict();
 /** Owner-only send: the owner approves THIS request, recipient, amount and expiry. Practice recipients end in .invalid and nothing is delivered. */
-export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.string().email().refine(s => s.toLowerCase().endsWith(".invalid")),
+export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.email({ error: "Invalid email" }).refine(s => s.toLowerCase().endsWith(".invalid")),
   linkToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u), expiresAt: z.coerce.date() }).strict();
 export const revokeClientApprovalV1 = z.object({ version: z.literal("revoke-client-approval.v1"), ...common, linkId: uuid }).strict();
-export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email() }).strict();
-export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email(), revisionHash: hash, netPence: pence,
+export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }) }).strict();
+export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }), revisionHash: hash, netPence: pence,
   decision: z.enum(["approve", "reject"]), reasonCode: reason.optional(),
   /** Ben decision 20: a named fictional role, with the real tester recorded beside it. Neither may be omitted. */
   fictionalRoleName: z.string().trim().min(1).max(100), actualTesterReference: z.string().trim().min(1).max(100) }).strict();
@@ -78,6 +78,7 @@ export class ExtraApprovalRepository {
     const member = this.checkActor(context, actor), tenant = lc(context.tenantId), requestHash = sha256Hex(canonicalJson({ type, actor: member, content }));
     try {
       return await withTenant(this.pool, context, async db => {
+        if (type !== "RevokeClientApproval") await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]);
         const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
           VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, requestHash, member]);
         if (!inserted.rowCount) {
@@ -159,7 +160,7 @@ export class ExtraApprovalRepository {
       const command: ConsequentialCommand = { version: "command.v1", commandId: i.commandId, commandType: "IssueClientApproval", semanticKey: `extra-client-approval:${i.requestId}:${i.commandId}`, actorMembershipId: member, subjectType: "extra", subjectRef: request.variation_id,
         action: { actionType: "extra.client_approval_request.send", recipient: i.recipient, contentHash, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", expiresAt: i.expiresAt } };
       const handler: CommandMutation<Result> = {
-        lock: async db => { await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
+        lock: async db => { await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]); await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
         mutate: async (db, c) => {
           await appendOutboundAction(db, tenant, { version: "outbound-action.v1", id: outboxId, authorizationId: c.authorizationId!, adapter: "fake_email", providerEffectKey: `extra-client-link:${linkId}`, actionType: c.action.actionType, recipient: i.recipient,
             contentHash, immutableContent: content, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", authorizationExpiresAt: i.expiresAt });

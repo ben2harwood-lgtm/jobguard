@@ -36,7 +36,7 @@ describe("ActionExecutor adapter ownership", () => {
     };
     const before = { ...row };
     const query = vi.fn(async (sql: string) => {
-      if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row] };
+      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 0 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
       if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
@@ -59,7 +59,7 @@ describe("ActionExecutor adapter ownership", () => {
       "BEGIN",
       "SELECT set_config('app.tenant_id', $1, true)",
       "SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))",
-      expect.stringMatching(/^SELECT o\.\* FROM app\.action_outbox.*FOR UPDATE OF o$/u),
+      expect.stringMatching(/^SELECT o\.\*,a\.actor_membership_id AS authorization_actor FROM app\.action_outbox.*FOR UPDATE OF o$/u),
       "COMMIT",
     ]);
     expect(row).toEqual(before);
@@ -96,7 +96,7 @@ describe("ActionExecutor retry exhaustion", () => {
       if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
       if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
       if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
-      if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row] };
+      if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 4 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
       if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
@@ -129,4 +129,24 @@ describe("ActionExecutor retry exhaustion", () => {
     expect(telemetry.emit).toHaveBeenCalledWith("outbox.failure", { actionId: id, attempt: 5 });
     expect(telemetry.emit).toHaveBeenCalledWith("outbox.retry", { actionId: id, attempt: 5 });
   });
+});
+it("MON-8 cancels an approval message before delivery or attempt creation after entitlement loss (unit double)", async () => {
+  const context=testTenantContext("10000000-0000-4000-8000-000000000001"),id="20000000-0000-4000-8000-000000000002";
+  const row={adapter:"fake_email",action_type:"extra.client_approval_request.send",authorization_actor:"40000000-0000-4000-8000-000000000004",
+    status:"pending",created_at:"2026-01-01T00:00:00Z",authorization_expires_at:"2099-01-01T00:00:00Z"};
+  const query=vi.fn(async(sql:string)=>{
+    if(sql.startsWith("SELECT o.*"))return {rows:[row]};
+    if(sql.startsWith("SELECT app.mon8_feature_decision"))return {rows:[{decision:{version:"plan-entitlement-decision.v1",environment:"synthetic_demo",feature:"approval_chains",entitlement:"held",executable:false,reason:"agreement_authority_held"}}]};
+    if(sql.startsWith("SELECT nullif(current_setting"))return {rows:[{tenant_id:context.tenantId}]};
+    if(sql==="SELECT clock_timestamp() AS occurred_at")return {rows:[{occurred_at:new Date()}]};
+    if(sql.startsWith("INSERT ")||sql.startsWith("UPDATE ")||sql.startsWith("SELECT pg_advisory_xact_lock(")||sql.startsWith("SELECT set_config")||sql==="SELECT sequence::text, event_hash FROM app.lock_audit_head()"||sql==="SELECT app.advance_audit_head($1, $2)"||["BEGIN","COMMIT","ROLLBACK"].includes(sql))return {rows:[]};
+    throw new Error(`Unexpected database operation: ${sql}`);
+  });
+  const pool={connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
+  const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional"}));
+  const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:true,deliver,reconcile:async()=>"unknown"};
+  await new ActionExecutor(pool,new Map([[adapter.name,adapter]]),{emit:vi.fn()}).execute(context,id);
+  expect(deliver).not.toHaveBeenCalled();
+  expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT INTO app.action_attempt"))).toBe(false);
+  expect(query.mock.calls.some(([sql])=>sql.includes("SET status='cancelled'"))).toBe(true);
 });

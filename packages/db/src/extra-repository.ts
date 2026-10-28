@@ -14,7 +14,7 @@ import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type
 export type ExtraTransactionSeam = (db: TenantTransaction, fact: Readonly<{ kind: "raise" | "duplicate_link" | "order_line_link" | "duplicate_unlink"; commandId: string; jobId: string; variationId: string; linkId?: string; reversesLinkId?: string }>) => Promise<void>;
 export type RaisedExtra = { variationId: string };
 export type ExtraLinkResult = { linkId: string; variationId: string };
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const originColumns = `o.*,to_char(o.server_recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') server_text,
  to_char(o.device_captured_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') device_text,
  (SELECT kind FROM app.extra_event e WHERE (e.tenant_id,e.job_id,e.variation_id)=(o.tenant_id,o.job_id,o.variation_id) ORDER BY sequence DESC LIMIT 1) latest_kind`;
@@ -66,6 +66,7 @@ export class ExtraRepository {
    const tenant = context.tenantId.toLowerCase();
    // Match revision/revocation order: tenant administration before job locks and origin foreign keys.
    await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
+   await db.$client.query("SELECT app.mon8_require_feature($1,'site_origin_capture')", [input.actorMembershipId]);
    await lockJob(db, tenant, input.jobId);
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");

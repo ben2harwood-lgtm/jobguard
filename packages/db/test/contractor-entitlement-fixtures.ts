@@ -1,9 +1,10 @@
+import { startSession as baseStartSession } from "./contractor-practice-session-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import type { Pool, PoolClient } from "pg";
 import { ContractorEntitlementAuthorityRepository } from "../src/contractor-entitlement-authority-repository.js";
 import { ownerTx, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
-export { cluster, startSession, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
+export { cluster, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
 export type { Cluster, SessionFixture };
 export const own = "0198_contractor_entitlement_authority.sql";
 export async function snapshot(db: Pool | PoolClient) {
@@ -46,3 +47,6 @@ export async function predecessorCatalogue(db: Pool | PoolClient) {
  const policies=(await db.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') AND NOT(schemaname='app' AND tablename=$1) ORDER BY schemaname,tablename,policyname",[table])).rows;
  return {relations,routines,policies};
 }
+
+// MON-8 tests deliberately start without the positive agreement fixture.
+export const startSession = (c: Cluster, home = false) => baseStartSession(c, home, false);

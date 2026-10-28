@@ -102,3 +102,16 @@ unit/check results. No query double is offered as database evidence. B's Q-03
 runtime-command denial matrix, legacy compatibility and retained-read integration
 remain outstanding; C waits for merged MON-2A-P and actual MON-3-P transitions.
 No independent acceptance or release gate is claimed by this document.
+
+
+### 28 October enforcement addendum
+
+0318/0319 consume these persisted status facts through the common server service
+specified in [plan entitlements](plan-entitlements-v1.md#28-october--mon-8-persisted-enforcement-03180319-red).
+The status insertion trigger now acquires the exclusive tenant advisory lock
+itself; immutable/no-truncate behavior and grants are preserved. No status is
+backfilled or inferred from a reference. The earlier A-only limitation above is
+historical: command guards and retained-reader integration now have source and
+CI test coverage in this change. Actual PostgreSQL execution and independent RED
+review are not claimed locally. Missing persisted MON-3 trial authority and the
+existing normal-company commercial route restriction still refuse execution.

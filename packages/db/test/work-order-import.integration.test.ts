@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -27,7 +28,7 @@ async function member(p: AuthenticatedMembership, role: string, scope: { kind: s
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
   return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
 }
-async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
+async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
 const counts = async (tenantId: string, tables = [...ENT2_TABLES, ...SPINE_TABLES]) => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
 const importOf = (p: AuthenticatedMembership, csv: string, name = "test.csv", commandId: string = randomUUID()) => orders.importCsv(p, { commandId, name, kind: "csv", csv });
 const row1 = (demo: WorkOrderDemo, n: number, overrides: Record<string, unknown> = {}) => demoRow(demo, n, overrides);

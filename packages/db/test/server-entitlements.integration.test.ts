@@ -1,0 +1,104 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { ContractorRepository, WorkOrderRepository, AuditExportRepository, withTenant } from "../src/index.js";
+import { serverEntitlement } from "../src/plan-entitlement-service.js";
+import { cluster, startSession, status, unchanged, type Cluster } from "./contractor-entitlement-fixtures.js";
+import { currentCommand } from "./contractor-practice-session-fixtures.js";
+import { track } from "./contractor-retained-read-fixtures.js";
+let c: Cluster;
+beforeAll(async () => { c = await cluster(); }, 120000);
+afterAll(async () => { await c?.close(); });
+const features = ["operative_roles", "site_origin_capture", "approval_chains", "work_orders", "sso"] as const;
+async function decision(f: Awaited<ReturnType<typeof startSession>>, feature: typeof features[number]) {
+  return withTenant(c.runtime, f.context, db => serverEntitlement(db, f.p.membershipId, feature));
+}
+async function invite(f: Awaited<ReturnType<typeof startSession>>) {
+  return currentCommand(c, f, { kind: "member.invite", role: "operative", email: `${randomUUID()}@fixture.invalid`, clientId: null, contractId: null,
+    scope: { kind: "team", id: (await c.admin.query("SELECT id FROM app.team WHERE tenant_id=$1", [f.p.tenantId])).rows[0].id } });
+}
+it("MON-8 missing agreement refuses every contractor capability and operative creation with no effects", async () => {
+  const f = await startSession(c);
+  for (const feature of features) expect(await decision(f, feature)).toMatchObject({ executable: false, entitlement: "held" });
+  await unchanged(c, async () => {
+    await expect(new ContractorRepository(c.runtime).command(f.p, await invite(f))).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+it("MON-8 cross-company membership cannot receive a grant even with an active agreement", async () => {
+  const a = await startSession(c), b = await startSession(c);
+  await status(c, a, "active");
+  const command = await currentCommand(c, a, { kind: "grant.create", membershipId: b.p.membershipId, role: "operative", contractId: null,
+    scope: { kind: "tenant", id: a.p.tenantId } });
+  await unchanged(c, () => expect(new ContractorRepository(c.runtime).command(a.p, command)).rejects.toMatchObject({ code: "NOT_FOUND" }));
+  await expect(withTenant(c.runtime, a.context, db => serverEntitlement(db, b.p.membershipId, "operative_roles"))).rejects.toThrow("FORBIDDEN");
+});
+it("MON-8 agreement suspension refuses successful-command replay before looking up its receipt", async () => {
+  const f = await startSession(c); await status(c, f, "active");
+  const repository = new ContractorRepository(c.runtime), command = await invite(f);
+  const first = await repository.command(f.p, command);
+  expect(await repository.command(f.p, command)).toEqual(first);
+  await status(c, f, "suspended");
+  await unchanged(c, () => expect(repository.command(f.p, command)).rejects.toMatchObject({ code: "FORBIDDEN" }));
+  for (const feature of features) expect((await decision(f, feature)).executable).toBe(false);
+});
+it("MON-8 downgrade invalidates cached eligibility while preserving scoped records and order exports", async () => {
+  const f = await startSession(c); await status(c, f, "active");
+  const repository = new ContractorRepository(c.runtime), query = { version: "contractor-query.v1", tenantId: f.p.tenantId, resource: "organisation" };
+  const before = await repository.query(f.p, query);
+  expect((await decision(f, "operative_roles")).executable).toBe(true);
+  await track(c, f);
+  for (const feature of features) expect(await decision(f, feature)).toMatchObject({ executable: false, entitlement: "excluded" });
+  expect(await repository.query(f.p, query)).toEqual(before);
+  expect((await new WorkOrderRepository(c.runtime).overview(f.p)).orders).toEqual([]);
+  expect(await new AuditExportRepository(c.runtime).list(f.context, { membershipId: f.p.membershipId, identityUserId: f.p.identityUserId })).toEqual([]);
+  await unchanged(c, async () => {
+    await expect(repository.command(f.p, await invite(f))).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+it("MON-8 a blocked check observes a committed suspension, rather than stale eligibility", async () => {
+  const f = await startSession(c); await status(c, f, "active");
+  const writer = await c.admin.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await writer.query("BEGIN");
+    await writer.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
+    pending = decision(f, "work_orders");
+    let waiting = false;
+    for (let i = 0; i < 200; i++) {
+      waiting = (await c.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) waiting")).rows[0].waiting;
+      if (waiting) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect(waiting).toBe(true);
+    await writer.query(`INSERT INTO app.contractor_agreement_status_revision
+      SELECT tenant_id,$2,assignment_id,2,'suspended',schema_version,environment,clock_timestamp(),$3
+      FROM app.contractor_agreement_status_revision WHERE tenant_id=$1`, [f.p.tenantId, randomUUID(), `fictional-fixture:${randomUUID()}`]);
+    await writer.query("COMMIT");
+    expect(await pending).toMatchObject({ executable: false, entitlement: "held" });
+  } finally { await writer.query("ROLLBACK"); writer.release(); await pending; }
+});
+it("MON-8 real installed guards reference the one service; no public or infrastructure execution grant", async () => {
+  const names = ["app.contractor_admin_command", "app.guard_contractor_grant", "app.work_order_begin", "app.work_order_commit", "app.ent4b_origin_provenance", "app.xa_begin", "identity.sso_admin_command", "identity.sso_required_command", "identity.sso_complete"];
+  for (const name of names) {
+    const [schema, routine] = name.split(".");
+    const rows = (await c.admin.query("SELECT pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=$2", [schema, routine])).rows;
+    expect(rows).toHaveLength(1); expect(rows[0].definition).toContain("app.mon8_require_feature");
+  }
+  expect((await c.admin.query(`SELECT has_function_privilege('jobguard_infrastructure','app.mon8_feature_decision(uuid,text,text)','EXECUTE') allowed,
+    EXISTS(SELECT 1 FROM pg_proc p, LATERAL aclexplode(p.proacl) a WHERE p.oid='app.mon8_feature_decision(uuid,text,text)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE') public`)).rows[0]).toEqual({ allowed: false, public: false });
+});
+it("MON-8 an operative email invitation cannot provision after its agreement is suspended", async () => {
+  const f=await startSession(c);await status(c,f,"active");
+  const digest=randomUUID().replaceAll("-","").repeat(2),email=`${randomUUID()}@invitation.invalid`;
+  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",[randomUUID(),f.p.identityUserId,digest,randomUUID()]);
+  const invitation=(await c.admin.query("SELECT identity.invite_member($1,$2,$3,'operative') id",[digest,f.p.tenantId,email])).rows[0].id;
+  await status(c,f,"suspended");
+  const challenge=randomUUID();
+  await c.admin.query(`INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified,delivery_state)
+    VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '10 minutes',clock_timestamp(),true,'fixture_delivered')`,[challenge,email,invitation,"a".repeat(64)]);
+  const before=(await c.admin.query("SELECT count(*)::int n FROM app.membership WHERE tenant_id=$1",[f.p.tenantId])).rows[0].n;
+  expect((await c.admin.query("SELECT identity.provision_verified_challenge($1) user_id",[challenge])).rows[0].user_id).toBeNull();
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.membership WHERE tenant_id=$1",[f.p.tenantId])).rows[0].n).toBe(before);
+  expect((await c.admin.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[invitation])).rows[0].accepted_at).toBeNull();
+  expect((await c.admin.query("SELECT verified FROM identity.challenge WHERE id=$1",[challenge])).rows[0].verified).toBe(false);
+  expect((await c.admin.query("SELECT 1 FROM identity.user_email WHERE email=$1",[email])).rows).toEqual([]);
+});

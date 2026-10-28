@@ -1,6 +1,248 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/success-fee-attribution": {
+      "get": {
+        "operationId": "RecoveryAttributionController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic proposed principal-only attribution history; current qualification held",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAttributionController_post",
+        "parameters": [],
+        "responses": {
+          "503": {
+            "description": "Execution held pending accepted source, authorization and audit dependencies"
+          }
+        },
+        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      }
+    },
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing": {
+      "get": {
+        "operationId": "BillingController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted immutable export artifacts, current allocation runs, quarantine history and delivery status"
+          }
+        },
+        "summary": "Read persisted synthetic contractor billing and reconciliation",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{batchId}/download": {
+      "get": {
+        "operationId": "BillingController_download",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact persisted CSV after approved fake download delivery",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{action}": {
+      "post": {
+        "operationId": "BillingController_write",
+        "parameters": [
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "export",
+                "import",
+                "approve-delivery",
+                "advance-delivery"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check": {
+      "get": {
+        "operationId": "FinalCheckController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read lock-bound synthetic final-check result",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/dispositions": {
+      "post": {
+        "operationId": "FinalCheckController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/runs": {
+      "post": {
+        "operationId": "FinalCheckController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Practice only: ask the worker to run the final check for this locked job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/disputes": {
+      "get": {
+        "operationId": "FinalCheckController_disputes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read unresolved attribution disputes for this job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/possible-extras": {
       "get": {
         "operationId": "EnterpriseLivePromptController_list",
@@ -5053,7 +5295,51 @@
             "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
           }
         },
-        "summary": "Read immutable synthetic work facts; interval and command policies held",
+        "summary": "Read immutable synthetic work facts",
+        "tags": [
+          "JobWorkState"
+        ]
+      },
+      "post": {
+        "operationId": "JobWorkStateController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Durable first command result; replay returns the same snapshot"
+          },
+          "400": {
+            "description": "INVALID_WORK_STATE_INPUT: strict versioned action required"
+          },
+          "404": {
+            "description": "NOT_FOUND: current owner/session authority required"
+          },
+          "409": {
+            "description": "State/revision conflict or unavailable capacity admission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site"
+          }
+        },
+        "summary": "Record owner-authorized synthetic work state",
         "tags": [
           "JobWorkState"
         ]

@@ -151,15 +151,68 @@ it("actual catalogs retain least privilege",async()=>{
  const routines=(await c.admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname IN('mon8_contractor_agreement_context','mon8_agreement_status_guard') ORDER BY p.proname`)).rows;
  expect(routines).toEqual([{proname:"mon8_agreement_status_guard",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],runtime:false,infrastructure:false,public:false},{proname:"mon8_contractor_agreement_context",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
 });
+// Preserve main's explicit empty successor-table expectations as well as the general proof.
+const emptySuccessors=[
+ "job_small_trip_event",
+ "job_small_trip_observation",
+ "meter_lifecycle_alert",
+ "meter_lifecycle_computation",
+ "meter_lifecycle_correction",
+ "meter_lifecycle_day_ledger",
+ "meter_lifecycle_place_binding",
+ "meter_lifecycle_scope",
+ "meter_lifecycle_source",
+ "meter_lifecycle_source_ref",
+ "enterprise_baseline_batch",
+ "enterprise_baseline_team",
+ "billing_allocation_run",
+ "billing_application_event",
+ "billing_export_batch",
+ "billing_export_delivery",
+ "billing_export_line",
+ "billing_fact",
+ "billing_line_match",
+ "billing_quarantine",
+ "billing_status_import",
+ "contractor_receipt_line_allocation",
+ "receipt_allocation_fact_command",
+ "receipt_allocation_fact_line",
+ "receipt_allocation_fact_review",
+ "receipt_allocation_fact_revision",
+ "receipt_allocation_fact_source",
+ "enterprise_agreement_version",
+ "enterprise_fee_contribution",
+ "enterprise_fee_derivation",
+ "enterprise_fee_statement",
+ "enterprise_fee_statement_approval",
+ "enterprise_fee_statement_dispute",
+ "enterprise_fee_statement_section",
+ "recovery_attribution_revision",
+ "recovery_attribution_command",
+ "recovery_attribution_reassessment",
+ ...["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"],
+];
 it("repeat migration and later successors succeed",async()=>{
  // Include status rows produced by the authorization tests as well as every original predecessor.
  const before = await capture(c.admin);
  for (let pass=0;pass<2;pass++) {
   await migrate(c.admin);
+  for(const table of emptySuccessors) expect((await c.admin.query(`SELECT * FROM ${tableIdent(`app.${table}`)}`)).rows,table).toEqual([]);
   expect(await proofDifferences(c.admin,original)).toEqual(preserved);
   expect(await proofDifferences(c.admin,before)).toEqual(preserved);
   expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!));
  }
+ // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
+ expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='app' AND p.proname IN ('mon1_admit_place','mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
+ {nspname:"app",proname:"mon1_admit_place",args:"t uuid, j uuid, source_kind text, source_id uuid"},
+ {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
+ {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
+ {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
+ {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
+ ]);
 });
 it("negative controls detect changed prior rows grants and shapes",async()=>{
  const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin), proof=await capture(c.admin);

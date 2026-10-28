@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,7 +18,7 @@ const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(
 const query = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await query(p)).revision, ...fields });
 async function setup(type = "insurer") {
-  const session = randomUUID(), p = await contractors.startPractice(session), v = await query(p);
+  const session = randomUUID(), p = await contractors.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
   const job = (await new JobRepository(runtime).create(ctx(p), ["job:update"], { title: "Fictional contractor job" })).id as string;
   const jp = new JobPartiesRepository(runtime);
   const customer = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_customer", customer: { version: "customer.v1", name: "Fictional Client", type, email: "client@example.invalid" } }));

@@ -108,3 +108,200 @@ Disk read-only `df -k .`: available 47,150,388 then 47,151,820 KiB (below the co
 Mandatory r3 compiler holds remain item-specific and unaccepted. Required real PostgreSQL controls and entitlement upgrade/authority/session, billing upgrade/import/ordering regressions plus mandatory repository CI remain CI-only. Earlier r1/r2 source checks and old-head CI do not prove new bytes. Independent Claude review, separate technical acceptance, merge and release are pending; this repair does not accept ENT6B, lift decision 74, complete MON-8 or any product card. No new operational alert, migration/rollback strategy, external action, commercial behavior, permission or release gate changed.
 
 Final r3 checks after receipt/handoff preparation: root lint guard script exit 0; lane lint exit 0; diffcheck exit 0. Both host-visible scheduler interruptions returned exit 130, not compiler results. Final repeated diffcheck after this receipt correction also exit 0. Intended commit subject/body written to `/private/tmp/jg-msg-mon8-upgrade-successors.txt`. Builder leaves HEAD 5866d283 unchanged; exactly the three issued tracked files differ. Dispatcher owns commit; root owns existing PR302 feature-branch delivery and regenerated exact-head review queue.
+
+
+## 28 October 2026 catch-up — incomplete MON-8, do not commit
+
+The router supplied a current-main merge with one conflicted path,
+`packages/db/test/contractor-entitlement-upgrade.integration.test.ts`. Resolved its
+working-file conflict by preserving the branch's full populated/empty/unkeyed
+predecessor proof, comparison against both captures after each of two migration
+passes, and exact migration bookkeeping. Also retained current main's explicit
+six successor-routine signature assertions. Also retained main's explicit empty successor-table expectations after each pass,
+without imposing whole-table snapshots on populated predecessors after authorized
+successor changes. Those predecessors use the branch's full general proof.
+No git writes were performed: the index remains unmerged until the router stages
+the resolved file. No migration, runtime feature, permission or production
+behavior changed. The existing lane lists precisely the two non-lane paths edited
+here; the lane file itself is implicitly editable under the lane checker.
+
+The broader issued build is NOT COMPLETE. Source inspection establishes these
+remaining concrete gaps, without claiming an external approval blocker:
+
+- `apps/api/src/plan-entitlements.application.ts` still has no installed persisted
+  plan-authority adapter. Its existing unit port is not an executing command guard.
+- `packages/db/src/contractor-repository.ts` and the underlying
+  `app.contractor_admin_command` still use legacy membership/permission checks;
+  operative grants do not consume the active agreement projection.
+- `packages/db/src/work-order-repository.ts:60` gates both new work and retained
+  readers on current contractor track. Site-extra prechecks share that legacy
+  gate. These require separate command enforcement and retained-read treatment,
+  preserving actor/resource authorization and transaction lock ordering.
+- Approval-chain SQL and SSO admin SQL still have their own authority paths.
+  Retained exports/readers also need the explicit downgrade/lapse/track matrix.
+- Subscription persistence has effective-date plan changes, but MON-8 has no
+  composed adapter for them or the free-first-job/lifecycle transitions. Existing
+  pure plan parity tests do not prove billing-boundary or upgrade/downgrade races.
+
+Safest choice taken: leave runtime behavior untouched rather than introduce a
+partial guard and represent it as complete authorization enforcement. This change introduces no new
+feature enablement or active-status default. The requested
+replay/duplicate, cross-company and period/race tests for the remaining slices
+are still outstanding. This is RED and requires independent Claude review and
+current-head CI after implementation, not merely after this conflict repair.
+
+Actual local verification (installed tools; no packages downloaded):
+
+- Node v24.17.0; installed Vitest v4.1.12, explicit `--maxWorkers=2`.
+- `node packages/db/node_modules/typescript/bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/contractor-entitlement-upgrade.integration.test.ts`: passed.
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`: passed.
+- From packages/core, `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/plan-entitlements.test.ts src/contractor-entitlement-authority.test.ts`: 2 files / 13 tests passed. These are existing pure-domain tests, not database or command-enforcement evidence.
+- The API's two existing entitlement unit suites initially could not import the
+  absent built `@jobguard/core`. Built only that local dependency using
+  `node packages/core/node_modules/typescript/bin/tsc -p packages/core/tsconfig.json`
+  (passed), then retried the same named suites; result recorded below.
+- `pnpm --version` stalled after an installed pnpm compatibility warning; interrupted
+  with exit 130. Used installed Node tool entrypoints thereafter.
+- PostgreSQL, migration execution and browser suites were not run, per the issued
+  sandbox constraints. No live provider, release, customer data or money used.
+
+API retry: from apps/api, `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/plan-entitlements.application.test.ts src/plan-entitlements.boundary.test.ts`: 2 files / 12 tests passed. Existing unit doubles do not prove persisted authorization.
+
+Final verification: repeated strict compilation of the resolved upgrade test
+passed after restoring main's explicit empty successor-table assertions.
+`git diff --check` passed. `LANE_BASE_REF=origin/main node
+tools/agent-lane-boundary-lint.mjs` failed because the unfinished merge index
+attributes the incoming main catch-up files to this lane. The working-tree edits
+are only the upgrade test, this receipt and the lane file. The router must finish
+staging the merge resolution and recheck the final committed range; no lane
+allowlist was widened to cover main's unrelated incoming files.
+
+Handoff file: `/tmp/mon8-upgrade-successors-20261028T190939Z-commit-msg.txt`,
+explicitly marked `do not commit`. No MON-8 completion, new adversarial integration
+coverage, CI pass or independent review is claimed. The requested remaining build
+requires further implementation; this run only completes the conflict repair.
+
+## 28 October continuation — MON-8 RED server enforcement candidate
+
+This section supersedes the preceding incomplete handoff. Source implementation
+is ready for router commit/push and CI/independent Claude review; no local
+PostgreSQL, browser, independent-review or release pass is claimed.
+
+0318 introduces the one persisted server decision service and the normal-company
+session adapter. The adapter independently authenticates the stored session after
+lock waits, checks the requested job in the verified company, and reads effective
+subscription terms using server London dates. Solo/Builder decisions are identical.
+Unknown features/purposes and malformed authority refuse. Client flags cannot
+supply plan, agreement status, lifecycle or enablement. The legacy pure facts port
+remains a domain/compatibility API, with no command authority.
+
+0319 preserves the current definitions/ACLs of existing guarded routines while
+adding the service at operative/admin grants, work-order/batch/rate/party writes,
+site-origin/visit writes, approval chains and SSO administration/provisioning.
+Repository entrypoints check before replay returns and before business locks.
+The worker also rechecks queued client-approval sends before claiming a delivery:
+agreement loss cancels pending/retryable work, with an existing cancellation audit,
+no attempt and no adapter call. Executing/unknown outcomes retain reconciliation.
+Retained contractor billing/export authority uses the same service's explicit
+retained-read purpose plus all original finance/job permissions.
+
+Membership validity is separated from commercial eligibility. Historical order,
+visit, scheduling, rate, organisation and audit-export readers keep their existing
+identity, scope and revocation checks without filtering on agreement/track.
+Existing SSO-linked users can re-authenticate after agreement loss without adding
+scopes: only grants matching current IdP claims survive; removed claims still
+revoke. New linking/JIT and configuration/mapping changes require active agreement.
+Disabling required SSO and membership/grant/link revocation retain their existing
+security permissions. The service never grants resource access or exact commercial
+approval, and a result cannot be reused as an execution permit.
+
+Safest choices (also listed in the commit message):
+
+- Missing/inactive/suspended/superseded bound agreement refuses new contractor work,
+  including replays. No backfill, reference-only activation or runtime status writer.
+- No contractor capability comes from Solo, Builder, a payment result or client flags.
+- Missing effective subscription terms or persisted MON-3 trial authority refuses
+  new small-builder feature execution; no trial lifecycle is invented.
+- Pay-now and new accounting exports remain disabled pending their readiness paths.
+  Retained exports remain available only under their original current permissions.
+- Existing normal-company commercial routes still refuse outside the current
+  subscription allowlist (`SYNTHETIC_WORKFLOW_ONLY`); no guard bypass or live route.
+- Security revocation/SSO-required disable remains possible after commercial loss.
+  Retained SSO sign-in cannot add grants, and current IdP removals still revoke.
+- Pending approval deliveries are cancelled on entitlement loss; executing/unknown
+  actions keep reconciliation rather than being blindly replayed or rewritten.
+
+The organisation/status lock (54) precedes the subscription/lifecycle lock (184)
+when small-builder new-work terms need it, then business locks, then audit.
+Contractor/retained checks do not acquire the irrelevant subscription lock. Status
+inserts mechanically acquire the exclusive tenant lock. READ COMMITTED queries
+re-read after waits. Existing supported writers use those keys; privileged-owner
+compromise is outside the verified-tenant runtime trust boundary.
+
+Complexity and compatibility: PostgreSQL requires complete explicit replacement
+bodies, so 0319 contains the existing routines plus narrow guards rather than a
+runtime SQL-rewriting framework. Older positive suites now explicitly insert an
+owner-only fictional active agreement fixture; missing-status tests omit it.
+Earlier-schema upgrade fixtures run today's repository source, so the existing
+legacy fixture installer supplies the pre-MON-8 gate only before 0318 exists.
+0318 replaces those exact signatures. It cannot mask a missing service in a schema
+recorded as migrated to 0318. Current-schema MON-8 tests exercise the real service,
+never that earlier-schema fixture shim. No production/demo code calls this setup.
+The missing-status retained-read test now builds actual pre-0318 records, upgrades,
+and proves there is no status backfill and no loss of authorized records. Two
+existing fixture type annotations were corrected without changing runtime values
+(nonempty enum default and deliberately undefined optional SAML fixture input).
+
+Data/migration impact: no business rows are updated/deleted, no tables or runtime
+table privileges are added, and no fee/settlement/price policy changes. Existing
+status facts, job terms and audit history remain intact. Fresh/upgrade/idempotence
+and catalog assertions are authored for CI. Forward fix: preserve immutable facts
+and retained-read scope; issue a reviewed later migration correcting the guard
+function while refusing affected new work. Do not roll back by deleting statuses,
+rewriting history or granting an inferred active agreement. No new operational
+alert is needed; delivery cancellation uses the existing audit event.
+
+Adversarial PostgreSQL coverage added (CI-only here): missing agreements, foreign
+company grant targets/actors, exact-command replay after suspension, downgrade
+then use, retained orders/audit exports, a status change while blocked on lock 54,
+effective-date exclusion/inclusion, plan parity across upgrade/pending downgrade,
+a subscription change while blocked on lock 184, session revocation while waiting,
+0318/0319 populated upgrade preservation/idempotence, retained SSO scopes with no
+new grants, IdP-removal revocation, refused JIT/mapping and cancelled queued delivery.
+The catch-up proof retains the complete populated/empty/unkeyed predecessor proof,
+main's empty successor expectations and its routine signatures. Own-step populated
+status rows remain in the baseline proof, not the empty-successor list.
+
+Actual local checks (installed Node tools; no package download, git write, real
+customer data, live provider, money action or release):
+
+- Node v24.17.0 and Vitest v4.1.12, explicit `--maxWorkers=2` throughout.
+- From packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/outbox.test.ts src/later-outbox.test.ts src/plan-entitlement-service.test.ts`: 3 files / 23 tests passed. Includes a unit double proving no adapter/attempt on lost entitlement. Initial outbox tests failed on their exact old SELECT-prefix expectations; updated them to require the new authorization-actor column, preserving all behavior assertions; final rerun passed.
+- From apps/api: `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/plan-entitlements.application.test.ts src/plan-entitlements.boundary.test.ts src/plan-entitlements.persisted.test.ts`: 3 files / 14 tests passed.
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit` and `node apps/api/node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noEmit`: passed.
+- Strict `tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext` over the resolved upgrade proof, three new integration files, enterprise identity and approval-chain suites: passed. Earlier attempts exposed the two existing fixture type issues noted above; final strict compilation passed.
+- PostgreSQL/migration/browser execution remains CI-only under the issued sandbox constraint. These authored suites are not represented as executed or independently verified.
+
+
+Final boundary inspection also found ordinary email invitations can assign an
+operative membership without the contractor-admin path. 0319 now guards operative
+invitation issue and rechecks the original issuer's current owner membership,
+account and active agreement before acceptance. A lost agreement returns the
+existing invalid-code result before any new identity/membership is created,
+consuming the one-use verified latch. Added real-PG tests for small-builder issue
+refusal and active issue followed by suspension-before-acceptance. The unrelated
+existing invitation expiry test uses its ordinary foreman role so it continues
+testing expiry/revocation rather than contradicting the new operative restriction.
+This is an additional safest choice in the commit message.
+
+Final static checks: core purity passed (282 TypeScript files; ten existing computed
+module-name reports), money arithmetic boundary passed, commercial boundary passed,
+and `git diff --check` passed. Working-tree-only lane validation through the
+repository's `loadLanePolicy`/`lanePathAllowed` exports passed; this is not a full
+branch-range lane pass. The merge index still marks the upgrade proof unmerged
+although its file has no conflict markers: the router must stage that resolution
+and run final range/CI checks. No allowlist was widened for unrelated incoming
+main files. Rechecked the incoming successor expectation union against index stage
+3; own-step populated status rows remain covered by the full baseline proof.
+Strict compilation including the ordinary identity invitation suite also passed.
+No required release, RED review or current-main CI gate is waived.

@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -187,7 +188,7 @@ beforeAll(async () => {
   contractor = new ContractorRepository(runtime); repo = new AuditExportRepository(runtime);
 }, 120000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
-async function setup() { const session = randomUUID(), p = await contractor.startPractice(session); return { session, p }; }
+async function setup() { const session = randomUUID(), p = await contractor.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); return { session, p }; }
 async function checkpoint(p: AuthenticatedMembership) {
   // Existing restricted path: exportAuditCheckpoints creates records using assurance credentials, not runtime.
   // It covers all tenants, but only this tenant's record is handed to its export.
@@ -246,7 +247,13 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     // older row-secured table, remove an older restrictive policy, give an older jobguard_ role an attribute or a membership, or
     // give any role (new or old) membership of an older jobguard_ role. The reading was taken in the set-up directly after the
     // migrate() pair, before the test's own login joined jobguard_runtime, and is asserted here.
-    expect(upgrade.afterAllDifferences, "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
+    // Reviewed 0209 exceptions only: five source SELECT grants and their five
+    // tenant-scoped policies. The comparator and every other refusal stay intact.
+    const reviewedMeterSources=["app.job","app.job_activation","app.job_activation_terms","app.job_party_binding","app.membership"].flatMap(table=>[
+      `table ${table}: + grant jobguard_meter_owner SELECT`,
+      `policy ${table}.meter_lifecycle_source_read: permissive policy added`,
+    ]).sort();
+    expect(upgrade.afterAllDifferences, "[MO5-e] only reviewed meter source additions to older permission facts").toEqual(reviewedMeterSources);
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();

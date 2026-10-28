@@ -12,7 +12,7 @@ import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMemb
 export class JobSchedulingRepository {
   constructor(private readonly pool: Pool) {}
   private async scoped(db: TenantTransaction, principal: AuthenticatedMembership, jobId: string) {
-    await assertContractorGate(db, principal, "member");
+    await assertContractorGate(db, principal, "retained_member");
     const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.contractor_job_allowed($1,'job.read',$2) allowed", [principal.membershipId, jobId])).rows[0]!.allowed;
     if (!allowed) throw new WorkOrderError("NOT_FOUND");
   }

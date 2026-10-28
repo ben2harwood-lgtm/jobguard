@@ -1,3 +1,5 @@
+import { requireServerEntitlement } from "./plan-entitlement-service.js";
+import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -6,9 +8,9 @@ import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.
 
 export const AUDIT_EXPORT_NOTICE = "The signature proves export integrity only";
 export const AUDIT_EXPORT_SANDBOX = "Practice sandbox — synthetic data; nothing is sent or charged";
-const uuid = z.string().uuid(), digest = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const sequence = z.number().int().positive().safe();
-const timestamp = z.string().datetime();
+const timestamp = utcDatetimeV1;
 export const auditExportRequestV1 = z.object({ version: z.literal("audit-export-request.v1"), commandId: uuid }).strict();
 const eventV1 = auditEventInputV1Schema.extend({ tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest }).strict();
 const checkpointV1 = z.object({ tenantId: uuid, sequence, eventHash: digest, recordedAt: timestamp }).strict();
@@ -95,6 +97,7 @@ export class AuditExportRepository {
       AND g.role IN ('owner','admin') AND g.scope_kind='tenant' AND g.scope_id=$1 AND g.contract_id IS NULL
       AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE (r.tenant_id,r.grant_id)=(g.tenant_id,g.id))) allowed,
       EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3) AS "knownMember"`, [context.tenantId, actor.membershipId, actor.identityUserId])).rows[0]!;
+    if (allowed.allowed) await requireServerEntitlement(db, actor.membershipId, "accounting_export", "retained_read");
     // Never copy an unknown/foreign membership identity into this tenant's refusal chain.
     if (!allowed.allowed) await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: allowed.knownMember ? `membership:${actor.membershipId}` : "security:unverified-member", eventType: "audit.export.refused", subjectType: "audit-export", subjectRef: context.tenantId, payload: { references: { action }, classifications: { action: "security" } } }]);
     return allowed.allowed;
