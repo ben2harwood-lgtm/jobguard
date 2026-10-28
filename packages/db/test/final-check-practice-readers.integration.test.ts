@@ -1,31 +1,29 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { SupplierDocumentRepository } from "../src/supplier-document-repository.js";
 import { PurchaseOrderRepository } from "../src/purchase-order-repository.js";
+import { MaterialRepository } from "../src/material-repository.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/shadow-detection-repository.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
 let f: FinalCheckFixture;
-beforeAll(async () => { f = await createFinalCheckFixture(); }, 60000);
-afterAll(async () => closeFinalCheckFixture(f));
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createFinalCheckFixture(); }, 60000);
+afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 const worker = () => new FinalCheckWorker(practiceFinalCheckPorts(f.shadow, f.runtime, "f".repeat(64)), "synthetic_demo");
 
 it.each(["shadow-30000", "recovery-18800"] as const)("processes %s supplier/PO sources through the actual practice ports and publishes completion", async scenario => {
   const a = await seedFinalCheckJob(f), supplier = new SupplierDocumentRepository(f.runtime);
   if (scenario === "recovery-18800") {
     // DR-02: material requirement and both the proposed and revised order, through the real commands.
-    const merchant = randomUUID(), sku = randomUUID();
-    await finalCheckTenant(f.admin, a.tenantId, async db => {
-      await db.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,$3)", [merchant,a.tenantId,`Fictional ${merchant}`]);
-      await db.query("INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit) VALUES($1,$2,$3,'fictional-block','Fictional material','each')", [sku,a.tenantId,merchant]);
-      await db.query("INSERT INTO app.material_rate_revision(id,tenant_id,merchant_id,sku_id,version,price_pence,currency,price_unit,tax_basis,effective_from,source_label) VALUES($1,$2,$3,$4,1,2000,'GBP','each','net','2026-01-01','fictional')", [randomUUID(),a.tenantId,merchant,sku]);
-    });
-    const requirement = randomUUID();
-    await finalCheckTenant(f.admin,a.tenantId,db => db.query("INSERT INTO app.material_requirement(id,tenant_id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision) VALUES($1,$2,$3,$4,$5,'10','each',1)",[requirement,a.tenantId,a.jobId,a.scopeItemId,sku]));
-    const orders = new PurchaseOrderRepository(f.runtime);
+    const pool = practiceMaterialPool(f.runtime, a.digest), materials = new MaterialRepository(pool);
+    const rate = await materials.addRate(a.context, {merchantName:`Fictional ${randomUUID()}`,sku:"fictional-block",description:"Fictional material",
+      pricePence:2000,priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-01-01",sourceLabel:"fictional",expectedVersion:0});
+    const requirement = await materials.addRequirement(a.context, {jobId:a.jobId,scopeItemId:a.scopeItemId,skuId:rate.skuId,quantity:"10",unit:"each",expectedRevision:0});
+    const orders = new PurchaseOrderRepository(pool);
     for (const [expectedRevision,unitPricePence] of [[0,2500],[1,2000]] as const)
-      await orders.revise(a.context,a.jobId,{version:"purchase-order-draft.v1",commandId:randomUUID(),requirementId:requirement,quantity:"10",unitPricePence,recipient:"merchant@example.invalid",requiredDate:"2026-10-28",expectedRevision},"2026-10-28");
+      await orders.revise(a.context,a.jobId,{version:"purchase-order-draft.v1",commandId:randomUUID(),requirementId:requirement.id,quantity:"10",unitPricePence,recipient:"merchant@example.invalid",requiredDate:"2026-10-28",expectedRevision},"2026-10-28");
   }
   const fixtureIds = scenario === "shadow-30000" ? ["materials-320-invoice"] as const : ["materials-B-delivery","materials-B-invoice","materials-B-revised-invoice"] as const;
   for (const [expectedRevision,fixtureId] of fixtureIds.entries())
