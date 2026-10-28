@@ -12,8 +12,7 @@
         "apps/web/e2e/SV-7A.spec.ts",
         "apps/api/src/job-source.application.test.ts",
         "packages/db/test/job-source-test-o.integration.test.ts",
-        "packages/db/test/job-source-intake.integration.test.ts",
-        "config/lanes/sv7a-pages.json"
+        "packages/db/test/job-source-intake.integration.test.ts"
       ]
     }
   }
