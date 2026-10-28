@@ -44,7 +44,11 @@ test("stored baseline import/replay, scoped dashboard and baseline downloads use
   expect(await page.getByLabel("Stored batch ID").inputValue()).toBe(batchId);
   await page.getByLabel("Pilot historical team IDs (comma separated)").fill("pilot");
   await page.getByLabel("Rest historical team IDs (comma separated)").fill("rest");
-  await page.getByLabel("Export format", { exact: true }).selectOption("csv");
+  const exportFormat = page.getByRole("combobox", { name: "Export format", exact: true });
+  await expect(exportFormat).toBeVisible();
+  await expect(exportFormat).toBeEnabled();
+  await exportFormat.selectOption("csv");
+  await expect(exportFormat).toHaveValue("csv");
   await page.getByRole("button", { name: "Compare baseline", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Pilot baseline comparison" })).toBeVisible();
   await expect(page.getByText(/pilot: 1 jobs · 1 extras · known net £123.45/)).toBeVisible();

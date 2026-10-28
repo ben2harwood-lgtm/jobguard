@@ -113,7 +113,7 @@ export function EnterpriseDashboard() {
     <fieldset disabled={busy}><legend>Compare pilot teams with the rest</legend><form onSubmit={compare}>
       <label>Stored batch ID <input value={batchId} onChange={e => setBatchId(e.target.value)} required/></label>
       <label>Pilot historical team IDs (comma separated) <input name="pilot" required/></label><label>Rest historical team IDs (comma separated) <input name="rest" required/></label>
-      <label>Export format <select name="outputFormat"><option value="json">JSON</option><option value="csv">CSV</option></select></label><button>Compare baseline</button>
+      <label htmlFor="baseline-output-format">Export format</label> <select id="baseline-output-format" name="outputFormat"><option value="json">JSON</option><option value="csv">CSV</option></select><button>Compare baseline</button>
     </form></fieldset>
     {busy && <p role="status">Loading…</p>}{message && <p role="status">{message}</p>}
     {activity && billing && <DashboardView activity={activity} billing={billing}/>}{baseline && <BaselineView baseline={baseline}/>}
