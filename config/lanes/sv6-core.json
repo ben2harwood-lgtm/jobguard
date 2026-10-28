@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-core": {
+      "branches": [
+        "codex/sandbox/sv6-core"
+      ],
+      "note": "RED SV-6 pure core: recovery attribution and v3 fee illustration contracts, guards and scenario tests (SV6-01..17 pure parts), combined from the accepted sv6-01/05/02-04/06-07/08-09/11-17/12-16/13-15 stack and caught up with main. Negative-source DB regressions only; positive persisted chain is dependency-bound on SV-5 catch path (Q2) and M4-8.",
+      "allow": [
+        "docs/contracts/recovery-attribution-v1.md",
+        "docs/contracts/recovery-fee-illustration-v3.md",
+        "docs/verdicts/SV6-01/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-02-04/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-05/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-06-07/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-08-09/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-11-17/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-12-16/BUILDER_RECEIPT.md",
+        "docs/verdicts/SV6-13-15/BUILDER_RECEIPT.md",
+        "packages/core/src/recovery-attribution-illustration.test.ts",
+        "packages/core/src/recovery-attribution-illustration.ts",
+        "packages/core/src/recovery-attribution-persistence.test.ts",
+        "packages/core/src/recovery-attribution-persistence.ts",
+        "packages/core/src/recovery-attribution-persistence.type.test.ts",
+        "packages/core/src/recovery-attribution.integration.test.ts",
+        "packages/core/src/recovery-fee-illustration.test.ts",
+        "packages/core/src/recovery-fee-illustration.ts",
+        "packages/core/src/recovery-fee-illustration.type.test.ts",
+        "packages/db/test/recovery-attribution.integration.test.ts"
+      ]
+    }
+  }
+}

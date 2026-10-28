@@ -352,6 +352,8 @@ describe("SV6-08/09 saved attribution consumption", () => {
     expect(() => derive(missing)).toThrow(RecoveryFeeIllustrationError);
     const noProof = rawInput(); noProof.sources[0]!.qualification.source.lineAllocationIds = [];
     expect(() => derive(noProof)).toThrow();
+  });
+});
 
 describe("SV6-11-17 pure acceptance", () => {
   it("SV6-11 cumulative exact principal is rounded once", () => {
@@ -411,6 +413,9 @@ describe("SV6-11-17 pure acceptance", () => {
     const captures = rawInput(); captures.captures[0]!.exactNet = wire("1000000");
     expect(derive(captures).cumulativeFee.pence).toBe(8000);
     // The unchanged merged fee.test.ts / fee-what-if.test.ts exercise v1 separately.
+  });
+});
+
 // Pure synthetic fixtures only: these are not persisted commands or settlement proof.
 // Exercise the existing owner kernel; the illustration consumes its exact results unchanged.
 const allocationFixture = (): RecoveryReceiptFacts => ({
