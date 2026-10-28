@@ -1,4 +1,4 @@
-# 0246 enterprise fee derivation (ENT-7a)
+# 0265 enterprise fee derivation (ENT-7a)
 
 Adds `enterprise_agreement_version` (operations writes through the migration owner only), `enterprise_fee_derivation`
 and `enterprise_fee_contribution`. All three have FORCE RLS, are append-only by trigger (even for the owner), and give
