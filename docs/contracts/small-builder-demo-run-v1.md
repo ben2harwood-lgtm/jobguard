@@ -1,44 +1,25 @@
-# DEMO-I run boundary preparation v1
+# DEMO-S / DEMO-I run lifecycle v1 (RED)
 
-Status: **HELD — no lifecycle runtime or storage is installed.** This is request-shape preparation under the 24 October 2026 build-ahead order, based on DEMO-P2 `0d390b89`. It does not close DI1, DI2 or DI3.
+Backend groundwork, 28 October 2026. This supersedes the earlier request-shape-only preparation. The chooser, HTTP/browser transports and journeys J1–J5 are outside this piece. No completed journey or product acceptance is asserted.
 
-The only implemented surfaces are unregistered, pure Zod request schemas in `apps/api/src/small-builder-demo.contracts.ts`. They accept no authority or business result. There is no browser or Nest endpoint for this feature. Validating a selection does not make its family executable.
+`SmallBuilderDemoApplication.execute(credentials, operation, runId, input)` uses the existing MON-2A signed-in company authority port (`subscriptionAuthority(identity)`). It resolves the real email-code session, selected company membership, Origin and CSRF anew on every call. A practice cookie cannot substitute for company authority. Compose it with `SmallBuilderDemoRepository(pool)`; the repository rechecks the persisted session in PostgreSQL through `mon1_company_actor`. No new authentication or fictional company bootstrap is invented.
 
-| Prepared schema | Version / fields |
-| --- | --- |
-| Create | `small-builder-demo.create.v1`, metadata `commandId`, one of the five family IDs |
-| Reset | `small-builder-demo.reset.v1`, metadata `commandId`, positive safe `expectedRunRevision` |
-| Snapshot | `small-builder-demo.report-snapshot.v1`, metadata `commandId`, positive safe `expectedRunRevision` |
-| Read run locator | UUID `runId` only |
-| Read stored report locator | UUID `runId`, optional UUID `snapshotId` |
+| Operation | Input | Result |
+| --- | --- | --- |
+| create | null run ID; `small-builder-demo.create.v1`, commandId, scenario | Stored blocked run attempt with plain reason |
+| read / resume | exact run ID; empty object | Current saved lifecycle state; no write |
+| reset | exact run ID; `small-builder-demo.reset.v1`, commandId, expectedRunRevision | Archived predecessor and successor ID |
+| snapshot | exact run ID; `small-builder-demo.report-snapshot.v1`, commandId, expectedRunRevision | Immutable report snapshot of lifecycle facts |
+| report | exact run ID; empty object or snapshotId | Existing latest or exact snapshot; no implicit creation |
 
-Objects are strict. Metadata commands cannot carry tenant/session/member authority, source facts, money, settlement, counts, completion, trial state, hidden-state selectors, or acceptance claims. Locators are not ownership checks. Reset has no cancel/delete/release-key option, and snapshot has no submitted fact-vector or receipt body. Revision checks here validate shape only; they do not lock or authorize anything.
+Strict Zod schemas are shared from the database package and re-exported by the existing API contracts module. SQL independently rejects extra command keys. No client-provided authority, hidden selector, source vector, completion, money, trial entitlement or business outcome is accepted.
 
-Intent and checkpoint schemas are **not defined**: no accepted P1 operation/recipe/reference map is installed. Replacing them with strings, records, generic command proxies or arbitrary result JSON would weaken the required boundary. A future owner must bind every allowed step, variant, operation kind, recipe/version, parent identity and producer reference before implementing those schemas.
+All five families currently refuse execution: core awaits journey/correction bindings; recovery awaits its journey/collection/refund bindings; shadow awaits Final Check journey/attribution bindings; meter awaits profile execution/clock bindings; trial awaits journey/identity/clock bindings. Create persists the selection and refusal, rather than pretending to start domain work. Resume returns that persisted reason. J1–J5 must introduce accepted executable producer contracts in later changes; this piece has no execution-enabling switch or generic step/checkpoint writer.
 
-## Storage STOP
+Runs have tenant-qualified keys, creator membership and exact session digest. The signed-in company must be synthetic and the database must be `jobguard_synthetic_demo`. Runtime has no direct read/write table grants; the controlled routine checks authority before reads or receipt replay, including after waiting on the company lock. Ownership additionally denies another session for the same user/company. New login sessions cannot adopt old runs. RLS is forced and restricted to the migration-owned routine under transaction-local tenant context. These controls do not protect against stolen privileged database credentials.
 
-`VerifiedDemoAuthority` and the accepted isolated-company/reset bootstrap are absent at this base. `PracticeAccess` authenticates the existing synthetic session; it does not establish the proposed company/run authority. `issuePracticeSession` creates legacy prebuilt jobs and cannot be used as the fresh-world bootstrap for this order. The existing meter/company guard must not be bypassed.
+Commands use durable per-company IDs. Reusing an ID with different input, operation, run or session fails. Reset serializes with snapshots, increments predecessor revision from 1 to 2 and creates exactly one successor with revision 1. The original reset command replays its stored result; a different stale reset fails. No deletion, business cancellation, company replacement, meter exclusion, key release or billing rewrite occurs. Archived runs and their immutable snapshots remain readable with current original-session authority.
 
-The draft expressly says: “The concrete DB routine signatures and checked authority binding must be fixed in the issued migration against the accepted security contract; absence is a build hold”. Migration 0214 is reserved by the issued order; **no SQL or migration registration is supplied** because the security contract is absent. No table, routine, grant, owner, RLS policy, job, ledger, trial key, audit row or business history is changed by this preparation.
+Reports contain only persisted run ID, scenario, reason, lifecycle revision/status, timestamps and predecessor/successor IDs at snapshot time. They are lifecycle reports, not P2 product/source reports. There are no prices, hidden signals, claimed settled facts, external-action counts, source hashes or PASS claims. Snapshot and reset are audited transactionally with request/result hashes; the audit head is the final contending lock. GET-like reads never create reports or receipts. No external provider is called.
 
-The storage handoff must fix checked authority/routine signatures, session/tenant/run-qualified keys, immutable intent/operation uniqueness, metadata command payload conflicts, authorization before replay, expected-revision serialization, reset successor/bootstrap scope, and immutable report/source-vector semantics. It must provide real PostgreSQL adversaries, N-alone and successor-twice upgrade tests and mutation controls. These obligations remain held, not waived.
-
-## Runtime and integration holds
-
-The P1 catalogue itself says `documentation-only`, `BLOCKED_NOT_COMPLETE`; its operation bindings remain HELD. P2 is a pure structural validator, not a source reader or a CH-9 runtime receipt. Missing operation recovery remains UNKNOWN; no latest-row or amount-matching fallback is allowed. No scenario end state or figure has been seeded.
-
-DI2 is entirely HELD behind DI1 and accepted source/authority producers. No page, chooser, report component, Next adapter or registry has been installed. Consequently no Playwright test for a nonexistent route has been added.
-
-After the missing contracts are supplied, the coordinator must serialize these shared changes (none is applied here):
-
-- Export the accepted catalogue/trace modules through `packages/core/src/index.ts` and build output, or provide an explicit accepted package subpath. They are not currently exported through the public core barrel.
-- Export the eventual run repository through `packages/db/src/index.ts` only once its checked storage contract exists.
-- Compose the same eventual application in `apps/api/src/app.module.ts`, `apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts` and `apps/web/app/lib/workspace-server.ts`; expose any required package subpaths deliberately.
-- Register the seven Nest operations and their equivalent Next adapters; regenerate `apps/api/openapi.json` on that integrated head.
-- Register 0214 in actual migration discovery/protection/privilege inventories only after the reviewed SQL and companion `packages/db/migration-notes/0214_small_builder_demo_runs.md` exist. No unknown catalogue filename is invented here.
-- Add navigation and accepted J1–J5 registry rows in merge order. No root navigation or other leaf is changed here.
-
-Required future routes remain the seven draft operations: create, read run, reserve operation intent, checkpoint, create report snapshot, read report, and reset. GET must never create a snapshot; stored reports and archived runs must recheck current authority. Reset must preserve pending intents, snapshots, liabilities, meter history and consumed trial keys without implying domain cancellation.
-
-No technical acceptance, independent model verdict, production activation or policy approval is asserted.
+Migration 0313 is additive, automatically discovered by the existing numbered migration loader. See `packages/db/migration-notes/0313_small_builder_demo_runs.md` for isolation, CI suites and forward-fix notes. No production policy or release gate is changed.

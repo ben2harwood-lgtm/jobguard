@@ -6,12 +6,20 @@
         "codex/sandbox/demo-i"
       ],
       "receipt": "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
-      "note": "Issued build-ahead; runtime/storage STOP on absent accepted authority/reset/bootstrap/source contracts. DI2 HELD; no route exists so no browser spec. Pure boundary preparation only, no runtime acceptance.",
+      "note": "DEMO-S / DEMO-I RED lifecycle metadata and storage only; all five journey executors refuse pending J1-J5 bindings. No chooser or domain bootstrap.",
       "allow": [
         "apps/api/src/small-builder-demo.contracts.ts",
         "apps/api/src/small-builder-demo.application.test.ts",
         "docs/contracts/small-builder-demo-run-v1.md",
-        "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md"
+        "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
+        "apps/api/src/small-builder-demo.application.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/small-builder-demo-repository.ts",
+        "packages/db/src/small-builder-demo-repository.test.ts",
+        "packages/db/migrations/0313_small_builder_demo_runs.sql",
+        "packages/db/migration-notes/0313_small_builder_demo_runs.md",
+        "packages/db/test/small-builder-demo.integration.test.ts",
+        "packages/db/test/small-builder-demo-upgrade.integration.test.ts"
       ]
     }
   }

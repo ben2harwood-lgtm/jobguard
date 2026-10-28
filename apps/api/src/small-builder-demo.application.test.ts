@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   smallBuilderDemoCreateV1,
   smallBuilderDemoResetV1,
@@ -7,7 +7,8 @@ import {
   smallBuilderDemoReadReportV1,
 } from "./small-builder-demo.contracts.js";
 
-// Boundary preparation only. These tests do not establish lifecycle, DB or journey acceptance.
+import { SmallBuilderDemoApplication } from "./small-builder-demo.application.js";
+// Request-boundary tests; persisted lifecycle adversaries are in the PostgreSQL suite.
 const id = "d1500000-0000-4000-8000-000000000001";
 const create = { contractVersion: "small-builder-demo.create.v1", commandId: id, scenario: "core-1000" };
 const reset = { contractVersion: "small-builder-demo.reset.v1", commandId: id, expectedRunRevision: 1 };
@@ -18,7 +19,7 @@ const commands = [
   { schema: smallBuilderDemoReportSnapshotV1, input: snapshot },
 ];
 
-describe("DEMO-I boundary preparation; runtime acceptance remains HELD", () => {
+describe("DEMO-I strict request boundary", () => {
   it.each(["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"])(
     "accepts catalogue selection %s without asserting executability (DI2-01 preparation)", scenario => {
       expect(smallBuilderDemoCreateV1.parse({ ...create, scenario })).toEqual({ ...create, scenario });
@@ -85,4 +86,32 @@ describe("DEMO-I boundary preparation; runtime acceptance remains HELD", () => {
     expect(smallBuilderDemoReadReportV1.safeParse({ runId: id, snapshotId: "invalid" }).success).toBe(false);
     expect(smallBuilderDemoReadRunV1.safeParse({ runId: id, snapshotId: id }).success).toBe(false);
   });
+});
+
+// Company authority tests exercise the real application bridge with a fake storage port.
+
+function lifecycleFixture(environment="synthetic_demo") {
+ const credentials={sessionToken:"s".repeat(32),requestedTenantId:id,csrfToken:"c".repeat(24),origin:"https://jobguard.invalid"};
+ const provider={authenticate:vi.fn().mockResolvedValue({identityUserId:id,sessionId:id,csrfToken:credentials.csrfToken}),findMembership:vi.fn().mockResolvedValue({id,identityUserId:id,tenantId:id,role:"owner",email:"owner@fictional.invalid"})};
+ const authority={provider,allowedOrigin:credentials.origin,environment:()=>environment,resolve:vi.fn().mockResolvedValue({credentials,digest:"a".repeat(64)})};
+ const repository={execute:vi.fn().mockResolvedValue({status:"blocked"})};
+ return {authority,repository,app:new SmallBuilderDemoApplication(authority as never,repository)};
+}
+describe("DEMO-I company authority",()=>{
+ it("re-authenticates resume, reset and report reads; a revoked session cannot replay",async()=>{
+  const f=lifecycleFixture();
+  for(const op of ["read","reset","report"] as const) await f.app.execute("session",op,id,op==="reset"?reset:{});
+  expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(3);
+  expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(3);
+  f.authority.provider.authenticate.mockResolvedValue(null as never);
+  await expect(f.app.execute("session","reset",id,reset)).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(f.repository.execute).toHaveBeenCalledTimes(3);
+ });
+ it("refuses production, practice credentials and missing membership before storage",async()=>{
+  const production=lifecycleFixture("production");await expect(production.app.execute("session","create",null,create)).rejects.toThrow("DEMO_SYNTHETIC_ONLY");expect(production.repository.execute).not.toHaveBeenCalled();
+  const f=lifecycleFixture();f.authority.resolve.mockRejectedValue(new Error("practice cookie"));
+  await expect(f.app.execute("practice","read",id)).rejects.toThrow("DEMO_FORBIDDEN");expect(f.repository.execute).not.toHaveBeenCalled();
+  const g=lifecycleFixture();g.authority.provider.findMembership.mockResolvedValue(null as never);
+  await expect(g.app.execute("session","read",id)).rejects.toThrow("DEMO_FORBIDDEN");expect(g.repository.execute).not.toHaveBeenCalled();
+ });
 });
