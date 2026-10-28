@@ -5,12 +5,14 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED: MON-1 committed-place admission and synchronous stored-ledger refresh, migration 0305. MON1-J screen refresh remains explicitly refused when counted sources are stale; exact follow-up in commit message. Own lane file is implicitly authorized.",
+      "note": "RED: MON-1 parts 4-5; real committed-place admission and authenticated fresh-source meter display, migration 0305. Synthetic parents and historical boundary fixtures; real repository commands and browser meter reads. PostgreSQL/browser CI and independent RED review required.",
       "allow": [
         "apps/api/src/job-work-state-capacity.test.ts",
         "apps/api/src/job-work-state.errors.ts",
         "apps/web/app/meter/meter-screen.test.tsx",
         "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/e2e/MON1-J.spec.mts",
+        "apps/web/tsconfig.json",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/meter-place-admission-v1.md",
         "packages/core/src/job-work-state.ts",
@@ -25,6 +27,9 @@
         "packages/db/src/tenant-context.test.ts",
         "packages/db/src/tenant-context.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/meter-journey-fixtures.ts",
+        "packages/db/test/meter-today-journey.integration.test.ts",
         "packages/db/test/meter-today.integration.test.ts",
         "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
         "packages/db/test/meter-work-admission.integration.test.ts",

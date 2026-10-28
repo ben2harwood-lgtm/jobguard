@@ -6,6 +6,7 @@ import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, boundaryLock, prepareWorkAccount, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
+import { activateMeterJob } from "./meter-journey-fixtures.js";
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 
 // CI PostgreSQL only. Activation parents are explicit storage fixtures;
@@ -14,21 +15,7 @@ describe("MON-1 work admission attacks", () => {
  let f: WorkFixture;
  beforeAll(async () => { f = await createWorkFixture(); }, 60000);
  afterAll(async () => closeWorkFixture(f));
- async function activation(a: WorkJob, small = false, stage = false) {
-  let staged!: {sql:string;values:unknown[]};
-  await workTenant(f.admin, a.tenantId, async db => {
-   await db.query("SET LOCAL session_replication_role='replica'");
-   const binding = (await db.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].binding_id;
-   const activationId = randomUUID(), baseline = randomUUID();
-   await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING", [a.tenantId, a.jobId]);
-   await db.query(`INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at,party_binding_id)
-    VALUES($1,$2,$3,$4,1,$5,'synthetic_demo','synthetic_demo_activation.v3','reference_fee_policy_v3',$6,clock_timestamp(),$7)`, [activationId, a.tenantId, a.jobId, baseline, "a".repeat(64), a.actorId, binding]);
-   staged={sql:`INSERT INTO app.job_activation_terms(id,tenant_id,job_id,activation_id,baseline_quote_version_id,baseline_document_version,baseline_document_hash,accepted_net_pence,highest_sent_net_pence,small_job,policy_version,commercial_track,trial_plan_context)
-    VALUES($1,$2,$3,$4,$5,1,$6,$7,$7,$8,'reference_fee_policy_v3','small_builder','none_recorded_pre_mon2a')`,values:[randomUUID(), a.tenantId, a.jobId, activationId, baseline, "a".repeat(64), small ? 100000 : 300000, small]};
-   if (!stage) await db.query(staged.sql,staged.values);
-  });
-  return staged;
- }
+ const activation = (a: WorkJob, small = false, stage = false) => activateMeterJob(f,a,small,stage);
  const repo = () => new JobWorkStateRepository(f.runtime);
  const command = (a: WorkJob, action: string, revision: number, extra = {}) => repo().command(a.context, a.jobId, a.actorId,
   { version: "job-work-state-command.v1", commandId: randomUUID(), action, expectedRevision: revision, ...extra });

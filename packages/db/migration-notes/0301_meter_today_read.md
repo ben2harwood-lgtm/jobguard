@@ -1,6 +1,6 @@
 # MON-1 remainder part 3 — company meter read (RED)
 
-0293 adds only `app.mon1_counted_meter_today(uuid,text)`. Runtime receives EXECUTE,
+0301 adds only `app.mon1_counted_meter_today(uuid,text)`. Runtime receives EXECUTE,
 with no direct ledger SELECT or writes. As with 0239, it is initially an invoker
 owned by migration and fails closed; the administrative bootstrap finalizer
 assigns `jobguard_meter_owner` and enables SECURITY DEFINER. Its fixed search path,

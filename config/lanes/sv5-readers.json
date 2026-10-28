@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-readers": {
+      "branches": [
+        "codex/sandbox/sv5-readers"
+      ],
+      "note": "RED SV-5 practice supplier/PO readers. Depends on #369 practice worker ports; synthetic only. This lane file registers itself under the existing lane rule.",
+      "allow": [
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/src/final-check-practice-readers.ts",
+        "packages/db/src/final-check-practice-readers.test.ts",
+        "packages/db/test/final-check-practice-readers.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/migrations/0295_final_check_practice_readers.sql",
+        "packages/db/migration-notes/0295_final_check_practice_readers.md",
+        "docs/contracts/final-check-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/ledger/SV5-READERS.md"
+      ]
+    }
+  }
+}

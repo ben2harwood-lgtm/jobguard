@@ -490,6 +490,7 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   "meter_lifecycle_day_ledger", "meter_lifecycle_place_binding", "meter_lifecycle_correction", "meter_lifecycle_alert"];
  const indexNames = [...tables.map(t => `${t}_pkey`), "meter_lifecycle_scope_tenant_id_kind_key",
   "meter_lifecycle_source_tenant_id_scope_id_command_id_key", "meter_lifecycle_source_tenant_id_scope_id_period_start_revi_key",
+  // 0300 replaces the source-only UNIQUE with source + recipe, preserving both projections.
   "meter_lifecycle_computation_tenant_id_scope_id_source_id_re_key"];
  const identities = [
   ["mon1_counted_meter_today", "t uuid, digest text"],
@@ -616,13 +617,21 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
-// SV-5 catch (0281-0283): only its five routines; their table, triggers and constraint sit outside this snapshot.
+// SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
+// their table, triggers and constraint sit outside this snapshot.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [["confirm_final_check_catch", "t uuid, j uuid, d text, p jsonb"], ["final_check_claim_catch_case", ""], ["final_check_open_catch_case", ""],
-  ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"]];
+  ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"],
+  ["final_check_practice_source_current", "s app.final_check_processing_source"]];
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines).toHaveLength(identities.length);
+ const helper = routines.find(r => r.proname === "final_check_practice_source_current");
+ expect(helper).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog, app"]});
+ const helperAcl = (await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid='app.final_check_practice_source_current(app.final_check_processing_source)'::regprocedure`)).rows;
+ expect(helperAcl).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration"]}]);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
@@ -646,7 +655,7 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
-// MON-1 0305: enumerate only its committed projection, policy and six routines.
+// MON-1 0305: enumerate only its committed projection, policy and seven routines.
 // Every predecessor row, privilege, routine posture and policy stays compared.
 async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -657,6 +666,7 @@ async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot
   ["mon1_admit_live_source",""],
   ["mon1_refresh_after_source",""],
   ["mon1_fresh_counted_meter_today","t uuid, digest text"],
+  ["mon1_today_source","t uuid, digest text"],
  ];
  const routines=after.routines.filter(r=>r.nspname==='app' && identities.some(([name,args])=>r.proname===name && r.args===args));
  expect(routines).toHaveLength(identities.length);
@@ -667,7 +677,7 @@ async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot
   expect(row.prosecdef).toBe(['mon1_admit_work_event','mon1_admit_live_source','mon1_refresh_after_source'].includes(row.proname));
   expect(row.proconfig.map((value:string)=>value.toLowerCase())).toEqual(row.proname==='mon1_refresh_work_ledger'?['search_path=pg_catalog','timezone=utc']:['search_path=pg_catalog']);
   const executors=(await f.admin.query("SELECT ARRAY(SELECT CASE WHEN grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(grantee)::text END FROM aclexplode($1::aclitem[]) ORDER BY 1) names",[row.proacl])).rows[0].names;
-  expect(executors).toEqual(row.proname==='mon1_fresh_counted_meter_today'?['jobguard_migration','jobguard_runtime']:['jobguard_migration']);
+  expect(executors).toEqual(['mon1_fresh_counted_meter_today','mon1_today_source'].includes(row.proname)?['jobguard_migration','jobguard_runtime']:['jobguard_migration']);
  }
  const names=['meter_work_ledger','meter_work_ledger_pkey'];
  const relations=after.relations.filter(r=>r.nspname==='app' && names.includes(r.relname));

@@ -2,7 +2,7 @@
 
 Capacity admission uses committed places, which include live jobs that have not
 started counting today. Daily counted places remain the separate billing/screen
-projection introduced in 0292. They are never used as a capacity counter.
+projection introduced in 0300. They are never used as a capacity counter.
 
 The private `meter_work_ledger` is an append-only, tenant-scoped projection of
 accepted activation terms, frozen parties, immutable work events, locks and trips.
@@ -34,13 +34,22 @@ no runtime/meter/shadow table grants. Existing rows, grants and policies stay in
 
 ## Explicit remaining scope
 
-MON1-J is not complete: the normal-company command → lifecycle source capture →
-0292 counted-day projection → authenticated meter-screen journey still needs its
-refresh driver and real browser journey across start/finish/lock/close/reopen and
-London-midnight stops. Until then, a missing or stale counted source returns
-`METER_UNAVAILABLE`, including after work/lock/trip/plan changes, at a new London
-date, or while a legacy live import is unsupported. Disabled practice resume and
-unlocked-reopen controls stay disabled; no mocked success journey is substituted.
+MON1-J adds `mon1_today_source` to this same unmerged migration (0305 is not
+renumbered; its admission SQL is preserved). This checked entrypoint reuses
+lifecycle capture under lock 184. The application derives today's display from
+the captured immutable facts with the existing pure counter. There is no new
+runtime table grant, credential, supplied count, billing action or issued-period
+edit. Administrative finalization assigns the same narrow owner. The prior
+stored counted reader and its stale-source refusal remain tested separately.
+
+The browser journey reads the real authenticated screen after real repository
+photo/work commands. Parent activations and the historical seven-day boundary
+are explicit synthetic fixtures; there is no backdating API or fake meter route.
+It proves start, finish tail, stop, restart, replay, real grace admission, seventh
+place refusal and cross-company command denial. Disabled shared-practice
+resume/reopen controls remain disabled. A normal-company work-command UI is
+not introduced here. Automatic stored-day persistence is still the meter-role
+period writer's responsibility, rather than a side effect of reading the screen.
 Grace/upgrade and Builder track-review Decision delivery also remain separate
 MON-1 follow-up; this change authorizes no charge and edits no issued bill.
 

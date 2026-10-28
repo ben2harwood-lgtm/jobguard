@@ -262,5 +262,42 @@ END $$;
 ALTER FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) FROM PUBLIC,jobguard_runtime;
 GRANT EXECUTE ON FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) TO jobguard_runtime;
+-- MON1-J: capture real builder sources under the same tenant serializer.
+-- The application uses the existing pure counter for this display only; no
+-- caller-supplied counts enter SQL and issued billing projections are untouched.
+CREATE FUNCTION app.mon1_today_source(t uuid,digest text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE actor uuid; today date; start_day date; anchor integer; expected integer; captured jsonb;
+BEGIN
+ actor:=app.mon1_lifecycle_actor(t,digest,false);
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));
+ actor:=app.mon1_lifecycle_actor(t,digest,false);
+ -- Preserve the existing admin read capability without granting source-capture
+ -- authority: admins can still read an already-fresh counted projection.
+ IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=actor AND role='owner') THEN
+  RETURN jsonb_build_object('view',app.mon1_fresh_counted_meter_today(t,digest));
+ END IF;
+ today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+ SELECT anchor_day INTO anchor FROM app.subscription_agreement_revision
+ WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1;
+ IF anchor IS NULL THEN RAISE EXCEPTION 'METER_UNAVAILABLE'; END IF;
+ start_day:=date_trunc('month',today)::date+least(anchor,extract(day FROM date_trunc('month',today)+interval '1 month - 1 day')::integer)-1;
+ IF start_day>today THEN
+  start_day:=(date_trunc('month',today)-interval '1 month')::date+least(anchor,extract(day FROM date_trunc('month',today)-interval '1 day')::integer)-1;
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND practice_session_digest IS NULL AND provenance='imported' AND status='live')
+ OR EXISTS(SELECT 1 FROM app.job_activation a JOIN app.job j ON (j.tenant_id,j.id)=(a.tenant_id,a.job_id)
+  WHERE a.tenant_id=t AND j.practice_session_digest IS NULL
+  AND NOT EXISTS(SELECT 1 FROM app.job_activation_terms terms WHERE (terms.tenant_id,terms.job_id,terms.activation_id)=(t,a.job_id,a.id)))
+ THEN RAISE EXCEPTION 'METER_UNAVAILABLE'; END IF;
+ SELECT coalesce(max(s.revision),0) INTO expected FROM app.meter_lifecycle_source s
+ JOIN app.meter_lifecycle_scope scope ON (scope.tenant_id,scope.id)=(s.tenant_id,s.scope_id)
+ WHERE s.tenant_id=t AND scope.kind='normal_company' AND s.period_start=start_day;
+ captured:=app.mon1_lifecycle_capture(t,digest,gen_random_uuid(),start_day,expected);
+ RETURN jsonb_build_object('date',((captured#>>'{source,asOf}')::timestamptz AT TIME ZONE 'Europe/London')::date::text,'stored',captured);
+END $$;
+ALTER FUNCTION app.mon1_today_source(uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon1_today_source(uuid,text) FROM PUBLIC,jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.mon1_today_source(uuid,text) TO jobguard_runtime;
 COMMIT;
 

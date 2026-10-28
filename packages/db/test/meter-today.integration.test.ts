@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
-import { MeterTodayRepository } from "../src/meter-today-repository.js";
+import { meterTodayReadV1 } from "@jobguard/core";
 import { closeWorkFixture, createWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 
@@ -16,7 +16,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
     try { await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   }, 60000);
   afterAll(async () => closeWorkFixture(f));
-  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => new MeterTodayRepository(f.runtime).read(a.context, digest);
+  const read = (a: Awaited<ReturnType<typeof meterCompany>>, digest = a.digest) => workTenant(f.runtime, a.tenantId, async db => meterTodayReadV1.parse((await db.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [a.tenantId,digest])).rows[0].result));
   async function stored(a: Awaited<ReturnType<typeof meterCompany>>, count: number, revision = 1, scope = randomUUID(), counted = true) {
     const source = randomUUID(), computation = randomUUID();
     await workTenant(f.admin, a.tenantId, async db => {
@@ -57,12 +57,20 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
     await stored(a, 9, 2, first.scope, false);
     await expect(read(a)).rejects.toThrow("METER_UNAVAILABLE");
   });
-  it("MON1-J held path: a command invalidates a previously fresh counted screen source", async () => {
+  it("legacy stored-reader safety: a command invalidates a previously fresh counted source", async () => {
     const a=await meterCompany(f); await stored(a,1); expect((await read(a)).countedPlaces).toBe(1);
     await new JobWorkStateRepository(f.runtime).finish(a.context,a.jobId,a.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),action:"finish",expectedRevision:0});
     await expect(read(a)).rejects.toThrow("METER_UNAVAILABLE");
     // Retiring the legacy reader prevents a raw runtime fallback to stale data.
     expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_counted_meter_today(uuid,text)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
+  });
+  it("fresh-source entrypoint preserves admin reads without granting capture authority", async () => {
+    const a=await meterCompany(f), first=await stored(a,3);
+    await f.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.actorId]);
+    const readAdmin=()=>workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT app.mon1_today_source($1,$2) result",[a.tenantId,a.digest])).rows[0].result);
+    expect(await readAdmin()).toMatchObject({view:{countedPlaces:3,plan:"Builder"}});
+    await stored(a,4,2,first.scope,false);
+    await expect(readAdmin()).rejects.toThrow("METER_UNAVAILABLE");
   });
   it("keeps forced RLS and table grants; the narrow routine cannot be used without tenant context", async () => {
     const a = await meterCompany(f); await stored(a, 3);

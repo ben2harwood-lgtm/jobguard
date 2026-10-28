@@ -1,0 +1,9 @@
+# SV-5 practice readers — PR #371 renumber catch-up
+
+RED: hidden/shadow data and privileges. Plan piece: BUILD_PLAN.md SV-5 Final check, reveal and disposition.
+
+After merging main through migration 0290, move this piece's migration from 0284 to router-reserved 0295; 0291–0294 belong to other pieces. Used the exported planRenumber function in tools/migration-renumber.mjs with the reserved-number floor and filesystem moves because its CLI writes the Git index, which is read-only here. The migration runner discovers 0295 automatically; no static index edit is needed. Update only migration references, note, lane and this ledger.
+
+SQL remains byte-identical to PR #371's 0284 (29,267 bytes; SHA-256 6d375e7b03674683905f0fa7082d3e8fd1966e53cae9478b16c3639989be0d4f). Main's shared LP-0, SERIOUS-B5, entitlement and privilege expectation rows are retained alongside the piece's existing additions. No unresolved conflicts, new behavior or assertion changes beyond the migration number.
+
+Local verification passed: `packages/db/node_modules/.bin/vitest run --maxWorkers=2 packages/db/src/migrate-discovery.test.ts packages/db/src/final-check-practice-readers.test.ts packages/db/test/lp-0-catalog.test.ts` (3 files, 41 tests); `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`; `git diff --check`. Read-only checks also confirmed exact SQL bytes against HEAD, 0295 above main, exact lane coverage of all 11 PR paths, retention of every main LP-0 catalog row, unchanged main entitlement/privilege/LP-0 test files, retained SERIOUS-B5 identities and no conflict markers. Database, migration and browser suites run in GitHub CI after the router pushes; this sandbox cannot start PostgreSQL or bind localhost. No Git writes, providers, real data, money or release actions. Independent RED review and green required CI remain the merge gates.

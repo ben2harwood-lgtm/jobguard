@@ -34,9 +34,10 @@ describe("MON-1 0305 upgrade (PostgreSQL CI)", () => {
   const admin=await f.admin.connect();
   try { await finalizeMeterLifecycleOwnership(admin); await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   expect((await f.admin.query(`SELECT proname,pg_get_userbyid(proowner) owner,prosecdef,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime
-   FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname IN('mon1_counted_meter_today','mon1_fresh_counted_meter_today') ORDER BY proname`)).rows).toEqual([
+   FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname IN('mon1_counted_meter_today','mon1_fresh_counted_meter_today','mon1_today_source') ORDER BY proname`)).rows).toEqual([
     {proname:"mon1_counted_meter_today",owner:"jobguard_meter_owner",prosecdef:true,runtime:false},
     {proname:"mon1_fresh_counted_meter_today",owner:"jobguard_meter_owner",prosecdef:true,runtime:true},
+    {proname:"mon1_today_source",owner:"jobguard_meter_owner",prosecdef:true,runtime:true},
    ]);
   expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1",[own])).rows[0].n).toBe(1);
   expect((await f.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.meter_work_ledger'::regclass")).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true});

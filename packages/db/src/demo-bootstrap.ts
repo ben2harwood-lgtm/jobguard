@@ -81,6 +81,7 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     "app.mon1_lifecycle_read(uuid,text,uuid)",
     "app.mon1_counted_meter_today(uuid,text)",
     "app.mon1_fresh_counted_meter_today(uuid,text)",
+    "app.mon1_today_source(uuid,text)",
   ];
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   if (owner === "jobguard_migration") throw new Error("Meter ownership requires the administrative bootstrap principal");

@@ -68,7 +68,25 @@ replays verify the stored result; mismatches refuse the entire command.
 
 Normal-company accepted activations are supported. Shared practice aggregation,
 missing agreements and legacy live imports without accepted activation/trip terms
-remain refused. MON1-J's automatic daily-ledger/screen refresh is unfinished;
-`mon1_fresh_counted_meter_today` refuses stale sources with `METER_UNAVAILABLE`.
+remain refused. MON1-J captures checked normal-company lifecycle facts on each
+authenticated owner read using `mon1_today_source`, then applies the existing
+approved pure day counter for the screen. It takes no client counts or clock.
+The legacy `mon1_fresh_counted_meter_today` still refuses stale stored sources
+with `METER_UNAVAILABLE`.
 Administrative bootstrap assigns its narrow owner and retires the older runtime
 reader in the same transaction. No financial action is introduced.
+
+The fresh display does not persist a second counted computation or issue billing
+facts. The stored period-ledger writer remains the existing meter-role path;
+closed/issued periods are untouched. This avoids a runtime ledger-write grant,
+another credential, or a duplicate SQL counting engine. Normal-company owner
+reads capture immutable source revisions under tenant lock 184, with current
+session/authority checks after waiting. Missing terms, unsupported live imports,
+shared practice, non-owner fresh captures and an in-period plan change still refuse.
+Admins retain their prior checked read of an already-fresh stored projection;
+stale or absent stored data still refuses for them. Reads may append a
+new source revision; command retries remain durable replays of their first result.
+
+MON1-J browser coverage uses real repository commands and the real authenticated
+meter HTTP/UI path, with explicit synthetic activation parents and historical
+clock fixtures. It does not claim a normal-company job-command browser UI.
