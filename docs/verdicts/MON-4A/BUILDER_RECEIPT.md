@@ -136,3 +136,24 @@ Comparator sensitivity mutations are authored as the five real-PostgreSQL contro
 - Native/device and changed-model live evaluation: inapplicable to this diff. Screens remain parked. All real-data, policy, provider, VAT, collection and production gates remain closed.
 - No database/backfill, historical shape, grant, provider/data-flow, environment, alert, prompt or operational activation change. Pure exports are additive; existing v1 behavior is preserved. Future persistence must use a forward fix preserving immutable history, as documented in the contract.
 - Exact-commit independent verdict(s), separate acceptance, complete green current-main CI and dispatcher commit/push/merge remain outstanding. This builder does not accept its own work or claim the counted MON-4A money-chain card is complete.
+
+## 28 October 2026 catch-up — MON-4A, RED
+
+Scope: finish-list row 10, BUILD_PLAN §10.4 MON-4A, “Success fee on the payment screen”. This handoff is a catch-up of the existing branch, with no new behaviour. It does not supersede the implementation limitations above or claim that the complete payment-screen flow exists.
+
+The router had already committed the main merge as `151ae6a8` before this session; the worktree started clean. Read-only comparison against `origin/main` (`eaa63703`) confirms the seven-path MON-4A delta. Both parents' core exports are preserved. Shared tenancy, shadow-catalogue, SERIOUS-B5 and contractor-entitlement expectations match main exactly, retaining its additions. Migrations and migration notes also match main exactly: the old `0249_recovery_attribution` copy is absent and main's `0277_recovery_attribution` is retained. There are no conflict markers or new migrations.
+
+The branch-specific source is pure schema preparation; its comparator test writes only scratch comparator rows. It does not write attribution or allocation rows. The #368 locked-revision line check, #356 allocation cap/distinct-line checks and #346 practice-feed job binding therefore require no code repair in this catch-up. No inherited writer or financial control was changed. The lane note now describes this scope; its exact allow list remains the six non-lane PR paths, with its own lane file implicitly owned under the repository lane validator.
+
+Commands executed using the already-cached pnpm 10.28.1 at `/private/tmp/jg-sv6-bin/pnpm`:
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/payment-fee-authority.test.ts src/fee-statement.test.ts`: PASS, 40 tests in two files.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/migrate-discovery.test.ts`: PASS, 3 tests.
+- `pnpm --filter @jobguard/core typecheck`: PASS.
+- `pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/payment-fee-upgrade.integration.test.ts`: PASS; compilation only.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: PASS (core purity, lane, money and commercial boundaries). Existing computed-import notices remain informational.
+- Read-only path/export/expectation/migration/conflict audit: PASS; `git diff --check`: PASS.
+
+The default PATH pnpm attempts were interrupted before test execution after printing an ignored-overrides warning; the completed runs above used the cached pinned executable. No packages were downloaded or dependencies changed. Each completed Vitest run used at most two workers and at most two named files. PostgreSQL, database integration, browser and aggregate suites were not run under the sandbox restrictions; GitHub CI must execute them. No Git writes, provider calls, real data, live money or release actions were performed.
+
+Router PR description: **RED — MON-4A catch-up, BUILD_PLAN §10.4 / finish-list row 10 (Success fee on the payment screen).** Preserve the accepted branch preparation against current main; no new behaviour or migration. Main's attribution migration and shared expectations are retained. Focused local checks above pass; database/browser suites remain CI work. Arrange the independent RED review against the final head before merge. The full MON-4A flow remains outside this catch-up's completion claim.
