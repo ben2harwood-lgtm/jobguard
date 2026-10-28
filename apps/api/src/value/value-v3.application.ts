@@ -45,3 +45,12 @@ export class ValueV3Application {
   return result.data;
  }
 }
+
+/** Shared sanitized failure contract for both HTTP adapters. */
+export function valueV3Failure(error: unknown) {
+ const code = error instanceof Error && "code" in error &&
+  ["NOT_FOUND", "UNAUTHENTICATED", "SYNTHETIC_MODE_REQUIRED", "VALUE_V3_QUERY_UNBOUND", "VALUE_V3_SOURCE_REJECTED"].includes(String(error.code))
+  ? String(error.code) : "VALUE_V3_UNAVAILABLE";
+ const status = code === "UNAUTHENTICATED" ? 401 : code === "NOT_FOUND" ? 404 : code === "SYNTHETIC_MODE_REQUIRED" ? 403 : code === "VALUE_V3_QUERY_UNBOUND" ? 400 : 503;
+ return { status, body: { version: "job-value-error.v3", status: "incomplete", code } };
+}

@@ -1,9 +1,8 @@
 import { Pool } from "pg";
 import { Controller, Get, Headers, HttpException, Inject, Optional, Param, Query, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { PracticeAccessError } from "@jobguard/db";
 import { practiceCookie } from "../practice-access.js";
-import { ValueV3Application, ValueV3ReadError, type ValueV3JobReader } from "./value-v3.application.js";
+import { ValueV3Application, valueV3Failure, type ValueV3JobReader } from "./value-v3.application.js";
 
 export const VALUE_V3_READER_FACTORY = Symbol("VALUE_V3_READER_FACTORY");
 export type ValueV3ReaderFactory = (pool: Pool, sessionId: string | undefined) => ValueV3JobReader;
@@ -27,11 +26,8 @@ export class ValueV3Controller {
    return await new ValueV3Application(this.pool, session, reader).readJob(id, query);
   }
   catch (error) {
-   const code = error instanceof ValueV3ReadError || error instanceof PracticeAccessError ? error.code :
-    // A structural error code from the shared boundary is safe only if allowlisted.
-    error instanceof Error && "code" in error && ["NOT_FOUND", "UNAUTHENTICATED", "SYNTHETIC_MODE_REQUIRED"].includes(String(error.code)) ? String(error.code) : "VALUE_V3_UNAVAILABLE";
-   const status = code === "UNAUTHENTICATED" ? 401 : code === "NOT_FOUND" ? 404 : code === "VALUE_V3_QUERY_UNBOUND" ? 400 : 503;
-   throw new HttpException({ version: "job-value-error.v3", status: "incomplete", code }, status);
+   const failure = valueV3Failure(error);
+   throw new HttpException(failure.body, failure.status);
   }
  }
 }

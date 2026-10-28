@@ -172,3 +172,144 @@ Check logs: `/private/tmp/ch9-b-r1-{web-typecheck,web-lint,web-unit,typecheck,li
 **Browser NOT RUN here**, as issued. PostgreSQL and migration suites NOT RUN: sandbox cannot start PostgreSQL or bind localhost; dispatcher-owned GitHub CI must run database and both browser projects. Full root test and clean install NOT RUN. The duplicate is source-inspected as removed; this receipt does not claim a browser pass or independent verification of the repair. Exact repair-commit review and separate acceptance remain with the dispatcher/reviewer. No commit, push, staging or other git write was performed.
 
 Intended commit subject/body written to `/private/tmp/jg-msg-ch9-b.txt` for the dispatcher.
+
+
+## CH-9 combined-base repair — 28 October 2026
+
+**RED; incomplete; do not commit as completed CH-9.** This run uses the router's
+already-merged `codex/sandbox/ch9-b` base. The current SIMPLE_LOOP.md is the build
+rulebook; earlier coordinator/checker-count instructions in this historical receipt
+are superseded. One independent RED review remains required before merge.
+
+Installed the previously unapplied composition in actual code: both Nest GETs,
+request-scoped workspace job/business services, the database reader export, and
+Next `/api/jobs/[id]/value/v3`. Next `/api/value` now uses the shared business
+application instead of a separate copy of authentication/selection behavior.
+Repeated query selectors remain invalid after authentication. Business service
+code moved out of the decorated controller so the Next TypeScript build can consume
+it without Nest decorator compilation. Existing controller exports remain compatible.
+Both transports keep private, no-store responses with Vary: Cookie. Corrected the
+job controller's synthetic-only refusal from 503 to 403 and shared its sanitized
+error mapping with Next. OpenAPI was regenerated from the registered application.
+
+No migration, money computation, financial posting, producer authorization,
+external action, prompt/model change, provider call or real-data execution was added.
+Migration 0308 is unused. Existing integration patches are historical handoff
+artifacts; the actual composition above is installed, so do not apply them again.
+
+### Self-attack and remaining completion blockers
+
+- Duplicates/replays: existing strict source/event DTO tests pass; new producer
+  injection tests reject duplicate claimed sources. Repeated actual reads authenticate
+  again. Next business tests preserve rejection of duplicate selectors.
+- Reversals: existing receipt tests retain the explicit original/reversal and reject
+  broken references; the live availability envelope rejects a supplied unsupported
+  reversal rather than displaying it as a financial fact.
+- Cross-customer access: current application authorization precedes queries and source
+  reads. Existing real-PostgreSQL suites remain for CI. Added a CI browser regression
+  for unauthenticated and other-session access to the composed job endpoint.
+- Allocation limits and locked bill: supplied over-allocation and unlocked-revision
+  claims are rejected at the strict unavailable envelope. These tests prove refusal,
+  not a complete positive allocation/locked-bill producer pipeline.
+- Found during attack: synthetic-only job denial had the wrong HTTP status; a new
+  controller case and Next refusal test now cover 403 and private error responses.
+
+**CH-9's positive acceptance is not met.** Current
+`apps/api/src/recovery-attribution.application.ts` still refuses assessment commands
+with RECOVERY_ATTRIBUTION_DEPENDENCY_BOUND and labels history qualification
+`dependency_bound`. `packages/db/src/recovery-attribution-repository.ts` is storage
+access with runtime assessment closed pending its source adapter. It cannot supply
+current fee entitlement merely because SV-6 merged. The illustrative core v3 DTOs
+are still explicitly `illustrative_unbound`; relabelling them would not reproduce
+figures from authoritative sources. The newly merged MON-1 counted-today read
+provides a date and place count, not a practice subscription-period computation.
+The existing MeterRepository period read explicitly holds shared practice scope.
+Thus source-backed job/business recovery receipts, accepted event-window semantics,
+locked-bill attribution, and practice subscription-period figures remain unfinished.
+No upstream gate/policy was weakened to manufacture them.
+
+The default root lane gate also fails: this combined branch includes inherited
+CH9-J/R and MON-1 paths and other lanes' own registration files. The updated
+`config/lanes/ch9-b.json` lists exactly this run's edited paths (its own registration
+is implicitly permitted by the checker). It does not grant inherited unrelated
+paths or change the gate. Router must reconcile the combined PR's ancestry/lane
+scope before claiming green CI. An attempted LANE_BASE_REF=HEAD check was refused
+by the tool as a self-comparison; it is not a pass.
+
+LATER / SIMPLICITY (initial review):
+`apps/web/app/ui/business-value-v3.tsx:4` repeats the strict unavailable response
+schema. A future pure contract export shared with the server would reduce schema
+and error-code drift. This is nonblocking and was left outside this repair.
+
+### Local validation
+
+Node 24.17.0, installed pnpm 10.28.1 and Vitest 4.1.12. Used the existing
+`/private/tmp/jg-ch9-b-bin/pnpm` wrapper for the pinned cached pnpm; no install or
+download. Turbo concurrency at most 2; each Vitest run at most 2 workers and at
+most 3 named files. No helper agents and no git write commands.
+
+- `pnpm typecheck --concurrency=2`: PASS, 7 tasks after the application/controller split.
+- `pnpm build --concurrency=2`: PASS, 7 tasks, including production Next routes.
+  Existing CSS, dependency-bundling, workspace-root and sandbox cache warnings.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/value-v3.test.ts src/value-v3-receipt.test.ts src/value-v3-copy.test.ts`: PASS, 85 tests.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/value/value-v3.application.test.ts src/value/value-v3.controller.test.ts src/value/value-business.controller.test.ts`: PASS, 40 tests.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/value/value-composition.test.ts src/value/value-v3-business.application.test.ts src/value/value.application.test.ts`: PASS, 28 tests. The composition test initializes Nest and invokes its registered handlers without binding sockets; financial services are doubled there.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/api/value/route.test.ts 'app/api/jobs/[id]/value/v3/route.test.ts'`: PASS, 20 tests.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/meter-day-ledger.test.ts src/meter-today-repository.test.ts`: PASS, 5 unit tests; no PostgreSQL started.
+- `node --import tsx src/generate-openapi.ts --check` in apps/api: PASS, using installed loader without tsx CLI IPC binding.
+- Money arithmetic and commercial boundary lints: PASS.
+- `pnpm lint`: FAIL at inherited lane paths, as described above. Core purity passes.
+
+178 distinct targeted assertions passed in the final listed batches. The first API
+attempt used stale dist artifacts from before main's Zod update and failed during
+module loading. Rebuilding the installed dependency packages resolved that without
+source changes. The first composition typecheck exposed Nest decorators through
+the workspace export; separating application/controller fixed that. These failed
+attempts are not represented as passing checks.
+
+Database/migration/catalogue/RLS and browser suites were NOT RUN in this sandbox,
+as instructed. Full root tests, clean install, independent RED review, CI and release
+were NOT performed. CI should run the existing value-v3-reader and value-v3-business
+PostgreSQL suites, MON-1 ledger/read regressions and the updated CH-9-business.spec.ts
+in mobile-360 and desktop. No completed positive CH-9 journey is claimed.
+
+
+## Router scope decision: CH-9 part 1 — 28 October 2026
+
+The router explicitly accepts the composed value-read boundaries, v3 job GET,
+refusals and tests as **CH-9 part 1 (RED)**. Real source-backed recovery receipts
+and billing-period subscription figures are a later piece after the SV-6 hookup
+and a MON-1 billing-period amount. They still refuse; this is an intentional
+part-1 boundary, not a source-completion claim. Earlier full-CH-9 readiness
+statements above do not reject this narrower approved scope.
+
+Archived the inherited CH9-J/R registration files byte-for-byte at
+`docs/verdicts/CH9-J/LANE_ARCHIVE.json` and
+`docs/verdicts/CH9-R/LANE_ARCHIVE.json`, removing those leaf registrations from
+config/lanes. Consolidated the CH-9 paths into the sole ch9-b lane. The MON-1
+ledger/read registrations are byte-for-byte unchanged and retain their own branches;
+MON-1-only paths are not claimed by this CH-9 lane. No lane gate/test code changed.
+
+Actual checkout observation at this repair: HEAD `743b0761`, origin/main `eaa63703`
+(main still reports #363). No unmerged index entries exist. The stated new-main
+merge is not present in these local refs; #376/#377's paths are still in the
+committed branch/main comparison. The local gate also includes committed changes
+before considering working-tree deletions: archived leaf registration files are
+still selected from origin/main...HEAD until the router commits their removal.
+Therefore default `pnpm lint` was run and still FAILS on the inherited MON-1 paths
+and committed CH9-J/R registration paths. No alternative base, shim, integration
+lane or weakened gate was used to create a pass.
+
+Required router action: refresh/merge current main (including the MON-1 parents
+when landed), resolve shared expectation-list rows by union if any conflict exists,
+and checkpoint this reconciliation using the router's git permissions. Resume this
+session for the real default lint run and exact final main-relative lane inventory.
+This session cannot perform that git mutation. Part-1 source behavior is ready
+for the narrower review, but the requested lint-ready handoff is not yet proven.
+
+Checks: `node --test --test-concurrency=2 tools/agent-lane-boundary.test.mjs tools/agent-lane-boundary-train.test.mjs`
+PASS (66 tests); archive/unchanged-MON-1 byte comparisons PASS; `git diff --check`
+PASS. No code behavior changed in this metadata repair; the earlier production
+build, typecheck and 178 focused assertions remain the last code validation.
+No PostgreSQL/browser suites run here. The git-based lane tests use disposable
+fixture repositories; no git-writing command was issued against this worktree.

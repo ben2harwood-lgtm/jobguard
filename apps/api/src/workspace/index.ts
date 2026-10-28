@@ -98,3 +98,6 @@ export * from "../contractor/billing.application.js";
 export * from "../meter-today.application.js";
 export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
+
+export * from "../value/value-v3.application.js";
+export { BusinessValueApplication, businessValueResultV1, businessValueFailure, businessValueStatus } from "../value/value-business.application.js";

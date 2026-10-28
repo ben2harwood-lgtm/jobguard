@@ -19,7 +19,7 @@ it("CH9-J01/05 sets private no-store before success and delegates without writes
  expect(res.headers["Vary"]).toBe("Cookie");
  expect(res.setHeader.mock.invocationCallOrder[0]).toBeLessThan(read.mock.invocationCallOrder[0]!);
 });
-it.each(["NOT_FOUND", "UNAUTHENTICATED", "VALUE_V3_QUERY_UNBOUND", "VALUE_V3_SOURCE_REJECTED", "DATABASE_UNAVAILABLE"])("CH9-J01/02/09 keeps %s private and sanitized", async code => {
+it.each(["NOT_FOUND", "UNAUTHENTICATED", "VALUE_V3_QUERY_UNBOUND", "VALUE_V3_SOURCE_REJECTED", "SYNTHETIC_MODE_REQUIRED", "DATABASE_UNAVAILABLE"])("CH9-J01/02/09 keeps %s private and sanitized", async code => {
  vi.spyOn(ValueV3Application.prototype, "readJob").mockRejectedValue(
   code.startsWith("VALUE_") ? new ValueV3ReadError(code as "VALUE_V3_QUERY_UNBOUND" | "VALUE_V3_SOURCE_REJECTED") : Object.assign(new Error("private SQL/session/tenant bytes"), { code }));
  const res = response();
@@ -27,7 +27,7 @@ it.each(["NOT_FOUND", "UNAUTHENTICATED", "VALUE_V3_QUERY_UNBOUND", "VALUE_V3_SOU
  catch (error) {
   const result = error as { getResponse(): unknown; getStatus(): number };
   expect(JSON.stringify(result.getResponse())).not.toContain("private SQL");
-  expect(result.getStatus()).toBe(code === "NOT_FOUND" ? 404 : code === "UNAUTHENTICATED" ? 401 : code === "VALUE_V3_QUERY_UNBOUND" ? 400 : 503);
+  expect(result.getStatus()).toBe(code === "NOT_FOUND" ? 404 : code === "UNAUTHENTICATED" ? 401 : code === "SYNTHETIC_MODE_REQUIRED" ? 403 : code === "VALUE_V3_QUERY_UNBOUND" ? 400 : 503);
  }
  expect(res.headers["Cache-Control"]).toBe("private, no-store");
 });

@@ -135,3 +135,5 @@ export { ContractorRetainedReadRepository } from "./contractor-retained-read-rep
 
 export * from "./meter-today-repository.js";
 export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
+
+export * from "./value-v3-reader.js";

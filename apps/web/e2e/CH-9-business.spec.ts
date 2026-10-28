@@ -36,3 +36,29 @@ test("CH9-B10 held business view survives reload, preserves job access and expos
  } finally { await foreign.close(); }
  await page.screenshot({ path: `test-results/CH9-B-held-${test.info().project.name}.png`, fullPage: true });
 });
+
+test("CH-9 composed job v3 read authenticates each session and never discloses producer money", async ({ page, browser }) => {
+ expect((await page.request.post("/api/session")).ok()).toBe(true);
+ const session = await (await page.request.get("/api/session")).json();
+ const jobs = await (await page.request.get(`/api/jobs?tenantId=${session.tenants[0].id}`)).json();
+ expect(jobs.jobs.length).toBeGreaterThan(0);
+ const path = `/api/jobs/${jobs.jobs[0].id}/value/v3`;
+ for (let n = 0; n < 2; n++) {
+  const result = await page.request.get(path);
+  expect(result.status()).toBe(200);
+  expect(result.headers()["cache-control"]).toBe("private, no-store");
+  expect(await result.json()).toMatchObject({ version: "job-value.v3", jobId: jobs.jobs[0].id, status: "incomplete", receipt: null, asOf: null });
+ }
+ const invalid = await page.request.get(`${path}?allocation=999999999`);
+ expect(invalid.status()).toBe(400);
+ const foreign = await browser.newContext();
+ try {
+  const tab = await foreign.newPage();
+  const url = new URL(path, test.info().project.use.baseURL!).href;
+  expect((await tab.request.get(url)).status()).toBe(401);
+  expect((await tab.request.post(new URL("/api/session", url).href)).ok()).toBe(true);
+  const denied = await tab.request.get(url);
+  expect(denied.status()).toBe(404);
+  expect(await denied.json()).toEqual({ version: "job-value-error.v3", status: "incomplete", code: "NOT_FOUND" });
+ } finally { await foreign.close(); }
+});

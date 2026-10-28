@@ -80,3 +80,16 @@ it("CH9-J10 server copy makes no ownership/settlement/prevention-money claim", a
  const text = JSON.stringify(await app.readJob(jobId));
  expect(text).not.toMatch(/£|saved you|would have forgotten|you(?:’|')?ll|\bwill\b|get to keep|\bretain\b|belongs to you|your money|goes to you|take.home|pocket|\bowed\b|\bcharged\b|\bpaid\b/i);
 });
+
+it.each([
+ { sources: [{ id: "replayed" }, { id: "replayed" }] },
+ { reversal: { corrects: "missing-original", pence: -250000 } },
+ { tenantId: "foreign-customer" },
+ { allocation: { pence: 999999999999, settledPence: 0 } },
+ { lock: { accountRevisionId: "unlocked-current-bill" } },
+ { receipt: { categories: [{ category: "found", pence: 80000, fee: 8000 }] } },
+])("CH-9 RED: a supplied producer cannot smuggle replay, reversal, scope, allocation or unlocked-bill claims: %j", async extra => {
+ const { app, readJob } = fixture();
+ readJob.mockResolvedValue({ ...heldJobValueV3(jobId), ...extra });
+ await expect(app.readJob(jobId)).rejects.toMatchObject({ code: "VALUE_V3_SOURCE_REJECTED" });
+});

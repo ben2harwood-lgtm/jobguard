@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const f = vi.hoisted(() => ({ cookie: vi.fn(), authenticate: vi.fn(), pool: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: f.cookie }) }));
-vi.mock("@jobguard/db", () => ({ authenticatePracticeSession: f.authenticate }));
+vi.mock("@jobguard/db", async importOriginal => ({ ...await importOriginal<typeof import("@jobguard/db")>(), authenticatePracticeSession: f.authenticate }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: f.pool }));
+vi.mock("../../lib/workspace-server", () => ({ workspaceApplication: async () => {
+ const { BusinessValueApplication } = await import("@jobguard/api/workspace");
+ return { businessValue: new BusinessValueApplication(f.pool(), f.cookie()?.value) };
+} }));
 import * as route from "./route";
 
 beforeEach(() => {
