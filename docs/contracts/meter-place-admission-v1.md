@@ -57,7 +57,7 @@ consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
 
 
-## MON-1 remainder, migration 0305
+## MON-1 remainder, migration 0307
 
 The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
 Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // Source inspection only. Runtime SQL guarantees belong to PostgreSQL CI.
-const migration = readFileSync(new URL("../migrations/0305_meter_work_admission.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0307_meter_work_admission.sql", import.meta.url), "utf8");
 const admission = migration.slice(0,migration.indexOf("-- The administrative finalizer"));
 describe("MON-1 admission source boundaries", () => {
  it("reads stored builder facts and excludes hidden inputs", () => {

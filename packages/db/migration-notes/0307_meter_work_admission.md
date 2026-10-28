@@ -1,4 +1,4 @@
-# 0305 — MON-1 committed-place admission and transactional refresh (RED)
+# 0307 — MON-1 committed-place admission and transactional refresh (RED)
 
 Capacity admission uses committed places, which include live jobs that have not
 started counting today. Daily counted places remain the separate billing/screen
@@ -35,7 +35,7 @@ no runtime/meter/shadow table grants. Existing rows, grants and policies stay in
 
 ## Explicit remaining scope
 
-MON1-J adds `mon1_today_source` to this same unmerged migration (0305 is not
+MON1-J adds `mon1_today_source` to this same unmerged migration (0307 is not
 renumbered; its admission SQL is preserved). This checked entrypoint reuses
 lifecycle capture under lock 184. The application derives today's display from
 the captured immutable facts with the existing pure counter. There is no new
@@ -84,7 +84,7 @@ Required real-PostgreSQL and browser runs remain CI work in this sandbox.
 
 ## Last CI repair: source-scoped locking and canonical fact order
 
-0305 SQL changes in this repair: existing live/source guards join capacity
+0307 SQL changes in this repair: existing live/source guards join capacity
 lock 184 before job SHARE for normal-company small-builder sources.
 General `withTenant` transactions no longer acquire it, preserving the financial
 preflight boundary, receipt identity waits and contractor authority gate 54.
