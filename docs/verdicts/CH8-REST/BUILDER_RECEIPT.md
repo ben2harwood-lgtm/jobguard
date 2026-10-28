@@ -113,3 +113,49 @@ migration and browser suites remain for GitHub CI after router push. The
 read-only index still reports two unmerged paths; the router must stage the
 resolved working files and complete the pending merge. Ready commit message:
 /tmp/ch8-rest-20261028T211109Z-commit-msg.txt.
+
+## PR #389 repair round 1 — 28 October 2026
+
+RED — CH-8 part 2, BUILD_PLAN.md §10.4. No merge conflicts were present.
+The actual worker composition already installed CH-8 discovery/build tasks in
+normal and practice modes; the SV-3 composition test still expected the older
+final-check-only list and cron. Updated its exact lists and cron, preserving
+startup gating, accepted-terms checks and the exclusion of outbox from practice.
+
+Migration 0306 already installed four app tables, six indexes and nine routines.
+Entitlement-upgrade now expects those four empty tables. SERIOUS-B5 adds only
+those exact tables/indexes/routine signatures and tenant policies, verifies the
+nine routines' exact owner/executor ACLs (including owner-only helpers), and
+continues comparing all predecessor rows and catalogue metadata on repeat
+migration. No predecessor expectations are filtered out or weakened.
+
+LP-0 was missing 0306's capabilities. Added exactly six non-owner ACL facts:
+two runtime EXECUTEs, three shadow EXECUTEs and infrastructure SELECT on its
+identifier-only queue table; plus their six corresponding ownership facts.
+No runtime table grants, PUBLIC EXECUTE or extra helper grants were added.
+The new authority group/path documents dependency refusal and worker separation.
+All prior LP-0 entries remain. No migration, production code or grant changed;
+0306 SQL SHA-256 remains
+5d0a300b27bf74601c37296009414da15a96c6f10e14eea6f0c0bd6a0b82dea8.
+The lane now includes the four additional actual repair payload paths, with no
+lane-directory/register grants. Its own file stays implicitly permitted.
+
+Local checks with installed tools, maxWorkers=2 and at most three named files:
+
+- API Vitest shadow-detection.worker + evidence-pack-v3.worker: PASS, 11 tests.
+- DB Vitest lp-0-catalog: PASS, 26 tests.
+- Actual LP-0 inventory parse and authority-path completeness: PASS.
+- DB TypeScript no-emit: PASS. Both edited upgrade tests transpile without
+  syntax diagnostics (not database execution or full test-file typechecking).
+- Root node tools/lint.mjs: PASS (purity, lane/migration order, money arithmetic,
+  commercial boundaries). Existing computed-import notices remain nonblocking.
+- Vitest list collects entitlement-upgrade, SERIOUS-B5 and LP-0 grant-freeze:
+  PASS, 20 tests collected, not executed.
+- git diff --check: PASS; unmerged index entries: none; 0306 matches HEAD bytes.
+
+A helper invocation initially used the API directory for repository-relative
+paths and exited before editing; reran the edits from the repository root.
+No package installation, Git write, PostgreSQL start, localhost, browser,
+provider, real data, money or release action occurred. PostgreSQL grant-freeze,
+authority-path and upgrade suites remain for GitHub CI after router push.
+Ready commit message: /tmp/ch8-rest-20261028T214749Z-commit-msg.txt.
