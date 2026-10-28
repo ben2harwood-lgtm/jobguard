@@ -1,4 +1,4 @@
-// SV-7A intake writer (0297). Real PostgreSQL; CI only.
+// SV-7A intake writer (0321). Real PostgreSQL; CI only.
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {JobSourceError,JobWorkStateError} from "@jobguard/core";

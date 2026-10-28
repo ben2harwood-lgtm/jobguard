@@ -522,7 +522,7 @@ async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snaps
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
-// SV-7A (0297): only the intake and authorized SHARE-lock routines, migration-owned, definer, runtime EXECUTE only.
+// SV-7A (0321): only the intake and authorized SHARE-lock routines, migration-owned, definer, runtime EXECUTE only.
 async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [["sv7a_intake_job_source", "t uuid, j uuid, digest text, source text, input jsonb"], ["sv7a_require_watchdog_live_lock", "t uuid, j uuid, digest text"]];

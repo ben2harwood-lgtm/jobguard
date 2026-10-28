@@ -1,4 +1,4 @@
-# 0297 — SV-7A checked intake writer
+# 0321 — SV-7A checked intake writer
 
 Adds `app.sv7a_intake_job_source(uuid,uuid,text,text,jsonb)`: a SECURITY DEFINER routine,
 migration-owned, runtime EXECUTE only, that records an off-site job-diary note or an owner-entered
