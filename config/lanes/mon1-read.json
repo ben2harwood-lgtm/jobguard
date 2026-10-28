@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon1-read"
       ],
-      "note": "RED: MON-1 remainder part 3, company session read and screen; migration 0301 follows parent ledger 0300. Lists only this PR’s paths relative to codex/sandbox/mon1-ledger; own lane file is authorized automatically. PostgreSQL and browser checks run in CI.",
+      "note": "RED: MON-1 remainder part 3, company session read and screen; migration 0301 follows main ledger 0300. Lists exactly this PR's paths relative to current main; its own lane file is authorized automatically. Catch-up preserves both sides of shared expectations; PostgreSQL and browser checks run in CI.",
       "allow": [
         "apps/api/src/meter-today.application.ts",
         "apps/api/src/workspace/index.ts",
