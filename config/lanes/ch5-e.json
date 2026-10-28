@@ -6,7 +6,7 @@
         "codex/sandbox/ch5-e"
       ],
       "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
-      "note": "CH-5 combined current-main catch-up plus CH5-A/J synthetic invoiced writer/API/journey, migration 0312. RED. Live grace admission, imported history and final-account source/lock/catch consumption remain explicitly refused.",
+      "note": "CH-5 combined current-main catch-up plus CH5-A/J synthetic invoiced writer/API/journey, migration 0324. RED. Live grace admission, imported history and final-account source/lock/catch consumption remain explicitly refused. Renumber-only catch-up: 0323 private refusal precedes 0324 invoiced writer; SQL bytes unchanged.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
@@ -29,8 +29,14 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
         "packages/core/src/index.ts",
+        "packages/db/migration-notes/0224_job_import_v3.md",
         "packages/db/migration-notes/0312_job_import_v3_invoiced.md",
+        "packages/db/migration-notes/0323_job_import_v3.md",
+        "packages/db/migration-notes/0324_job_import_v3_invoiced.md",
+        "packages/db/migrations/0224_job_import_v3.sql",
         "packages/db/migrations/0312_job_import_v3_invoiced.sql",
+        "packages/db/migrations/0323_job_import_v3.sql",
+        "packages/db/migrations/0324_job_import_v3_invoiced.sql",
         "packages/db/src/imported-evidence-provenance-repository.ts",
         "packages/db/src/imported-observation-reader.ts",
         "packages/db/src/index.ts",

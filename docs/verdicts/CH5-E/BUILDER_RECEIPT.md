@@ -1,3 +1,38 @@
+## Renumber-only catch-up for PR #386 — 28 October 2026
+
+Renamed 0224_job_import_v3 to 0323_job_import_v3 and
+0312_job_import_v3_invoiced to 0324_job_import_v3_invoiced, preserving the
+private-refusal-before-invoiced-writer order and both SQL files byte for byte.
+Used the exported `planRenumber` from `tools/migration-renumber.mjs` with the
+reserved 0323/0324 range; applied filesystem moves because its CLI write mode
+requires a clean tree and writes Git's index. No Git write commands were run.
+Renamed notes, updated upgrade-test filenames and predecessor (main's 0300),
+and extended this branch's lane paths. Kept both import and enterprise exports
+when resolving the workspace barrel conflict. The privilege inventory retains
+the union of HEAD and origin/main entries, verified by key/identity.
+
+Local checks actually run:
+
+- `node --check tools/migration-renumber.mjs` — passed.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/job-import-v3.application.test.ts src/imported-shadow-source-adapter.test.ts` — 2 files, 8 tests passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/migrate-discovery.test.ts` — 1 file, 3 tests passed.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — passed.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `git diff --check` — passed.
+- Read-only Node assertions — SQL bytes match original HEAD; reserved order,
+  upgrade-test references, privilege-list union and catch-up lane coverage pass.
+- `node tools/agent-lane-boundary-lint.mjs --lane=ch5-e` — FAILED on inherited
+  CH5-B/P paths and other lanes' incoming merge entries. In particular,
+  config/lanes/ch5-b.json and config/lanes/ch5-p.json are outside this lane;
+  this repair does not change those files or weaken lane enforcement.
+
+Router action required before committing: finalize the resolved merge in Git's
+index and reconcile the inherited lane-boundary rejection. The workspace file
+has no conflict markers, but Git still records it as unmerged because the index
+is read-only here. No PostgreSQL or browser suite was run; those require GitHub
+CI. RED remains applicable to the enclosing CH-5 PR; no behavior changed in
+this catch-up and no independent review is claimed.
+
 # CH-5 current-main catch-up and CH5-A/J candidate — 28 October 2026
 
 RED: charging control and tenant isolation. Synthetic only. No commit, push,
@@ -5,7 +40,7 @@ merge, live provider, real customer data or release performed in this sandbox.
 The supplied SIMPLE_LOOP is the current build rulebook; the older receipt below
 is retained as history, not current coordination authority.
 
-Implemented migration 0312's positive invoiced writer, authenticated Nest/Next
+Implemented migration 0324's positive invoiced writer, authenticated Nest/Next
 preview/adopt/read APIs, and a browser preview/attestation/saved-import page. One
 immutable aggregate stores the approved v3 fixture, terms and baseline/scope
 mapping, original result, session-bound public request hash and an invoiced-stage
@@ -16,7 +51,7 @@ a different command for the same source fixture is refused. Source job locking
 precedes receipt and audit locks. Actual history manifests are refused.
 
 Resolved the SERIOUS-B5 catch-up conflict by preserving both sides' exact-object
-upgrade checks. Added the 0312 catalogue/RLS/grant expectations and four narrow
+upgrade checks. Added the 0324 catalogue/RLS/grant expectations and four narrow
 privilege-inventory entries for review. No generic inventory/fingerprint refresh.
 The table is FORCE RLS, tenant-qualified and SELECT-only for the runtime; only
 the session-authorized checked routine can write it. Existing canonical JSON is
@@ -77,7 +112,7 @@ Executed local evidence (installed Node 24.17.0 / Vitest 4.1.12):
 CI still must execute PostgreSQL fresh/upgrade/race/authorization/RLS/locked-bill
 cases and CH-5.spec.ts on the real browser. PostgreSQL/localhost were not started.
 No whole-repository test/build pass or independent review is claimed. Migration
-0312 notes specify forward fix/revocation with immutable rows retained.
+0324 notes specify forward fix/revocation with immutable rows retained.
 
 CH-5 as a whole is NOT complete: the stored admission and historical catch/source
 work above are outstanding. Do not silently mark its finish-list line done.
@@ -104,7 +139,7 @@ No Git-writing commands. Changes remain in this working tree for dispatcher comm
 
 ## Scope and dependency evidence
 
-P has preview/refusal only; 0224 installs an uncallable unconditional SQL refusal,
+P has preview/refusal only; 0323 installs an uncallable unconditional SQL refusal,
 not a successful baseline/terms/history writer or protected completion ledger.
 B returns never with IMPORTED_BASELINE_SOURCE_HANDOFF_HELD, no accepted baseline
 map. ImportedObservationBundleV1 and worker/sink import-source acknowledgement

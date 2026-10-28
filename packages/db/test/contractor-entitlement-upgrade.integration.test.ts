@@ -57,6 +57,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.enterprise_fee_statement_approval":[],
  "app.enterprise_fee_statement_dispute":[],
  "app.enterprise_fee_statement_section":[],
+ "app.platform_enterprise_fee":[],
+ "app.platform_enterprise_fee_line":[],
  "app.recovery_attribution_revision":[],
  "app.recovery_attribution_command":[],
  "app.recovery_attribution_reassessment":[],

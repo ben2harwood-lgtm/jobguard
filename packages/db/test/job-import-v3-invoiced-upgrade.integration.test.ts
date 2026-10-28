@@ -8,8 +8,8 @@ import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => { await closeWorkFixture(f); });
-it("CH-5 0312 preserves existing job rows and v1 baseline fields, then repeats migrate safely", async () => {
-  const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0312_job_import_v3_invoiced.sql"));
+it("CH-5 0324 preserves existing job rows and v1 baseline fields, then repeats migrate safely", async () => {
+  const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0324_job_import_v3_invoiced.sql"));
   expect(index).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, index)) {

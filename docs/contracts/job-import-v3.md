@@ -185,7 +185,7 @@ v1 change is introduced; revert these additive files to withdraw the proposal.
 
 The original status above describes the earlier pure/held build. This branch now
 adds an authenticated API and browser journey at `/jobs/:id/parties/import-v3`
-(and `/preview`), plus the synthetic **invoiced** writer in migration 0312.
+(and `/preview`), plus the synthetic **invoiced** writer in migration 0324.
 `JobImportV3Repository.read` is the positive immutable import reader; it returns
 `job-import-read.v3`. Its stored snapshot and result bind the original parties,
 v3 terms and baseline/scope identities. This does not enable the separate imported

@@ -98,3 +98,6 @@ export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
 export { JobImportV3Application } from "../job-import-v3.application.js";
 export { JobImportV3Error } from "@jobguard/db";
+
+export * from "../contractor/enterprise-dashboard.application.js";
+export * from "../contractor/enterprise-baseline.application.js";
