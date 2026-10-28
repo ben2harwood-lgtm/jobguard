@@ -84,7 +84,7 @@ BEGIN
  IF NOT FOUND OR manifest.processing_source_count<>(SELECT count(*) FROM app.final_check_processing_source WHERE tenant_id=t AND job_id=j AND manifest_id=m) THEN RAISE EXCEPTION 'FINAL_CHECK_PENDING'; END IF;
  -- The job's own walk-it text is listed as builder capture, not scanned; it is the only entry exempt from processing.
  IF EXISTS(SELECT 1 FROM app.final_check_processing_source s LEFT JOIN LATERAL(SELECT status,input_hash FROM app.final_check_source_attempt WHERE tenant_id=t AND job_id=j AND manifest_id=m AND source_id=s.id ORDER BY sequence DESC LIMIT 1)a ON true
-  WHERE s.tenant_id=t AND s.job_id=j AND s.manifest_id=m AND s.source_kind<>'builder_capture_not_scanned' AND (a.status IS NULL OR a.status NOT IN('zero_result','detected') OR a.input_hash<>s.input_hash OR NOT s.processable
+  WHERE s.tenant_id=t AND s.job_id=j AND s.manifest_id=m AND NOT (s.source_kind='builder_capture_not_scanned' AND s.evidence_id IS NULL) AND (a.status IS NULL OR a.status NOT IN('zero_result','detected') OR a.input_hash<>s.input_hash OR NOT s.processable
    OR NOT EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=t AND e.job_id=j AND e.id=s.evidence_id AND app.final_lock_hash(to_jsonb(e))=s.input_hash)
    OR EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=s.evidence_id))) THEN RAISE EXCEPTION 'FINAL_CHECK_PENDING'; END IF;
  PERFORM 1 FROM app.shadow_commercial_signal WHERE tenant_id=t AND job_id=j ORDER BY id FOR UPDATE;

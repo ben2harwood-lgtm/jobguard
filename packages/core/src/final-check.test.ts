@@ -13,10 +13,12 @@ describe("SV-5 pure reconciliation",()=>{
   expect(checkSourceCompletion([source],[{...source,inputHash:"b".repeat(64),status:"zero_result"}])).toBe(false);
  });
  it("the job's own walk-it text is listed as builder capture and never needs a scan result",()=>{
-  const walkIt={id:id(3),inputHash:"a".repeat(64),sourceKind:FINAL_CHECK_BUILDER_CAPTURE},photo={id:id(4),inputHash:"b".repeat(64),sourceKind:"completion_photo"};
+  const walkIt={id:id(3),inputHash:"a".repeat(64),sourceKind:FINAL_CHECK_BUILDER_CAPTURE,evidenceId:null},photo={id:id(4),inputHash:"b".repeat(64),sourceKind:"completion_photo"};
   expect(checkSourceCompletion([walkIt],[])).toBe(true);
   expect(checkSourceCompletion([walkIt,photo],[])).toBe(false);
   expect(checkSourceCompletion([walkIt,photo],[{...photo,status:"zero_result"}])).toBe(true);
+  // An evidence file whose free-text type collides is not exempt.
+  expect(checkSourceCompletion([{...walkIt,evidenceId:id(5)}],[])).toBe(false);
  });
  it("SV5-04 empty inventory has an explicit normal zero-result message",()=>{
   expect(checkSourceCompletion([],[])).toBe(true);

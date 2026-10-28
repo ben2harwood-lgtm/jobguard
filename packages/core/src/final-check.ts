@@ -21,9 +21,11 @@ export type FinalCheckSourceStatus="pending"|"failed"|"unsupported"|"zero_result
 /** Compare every inventory identity to its latest append-only result, including input bytes. */
 /** The job's own walk-it text: listed in the inventory as builder capture (AGENTS 5.14), never scanned. */
 export const FINAL_CHECK_BUILDER_CAPTURE="builder_capture_not_scanned";
-export function checkSourceCompletion(sources:readonly {id:string;inputHash:string;sourceKind?:string}[],results:readonly {id:string;inputHash:string;status:FinalCheckSourceStatus}[]):boolean{
+/** Only the job-linked capture entry qualifies; an evidence file whose free-text type collides is still scanned. */
+export const isBuilderCaptureNotScanned=(s:{sourceKind?:string;evidenceId?:string|null}):boolean=>s.sourceKind===FINAL_CHECK_BUILDER_CAPTURE&&s.evidenceId===null;
+export function checkSourceCompletion(sources:readonly {id:string;inputHash:string;sourceKind?:string;evidenceId?:string|null}[],results:readonly {id:string;inputHash:string;status:FinalCheckSourceStatus}[]):boolean{
  if(new Set(sources.map(s=>s.id)).size!==sources.length)return false;
- return sources.every(s=>{if(s.sourceKind===FINAL_CHECK_BUILDER_CAPTURE)return true;const r=results.findLast(r=>r.id===s.id);return r?.inputHash===s.inputHash&&(r.status==="zero_result"||r.status==="detected");});
+ return sources.every(s=>{if(isBuilderCaptureNotScanned(s))return true;const r=results.findLast(r=>r.id===s.id);return r?.inputHash===s.inputHash&&(r.status==="zero_result"||r.status==="detected");});
 }
 export function finalCheckIncludedReference(answer:"already_included"|"in_original_scope",id:string|null,lines:readonly string[],baseline:readonly string[]):"already_included"|"in_original_scope"|"attribution_disputed"{
  if(id===null)return "attribution_disputed";

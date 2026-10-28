@@ -2,7 +2,7 @@
 // Its own walk-it text stays listed as builder capture, not scanned. Real PostgreSQL; CI only.
 import {createHash,randomUUID} from "node:crypto";
 import {afterAll,beforeAll,expect,it} from "vitest";
-import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,finalCheckTenant,insertFinalCheckEvidence,type FinalCheckFixture} from "./final-check-fixture.js";
 import {FinalCheckRepository} from "../src/final-check-repository.js";
 let f:FinalCheckFixture;beforeAll(async()=>{f=await createFinalCheckFixture()},60000);afterAll(async()=>closeFinalCheckFixture(f));
 it("the job's own walk-it text is listed as builder capture, not scanned, and a captured job completes its check",async()=>{
@@ -24,4 +24,15 @@ it("the job's own walk-it text is listed as builder capture, not scanned, and a 
  // The completed check still lists the walk-it text, unscanned, in its frozen inventory.
  const after=await repo.manifest(a.context,a.jobId,m.id);
  expect(after.result).not.toBeNull();expect(after.sources).toEqual([expect.objectContaining({sourceKind:"builder_capture_not_scanned",sourceRef:captureId,status:"pending"})]);
+});
+it("an evidence file whose free-text type collides with builder_capture_not_scanned is not exempt from scanning",async()=>{
+ const a=await seedFinalCheckJob(f),evidenceId=await insertFinalCheckEvidence(f,a,"builder_capture_not_scanned");
+ await a.lock();
+ const repo=new FinalCheckRepository(f.shadow),m=await repo.begin(a.context,a.jobId);
+ expect(m.sources).toEqual([expect.objectContaining({sourceKind:"builder_capture_not_scanned",evidenceId})]);
+ // Unscanned, it holds completion in SQL and in the worker.
+ await expect(repo.reconcile(a.context,a.jobId,m.id,[])).rejects.toThrow(/FINAL_CHECK_PENDING/u);
+ const {createFinalCheckWorker}=await import("./final-check-worker-factory.js");
+ await expect(createFinalCheckWorker(f.shadow,[],"synthetic_demo").execute(a.context,{version:"final-check.task.v1",jobId:a.jobId,manifestId:m.id})).rejects.toThrow(/FINAL_CHECK_PENDING/u);
+ expect((await repo.manifest(a.context,a.jobId,m.id)).result).toBeNull();
 });
