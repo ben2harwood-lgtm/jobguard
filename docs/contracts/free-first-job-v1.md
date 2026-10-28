@@ -101,7 +101,7 @@ under Ben’s issued authority; it does not enable admission or settle B/C inter
 The old elapsed-day clock remains preview-only, never persisted billing authority.
 
 20 October supersession — MON-3-P-B adds disabled fictional verification/card persistence
-in actual migration `0240_free_first_job_admission.sql`; A's merged migration is
+in actual migration `0316_free_first_job_admission.sql`; A's merged migration is
 `0194_free_first_job_keys.sql` (historical 0192 references above are superseded).
 See `free-first-job-persistence-v1.md` for strict request/result boundaries, immutable
 business bindings, owner/session replay checks and the disabled activation seam.

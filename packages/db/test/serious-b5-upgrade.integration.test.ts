@@ -100,6 +100,9 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const livePrompt = await livePromptAdditions(before, after);
  const admission = await trialAdmissionAdditions(before, after);
  const finalCheck = await finalCheckAdditions(before, after);
+ const eligibility = after.routines.filter(r => r.nspname === "app" && r.proname === "mon3_read_eligibility");
+ expect(eligibility.map(r => r.proname)).toEqual(["mon3_read_eligibility"]);
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "mon3_read_eligibility")).toBe(false);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -141,7 +144,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  };
  return {
   rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...admission.rows, ...finalCheck.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...admission.routines, ...finalCheck.routines], after.routines),
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...admission.routines, ...finalCheck.routines, ...eligibility], after.routines),
   relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...admission.relations, ...finalCheck.relations], after.relations),
   policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...admission.policies, ...finalCheck.policies], after.policies),
  };
@@ -334,14 +337,14 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
 
 // MON-3-P-B: ONLY the four new side tables and five new routines from 0235.
 async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
- const tables = ["trial_admission", "trial_business_verification", "trial_card_attempt", "trial_card_result"];
- const names = ["mon3_admit", "mon3_audit", "mon3_owner", "mon3_record_card_fixture", "mon3_request_card"];
+ const tables = ["trial_admission", "trial_business_verification", "trial_card_attempt", "trial_card_result", "trial_start", "trial_end_source", "trial_subscription_source"];
+ const names = ["mon3_admit", "mon3_audit", "mon3_owner", "mon3_record_card_fixture", "mon3_request_card", "mon3_activate", "mon3_build_source", "mon3_capture_lifecycle", "mon3_pin_source", "mon3_read_lifecycle", "mon3_require_registered_admission", "mon3_simulate_card", "mon3_trial_date", "mon3_validate_billing"].sort();
  const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
  expect(routines.map(r => r.proname).sort()).toEqual(names);
  const indexRows = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x
   JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
   JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows;
- for (const [table, count] of [["trial_admission",3],["trial_business_verification",2],["trial_card_attempt",3],["trial_card_result",2]] as const) expect(indexRows.filter(r => r.table_name === table)).toHaveLength(count);
+ for (const [table, count] of [["trial_admission",4],["trial_business_verification",2],["trial_card_attempt",3],["trial_card_result",2],["trial_start",3],["trial_end_source",1],["trial_subscription_source",1]] as const) expect(indexRows.filter(r => r.table_name === table)).toHaveLength(count);
  const relationNames = [...tables, ...indexRows.map(r => r.relname as string)];
  const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());

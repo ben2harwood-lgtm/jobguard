@@ -34,6 +34,9 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
  "app.trial_admission":[],
+ "app.trial_start":[],
+ "app.trial_end_source":[],
+ "app.trial_subscription_source":[],
  "app.trial_business_verification":[],
  "app.trial_card_attempt":[],
  "app.trial_card_result":[],
@@ -44,6 +47,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  WHERE n.nspname='app' AND p.proname='mon1_capture_small_trip' ORDER BY 1,2,3`)).rows).toEqual([
  {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
  ]);
+ // 0236 successor routine follows 0208; preserve both additive catalogue expectations.
+ expect((await c.admin.query("SELECT proname FROM pg_proc WHERE oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure")).rows).toEqual([{proname:"mon3_read_eligibility"}]);
 });
 it("negative controls detect changed prior rows grants and shapes",async()=>{
  const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);

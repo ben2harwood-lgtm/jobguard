@@ -103,3 +103,6 @@ export * from "./contractor-entitlement-authority.js";
 
 export * from "./free-first-job-persistence.js";
 export { utcDatetimeV1 } from "./datetime.js";
+
+export * from "./free-first-job-calendar.js";
+export * from "./free-first-job-conversion.js";

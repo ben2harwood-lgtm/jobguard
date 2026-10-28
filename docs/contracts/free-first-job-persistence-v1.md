@@ -3,7 +3,7 @@
 Issued 20 October 2026. Disabled synthetic foundation only; MON-3 remains incomplete.
 No pricing-policy approval, release authority, customer data, network, collection or billing date is supplied.
 
-Migration `0240_free_first_job_admission.sql` adds four immutable side tables. It changes no existing table or function.
+Migration `0316_free_first_job_admission.sql` adds four immutable side tables. It changes no existing table or function.
 `trial_business_verification` is one migration-owned fictional verified fixture per tenant, with source/version, independent verification time and available normalized company/phone facts. A phone alone is not sufficient trial identity. There is no runtime verification endpoint, browser verification flag, support override, identity replacement or merge. Fixture insertion by migration ownership is **not real business verification**.
 
 `trial_card_attempt` stores a server-minted attempt bound by composite FK to that business verification, current owner and request command. `trial_card_result` stores one terminal simulated result per attempt, retaining the verification binding. Requested is represented by the attempt without a result. Redirect-only, failed, cancelled and outcome-unknown have no reference/fingerprint and cannot qualify. Only completed has both opaque `sim_ref_` and `sim_fp_` values. They are constructed by the migration-owned fixture writer from the stored attempt and one of two fictional instruments, never accepted from browser output. Instrument fingerprints remain stable across attempts and tenants; business identity still requires independent phone/company facts. No raw card data or hosted URL exists.
@@ -27,3 +27,29 @@ The dispatcher would own exact command receipt/replay and audit-last, but B cann
 Core `admissionPrerequisites` consumes strict server-fact fixtures only and returns `awaiting_c`, never permission. No provisional unidentified skip exists: first-job skip needs independently sufficient identity (company, or verified phone plus completed card). A requested/redirected/failed/cancelled/unknown result is never a completed same-business card. Already active returns an existing-job prerequisite classification, not a new grant or actual command replay.
 
 Acceptance: IDENTITY-01/LIVE-01/CARD-01/ATOMIC-01/AUTH-01/REPLAY-01/UPGRADE-01 have bounded fixture/unit/denial and PostgreSQL test sources. PostgreSQL execution, shared catalog integration and successful admission remain holds, not passes. A KEY-01/02/03 are preserved. CLOCK/END/BILL/FINAL belong to C. No subscription statement, original-anchor adjustment, trial end, conversion, Final Check or fee illustration changes here. MON-3 stays open.
+
+## 28 October MON-3 END/CONV/WIRE composition
+
+Reserved migration `0317_free_first_job_eligibility.sql` adds immutable lifecycle
+sources and pinned subscription inputs after the unchanged 0316 foundation. New
+checked `mon3_activate` uses current company-owner authority, exact accepted
+quote/parties, original dispatcher approval and global key claims. B's legacy
+`mon3_admit` remains closed. Main's capacity prerequisite currently refuses new
+activation; it is never bypassed in runtime. Imports, historical conversions,
+shared practice and missing verified identity also refuse.
+
+Normal synthetic company sessions can read `/jobs/:id/trial`, request a card,
+and explicitly complete a fictional card setup. Next exposes the same route
+under `/api`; switch-live retains `/jobs/:id/quotes/activation`. No browser can
+supply an identity, card fingerprint, successful outcome, timestamp or trial flag.
+The UI is `/jobs/:id/trial`, linked from the job workspace. First-only Skip and
+second-job Add a card are advisory offers; the command rechecks every condition.
+The simulation uses a fixed fictional card and is not a hosted/live provider.
+
+Trial days zero base and extras. Conversion uses the existing London clock,
+keeps lock/close day free, begins on the successful second activation date or
+exclusive day-90 midnight, and preserves the original monthly anchor. Initial
+pre-start stub dates are free. Accepted monthly terms are required for paid
+continuation. Wholly pre-start or unclosed periods and unsupported corrections
+refuse. Issued documents keep their pinned input; a changed conversion boundary
+blocks affected positive collection rather than rewriting or charging early.

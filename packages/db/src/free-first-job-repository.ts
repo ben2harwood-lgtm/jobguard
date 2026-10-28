@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 export class FreeFirstJobPersistenceError extends Error {
- constructor(readonly code:"INVALID_FREE_FIRST_JOB_INPUT"|"FREE_FIRST_JOB_ACCESS_DENIED"|"FREE_FIRST_JOB_SYNTHETIC_ONLY"|"FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C"|"FREE_FIRST_JOB_UNAVAILABLE"|"COMMAND_CONFLICT"|"EXACT_ACTIVATION_AUTHORIZATION_MISMATCH"|"TRIAL_IDENTITY_REQUIRED"){super(code);this.name="FreeFirstJobPersistenceError";}
+ constructor(readonly code:"INVALID_FREE_FIRST_JOB_INPUT"|"FREE_FIRST_JOB_ACCESS_DENIED"|"FREE_FIRST_JOB_SYNTHETIC_ONLY"|"FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C"|"FREE_FIRST_JOB_UNAVAILABLE"|"COMMAND_CONFLICT"|"EXACT_ACTIVATION_AUTHORIZATION_MISMATCH"|"TRIAL_IDENTITY_REQUIRED"|"TRIAL_COMPLETED_CARD_REQUIRED"|"CAPACITY_ADMISSION_UNAVAILABLE"|"TRIAL_TARGET_UNAVAILABLE"|"TRIAL_SUBSCRIPTION_TERMS_REQUIRED"|"TRIAL_CARD_ATTEMPT_REQUIRED"|"TRIAL_IDENTITY_CONFLICT"|"TRIAL_LEGACY_POLICY_CONVERSION_FORBIDDEN"){super(code);this.name="FreeFirstJobPersistenceError";}
 }
 export const trialAdmissionV1=z.object({
  version:z.literal("trial-admission.v1"),activationId:z.string().uuid(),termsId:z.string().uuid(),jobId:z.string().uuid(),
@@ -21,6 +21,7 @@ export function trialFailure(error:unknown):never{
  if(error instanceof FreeFirstJobPersistenceError)throw error;
  const message=error instanceof Error?error.message:"";
  if(message==="METER_FORBIDDEN"||message==="FREE_FIRST_JOB_ACCESS_DENIED")throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_ACCESS_DENIED");
+ if(["TRIAL_SUBSCRIPTION_TERMS_REQUIRED","TRIAL_COMPLETED_CARD_REQUIRED","CAPACITY_ADMISSION_UNAVAILABLE","TRIAL_TARGET_UNAVAILABLE","TRIAL_CARD_ATTEMPT_REQUIRED","TRIAL_IDENTITY_CONFLICT","TRIAL_LEGACY_POLICY_CONVERSION_FORBIDDEN"].includes(message))throw new FreeFirstJobPersistenceError(message as FreeFirstJobPersistenceError["code"]);
  if(message==="FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C"||message==="COMMAND_CONFLICT"||message==="TRIAL_IDENTITY_REQUIRED"||message==="EXACT_ACTIVATION_AUTHORIZATION_MISMATCH")throw new FreeFirstJobPersistenceError(message);
  throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_UNAVAILABLE");
 }
