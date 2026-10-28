@@ -17,6 +17,22 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
+  // Coordinator ruling 107: classification never grants command authority.
+  "/api/jobs/[id]/work-state#finish": "watchdog_live_only",
+  "nest:/jobs/:id/work-state#finish": "watchdog_live_only",
+  "command:WorkState.finish": "watchdog_live_only",
+  "/api/jobs/[id]/work-state#cancel_finish": "watchdog_live_only",
+  "nest:/jobs/:id/work-state#cancel_finish": "watchdog_live_only",
+  "command:WorkState.cancel_finish": "watchdog_live_only",
+  "/api/jobs/[id]/work-state#close": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#close": "pre_live_allowed",
+  "command:WorkState.close": "pre_live_allowed",
+  "/api/jobs/[id]/work-state#reopen": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#reopen": "pre_live_allowed",
+  "command:WorkState.reopen": "pre_live_allowed",
+  "/api/jobs/[id]/work-state#link": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#link": "pre_live_allowed",
+  "command:WorkState.link": "pre_live_allowed",
   // ENT-8A-P: contractor mutations enforce their own authority-first live-job guard.
   "command:ImportMaterialsIssue": "pre_live_allowed",
   "command:RegisterCompletionObservation": "pre_live_allowed",
@@ -137,6 +153,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-account/terms": "post_live_billing",
   "/api/jobs/[id]/final-account/review-extras": "post_live_billing",
   "nest:/jobs/:id/final-account/review-extras": "post_live_billing",
+  "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
+  "command:RecordFinalCheckDisposition": "post_live_billing",
   "command:LockFinalAccount": "post_live_billing",
   "command:RecordFinalAccountDisposition": "post_live_billing",
   "command:AcceptFinalCheckTerms": "post_live_billing",
@@ -189,6 +207,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
 /** Business entrypoints used by the registry's live-only commands. */
 export const watchdogCommandGuards = [
+  // Work-state prechecks hold SHARE; SQL uses the event serializer without upgrading.
+  { file: "job-work-state-repository.ts", method: "finish", calls: 1 },
+  { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 1 },
   { file: "purchase-order-repository.ts", method: "revise", calls: 1 },
   { file: "purchase-order-repository.ts", method: "place", calls: 1 },
   { file: "supplier-document-repository.ts", method: "intake", calls: 1 },

@@ -7,7 +7,7 @@ import { canonicalJson } from "./work-order-repository.js";
 export type BillingProjection=ReturnType<typeof deriveUnambiguousBilling>;
 export type ExportResult={batchId:string|null;lineCount:number};
 export type BillingRead={version:"contractor-billing-projection.v1";exports:{id:string;artifact:ReturnType<typeof renderBillingExport>;jsonHash:string;csvHash:string;csv:string}[];invoices:{source:string;invoiceNumber:string;projection:BillingProjection;runId:string}[];quarantine:{fact_id:string;reason:string}[];deliveries:Record<string,unknown>[];reconciliation:ReturnType<typeof contractorBillingReconciliation>};
-function parse<T>(schema:{safeParse(raw:unknown):z.SafeParseReturnType<unknown,T>},raw:unknown):T {const r=schema.safeParse(raw);if(!r.success)throw new ContractorBillingError("BILLING_INVALID");return r.data;}
+function parse<T>(schema:{safeParse(raw:unknown):z.ZodSafeParseResult<T>},raw:unknown):T {const r=schema.safeParse(raw);if(!r.success)throw new ContractorBillingError("BILLING_INVALID");return r.data;}
 export function billingDatabaseFailure(error:unknown):never {
  if(error instanceof ContractorBillingError)throw error;
  const e=error as {code?:string;message?:string};const known=contractorBillingErrorCodes.find(c=>c===e.message||c===e.code);if(known)throw new ContractorBillingError(known);
