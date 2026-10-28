@@ -3,7 +3,7 @@ import { contractorPermits, type ContractorGrant, type ContractorTarget } from "
 import { contractorResidentBoundaryV1 } from "./contractor-parties.js";
 import { assertSorQuantity, SorPricingError, sorMoneyV1, sorQuantityV1 } from "./sor-pricing.js";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 /** Typed codes a single row can be refused with; each is stored in that row's receipt. */
 export const workOrderRowErrorCodes = ["INVALID_ROW", "DUPLICATE_LINE_REFERENCE", "INVALID_QUANTITY", "NEGATIVE_QUANTITY", "QUANTITY_PRECISION", "INVALID_ADJUSTMENT", "NEGATIVE_MULTIPLIER", "MONEY_OUT_OF_RANGE", "SOR_VERSION_NOT_FOUND", "AMBIGUOUS_SOR_VERSION", "UNKNOWN_SOR_CODE", "CONTRACTOR_PARTIES_REQUIRED", "PARTY_NOT_FOUND", "CUSTOMER_TYPE_MISMATCH", "NOT_FOUND", "STALE_REVISION", "PARTY_CHANGE_REFUSED", "ASSIGNMENT_INVALID", "ORDER_NOT_FOUND"] as const;
 export type WorkOrderRowErrorCode = typeof workOrderRowErrorCodes[number];
@@ -192,7 +192,7 @@ export const workOrderSampleCatalogV1: readonly Readonly<{ id: WorkOrderSampleId
   { id: "orders_with_errors", label: "Orders with problems (7 rows)", description: "Two good orders and five rows that each show a typed error: unknown code, too many decimals, missing site, quantity below zero, price out of range." },
   { id: "revised_orders", label: "Revised orders (changes to the starter orders)", description: "Changes two starter orders (one gets a new line and a new priority), cancels one and repeats one unchanged. Import the starter orders first." },
 ];
-const uuidValue = z.string().uuid();
+const uuidValue = z.guid({ error: "Invalid uuid" });
 export const workOrderImportRequestV1 = z.object({
   version: z.literal("work-order-import-request.v1"), environment: z.literal("synthetic_demo"), commandId: uuidValue,
   source: z.discriminatedUnion("kind", [
