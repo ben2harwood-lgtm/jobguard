@@ -2,7 +2,7 @@ import { readFile,readdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,describe,it,expect } from "vitest";
 import { selectIntegrityFamily,integrityActivitySql,integrityFamilySql } from "../src/commercial-integrity-v3-sources.js";
-import { actor,tenant,createIntegrityFixture,seedIntegrityJob,transaction,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
+import { actor,tenant,protectedFacts,reviewFor,createIntegrityFixture,seedIntegrityJob,transaction,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 const base={saved_v1_sample:false,provenance:"system_generated_quote",job_policy:null,activation_policy:null,terms_policy:null,terms_track:null,job_track:null,environment:null};
 describe("local family and architecture checks",()=>{
  it("family fails closed on contradictions, unsupported track, policy and imports",()=>{
@@ -37,7 +37,7 @@ describe("local family and architecture checks",()=>{
 describe("PostgreSQL zero/many hidden signal query log",()=>{
  let f:IntegrityFixture;beforeAll(async()=>{f=await createIntegrityFixture();},120000);afterAll(async()=>{await f?.close();});
  it("CI-P02 same executed query sequence and public values, with no hidden relation grants",async()=>{
-  const {job}=await seedIntegrityJob(f);
+  const {job}=await seedIntegrityJob(f),protectedBefore=await protectedFacts(f);
   const queries:string[]=[];
   // Record the statements actually sent to pg; controlled routines are inspected independently below.
   const original=f.runtime.connect.bind(f.runtime);
@@ -49,9 +49,27 @@ describe("PostgreSQL zero/many hidden signal query log",()=>{
   expect(queries).toEqual(sequence);expect(sequence.length).toBeGreaterThan(5);expect(sequence.join("\n")).not.toMatch(/shadow_|reveal_shadow|set role/iu);
   expect({...many,result:{...many.result,evaluatedAt:zero.result.evaluatedAt}}).toEqual(zero);
   // Read-clock is intentionally different. All other serialized bytes must match.
-  const bodies=await f.admin.query("SELECT pg_get_functiondef(p.oid) body FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN ('authenticate_practice_session','ch6_integrity_authority','ch6_integrity_family','ch6_integrity_source_fingerprint')");
-  expect(bodies.rows).toHaveLength(4);for(const row of bodies.rows)expect(row.body).not.toMatch(/\bapp\.shadow_|reveal_shadow|SET ROLE/iu);
+  const bodies=await f.admin.query("SELECT pg_get_functiondef(p.oid) body FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN ('authenticate_practice_session','ch6_integrity_authority','ch6_integrity_family','ch6_integrity_source_fingerprint','ch6_integrity_sources')");
+  expect(bodies.rows).toHaveLength(5);for(const row of bodies.rows)expect(row.body).not.toMatch(/\bapp\.shadow_|reveal_shadow|SET ROLE/iu);
   const grants=await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.shadow_commercial_signal','SELECT') allowed");expect(grants.rows[0].allowed).toBe(false);
   expect(f.logs.join("")).toContain("SELECT");
+  const review=await reviewFor(f,job);
+  await f.repo.review(f.auth.context,actor,f.auth.digest,job,review);
+  await f.repo.review(f.auth.context,actor,f.auth.digest,job,review);
+  // Includes both legacy meter tables and MON-1 lifecycle source, place, correction and day ledgers.
+  // Hidden-signal volume, advisory reads, feedback and its replay cannot change these economic records.
+  expect(await protectedFacts(f)).toEqual(protectedBefore);
  });
+
+it("CH-6 unlocked reads never invoke even the private publication entry",async()=>{
+ const {job}=await seedIntegrityJob(f);
+ const definition=(await f.admin.query("SELECT pg_get_functiondef('app.ch6_integrity_published(uuid,uuid,text)'::regprocedure) body")).rows[0].body;
+ try{
+  await f.admin.query("CREATE OR REPLACE FUNCTION app.ch6_integrity_published(t uuid,j uuid,d text) RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$ BEGIN RAISE EXCEPTION 'PRELOCK_PUBLICATION_READ'; END $$");
+  const view=await f.repo.read(f.auth.context,actor,f.auth.digest,job);
+  expect(view.published).toBeNull();expect(view.result.findings.map(f=>f.kind)).toEqual(["invoice_or_payment_without_lock"]);
+ }finally{await f.admin.query(definition);}
+ await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_published($1,$2,$3)",[tenant,job,f.auth.digest]))).rejects.toMatchObject({code:"42501"});
+});
+
 });

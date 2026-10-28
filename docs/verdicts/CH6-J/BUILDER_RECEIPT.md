@@ -1,5 +1,11 @@
 # CH6-J builder receipt
 
+> Current state, 28 October 2026: CH-6 continuation is ready for router commit,
+> GitHub CI and the independent RED review. The final section below supersedes
+> previous incomplete/facade/source-port statuses. Explicit allocation avoidance
+> refuses the installed neutral-source handoff; it does not depend on SV-6.
+
+
 Status: BUILD-AHEAD IMPLEMENTATION; aggregate acceptance HELD. Builder source inspection and focused unit execution only. No independent model verdict or technical acceptance is asserted. No commit, push, merge, migration, live provider, spending or commercial external action.
 
 ## Authority and base
@@ -151,3 +157,205 @@ pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop --wo
 ```
 
 No screenshots, traces or CI result asserted. Current independent verdict remains REPAIR until the dispatcher commits and obtains a fresh exact-commit review. CI-J02's code regression is repaired by exact-main restoration; its browser acceptance remains unverified. J-S2 export hold is resolved by the merged parent. OpenAPI is locally checked via the equivalent Node invocation. J-S1 facade, ordinary source completeness, source navigation, explicit shell session integration, persisted v3 process-restart/tenant/shadow differential proof and separate acceptance remain HELD. No fee/meter/settlement/Final Check action enabled; no commercial external effect. Rollback is a source revert, with no migration/backfill. Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch6-j.txt` for the dispatcher.
+
+
+## 28 October 2026 — CH-6 integration on ch6-j (RED, incomplete)
+
+Read the current SIMPLE_LOOP.md, SIMPLICITY_RULE.md, repository AGENTS.md and
+BUILD_PLAN.md CH-6 / 10.2.9. SIMPLE_LOOP supersedes the old BUILD_RULES coordination
+rules. No git mutation, dependency download, database server, HTTP listener,
+provider call, real customer data or release was used.
+
+Resolved all four conflicted working files, retaining both controller sets and
+providers, both tenancy tests and the union of B5 additive routine expectations.
+OpenAPI was regenerated from the combined Nest controller graph and checked.
+The index remains unmerged because .git is read-only; the router must stage the
+resolved files. No git add/commit/merge/reset was run.
+
+Ported the three tools files by hand from the requested read-only diff
+origin/main...origin/codex/sandbox/ch6-b. No old branch receipt or lane was copied.
+Rebound exactly five existing unresolved-site fingerprints after inspecting their
+current code and branch diff: commands.ts lines 81/109 and extra-repository.ts
+line 75 have only the upstream UUID schema compatibility change in their lexical
+closure; site-visit-repository.ts lines 197/205 retain business execute(context,...)
+with upstream assigned-jobs query extraction in their enclosing class. Reasons,
+site count, violation detection and fail-closed new/stale-site checks are retained.
+These remain unresolved sites, not a claim of whole-program runtime isolation.
+
+Self-attack found and fixed two gaps in pure advisory evaluation:
+- Allocation avoidance previously counted absent/reversed/overallocated receipts.
+  It now requires exact unreversed receipt references, common amount basis, known
+  catch lines, bounded outstanding value, and a cumulative exact bigint allocation
+  total within receipt capacity (including other saved active allocations).
+  Receipts enter the finding source snapshot, so changed receipt revisions change
+  its fingerprint. Duplicate inputs deduplicate; reversed competing allocations
+  consume no capacity. Tests cover all of these boundaries.
+- A supplied published lock could cite a different bill. Its source ID must now
+  equal the lock ID, its server timestamp must equal the immutable cutoff and its
+  provenance must be server_recorded. Cross-job/tenant/session references and
+  duplicate receipt identities are rejected. Existing fixture locks were made
+  explicit; previous assertions remain.
+
+Added CI-only cross-tenant read/review/SQL-replay and RLS receipt isolation tests.
+Extended the zero/many-hidden query-log test to compare protected economic records
+after advisory reads, review and replay. The snapshot now includes MON-1 lifecycle
+sources, computations, place bindings, corrections, alerts and day ledgers as well
+as the prior meter, financial and document records. Added the v1-only cap-signal
+label and its browser assertion. Fixed the two existing one-argument Zod record
+calls in the DB feedback decoder and web legacy decoder for this merged base.
+No migration is needed for these changes; reserved 0309 remains unused.
+
+Local executed evidence (Node 24.17.0, installed pnpm 10.28.1 cached CLI):
+- core targeted Vitest: commercial-integrity-v3.test.ts,
+  commercial-integrity-v3.boundaries.test.ts, commercial-integrity.test.ts,
+  --maxWorkers=2: PASS, 3 files / 28 tests.
+- API targeted Vitest: commercial-integrity-v3.application.test.ts and
+  commercial-integrity-v3.boundary.test.ts, --maxWorkers=2: PASS, 2 files / 24 tests.
+- web targeted Vitest: commercial-integrity-v3.test.tsx, --maxWorkers=2:
+  PASS, 1 file / 44 tests (rerun after the decoder fix).
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: PASS, 250 tests.
+  New v3 guard alone: 81 tests. The tests mutate authority sources and prove
+  forbidden dependencies/SQL cannot feed pricing, meter, fees, entitlement or
+  account status within the scanner's documented source model.
+- core, db, API and web typecheck: PASS. DB/API and web initially found the Zod
+  decoder incompatibilities above; final runs passed after repair.
+- core, db and config builds: PASS (needed to refresh inherited stale runtime
+  exports before generating OpenAPI). API OpenAPI generation and --check via
+  node --import tsx src/generate-openapi.ts in apps/api: PASS; no listener.
+- core-purity, money-arithmetic and commercial-boundary lint: PASS. Core purity
+  reports its existing ten computed-import observations, not refusals.
+- TypeScript syntax parsing of four changed DB test suites: PASS, syntax only.
+- git diff --check: PASS. React checklist applied to the two minimal TSX changes;
+  no hook, lifecycle or architecture refactor. Existing source package imports
+  retained. No independent review is claimed.
+
+The initial system pnpm wrapper stalled and was interrupted; that run is not a
+pass. OpenAPI initially hit inherited stale DB/config dist exports, corrected by
+the builds above. One generation attempt from repository root could not resolve
+the API-local tsx package; the final generation/check used the API directory.
+
+Not run: PostgreSQL, migrations, browser/E2E, full workspace test/lint/build,
+GitHub CI or RED review. These sandbox limits are explicit in the user brief.
+Lane policy lists exactly these session's edited paths (plus its implicitly
+permitted own file), not the inherited MON-1/main merge tree.
+
+**Not complete: do not commit as a finished CH-6 piece.** This base still has only
+CI-F05 as a persisted source adapter. CI-F01–04 have no exact published evidence /
+catch-line financial DTO; CI-F06–08 still have empty ordinary quote/activation /
+lifecycle arrays and no installed bounded profile; CI-F09 has no authorised opaque
+identifier assertion source. Imported-v3 routing also stays unavailable. The
+installed job page still uses the v1 panel; its v3 component remains a standalone
+seam. This change does not turn those unavailable sources into empty successful
+assessments or turn pure synthetic fixtures into persisted-source proof. The
+remaining source-contract and page composition work must be completed before
+aggregate CH-6 is called finished. CI and one independent RED review are then
+required. The router handoff message is marked do not commit accordingly.
+
+
+## 28 October 2026 — CH-6 persisted sources and installed v3 continuation (RED)
+
+Ready for the router to stage the resolved merge and commit. This continuation
+supersedes the preceding incomplete status and the earlier temporary message.
+No commit, push, merge, release, PostgreSQL server, local listener, provider or
+real customer data was used. Current working files preserve both merge parents
+(HEAD 46eeb776 / incoming 36de0fe3); module tokens, shared relation expectations
+and catalogue helpers were checked against the actual incoming merge parent.
+The remote main ref moved during work; unrelated later main changes were not
+copied into this task. The index still has unresolved entries because it is
+read-only; conflict markers are removed from all four working files.
+
+Implemented:
+- 0309 source migration: exact owned accepted quote documents/party bindings,
+  ordinary activity, immutable linked server lifecycle events, and minimized
+  current-user account reuse; completed published Final Check evidence and the
+  exact locked gross bill/catch lines/receipts; bounded synthetic credit/writeoff
+  line sources and opaque user/phone/card assertions. Runtime has no direct
+  SELECT or write grant on either new source table, no new hidden table grant,
+  and no execution grant on the private publication/validation helpers.
+- Eight active rule families F01–F03/F05–F09 now have persisted source paths.
+  Missing inputs remain distinguishable from no findings. Assertions and exact
+  correction mappings are owner-loaded, versioned fictional fixtures; no live
+  identifier collection, raw phone/card matching or financial write route exists.
+- The source reader enters its publication port only after ordinary lock presence
+  and a completed, authorized publication bound to that exact lock/run. Public
+  `published` is always null; the page receives only cited advisory snapshots.
+  Pending/failed/unavailable publication refuses without private fallback reads.
+- The checked feedback writer reconstructs each supported kind's exact facts,
+  comparisons, profile and key in SQL before matching the canonical hash.
+  Historical 0227 receipts replay before recomputation and retain their bytes.
+- The installed page now uses the existing family-first journey, preserves saved
+  v1 values/test IDs and v1-only cap labelling, and shows actual v3 read/review
+  results plus readable refusals. Fabricated initial values are removed.
+- LP-0 registers the one runtime read capability and all four new routine
+  protection rows. SERIOUS-B5 and both exact tenancy/upgrade inventories union
+  the new source objects with both parents' rows. 0309 adds no backfill or change
+  to prior business facts. Migration notes give its forward-fix strategy.
+
+Explicit source refusals:
+- F04: `receipt_line_source_handoff_unavailable` / per-rule `source_absent`.
+  The installed receipt-line adapter refuses every save with
+  `RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED`, and 0258 explicitly quarantines its
+  storage. CH-6 does not read/promote that quarantine or bypass its gate. The
+  pure allocation detector retains exact capacity/reversal tests; SQL review
+  refuses that kind until a later accepted neutral-source handoff. This is
+  independent of SV-6. No speculative enabling switch was added.
+- Imported-v3 family still refuses without immutable adoption routing. No lock,
+  pending/failed/unauthorized publication, unsupported original completion
+  metadata, absent/expired opaque assertions, missing exact quote party/value
+  sources, missing catch gross-line amounts, and unmapped credit balances are
+  explicit unavailable inputs. Actual corrections keep F02's credit-basis
+  comparison unavailable rather than inventing net/gross adjustment semantics.
+- All non-synthetic process routes remain closed; D11 production approval and
+  real-data/provider/release gates are unchanged.
+
+Self-attack and tests added:
+- Duplicate/replayed source identities and feedback, distinct-session related
+  quotes, cross-tenant receipt replay/RLS, forged locked-bill references, original
+  evidence bindings, credit/line aggregate capacity and competing insert races.
+- Whole-invoice versus exact-line corrections, partial unmapped credit balances,
+  verified writeoff evidence and invalidation, exact locked gross receipt bounds
+  and payment reversal. Source hash timestamps are timezone-normalized, with a
+  UTC versus Pacific/Auckland regression. Unsupported isolation refuses with
+  retry semantics instead of using a stale aggregate snapshot.
+- Zero/many hidden query logs and byte comparison, a private publication trap
+  proving the unlocked read never invokes it, closed runtime grants, and full
+  protected-fact snapshots across reads/reviews/replays. Protected snapshots
+  include quote/cap, account/membership, fee/landing/journal, subscription and
+  MON-1 source/computation/place/correction/day ledgers.
+- The published financial-parent fixtures explicitly bypass predecessor setup
+  checks only while making fictional parent rows. CH-6 source guards, FK checks,
+  reads and review verification run with ordinary triggers and RLS enabled.
+  These are source projection tests, not financial/provider command proof.
+
+Executed local checks, installed dependencies only (at most two workers):
+- Core targeted Vitest, three named files: PASS, 28 tests.
+- API v3 application/boundary Vitest, two named files: PASS, 24 tests.
+- Web v3 journey/rendering Vitest, one named file: PASS, 48 tests.
+- DB strict-input/LP-0 comparator unit Vitest, two named files: PASS, 31 tests.
+- Node v3 + installed-v1 guards, test-concurrency=1: PASS, 253 tests.
+  Total: 384 targeted local tests. Final v3 guard CLI: 58 protected roots,
+  zero diagnostics, 13 existing exactly baselined unresolved sites. No new
+  unresolved allowance was added; the five upstream fingerprint adaptations
+  documented above remain the only ported-baseline changes.
+- DB build, API/web typecheck, and expanded test-only TypeScript check covering
+  the new DB suites plus shared catalogue inventories: PASS. Expanded test
+  checking caught a fixture-scope mistake in the publication trap; it was fixed
+  before the final passing check. These checks do not start PostgreSQL.
+- OpenAPI `node --import tsx src/generate-openapi.ts --check` in apps/api: PASS.
+- Core purity (279 files), money arithmetic and commercial boundary lint: PASS.
+- git diff --check: PASS. Lane schema validates 33 exact edited/new paths plus
+  its implicit own lane file. Full branch-diff lane lint was not presented as a
+  pass against the read-only unresolved merge/inherited parent tree.
+
+New DB suites, migrations, fresh/upgrade catalogue checks, query-log tests and
+mobile/desktop browser journeys are CI ONLY and NOT RUN locally. Full workspace
+build/test/lint and GitHub CI are not claimed. The router must stage, commit,
+push and obtain green required CI plus one independent RED review on that head.
+The new ready message is /tmp/ch6-j-20261028T183104Z-commit-msg.txt.
+
+LATER / SIMPLICITY (initial self-check, non-blocking): the duplicate CH-6 routine
+identity lists in tenancy.integration.test.ts and contractor-entitlement-upgrade.
+integration.test.ts could share one test-only declared inventory. This would
+reduce expectation-list drift while keeping actual PostgreSQL catalogue reads
+independent from their expected values. No unrelated extraction was bundled.

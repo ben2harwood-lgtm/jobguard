@@ -1,0 +1,45 @@
+import { readFile } from "node:fs/promises";
+import { expect,it,vi } from "vitest";
+import {parseInventory,pathCompleteness} from "./lp-0-catalog.js";
+import {existsSync} from "node:fs";
+import {fileURLToPath} from "node:url";
+import { readCommercialIntegrityV3Input,type CommercialIntegrityScope } from "../src/commercial-integrity-v3-sources.js";
+const scope:CommercialIntegrityScope={tenantId:"11111111-1111-4111-8111-111111111111",jobId:"22222222-2222-4222-8222-222222222222",digest:"a".repeat(64),actor:{membershipId:"33333333-3333-4333-8333-333333333333",identityUserId:"44444444-4444-4444-8444-444444444444"}};
+const time="2026-10-28T12:00:00.000000Z";
+function fixture(){return {input:{version:"commercial-integrity-input.v3",environment:"synthetic_demo",tenantId:scope.tenantId,jobId:scope.jobId,scopeId:scope.digest,evaluatedAt:time,profile:{version:"synthetic_fixture.persisted-v3.1",ruleVersion:"persisted-v3.1",window:{start:time,end:time}},phase:"pre_lock",ordinaryFacts:{lockState:"absent",quotes:[],activations:[],activity:[],workEvents:[],assertions:[]}},availability:["identifier_phone_source_unavailable"]};}
+function database(raw:unknown,authorized=true){const query=vi.fn().mockResolvedValueOnce({rowCount:authorized?1:0,rows:authorized?[{}]:[]}).mockResolvedValueOnce({rows:[{result:raw}]});return {db:{$client:{query}} as never,query};}
+it("CH-6 actual source adapter accepts only exact server-bound versioned input and explicit refusals",async()=>{
+ const raw=fixture(),{db,query}=database(raw);expect(await readCommercialIntegrityV3Input(db,scope)).toEqual(raw);
+ expect(query.mock.calls[1]).toEqual(["SELECT app.ch6_integrity_sources($1,$2,$3) result",[scope.tenantId,scope.jobId,scope.digest]]);
+});
+it("CH-6 source decoder refuses hidden pre-lock fields, foreign scope, malformed facts and unversioned payloads",async()=>{
+ const raw=fixture();
+ for(const input of [{...raw.input,scopeId:"another-session"},{...raw.input,tenantId:scope.jobId},{...raw.input,jobId:scope.actor.membershipId},{...raw.input,version:"invented"},{...raw.input,published:{}},{...raw.input,ordinaryFacts:{...raw.input.ordinaryFacts,shadowSignals:[{description:"private"}]}}]){
+  const {db}=database({...raw,input});await expect(readCommercialIntegrityV3Input(db,scope)).rejects.toThrow("INTEGRITY_SOURCE_UNAVAILABLE");
+ }
+ const {db,query}=database(raw,false);await expect(readCommercialIntegrityV3Input(db,scope)).rejects.toThrow("NOT_FOUND");expect(query).toHaveBeenCalledTimes(1);
+});
+it("CH-6 source migration confines publication calls to the locked branch and adds no runtime table grants",async()=>{
+ const sql=await readFile(new URL("../migrations/0309_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const body=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_integrity_sources"),sql.indexOf("-- Re-resolve all source facts"));
+ const pre=body.slice(0,body.indexOf("IF has_lock THEN"));
+ expect(pre).not.toMatch(/app\.(?:shadow_|final_check_|ch6_integrity_published)/u);
+ expect(body).toContain("IF has_lock THEN publication:=app.ch6_integrity_published(t,j,d)");
+ expect(sql).not.toMatch(/\bFROM\s+app\.receipt_allocation_fact_/iu);
+ expect(sql).toContain("RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED");
+ expect(sql).not.toMatch(/GRANT\s+(?:SELECT|INSERT|UPDATE|DELETE|ALL)\s+ON\s+(?:TABLE\s+)?app\.ch6_/iu);
+ expect(sql).toContain("GRANT EXECUTE ON FUNCTION app.ch6_integrity_sources(uuid,uuid,text) TO jobguard_runtime");
+ expect(sql).not.toMatch(/\b(?:INSERT INTO|UPDATE|DELETE FROM)\s+app\.(?:journal|meter_|subscription_|landing_allocation|recovery_fee)/iu);
+});
+
+it("CH-6 LP-0 rows retain a valid exact privilege inventory and complete path coverage",async()=>{
+ const raw=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+ const inventory=parseInventory(raw),root=fileURLToPath(new URL("../../../",import.meta.url));
+ expect(pathCompleteness(inventory,p=>existsSync(root+p))).toEqual([]);
+ expect(inventory.entries.filter(e=>e.key.includes("app.ch6_integrity_sources("))).toHaveLength(2);
+});
+
+it("CH-6 revocation between the ordinary authority read and controlled source query remains NOT_FOUND",async()=>{
+ const query=vi.fn().mockResolvedValueOnce({rowCount:1,rows:[{}]}).mockRejectedValueOnce(new Error("NOT_FOUND"));
+ await expect(readCommercialIntegrityV3Input({$client:{query}} as never,scope)).rejects.toMatchObject({code:"NOT_FOUND"});
+});

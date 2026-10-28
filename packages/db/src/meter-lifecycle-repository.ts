@@ -36,7 +36,7 @@ export class MeterLifecycleRepository {
     return this.run(context, async transaction => projectStoredMeterLifecycle(context.tenantId,
       (await transaction.$client.query("SELECT app.mon1_lifecycle_read($1,$2,$3) result", [context.tenantId, digest, input.computationId])).rows[0]?.result));
   }
-  private parse<T>(schema: z.ZodType<T>, digest: string, raw: unknown): T {
+  private parse<T>(schema: z.ZodType<T, unknown>, digest: string, raw: unknown): T {
     const parsed = schema.safeParse(raw);
     if (!parsed.success || typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest)) throw new MeterLifecyclePersistenceError("INVALID_METER_LIFECYCLE_INPUT");
     return parsed.data;

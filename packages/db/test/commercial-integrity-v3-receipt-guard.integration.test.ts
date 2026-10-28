@@ -16,13 +16,13 @@ it("CI-P08 result, status, completion, deletion and conversion are independently
  const id=randomUUID();await transaction(f.runtime,db=>db.query(insert,[id,tenant,"unrelated.ch6.fixture",member]));
  await expect(transaction(f.admin,db=>db.query("UPDATE app.command_receipt SET command_type='commercial_integrity.review.v3' WHERE tenant_id=$1 AND command_id=$2",[tenant,id]))).rejects.toThrow("INTEGRITY_RECEIPT_IMMUTABLE");
 });
-it("CI-P08 private helpers inaccessible, exact definer posture and only writer executable",async()=>{
+it("CI-P08 private helpers inaccessible, exact definer posture and only checked writer/source reader executable",async()=>{
  const rows=(await f.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,
  has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
  EXISTS(SELECT 1 FROM aclexplode(p.proacl) x WHERE x.grantee=0 AND x.privilege_type='EXECUTE') public
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname LIKE 'ch6_%'`)).rows;
- expect(rows).toHaveLength(7);for(const r of rows){expect(r.owner).toBe("jobguard_migration");expect(r.proconfig).toEqual(["search_path=pg_catalog"]);expect(r.runtime).toBe(r.proname==="ch6_record_integrity_review");expect(r.prosecdef).toBe(r.proname==="ch6_record_integrity_review");expect([r.shadow,r.infrastructure,r.public]).toEqual([false,false,false]);}
+ expect(rows).toHaveLength(11);for(const r of rows){expect(r.owner).toBe("jobguard_migration");expect(r.proconfig).toEqual(["search_path=pg_catalog"]);expect(r.runtime).toBe(["ch6_record_integrity_review","ch6_integrity_sources"].includes(r.proname));expect(r.prosecdef).toBe(["ch6_record_integrity_review","ch6_integrity_sources"].includes(r.proname));expect([r.shadow,r.infrastructure,r.public]).toEqual([false,false,false]);}
  await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_source_fingerprint($1,$2,$3,'{}')",[tenant,randomUUID(),f.auth.digest]))).rejects.toThrow("permission denied");
 });
 it("guard removal control demonstrates the INSERT denial is enforced by this trigger, rolled back",async()=>{

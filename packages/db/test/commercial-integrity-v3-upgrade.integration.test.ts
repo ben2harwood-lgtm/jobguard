@@ -22,7 +22,16 @@ it("CI-P09 own-step upgrade preserves populated old receipt/history/column types
  await f.admin.query(await readFile(migrationUrl,"utf8"));
  expect((await f.admin.query(query)).rows).toEqual(history);expect((await f.admin.query(columnQuery)).rows).toEqual(types);
  expect((await f.admin.query("SELECT id,source_hash,pdf_sha256,encode(pdf_bytes,'hex') bytes FROM app.customer_invoice ORDER BY id")).rows).toEqual(artifacts);
- const review=await reviewFor(f,x.job),result=await f.repo.review(f.auth.context,actor,f.auth.digest,x.job,review);
+ const {withTenant}=await import("../src/tenant-context.js"),{readCommercialIntegrityV3OrdinaryFacts}=await import("../src/commercial-integrity-v3-sources.js");
+ const {evaluateCommercialIntegrityV3,canonicalCommercialIntegritySnapshot}=await import("@jobguard/core");
+ const snapshot=await withTenant(f.runtime,f.auth.context,async db=>{
+  const times=(await db.$client.query(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') now,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') start FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,x.job])).rows[0];
+  const ordinaryFacts=await readCommercialIntegrityV3OrdinaryFacts(db,{tenantId:tenant,jobId:x.job,digest:f.auth.digest,actor},times.now);
+  const end=[times.start,...ordinaryFacts.activity.map(a=>a.source.recordedAt)].sort().at(-1)!;
+  return evaluateCommercialIntegrityV3({version:"commercial-integrity-input.v3",environment:"synthetic_demo",tenantId:tenant,jobId:x.job,scopeId:f.auth.digest,evaluatedAt:times.now,profile:{version:"synthetic_fixture.persisted-activity.v3",ruleVersion:"persisted-activity.1",window:{start:times.start,end}},phase:"pre_lock",ordinaryFacts}).findings[0]!;
+ });
+ const review={version:"commercial-integrity-review.v3",commandId:randomUUID(),findingKey:snapshot.key,findingSnapshotHash:createHash('sha256').update(canonicalCommercialIntegritySnapshot(snapshot.sourceSnapshot)).digest('hex'),outcome:"dismissed_false_positive",explanation:"Historical 0227 source review."};
+ const result=(await transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb) result",[tenant,x.job,f.auth.digest,JSON.stringify(review),JSON.stringify(snapshot.sourceSnapshot)]))).rows[0].result;
  await f.admin.query("CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.filter(url=>url.pathname<=migrationUrl.pathname))await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING",[url.pathname.split('/').at(-1)]);
  const receiptQuery="SELECT command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,created_at,completed_at FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2";

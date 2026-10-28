@@ -8,9 +8,9 @@ import { pounds } from "../lib/pounds";
 const uuid = z.string().uuid().transform(v => v.toLowerCase());
 const feedbackSchema = commercialIntegrityReviewV3Schema.extend({ commandId: uuid, jobId: uuid, recordedAt: z.string().datetime({ precision: 6 }) }).strict();
 const viewSchema = z.object({ version: z.literal("commercial-integrity-view.v3"), advisory: z.literal(true), result: commercialIntegrityV3ResultSchema,
- feedback: z.array(feedbackSchema), availability: z.array(z.string()), published: z.unknown(), environment: z.literal("synthetic_demo"), jobId: uuid,
+ feedback: z.array(feedbackSchema), availability: z.array(z.string()), published: z.null(), environment: z.literal("synthetic_demo"), jobId: uuid,
  notice: z.literal("Practice sandbox — synthetic data; nothing is sent or charged"), decisionRecord: z.object({ id: z.literal("D11"), status: z.literal("proposed"), approvalEvidence: z.null() }).strict(), realExternalActions: z.literal(0) }).strict();
-const legacyFinding = z.object({ key: z.string(), kind: z.string(), reason: z.string(), policyVersion: z.string(), sourceReferences: z.array(z.string()), timeWindow: z.string().optional(), citedNumbers: z.record(z.number().int().safe()), dismissed: z.boolean() });
+const legacyFinding = z.object({ key: z.string(), kind: z.string(), reason: z.string(), policyVersion: z.string(), sourceReferences: z.array(z.string()), timeWindow: z.string().optional(), citedNumbers: z.record(z.string(), z.number().int().safe()), dismissed: z.boolean() });
 const legacySchema = z.object({ version: z.literal("commercial-integrity-view.v1"), environment: z.literal("synthetic_demo"), decisionRecord: z.object({ status: z.string() }), profile: z.object({ version: z.string(), label: z.string() }), acceptedCapPence: z.number().int().safe().nonnegative(), capBasisPence: z.number().int().safe().nonnegative(), findings: z.array(legacyFinding) });
 export type LegacyIntegrityView = z.infer<typeof legacySchema>;
 export type IntegrityV3View = z.infer<typeof viewSchema> & { snapshotHashes: Record<string, string> };
@@ -118,10 +118,11 @@ export function IntegrityV3Results({ view, open }: { view: IntegrityV3View; open
  const [filter, setFilter] = useState<"open" | "dismissed" | "all">("open");
  const dismissed = (f: IntegrityV3View["result"]["findings"][number]) => view.feedback.some(r => r.findingKey === f.key && r.findingSnapshotHash === view.snapshotHashes[f.key]);
  const findings = view.result.findings.filter(f => filter === "all" || dismissed(f) === (filter === "dismissed"));
- return <><p>Recorded advisory checks · v3</p><p>Example thresholds — not a judgement or billing rule</p><p>Profile: {view.result.profileVersion}. Some source rules are unavailable; this is not a complete assessment.</p><div className="filter-row" aria-label="Things-to-check filter">{(["open", "dismissed", "all"] as const).map(f => <button style={targetStyle} key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{f === "open" ? "Things to check" : f === "dismissed" ? "Dismissed" : "All"}</button>)}</div>
+ return <><p>Recorded advisory checks · v3</p><p>Example thresholds — not a judgement or billing rule</p><p>Profile: {view.result.profileVersion}. Advisory prompts do not change pricing, the meter or fees.</p><div className="filter-row" aria-label="Things-to-check filter">{(["open", "dismissed", "all"] as const).map(f => <button style={targetStyle} key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{f === "open" ? "Things to check" : f === "dismissed" ? "Dismissed" : "All"}</button>)}</div>
  {findings.length === 0 && <p>No recorded ordinary findings in this filter. Unavailable sources have not been assessed.</p>}
- {findings.map((f, index) => <article className="inbox-card" key={index}><h3>{f.reason}</h3><p>Rule/version: {f.kind} · {f.sourceSnapshot.profile.ruleVersion}</p><p>Time window: {f.window.start} to {f.window.end} (UTC)</p><details><summary>Inspect recorded sources and plain reason</summary><p>Plain reason: {f.reason}</p><ul>{f.sourceReferences.map((s, i) => <li key={i}>{s.jobId.toLowerCase() === view.jobId ? "This job" : "Authorised related job"} · {sourceLabel(s.sourceType)} · recorded {s.recordedAt} (UTC) · {s.provenance === "builder_attested" ? "Builder attestation; not settlement proof" : s.provenance === "synthetic_settled" ? "Synthetic settled record" : s.provenance === "published_final_check" ? "Published Final Check record" : "Server record"}</li>)}</ul><p>Source navigation is unavailable for these record types.</p>{Object.entries(f.sourceSnapshot.compared).map(([key, value]) => comparedText(key, value)).filter((text): text is string => text !== null).map((text, i) => <p key={i}>{text}</p>)}</details>{dismissed(f) ? <p>Dismissed as a possible false positive; the saved feedback remains append-only.</p> : <button style={targetStyle} onClick={e => void open({ key: f.key, reason: f.reason }, e.currentTarget, f.sourceSnapshot)}>Review or dismiss</button>}</article>)}
- <p>Available ordinary records only. Missing source rules remain unavailable.</p></>;
+ {findings.map(f => <article className="inbox-card" key={f.key}><h3>{f.reason}</h3><p>Rule/version: {f.kind} · {f.sourceSnapshot.profile.ruleVersion}</p><p>Time window: {f.window.start} to {f.window.end} (UTC)</p><details><summary>Inspect recorded sources and plain reason</summary><p>Plain reason: {f.reason}</p><ul>{f.sourceReferences.map((s, i) => <li key={i}>{s.jobId.toLowerCase() === view.jobId ? "This job" : "Authorised related job"} · {sourceLabel(s.sourceType)} · recorded {s.recordedAt} (UTC) · {s.provenance === "builder_attested" ? "Builder attestation; not settlement proof" : s.provenance === "synthetic_settled" ? "Synthetic settled record" : s.provenance === "published_final_check" ? "Published Final Check record" : "Server record"}</li>)}</ul><p>Source navigation is unavailable for these record types.</p>{Object.entries(f.sourceSnapshot.compared).map(([key, value]) => comparedText(key, value)).filter((text): text is string => text !== null).map((text, i) => <p key={i}>{text}</p>)}</details>{dismissed(f) ? <p>Dismissed as a possible false positive; the saved feedback remains append-only.</p> : <button style={targetStyle} onClick={e => void open({ key: f.key, reason: f.reason }, e.currentTarget, f.sourceSnapshot)}>Review or dismiss</button>}</article>)}
+ <p>Available recorded sources only. Missing source rules remain unavailable.</p>
+ <IntegrityUnavailable view={view} /></>;
 }
 function sourceLabel(type: string) { return ({ customer_invoice: "Invoice record", customer_payment: "Payment record", quote: "Quote record", work_event: "Work activity record" } as Record<string, string>)[type] ?? "Recorded source"; }
 function comparedText(key: string, value: unknown): string | null {
@@ -133,7 +134,41 @@ function comparedText(key: string, value: unknown): string | null {
  const labels: Record<string, string> = { acceptedAt: "Recorded acceptance (UTC)", delayMicroseconds: "Reference delay (microseconds)", activation: "Recorded activation", lockState: "Recorded lock", activityKind: "Activity", basis: "Amount basis", distanceMicroseconds: "Quote separation (microseconds)", endpoint: "Window endpoint", cycles: "Linked cycles", minimumCycles: "Reference minimum cycles", payments: "Explicit payments", minimumPayments: "Reference minimum payments", disposition: "Published disposition", evidenceState: "Evidence state", correctionKind: "Correction type", cutoff: "Published cutoff (UTC)" };
  return labels[key] && (typeof value === "string" || typeof value === "number") ? `${labels[key]}: ${value}` : null;
 }
-/** Family-first seam for future page composition; the installed v1 wrapper stays independent. */
+function IntegrityUnavailable({ view }: { view: IntegrityV3View }) {
+ const labels: Record<string, string> = {
+  published_final_check_pending: "The Final Check has not finished. Its results are unavailable.",
+  published_final_check_failed: "The Final Check could not finish. Its results are unavailable.",
+  quote_party_binding_unavailable: "Some accepted quotes have no exact saved customer and site binding.",
+  quote_value_source_unavailable: "Some accepted quote values are unavailable for comparison.",
+  catch_line_source_unavailable: "A confirmed extra has no exact invoiced line amount for comparison.",
+  published_final_check_unavailable: "The published Final Check is unavailable for these checks.",
+  receipt_line_source_handoff_unavailable: "Exact saved receipt line allocations are unavailable.",
+  allocation_outstanding_basis_unavailable: "Outstanding catch amounts cannot be compared after credits or write-offs.",
+  completion_evidence_source_unavailable: "Verified original completion evidence is unavailable for this check.",
+  identifier_phone_source_unavailable: "No authorised phone-sharing source is available.",
+  identifier_card_source_unavailable: "No authorised card-sharing source is available.",
+  credit_line_source_unavailable: "Credit notes have no confirmed-extra line attribution.",
+  writeoff_line_source_unavailable: "No recorded line-specific write-off source is available.",
+  fractional_allocation_source_unavailable: "Fractional payment allocations cannot be compared by this check.",
+  imported_v3_source_unavailable: "This imported job has no supported advisory source binding.",
+ };
+ const unavailable = [...new Set([...view.result.unavailable.map(item => ruleLabel(item.kind)), ...view.availability.map(code => labels[code] ?? "Some recorded source information is unavailable for this practice job.")])];
+ return unavailable.length ? <aside aria-label="Unavailable advisory sources"><h3>Some checks are unavailable</h3><p>Unavailable sources have not been assessed. A missing check does not show that nothing was missed.</p><ul>{unavailable.map(label => <li key={label}>{label}</li>)}</ul></aside> : null;
+}
+function ruleLabel(kind: IntegrityV3View["result"]["unavailable"][number]["kind"]): string {
+ return {
+  dismissed_not_completed_with_completion_evidence: "Completion evidence and a not-completed answer",
+  receipts_exceed_locked_account_and_confirmed_catches: "Receipts compared with the locked account and confirmed extras",
+  catch_line_credit_or_writeoff: "Credits or write-offs linked to a confirmed extra",
+  explicit_allocations_avoid_catch_lines: "Payment allocations compared with confirmed extra lines",
+  invoice_or_payment_without_lock: "Invoice or payment activity without a final-account lock",
+  won_never_switched_live: "Accepted quotes without a recorded switch-live",
+  related_sub2000_quotes_90_days: "Related quotes under £2,000 within 90 days",
+  repeated_finish_restart: "Repeated finish-and-restart activity",
+  account_identifier_reuse: "Accounts sharing a user, phone or card",
+ }[kind];
+}
+/** Standalone view retained for direct consumers; the job page composes both families. */
 export function CommercialIntegrityV3({ jobId }: { jobId: string }) { return <V3Panel key={jobId.toLowerCase()} jobId={jobId.toLowerCase()} />; }
 function V3Panel({ jobId }: { jobId: string }) {
  const journey = useIntegrityJourney(jobId);

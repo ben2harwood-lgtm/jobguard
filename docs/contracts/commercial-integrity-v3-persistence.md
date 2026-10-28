@@ -109,3 +109,45 @@ Shared exports/catalogue/route registration are coordinator work listed in the
 builder receipt. The module currently consumes CH6-C's compiled public module;
 core must build first until the coordinator adds the shared exports and changes
 the import to `@jobguard/core`. That integration is a clean-install typecheck hold.
+
+## CH-6 completion — 0309 (28 October 2026, synthetic only)
+
+This section supersedes the held runtime ports above. `ch6_integrity_sources`
+provides versioned strict core input from persisted, owned ordinary sources and,
+only after lock and completed publication, minimized published facts. The current
+repository calls it once per read, validates the exact tenant/job/session binding,
+and evaluates all nine rules. Raw publication data is never returned as a page
+payload: `published` is always null; only cited advisory findings are public.
+
+- F01: a published not-completed disposition, exact original verified completion
+  evidence and the same immutable lock.
+- F02: the gross locked revision plus additional confirmed catches with exact
+  invoiced gross line sources, against deduplicated unreversed attested receipts.
+  Unknown catch basis or actual credits refuses the comparison.
+- F03: exact owner-loaded synthetic line correction sources, bounded to their
+  actual credit note or verified writeoff record, invoice line and lock.
+  Unmapped whole-invoice credit amounts remain explicitly unavailable.
+- F04: the persisted port refuses with `receipt_line_source_handoff_unavailable`
+  and a per-rule `source_absent` result. The installed neutral source adapter
+  refuses all saves with `RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED`; its 0258 tables
+  are explicitly quarantined, so CH-6 does not read or promote them. The pure
+  detector retains exact receipt/catch capacity and reversal checks; the current
+  review writer refuses this kind until a later accepted source handoff. This refusal is independent of SV-6.
+- F05: ordinary saved invoice/payment activity without a lock.
+- F06/F07: the exact current accepted document's saved net amount and immutable
+  party binding (never the current mutable party registry or fuzzy names).
+- F08: original linked server lifecycle facts; source replays cannot add cycles.
+- F09: same-current-user/same-tenant membership reuse or owner-loaded opaque
+  synthetic user/phone/card assertions. No raw identifiers or cross-tenant search.
+
+The profile retains the pure fixture's 7-day won delay, inclusive 90-day quote
+window, two linked restart cycles and two explicit payments. Its window anchors
+to saved source timestamps; read time does not advance finding fingerprints.
+These are named synthetic examples, not commercial or enforcement policy.
+
+0309 revalidates source facts, profile, kind-specific comparisons, canonical key
+and snapshot hash inside the existing checked feedback writer. The writer extends
+its synthetic source locks to the new ordinary/publication inputs. Historical
+0227 receipts replay before recomputation and retain their bytes. The migration
+note records object/grant, refusal and forward-fix details. DB/browser evidence
+is CI-only; this contract does not assert that those suites have run.

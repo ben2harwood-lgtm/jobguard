@@ -26,9 +26,9 @@ it("CI-P01 revoked persisted session denies even malformed review",async()=>{
  try{await expect(f.repo.review(f.auth.context,actor,f.auth.digest,job,null)).rejects.toThrow("NOT_FOUND");}
  finally{await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=NULL WHERE token_digest=$1",[f.auth.digest]);}
 });
-it("CI-P03 locked jobs return a held public port without private outcome inspection",async()=>{
+it("CI-P03 a locked job without published authority returns explicit availability without private data",async()=>{
  const {addIntegrityLock}=await import("./commercial-integrity-v3-fixtures.js"),x=await seedIntegrityJob(f),lockId=await addIntegrityLock(f,x);
  const view=await f.repo.read(f.auth.context,actor,f.auth.digest,x.job);
- expect(view.published).toMatchObject({available:false,code:"INTEGRITY_PUBLISHED_OUTCOMES_UNAVAILABLE",hold:"CI-H1",lock:{id:lockId,status:null}});
+ expect(view.published).toBeNull();expect(view.availability).toContain("published_final_check_unavailable");
  expect(view.result.findings).toEqual([]);
 });

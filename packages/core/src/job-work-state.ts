@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 /** Canonical UTC microseconds are compared as text. Date is used only for calendar validation. */
-export const workFactTimeV1 = z.string().datetime({ precision: 6 }).refine(value => {
+export const workFactTimeV1 = z.iso.datetime({ precision: 6, error: "Invalid datetime" }).refine(value => {
  const date = new Date(value);
  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 19) === value.slice(0, 19);
 });

@@ -39,6 +39,7 @@ export * from "./evidence-pack.js";
 export * from "./job-parties.js";
 export * from "./cumulative-fee.js";
 export * from "./receipt-allocation.js";
+export * from "./receipt-line-allocation-source.js";
 export * from "./extra-origin.js";
 export * from "./enterprise-domain/index.js";
 export * from "./shadow-domain/index.js";
@@ -86,6 +87,7 @@ export * from "./free-first-job.js";
 
 export * from "./plan-entitlements.js";
 export * from "./contractor-billing.js";
+export * from "./contractor-billing-commands.js";
 export * from "./enterprise-fee-statement.js";
 export * from "./enterprise-dashboard.js";
 export * from "./enterprise-signal.js";
@@ -101,3 +103,13 @@ export * from "./enterprise-live-prompt-persistence.js";
 export * from "./job-work-timing.js";
 
 export * from "./contractor-entitlement-authority.js";
+
+export * from "./recovery-attribution-persistence.js";
+export * from "./final-check.js";
+
+export { utcDatetimeV1 } from "./datetime.js";
+
+export * from "./meter-lifecycle.js";
+export * from "./subscription-plan-view.js";
+
+export * from "./meter-today.js";

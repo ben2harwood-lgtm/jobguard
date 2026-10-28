@@ -121,3 +121,29 @@ Used supplied dependencies, Node `v24.17.0` and cached `pnpm@10.28.1` via `PATH=
 | `git diff --check`; unchanged v1 source/test diff | EXIT 0. |
 
 Database/migration and browser suites remain CI-only under the dispatcher's sandbox instruction (no PostgreSQL/local listener). Root `pnpm test` was not run because it invokes database/listener suites; no clean reinstall, live-model evaluation, external integration, SQL canonical equivalence, exact-repair independent verdict or technical acceptance is claimed. The dispatcher must commit, run required CI and obtain the repair verdict. Intended commit message: `/private/tmp/jg-msg-ch6-c.txt`.
+
+
+## make PR green
+
+25 October 2026. Dispatched CH6-C / PR #329; branch `codex/sandbox/ch6-c`, head `192795f4ec8b5d8ade65c62d9e72dbdbd1f4a4cc`, current `origin/main` `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`. Read actual AGENTS.md, BUILD_PLAN.md CH-6, the lane contract and prior receipt. Builder source inspection and executed checks only; no independent verdict, acceptance, commit, push or merge.
+
+Changed only the snapshot `compared` record to `z.record(z.string(), existingValueSchema)` for installed Zod 4.6.6. String keys, scalar value validation and every strict object remain intact; no intended behaviour change. Lane source/tests contain no legacy three-parameter `ZodType`, `._type` or `._def` access requiring migration. No tests or scanners changed; no lane expansion, migrations, provider/AI configuration, operational alerts or commercial-policy changes. Earlier integration and release holds remain held. Existing v1 source/test remain byte-identical to `origin/main` (checked with `git diff --exit-code`).
+
+Node `v24.17.0`; supplied dependencies and cached pnpm 10.28.1, no install or dependency changes. Used `/private/tmp/ch6-c-bin/pnpm`; final workspace commands set `PATH=/private/tmp/ch6-c-bin:$PATH` so Turbo children also use it. Initial PATH `pnpm --version` and the first workspace typecheck selected the other installed launcher, which attempted version selection and failed registry signature/fetch verification; these are launcher failures, not compiler results. Corrected PATH rather than changing dependencies or disabling verification.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck`, with all five `packages/*/dist` directories moved into a temporary directory | EXIT 0. All original dist directories restored in `finally`; no emitted output available during this package check. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | Initial EXIT 1: 3023 passed, three default-5000ms timeouts (two receipt-allocation stress tests and enterprise-domain scanner) while compilation ran concurrently. Serial full rerun EXIT 0: **3026 tests / 131 files**, 23.48s, unchanged assertions/timeouts/scanner. All CH6-C tests pass. |
+| `pnpm --filter @jobguard/core lint` | EXIT 0. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | EXIT 0, all seven packages; purity, lane, money and commercial guards pass. Existing computed-import diagnostics and shared-cache permission warnings remain. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | EXIT 0 against the recorded main/head; rerun after receipt append also EXIT 0. |
+| `pnpm typecheck --concurrency=2` with corrected PATH | EXIT 0, all seven packages. Earlier workspace attempt failed in the launcher as described above. |
+| `pnpm build --concurrency=2` | EXIT 0, all seven packages including Next production compilation/static pages. Existing workspace-root, build dependency/CSS and shared-cache warnings; no source changes to address unrelated warnings. |
+| `pnpm openapi:check` | EXIT 1: tsx CLI IPC `listen EPERM` in sandbox before generator execution. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | EXIT 0, same OpenAPI generator/check without CLI IPC. No generated contract changes. |
+| `git diff --check` | EXIT 0, including final receipt. |
+
+Logs for this repair are under `/private/tmp/ch6-c-*.log`. Database/migration/browser suites NOT RUN: dispatched sandbox cannot start PostgreSQL or bind localhost; GitHub CI must run applicable suites after dispatcher commit/push. This receipt does not claim GitHub CI is green or independent acceptance. Intended conventional commit message: `/private/tmp/jg-msg-ch6-c.txt`.
+
+Size: +27/−1 lines across 2 files; largest touched logic file: 181 lines; new abstractions: none.

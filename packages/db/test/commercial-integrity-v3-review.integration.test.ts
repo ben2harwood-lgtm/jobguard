@@ -53,3 +53,21 @@ it("CI-P08 SQL strict review schema refuses extra keys, UTF-16 overflow and untr
  const {transaction}=await import("./commercial-integrity-v3-fixtures.js"),{job}=await seedIntegrityJob(f),review=await reviewFor(f,job),snapshot=(await f.repo.read(f.auth.context,actor,f.auth.digest,job)).result.findings[0]!.sourceSnapshot;
  for(const change of [{tenantId:tenant},{outcome:"approved"},{version:"commercial-integrity-review.v1"},{explanation:"😀".repeat(251)},{explanation:"\u00a0hidden whitespace\u00a0"}])await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify({...review,...change,commandId:randomUUID()}),JSON.stringify(snapshot)]))).rejects.toThrow("INVALID_INTEGRITY_REVIEW");
 });
+
+it("CH-6 cross-customer attack refuses another tenant's sources, feedback and exact receipt replay", async () => {
+ const { verifiedTenantContextForQueuedJob, withTenant } = await import("../src/tenant-context.js");
+ const {job} = await seedIntegrityJob(f), review = await reviewFor(f,job);
+ await f.repo.review(f.auth.context,actor,f.auth.digest,job,review);
+ const foreignTenant = randomUUID();
+ await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[foreignTenant]);
+ // A genuine server context alone cannot make the original practice identity a member of this tenant.
+ const foreignContext = verifiedTenantContextForQueuedJob(foreignTenant);
+ await expect(f.repo.read(foreignContext,actor,f.auth.digest,job)).rejects.toThrow("NOT_FOUND");
+ await expect(f.repo.review(foreignContext,actor,f.auth.digest,job,review)).rejects.toThrow("NOT_FOUND");
+ await expect(withTenant(f.runtime,foreignContext,db=>db.$client.query(
+  "SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,NULL::jsonb)",
+  [foreignTenant,job,f.auth.digest,JSON.stringify(review)]))).rejects.toThrow("NOT_FOUND");
+ const rows = await withTenant(f.runtime,foreignContext,db=>db.$client.query(
+  "SELECT result FROM app.command_receipt WHERE command_id=$1",[review.commandId]));
+ expect(rows.rows).toEqual([]);
+});

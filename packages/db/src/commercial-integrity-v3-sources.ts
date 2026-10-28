@@ -1,13 +1,11 @@
 import { z } from "zod";
 import type { TenantTransaction } from "./tenant-context.js";
 import { PracticeAccessError, practiceOwnedJobsSql } from "./practice-session.js";
-import type { CommercialIntegrityV3Input } from "@jobguard/core";
+import { commercialIntegrityV3InputSchema, type CommercialIntegrityV3Input } from "@jobguard/core";
 
 export type CommercialIntegrityActor = Readonly<{ membershipId: string; identityUserId: string }>;
 export type CommercialIntegrityScope = Readonly<{ tenantId: string; jobId: string; digest: string; actor: CommercialIntegrityActor }>;
 export type CommercialIntegrityV3OrdinaryFacts = CommercialIntegrityV3Input["ordinaryFacts"];
-export type PublishedIntegrityLock = Readonly<{ id: string; status: "pending" | "failed" | "completed" | null; cutoff: string }>;
-export type CommercialIntegrityV3PublishedOutcomes = Readonly<{ available: false; code: "INTEGRITY_PUBLISHED_OUTCOMES_UNAVAILABLE"; hold: "CI-H1"; lock: PublishedIntegrityLock }>;
 export class CommercialIntegrityPersistenceError extends Error {
  constructor(readonly code: "INTEGRITY_FAMILY_UNAVAILABLE" | "INTEGRITY_SOURCE_UNAVAILABLE" | "INTEGRITY_SOURCE_CHANGED" | "INTEGRITY_RETRY_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "INVALID_INTEGRITY_REVIEW") { super(code); }
 }
@@ -48,7 +46,7 @@ export async function readIntegrityFamily(db: TenantTransaction, s: CommercialIn
  if (!row) throw new PracticeAccessError("NOT_FOUND");
  return selectIntegrityFamily(row);
 }
-// Exactly the same saved activity projection is re-resolved by 0227. No attestation is settlement proof.
+// Historical 0227 upgrade projection; current runtime reads use 0309 below. The 0227 writer re-resolves exactly this activity. No attestation is settlement proof.
 export const integrityActivitySql = `SELECT jsonb_build_object('source',jsonb_build_object(
  'tenantId',x.tenant_id,'jobId',x.job_id,'scopeId',$3::text,'sourceId',x.id::text,'sourceType',x.kind,
  'revision','1','hash',encode(sha256(convert_to(x.identity,'UTF8')),'hex'),
@@ -67,9 +65,17 @@ export async function readCommercialIntegrityV3OrdinaryFacts(db: TenantTransacti
  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/u.test(evaluatedAt)) throw new CommercialIntegrityPersistenceError("INTEGRITY_SOURCE_UNAVAILABLE");
  return { lockState: lock.rowCount ? "present" : "absent", activity, quotes: [], activations: [], workEvents: [], assertions: [] };
 }
-/** HELD port: accepted SV-5 7e139e0b FinalCheckRepository.read -> app.read_final_check_reveal.
- * Its loose item records do not yet provide the exact financial/evidence DTO. Never probe private storage.
- */
-export async function readCommercialIntegrityV3PublishedOutcomes(_db: TenantTransaction, _scope: CommercialIntegrityScope, lock: PublishedIntegrityLock): Promise<CommercialIntegrityV3PublishedOutcomes> {
- return { available: false, code: "INTEGRITY_PUBLISHED_OUTCOMES_UNAVAILABLE", hold: "CI-H1", lock };
+/** 0309 returns only authorised ordinary facts, or an exact completed publication after lock. */
+export async function readCommercialIntegrityV3Input(db: TenantTransaction, scope: CommercialIntegrityScope) {
+ await authorizeIntegrityScope(db,scope);
+ const row=await db.$client.query<{result:unknown}>("SELECT app.ch6_integrity_sources($1,$2,$3) result",[scope.tenantId,scope.jobId,scope.digest]).then(r=>r.rows[0]).catch((error:unknown)=>{
+  const code=(error as Error).message;
+  if(code==="NOT_FOUND")throw new PracticeAccessError("NOT_FOUND");
+  if(code==="INTEGRITY_FAMILY_UNAVAILABLE"||code==="INTEGRITY_SOURCE_UNAVAILABLE")throw new CommercialIntegrityPersistenceError(code);
+  throw error;
+ });
+ const parsed=z.object({input:commercialIntegrityV3InputSchema,availability:z.array(z.string())}).strict().safeParse(row?.result);
+ if(!parsed.success)throw new CommercialIntegrityPersistenceError("INTEGRITY_SOURCE_UNAVAILABLE");
+ if(parsed.data.input.tenantId!==scope.tenantId||parsed.data.input.jobId!==scope.jobId||parsed.data.input.scopeId!==scope.digest)throw new CommercialIntegrityPersistenceError("INTEGRITY_SOURCE_UNAVAILABLE");
+ return parsed.data;
 }

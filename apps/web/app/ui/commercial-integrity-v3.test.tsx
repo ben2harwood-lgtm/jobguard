@@ -1,6 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { CommercialIntegrity, LegacyIntegrityResults } from "./commercial-integrity";
 import { CommercialIntegrityV3, IntegrityJourney, IntegrityV3Results, integritySnapshotHash, type IntegrityState, type IntegrityV3View } from "./commercial-integrity-v3";
 const job = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", tenant = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", other = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const time = "2026-10-20T12:00:00.000001Z", key = "ordinary-invoice";
@@ -23,7 +24,7 @@ function setup(responses: unknown[] = [family(), fixture()]) {
 function ready(state: IntegrityState): IntegrityV3View { if (state.status !== "v3") throw Error("Expected ready v3"); return state.view; }
 describe("CH6-J authoritative family selection and no fixture flash", () => {
  it("renders loading without v1 values, findings or source identifiers", () => {
-  const markup = renderToStaticMarkup(<CommercialIntegrityV3 jobId={job} />);
+  const markup = renderToStaticMarkup(<CommercialIntegrity jobId={job} />);
   expect(markup).toContain("Loading recorded sources"); expect(markup).not.toMatch(/£|Frozen accepted|No checks|private-source/u);
  });
  it("routes a server-selected v1 family to the v1 endpoint", async () => {
@@ -144,4 +145,39 @@ describe("CH6-J safe presentation", () => {
   const s = setup([family(), raw]); await s.journey.load(); const markup = renderToStaticMarkup(<IntegrityV3Results view={ready(s.latest())} open={async () => {}} />);
   expect(markup).toContain("Review or dismiss"); expect(markup).not.toContain("the saved feedback remains");
  });
+});
+
+it("CH-6 installed panel shares the saved-v1 rendering without fabricated pricing", async () => {
+ const s = setup([family("v1"), { ...legacy, acceptedCapPence: 1500, capBasisPence: 100000 }]);
+ await s.journey.load(); const state = s.latest();
+ if (state.status !== "v1") throw Error("Expected saved v1");
+ const markup = renderToStaticMarkup(<LegacyIntegrityResults view={state.view} open={async () => {}} />);
+ expect(markup).toContain('data-testid="integrity-frozen-accepted-cap">£15.00');
+ expect(markup).toContain("£1,000.00 accepted (quoted/final signals do not alter it)");
+ expect(markup).toContain("Cap-basis signals are v1-only.");
+ expect(markup).not.toContain("£12.00"); expect(markup).not.toContain("Recorded advisory checks · v3");
+});
+it("CH-6 refuses a hidden publication payload before it enters page state", async () => {
+ const raw = { ...fixture(), published: { hiddenSignals: ["private shadow evidence"] } };
+ const s = setup([family(), raw]); await s.journey.load(); expect(s.latest().status).toBe("error");
+ expect(JSON.stringify(s.states)).not.toMatch(/private shadow evidence|hiddenSignals/u);
+});
+it("CH-6 renders clear refusals without internal codes or counterfeit successful checks", async () => {
+ const raw = fixture(); raw.result.findings = [];
+ raw.availability = ["identifier_phone_source_unavailable", "identifier_card_source_unavailable", "credit_line_source_unavailable", "writeoff_line_source_unavailable", "fractional_allocation_source_unavailable", "published_final_check_pending", "receipt_line_source_handoff_unavailable"];
+ const s = setup([family(), raw]); await s.journey.load();
+ const markup = renderToStaticMarkup(<IntegrityV3Results view={ready(s.latest())} open={async () => {}} />);
+ expect(markup).toContain("No authorised phone-sharing source is available.");
+ expect(markup).toContain("No authorised card-sharing source is available.");
+ expect(markup).toContain("Credit notes have no confirmed-extra line attribution.");
+ expect(markup).toContain("The Final Check has not finished.");
+ expect(markup).toContain("Exact saved receipt line allocations are unavailable.");
+ expect(markup).not.toMatch(/identifier_phone_source_unavailable|CI-H|private-session|hidden/u);
+});
+it("CH-6 legacy review failure never creates optimistic saved feedback", async () => {
+ const s = setup([family("v1"), { ...legacy, findings: [{ key, kind: "example", reason: "Fictional", policyVersion: "v1", sourceReferences: [], citedNumbers: {}, dismissed: false }] }]);
+ await s.journey.load(); s.queue.push(new Response("{}", { status: 503 }));
+ await expect(s.journey.save({ key, reason: "Fictional" }, "A fictional reason")).rejects.toThrow();
+ const state = s.latest(); if (state.status !== "v1") throw Error("Expected saved v1");
+ expect(state.view.findings[0]!.dismissed).toBe(false);
 });

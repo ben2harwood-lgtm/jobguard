@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-read": {
+      "branches": [
+        "codex/sandbox/mon1-read"
+      ],
+      "note": "RED: MON-1 remainder part 3, company session read and screen; migration 0301 follows parent ledger 0300. Lists only this PR’s paths relative to codex/sandbox/mon1-ledger; own lane file is authorized automatically. PostgreSQL and browser checks run in CI.",
+      "allow": [
+        "apps/api/src/meter-today.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/meter/current/route.test.ts",
+        "apps/web/app/api/meter/current/route.ts",
+        "apps/web/app/lib/meter-server.ts",
+        "apps/web/app/meter/meter-screen.test.tsx",
+        "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/app/meter/page.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/meter-today.ts",
+        "packages/db/migration-notes/0301_meter_today_read.md",
+        "packages/db/migrations/0301_meter_today_read.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/meter-today-repository.test.ts",
+        "packages/db/src/meter-today-repository.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/meter-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/meter-today.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

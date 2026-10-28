@@ -14,6 +14,12 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
+  "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
+  // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
+  "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.
   "/api/jobs/[id]/work-state#finish": "watchdog_live_only",
   "nest:/jobs/:id/work-state#finish": "watchdog_live_only",
@@ -152,6 +158,13 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-account/terms": "post_live_billing",
   "/api/jobs/[id]/final-account/review-extras": "post_live_billing",
   "nest:/jobs/:id/final-account/review-extras": "post_live_billing",
+  "/api/jobs/[id]/final-check/dispositions": "post_live_billing",
+  "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
+  "/api/jobs/[id]/final-check/catches": "post_live_billing",
+  "nest:/jobs/:id/final-check/catches": "post_live_billing",
+  "/api/jobs/[id]/final-check/runs": "post_live_billing",
+  "nest:/jobs/:id/final-check/runs": "post_live_billing",
+  "command:RecordFinalCheckDisposition": "post_live_billing",
   "command:LockFinalAccount": "post_live_billing",
   "command:RecordFinalAccountDisposition": "post_live_billing",
   "command:AcceptFinalCheckTerms": "post_live_billing",

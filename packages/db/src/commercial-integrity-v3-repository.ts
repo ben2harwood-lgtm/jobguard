@@ -6,18 +6,18 @@ import { canonicalCommercialIntegritySnapshot, commercialIntegrityReviewV3Schema
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { authorizeIntegrityScope, canonicalIntegrityScope, CommercialIntegrityPersistenceError, readIntegrityFamily,
- readCommercialIntegrityV3OrdinaryFacts, readCommercialIntegrityV3PublishedOutcomes, type CommercialIntegrityActor, type CommercialIntegrityScope } from "./commercial-integrity-v3-sources.js";
+ readCommercialIntegrityV3Input, type CommercialIntegrityActor, type CommercialIntegrityScope } from "./commercial-integrity-v3-sources.js";
 export type { CommercialIntegrityActor } from "./commercial-integrity-v3-sources.js";
 export type CommercialIntegrityV3Feedback = CommercialIntegrityReviewV3 & { jobId: string; membershipId: string; identityUserId: string; sessionDigest: string; recordedAt: string };
 const feedbackMetadata = z.object({ jobId: z.string().uuid(), membershipId: z.string().uuid(), identityUserId: z.string().uuid(), sessionDigest: z.string().regex(/^[a-f0-9]{64}$/u), recordedAt: z.string().regex(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/u) }).strict();
 const feedbackSchema = {
  parse(raw: unknown): CommercialIntegrityV3Feedback {
-  const {jobId,membershipId,identityUserId,sessionDigest,recordedAt,...review}=z.record(z.unknown()).parse(raw);
+  const {jobId,membershipId,identityUserId,sessionDigest,recordedAt,...review}=z.record(z.string(), z.unknown()).parse(raw);
   return {...commercialIntegrityReviewV3Schema.parse(review),...feedbackMetadata.parse({jobId,membershipId,identityUserId,sessionDigest,recordedAt})};
  },
  safeParse(raw: unknown): {success:true;data:CommercialIntegrityV3Feedback}|{success:false} {try{return {success:true,data:this.parse(raw)};}catch{return {success:false};}},
 };
-export type CommercialIntegrityV3StoredView = Readonly<{ version: "commercial-integrity-view.v3"; advisory: true; result: CommercialIntegrityV3Result; feedback: CommercialIntegrityV3Feedback[]; availability: readonly string[]; published: Awaited<ReturnType<typeof readCommercialIntegrityV3PublishedOutcomes>> | null }>;
+export type CommercialIntegrityV3StoredView = Readonly<{ version: "commercial-integrity-view.v3"; advisory: true; result: CommercialIntegrityV3Result; feedback: CommercialIntegrityV3Feedback[]; availability: readonly string[]; published: null }>;
 const commandType = "commercial_integrity.review.v3";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 async function v3(db: Parameters<typeof authorizeIntegrityScope>[0], s: CommercialIntegrityScope) {
@@ -33,20 +33,14 @@ export class CommercialIntegrityV3Repository {
   });
  }
  private async view(db: Parameters<typeof authorizeIntegrityScope>[0], s: CommercialIntegrityScope): Promise<CommercialIntegrityV3StoredView> {
-  const times=(await db.$client.query<{ now: string; start: string }>(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') now,
-   to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') start FROM app.job WHERE tenant_id=$1 AND id=$2`,[s.tenantId,s.jobId])).rows[0]!;
-  const ordinaryFacts=await readCommercialIntegrityV3OrdinaryFacts(db,s,times.now);
-  const evaluatedAt=(await db.$client.query<{now:string}>(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') now`)).rows[0]!.now;
-  // Anchored ordinary source horizon, never a moving read clock or a guessed repetition/delay policy.
-  const end=[times.start,...ordinaryFacts.activity.map(a=>a.source.recordedAt)].sort().at(-1)!;
-  const result=evaluateCommercialIntegrityV3({ version:"commercial-integrity-input.v3",environment:"synthetic_demo",tenantId:s.tenantId,jobId:s.jobId,scopeId:s.digest,
-   evaluatedAt,profile:{version:"synthetic_fixture.persisted-activity.v3",ruleVersion:"persisted-activity.1",window:{start:times.start,end}},phase:"pre_lock",ordinaryFacts });
-  const published=ordinaryFacts.lockState === "present" ? await readCommercialIntegrityV3PublishedOutcomes(db,s,(await db.$client.query(`SELECT l.id,
-   (SELECT c.status FROM app.final_account_lock_check c WHERE c.tenant_id=l.tenant_id AND c.job_id=l.job_id AND c.lock_id=l.id AND c.evidence_cutoff_at=l.locked_at ORDER BY c.created_at DESC,c.id DESC LIMIT 1) status,
-   to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') cutoff FROM app.final_account_lock l WHERE l.tenant_id=$1 AND l.job_id=$2`,[s.tenantId,s.jobId])).rows[0]) : null;
+  const source=await readCommercialIntegrityV3Input(db,s);
+  const evaluated=evaluateCommercialIntegrityV3(source.input);
+  const result:CommercialIntegrityV3Result=source.availability.includes("receipt_line_source_handoff_unavailable")
+   ? {...evaluated,unavailable:[...evaluated.unavailable,{kind:"explicit_allocations_avoid_catch_lines",reason:"source_absent"}]}
+   : evaluated;
   const feedback=(await db.$client.query<{result:unknown}>(`SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_type=$2 AND status='succeeded'
    AND semantic_key LIKE $3 AND actor_membership_id=$4 AND result->>'sessionDigest'=$5 ORDER BY created_at,command_id`,[s.tenantId,commandType,`${s.jobId}:%`,s.actor.membershipId,s.digest])).rows.map(r=>feedbackSchema.parse(r.result));
-  return {version:"commercial-integrity-view.v3",advisory:true,result,feedback,availability:["CI-H1","CI-H2","CI-H3","CI-H4","CI-H5","CI-H7"],published};
+  return {version:"commercial-integrity-view.v3",advisory:true,result,feedback,availability:source.availability,published:null};
  }
  async read(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string): Promise<CommercialIntegrityV3StoredView> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);

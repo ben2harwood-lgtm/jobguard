@@ -254,3 +254,66 @@ lifecycle tests, calendar tests, contract and this receipt. The lane and
 architecture test are unchanged. Intended commit subject/body written to
 `/private/tmp/jg-msg-mon1-l.txt`. No independently reviewed repair SHA exists yet;
 dispatcher must commit, rerun required CI and obtain the required verdict/acceptance.
+
+## catch-up onto 28416d1e
+
+25 October 2026. C261 / MON1-L-CATCHUP. Accepted piece head `70e1778a`;
+dispatcher merge `5247a7a3c63c7aceb6ed7e5e0240d958b8001b90`;
+`origin/main` = `28416d1ea7e154f2353d56e28f30db34e06e36ab`.
+Branch `codex/sandbox/mon1-l-catchup`; initial working tree clean.
+Read AGENTS.md, BUILD_PLAN.md §§10.1.4–6 / MON-1, own contract/receipt,
+and main's jobs-on-the-go/job-work-timing typing and dependency changes.
+
+Behavior unchanged. Two one-line alignment changes:
+
+- `meter-lifecycle.ts`: replace Zod 3 `z.ZodType<T, z.ZodTypeDef, unknown>`
+  with main's Zod 4 `z.ZodType<T, unknown>`. Runtime schemas, strictness,
+  validation, errors and projection behavior are unchanged.
+- Architecture test: add `job-work-timing.ts` to the explicit transitive pure
+  source allowlist, matching main's extracted calendar-helper dependency from
+  `jobs-on-the-go.ts`. The walker now inspects this file with every existing
+  purity assertion. No assertion removed or weakened; 3 files / 39 piece tests
+  unchanged in count. Other piece test files are byte-identical to accepted head.
+
+MON1-L adds **no migration, table or routine** relative to main. Main's highest
+migration is `0201_job_work_state_commands.sql`; no renumbering was performed.
+Exact additive rows in `lp-0-effective-privileges-v1.json` recorded.routines and
+the serious-b5-upgrade, contractor-entitlement-upgrade and tenancy expected
+additions lists: **none**, because this piece introduces no database objects.
+
+Node v24.17.0; cached pinned pnpm 10.28.1 via
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`; Zod 4.6.6, Vitest 4.1.12.
+No install/download or clean-install claim. An initial default `pnpm --version`
+probe stalled in the global launcher; subsequent commands used the cached shim.
+Logs are `/private/tmp/jg-mon1-l-catchup-*.log`.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm typecheck` | PASS, all 7 workspace tasks |
+| `pnpm turbo run lint --concurrency=2` | PASS, all 7 package lint tasks |
+| `pnpm build --concurrency=2` | PASS, 7/7 tasks, 2 cached; 3m11.639s |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/meter-lifecycle.test.ts src/meter-lifecycle-calendar.test.ts src/meter-lifecycle-architecture.test.ts` | PASS, 3 files / 39 tests |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | PASS, 129 source files / 3007 tests |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL only at expected unregistered catch-up branch name; core purity passed; package lint run separately above |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL: `codex/sandbox/mon1-l-catchup` matches no registered lane; dispatcher pushes registered piece branch |
+| `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs` | PASS; run separately because root lint stops at lane check |
+| `pnpm openapi:check` | FAIL before generation: sandbox denies tsx IPC listen (EPERM) |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | PASS, same source generator/check without CLI IPC; OpenAPI artifact unchanged |
+| `git diff --check` | PASS |
+
+Initial full-core and focused runs reproduced the architecture allowlist failure
+(3006/3007 and 38/39 respectively), then passed after the additive dependency
+alignment. An initial direct OpenAPI attempt from root could not resolve tsx;
+the first apps/api attempt preceded compiled db output and could not resolve it.
+The final apps/api direct check passed after dependency build.
+Build/check output included shared-cache permission IO, workspace-root,
+Nest/file-type and CSS autoprefixer warnings; none were suppressed.
+
+PostgreSQL **NOT RUN**; no local PostgreSQL or browser/server suite attempted
+under the dispatcher's sandbox restriction. Reviewer/CI owns database/browser
+verification, including lp-0-authority-paths, serious-b5-upgrade,
+contractor-entitlement-upgrade and tenancy. No independent model review or
+separate acceptance claimed; one exact-commit delta check remains dispatcher-owned.
+All existing policy, runtime, production and release holds remain unchanged.
+No commit, staging, push or git mutation performed. Intended commit subject/body:
+`/private/tmp/jg-msg-mon1-l-catchup.txt`.
