@@ -46,7 +46,7 @@ export class SubscriptionApplication {
     // A replay reads durable work. Never retry an attempted or unknown network outcome.
     if (!snapshot.attempts.some(row => row.work_id === workId)) {
      await new SubscriptionExecutor(this.repository, new SyntheticSubscriptionPaymentAdapter())
-      .execute(context, digest, randomUUID(), workId, action.expectedRevision);
+      .executeApprovedSimulation(context, digest, randomUUID(), workId, action.expectedRevision);
     }
    }
    return result;

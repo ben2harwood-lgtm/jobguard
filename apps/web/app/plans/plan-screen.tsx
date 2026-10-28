@@ -84,7 +84,7 @@ export function PlanScreen() {
         <section aria-label="Manage subscription"><h2>Manage subscription</h2>
           <p>The monthly prices and maximums shown above form these demonstration terms. Principal excluding VAT. Annual plans are unavailable.</p>
           <p>Upgrades apply today. Downgrades are requested for the next billing boundary and depend on available capacity. Issued periods cannot be changed.</p>
-          <label>Plan <select value={plan} disabled={busy} onChange={e => { setPlan(e.target.value as "Solo" | "Builder"); setConsent(false); }}><option>Solo</option><option>Builder</option></select></label>
+          <label>Plan <select aria-label="Plan" value={plan} disabled={busy} onChange={e => { setPlan(e.target.value as "Solo" | "Builder"); setConsent(false); }}><option>Solo</option><option>Builder</option></select></label>
           {!view.agreement && <label>Billing anchor day <input type="number" min="1" max="31" value={anchorDay} disabled={busy} onChange={e => { setAnchorDay(Number(e.target.value)); setConsent(false); }} /></label>}
           <label><input type="checkbox" checked={consent} disabled={busy} onChange={e => setConsent(e.target.checked)} />I accept these monthly terms and the selected plan's monthly maximum for this made-up company.</label>
           <button type="button" disabled={busy || !consent || !Number.isInteger(anchorDay) || anchorDay < 1 || anchorDay > 31 || view.agreement?.plan === plan}

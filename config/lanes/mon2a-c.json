@@ -17,7 +17,9 @@
         "docs/contracts/subscription-plan-read-v1.md",
         "packages/core/src/subscription-plan-view.test.ts",
         "packages/core/src/subscription-plan-view.ts",
-        "packages/db/test/subscription-actions.integration.test.ts"
+        "packages/db/src/subscription-executor.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
