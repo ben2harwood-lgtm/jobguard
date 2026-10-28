@@ -6,7 +6,7 @@
         "codex/sandbox/m4-8-s-p2"
       ],
       "receipt": "packages/db/migration-notes/0304_stored_receipt_case_allocation.md",
-      "note": "M4-8-S part 2 / PR #383 round 3: fix generated-job parameter typing, retain serializable receipt commands locally while restoring the pinned practice bridge, union exact installed-table expectations, strengthen stale-watermark refusal, and refresh only the existing demo-seed unresolved fingerprint. Database execution remains in CI. This lane metadata file is implicitly owned.",
+      "note": "M4-8-S part 2 / PR #383 catch-up after #380: retain both LP-0 inventory additions and the exact shared catalogue expectations from main. Migration 0304 and all SQL bytes remain unchanged; no new behaviour. This lane metadata file is implicitly owned.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/receipt-line-allocation.application.test.ts",
