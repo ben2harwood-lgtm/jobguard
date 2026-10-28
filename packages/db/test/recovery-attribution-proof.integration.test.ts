@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deriveAttributionBillingPaymentProof } from "../../core/src/recovery-attribution-illustration.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { createLockFixture, closeLockFixture, seedAccount, asFixtureTenant, LOCK_OWNER, type LockFixture } from "./final-account-lock.integration.test.js";
 
 const missingCatchTarget = (a: Awaited<ReturnType<typeof seedAccount>>, invoiceId: string) => ({
@@ -19,6 +20,8 @@ describe("SV6-06/07 persisted missing-proof regressions (positive chain dependen
   it("SV6-06 qualification requires the exact approved invoiced catch line", async () => {
     const a = await seedAccount(f.admin);
     const invoices = new PracticeInvoiceRepository(f.runtime);
+    // Main's invoice gate: lock and completed Final Check first (shared sv5pre fixture).
+    await prepareInvoicePrerequisites(f.admin, f.runtime, a.tenantId, a.jobId, LOCK_OWNER, a.revisionId);
     await invoices.issue(a.context, { jobId: a.jobId, finalAccountRevisionId: a.revisionId,
       actorMembershipId: LOCK_OWNER, commandId: randomUUID(), recipient: "fictional@example.invalid", issuedOn: "2026-10-24" });
     const rows = await asFixtureTenant(f.runtime, a.tenantId, db => db.query<{ id: string }>(
@@ -41,6 +44,7 @@ describe("SV6-06/07 persisted missing-proof regressions (positive chain dependen
   });
   it("SV6-07 only matched settled money can qualify", async () => {
     const a = await seedAccount(f.admin), invoices = new PracticeInvoiceRepository(f.runtime);
+    await prepareInvoicePrerequisites(f.admin, f.runtime, a.tenantId, a.jobId, LOCK_OWNER, a.revisionId);
     await invoices.issue(a.context, { jobId: a.jobId, finalAccountRevisionId: a.revisionId,
       actorMembershipId: LOCK_OWNER, commandId: randomUUID(), recipient: "fictional@example.invalid", issuedOn: "2026-10-24" });
     const invoice = (await asFixtureTenant(f.runtime, a.tenantId, db => db.query<{ id: string }>(

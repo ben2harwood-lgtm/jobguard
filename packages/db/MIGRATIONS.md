@@ -1204,11 +1204,11 @@ switches while retaining switch-off/state access. PostgreSQL execution, catalogu
 upgrade and rollback proofs require dispatcher/CI verification; they were not run
 in the builder sandbox.
 
-### 0251 — M4-9-S dependency boundary (renumbered from 0218)
+### 0302 — M4-9-S dependency boundary (renumbered from 0218, then 0251)
 
 Adds only `app.read_success_fee_v3(uuid,text)` and
 `app.write_success_fee_v3(uuid,text,jsonb,jsonb)`. Migration directory discovery
-registers 0251; the closed historical list is unchanged. No table, row backfill,
+registers 0302; the closed historical list is unchanged. No table, row backfill,
 existing routine, existing grant or ledger kind changes. Runtime receives only
 these exact EXECUTE signatures; PUBLIC and infrastructure receive none. Both
 calls reauthenticate the persisted session/current owner and require an owned,

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon2a-c1": {
+      "branches": [
+        "codex/sandbox/mon2a-c1"
+      ],
+      "note": "RED (sign-in) MON-2A C1 per Ben 28 Oct: exact-path real email-code session for subscriptions, checked before the practice shortcut with Origin/CSRF; other money paths unchanged; practice sessions never get billing authority. Synthetic only; no migration.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/subscription.access.test.ts",
+        "apps/api/src/subscription.authority.ts",
+        "apps/api/src/subscription.controller.ts",
+        "apps/web/app/lib/subscription-server.ts",
+        "apps/web/app/api/subscriptions/current/route.ts",
+        "apps/web/app/api/subscriptions/current/route.test.ts",
+        "apps/web/app/api/subscriptions/commands/route.ts",
+        "apps/web/app/api/subscriptions/commands/route.test.ts"
+      ]
+    }
+  }
+}

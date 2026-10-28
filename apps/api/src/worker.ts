@@ -1,5 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources } from "@jobguard/db";
+import { createHash, randomUUID } from "node:crypto";
+import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, practiceFinalCheckPorts } from "@jobguard/db";
+import { FinalCheckError } from "@jobguard/core";
+import { FinalCheckWorker } from "./final-check.worker.js";
+import { generatePracticePng } from "./proof/proof.application.js";
 import { ShadowFixtureProposer, shadowFixtureCorpusV1 } from "@jobguard/ai";
 import { ShadowDetectionWorker } from "./shadow-detection.worker.js";
 import { ActionExecutor, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
@@ -35,5 +39,23 @@ const tasks:TaskList={
  async detect_shadow_evidence(payload){const parsed=z.object({version:z.literal("shadow-detection-task.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await detectionWorker.execute(queueContext({tenantId:parsed.tenantId}),parsed);},
 };
 registerFinalCheckTask(tasks,async parsed=>{await executeFinalCheckTask(queueContext({tenantId:parsed.tenantId}),parsed);});
-const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,taskList:tasks,crontab:"*/1 * * * * discover_outbox"});
+// SV-5 Q6 practice run (Ben, 28 Oct). Requests come only from the owner's checked routine; this worker alone
+// freezes the manifest, examines each frozen source honestly, reconciles and publishes the completion record.
+const practiceRun=new FinalCheckWorker(practiceFinalCheckPorts(shadowPool,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex")),"synthetic_demo");
+const practiceTaskV1=z.object({version:z.literal("final-check-practice-run.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),lockId:z.guid({ error: "Invalid uuid" })}).strict();
+tasks.discover_final_check_requests=async(_payload,helpers)=>{const rows=await helpers.withPgClient(client=>client.query<{lock_id:string;tenant_id:string;job_id:string}>(`SELECT lock_id,tenant_id,job_id FROM infrastructure.final_check_request WHERE enqueued_at IS NULL ORDER BY requested_at LIMIT 100 FOR UPDATE SKIP LOCKED`));for(const row of rows.rows){await helpers.addJob("final_check_practice_run",{version:"final-check-practice-run.v1",tenantId:row.tenant_id,jobId:row.job_id,lockId:row.lock_id},{jobKey:`final-check-practice:${row.lock_id}`});await helpers.withPgClient(client=>client.query("UPDATE infrastructure.final_check_request SET enqueued_at=clock_timestamp() WHERE lock_id=$1",[row.lock_id]));}};
+tasks.final_check_practice_run=async payload=>{
+ const task=practiceTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
+ const manifest=await new FinalCheckRepository(shadowPool).begin(context,task.jobId);
+ if(manifest.lockId!==task.lockId)throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
+ const result=await practiceRun.execute(context,{version:"final-check.task.v1",jobId:task.jobId,manifestId:manifest.id}) as {runId:string};
+ // The invoice gate reads its own completion certificate; publish it once for this run.
+ await new FinalCheckCompletionRepository(shadowPool).publish(context,{version:"final-check-publication.v1",jobId:task.jobId,runId:result.runId,checkId:randomUUID()}).catch((error:unknown)=>{if(!String((error as {code?:string})?.code??error).includes("IDEMPOTENCY"))throw error;});
+};
+// Browser-test isolation: the e2e worker runs only the practice final-check tasks, so queued outbox actions
+// that existing journeys advance by hand are never delivered behind their backs.
+const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";
+const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
+ taskList:practiceOnly?{discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!}:tasks,
+ crontab:practiceOnly?"*/1 * * * * discover_final_check_requests":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests"});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,async()=>{await runner.stop();await runtimePool.end();await shadowPool.end();});
