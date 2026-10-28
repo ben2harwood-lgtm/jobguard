@@ -153,3 +153,51 @@ passed (2 files, 5 tests); node_modules/.bin/tsc -p
 packages/db/tsconfig.json --noEmit passed; git diff --check passed. PostgreSQL
 migration and database suites remain for GitHub CI. RED review remains required
 against the repaired head. No git writes, packages downloaded or listeners started.
+
+## PR #383 repair round 3 — shared fixture and catalogue regressions
+
+Inspected CI run 40764722895 against 381a75a0da9e18f3f6e90a3e28b2d9388c16f049.
+The final-account, activation, re-acceptance and stored-receipt failures share
+PostgreSQL 42P08 in prepareActivationFixtureV3: the first use of $4 inferred
+char(64), while its CASE use required text. Both uses now explicitly take text;
+the stored digest column and immutable ownership rules are unchanged. Existing
+real-writer DB tests continue to exercise null and session-bound fixtures.
+
+Restored practice-session.ts byte-for-byte to the pinned bridge (SHA-256
+9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14).
+The receipt producer now uses a small local connection adapter for serializable
+BEGIN before digest/tenant setup; it changes no session-wide defaults or other
+callers. Its boundary test additionally checks digest/tenant ordering and client
+release after rollback. No pinned expectation was updated.
+
+The entitlement-upgrade snapshot and both tenancy catalogues omitted 0304's
+three installed tables: stored_receipt_case_allocation, stored_receipt_case_binding
+and stored_receipt_case_command. Added exactly those rows, retaining all existing
+rows and full equality checks. LP-0 and SERIOUS-B5's existing 0304 registrations
+remain; no migration, grant, routine identity or privilege changed this round.
+
+The A3 race test used the ordinary postgres database and still expected the old
+held-source reader refusal. It now uses the existing isolated synthetic fixture
+and tests both stale hash and stale revision through the caller-owned transaction:
+40001 must precede dependent work, and no allocation revision may be saved.
+Concurrent superseded approvals are still refused. Reads are not approval or a
+claim of source-lock atomicity.
+
+CSG's existing quote-delivery execute exception fingerprint became stale when
+the fixture declaration changed. Refreshed only that fingerprint; the same 13
+exceptions, file, line and reason remain. Restoring the practice bridge also
+restored its original fingerprint. The guard reports zero diagnostics, and all
+169 guard tests passed; no new exception or scope was added.
+
+Local verification: database package typecheck passed; the three named unit
+files (stored-receipt-case-allocation-repository, stored-receipt-migration,
+demo-seed) passed all 24 tests with at most two Vitest workers. After strengthening
+SSI assertions, the 19-test boundary file passed again. A3/entitlement/tenancy
+DB tests were discovered through Vitest only; PostgreSQL and browser suites
+remain for GitHub CI. Money arithmetic/commercial boundary lint and diff
+whitespace checks passed. Final net branch payload exactly matches the lane's
+20 allowed paths, excluding its implicit metadata file and the restored bridge.
+The stock local lane command includes uncommitted reverts in its union and thus
+still reports the restored bridge until the router commits; the bridge has zero
+net diff against merged origin/main, so it is intentionally absent from allow.
+No git writes, real data, provider calls, downloads or local listeners.
