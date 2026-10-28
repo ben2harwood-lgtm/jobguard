@@ -29,11 +29,11 @@ export function practiceFactDefinition(key: PracticeFactKey): PracticeFactDefini
   if(!definition)throw new Error(`Unknown practice fact ${String(key)}`);
   return definition;
 }
-const commandBase = {version:z.literal("practice-facts-command.v1"),commandId:z.string().uuid(),expectedRevision:z.number().int().nonnegative().max(1000000)};
+const commandBase = {version:z.literal("practice-facts-command.v1"),commandId:z.guid({ error: "Invalid uuid" }),expectedRevision:z.number().int().nonnegative().max(1000000)};
 export const practiceFactsCommandV1 = z.discriminatedUnion("action",[
   z.object({...commandBase,action:z.literal("advance"),movement:practiceFactKeyV1,step:practiceFeedStepV1}).strict(),
   z.object({...commandBase,action:z.literal("reconcile_duplicate"),movement:practiceFactKeyV1}).strict(),
-  z.object({...commandBase,action:z.literal("match_receipt"),movement:practiceFactReceiptKeyV1,paymentId:z.string().uuid()}).strict(),
+  z.object({...commandBase,action:z.literal("match_receipt"),movement:practiceFactReceiptKeyV1,paymentId:z.guid({ error: "Invalid uuid" })}).strict(),
 ]);
 export type PracticeFactsCommand = z.infer<typeof practiceFactsCommandV1>;
 export const practiceFactsQueryV1 = practiceFeedQueryV1.extend({version:z.literal("practice-facts-query.v1")});
@@ -56,7 +56,7 @@ function representativeEvent(event:PracticeFactsAdapterEvent) {
   return {...event,movementKey:key,eventId:`${event.eventKind}-${key}`,grossPence:practiceMovementDefinition(key).grossPence};
 }
 export const practiceFactsAdapterEventV1 = z.object({
-  ...practiceFeedAdapterEventV1.innerType().shape,movementKey:practiceFactKeyV1,
+  ...practiceFeedAdapterEventV1.shape,movementKey:practiceFactKeyV1,
 }).strict().superRefine((event,ctx)=>{
   if(event.grossPence!==practiceFactDefinition(event.movementKey).grossPence)ctx.addIssue({code:"custom",path:["grossPence"],message:"amount is not the fixed catalogue amount"});
   if(event.eventId!==`${event.eventKind}-${event.movementKey}`)ctx.addIssue({code:"custom",path:["eventId"],message:"event id is not the fixed generated identity"});

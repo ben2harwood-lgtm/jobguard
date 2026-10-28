@@ -54,6 +54,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await page.setViewportSize({ width: 360, height: 800 }); // mobile-360
   const op = { page };
   await op.page.goto("/site/extra");
+  await expect(op.page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready");
   await expect(op.page.getByText(banner, { exact: true })).toHaveCount(1);
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
   await op.page.getByLabel("What is the extra work?").fill(description);
@@ -173,3 +174,79 @@ test("the first contractor demo: operative logs an extra with photo and resident
   expect(Number((await db.query("SELECT count(*) n FROM app.extra_origin WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(1);
   await db.end();
 });
+
+test("hub GET fault injections: aborted transport, 503 and malformed JSON recover the stored practice without POST", async ({ page }) => {
+  await page.goto("/northside");
+  await page.getByRole("button", { name: "Start Northside practice", exact: true }).click();
+  await expect(page.getByTestId("fact-orders")).toHaveText("2000", { timeout: 240_000 });
+  const storedFacts = await facts(page);
+  const posts: string[] = [];
+  page.on("request", request => { if (request.method() === "POST") posts.push(request.url()); });
+
+  for (const fault of ["aborted transport", "503", "malformed JSON"] as const) {
+    await test.step(`GET fault injection: ${fault}`, async () => {
+      await page.route("**/api/northside", async route => {
+        expect(route.request().method()).toBe("GET");
+        if (fault === "aborted transport") await route.abort("failed");
+        else if (fault === "503") await route.fulfill({ status: 503, contentType: "application/json", body: '{"code":"NORTHSIDE_UNAVAILABLE"}' });
+        // A 200 with invalid JSON is failure injection, never a success API mock.
+        else await route.fulfill({ status: 200, contentType: "application/json", body: '{"broken":' });
+      });
+      await page.reload();
+      const alert = page.getByRole("alert").filter({ hasText: /^The practice could not be loaded\.$/ });
+      const retry = page.getByRole("button", { name: "Try again", exact: true });
+      await expect(alert).toBeVisible();
+      await expect(alert).toHaveText("The practice could not be loaded.");
+      await expect(alert).toBeFocused();
+      await expect(page.getByTestId("northside-status")).toHaveText("Practice not loaded.");
+      await expect(page.getByText(banner, { exact: true })).toHaveCount(1);
+      expect(await noSideScroll(page)).toBe(true);
+      await page.keyboard.press("Tab");
+      await expect(retry).toBeFocused();
+      expect(await retry.evaluate(button => button.matches(":focus-visible"))).toBe(true);
+      const target = await retry.boundingBox();
+      expect(target!.width).toBeGreaterThanOrEqual(44);
+      expect(target!.height).toBeGreaterThanOrEqual(44);
+
+      await page.unroute("**/api/northside");
+      // Hold the real GET just long enough to inspect the pending state.
+      let release!: () => void;
+      const pending = new Promise<void>(resolve => { release = resolve; });
+      await page.route("**/api/northside", async route => { await pending; await route.continue(); });
+      try {
+        await retry.click();
+        await expect(retry).toBeDisabled();
+        await expect(page.getByTestId("northside-status")).toHaveText("Loading…");
+      } finally { release(); }
+      await expect(page.getByTestId("northside-status")).toHaveText("Loaded from the stored practice");
+      await page.unroute("**/api/northside");
+      await expect(alert).toHaveCount(0);
+      await expect(retry).toHaveCount(0);
+      expect(await facts(page)).toEqual(storedFacts);
+      expect(posts).toEqual([]);
+      await page.reload();
+      await expect(page.getByTestId("northside-status")).toHaveText("Loaded from the stored practice");
+      expect(await facts(page)).toEqual(storedFacts);
+      await expect(page.getByText(banner, { exact: true })).toHaveCount(1);
+      expect(await noSideScroll(page)).toBe(true);
+      expect(posts).toEqual([]);
+    });
+  }
+});
+
+// Transport and HTTP fault regressions: neither is an empty assignment register.
+for (const fault of ["transport", "http"] as const) {
+  test(`assigned-job ${fault} failure is visible instead of no jobs`, async ({ page }) => {
+    await page.route("**/api/contractor/site/jobs", async route => {
+      if (fault === "transport") await route.abort("failed");
+      else await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "SITE_VISIT_UNAVAILABLE" }) });
+    });
+    await page.route("**/api/northside/extras", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "NORTHSIDE_UNAVAILABLE" }) }));
+    await page.goto("/site/extra");
+    await expect(page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "failed");
+    await expect(page.locator("main").getByRole("alert")).toContainText(fault === "http" ? "could not load" : "Failed to fetch");
+    await expect(page.getByText("No jobs are assigned to you.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reload jobs and extras", exact: true })).toBeEnabled();
+    await expect(page.getByRole("region", { name: "My extras" })).toContainText("Extras are unavailable.");
+  });
+}

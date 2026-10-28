@@ -15,7 +15,7 @@
         "packages/core/src/success-fee-posting-fixtures.test.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0218_success_fee_v3.sql",
+        "packages/db/migrations/0251_success_fee_v3.sql",
         "packages/db/src/success-fee-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/MIGRATIONS.md",
