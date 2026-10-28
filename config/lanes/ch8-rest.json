@@ -6,7 +6,7 @@
         "codex/sandbox/ch8-rest"
       ],
       "receipt": "docs/verdicts/CH8-REST/BUILDER_RECEIPT.md",
-      "note": "RED \u2014 CH-8 part 2, BUILD_PLAN.md \u00a710.4, finish-list row 11. Router-scoped preparatory implementation. Part 3 owns the shadow-30000 source-to-settlement/UI/verifier journey and SV-6 runtime activation. Application and SQL creation/approval refuse until that activation. Own changed path config/lanes/ch8-rest.json is implicitly permitted. PR #389 catch-up preserves both export barrels, current-main shared expectations and unchanged migration 0306; no new behaviour.",
+      "note": "RED \u2014 CH-8 part 2, BUILD_PLAN.md \u00a710.4, finish-list row 11. Router-scoped preparatory implementation. Part 3 owns the shadow-30000 source-to-settlement/UI/verifier journey and SV-6 runtime activation. Application and SQL creation/approval refuse until that activation. Own changed path config/lanes/ch8-rest.json is implicitly permitted. PR #389 catch-up preserves both export barrels, current-main shared expectations and unchanged migration 0306; no new behaviour. Catch-up after PR #380 retains successFees and listV3 bindings and unions both LP-0 routine inventories.",
       "allow": [
         "apps/api/src/evidence-pack-v3.application.test.ts",
         "apps/api/src/evidence-pack-v3.controller.test.ts",

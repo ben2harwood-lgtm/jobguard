@@ -159,3 +159,40 @@ No package installation, Git write, PostgreSQL start, localhost, browser,
 provider, real data, money or release action occurred. PostgreSQL grant-freeze,
 authority-path and upgrade suites remain for GitHub CI after router push.
 Ready commit message: /tmp/ch8-rest-20261028T214749Z-commit-msg.txt.
+
+
+## PR #389 catch-up after #380 (M4-9-S) — 28 October 2026
+
+RED — CH-8 part 2; merge catch-up only, no new behaviour. Retained main's
+successFees workspace binding and CH-8's listV3 binding. LP-0 entries, groups
+and authority paths are the exact keyed union of main and the reviewed branch.
+SERIOUS-B5 retains main's two 0302 success-fee routine expectations plus CH-8's
+0306 additions; entitlement upgrade retains main plus the four CH-8 tables.
+The lane's exact payload paths still match the diff against origin/main; its
+own path is implicitly allowed. All SQL bytes are unchanged: 0306 matches HEAD
+(SHA-256 5d0a300b27bf74601c37296009414da15a96c6f10e14eea6f0c0bd6a0b82dea8);
+all other SQL matches origin/main.
+
+Local validation with installed tools:
+
+- API Vitest evidence-pack-v3.application, evidence-pack-v3.worker and
+  success-fee.application: PASS, 34 tests, maxWorkers=2.
+- DB Vitest lp-0-catalog: PASS, 26 tests, maxWorkers=1.
+- Core TypeScript build, DB and API TypeScript no-emit: PASS.
+- Actual LP-0 inventory parse/path completeness and exact main/HEAD union: PASS.
+- Core purity, money arithmetic and commercial boundary checks: PASS.
+- git diff --check, payload conflict-marker scan and exact lane-path check: PASS.
+
+The initial API run passed 23 CH-8 tests but failed 11 success-fee tests because
+installed core dist predated main's new exports; rebuilding core and rerunning
+passed all 34. The root lint wrapper stops at the lane check while the merge is
+uncommitted: main's staged incoming paths are counted as local CH-8 edits.
+No lane grants were widened; the actual payload against main matches exactly.
+The tsx CLI inventory helper could not open its IPC pipe; node with the existing
+tsx loader ran that same validation successfully without binding a socket.
+
+PostgreSQL, browser, full CI and the post-commit lane gate remain for GitHub CI
+after router push. No Git writes were performed. The two unmerged index entries
+must be staged by the router with the resolved working-tree files before the
+merge commit. This records builder checks, not a new independent RED review.
+Commit message: /tmp/ch8-rest-20261028T220936Z-commit-msg.txt.
