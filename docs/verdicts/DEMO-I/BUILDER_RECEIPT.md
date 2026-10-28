@@ -72,3 +72,39 @@ Actual local checks, using installed binaries and no downloads:
 - `git diff --check` and existing lane-path validation — passed.
 
 The sandbox cannot start PostgreSQL, so actual PostgreSQL compilation and database assertions still require GitHub CI. No database success or new independent review is claimed. No git writes; router commits and pushes the repair. RED classification remains unchanged.
+
+## PR #387 repair round 2 — successor catalogue expectations
+
+Current-main merge arrived clean (`git status --short` and `git ls-files -u` had no unresolved entries). Read current SIMPLE_LOOP/SIMPLICITY_RULE, repository instructions, DEMO-S scope, 0313 and the failing catalogue consumers.
+
+Cause: migration 0313 installs three private lifecycle tables and three routines, but shared successor expectations did not enumerate them. Updated contractor-entitlement's exact expected row map with the three empty tables. Added a bounded SERIOUS-B5 successor extension for precisely the three tables, four indexes, three tenant_scope policies and three routine signatures. The extension explicitly verifies migration ownership, FORCE RLS, no non-owner table grants, fixed search_path, the sole runtime-executable definer, and owner-only audit/guard helpers; all predecessor rows/catalogue values remain compared.
+
+LP-0 now records exactly two new capability facts: runtime EXECUTE on `small_builder_demo(uuid,text,text,uuid,jsonb)` and that reachable routine's migration owner. Private tables and helpers contribute no executable/read capabilities and are not allowlisted. Added the source-referenced lifecycle authority disposition/path and three routine protection records, labelled source inspection with actual PostgreSQL CI/RED review still required. Preserved every existing inventory row and its compact formatting; no baseline was regenerated and no SQL or grants changed. The new local catalogue regression rejects runtime SELECT on each private table and runtime/PUBLIC/infrastructure EXECUTE on either helper.
+
+The DEMO-I lane now lists exactly its 22 current branch payload paths, including inherited DEMO-P2 payloads and the shared expectation repairs. It excludes every config/lanes path and the lane register, as required. No other lane file was edited.
+
+Actual checks:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts src/small-builder-demo-repository.test.ts` — 45 passed across two files. Repeated after preserving inventory formatting/order; final run passed.
+- From `packages/db`: Vitest `list --maxWorkers=1` collected contractor-entitlement upgrade, SERIOUS-B5 upgrade and LP-0 grant-freeze (three named files); a separate list collected LP-0 authority paths, DEMO-I lifecycle and DEMO-I upgrade (three named files). Collection only, no PostgreSQL hooks or database assertions executed.
+- Explicit inventory union check — every predecessor group, capability, authority path and routine record retained; exactly one group/path, two capability facts and three routine records added; base, targets, held records and prior protection data unchanged.
+- Exact branch payload/lane comparison — passed; no lane-metadata grants.
+- `git diff --check` — passed.
+
+Remaining concrete blocker: `node tools/agent-lane-boundary-lint.mjs --lane=demo-i` fails solely on inherited `config/lanes/demo-p2.json`, which is already present in HEAD but absent from origin/main. This piece cannot authorize another lane file, and adding it to allow is explicitly prohibited; no files were deleted and no checker weakened. The router must reconcile that inherited dependency with the PR base (for example, land DEMO-P2 and merge the resulting main) before committing this as ready. Commit-message file is marked `do not commit` for that reason. The database suites still require CI because this sandbox cannot start PostgreSQL. No git writes or independent-review claims.
+
+## PR #387 repair round 2 continued — inherited lane consolidation
+
+The issued continuation explicitly authorizes archiving the inherited DEMO-P2 registration and consolidating this branch's payload under DEMO-I. This resolves the previous subsection's lane blocker and supersedes its not-ready handoff. No unresolved merge entries were present.
+
+Moved `config/lanes/demo-p2.json` to `archive/2026-10-28/demo-i-inherited-lanes/demo-p2.json` with identical bytes, checked against its HEAD contents. Its registration is no longer active; its contents and git history are preserved. Updated `config/lanes/demo-i.json` to enumerate exactly the 23 payload paths differing from main, including inherited DEMO-P2 sources/contracts/fixtures/receipt, the archive and the existing LP-0/entitlement/SERIOUS-B5 repairs. The only active lane-metadata path in the prospective PR is DEMO-I's own registration, implicitly allowed by the existing checker. No config/lanes or lane-register grants, checker changes, SQL/grant changes or extra product changes.
+
+Relevant actual validation:
+
+- The existing lane-policy loader and selector loaded the final working-tree policy; the existing `lanePathAllowed` checked every path in `git diff --no-renames --name-only -z origin/main --` plus untracked files. Prospective PR boundary passed: 24 total paths, 23 payload paths. Exact equality with the lane allowlist passed.
+- The existing `migrationOrderViolations` checked the main migration tree and the prospective added migration paths — passed.
+- Byte comparison of the archive against `git show HEAD:config/lanes/demo-p2.json` — passed; the original active path and DEMO-P2 active policy are absent.
+- `git diff --check` — passed. No git writes performed.
+
+The stock local CLI compares main to HEAD and then unions uncommitted paths, so it still sees the old HEAD's inherited registration until the router commits the move. Validation above checks the actual prospective PR diff against main using the unchanged checker predicates, rather than claiming that pre-commit HEAD is already repaired. GitHub CI must run the full lane check on the committed head. Prior round-2 typecheck and 45 passing local tests remain applicable: catalogue/test code is unchanged by this continuation; PostgreSQL execution still belongs to CI. Ready commit message written to the newly issued path; the router commits/pushes and updates finish/work lists. RED review/merge gates remain unchanged.

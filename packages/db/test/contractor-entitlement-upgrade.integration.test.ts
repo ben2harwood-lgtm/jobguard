@@ -23,6 +23,9 @@ it("actual catalogs retain least privilege",async()=>{
 // C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
 const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
+ "app.small_builder_demo_run":[],
+ "app.small_builder_demo_receipt":[],
+ "app.small_builder_demo_report":[],
  "app.job_small_trip_event":[],
  "app.job_small_trip_observation":[],
  "app.meter_lifecycle_alert":[],
