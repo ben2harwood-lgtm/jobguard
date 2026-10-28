@@ -19,6 +19,8 @@ Verification handoff: run the three own API files together with `--maxWorkers=2`
 
 ## ENT-11b browser continuation (RED; synthetic only)
 
+Public description: **mapped, inspectable**. This is not a verification or certification claim. Browser statement approvals must expire within fifteen minutes of the server's current time; the route refuses later client-supplied expiries.
+
 Start `/northside`, generate a new fictional run, then use the existing role controls for operative → surveyor → supervisor → owner → client approver. Return to Northside and act as finance. Finance is seeded by organisation commands with tenant finance plus read_only grants, allowing order/billing/dashboard reads without extra-approval authority. Existing runs acquire that fixture when the owner explicitly generates again. Migration 0314 extends the private switch decision only for `finance@northside-fictional.invalid` in a registered Northside run; generic finance, other-company and sign-in-bearing targets remain refused. The existing active-switch wider-grant trigger is unchanged. The LP-0 function digest was recomputed using PostgreSQL's canonical definition format, verified against the predecessor digest; CI must confirm the actual catalog.
 
 From the work-order detail follow **Billing and reconciliation**, export the approved extra, approve the exact fake download and import `billing-status.v1` invoice/payment events with complete invoice composition and immutable export-line matches. The screen derives Billed / Part-paid / Paid from exact imported balances, with credits and reversals preserved. The timed browser test imports a half payment twice to prove replay contributes once, then imports the balance. No provider or live-money route is enabled.

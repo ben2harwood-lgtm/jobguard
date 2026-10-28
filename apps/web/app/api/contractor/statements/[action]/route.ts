@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { EnterpriseFeeError, enterpriseFeePublicError } from "@jobguard/core";
-import { EnterpriseFeeRepository, contractorSessionContext } from "@jobguard/db";
+import { EnterpriseFeeRepository, contractorSessionContext, enterpriseFeeApproveStatementV1 } from "@jobguard/db";
 import { syntheticPool } from "../../../../lib/synthetic-server";
 import { isTrustedBrowserOrigin } from "../../origin";
 const headers = { "cache-control": "no-store" };
@@ -30,7 +30,13 @@ export async function POST(request: Request, context: { params: Promise<{ action
       result = { statement, derivations, postings };
     } else if (action === "derive") result = await repo.derive(tenant, session, raw);
     else if (action === "prepare") result = await repo.prepareStatement(tenant, session, raw);
-    else if (action === "approve") result = await repo.approveStatement(tenant, session, raw);
+    else if (action === "approve") {
+      const input = enterpriseFeeApproveStatementV1.safeParse(raw);
+      const now = Date.now();
+      if (!input.success || Date.parse(input.data.expiresAt) <= now || Date.parse(input.data.expiresAt) > now + 15 * 60_000)
+        throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+      result = await repo.approveStatement(tenant, session, input.data);
+    }
     else if (action === "post") result = await repo.postStatement(tenant, session, raw);
     else result = await repo.disputeStatement(tenant, session, raw);
     return NextResponse.json(result, { headers });

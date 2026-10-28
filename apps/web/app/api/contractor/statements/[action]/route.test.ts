@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ context: vi.fn(), pool: vi.fn(), read: vi.fn()
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => mocks.token ? { value: mocks.token } : undefined }) }));
 vi.mock("../../../../lib/synthetic-server", () => ({ syntheticPool: mocks.pool }));
-vi.mock("@jobguard/db", () => ({ contractorSessionContext: mocks.context, EnterpriseFeeRepository: class {
+vi.mock("@jobguard/db", async importOriginal => ({ enterpriseFeeApproveStatementV1: (await importOriginal<typeof import("@jobguard/db")>()).enterpriseFeeApproveStatementV1, contractorSessionContext: mocks.context, EnterpriseFeeRepository: class {
   readStatement = mocks.read; readPostings = mocks.postings; read = mocks.derivation; derive = mocks.derive; prepareStatement = mocks.prepare;
   approveStatement = mocks.approve; postStatement = mocks.post; disputeStatement = mocks.dispute;
 } }));
@@ -18,7 +18,7 @@ beforeEach(() => {
   mocks.context.mockResolvedValue({ tenantId: "from-cookie" }); mocks.read.mockResolvedValue({ id, sections: [{ derivationId: id }] });
   mocks.derivation.mockResolvedValue({ contributions: [] }); mocks.postings.mockResolvedValue([]);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 it("binds all reads to the current cookie context and returns drill-downs without caching", async () => {
   for (let i = 0; i < 2; i++) { const result = await call(); expect(result.status).toBe(200); expect(result.headers.get("cache-control")).toBe("no-store"); }
   expect(mocks.read).toHaveBeenLastCalledWith({ tenantId: "from-cookie" }, id, id);
@@ -36,11 +36,25 @@ it("rejects forged read authority and malformed or unknown commands", async () =
   expect(mocks.read).not.toHaveBeenCalled(); expect((await call("unknown")).status).toBe(400);
   expect((await call("read", new Request(request().url, { method: "POST", headers: { origin: "http://localhost:3000" }, body: "{" }))).status).toBe(400);
 });
-it("delegates exact commands unchanged: the repository is the only validator and authorizer", async () => {
-  for (const [action, fn] of [["derive", mocks.derive], ["prepare", mocks.prepare], ["approve", mocks.approve], ["post", mocks.post], ["dispute", mocks.dispute]] as const) {
+it("delegates exact commands unchanged to the repository", async () => {
+  for (const [action, fn] of [["derive", mocks.derive], ["prepare", mocks.prepare], ["post", mocks.post], ["dispute", mocks.dispute]] as const) {
     const command = { version: `enterprise-fee-${action}.v1`, commandId: id };
     fn.mockResolvedValue({ replayed: true }); expect((await call(action, request(command))).status).toBe(200);
     expect(fn).toHaveBeenLastCalledWith({ tenantId: "from-cookie" }, id, command);
+  }
+});
+it("refuses browser approval expiries outside the server's fifteen-minute window", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-28T12:00:00Z"));
+  const command = { version: "enterprise-fee-approve-statement.v1", commandId: id, statementId: id, contentHash: "a".repeat(64), totalDeltaPence: 806 };
+  for (const expiresAt of ["2099-01-01T00:00:00Z", "2026-10-28T12:15:00.001Z", "2026-10-28T12:00:00Z", "2026-10-28T11:59:59Z", "tomorrow"]) {
+    expect((await call("approve", request({ ...command, expiresAt }))).status).toBe(400);
+  }
+  expect(mocks.approve).not.toHaveBeenCalled();
+  mocks.approve.mockResolvedValue({ authorizationId: id, replayed: false });
+  for (const expiresAt of ["2026-10-28T12:01:00Z", "2026-10-28T12:15:00Z"]) {
+    const approved = { ...command, expiresAt };
+    expect((await call("approve", request(approved))).status).toBe(200);
+    expect(mocks.approve).toHaveBeenLastCalledWith({ tenantId: "from-cookie" }, id, approved);
   }
 });
 it("fails closed on cross-company reads, stale approval and private database errors", async () => {

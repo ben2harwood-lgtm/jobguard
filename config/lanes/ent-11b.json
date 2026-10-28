@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/ent-11b"
       ],
-      "note": "RED. ENT-11b synthetic Northside finance, statements and timed journey. Finance switch requires migration 0314. Human sales bible, claim review and rehearsals remain outstanding. Prerequisite merge conflicts retain the union of catalog expectations.",
+      "note": "RED. ENT-11b synthetic Northside finance, statements and timed journey, with server-enforced fifteen-minute browser approval expiry. Finance switch requires migration 0314. Human sales bible, claim review and rehearsals remain outstanding. Prerequisite merge conflicts retain the union of catalog expectations.",
       "allow": [
         "apps/web/app/api/contractor/statements/[action]/route.test.ts",
         "apps/web/app/api/contractor/statements/[action]/route.ts",
