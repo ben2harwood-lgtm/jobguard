@@ -56,7 +56,6 @@ export function JobWorkState({ jobId }: { jobId: string }) {
  const closed = view?.closedEventId != null, noteMissing = note.trim() === "";
  return <section id="site-work" className={styles.panel} aria-labelledby="site-work-title" aria-busy={busy} data-testid="job-work-state">
   <h2 id="site-work-title">Site work</h2>
-  <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
   {error && <p role="alert">{error}</p>}
   {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/">Start a new job</a></p>}
   {view && <>
@@ -64,10 +63,10 @@ export function JobWorkState({ jobId }: { jobId: string }) {
    <div className={styles.actions}>
     {!closed && !view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
     {!closed && view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
-    {closed && <button type="button" disabled={busy} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
+    {closed && <button type="button" disabled={busy || !view.locked} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
     <button type="button" disabled>Resume site work</button>
    </div>
-   <p>Resume site work is not available yet: it waits for the jobs-on-the-go meter.</p>
+   <p>Resume site work is not available yet: it waits for the jobs-on-the-go meter.{closed && !view.locked ? " Reopening a closed job waits for it too." : ""}</p>
    {!closed && <fieldset className={styles.actions}>
     <legend>Close job</legend>
     <div className={styles.field}><label htmlFor="close-reason">Reason</label><select id="close-reason" value={reason} disabled={busy} onChange={e => setReason(e.target.value as CloseReason)}>{(Object.keys(closeReasonLabels) as CloseReason[]).map(key => <option key={key} value={key}>{closeReasonLabels[key]}</option>)}</select></div>
