@@ -4,11 +4,11 @@ import { expect, it } from "vitest";
 
 const root = new URL("../../../../", import.meta.url);
 const own = ["packages/core/src/enterprise-dashboard.ts", "packages/core/src/enterprise-dashboard-billing.ts", "packages/core/src/enterprise-signal.ts",
-  "packages/db/src/enterprise-dashboard-repository.ts", "packages/db/src/enterprise-dashboard-queries.ts", "apps/api/src/contractor/enterprise-dashboard.application.ts"];
+  "packages/db/src/enterprise-dashboard-repository.ts", "packages/db/src/enterprise-dashboard-queries.ts", "packages/db/src/enterprise-dashboard-signals.ts", "apps/api/src/contractor/enterprise-dashboard.application.ts"];
 it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/session boundary; no writer, provider, outbox or privileged client", async () => {
   const allowed: Record<string, string[]> = {
     core: ["zod", "./money.js", "./evidence-pack.js", "./receipt-allocation.js", "./enterprise-domain/contracts.js", "./enterprise-dashboard.js", "./contractor-billing.js", "./cumulative-fee.js", "./rational.js"],
-    db: ["pg", "zod", "@jobguard/core", "./tenant-context.js", "./enterprise-dashboard-queries.js"],
+    db: ["pg", "zod", "@jobguard/core", "./tenant-context.js", "./enterprise-dashboard-queries.js", "./enterprise-dashboard-signals.js"],
     api: ["pg", "zod", "@jobguard/core", "@jobguard/db"],
   };
   for (const path of own) {
@@ -18,10 +18,26 @@ it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
         expect(allowed[tier]).toContain(node.moduleSpecifier.text);
         const bindings = node.importClause?.namedBindings;
+        if (path === "packages/db/src/enterprise-dashboard-signals.ts") {
+          // This adapter must remain pure even though its caller may read the database.
+          const pureImports: Record<string, string[]> = {
+            zod: ["z"],
+            "@jobguard/core": ["dashboardExtraV1", "dashboardParse", "dashboardQueryV1", "dashboardFactsV1", "dashboardPeriodContains", "enterpriseSignalFactsV1", "enterpriseSignals", "projectEnterpriseDashboard"],
+          };
+          expect(Object.keys(pureImports)).toContain(node.moduleSpecifier.text);
+          expect(bindings && ts.isNamedImports(bindings)).toBe(true);
+          if (bindings && ts.isNamedImports(bindings))
+            expect(bindings.elements.map(e => (e.propertyName ?? e.name).text).sort()).toEqual(pureImports[node.moduleSpecifier.text]!.toSorted());
+        }
         if (node.moduleSpecifier.text === "@jobguard/db" && bindings && ts.isNamedImports(bindings))
           expect(bindings.elements.map(e => e.name.text).sort()).toEqual(["EnterpriseDashboardRepository", "VerifiedTenantContext", "contractorSessionContext"].sort());
         if (node.moduleSpecifier.text === "./tenant-context.js" && bindings && ts.isNamedImports(bindings))
           expect(bindings.elements.map(e => e.name.text).sort()).toEqual(["VerifiedTenantContext", "withTenant"].sort());
+      }
+      if (path === "packages/db/src/enterprise-dashboard-signals.ts") {
+        if (ts.isNewExpression(node)) expect(node.expression.getText(ast)).toBe("Set");
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression))
+          expect(node.expression.name.text).not.toBe("query");
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "query")
         expect(["enterpriseDashboardScopeLockSql", "enterpriseDashboardSourceSql"]).toContain(node.arguments[0]?.getText(ast));

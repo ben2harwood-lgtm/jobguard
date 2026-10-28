@@ -1,3 +1,128 @@
+# CH-9 part 2 — current builder handoff (RED)
+
+28 October 2026. Branch `codex/sandbox/ch9-p2`. Source implemented locally;
+PostgreSQL/browser CI and the independent RED review remain to run.
+**Not commit-ready on this combined parent tree:** the inherited lane footprint
+and the protected practice-session source-pin gate still fail. No commit,
+push, PR, merge, provider, real data, live money or release action was performed.
+The historical part-1 record below is preserved as history.
+
+## Change and scope
+
+- Resolved both supplied conflicts by retaining both sides' exports. The Git index
+  remains unmerged/read-only until the router stages these resolved files.
+- Added migration **0326**, two controlled read functions, source DTO/projection,
+  mapped job and company receipt views, source-reproduced business totals and
+  separate MON-1/MON-2A subscription periods/statements. Existing candidate
+  illustrative DTOs, fixtures and v1 recorded-money views remain separate.
+- Original-bill captures join their actual variation **revision** source IDs and
+  belong to the locked revision and original invoice. The existing receipt-line
+  binding helper checks the completed check, invoice and exact line identity.
+- Found figures reuse SV-6's persisted assessments and current source resolver,
+  including #346, #356 and corrected #368. Revisions replace balances; explicit
+  signed movements retain reversals. Stale sources, unassessed cases and fractional
+  pence refuse current figures. No second allocator, writer or qualification
+  policy was introduced. Fees reuse SV-6's cumulative v3 kernel and remain proposed
+  policy illustrations, with “yours before VAT and tax”.
+- Company access uses the existing MON-1/MON-2A identity bridge. A shared practice
+  cookie never grants company billing access, including alongside a revoked company
+  cookie. Private/no-store reads authenticate before selection or source details.
+  Company job links use that same bridge on the exact read endpoint. Per-job practice ownership is rechecked. No hidden query occurs before lock.
+- Optional half-open windows use exact server-recorded instants (including
+  PostgreSQL microseconds). Original invoice creation, completed check availability
+  and attribution recording supply the clocks. Subscription selection is by saved
+  period ID; job windows never prorate a subscription or place it on a job.
+- The public phrase is “mapped, inspectable”. Supplier and withheld-payment
+  sections stay explicitly unavailable because this branch has no accepted
+  producer for their figures. No capture or catch amount is relabelled into them.
+
+The additional company read boundary is necessary because the old practice-session
+boundary cannot authorize MON-1/MON-2A's company ledger. It reuses that producer's
+existing authentication; it does not relax shared-practice isolation. The source
+contract is distinct because the old illustrative contract is deliberately unbound.
+This is the substantial complexity added by this piece; no new orchestration,
+provider layer, framework or reporting system was introduced.
+
+## Local evidence (actual execution)
+
+Node 24.17.0; installed TypeScript 5.8.3 and Vitest 4.1.12. No packages downloaded.
+The pnpm wrapper stalled before running checks and was interrupted; checks below
+use the installed compiler/test-runner entrypoints directly.
+
+- `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json` — PASS.
+- Same compiler for `packages/db/tsconfig.json` and `apps/api/tsconfig.json` — PASS;
+  `apps/web/tsconfig.json --noEmit` — PASS (rerun after final view edits).
+- Core Vitest: `src/value-source-receipt.test.ts src/cumulative-fee.test.ts`,
+  `--maxWorkers=2` — **111 passed**. Includes the reused attribution fixture's
+  registered tests; this is not 111 newly added tests.
+- API Vitest: job/business application + composition — **52 passed** before the
+  additional positive-source regression; job/business/company application
+  run — **60 passed**; final job/company/composition run — **41 passed**. Company/subscription-access/controller run — **20 passed**.
+- DB scripted adapter + catalogue comparator: `src/value-business-reader.test.ts
+  test/lp-0-catalog.test.ts`, `--maxWorkers=2` — **30 passed**. These are deterministic
+  adapter/comparator tests, not PostgreSQL permission or settlement proof.
+- Web value routes + static receipt rendering, three named files,
+  `--maxWorkers=2` — **24 passed** after repeated-window-selector and company job-link regressions.
+- OpenAPI generation ran without sockets. Its checked-in diff changes only the
+  two value-read summaries. OpenAPI consistency is checked again on the final tree.
+- Core-purity, money-arithmetic and commercial-boundary scripts — PASS. Lane
+  checking is reported separately below because this is a build-ahead branch.
+- An optional standalone typecheck of the new integration files reached the
+  existing `packages/db/test/job-work-state-fixtures.ts:45` error: the default
+  proof-evidence option is typed `string | undefined`. That unrelated fixture was
+  preserved; Vitest's real PostgreSQL suite remains the required execution proof.
+
+## Lane gate on this build-ahead tree
+
+`node tools/agent-lane-boundary-lint.mjs` selects the new `ch9-p2` lane, then
+**FAILS** against local `origin/main`: it also sees inherited CH9-B and SV6-hookup
+parent changes (including their lane files and enterprise/allocator work). The
+new lane lists only the 32 exact paths edited by this piece; it does not absorb
+parent ownership, grant other lane files or weaken the checker. The router must
+integrate the parent branches into the comparison base before this piece can
+have green PR CI. This is not a local lane PASS or permission to merge.
+
+Initial builder source inspection (not an independent review): **LATER / SIMPLICITY**
+— `packages/core/src/recovery-attribution-persistence.test.ts`, exported `fixture`:
+move that factory to a shared test helper later. Both suites can reuse it without
+registering the persistence suite as an import side effect, keeping focused test
+counts and failures easier to maintain. Non-blocking; no adjacent refactor here.
+
+Additional security-boundary execution: `src/auth/context-boundary.test.ts`
+finishes **143 passed, 2 failed**. After correcting the new wrapper's type shape,
+its diagnostic names only inherited `packages/db/src/practice-session.ts:24` and
+that file's protected source identity. There is no unstaged change to that file;
+the supplied staged parent delta adds the optional serializable-transaction path
+to `practiceMaterialPool`. The protected checker/fingerprint and parent behavior
+were preserved. The parent's owner/reviewer must reconcile this gate before this
+combined tree is ready. `src/auth/identity.test.ts` separately passed 6 tests;
+final legacy value-controller/subscription-access regression passed 16 tests.
+The reviewed catalogue JSON parses with 1,375 entries and no path-completeness
+problems. None of this substitutes for live PostgreSQL grant inspection.
+
+## CI and review evidence still required
+
+`value-source.integration.test.ts` uses real synthetic writers for the catch,
+supplementary invoice, matched settled receipt, allocator and assessment chain.
+It tests replay/no read-side audit append, immediate stale-money refusal after a
+refund, explicit negative reassessment, original-bill fee-free capture, cross-
+session/job/tenant refusal, real subscription statement reproduction and session
+revocation. Disposable corruption tests attack allocation caps and wrong locked
+revisions through the read boundary. Grants are checked as real catalogue facts.
+`value-source-upgrade.integration.test.ts` populates the actual predecessor,
+preserves existing rows/types/keys through 0326, applies successors and repeats
+migration. These PostgreSQL tests were **not run locally**: this sandbox cannot
+start PostgreSQL or bind localhost.
+
+`CH-9-mapped.spec.ts` tests responsive source/period rendering and removal of stale
+figures on refresh with an explicitly mocked transport fixture. It is browser UI
+coverage, not database truth; PostgreSQL coverage is separate. Browser suites,
+full required CI, current-main comparison and one independent Claude RED review
+are still required before merge. No live-model evaluation applies: prompts,
+models, extraction schemas and provider routes did not change.
+
+---
+
 # CH9-B builder receipt — build-ahead, held
 
 Date: 24 October 2026. Builder: Codex. One initial build; no independent repair round, review, acceptance, commit, push or merge. C250's at-most-two review repair rounds remain with the dispatcher. RED money-display lane.

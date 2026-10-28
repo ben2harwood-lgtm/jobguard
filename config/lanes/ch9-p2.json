@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-p2": {
+      "branches": [
+        "codex/sandbox/ch9-p2"
+      ],
+      "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
+      "note": "RED: CH-9 part 2 source-mapped value page and receipt. Exact paths edited by this piece, including the two supplied merge resolutions; inherited parent changes keep their own lanes. Own lane file is implicitly permitted. PostgreSQL/browser CI and independent RED review remain required.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/value/company-value.application.test.ts",
+        "apps/api/src/value/value-business.application.ts",
+        "apps/api/src/value/value-business.controller.ts",
+        "apps/api/src/value/value-v3.application.test.ts",
+        "apps/api/src/value/value-v3.application.ts",
+        "apps/api/src/value/value-v3.controller.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.test.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.ts",
+        "apps/web/app/api/value/route.test.ts",
+        "apps/web/app/api/value/route.ts",
+        "apps/web/app/jobs/[id]/value/page.tsx",
+        "apps/web/app/ui/business-value-v3.tsx",
+        "apps/web/app/ui/mapped-value-receipt.test.tsx",
+        "apps/web/app/ui/mapped-value-receipt.tsx",
+        "apps/web/e2e/CH-9-mapped.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/value-v3.md",
+        "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/value-source-receipt.test.ts",
+        "packages/core/src/value-source-receipt.ts",
+        "packages/db/migration-notes/0326_value_source_read.md",
+        "packages/db/migrations/0326_value_source_read.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/value-business-reader.test.ts",
+        "packages/db/src/value-business-reader.ts",
+        "packages/db/src/value-v3-reader.ts",
+        "packages/db/test/value-source-upgrade.integration.test.ts",
+        "packages/db/test/value-source.integration.test.ts"
+      ]
+    }
+  }
+}

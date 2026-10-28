@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-hookup": {
+      "branches": [
+        "codex/sandbox/sv6-hookup"
+      ],
+      "note": "RED SV-6 runtime attribution writer and synthetic per-catch value illustration; builds on PR #383 repair head 9bb4b30b. CI PostgreSQL and one independent RED review required. Own lane file is implicitly permitted by the lane checker.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/recovery-attribution-value.ts",
+        "apps/api/src/recovery-attribution.application.test.ts",
+        "apps/api/src/recovery-attribution.application.ts",
+        "apps/api/src/recovery-attribution.controller.test.ts",
+        "apps/api/src/recovery-attribution.controller.ts",
+        "apps/api/src/recovery-attribution.http.test.ts",
+        "docs/contracts/recovery-attribution-v1.md",
+        "packages/core/src/recovery-attribution-illustration.test.ts",
+        "packages/core/src/recovery-attribution-illustration.ts",
+        "packages/core/src/recovery-fee-illustration.test.ts",
+        "packages/core/src/recovery-fee-illustration.ts",
+        "packages/db/migration-notes/0311_recovery_attribution_hookup.md",
+        "packages/db/migrations/0311_recovery_attribution_hookup.sql",
+        "packages/db/src/recovery-attribution-repository.test.ts",
+        "packages/db/src/recovery-attribution-repository.ts",
+        "packages/db/test/recovery-attribution-hookup-upgrade.integration.test.ts",
+        "packages/db/test/recovery-attribution-hookup.integration.test.ts"
+      ]
+    }
+  }
+}

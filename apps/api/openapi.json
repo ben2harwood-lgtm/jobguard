@@ -10,7 +10,7 @@
             "description": ""
           }
         },
-        "summary": "Read business value availability; producer and billing-period bindings held",
+        "summary": "Read mapped, inspectable company value and subscription periods",
         "tags": [
           "value"
         ]
@@ -25,7 +25,7 @@
             "description": ""
           }
         },
-        "summary": "Read job value v3 availability; producer bindings held",
+        "summary": "Read mapped, inspectable job value from locked bill and attribution sources",
         "tags": [
           "jobs"
         ]
@@ -49,11 +49,14 @@
         "operationId": "RecoveryAttributionController_post",
         "parameters": [],
         "responses": {
+          "409": {
+            "description": "Stored sources, expected revisions or command replay conflict"
+          },
           "503": {
-            "description": "Execution held pending accepted source, authorization and audit dependencies"
+            "description": "Review approval remains dependency-bound"
           }
         },
-        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
         "tags": [
           "synthetic recovery attribution"
         ]
