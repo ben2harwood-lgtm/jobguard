@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finalCheckDispositionV1, finalCheckTaskV1, checkSourceCompletion, reconcileFinalCheck, finalCheckIncludedReference, FINAL_CHECK_EMPTY_TEXT } from "./final-check.js";
+import { finalCheckDispositionV1, finalCheckTaskV1, checkSourceCompletion, reconcileFinalCheck, finalCheckIncludedReference, FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_BUILDER_CAPTURE } from "./final-check.js";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const capture = {version:"shadow-capture.v1",tenantId:id(1),jobId:id(2),id:id(3),scopeItemId:id(4),revisionId:id(5),serverRecordedAt:"2026-10-12T10:00:00.000001Z",valuePence:null,kind:"log_extra",state:"draft",scopeArea:"job",description:"outside tap",recordedPhase:"pre_lock",aiStructured:false,sourceRef:"synthetic"};
 const signal = {tenantId:id(1),jobId:id(2),signalId:id(9),description:"outside tap",scopeArea:"job",scopeItemId:null,coalescedIntoSignalId:null,hasEvidence:true,permanentExclusion:false};
@@ -11,6 +11,12 @@ describe("SV-5 pure reconciliation",()=>{
   expect(checkSourceCompletion([source],[])).toBe(false);
   expect(checkSourceCompletion([source],[{...source,status:"zero_result"}])).toBe(true);
   expect(checkSourceCompletion([source],[{...source,inputHash:"b".repeat(64),status:"zero_result"}])).toBe(false);
+ });
+ it("the job's own walk-it text is listed as builder capture and never needs a scan result",()=>{
+  const walkIt={id:id(3),inputHash:"a".repeat(64),sourceKind:FINAL_CHECK_BUILDER_CAPTURE},photo={id:id(4),inputHash:"b".repeat(64),sourceKind:"completion_photo"};
+  expect(checkSourceCompletion([walkIt],[])).toBe(true);
+  expect(checkSourceCompletion([walkIt,photo],[])).toBe(false);
+  expect(checkSourceCompletion([walkIt,photo],[{...photo,status:"zero_result"}])).toBe(true);
  });
  it("SV5-04 empty inventory has an explicit normal zero-result message",()=>{
   expect(checkSourceCompletion([],[])).toBe(true);

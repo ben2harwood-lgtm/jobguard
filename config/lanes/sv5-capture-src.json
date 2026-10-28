@@ -5,11 +5,18 @@
       "branches": [
         "codex/sandbox/sv5-capture-src"
       ],
-      "note": "RED. The job's own walk-it capture text stops being a non-processable Final Check source (unblocks merged SV-5 completion). One routine restated; synthetic only.",
+      "note": "RED. Ben 28 Oct 'Yes, builder capture': the job's own walk-it text is listed in the Final Check inventory as builder_capture_not_scanned and does not hold completion. Synthetic only.",
       "allow": [
+        "packages/db/migrations/0257_final_check_builder_capture_not_scanned.sql",
+        "packages/db/migration-notes/0257_final_check_builder_capture_not_scanned.md",
+        "packages/db/test/final-check-capture-text.integration.test.ts",
+        "docs/contracts/final-check-v1.md",
+        "packages/core/src/final-check.ts",
+        "packages/core/src/final-check.test.ts",
+        "apps/api/src/final-check.worker.ts",
+        "apps/api/src/final-check.worker.test.ts",
         "packages/db/migrations/0257_final_check_capture_text_not_source.sql",
-        "packages/db/migration-notes/0257_final_check_capture_text_not_source.md",
-        "packages/db/test/final-check-capture-text.integration.test.ts"
+        "packages/db/migration-notes/0257_final_check_capture_text_not_source.md"
       ]
     }
   }
