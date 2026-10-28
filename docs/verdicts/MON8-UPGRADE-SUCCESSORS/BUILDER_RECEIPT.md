@@ -305,3 +305,67 @@ main files. Rechecked the incoming successor expectation union against index sta
 3; own-step populated status rows remain covered by the full baseline proof.
 Strict compilation including the ordinary identity invitation suite also passed.
 No required release, RED review or current-main CI gate is waived.
+
+
+## Repair round 1 — RED verdict at 1551d456 (28 October)
+
+Addresses the contractor-to-small-builder authority regression using the reviewer's
+option (b): keep membership-only validity for scoped retained reads and security
+revocation, and require the current persisted contractor feature at every remaining
+legacy writer boundary. 0318 is edited in place. It now guards `ef_actor` (and
+therefore fee derivation, preparation, approval and dispute),
+`enterprise_baseline_actor`, `ent3a_extra_authority` (including resident
+confirmation), practice worker decisions and switch-on before replay, customer
+linking, live-prompt mutations and visit evaluation. 0319's billing authority
+requires current contractor entitlement only for `p_write=true`. Existing
+`contractor_allowed` / `contractor_job_allowed` checks remain resource permissions,
+not commercial eligibility. Missing/current small-builder assignment refuses;
+old active status on a superseded contractor assignment cannot authorize work.
+
+The existing finance and baseline actor checks are reused as two private
+migration-owned retained-reader helpers. They grant neither new work nor runtime
+execution. Existing derivation, statement and baseline readers use these helpers
+and preserve their original tenant/session/finance/resource checks. Fee writers
+re-read finance authority after the entitlement lock wait. No membership/grant/link
+revocation or required-SSO disable guard is tightened. No data is deleted, migrated
+or backfilled; no provider, release or policy activation occurs. PostgreSQL requires
+full explicit CREATE OR REPLACE definitions: the added text preserves original
+bodies/ACLs plus narrow guards, rather than introducing dynamic source rewriting.
+
+The existing real-PostgreSQL server-entitlements suite now includes a populated
+contractor company with positive finance, baseline, extra and worker authority
+controls. It derives and prepares an actual synthetic zero-value fee statement,
+reassigns the company through `assign_commercial_track` to small_builder, and
+requires FORBIDDEN/42501 for the legacy writer matrix, including exact fee-command
+replays. It asserts no table changes from refused calls, identical retained fee and
+organisation reads, and successful scoped grant/membership revocation. Installed
+routine checks include every added writer guard. These are authored CI tests,
+not locally executed PostgreSQL evidence.
+
+Actual local checks (installed tools; no downloads or git writes):
+
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`: passed.
+- Strict standalone compilation of `packages/db/test/server-entitlements.integration.test.ts`
+  with `--noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes
+  --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext`: passed.
+- From packages/db, `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/plan-entitlement-service.test.ts src/outbox.test.ts src/later-outbox.test.ts`:
+  3 files, 23 tests passed.
+- From packages/db, `node node_modules/vitest/vitest.mjs list --maxWorkers=2
+  test/server-entitlements.integration.test.ts`: collected all 8 cases, including
+  the new regression. The first collection failed because the installed storage
+  dependency lacked dist; `node packages/storage/node_modules/typescript/bin/tsc
+  -p packages/storage/tsconfig.json` passed and the same collection then passed.
+  Listing tests does not execute their hooks or PostgreSQL assertions.
+- Core purity, money-arithmetic and commercial-boundary tools passed. Core purity
+  reported its 10 existing computed-import notices.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: passed for
+  the existing committed branch range ending 1551d456. Repair paths are already
+  within this lane's exact allowlist; the router must check its new committed head.
+- `git diff --check`: passed.
+
+Ready for router commit/push and CI, followed by the one independent RED review
+against the resulting head. PostgreSQL, migration, browser and current-head CI
+execution remain pending under the issued sandbox constraints. The router owns
+finish-list/work-list state and delivery. Commit message:
+`/tmp/mon8-upgrade-successors-20261028T212412Z-commit-msg.txt`.

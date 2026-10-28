@@ -610,6 +610,7 @@ BEGIN
  -- Retained contractor billing/exports keep their original finance and job scope.
  PERFORM app.mon8_feature_decision(a,'accounting_export','retained_read');
  IF p_write THEN
+  PERFORM app.mon8_require_feature(a,'work_orders');
   -- Shared organisation fence, job/group, ordered extra members, actor; no business locks after audit.
   PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
   PERFORM pg_advisory_xact_lock(hashtextextended(t::text,618));
