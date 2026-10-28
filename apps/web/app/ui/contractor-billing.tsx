@@ -10,7 +10,7 @@ const projectionLineV1 = z.object({ lineId: id, billedNet: exactPenceV1, credite
 /** The fields this screen shows from `contractor-billing-projection.v1`; anything else in the response is ignored. */
 export const contractorBillingReadV1 = z.object({
   version: z.literal("contractor-billing-projection.v1"),
-  exports: z.array(z.object({ id, artifact: z.object({ lines: z.array(z.unknown()), totalNet: z.object({ pence: z.number().int() }) }), csvHash: z.string() })),
+  exports: z.array(z.object({ id, lines: z.array(z.unknown()), totalNet: z.object({ pence: z.number().int() }), csvHash: z.string() })),
   invoices: z.array(z.object({ source: id, invoiceNumber: id, projection: z.object({
     lines: z.array(projectionLineV1), totals: z.object({ billedNet: exactPenceV1, creditedNet: exactPenceV1, paidNet: exactPenceV1 }),
     held: z.array(z.object({ sourceEventId: id, reason: id })) }) })),
@@ -62,7 +62,7 @@ export function BillingView({ jobId, view }: { jobId: string; view: ContractorBi
       <h2>Exports</h2>
       {view.exports.length ? view.exports.map(e => { const sent = view.deliveries.filter(d => d.batch_id === e.id);
         return <div key={e.id} data-testid={`export-${e.id}`}>
-          <p>Batch {short(e.id)} · {e.artifact.lines.length} line{e.artifact.lines.length === 1 ? "" : "s"} · net {exactPounds({ numerator: String(e.artifact.totalNet.pence), denominator: "1" })}</p>
+          <p>Batch {short(e.id)} · {e.lines.length} line{e.lines.length === 1 ? "" : "s"} · net {exactPounds({ numerator: String(e.totalNet.pence), denominator: "1" })}</p>
           <p>{sent.length ? sent.map(d => <span key={d.id}>{channel[d.adapter] ?? d.adapter}: {d.status}. </span>) : "Not delivered yet."}</p>
           {sent.some(d => d.adapter === "fake_download" && d.status === "succeeded") && <a className={styles.action} href={`/api/contractor/jobs/${jobId}/billing/download?batchId=${e.id}`}>Download CSV</a>}
         </div>; }) : <p className={styles.muted}>No export batches yet.</p>}

@@ -9,7 +9,8 @@ vi.stubGlobal("React", React);
 const p = (numerator: string, denominator = "1") => ({ numerator, denominator });
 const read = {
   version: "contractor-billing-projection.v1",
-  exports: [{ id: "batch-0001-aaaa", artifact: { lines: [{}, {}], totalNet: { pence: 80000, currency: "GBP" } }, jsonHash: "j", csvHash: "c", csv: "x" }],
+  // Shape returned by BillingApplication.read (exports flattened, no CSV body).
+  exports: [{ id: "batch-0001-aaaa", jsonHash: "j", csvHash: "c", lines: [{}, {}], totalNet: { pence: 80000, currency: "GBP" } }],
   invoices: [{ source: "client-erp", invoiceNumber: "INV-7", runId: "r", projection: {
     lines: [{ lineId: "L1", billedNet: p("50000"), creditedNet: p("0"), paidNet: p("2500000", "31"), paidGross: p("0"), matchedExtraNet: p("0"), rejected: false }],
     totals: { billedNet: p("50000"), creditedNet: p("0"), paidNet: p("2500000", "31"), paidGross: p("0"), matchedExtraNet: p("0") },
