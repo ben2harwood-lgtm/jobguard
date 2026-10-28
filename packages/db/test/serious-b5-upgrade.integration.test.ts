@@ -461,6 +461,24 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   routines: additive(expectedRoutines, routines, after.routines),
   relations: additive(expectedRelations, relations, after.relations), policies: additive(before.policies, [...policies, ...newSourcePolicies], after.policies) };
 }
+// Dispatcher-assigned catalogue row: 0244 creates only this private routine.
+async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_admit_place"
+  && r.args === "t uuid, j uuid, source_kind text, source_id uuid");
+ expect(routines).toHaveLength(1);
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r.proowner).toBe(owner);
+  expect(r.prosecdef).toBe(false);
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
+  expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -491,6 +509,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
+ Object.assign(expected, await placeAdmissionAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
