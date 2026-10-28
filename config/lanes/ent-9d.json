@@ -7,6 +7,7 @@
       ],
       "note": "ENT-9 routes and screens, RED. Synthetic only; unmatched-variation signal intentionally omitted by router decision because ENT-6 requires an export match for every billed extra. No migration. The lane file itself is implicitly editable under the lane validator.",
       "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "apps/api/src/workspace/index.ts",
         "apps/web/app/api/contractor/baseline/compare/route.ts",
         "apps/web/app/api/contractor/baseline/route.ts",

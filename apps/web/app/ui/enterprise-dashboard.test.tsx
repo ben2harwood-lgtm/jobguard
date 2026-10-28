@@ -29,3 +29,10 @@ it("starts empty and offers explicit scope/period, baseline bindings and compari
   for (const text of ["Contractor dashboard", "Group by", "Filter ID", "Import history", "Stored batch ID", "Compare baseline"]) expect(html).toContain(text);
   expect(html).not.toContain("Billed variation without");
 });
+
+it("keeps the export format label separate from option text for exact accessible-name selection", () => {
+  const html = renderToStaticMarkup(<EnterpriseDashboard/>);
+  expect(html).toContain('<label for="baseline-output-format">Export format</label>');
+  expect(html).toContain('<select id="baseline-output-format" name="outputFormat">');
+  expect(html).not.toContain('<label>Export format <select');
+});

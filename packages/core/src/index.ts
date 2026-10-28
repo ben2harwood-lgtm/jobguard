@@ -104,6 +104,7 @@ export * from "./job-work-timing.js";
 export * from "./contractor-entitlement-authority.js";
 
 export * from "./recovery-attribution-persistence.js";
+export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
 
 export { utcDatetimeV1 } from "./datetime.js";
@@ -112,3 +113,5 @@ export * from "./meter-lifecycle.js";
 
 export * from "./enterprise-dashboard-stored-billing.js";
 export * from "./subscription-plan-view.js";
+
+export * from "./meter-today.js";
