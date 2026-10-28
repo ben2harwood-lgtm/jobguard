@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EnterpriseFeeError } from "@jobguard/core";
-import { EnterpriseFeeRepository, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1 } from "./enterprise-fee-repository.js";
+import { EnterpriseFeeRepository, enterpriseFeeApproveStatementV1, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1, enterpriseFeeDisputeStatementV1 } from "./enterprise-fee-repository.js";
 
 describe("ENT-7a enterprise fee repository boundary", () => {
   const id = "11111111-1111-4111-8111-111111111111";
@@ -21,5 +21,13 @@ describe("ENT-7a enterprise fee repository boundary", () => {
     const repo = new EnterpriseFeeRepository({ connect: () => { throw new Error("must not connect"); } } as never);
     await expect(repo.derive({} as never, "not-a-uuid", {})).rejects.toMatchObject({ code: "INVALID_FEE_INPUT" });
     await expect(repo.read({} as never, id, "nope")).rejects.toMatchObject({ code: "INVALID_FEE_INPUT" });
+  });
+  it("ENT-7b approval binds exact hash, integer total and an explicit expiry; disputes carry a short reason code", () => {
+    const ok = { version: "enterprise-fee-approve-statement.v1", commandId: id, statementId: id, contentHash: "a".repeat(64), totalDeltaPence: -12, expiresAt: "2026-10-28T12:00:00Z" };
+    expect(enterpriseFeeApproveStatementV1.safeParse(ok).success).toBe(true);
+    for (const bad of [{ contentHash: "A".repeat(64) }, { totalDeltaPence: 1.5 }, { expiresAt: "tomorrow" }, { amount: 1 }]) expect(enterpriseFeeApproveStatementV1.safeParse({ ...ok, ...bad }).success).toBe(false);
+    const dispute = { version: "enterprise-fee-dispute-statement.v1", commandId: id, statementId: id, reasonCode: "line_disputed" };
+    expect(enterpriseFeeDisputeStatementV1.safeParse(dispute).success).toBe(true);
+    for (const reasonCode of ["Line", "1x", "a".repeat(41), "free text"]) expect(enterpriseFeeDisputeStatementV1.safeParse({ ...dispute, reasonCode }).success).toBe(false);
   });
 });
