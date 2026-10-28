@@ -1,3 +1,84 @@
+## Catch-up to M4-9-S / PR #380 — 28 October 2026
+
+CH-5 / CH5-E, PR #386, RED. Catch-up only; no new product behavior.
+The supplied brief reports the existing head RED-passed; this entry is builder
+verification, not a new independent review.
+
+Observed HEAD d058cef4 had merged main only through 9a298d4d, whereas
+origin/main was already 6329be99 (PR #380). No unresolved Git entries existed.
+Integrated the exact incoming main content using read-only Git reads and
+stdout-only three-way comparisons; kept both controller/application exports,
+OpenAPI paths, LP-0 privilege entries and recorded routines. Restored main's
+exact M4-9-S read/write routine identities in SERIOUS-B5. Entitlement and tenancy
+expectations already retained main plus the CH-5 import aggregate. Preserved
+the pre-existing uncommitted policy-role assertion repair and receipt.
+
+Migrations 0323 and 0324, including filenames and SQL bytes, match HEAD exactly.
+Every non-overlapping incoming-main file matches origin/main byte for byte.
+The existing config/lanes/ch5-e.json lists exactly the 52 CH-5 payload paths
+against 6329be99; its own lane file is implicitly allowed. Updated its note;
+no additional lane grants. No worthwhile simplification within this catch-up.
+
+Checks actually run with installed tools (no package downloads):
+
+- DB Vitest: test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts, --maxWorkers=2: 44 passed.
+- API Vitest: src/job-import-v3.application.test.ts,
+  src/imported-shadow-source-adapter.test.ts and
+  src/success-fee.application.test.ts, --maxWorkers=2: 19 passed.
+- node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit: passed.
+- node_modules/.bin/tsc -p /tmp/ch5-e-r2-test-typecheck.json --noEmit: passed.
+- Installed tsc builds of packages/core and packages/db: passed.
+- From apps/api, node --import tsx src/generate-openapi.ts --check: passed.
+  The tsx CLI could not bind its IPC pipe; direct Node import avoided that.
+- Exact working-tree comparison with origin/main: lane paths match, all main
+  LP-0 entries/recorded routines retained, migrations unchanged; passed.
+- git diff --check and changed-file conflict-marker scan: passed.
+
+Router action before committing/pushing: record the actual merge of
+origin/main 6329be99 into this branch. This sandbox cannot write .git, so only
+the resolved file content is prepared here. The stock lane command currently
+fails because Git ancestry still treats incoming M4-9-S files as CH-5 edits;
+do not widen the CH-5 lane to hide that. After recording the merge, rerun the
+stock lane command. PostgreSQL and browser suites remain for GitHub CI.
+No Git writes, PostgreSQL startup, browser binding, providers, customer data,
+live money or release action occurred.
+
+## Repair round 2 for PR #386 — 28 October 2026
+
+RED; source/test-expectation repair only. Current main was already merged and
+there were no conflict markers or unmerged entries when this round began.
+
+Diagnosed SERIOUS-B5's policy assertion: pg_policies.roles has PostgreSQL type
+name[]. The installed pg driver exposes that type as a string rather than a
+JavaScript array. Reused this test file's existing SELECT $1::name[]::text[] cast
+and compared the sorted exact pair jobguard_migration/jobguard_runtime. Added
+explicit PERMISSIVE, USING and WITH CHECK assertions for precisely the policy
+installed by 0324. No SQL, permissions, routine body or grants changed. No test
+was weakened or disabled.
+
+Checks actually run:
+
+- Installed pg driver parser assertion: reproduced name[] as a string, verified
+  text[] as the exact two-role array, and verified an extra shadow role remains
+  detectable. This is a local driver check, not PostgreSQL verification.
+- TypeScript check of serious-b5-upgrade.integration.test.ts and its imports via
+  /tmp/ch5-e-r2-test-typecheck.json: passed.
+- node tools/agent-lane-boundary-lint.mjs --lane=ch5-e: passed against current
+  origin/main. The existing lane already covers this branch's exact payload;
+  no lane-register or directory-wide grant was added.
+- git diff --check: passed.
+
+Remaining hold: the supplied summary still omits the positive-import test's
+actual error and both browser assertions/stacks. GitHub CLI cannot connect to
+the API. Read-only Chrome inspection reached CI run 40770431788 at a5d4cc0,
+confirming the failed jobs; GitHub requires sign-in to view their logs. No
+credentials were entered. Requested the first browser assertion/trace and the
+positive-import error. Those causes remain undiagnosed, so no speculative
+production or journey changes and no claim that the round is ready. Real
+PostgreSQL/browser suites require CI; no such local suites were run. No Git
+write, push, live provider, customer-data or release action was performed.
+
 ## Repair round 1 for PR #386 — 28 October 2026
 
 RED; synthetic data only. This entry supersedes the earlier renumber-only state.

@@ -1,6 +1,200 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/success-fees": {
+      "get": {
+        "operationId": "SuccessFeeController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "jobId",
+                    "environment",
+                    "state",
+                    "dependency",
+                    "productionEnabled",
+                    "realExternalActions"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "success-fee-availability.v1"
+                      ]
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "synthetic_demo"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "dependency_bound"
+                      ]
+                    },
+                    "dependency": {
+                      "type": "string",
+                      "enum": [
+                        "accepted_attribution_source_adapter"
+                      ]
+                    },
+                    "productionEnabled": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "realExternalActions": {
+                      "type": "integer",
+                      "enum": [
+                        0
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read synthetic success-fee availability; source-backed calculation dependency-bound",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action",
+                      "reviewId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "reviewId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "503": {
+            "description": "No business effects; accepted attribution source adapter is missing"
+          }
+        },
+        "summary": "Validate synthetic fee review/approval intent; posting dependency-bound",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",

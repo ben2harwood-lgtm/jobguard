@@ -459,6 +459,9 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
   ["recovery_attribution_immutable",""],
   ["append_recovery_attribution","p_document jsonb, p_actor uuid, p_command jsonb, p_cause text, p_source text"],
   ["assess_recovery_attribution","p_job uuid, p_session text, p_command jsonb"],
+  // M4-9-S / 0302: exact additive routine identities, no table/row allowance.
+  ["read_success_fee_v3","p_job uuid, p_session text"],
+  ["write_success_fee_v3","p_job uuid, p_session text, p_command jsonb, p_artifact jsonb"],
  ];
  const routines=after.routines.filter(r=>r.nspname==="app"&&routineIdentities.some(([name,args])=>r.proname===name&&r.args===args));
  expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...routineIdentities].sort());
@@ -750,7 +753,12 @@ async function invoicedImportAdditions(before: Awaited<ReturnType<typeof snapsho
   && r.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text");
  expect(relations).toHaveLength(1); expect(policies).toHaveLength(1); expect(routines).toHaveLength(1);
  expect(relations[0]).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
- expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL", roles: ["jobguard_migration", "jobguard_runtime"] });
+ expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL", permissive: "PERMISSIVE" });
+ // pg returns name[] as a string; reuse the catalogue cast used above.
+ const roles = (await f.admin.query("SELECT $1::name[]::text[] roles", [policies[0].roles])).rows[0].roles;
+ expect(roles.sort()).toEqual(["jobguard_migration", "jobguard_runtime"]);
+ expect(policies[0].qual).toBe("(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)");
+ expect(policies[0].with_check).toBe(policies[0].qual);
  expect(routines[0]).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"] });
  expect((await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors

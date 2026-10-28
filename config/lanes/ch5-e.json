@@ -6,7 +6,7 @@
         "codex/sandbox/ch5-e"
       ],
       "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
-      "note": "CH-5 part 1 combined inherited payload and repair round 1 for PR #386. RED. Synthetic invoiced writer; live/history/final-account source handoffs remain held. Paths are the real branch payload against the incoming main; inherited CH5-B/P lane metadata is archived.",
+      "note": "CH-5 part 1 combined inherited payload and PR #386 catch-up to main after M4-9-S (#380). RED. Exact CH-5 paths only; incoming main files remain owned by their existing lanes. Migrations 0323/0324 unchanged.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
