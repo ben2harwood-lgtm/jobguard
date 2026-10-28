@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/ent-9e"
       ],
-      "note": "ENT-9 deferred advisory signal, RED. Pure adapter over scoped stored unmatched other invoice lines; no pricing, fees or meter input. No migration. Serial follow-on to ent-9d (#384), sharing dashboard paths. This lane file is implicitly editable.",
+      "note": "ENT-9 deferred advisory signal, RED. Pure adapter over scoped stored unmatched other invoice lines; no pricing, fees or meter input. No migration. Serial follow-on to ent-9d (#384), sharing dashboard paths. Caught up with main through #385 (highest migration 0301); migration SQL and shared expectation lists match main. This lane file is implicitly editable.",
       "allow": [
         "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
         "apps/web/app/ui/enterprise-dashboard.test.tsx",
