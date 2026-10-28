@@ -23,7 +23,8 @@
         "apps/web/app/ui/final-check-reveal-view.ts",
         "apps/web/app/ui/final-check-reveal-view.test.ts",
         "apps/web/app/ui/workspace-shell.tsx",
-        "apps/web/e2e/SV-5.spec.ts"
+        "apps/web/e2e/SV-5.spec.ts",
+        "packages/core/src/watchdog.ts"
       ]
     }
   }
