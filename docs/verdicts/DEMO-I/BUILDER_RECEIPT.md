@@ -108,3 +108,24 @@ Relevant actual validation:
 - `git diff --check` — passed. No git writes performed.
 
 The stock local CLI compares main to HEAD and then unions uncommitted paths, so it still sees the old HEAD's inherited registration until the router commits the move. Validation above checks the actual prospective PR diff against main using the unchanged checker predicates, rather than claiming that pre-commit HEAD is already repaired. GitHub CI must run the full lane check on the committed head. Prior round-2 typecheck and 45 passing local tests remain applicable: catalogue/test code is unchanged by this continuation; PostgreSQL execution still belongs to CI. Ready commit message written to the newly issued path; the router commits/pushes and updates finish/work lists. RED review/merge gates remain unchanged.
+
+## PR #387 repair round 3-last — policy roles and tenancy catalogue
+
+The incoming main merge left two conflict blocks in LP-0's shared JSON. Resolved both in the working file by unioning DEMO-I entries/routine records with M4-9-S success-fee entries/routine records. Retained main's additive recovery-money authority-path description and source/test references. Verified every entry/group/routine record from both index stages remains; the older recovery-money description is preserved as the prefix of main's extended description. JSON parses with no duplicate keys/identities or conflict markers. The index still lists the file as unmerged because .git writes are prohibited; the router must stage the resolved file normally when completing the merge. All other incoming-main staged files were preserved.
+
+SERIOUS-B5 cause: `pg_policies.roles` is PostgreSQL `name[]`. The installed pg parser returns that type as a string, whereas the expected row contains a JavaScript array. Reused the existing nearby SQL cast pattern `SELECT $1::name[]::text[] roles` before the exact comparison. The expected roles remain exactly migration-only for all three policies; no grants, policies, migration or application behavior changed.
+
+Tenancy cause: the two exact catalogue arrays omitted 0313's `small_builder_demo_receipt`, `small_builder_demo_report` and `small_builder_demo_run`. Added those three rows in server name order to both the RLS/check-policy and ownership expectations. Each requires enabled and forced RLS, an ALL policy with USING/WITH CHECK, and `jobguard_migration` ownership. No wildcard, exclusion, skip or dynamic expected baseline was introduced. DEMO-I's lane adds only the tenancy test path and matches the current prospective payload against main.
+
+Actual validation with installed tools, no downloads:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts src/small-builder-demo-repository.test.ts` — 45 tests passed across two named files, including committed LP-0 inventory validation and forbidden-grant controls.
+- Installed pg parser probe confirmed OID 1003 (name[]) returns `"{jobguard_migration}"` and OID 1009 (text[]) returns `["jobguard_migration"]`. Initial direct CommonJS named import failed; the corrected default import probe passed.
+- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/serious-b5-upgrade.integration.test.ts test/tenancy.integration.test.ts test/small-builder-demo.integration.test.ts` — collected all cases, including all three reported failures. Collection only, no PostgreSQL execution.
+- Static exact-row checks verified both tenancy arrays contain 312 unique, sorted table names with precisely 0313's required three DEMO-I postures.
+- Both-stage LP-0 union check passed, allowing only main's additive recovery-money description/source/test extension; JSON is valid and marker-free.
+- Existing lane-policy predicates and migration-order validator passed against the prospective diff from origin/main: exactly 24 payload paths, no config/lanes or register grants.
+- `git diff --check` — passed.
+
+Database suites still run in GitHub CI because this sandbox cannot start PostgreSQL. No live database success, new review, git write, commit or push is claimed. Ready commit message written to the issued /tmp path; router stages the resolved merge file, completes the merge as needed, commits/pushes and updates work-list state. RED review and CI gates remain unchanged.
