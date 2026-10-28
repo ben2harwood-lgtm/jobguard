@@ -8,8 +8,8 @@
       "receipt": "docs/verdicts/SV5-GUARD/BUILDER_RECEIPT.md",
       "note": "C248 post-lock upload state guard only; DB execution in reviewer/CI. No UI or HTTP changes. Own lane file is implicitly authorized by lane policy.",
       "allow": [
-        "packages/db/migrations/0261_post_lock_upload_guard.sql",
-        "packages/db/migration-notes/0261_post_lock_upload_guard.md",
+        "packages/db/migrations/0269_post_lock_upload_guard.sql",
+        "packages/db/migration-notes/0269_post_lock_upload_guard.md",
         "packages/db/test/post-lock-upload-guard.integration.test.ts",
         "packages/db/test/final-check-manifest.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
