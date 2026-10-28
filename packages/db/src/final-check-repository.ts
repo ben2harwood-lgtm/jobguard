@@ -10,7 +10,7 @@ export const finalCheckSourceResultV1=z.object({version:z.literal("final-check.s
 export type FinalCheckSourceResult=z.infer<typeof finalCheckSourceResultV1>;
 export type FinalCheckClassification={signalId:string;expectedRevision:number;outcome:FinalCheckOutcome;references:readonly string[];comparisons:{baselineItemIds:readonly string[];captureIds:readonly string[];lockedLineIds:readonly string[]}};
 export type FinalCheckView=z.infer<typeof viewV1>;
-const viewV1=z.object({state:z.enum(["unlocked","pending","failed","completed"]),lockId:uuid.optional(),runId:uuid.optional(),items:z.array(z.record(z.string(),z.unknown())),postLockItems:z.array(z.record(z.string(),z.unknown())).optional()}).strict();
+const viewV1=z.object({state:z.enum(["unlocked","pending","failed","completed"]),lockId:uuid.optional(),runId:uuid.optional(),items:z.array(z.record(z.string(),z.unknown())),postLockItems:z.array(z.record(z.string(),z.unknown())).optional(),lockedLines:z.array(z.object({id:uuid,kind:z.enum(["baseline","variation"]),scopeItemId:uuid,description:z.string()}).strict()).optional()}).strict();
 const codes=new Set(["INVALID_FINAL_CHECK_INPUT","FINAL_CHECK_FORBIDDEN","FINAL_CHECK_PENDING","FINAL_CHECK_SOURCE_CHANGED","FINAL_CHECK_FAILED","IDEMPOTENCY_CONFLICT","STALE_REVISION","FINAL_ACCOUNT_LOCK_REQUIRED"]);
 const prerequisitePending=new Set(["FINAL_CHECK_NOT_COMPLETE","FINAL_CHECK_INVENTORY_INCOMPLETE","FINAL_CHECK_INPUT_UNAVAILABLE","FINAL_CHECK_INPUT_MISMATCH","FINAL_CHECK_DETECTION_REQUIRED","FINAL_CHECK_SIGNAL_BINDING_INVALID","FINAL_CHECK_LOCK_BINDING_INVALID","FINAL_CHECK_SOURCE_IDENTITY_CHANGED","FINAL_CHECK_RESULT_UNAVAILABLE"]);
 function typed(e:unknown):never{

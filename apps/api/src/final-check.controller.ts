@@ -1,10 +1,9 @@
 import {Body,Controller,Get,Headers,Param,Post,HttpException} from "@nestjs/common";
 import {ApiOperation,ApiTags} from "@nestjs/swagger";
 import {Pool} from "pg";
-import {FinalCheckError} from "@jobguard/core";
-import {FinalCheckApplication} from "./final-check.application.js";
+import {FinalCheckApplication,finalCheckFailure} from "./final-check.application.js";
 import {practiceCookie} from "./practice-access.js";
-async function boundary<T>(work:()=>Promise<T>):Promise<T>{try{return await work();}catch(e){if(e instanceof FinalCheckError)throw new HttpException({code:e.code},e.code==="FINAL_CHECK_FORBIDDEN"?403:/CONFLICT|STALE/u.test(e.code)?409:400);throw e;}}
+async function boundary<T>(work:()=>Promise<T>):Promise<T>{try{return await work();}catch(e){const failure=finalCheckFailure(e);if(failure)throw new HttpException(failure.body,failure.status);throw e;}}
 @ApiTags("final check")
 @Controller("jobs/:id/final-check")
 export class FinalCheckController{
