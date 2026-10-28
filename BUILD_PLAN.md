@@ -62,6 +62,8 @@ The small-builder track is built in parallel (§12) because its Final Check is a
 
 ## 2. How the build runs
 
+> **Note (Ben, 28 Oct 2026):** the build loop is now `AGENTS.md` §5.13 and `~/.local/share/full-steam/SIMPLE_LOOP.md`. The text below in this section is history.
+
 ### 2.1 Roles (AGENTS §5.13)
 
 | Role | Who | Does |

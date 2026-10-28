@@ -565,3 +565,46 @@ No acceptance action follows these deterministic checks. Founder creates the
 commit; a different model must record a verdict bound to that exact commit,
 then a separate actor records technical acceptance. PostgreSQL/browser/restore
 and held product authority gates remain open.
+
+## 28 October 2026 — RED catch-up on M4-12-S
+
+Plan piece: **M4-17-S — Reconcile the synthetic money trail**, finish-list row 20.
+This catch-up preserves the built reference/read-only portion and its dependency-bound
+run authority. It adds no product behavior and does not complete the held full task.
+
+Resolved both merge conflicts by retaining the M4-17-S availability routine and
+M4-12-S's migration references. The LP-0 recovery-money path is one record, with
+both the base fee source and money-trail evidence. The base's 0277 attribution and
+0302 success-fee migrations supersede the absent older copies.
+
+Used `planRenumber` from `tools/migration-renumber.mjs` for the reserved 0310
+migration, then applied its filesystem rename without staging (the tool's normal
+`--write` writes the read-only git index). SQL bytes were compared directly and
+remain identical: SHA-256
+`a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e`.
+Updated the upgrade test, inventory, documentation and lane references.
+No attribution/allocation writer or proof helper is added or changed by this
+piece, so the #368 locked-revision, #356 line-cap/unique-line and #346 feed-job
+writer conditions remain intact without widening this catch-up.
+
+Local checks actually run (installed tools only, at most two Vitest workers):
+
+- Cached pnpm 10.28.1: core `src/money-trail-reconciliation.test.ts` — 18 passed;
+  database `src/money-trail-repository.test.ts` — 8 passed. Includes duplicate/replay,
+  refund limits, signed discrepancies, exact arithmetic, tenant/job source binding,
+  denied access, strict source shapes and incomplete-result assertions.
+- `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json --noEmit`
+  and the equivalent database check — both passed (also the package lint commands).
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs` — passed; purity reported existing
+  computed-module-name notices.
+- `git diff --check` — passed. Filesystem conflict-marker, lane-path, inventory
+  uniqueness and SQL identity checks — passed.
+
+The default pnpm launcher stalled before tests; stopped it and used the cached
+pinned launcher. A Turbo typecheck also selected that default launcher and was
+stopped; the direct installed TypeScript checks above completed successfully.
+No dependency downloads, git writes, PostgreSQL startup, localhost binding, real
+customer data, providers, money actions or releases. PostgreSQL upgrade/security,
+browser and full CI checks remain for GitHub CI after the router pushes; RED
+review remains the loop owner's gate against the resulting exact head.

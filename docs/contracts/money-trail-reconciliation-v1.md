@@ -108,7 +108,7 @@ amounts. Report hash binds source hash and the economic result. Same-ID exact
 replay and query order do not change it; changed relevant facts do. Hashes
 prove deterministic reference encoding, not source authenticity or live funds.
 
-## Checked read-only availability boundary (0222 / C262)
+## Checked read-only availability boundary (0310 / C262)
 
 `MoneyTrailRepository.availability(context, jobId, digest)` passes the existing
 stamped context whole through `practiceMaterialPool` and `withTenant`, with
@@ -125,7 +125,7 @@ it grants no new permission to request a run. It reads no shadow, eligibility,
 allocation, invoice, subscription or fee source. It returns dependency status
 only, never balances, counts, hashes or an empty completed report.
 
-0222 creates exactly this migration-owned SECURITY DEFINER function with fixed
+0310 creates exactly this migration-owned SECURITY DEFINER function with fixed
 `search_path=pg_catalog`. Runtime receives EXECUTE on this signature only;
 PUBLIC/infrastructure/shadow get none. No tables, table grants, policies,
 existing routines or roles change. There is no new table requiring FORCE RLS,

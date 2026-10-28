@@ -306,3 +306,69 @@ R1 validation uses the already-installed dependencies, Node `v24.17.0` and cache
 | `git diff --check` | Exit 0. Final path inspection confirms only the three ordered tests and this receipt changed. |
 
 Handoff: intended conventional commit subject/body is in `/private/tmp/jg-msg-m4-9-s.txt`. Dispatcher owns commit/push and CI PostgreSQL/browser execution. R1 is ready for exact-commit independent re-review; no technical acceptance, new independent verdict or production permission is claimed here. The previous full-card dependency and release holds remain.
+
+
+## 28 October 2026 — current-main catch-up (RED)
+
+Plan piece: **M4-9-S, Derive and approve cumulative v3 success fees**, BUILD_PLAN.md
+§10.4, finish-list row 8. Branch `codex/sandbox/m4-9-s`. Catch-up only; no new
+behaviour and no claim that the full plan card's posting acceptance is complete.
+The existing dependency-bound fee boundary remains closed.
+
+Resolved AppModule and workspace composition by keeping both sides: success-fee
+registration plus main's billing/subscription providers and current Final Check
+handlers. Retained the union of serious-B5 routine identities, watchdog entries
+and exports. Contractor-entitlement upgrade expectations are byte-identical to
+current `origin/main`. Regenerated OpenAPI; a structural comparison confirms
+that it equals main plus this lane's success-fee GET/POST path only.
+
+Used `planRenumber` from `tools/migration-renumber.mjs` with the router's reserved
+0302 slot, then filesystem rename/reference updates. The CLI's `--write` mode
+requires a clean tree and runs `git add`, so it was not used in this read-only-git
+sandbox. SQL SHA-256 before/after:
+`1c8490a2ecb398311635e5a657fbc488b4091786b0780743618932f61a6f9611`.
+All 129 main migrations are retained byte-for-byte; 0302 is the only additional
+migration. No older attribution migration copy remains. Main's attribution
+repository/fixture and receipt-allocation repository are unchanged. This lane
+writes no attribution or allocation rows; its SQL writer reauthenticates and
+unconditionally refuses. Conditions from #368, #356 and #346 therefore require
+no writer fix in this catch-up. No migration, grant or test guarantee was weakened.
+
+Validation used installed Node v24.17.0 and cached pnpm 10.28.1 through
+`PATH=/private/tmp/jg-sv6-bin:$PATH`. No packages installed. The default pnpm
+launcher stalled before task output and was stopped; all completed checks used
+the cached pinned launcher. Vitest runs used at most two workers and three named
+files per invocation:
+
+- `pnpm exec turbo run build typecheck --filter=@jobguard/api... --concurrency=2`:
+  PASS, 12 tasks (four cached), API and all dependencies; log
+  `/tmp/m4-9-s-catchup-build.log`.
+- `pnpm --filter @jobguard/web typecheck`: PASS;
+  `/tmp/m4-9-s-catchup-web-typecheck.log`.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts src/watchdog.test.ts`:
+  PASS, 80 tests; `/tmp/m4-9-s-catchup-core.log`.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/success-fee.application.test.ts src/success-fee.http.test.ts`:
+  PASS, 12 tests; `/tmp/m4-9-s-catchup-api.log`.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/success-fee-repository.test.ts`:
+  PASS, four scripted repository tests (not PostgreSQL proof);
+  `/tmp/m4-9-s-catchup-db-unit.log`.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/success-fees/route.test.ts'`:
+  PASS, six tests; `/tmp/m4-9-s-catchup-web.log`.
+- `node --import tsx src/generate-openapi.ts` then the same with `--check`
+  (API cwd): PASS, no socket needed.
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`: PASS. Core's existing computed-import
+  notices remain reports only.
+- Working-tree comparison against `origin/main`, using existing `loadLanePolicy`,
+  `lanePathAllowed` and `migrationOrderViolations`: PASS; 29 exact PR paths
+  (the lane file permits itself implicitly), no extra path or migration.
+  This is a deterministic working-tree check, not committed-head CI acceptance.
+- `git diff --check`: PASS.
+
+Router handoff: commit/push/open PR, with **RED** and **M4-9-S** in its description.
+GitHub CI must execute database, migration and browser suites; none ran locally.
+The new exact head requires the independent RED review. No independent review,
+merge, real customer data, provider activity, live money or release is claimed.
+Git's index still reports the two resolved files as unmerged because no git-write
+command was run; the router must stage the resolved content and migration rename.
+Commit text: `/tmp/m4-9-s-20261028T175022Z-commit-msg.txt`.

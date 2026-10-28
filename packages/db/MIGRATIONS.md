@@ -1204,11 +1204,11 @@ switches while retaining switch-off/state access. PostgreSQL execution, catalogu
 upgrade and rollback proofs require dispatcher/CI verification; they were not run
 in the builder sandbox.
 
-### 0251 — M4-9-S dependency boundary (renumbered from 0218)
+### 0302 — M4-9-S dependency boundary (renumbered from 0218, then 0251)
 
 Adds only `app.read_success_fee_v3(uuid,text)` and
 `app.write_success_fee_v3(uuid,text,jsonb,jsonb)`. Migration directory discovery
-registers 0251; the closed historical list is unchanged. No table, row backfill,
+registers 0302; the closed historical list is unchanged. No table, row backfill,
 existing routine, existing grant or ledger kind changes. Runtime receives only
 these exact EXECUTE signatures; PUBLIC and infrastructure receive none. Both
 calls reauthenticate the persisted session/current owner and require an owned,
@@ -1222,11 +1222,11 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0252 — M4-17-S dependency availability (renumbered from 0222)
+### 0310 — M4-17-S dependency availability (renumbered from 0222 → 0252)
 
 C262 adds only `app.read_money_trail_availability(uuid,text)`, discovered from
 this directory without changing the closed historical migration list. It calls
-0218's accepted current-session/current-owner/owned synthetic v3 job read check
+0302's accepted current-session/current-owner/owned synthetic v3 job read check
 and returns constant dependency metadata. No amounts, source counts, run result,
 source read, command, approval, audit append or outbound effect is introduced.
 It grants no permission to request a run. Runtime gets this exact EXECUTE only;

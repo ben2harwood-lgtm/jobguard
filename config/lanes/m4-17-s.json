@@ -6,7 +6,7 @@
         "codex/sandbox/m4-17-s"
       ],
       "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
-      "note": "C262 / 0222. Decision 74 preparation on accepted partial b3b322aa. Independent reference comparison and authenticated availability only; run authority, source-backed fee contracts, persistence, review, compensation and UI held. Catalogue additions only for actual objects.",
+      "note": "M4-17-S RED catch-up on M4-12-S; migration 0310. Synthetic reference comparison and read-only availability; run authority remains dependency-bound. No attribution or allocation writer.",
       "allow": [
         "packages/core/src/index.ts",
         "packages/core/src/money-trail-reconciliation.ts",
@@ -14,7 +14,7 @@
         "packages/db/src/index.ts",
         "packages/db/src/money-trail-repository.ts",
         "packages/db/src/money-trail-repository.test.ts",
-        "packages/db/migrations/0252_money_trail_reconciliation.sql",
+        "packages/db/migrations/0310_money_trail_reconciliation.sql",
         "packages/db/MIGRATIONS.md",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/money-trail-upgrade.integration.test.ts",

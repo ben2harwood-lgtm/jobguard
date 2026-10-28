@@ -1,11 +1,11 @@
-// Rule 9: proves 0222 alone, then later migrations twice. Real PostgreSQL required.
+// Rule 9: proves 0310 alone, then later migrations twice. Real PostgreSQL required.
 import { readFile } from "node:fs/promises";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
 import { createLockFixture,closeLockFixture,seedAccount } from "./recovery-attribution-fixture.js";
 import { proofBefore,proofColumns,proofDifferences,rolledBack,scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-const own="0252_money_trail_reconciliation.sql";
+const own="0310_money_trail_reconciliation.sql";
 let f:Awaited<ReturnType<typeof createLockFixture>>;
 beforeAll(async()=>{f=await createLockFixture(false);},120000);
 afterAll(async()=>{if(f)await closeLockFixture(f);});
