@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "site-jobs-scope": {
+      "branches": ["codex/sandbox/site-jobs-scope"],
+      "note": "RED: finish-list NEXT CODEX PIECE (CI reliability), contractor site jobs authority once per team scope. Own lane file is implicitly allowed by the lane tool. No migration.",
+      "allow": [
+        "packages/db/src/site-visit-repository.ts",
+        "packages/db/src/site-jobs-scope.test.ts",
+        "packages/db/test/site-jobs-scope.integration.test.ts"
+      ]
+    }
+  }
+}
