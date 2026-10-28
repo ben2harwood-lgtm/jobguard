@@ -13,7 +13,9 @@
         "packages/core/src/subscription-plan-view.test.ts",
         "apps/web/app/plans/page.tsx",
         "apps/web/app/plans/plan-screen.tsx",
-        "apps/web/app/plans/plan-screen.test.tsx"
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen-headers.test.ts",
+        "apps/web/e2e/M0-6L.spec.ts"
       ]
     }
   }

@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { subscriptionPlanView, type SubscriptionPlanView } from "@jobguard/core";
 
 export async function loadSubscriptionPlan(fetcher: typeof fetch = fetch): Promise<SubscriptionPlanView> {
-  const response = await fetcher("/api/subscriptions/current", { cache: "no-store", credentials: "same-origin" });
+  const sessionResponse = await fetcher("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+  if (!sessionResponse.ok) throw new Error(sessionResponse.status === 401 || sessionResponse.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+  const session = await sessionResponse.json() as { csrfToken: string; memberships: { tenantId: string }[] };
+  const tenantId = session.memberships?.[0]?.tenantId;
+  if (!session.csrfToken || !tenantId) throw new Error("SIGN_IN_REQUIRED");
+  const response = await fetcher("/api/subscriptions/current", { cache: "no-store", credentials: "same-origin",
+    headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId } });
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return subscriptionPlanView(await response.json(), date);

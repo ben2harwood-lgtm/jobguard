@@ -6,6 +6,7 @@ import { subscriptionPlanView } from "@jobguard/core";
 import { loadSubscriptionPlan, PlanDetails, PlanScreen } from "./plan-screen";
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
+const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
 const empty = { version: "subscription-persisted-read.v1", environment: "synthetic_demo", hypothetical: true,
   agreements: [], periods: [], statements: [], work: [], attempts: [], results: [] };
 it("loads only C1's exact read route with company credentials and no cache", async () => {
@@ -13,19 +14,22 @@ it("loads only C1's exact read route with company credentials and no cache", asy
   const read = { ...empty, agreements: [{ tenant_id: "00000000-0000-4000-8000-000000000001",
     id: "00000000-0000-4000-8000-000000000002", revision: 1, plan: "Builder", cadence: "monthly",
     anchor_day: 1, maximum_pence: 16900, effective_date: "2026-05-01" }] };
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(read));
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json(read));
   const loaded = await loadSubscriptionPlan(fetcher);
   expect(loaded).toEqual(subscriptionPlanView(read, "2026-05-01"));
   expect(loaded.agreement?.plan).toBe("Builder");
-  expect(fetcher).toHaveBeenCalledExactlyOnceWith("/api/subscriptions/current", { cache: "no-store", credentials: "same-origin" });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenNthCalledWith(1, "/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+  expect(fetcher).toHaveBeenNthCalledWith(2, "/api/subscriptions/current", { cache: "no-store", credentials: "same-origin",
+    headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": session.memberships[0]!.tenantId } });
 });
 it.each([401, 403, 500, 503])("refuses HTTP %s without using any returned company details", async status => {
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ...empty, privateDetail: "must not display" }, { status }));
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({ ...empty, privateDetail: "must not display" }, { status }));
   await expect(loadSubscriptionPlan(fetcher)).rejects.toThrow(status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
 });
 it("refuses malformed or production reads and propagates network failure", async () => {
   for (const body of [{ ...empty, environment: "production" }, { version: "unknown" }]) {
-    await expect(loadSubscriptionPlan(vi.fn<typeof fetch>().mockResolvedValue(Response.json(body)))).rejects.toThrow();
+    await expect(loadSubscriptionPlan(vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json(body)))).rejects.toThrow();
   }
   await expect(loadSubscriptionPlan(vi.fn<typeof fetch>().mockRejectedValue(new Error("offline")))).rejects.toThrow("offline");
 });
@@ -52,4 +56,12 @@ it("renders the engine's exact amount, period maximum and simulated redirect wor
   }, "2026-04-20");
   const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
   for (const label of ["£79.00", "£169.00", "day 31", "2026-03-31", "2026-04-30", "end date excluded", "Simulated redirect — not settled"]) expect(html).toContain(label);
+});
+
+it("does not request company data without a valid current session and membership", async () => {
+  for (const response of [Response.json({}, { status: 401 }), Response.json({ csrfToken: "csrf", memberships: [] }), Response.json({ memberships: session.memberships })]) {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response);
+    await expect(loadSubscriptionPlan(fetcher)).rejects.toThrow("SIGN_IN_REQUIRED");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  }
 });
