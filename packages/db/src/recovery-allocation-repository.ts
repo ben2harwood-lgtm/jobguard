@@ -33,7 +33,7 @@ export type RecoveryAllocationView = {
   lines: Array<{ id: string; paymentId: string; invoiceId: string; lineId: string; rule: "explicit" | "separate_invoice" | "pro_rata"; sourceRef: string; gross: Fraction; net: Fraction; reversesId: string | null }>;
   review: RecoveryAllocationReview | null;
 };
-const artifactId = z.string().uuid();
+const artifactId = z.guid({ error: "Invalid uuid" });
 const artifactAmount = z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
 const artifactHash = z.string().regex(/^[a-f0-9]{64}$/u);
 const artifactFraction = z.custom<Fraction>(value => exactPenceInputV1.safeParse(value).success);
@@ -104,8 +104,8 @@ export class RecoveryAllocationRepository {
 
   private guard(sessionDigest: string, jobId: string, actor: RecoveryAllocationActor): void {
     if (this.environment !== "synthetic_demo") fail("ALLOCATION_SYNTHETIC_ONLY");
-    if (!/^[a-f0-9]{64}$/u.test(sessionDigest) || !actor || !z.string().uuid().safeParse(actor.membershipId).success || !z.string().uuid().safeParse(actor.identityUserId).success) fail("ALLOCATION_FORBIDDEN");
-    if (!z.string().uuid().safeParse(jobId).success) fail("ALLOCATION_NOT_FOUND");
+    if (!/^[a-f0-9]{64}$/u.test(sessionDigest) || !actor || !z.guid({ error: "Invalid uuid" }).safeParse(actor.membershipId).success || !z.guid({ error: "Invalid uuid" }).safeParse(actor.identityUserId).success) fail("ALLOCATION_FORBIDDEN");
+    if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) fail("ALLOCATION_NOT_FOUND");
   }
 
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: RecoveryAllocationActor, sessionDigest: string, jobId: string): Promise<void> {
@@ -380,8 +380,8 @@ export class RecoveryAllocationRepository {
       if (createHash("sha256").update(source.bytes).digest("hex") !== source.sha256.trim()) fail("ALLOCATION_SOURCE_REQUIRED");
       let parsed: unknown;
       try { parsed = JSON.parse(remittanceContent); } catch { fail("ALLOCATION_SOURCE_REQUIRED"); }
-      const contract = z.object({ version: z.literal("recovery-remittance.v1"), paymentId: z.string().uuid(), invoiceId: z.string().uuid(),
-        shares: z.array(z.object({ lineId: z.string().uuid(), gross: z.object({ numerator: z.string().regex(/^(?:0|[1-9]\d*)$/u).max(100), denominator: z.string().regex(/^[1-9]\d*$/u).max(100) }).strict() }).strict()).max(10_000) }).strict().safeParse(parsed);
+      const contract = z.object({ version: z.literal("recovery-remittance.v1"), paymentId: z.guid({ error: "Invalid uuid" }), invoiceId: z.guid({ error: "Invalid uuid" }),
+        shares: z.array(z.object({ lineId: z.guid({ error: "Invalid uuid" }), gross: z.object({ numerator: z.string().regex(/^(?:0|[1-9]\d*)$/u).max(100), denominator: z.string().regex(/^[1-9]\d*$/u).max(100) }).strict() }).strict()).max(10_000) }).strict().safeParse(parsed);
       if (!contract.success || contract.data.paymentId !== receipt.id || contract.data.invoiceId !== receipt.invoice_id) fail("ALLOCATION_SOURCE_REQUIRED");
       facts.explicit = { sourceRef: remittanceEvidenceId, shares: contract.data.shares };
 

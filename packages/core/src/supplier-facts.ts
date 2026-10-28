@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const supplierFactCorrectionV1 = z.object({
-  version: z.literal("supplier-fact-correction.v1"), documentId: z.string().uuid(), commandId: z.string().uuid(),
+  version: z.literal("supplier-fact-correction.v1"), documentId: z.guid({ error: "Invalid uuid" }), commandId: z.guid({ error: "Invalid uuid" }),
   documentType: z.enum(["invoice", "credit"]), quantity: z.string().regex(/^\d+(?:\.\d{1,6})?$/),
   unitPricePence: z.number().int().safe().nonnegative().max(1_000_000_000_000), netPence: z.number().int().safe().nonnegative().max(1_000_000_000_000),
   disposition: z.enum(["source_verified", "manual_transcription", "pack_resolved"]).optional(), expectedRevision: z.number().int().nonnegative(),
