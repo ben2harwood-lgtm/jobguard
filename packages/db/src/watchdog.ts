@@ -58,16 +58,21 @@ const LEGACY_COMMAND_OWNERS = `
   UNION ALL SELECT 'proof.complete', job_id FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'evidence.begin_upload', job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2
   UNION ALL SELECT CASE kind WHEN 'finished_on_site' THEN 'WorkState.finish' WHEN 'finished_cancelled' THEN 'WorkState.cancel_finish' WHEN 'closed' THEN 'WorkState.close' WHEN 'reopened' THEN 'WorkState.reopen' ELSE 'WorkState.unrecognised' END, job_id FROM app.job_work_state_event WHERE tenant_id=$1 AND command_id=$2 AND source_receipt_id IS NULL
-  UNION ALL SELECT 'WorkState.link', predecessor_job_id FROM app.job_link WHERE tenant_id=$1 AND command_id=$2
-  UNION ALL SELECT 'JobSource.diary', job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2
-  UNION ALL SELECT 'JobSource.customer_message', job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2`;
+  UNION ALL SELECT 'WorkState.link', predecessor_job_id FROM app.job_link WHERE tenant_id=$1 AND command_id=$2`;
 
 /** An id the previous schema persisted belongs to the kind and job that persisted it. It can be claimed only by that kind on that job
  * (its own replay); any other kind, or the same kind on another job, is a conflict, so a command whose original has not replayed yet cannot
  * have its id taken and used for a new effect. An id persisted by two kinds, or for two jobs, belongs to nobody and is refused to every
  * claim: no winner is picked among commands that already had their effects. */
 async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType }): Promise<void> {
-  const owners = (await database.$client.query<{ kind: string; job_id: string | null }>(LEGACY_COMMAND_OWNERS, [spec.tenantId, spec.commandId])).rows;
+  // Upgrade fixtures execute commands before 0164 creates source tables. Resolve
+  // their presence before parsing a query that names them; do not cache across upgrades.
+  const sources = (await database.$client.query<{ name: string }>(
+    "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL")).rows;
+  let sql = LEGACY_COMMAND_OWNERS;
+  if (sources.some(row => row.name === "app.job_diary_entry")) sql += " UNION ALL SELECT 'JobSource.diary', job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2";
+  if (sources.some(row => row.name === "app.customer_message_source")) sql += " UNION ALL SELECT 'JobSource.customer_message', job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2";
+  const owners = (await database.$client.query<{ kind: string; job_id: string | null }>(sql, [spec.tenantId, spec.commandId])).rows;
   const kinds = new Set(owners.map(owner => owner.kind)), jobs = new Set(owners.flatMap(owner => owner.job_id ? [owner.job_id] : []));
   if ((kinds.size && (kinds.size > 1 || !kinds.has(spec.kind))) || (jobs.size && (jobs.size > 1 || !jobs.has(spec.jobId)))) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
 }
