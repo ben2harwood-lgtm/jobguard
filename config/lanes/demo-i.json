@@ -6,7 +6,7 @@
         "codex/sandbox/demo-i"
       ],
       "receipt": "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
-      "note": "DEMO-S / DEMO-I RED lifecycle metadata and storage only; all five journey executors refuse pending J1-J5 bindings. No chooser or domain bootstrap.",
+      "note": "DEMO-S / DEMO-I RED lifecycle metadata with company/member ownership across fresh sign-ins; all five journey executors refuse pending J1-J5 bindings. No chooser or domain bootstrap.",
       "allow": [
         "apps/api/src/small-builder-demo.contracts.ts",
         "apps/api/src/small-builder-demo.application.test.ts",
@@ -19,6 +19,7 @@
         "packages/db/migrations/0313_small_builder_demo_runs.sql",
         "packages/db/migration-notes/0313_small_builder_demo_runs.md",
         "packages/db/test/small-builder-demo.integration.test.ts",
+        "packages/db/test/meter-persistence-fixtures.ts",
         "packages/db/test/small-builder-demo-upgrade.integration.test.ts"
       ]
     }

@@ -15,7 +15,7 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
  let c:Cluster; let repo:SmallBuilderDemoRepository;
  beforeAll(async()=>{c=await cluster();repo=new SmallBuilderDemoRepository(c.runtime);},240000);
  afterAll(async()=>{await c?.close();});
- const company=()=>meterCompany(c as unknown as WorkFixture);
+ const company=(tenantId?:string)=>meterCompany(c as unknown as WorkFixture,tenantId);
  type Company=Awaited<ReturnType<typeof company>>;
  const call=(a:Company,op:Parameters<SmallBuilderDemoRepository["execute"]>[2],id:string|null,raw:unknown={})=>repo.execute(a.context,a.digest,op,id,raw);
  const runId=(value:Awaited<ReturnType<typeof call>>)=>"runId" in value ? value.runId : value.facts.runId;
@@ -45,15 +45,62 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   await expect(call(a,"create",null,{...cmd,contractVersion:"small-builder-demo.create.v1",scenario:"trial",expectedRunRevision:undefined})).rejects.toThrow();
   const rows=await c.admin.query("SELECT count(*)::int n FROM app.small_builder_demo_run WHERE tenant_id=$1",[a.tenantId]);expect(rows.rows[0].n).toBe(2);
  });
- it("refuses foreign company, foreign session and forged IDs before replay or report reads",async()=>{
-  const a=await company(),b=await company(),cmd=create(),run=await call(a,"create",null,cmd),id=runId(run);
-  await call(a,"snapshot",id,snapshot());
-  for(const op of ["read","report","reset","snapshot"] as const) await expect(call(b,op,id,op==="reset"?reset():op==="snapshot"?snapshot():{})).rejects.toThrow("DEMO_NOT_FOUND");
+ it("resumes after a fresh sign-in and replays create, snapshot and reset without duplicate effects",async()=>{
+  const a=await company(),cmd=create(),run=await call(a,"create",null,cmd),id=runId(run),snap=snapshot();
+  const report=await call(a,"snapshot",id,snap);
+  const otherDigest=createHash("sha256").update(randomUUID()).digest("hex"),sessionId=randomUUID();
+  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) SELECT $1,user_id,environment,$2,$3,clock_timestamp()+interval '1 hour' FROM identity.session WHERE id=$4",[sessionId,otherDigest,randomUUID(),a.sessionId]);
+  await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
+  const fresh={...a,digest:otherDigest,sessionId};
+  expect(await call(fresh,"read",id)).toEqual(run);
+  expect(await call(fresh,"create",null,cmd)).toEqual(run);
+  expect(await call(fresh,"snapshot",id,snap)).toEqual(report);
+  expect(await call(fresh,"report",id)).toEqual(report);
+  await expect(call(fresh,"create",null,{...cmd,scenario:"trial"})).rejects.toThrow("DEMO_COMMAND_CONFLICT");
+  const resetCommand=reset(),archived=await call(fresh,"reset",id,resetCommand);
+  const thirdDigest=createHash("sha256").update(randomUUID()).digest("hex"),thirdSessionId=randomUUID();
+  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) SELECT $1,user_id,environment,$2,$3,clock_timestamp()+interval '1 hour' FROM identity.session WHERE id=$4",[thirdSessionId,thirdDigest,randomUUID(),sessionId]);
+  await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[sessionId]);
+  const resumed={...a,digest:thirdDigest,sessionId:thirdSessionId};
+  expect(await call(resumed,"reset",id,resetCommand)).toEqual(archived);
+  expect(await call(resumed,"read",id)).toEqual(archived);
+  expect(await call(resumed,"report",id)).toEqual(report);
+  expect(await call(resumed,"snapshot",id,snap)).toEqual(report);
+  // Create replays retain their original result; resume reads the current archived revision.
+  expect(await call(resumed,"create",null,cmd)).toEqual(run);
+  if(!("successorId" in archived) || !archived.successorId)throw new Error("Expected successor");
+  expect(await call(resumed,"read",archived.successorId)).toMatchObject({predecessorId:id,status:"blocked",revision:1});
+  await expect(call(resumed,"reset",id,reset())).rejects.toThrow("DEMO_STALE_REVISION");
+  await expect(call(resumed,"snapshot",id,snapshot())).rejects.toThrow("DEMO_STALE_REVISION");
+  await expect(call(resumed,"reset",id,{...reset(),expectedRunRevision:2})).rejects.toThrow("DEMO_ARCHIVED");
+  for(const old of [a,fresh]) await expect(call(old,"reset",id,resetCommand)).rejects.toThrow("DEMO_FORBIDDEN");
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.small_builder_demo_run WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(2);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.small_builder_demo_receipt WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(3);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.small_builder_demo_report WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'small_builder_demo.%'",[a.tenantId])).rows[0].n).toBe(3);
+  await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[thirdSessionId]);
+  for(const op of ["read","report","create","reset","snapshot"] as const) await expect(call(resumed,op,op==="create"?null:id,op==="create"?cmd:op==="reset"?resetCommand:op==="snapshot"?snap:{})).rejects.toThrow("DEMO_FORBIDDEN");
+ });
+ it("refuses another company or another user in the same company before replay or report reads",async()=>{
+  const a=await company(),b=await company(),otherUser=await company(a.tenantId),cmd=create(),run=await call(a,"create",null,cmd),id=runId(run);
+  const snap=snapshot(),report=await call(a,"snapshot",id,snap),resetCommand=reset();
+  const archived=await call(a,"reset",id,resetCommand);
+  if(!("snapshotId" in report) || !("successorId" in archived) || !archived.successorId)throw new Error("Expected report and successor");
+  for(const foreign of [b,otherUser]){
+   for(const target of [id,archived.successorId]){
+    for(const op of ["read","report","reset","snapshot"] as const) await expect(call(foreign,op,target,op==="reset"?resetCommand:op==="snapshot"?snap:op==="report"?{snapshotId:report.snapshotId}:{})).rejects.toThrow("DEMO_NOT_FOUND");
+   }
+  }
+  await expect(call(otherUser,"create",null,cmd)).rejects.toThrow("DEMO_COMMAND_CONFLICT");
+  // Command IDs are company-scoped: another company gets its own run, never the saved result.
+  const foreignRun=await call(b,"create",null,cmd);expect(runId(foreignRun)).not.toBe(id);
   await expect(repo.execute(b.context,a.digest,"read",id,{})).rejects.toThrow("DEMO_FORBIDDEN");
-  const otherDigest=createHash("sha256").update(randomUUID()).digest("hex");
-  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) SELECT $1,user_id,environment,$2,$3,expires_at FROM identity.session WHERE id=$4",[randomUUID(),otherDigest,randomUUID(),a.sessionId]);
-  await expect(repo.execute(a.context,otherDigest,"read",id,{})).rejects.toThrow("DEMO_NOT_FOUND");
-  await expect(repo.execute(a.context,otherDigest,"create",null,cmd)).rejects.toThrow("DEMO_COMMAND_CONFLICT");
+  // Even the owning user with valid membership in another company cannot cross the tenant key.
+  const user=(await c.admin.query("SELECT user_id FROM identity.session WHERE id=$1",[a.sessionId])).rows[0].user_id;
+  const membership=randomUUID();
+  await c.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4",[membership,user,b.tenantId,b.actorId]);
+  await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[user,b.tenantId,membership]);
+  for(const op of ["read","report","reset","snapshot"] as const) await expect(repo.execute(b.context,a.digest,op,id,op==="reset"?resetCommand:op==="snapshot"?snap:op==="report"?{snapshotId:report.snapshotId}:{})).rejects.toThrow("DEMO_NOT_FOUND");
   await expect(call(a,"report",randomUUID())).rejects.toThrow("DEMO_NOT_FOUND");
   await expect(call(a,"report",id,{snapshotId:randomUUID()})).rejects.toThrow("DEMO_NOT_FOUND");
  });

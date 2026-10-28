@@ -3,7 +3,6 @@ BEGIN;
 CREATE TABLE app.small_builder_demo_run (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id),
  id uuid NOT NULL DEFAULT gen_random_uuid(), owner_membership_id uuid NOT NULL,
- session_digest text NOT NULL CHECK(session_digest ~ '^[a-f0-9]{64}$'),
  scenario text NOT NULL CHECK(scenario IN('core-1000','recovery-18800','shadow-30000','meter','trial')),
  reason text NOT NULL,
  revision integer NOT NULL DEFAULT 1 CHECK(revision IN(1,2)),
@@ -16,7 +15,7 @@ CREATE TABLE app.small_builder_demo_run (
 );
 CREATE TABLE app.small_builder_demo_receipt (
  tenant_id uuid NOT NULL, command_id uuid NOT NULL, run_id uuid NOT NULL,
- session_digest text NOT NULL, owner_membership_id uuid NOT NULL,
+ owner_membership_id uuid NOT NULL,
  request jsonb NOT NULL, result jsonb NOT NULL,
  PRIMARY KEY(tenant_id,command_id),
  FOREIGN KEY(tenant_id,run_id) REFERENCES app.small_builder_demo_run(tenant_id,id),
@@ -70,7 +69,7 @@ END $$;
 ALTER FUNCTION app.small_builder_demo_audit(uuid,uuid,uuid,text,text,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.small_builder_demo_audit(uuid,uuid,uuid,text,text,text) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 
--- Closed operations, fixed refusal facts, authority before replay, and session-bound ownership.
+-- Closed operations, fixed refusal facts, authority before replay, and company/member ownership.
 CREATE FUNCTION app.small_builder_demo(t uuid,digest text,operation text,run uuid,v jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; r app.small_builder_demo_run; prior app.small_builder_demo_receipt;
@@ -99,14 +98,14 @@ BEGIN
   END IF;
  END IF;
  IF operation<>'create' THEN
-  SELECT * INTO r FROM app.small_builder_demo_run WHERE tenant_id=t AND id=run AND session_digest=digest AND owner_membership_id=actor;
+  SELECT * INTO r FROM app.small_builder_demo_run WHERE tenant_id=t AND id=run AND owner_membership_id=actor;
   IF r.id IS NULL THEN RAISE EXCEPTION 'DEMO_NOT_FOUND'; END IF;
  END IF;
  request:=jsonb_build_object('operation',operation,'runId',run,'input',v);
  IF command IS NOT NULL THEN
   SELECT * INTO prior FROM app.small_builder_demo_receipt WHERE tenant_id=t AND command_id=command;
   IF prior.command_id IS NOT NULL THEN
-   IF prior.session_digest<>digest OR prior.owner_membership_id<>actor OR prior.request<>request THEN RAISE EXCEPTION 'DEMO_COMMAND_CONFLICT'; END IF;
+   IF prior.owner_membership_id<>actor OR prior.request<>request THEN RAISE EXCEPTION 'DEMO_COMMAND_CONFLICT'; END IF;
    RETURN prior.result;
   END IF;
  END IF;
@@ -119,17 +118,17 @@ BEGIN
    WHEN 'shadow-30000' THEN 'Final Check journey execution and attribution bindings are not available yet.'
    WHEN 'meter' THEN 'Meter profile journey execution and clock bindings are not available yet.'
    ELSE 'Trial journey execution, identity and clock bindings are not available yet.' END;
-  INSERT INTO app.small_builder_demo_run(tenant_id,owner_membership_id,session_digest,scenario,reason)
-   VALUES(t,actor,digest,v->>'scenario',why) RETURNING * INTO r;
+  INSERT INTO app.small_builder_demo_run(tenant_id,owner_membership_id,scenario,reason)
+   VALUES(t,actor,v->>'scenario',why) RETURNING * INTO r;
  ELSIF operation='reset' THEN
   UPDATE app.small_builder_demo_run SET revision=2,archived_at=clock_timestamp() WHERE tenant_id=t AND id=run RETURNING * INTO r;
-  INSERT INTO app.small_builder_demo_run(tenant_id,owner_membership_id,session_digest,scenario,reason,predecessor_id)
-   VALUES(t,actor,digest,r.scenario,r.reason,r.id);
+  INSERT INTO app.small_builder_demo_run(tenant_id,owner_membership_id,scenario,reason,predecessor_id)
+   VALUES(t,actor,r.scenario,r.reason,r.id);
  END IF;
  result:=jsonb_build_object('version','small-builder-demo-run.v1','environment','synthetic_demo','runId',r.id,'scenario',r.scenario,
   'revision',r.revision,'status',CASE WHEN r.archived_at IS NULL THEN 'blocked' ELSE 'archived' END,
   'reason',r.reason,'createdAt',r.created_at,'archivedAt',r.archived_at,'predecessorId',r.predecessor_id,'successorId',
-  (SELECT id FROM app.small_builder_demo_run WHERE tenant_id=t AND predecessor_id=r.id AND session_digest=digest AND owner_membership_id=actor));
+  (SELECT id FROM app.small_builder_demo_run WHERE tenant_id=t AND predecessor_id=r.id AND owner_membership_id=actor));
  IF operation='snapshot' THEN
   -- Only lifecycle facts are known here. No money, hidden signals, success or zero-action assertion.
   INSERT INTO app.small_builder_demo_report(tenant_id,run_id,facts) VALUES(t,r.id,result) RETURNING id INTO snapshot;
@@ -140,8 +139,8 @@ BEGIN
   IF result IS NULL THEN RAISE EXCEPTION 'DEMO_NOT_FOUND'; END IF;
  END IF;
  IF command IS NOT NULL THEN
-  INSERT INTO app.small_builder_demo_receipt(tenant_id,command_id,run_id,session_digest,owner_membership_id,request,result)
-   VALUES(t,command,r.id,digest,actor,request,result);
+  INSERT INTO app.small_builder_demo_receipt(tenant_id,command_id,run_id,owner_membership_id,request,result)
+   VALUES(t,command,r.id,actor,request,result);
   -- Audit head is the final contending lock, after all lifecycle writes.
   PERFORM app.small_builder_demo_audit(t,actor,command,operation,app.final_lock_hash(request),app.final_lock_hash(result));
  END IF;

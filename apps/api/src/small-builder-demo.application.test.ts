@@ -98,6 +98,19 @@ function lifecycleFixture(environment="synthetic_demo") {
  return {authority,repository,app:new SmallBuilderDemoApplication(authority as never,repository)};
 }
 describe("DEMO-I company authority",()=>{
+ it("resolves a fresh session digest for the same membership on resume",async()=>{
+  const f=lifecycleFixture();
+  await f.app.execute("first-login","read",id,{});
+  const original=f.authority.resolve.mock.results[0]!;
+  const {credentials}=await original.value;
+  f.authority.resolve.mockResolvedValue({credentials,digest:"b".repeat(64)});
+  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:credentials.csrfToken});
+  await f.app.execute("fresh-login","read",id,{});
+  expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
+  expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(2);
+  expect(f.repository.execute).toHaveBeenNthCalledWith(1,expect.objectContaining({tenantId:id}),"a".repeat(64),"read",id,{});
+  expect(f.repository.execute).toHaveBeenNthCalledWith(2,expect.objectContaining({tenantId:id}),"b".repeat(64),"read",id,{});
+ });
  it("re-authenticates resume, reset and report reads; a revoked session cannot replay",async()=>{
   const f=lifecycleFixture();
   for(const op of ["read","reset","report"] as const) await f.app.execute("session",op,id,op==="reset"?reset:{});
