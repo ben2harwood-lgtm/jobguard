@@ -187,6 +187,22 @@ describe("migration and privilege catalog", () => {
     expect((await admin.query("SELECT count(*)::int AS count FROM app.account")).rows[0]?.count).toBe(2);
   });
 
+  // 0244 adds no tables. Its sole routine stays private; schema/name/arguments order.
+  it("retains the private place-admission routine catalogue addition", async () => {
+    expect((await admin.query(`
+      SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args,
+             r.rolname AS owner, p.prosecdef, p.proconfig,
+             has_function_privilege('jobguard_runtime', p.oid, 'EXECUTE') AS runtime,
+             has_function_privilege('jobguard_meter', p.oid, 'EXECUTE') AS meter,
+             EXISTS (SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') AS public
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_roles r ON r.oid=p.proowner
+      WHERE n.nspname='app' AND p.proname='mon1_admit_place' ORDER BY 1,2,3
+    `)).rows).toEqual([
+      { nspname: "app", proname: "mon1_admit_place", args: "t uuid, j uuid, source_kind text, source_id uuid", owner: "jobguard_migration", prosecdef: false, proconfig: ["search_path=pg_catalog"], runtime: false, meter: false, public: false },
+    ]);
+  });
+
   it("automatically finds every business table protected by enabled and forced RLS plus a check policy", async () => {
     const result = await admin.query(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
@@ -208,6 +224,15 @@ describe("migration and privilege catalog", () => {
       { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_export", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_export_checkpoint", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_allocation_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_application_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_export_batch", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_export_delivery", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_export_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_line_match", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_quarantine", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "billing_status_import", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "cap_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "capture_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_contract", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -223,6 +248,7 @@ describe("migration and privilege catalog", () => {
       { relname: "contractor_member", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_membership_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_party_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "contractor_receipt_line_allocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_resident_contact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "counterparty_check", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "customer", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -374,6 +400,11 @@ describe("migration and privilege catalog", () => {
       { relname: "rate_book_observation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "readiness_decision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "readiness_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "receipt_allocation_fact_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "receipt_allocation_fact_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "receipt_allocation_fact_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "receipt_allocation_fact_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "receipt_allocation_fact_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "receipt_line_allocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_allocation_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_allocation_line_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -525,6 +556,15 @@ describe("migration and privilege catalog", () => {
       { relname: "audit_event", owner: "jobguard_migration" },
       { relname: "audit_export", owner: "jobguard_migration" },
       { relname: "audit_export_checkpoint", owner: "jobguard_migration" },
+      { relname: "billing_allocation_run", owner: "jobguard_migration" },
+      { relname: "billing_application_event", owner: "jobguard_migration" },
+      { relname: "billing_export_batch", owner: "jobguard_migration" },
+      { relname: "billing_export_delivery", owner: "jobguard_migration" },
+      { relname: "billing_export_line", owner: "jobguard_migration" },
+      { relname: "billing_fact", owner: "jobguard_migration" },
+      { relname: "billing_line_match", owner: "jobguard_migration" },
+      { relname: "billing_quarantine", owner: "jobguard_migration" },
+      { relname: "billing_status_import", owner: "jobguard_migration" },
       { relname: "cap_snapshot", owner: "jobguard_migration" },
       { relname: "capture_source", owner: "jobguard_migration" },
       { relname: "client_contract", owner: "jobguard_migration" },
@@ -540,6 +580,7 @@ describe("migration and privilege catalog", () => {
       { relname: "contractor_member", owner: "jobguard_migration" },
       { relname: "contractor_membership_revocation", owner: "jobguard_migration" },
       { relname: "contractor_party_binding", owner: "jobguard_migration" },
+      { relname: "contractor_receipt_line_allocation", owner: "jobguard_migration" },
       { relname: "contractor_resident_contact", owner: "jobguard_migration" },
       { relname: "counterparty_check", owner: "jobguard_migration" },
       { relname: "customer", owner: "jobguard_migration" },
@@ -691,6 +732,11 @@ describe("migration and privilege catalog", () => {
       { relname: "rate_book_observation", owner: "jobguard_migration" },
       { relname: "readiness_decision", owner: "jobguard_migration" },
       { relname: "readiness_snapshot", owner: "jobguard_migration" },
+      { relname: "receipt_allocation_fact_command", owner: "jobguard_migration" },
+      { relname: "receipt_allocation_fact_line", owner: "jobguard_migration" },
+      { relname: "receipt_allocation_fact_review", owner: "jobguard_migration" },
+      { relname: "receipt_allocation_fact_revision", owner: "jobguard_migration" },
+      { relname: "receipt_allocation_fact_source", owner: "jobguard_migration" },
       { relname: "receipt_line_allocation", owner: "jobguard_migration" },
       { relname: "recovery_allocation_command", owner: "jobguard_migration" },
       { relname: "recovery_allocation_line_source", owner: "jobguard_migration" },
