@@ -160,6 +160,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-account/terms": "post_live_billing",
   "/api/jobs/[id]/final-account/review-extras": "post_live_billing",
   "nest:/jobs/:id/final-account/review-extras": "post_live_billing",
+  "/api/jobs/[id]/final-check/dispositions": "post_live_billing",
   "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
   "command:RecordFinalCheckDisposition": "post_live_billing",
   "command:LockFinalAccount": "post_live_billing",

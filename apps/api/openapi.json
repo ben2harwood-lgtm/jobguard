@@ -102,7 +102,8 @@
               "enum": [
                 "export",
                 "import",
-                "approve-delivery"
+                "approve-delivery",
+                "advance-delivery"
               ],
               "type": "string"
             }
@@ -123,7 +124,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, or billing-approve-delivery.v1"
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
               }
             }
           }
@@ -133,7 +134,7 @@
             "description": ""
           }
         },
-        "summary": "Finance-only synthetic billing export, status import or exact delivery approval",
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
         "tags": [
           "contractor-billing"
         ]
