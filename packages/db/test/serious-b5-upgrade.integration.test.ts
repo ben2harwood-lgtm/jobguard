@@ -129,6 +129,33 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
+// ENT-7c (0298): only the fee book's two tables, their indexes, policies and three routines.
+async function enterprisePostingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["platform_enterprise_fee", "platform_enterprise_fee_line"];
+ const indexNames = ["platform_enterprise_fee_pkey", "platform_enterprise_fee_line_pkey",
+  "platform_enterprise_fee_tenant_id_statement_id_agreement_ve_key"];
+ const routineIdentities = [
+  ["ef_posted_net", "t uuid, p_agreement uuid"],
+  ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid"],
+  ["ef_read_postings", "p_session uuid, p_statement uuid"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
 // ENT-7b (0290): only the enterprise fee statement's own four tables, their indexes, policies and seven routines.
 async function enterpriseStatementAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["enterprise_fee_statement", "enterprise_fee_statement_approval", "enterprise_fee_statement_dispute", "enterprise_fee_statement_section"];
@@ -271,6 +298,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const baseline = await baselineAdditions(before, after);
  const enterpriseFee = await enterpriseFeeAdditions(before, after);
  const enterpriseStatement = await enterpriseStatementAdditions(before, after);
+ const enterprisePosting = await enterprisePostingAdditions(before, after);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -312,10 +340,10 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, ...baseline.rows, ...enterpriseFee.rows, ...enterpriseStatement.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines, ...baseline.routines, ...enterpriseFee.routines, ...enterpriseStatement.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations, ...baseline.relations, ...enterpriseFee.relations, ...enterpriseStatement.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...baseline.policies, ...enterpriseFee.policies, ...enterpriseStatement.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, ...baseline.rows, ...enterpriseFee.rows, ...enterpriseStatement.rows, ...enterprisePosting.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines, ...baseline.routines, ...enterpriseFee.routines, ...enterpriseStatement.routines, ...enterprisePosting.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations, ...baseline.relations, ...enterpriseFee.relations, ...enterpriseStatement.relations, ...enterprisePosting.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...baseline.policies, ...enterpriseFee.policies, ...enterpriseStatement.policies, ...enterprisePosting.policies], after.policies),
  };
 }
 // Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.
@@ -530,7 +558,8 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   "meter_lifecycle_day_ledger", "meter_lifecycle_place_binding", "meter_lifecycle_correction", "meter_lifecycle_alert"];
  const indexNames = [...tables.map(t => `${t}_pkey`), "meter_lifecycle_scope_tenant_id_kind_key",
   "meter_lifecycle_source_tenant_id_scope_id_command_id_key", "meter_lifecycle_source_tenant_id_scope_id_period_start_revi_key",
-  "meter_lifecycle_computation_tenant_id_scope_id_source_id_key"];
+  // 0300 replaces the source-only UNIQUE with source + recipe, preserving both projections.
+  "meter_lifecycle_computation_tenant_id_scope_id_source_id_re_key"];
  const identities = [
   ["mon1_lifecycle_actor", "t uuid, digest text, mutation boolean"],
   ["mon1_lifecycle_capture", "t uuid, digest text, command uuid, start_day date, expected integer"],
