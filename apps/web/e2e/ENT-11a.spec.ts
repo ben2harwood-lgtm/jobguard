@@ -54,7 +54,10 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await page.setViewportSize({ width: 360, height: 800 }); // mobile-360
   const op = { page };
   await op.page.goto("/site/extra");
-  await expect(op.page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready");
+  // First operative read straight after generating 2,000 orders: the assigned-jobs query checks authority once per
+  // assigned order (58 here, ~0.6 s on the DB suite's own run) and has exceeded the default 10 s on a busy runner.
+  // The page is correct, only slow on this cold first load, so this one wait gets a longer budget; it still requires "ready".
+  await expect(op.page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready", { timeout: 60_000 });
   await expect(op.page.getByText(banner, { exact: true })).toHaveCount(1);
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
   await op.page.getByLabel("What is the extra work?").fill(description);
