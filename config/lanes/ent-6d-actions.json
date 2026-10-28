@@ -14,7 +14,9 @@
         "apps/api/src/contractor/billing.controller.ts",
         "apps/api/openapi.json",
         "packages/db/src/contractor-billing-repository.ts",
-        "packages/db/test/contractor-billing-delivery.integration.test.ts"
+        "packages/db/test/contractor-billing-delivery.integration.test.ts",
+        "apps/api/src/contractor/billing.application.ts",
+        "apps/api/src/contractor/billing.advance.test.ts"
       ]
     }
   }
