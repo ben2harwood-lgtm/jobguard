@@ -14,8 +14,8 @@ describe("CH5-P own 0224 upgrade, no adoption persistence claimed — CI only", 
   it("applies alone after actual predecessor, preserves rows/types/security and permits successors twice", async () => {
     const own = "0224_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
     expect(index).toBeGreaterThan(0);
-    // This build base's predecessor is 0210, not an invented or unissued 0223.
-    expect(MIGRATION_URLS[index - 1]?.pathname).toMatch(/0210_meter_place_admission.sql$/u);
+    // Assert the actual predecessor under current main rather than the obsolete build-ahead base.
+    expect(MIGRATION_URLS[index - 1]?.pathname).toMatch(/0208_meter_small_trip.sql$/u);
     await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for (const url of MIGRATION_URLS.slice(0, index)) {
       await f.admin.query(await readFile(url, "utf8"));

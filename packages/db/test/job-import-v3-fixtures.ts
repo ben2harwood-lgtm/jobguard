@@ -26,6 +26,7 @@ export function scriptedImportPool(): ScriptedImportPool {
     if (sql.includes("authenticate_practice_session")) return { rows: state.authenticated ? [{ membership_id: state.actor }] : [], rowCount: state.authenticated ? 1 : 0 };
     if (sql.includes("FROM practice_owned_job WHERE")) return { rows: state.owns ? [{ id: J }] : [], rowCount: state.owns ? 1 : 0 };
     if (sql.includes("FROM app.job_party_current")) return { rows: [state.binding], rowCount: 1 };
+    if (sql.includes("FROM app.job_import_v3")) return { rows: [], rowCount: 0 };
     if (sql.startsWith("SELECT role FROM app.membership")) return { rows: [{ role: "owner" }], rowCount: 1 };
     throw new Error(`Unexpected SQL in unit transport: ${sql}`);
   });

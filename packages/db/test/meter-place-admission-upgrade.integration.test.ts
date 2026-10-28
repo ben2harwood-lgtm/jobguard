@@ -5,11 +5,12 @@ import { closeWorkFixture,createWorkFixture,seedWorkJob,type WorkFixture } from 
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore,proofDifferences,rolledBack } from "./upgrade-proof-utils.js";
 
-describe("MON1-A own 0210 upgrade proof, CI PostgreSQL only",()=>{
+describe("MON1-A own 0244 upgrade proof, CI PostgreSQL only",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false)},60000);afterAll(async()=>closeWorkFixture(f));
- it("M1A-10 applies after 0209 alone, preserves predecessor rows/types/security; successors twice and comparator control",async()=>{
-  const own="0210_meter_place_admission.sql",n=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith(own));
-  expect(n).toBeGreaterThan(0);expect(MIGRATION_URLS[n-1]?.pathname).toMatch(/0209_meter_lifecycle_source.sql$/u);
+ it("M1A-10 applies after 0239 alone, preserves predecessor rows/types/security; successors twice and comparator control",async()=>{
+  const own="0244_meter_place_admission.sql",n=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith(own));
+  expect(n).toBeGreaterThan(0);// MON1-S lifecycle source (0239 on main) must precede it; other pieces may land in between.
+  const source=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("/0239_meter_lifecycle_source.sql"));expect(source).toBeGreaterThanOrEqual(0);expect(source).toBeLessThan(n);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const u of MIGRATION_URLS.slice(0,n)){
    await f.admin.query(await readFile(u,"utf8"));

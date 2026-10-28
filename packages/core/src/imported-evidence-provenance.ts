@@ -55,7 +55,7 @@ export function classifyImportedEvidenceProvenance(raw: unknown): Readonly<Impor
   const parsed = importedEvidenceProvenanceV1.safeParse(raw);
   if (!parsed.success) throw new ImportProvenanceError("INVALID_IMPORT_PROVENANCE");
   const { prior, version: _version, ...facts } = parsed.data;
-  if (prior && (Object.entries(facts.binding).some(([key, value]) => prior.binding[key as keyof typeof binding._type] !== value) || !sameTime(prior.adoptedAt, facts.adoptedAt)))
+  if (prior && (Object.entries(facts.binding).some(([key, value]) => prior.binding[key as keyof z.infer<typeof binding>] !== value) || !sameTime(prior.adoptedAt, facts.adoptedAt)))
     throw new ImportProvenanceError("IMPORT_PROVENANCE_BINDING_MISMATCH");
   const source = timeRange(facts.sourceOccurredAt), adoption = timeRange(facts.adoptedAt), received = timeRange(facts.receivedAt);
   let holdReason: ImportedEvidenceProvenanceResult["holdReason"] = null;

@@ -19,7 +19,7 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory/u.test(sql))).toBe(false);
     expect(f.query.mock.calls.find(([sql]) => sql.includes("FROM practice_owned_job"))?.[1]).toEqual([T, J, D]);
   });
-  it.each(["live", "invoiced"] as const)("%s adoption refuses before receipt or authorization creation", async lifecyclePoint => {
+  it.each(["live"] as const)("%s adoption refuses before receipt or authorization creation", async lifecyclePoint => {
     const f = scriptedImportPool(), input = importFixtureV3(J, parties, lifecyclePoint, preview.fixtureId);
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, { ...intent, lifecyclePoint, previewHash: importActionHashV3(input) })).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });
     expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|adopt_in_flight|mon1_admit_place/u.test(sql))).toBe(false);
@@ -41,6 +41,12 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     await expect(repo.adopt(f.context, D, J, { ...intent, actor: M })).rejects.toMatchObject({ code: "INVALID_IMPORT" });
     await expect(repo.preview(f.context, "not-a-digest", J, preview)).rejects.toThrow();
     await expect(repo.preview(f.context, D, "not-a-uuid", preview)).rejects.toThrow();
+  });
+  it("client grace claims, count overrides and locked-bill references cannot authorize an import", async () => {
+    const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
+    for (const extra of [{ gracePlace: true }, { countedPlaces: 0 }, { plan: "Builder" }, { finalAccountRevisionId: randomUUID() }, { baselineId: randomUUID() }])
+      await expect(repo.adopt(f.context, D, J, { ...intent, ...extra })).rejects.toMatchObject({ code: "INVALID_IMPORT" });
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
   });
   it("production/pilot reject all entrypoints before SQL", async () => {
     const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
@@ -77,8 +83,36 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, intent)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(f.query.mock.calls.some(([sql]) => /INSERT|command_receipt/u.test(sql))).toBe(false);
   });
-  it("read never invents a persisted result", async () => {
-    const f = scriptedImportPool(); await expect(new JobImportV3Repository(f.pool).read(f.context, D, J)).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });
+  it("read refuses a missing persisted result", async () => {
+    const f = scriptedImportPool(); await expect(new JobImportV3Repository(f.pool).read(f.context, D, J)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+  it("invoiced mutation and replay preserve the original checked writer result and exclusion identity", async () => {
+    const f = scriptedImportPool(), originalQuery = f.query.getMockImplementation()!;
+    const value = importFixtureV3(J, parties, "invoiced", preview.fixtureId);
+    const input = { ...intent, lifecyclePoint: "invoiced", previewHash: importActionHashV3(value) };
+    const exactCommand = { ...command, authorizationId: randomUUID(), action: { ...command.action, contentHash: input.previewHash } };
+    const result = { version: "job-import-result.v3", importId: randomUUID(), jobId: command.subjectRef, termsId: randomUUID(), baselineId: randomUUID(),
+      provenance: "imported", lineageStrength: "builder_attested_weaker", lifecyclePoint: "invoiced", linkedJobIds: [J], meterResultRef: randomUUID(),
+      actionHash: input.previewHash, environment: "synthetic_demo", realExternalActions: 0,
+      baseline: { acceptedNetPence: value.baseline.acceptedNetPence, lines: value.baseline.lines.map(line => ({ sourceLineId: line.sourceLineId,
+        scopeItemId: randomUUID(), netPence: line.netPence, origin: "builder_baseline" })) } };
+    const publicHash = importPublicRequestHashV3(T, D, J, input);
+    f.query.mockImplementation(async (sql, values) => {
+      if (sql.includes("app.adopt_invoiced_job_v3")) return { rows: [{ result }], rowCount: 1 };
+      if (sql.includes("FROM app.job_import_v3")) return { rows: [{ result, snapshot: value, public_request_hash: publicHash, adopted_at: new Date("2026-10-28T18:00:00Z") }], rowCount: 1 };
+      return originalQuery(sql, values);
+    });
+    const mutation = new AdoptInFlightJobV3Mutation(T, D, J, input, value);
+    await withTenant(f.pool, f.context, async db => expect(await mutation.mutate(db, exactCommand)).toEqual(result));
+    expect(f.query.mock.calls.find(([sql]) => sql.includes("app.adopt_invoiced_job_v3"))?.[1]).toEqual([
+      T, J, D, input.commandId, exactCommand.authorizationId, JSON.stringify(value), publicHash,
+    ]);
+    const repo = new JobImportV3Repository(f.pool);
+    expect(await repo.adopt(f.context, D, J, input)).toEqual(result);
+    expect((await repo.read(f.context, D, command.subjectRef)).result).toEqual(result);
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("INSERT INTO app.command_receipt"))).toBe(false);
+    f.state.authenticated = false;
+    await expect(repo.adopt(f.context, D, J, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("public hash binds every intent field and path/scope; UUID case is canonical", () => {
     const hash = importPublicRequestHashV3(T, D, J, intent);
@@ -100,7 +134,7 @@ describe("CH5-P PostgreSQL held boundary — CI only", () => {
   afterAll(async () => { await closeWorkFixture(f); });
   it("fresh session preview and repeat live/invoiced refusals preserve all effects", async () => {
     const { auth } = f.practice, repo = new JobImportV3Repository(f.runtime), before = await importState(f);
-    for (const lifecyclePoint of ["live", "invoiced"] as const) {
+    for (const lifecyclePoint of ["live"] as const) {
       const p = await repo.preview(auth.context, auth.digest, f.practice.jobId, { ...f.request, lifecyclePoint });
       const request = freshIntent(f.request.expectedBindingId, p.previewHash, lifecyclePoint);
       for (let n = 0; n < 2; n++) await expect(repo.adopt(auth.context, auth.digest, f.practice.jobId, request)).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });

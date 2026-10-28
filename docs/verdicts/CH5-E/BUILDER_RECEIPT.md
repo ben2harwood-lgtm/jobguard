@@ -1,3 +1,89 @@
+# CH-5 current-main catch-up and CH5-A/J candidate — 28 October 2026
+
+RED: charging control and tenant isolation. Synthetic only. No commit, push,
+merge, live provider, real customer data or release performed in this sandbox.
+The supplied SIMPLE_LOOP is the current build rulebook; the older receipt below
+is retained as history, not current coordination authority.
+
+Implemented migration 0312's positive invoiced writer, authenticated Nest/Next
+preview/adopt/read APIs, and a browser preview/attestation/saved-import page. One
+immutable aggregate stores the approved v3 fixture, terms and baseline/scope
+mapping, original result, session-bound public request hash and an invoiced-stage
+zero-count exclusion. No v1 cap or policy is attached. The existing v1 writer,
+its fields and tests remain. Current same-customer/site live overlaps are linked
+within the owning practice session. A command replays its exact stored IDs;
+a different command for the same source fixture is refused. Source job locking
+precedes receipt and audit locks. Actual history manifests are refused.
+
+Resolved the SERIOUS-B5 catch-up conflict by preserving both sides' exact-object
+upgrade checks. Added the 0312 catalogue/RLS/grant expectations and four narrow
+privilege-inventory entries for review. No generic inventory/fingerprint refresh.
+The table is FORCE RLS, tenant-qualified and SELECT-only for the runtime; only
+the session-authorized checked routine can write it. Existing canonical JSON is
+reused for the fixed ASCII fixture instead of introducing another encoder.
+
+Still refused / outstanding:
+
+- Live imports and the actual Solo/Builder grace-place admission remain
+  METER_PLACE_SOURCE_HANDOFF_HELD: this checkout's MON-1 boundary is still an
+  unconditional refusal, and the stored ledger cannot yet atomically admit an
+  import. No supplied-count oracle becomes a runtime permit or free import period.
+- Historical-original ingestion, imported Final Account baseline consumption,
+  imported locks and a persisted pre-adoption catch remain unavailable. The UI
+  shows the £0 pre-adoption exclusion rule and says no historical catch exists;
+  this is NOT completion of CH-5's actual pre-adoption-catch Done-when assertion.
+- Production imports, real fees/providers/data and release gates remain off.
+
+The opaque meterResultRef on invoiced results refers to the durable zero-count
+exclusion, NOT a MON-1 period computation. Random generated IDs for terms/baseline
+are identities inside the immutable aggregate; they do not masquerade as quote
+or locked-bill rows. A baseline ID substituted into the lock boundary is tested
+with a valid lock command and must return STALE_REVISION.
+
+Executed local evidence (installed Node 24.17.0 / Vitest 4.1.12):
+
+- Direct installed tsc builds/typechecks for config, core, db and API; web noEmit
+  typecheck. No dependency download. The pnpm shim stalled and was cancelled;
+  installed binaries were used thereafter.
+- core Vitest, maxWorkers=1: job-import-v3.test.ts,
+  imported-evidence-provenance.test.ts, meter-place-admission.test.ts: 55 passed.
+- API Vitest, maxWorkers=1: job-import-v3.application.test.ts,
+  imported-shadow-source-adapter.test.ts, job-parties.application.test.ts:
+  43 passed.
+- db Vitest, maxWorkers=1: job-import-v3.integration.test.ts -t source-only:
+  12 passed, 3 PostgreSQL cases intentionally not selected.
+- db Vitest, maxWorkers=1: imported-baseline-sources.integration.test.ts,
+  imported-observation-reader.integration.test.ts,
+  imported-evidence-provenance.integration.test.ts -t source-only: 22 passed,
+  4 PostgreSQL cases intentionally not selected.
+- web Vitest, maxWorkers=1: import-v3/route.test.ts: 3 passed.
+  Total final focused cases: 135 passed. Scripted transports prove application
+  routing/binding/refusal only, not PostgreSQL guarantees.
+- Vitest list loaded the new PostgreSQL positive/upgrade cases, the earlier own
+  upgrade and the resolved SERIOUS-B5 suite without running hooks. Playwright
+  --list discovers CH-5.spec.ts for mobile-360 and desktop; no browser ran.
+- OpenAPI generated through node --import tsx (the tsx CLI's IPC socket is forbidden
+  here); only the new import endpoints are added.
+- Core purity and money/commercial boundary lints pass. Full tools/lint.mjs stops
+  at lane lint because the uncommitted catch-up merge attributes incoming main
+  and CH5-B/C/P paths to ch5-e. Its scope was not widened to cover those changes.
+- Final package builds/typechecks and OpenAPI --check pass. An additional temporary
+  test-only tsc project reports one inherited error in
+  job-work-state-fixtures.ts:45 (schema.options[0] may be undefined); no error in
+  the new test files was reported. That broader helper was left unchanged.
+- git diff --check passes. The index still reports the original unmerged file;
+  its text markers are resolved. Only the router can git add/complete the merge.
+
+CI still must execute PostgreSQL fresh/upgrade/race/authorization/RLS/locked-bill
+cases and CH-5.spec.ts on the real browser. PostgreSQL/localhost were not started.
+No whole-repository test/build pass or independent review is claimed. Migration
+0312 notes specify forward fix/revocation with immutable rows retained.
+
+CH-5 as a whole is NOT complete: the stored admission and historical catch/source
+work above are outstanding. Do not silently mark its finish-list line done.
+
+---
+
 # CH5-E builder receipt — DEPENDENCY-BOUND partial boundaries
 
 25 October 2026, C268. Synthetic only. Not complete, reviewed, accepted,

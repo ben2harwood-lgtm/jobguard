@@ -6,7 +6,7 @@ describe("CH5-P concurrent held imports — CI only; positive capacity races STO
   let f: ImportFixture;
   beforeAll(async () => { f = await createImportFixture(); }, 60000);
   afterAll(async () => { await closeWorkFixture(f); });
-  it.each(["live", "invoiced"] as const)("concurrent %s attempts create no receipt, approval, job or meter effect", async lifecyclePoint => {
+  it.each(["live"] as const)("concurrent %s attempts create no receipt, approval, job or meter effect", async lifecyclePoint => {
     const repo = new JobImportV3Repository(f.runtime), { auth } = f.practice;
     const p = await repo.preview(auth.context, auth.digest, f.practice.jobId, { ...f.request, lifecyclePoint });
     const request = freshIntent(f.request.expectedBindingId, p.previewHash, lifecyclePoint), before = await importState(f);

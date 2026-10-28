@@ -332,3 +332,48 @@ coordinator_acknowledged_at: unknown
 integrated_at: unknown
 merged_revision: unknown
 ```
+
+
+## make PR green
+
+Issued CH5-C MAKE-PR-GREEN order, Ben/dispatcher, 25 October 2026; PR #327.
+Starting head `0c7dd6efaa281ff871897d4ec6efbe93fc3321ee` includes the clean
+merge of main `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32` (`origin/main`).
+Only two lane-owned production files and this receipt change. No lane expansion,
+test/scanner edits, dependency changes, migration or runtime behavior change.
+
+Align the generic parser with Zod 4.6.6's `z.ZodType<T, unknown>` and derive
+binding keys through public `z.infer` instead of the removed `_type` internal.
+Every strict object, refinement, transformation and error path is preserved.
+No additional call-signature repair was required. No new abstraction.
+
+Commands use Node v24.17.0 and the existing cached pnpm 10.28.1 wrapper at
+`/private/tmp/jg-ch5-c-tools/pnpm`; no install or download was performed.
+Before typechecking, moved all five `packages/*/dist` directories into
+`/private/tmp/jg-ch5-c-green-20261025/*-dist-before`; build regenerates outputs.
+Logs are under `/private/tmp/jg-ch5-c-green-20261025/`.
+
+| Check | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/core typecheck` with no package dist present | PASS |
+| `pnpm typecheck` before build, no package dist present | PASS, 7/7 (2 cached) |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 131 files / 3,031 tests, including shared enterprise boundary scanner |
+| `pnpm --filter @jobguard/core lint` | PASS |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, boundary checks and 7/7 package tasks (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS |
+| `node --test tools/*.test.mjs` | PASS, 295 tests |
+| `pnpm eval` | PASS, 15 files / 147 tests, synthetic fixtures only; no live-model evaluation |
+| `pnpm openapi:check` | Launcher blocked: tsx IPC socket `listen EPERM` |
+| From apps/api: `node --import tsx src/generate-openapi.ts --check` | PASS, same generator and check mode without CLI socket |
+| `pnpm build --concurrency=2` | PASS, 7/7 tasks (2 cached), including web production build |
+| `git diff --check` | PASS |
+
+Existing CSS/workspace-root warnings and sandbox cache IO warnings remain;
+no new code failure was found. Database, migrations and browser suites were not
+run under the dispatcher's sandbox restriction (no PostgreSQL/localhost binding);
+GitHub CI must run those after the dispatcher pushes. This receipt records
+executed checks, not an independent model verdict or technical acceptance.
+No commit, push, merge or release performed; all existing release gates remain.
+Intended conventional commit message: `/private/tmp/jg-msg-ch5-c.txt`.
+
+Size: +47/−2 lines across 3 files; largest touched logic file: 116 lines; new abstractions: none.

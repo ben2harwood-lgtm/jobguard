@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-181-green": {
+      "branches": [
+        "codex/sandbox/sv5-181-green",
+        "codex/sandbox/sv5-green-metadata-20261026"
+      ],
+      "receipt": "docs/verdicts/SV-5/BUILDER_RECEIPT.md",
+      "note": "Scoped PR #181 merge resolutions and final-check catalogue/trigger-order repairs; database and browser verification remain for CI.",
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migrations/0205_final_check.sql",
+        "docs/verdicts/SV-5/BUILDER_RECEIPT.md",
+        "packages/db/src/final-check-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/final-check-access.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/final-check-upgrade.integration.test.ts",
+        "packages/db/test/final-check-c239.test.ts",
+        "packages/db/migration-notes/0205_final_check.md",
+        "docs/contracts/final-check-v1.md",
+        "docs/operations/final-check-recovery.md",
+        "packages/db/test/sv5pre-completion-access.integration.test.ts",
+        "packages/db/migrations/0238_final_check.sql",
+        "packages/db/migration-notes/0238_final_check.md",
+        "archive/2026-10-26/sv5-0205-forward-preservation/original-0205.zip",
+        "archive/2026-10-26/sv5-0205-forward-preservation/MANIFEST.json",
+        "archive/2026-10-26/sv5-0205-forward-preservation/ACTIVITY.md"
+      ]
+    }
+  }
+}

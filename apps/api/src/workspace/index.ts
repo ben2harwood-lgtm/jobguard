@@ -90,3 +90,11 @@ export * from "../job-source.errors.js";
 
 export * from "../plan-entitlements.application.js";
 export * from "../contractor/practice-worker-switch.application.js";
+
+export * from "../subscription.application.js";
+export * from "../subscription.authority.js";
+export * from "../contractor/billing.application.js";
+export * from "../recovery-attribution.application.js";
+export * from "../recovery-attribution.contracts.js";
+export { JobImportV3Application } from "../job-import-v3.application.js";
+export { JobImportV3Error } from "@jobguard/db";

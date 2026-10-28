@@ -1,18 +1,19 @@
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { adoptJobV3, assertImportIntentV3, importActionHashV3, jobPartiesImportV3, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
-import { UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
+import { adoptJobV3, assertImportIntentV3, assertImportResultV3, importActionHashV3, jobPartiesImportV3, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
+import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
 import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
-import { importFixtureV3, importTargetJobIdV3 } from "./job-import-v3-fixtures.js";
+import { importFixtureV3, importTargetJobIdV3, importPublicRequestHashV3 } from "./job-import-v3-fixtures.js";
 
 const uuid = z.string().uuid().transform(v => v.toLowerCase());
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 export const importPreviewRequestV3 = z.object({ version: z.literal("job-import-preview.v3"), expectedBindingId: uuid,
   fixtureId: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,99}$/u), lifecyclePoint: z.enum(["live", "invoiced"]) }).strict();
 export class JobImportV3Error extends Error {
-  constructor(readonly code: "FORBIDDEN" | "INVALID_IMPORT" | "REVISION_CONFLICT" | "IMPORT_HISTORY_ADAPTER_REQUIRED" | "METER_PLACE_SOURCE_HANDOFF_HELD" | "EXACT_IMPORT_AUTHORIZATION_MISMATCH" | "SYNTHETIC_MODE_REQUIRED") { super(code); this.name = "JobImportV3Error"; }
+  constructor(readonly code: "FORBIDDEN" | "INVALID_IMPORT" | "REVISION_CONFLICT" | "IMPORT_HISTORY_ADAPTER_REQUIRED" | "METER_PLACE_SOURCE_HANDOFF_HELD" | "EXACT_IMPORT_AUTHORIZATION_MISMATCH" | "SYNTHETIC_MODE_REQUIRED" | "COMMAND_CONFLICT" | "IMPORT_ALREADY_ADOPTED" | "NOT_FOUND") { super(code); this.name = "JobImportV3Error"; }
 }
 function syntheticOnly(): void {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new JobImportV3Error("SYNTHETIC_MODE_REQUIRED");
@@ -48,7 +49,7 @@ function previewIntent(input: ReturnType<typeof jobPartiesImportV3.parse>) {
   return { version: "job-import-preview.v3", expectedBindingId: input.expectedBindingId, fixtureId: input.fixtureId, lifecyclePoint: input.lifecyclePoint };
 }
 
-/** Partial build: previews exist; adoption and stored v3 reads remain explicitly held. */
+/** Synthetic invoiced imports persist; live imports require the atomic MON-1 handoff. */
 export class JobImportV3Repository {
   constructor(private readonly pool: Pool) {}
   async preview(context: VerifiedTenantContext, digest: string, sourceJobId: string, request: unknown) {
@@ -56,7 +57,7 @@ export class JobImportV3Repository {
     return withTenant(this.pool, context, async db => {
       const result = await snapshot(db, context.tenantId, digest, sourceJobId, request);
       return { version: "job-import-preview-result.v3" as const, snapshot: result.snapshot, previewHash: result.previewHash,
-        availability: meterPlaceAdmissionHold, environment: "synthetic_demo" as const, realExternalActions: 0 as const,
+        availability: result.snapshot.lifecyclePoint === "live" ? meterPlaceAdmissionHold : { status: "available", reason: "imported_at_invoiced_stage", countedPlaces: 0 }, environment: "synthetic_demo" as const, realExternalActions: 0 as const,
         notice: "Practice sandbox — synthetic data; nothing is sent or charged" };
     });
   }
@@ -72,23 +73,45 @@ export class JobImportV3Repository {
       return { input, ...result };
     });
     const targetId = importTargetJobIdV3(context.tenantId, digest, prepared.input.commandId);
+    const publicHash = importPublicRequestHashV3(context.tenantId, digest, sourceJobId, prepared.input);
+    const prior = async () => withTenant(this.pool, context, async db => {
+      await owned(db, context.tenantId, digest, sourceJobId);
+      const row = (await db.$client.query<{ public_request_hash: string; result: unknown }>(
+        "SELECT public_request_hash,result FROM app.job_import_v3 WHERE tenant_id=$1 AND command_id=$2 AND session_digest=$3",
+        [context.tenantId, prepared.input.commandId, digest])).rows[0];
+      if (!row) return null;
+      if (row.public_request_hash !== publicHash) throw new JobImportV3Error("COMMAND_CONFLICT");
+      return assertImportResultV3(prepared.snapshot, row.result);
+    });
+    // A live request must still stop before any receipt or approval; no pure oracle is a permit.
+    if (prepared.snapshot.lifecyclePoint === "invoiced") { const result = await prior(); if (result) return result; }
     return new UserCommandDispatcher(this.pool).dispatch(context, {
       version: "command.v1", commandId: prepared.input.commandId, commandType: "job.adopt_in_flight_v3",
       semanticKey: `import-v3:${prepared.input.commandId}`, actorMembershipId: prepared.actorId, subjectType: "job", subjectRef: targetId,
       action: { actionType: "job.adopt_in_flight_v3", recipient: null, contentHash: prepared.previewHash, aggregateRevision: 0,
         amountPence: prepared.snapshot.baseline.acceptedNetPence, currency: "GBP", policyVersion: "synthetic_demo_import.v3", expiresAt: new Date(Date.now() + 60000) },
-    }, new AdoptInFlightJobV3Mutation(context.tenantId, digest, sourceJobId, prepared.input, prepared.snapshot));
+    }, new AdoptInFlightJobV3Mutation(context.tenantId, digest, sourceJobId, prepared.input, prepared.snapshot)).catch(async error => {
+      if (error instanceof CommandError && error.code === "COMMAND_CONFLICT") { const result = await prior(); if (result) return result; }
+      if (error instanceof Error && error.message === "IMPORT_ALREADY_ADOPTED") throw new JobImportV3Error("IMPORT_ALREADY_ADOPTED");
+      throw error;
+    });
   }
-  async read(context: VerifiedTenantContext, digest: string, importedJobId: string): Promise<never> {
+  async read(context: VerifiedTenantContext, digest: string, importedJobId: string) {
     syntheticOnly(); digestSchema.parse(digest); importedJobId = uuid.parse(importedJobId);
     return withTenant(this.pool, context, async db => {
       await owned(db, context.tenantId, digest, importedJobId);
-      return admissionUnavailable();
+      const row = (await db.$client.query<{ snapshot: unknown; result: unknown; adopted_at: Date }>(
+        "SELECT snapshot,result,adopted_at FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND session_digest=$3",
+        [context.tenantId, importedJobId, digest])).rows[0];
+      if (!row) throw new JobImportV3Error("NOT_FOUND");
+      return { version: "job-import-read.v3" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, result: assertImportResultV3(row.snapshot, row.result), snapshot: adoptJobV3.parse(row.snapshot), adoptedAt: row.adopted_at.toISOString(),
+        meter: { countedPlaces: 0 as const, reason: "imported_at_invoiced_stage" as const },
+        lineageLabel: "Builder-attested imported baseline — weaker lineage than a customer-accepted quote" };
     });
   }
 }
 
-/** Actual dispatcher hook: refuses BEFORE receipt claim/approval, also before replay. No nested transaction. */
+/** Recheck current session and approved content before receipt/replay. No nested transaction. */
 export class AdoptInFlightJobV3Mutation implements CommandMutation<Record<string, unknown>> {
   constructor(private readonly tenantId: string, private readonly digest: string, private readonly sourceJobId: string,
     private readonly request: unknown, private readonly approvedSnapshot: unknown) {}
@@ -106,14 +129,24 @@ export class AdoptInFlightJobV3Mutation implements CommandMutation<Record<string
       command.action.amountPence !== approved.baseline.acceptedNetPence || command.action.currency !== "GBP" || command.action.policyVersion !== "synthetic_demo_import.v3")
       throw new JobImportV3Error("EXACT_IMPORT_AUTHORIZATION_MISMATCH");
   }
-  async lock(db: TenantTransaction, command: ConsequentialCommand): Promise<never> {
+  async lock(db: TenantTransaction, command: ConsequentialCommand): Promise<void> {
     await this.check(db, command);
-    // No business locks are needed for this unconditional refusal. Do not acquire the
-    // incomplete MON1 lock sequence or create an authorization to a held capability.
-    return admissionUnavailable();
+    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live") return admissionUnavailable();
+    // Serialize duplicate imports before receipt and audit locks. SQL reuses this row lock.
+    await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [this.tenantId, this.sourceJobId]);
   }
-  async mutate(db: TenantTransaction, command: ConsequentialCommand): Promise<never> {
+  async mutate(db: TenantTransaction, command: ConsequentialCommand): Promise<Record<string, unknown>> {
     await this.check(db, command);
-    return admissionUnavailable();
+    if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live") return admissionUnavailable();
+    const row = (await db.$client.query<{ result: unknown }>("SELECT app.adopt_invoiced_job_v3($1,$2,$3,$4,$5,$6::jsonb,$7) result",
+      [this.tenantId, this.sourceJobId, this.digest, command.commandId, command.authorizationId,
+        JSON.stringify(this.approvedSnapshot), importPublicRequestHashV3(this.tenantId, this.digest, this.sourceJobId, this.request)])).rows[0];
+    return assertImportResultV3(this.approvedSnapshot, row?.result);
+  }
+  auditEvents(result: Record<string, unknown>, command: ConsequentialCommand) {
+    return [{ id: randomUUID(), version: "audit.v1" as const, actorRef: `membership:${command.actorMembershipId}`,
+      eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: String(result.jobId),
+      payload: { references: { sourceJobId: this.sourceJobId, baselineId: String(result.baselineId) },
+        hashes: { baselineHash: String(result.actionHash) }, classifications: { action: "commercial" as const } } }];
   }
 }

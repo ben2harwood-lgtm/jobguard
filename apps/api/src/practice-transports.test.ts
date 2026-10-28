@@ -136,6 +136,8 @@ it("Next quote delivery GET maps missing, invented and stranger practice session
   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected route import: ${id}`);return adapters[id]},Response});
   return exports;
  }
+ adapters["zod"]=await import("zod");
+ adapters["../../../../../lib/route-error-code"]=load("../../web/app/lib/route-error-code.ts");
  adapters["../../../../../lib/synthetic-server"]=load("../../web/app/lib/synthetic-server.ts");
  adapters["../../../../../lib/workspace-server"]={workspaceApplication:async()=>({quote:{deliveryView}})};
  const route=load("../../web/app/api/jobs/[id]/quotes/delivery/route.ts");
