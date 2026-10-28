@@ -129,6 +129,67 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
+// ENT-7a (0276): only the enterprise fee derivation's own three tables, their indexes, policies and six routines.
+async function enterpriseFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["enterprise_agreement_version", "enterprise_fee_contribution", "enterprise_fee_derivation"];
+ const indexNames = [
+  "enterprise_agreement_version_pkey", "enterprise_agreement_version_tenant_id_effective_from_key",
+  "enterprise_fee_contribution_pkey", "enterprise_fee_contribution_tenant_id_derivation_id_allocat_key",
+  "enterprise_fee_derivation_pkey", "enterprise_fee_derivation_tenant_id_agreement_version_id_pe_key", "enterprise_fee_derivation_tenant_id_command_id_key"];
+ const routineIdentities = [
+  ["ef_actor", "p_session uuid"], ["ef_derive", "p_session uuid, p_command uuid, p_agreement uuid, p_period text"], ["ef_immutable", ""],
+  ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text"], ["ef_read", "p_session uuid, p_derivation uuid"], ["ef_round_half_even", "n numeric, d numeric"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
+// M4-8-S m48-b1 (0258): only the receipt-line source bridge's own five tables, their indexes, policies and six routines.
+async function receiptFactAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["receipt_allocation_fact_command", "receipt_allocation_fact_line", "receipt_allocation_fact_review", "receipt_allocation_fact_revision", "receipt_allocation_fact_source"];
+ const indexNames = [
+  "receipt_allocation_fact_command_pkey", "receipt_allocation_fact_command_tenant_id_job_id_command_id_key",
+  "receipt_allocation_fact_line_pkey", "receipt_allocation_fact_line_tenant_id_job_id_id_key", "receipt_allocation_fact_line_tenant_id_source_id_line_id_key",
+  "receipt_allocation_fact_review_pkey", "receipt_allocation_fact_review_tenant_id_command_id_key", "receipt_allocation_fact_review_tenant_id_job_id_id_key",
+  "receipt_allocation_fact_revis_tenant_id_job_id_id_payment_i_key", "receipt_allocation_fact_revision_pkey", "receipt_allocation_fact_revision_tenant_id_command_id_key",
+  "receipt_allocation_fact_revision_tenant_id_job_id_id_key", "receipt_allocation_fact_revision_tenant_id_review_id_key",
+  "receipt_allocation_fact_sourc_tenant_id_allocation_revision_key", "receipt_allocation_fact_sourc_tenant_id_job_id_id_invoice_i_key",
+  "receipt_allocation_fact_source_pkey", "receipt_allocation_fact_source_tenant_id_job_id_id_key", "receipt_allocation_one_receipt_interpretation"];
+ const routineIdentities = [
+  ["assert_receipt_fact_bound", "parts jsonb, limit_n numeric, limit_d numeric"], ["assert_receipt_fact_scope", "p_tenant uuid, p_job uuid, p_session_digest text"],
+  ["guard_receipt_fact_line", ""], ["read_receipt_allocation_facts", "p_tenant uuid, p_job uuid, p_session_digest text, p_selector jsonb, p_expected jsonb"],
+  ["receipt_fact_projection_safe", "p jsonb"], ["write_receipt_allocation_facts", "p_tenant uuid, p_job uuid, p_session_digest text, p_command jsonb, p_artifact jsonb"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "receipt_fact_tenant"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
 // Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
 // Ruling 113 also extends it to ENT-8A-P's own live-prompt objects (livePromptAdditions).
 // Existing rows, routine privileges, relations and policies still compare in full.
@@ -136,6 +197,8 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const after = await snapshot();
  const livePrompt = await livePromptAdditions(before, after);
  const finalCheck = await finalCheckAdditions(before, after);
+ const receiptFacts = await receiptFactAdditions(before, after);
+ const enterpriseFee = await enterpriseFeeAdditions(before, after);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -177,10 +240,10 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, ...enterpriseFee.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines, ...enterpriseFee.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations, ...enterpriseFee.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...enterpriseFee.policies], after.policies),
  };
 }
 // Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.
@@ -461,6 +524,24 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   routines: additive(expectedRoutines, routines, after.routines),
   relations: additive(expectedRelations, relations, after.relations), policies: additive(before.policies, [...policies, ...newSourcePolicies], after.policies) };
 }
+// Dispatcher-assigned catalogue row: 0244 creates only this private routine.
+async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_admit_place"
+  && r.args === "t uuid, j uuid, source_kind text, source_id uuid");
+ expect(routines).toHaveLength(1);
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r.proowner).toBe(owner);
+  expect(r.prosecdef).toBe(false);
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
+  expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -472,6 +553,26 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
  FROM pg_proc p WHERE p.oid='app.mon8_retained_contractor_workspace(uuid,jsonb)'::regprocedure`)).rows;
  expect(grants).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration","jobguard_runtime"]}]);
+ const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
+ return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+}
+// C248/C249: one added guard; C238 retains its exact identity and privileges.
+async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
+ expect(additions).toHaveLength(1);
+ expect(before.routines.some(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition')).toBe(false);
+ expect(additions[0]).toMatchObject({prosecdef:true,proconfig:['search_path=pg_catalog, app']});
+ const guards=(await f.admin.query(`SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='app.evidence_upload'::regclass
+  AND tgfoid='app.guard_post_lock_upload_transition()'::regprocedure ORDER BY tgname`)).rows;
+ expect(guards).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O'}]);
+ const acl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid IN ('app.guard_post_lock_upload_transition()'::regprocedure,'app.serialize_final_check_evidence()'::regprocedure)`)).rows;
+ expect(acl).toEqual(Array.from({length:2},()=>({owner:'jobguard_migration',executors:['jobguard_migration']})));
+ const restated=(rows:typeof before.routines)=>rows.filter(r=>r.nspname==='app' && r.proname==='serialize_final_check_evidence' && r.args==='');
+ expect(restated(before.routines)).toHaveLength(1);
+ expect(restated(after.routines)).toEqual(restated(before.routines));
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
@@ -491,6 +592,8 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
+ Object.assign(expected, await placeAdmissionAdditions(expected));
+ Object.assign(expected, await with0245Additions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

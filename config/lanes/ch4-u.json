@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch4-u": {
+      "branches": [
+        "codex/sandbox/ch4-u"
+      ],
+      "note": "CH-4 follow-on CH4-U: work-state controls on the saved job and the linked-job offer, over the existing CH-4-C routes. Web UI and tests only; no migration, route, SQL or money change.",
+      "allow": [
+        "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/app/ui/job-work-state-view.ts",
+        "apps/web/app/ui/job-work-state-view.test.ts",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/CH-4.spec.ts"
+      ]
+    }
+  }
+}
