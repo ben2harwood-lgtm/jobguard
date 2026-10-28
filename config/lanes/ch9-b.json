@@ -6,7 +6,7 @@
         "codex/sandbox/ch9-b"
       ],
       "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
-      "note": "RED: CH-9 part 1 combines the accepted J/R/B value-read and illustrative report work. Authoritative receipts and subscription-period amounts still refuse. MON-1 ledger/read ownership remains with #376/#377; this lane is for the CH-9 diff after those parents land on main. Own lane file is implicitly permitted.",
+      "note": "RED: CH-9 part 1 value-read composition. Catch-up retains both main enterprise exports and CH-9 value exports. Shared expectations and all migration SQL match incoming main; no new behaviour. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",

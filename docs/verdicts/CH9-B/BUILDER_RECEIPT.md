@@ -313,3 +313,47 @@ PASS. No code behavior changed in this metadata repair; the earlier production
 build, typecheck and 178 focused assertions remain the last code validation.
 No PostgreSQL/browser suites run here. The git-based lane tests use disposable
 fixture repositories; no git-writing command was issued against this worktree.
+
+## Catch-up resolution — 28 October 2026, 21:28 UTC
+
+This section supersedes the earlier catch-up observations above. Scope remains
+CH-9 part 1, RED; no new product behaviour or migrations. Resolved the two
+working-file conflicts in `apps/api/src/workspace/index.ts` and
+`packages/db/src/index.ts` by retaining both the CH-9 value exports and main's
+enterprise exports. The ch9-b lane lists exactly the 35 changed paths relative
+to incoming main, with its own lane file implicitly allowed (36 paths total).
+The five shared LP-0/SERIOUS-B5/entitlement/tenancy/origin expectation files and
+all 178 migration/note files are byte-identical to incoming main. No SQL changed.
+
+Incoming main in the pending merge is `8e80dabd` (#381), including #376/#377.
+`origin/main` now points to `9a298d4d` (#385, MON-2A); that later change is not
+part of the merge already in progress. Router must stage the resolved files,
+finish this merge, then incorporate newer main before the current-main CI gate.
+No Git-writing command was run; the index still records two unmerged entries.
+
+Actual local checks (Node 24.17.0, installed Vitest 4.1.12):
+
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-composition.test.ts src/value/value-v3.application.test.ts src/value/value-v3-business.application.test.ts` — PASS, 52 tests.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2 src/value-v3-receipt.test.ts src/value-v3-copy.test.ts` — PASS, 28 tests.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-v3.controller.test.ts src/value/value-business.controller.test.ts` — PASS, 12 tests.
+- From apps/api: `node --import tsx src/generate-openapi.ts --check` — PASS.
+  The tsx CLI attempt failed on sandbox IPC binding; the Node import invocation
+  executes the same generator without the CLI IPC server.
+- Read-only deterministic main-relative lane inventory, shared-file/migration
+  byte comparisons and conflict-marker assertions — PASS. This is not the
+  Git-based lane gate or independent review.
+- `node tools/lint.mjs` — FAIL at the lane gate: it counts staged incoming-main
+  changes against pre-merge HEAD while the merge is unfinished. Core purity
+  passed; subsequent lint stages did not run. Router must rerun default lint
+  after committing the merge; no gate was weakened or alternate base supplied.
+- `git diff --check` — PASS for this catch-up. Main-relative checking additionally
+  reports pre-existing space-only context lines in the two archived integration
+  patch files; those patch bytes were preserved.
+
+The pnpm version probe stalled and was interrupted; no dependency install or
+package download was requested. Checks used installed repository binaries.
+PostgreSQL, browser, full CI and independent RED review were not run here and
+remain with CI/the loop owner. The working-file reconciliation is ready for the
+router's merge commit; green current-main CI is not claimed.
