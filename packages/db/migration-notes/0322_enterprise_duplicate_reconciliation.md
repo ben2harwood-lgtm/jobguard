@@ -1,4 +1,4 @@
-# 0299 — ENT-7 leftovers (RED)
+# 0322 — ENT-7 leftovers (RED)
 
 Adds `ReconcileExportedDuplicate` through `EnterpriseFeeRepository.reconcileExportedDuplicate` and
 `app.ef_reconcile_exported_duplicate`. The SECURITY DEFINER routine uses the existing finance-session check,
@@ -49,7 +49,7 @@ PostgreSQL integration, migrations and the new adversarial cases were not execut
 Independent RED recheck remains required. Synthetic data only; no providers, live money or release.
 
 
-Repair round 2 (PR #378): keep 7c's 0298 posting migration and apply this migration as 0299. The
+Repair round 2 (PR #378): keep 7c's 0298 posting migration and apply this migration as 0322. The
 `migration-renumber.mjs` planner produced the filesystem renumber; its CLI `--write` also stages files, which is
 forbidden in this sandbox, so only its planned moves/references were applied. The SERIOUS-B5 conflict keeps both
 the reconciliation objects and the 0298 posting rows, as well as current main's practice-reader expectations.
