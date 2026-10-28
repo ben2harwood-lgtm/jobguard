@@ -32,7 +32,10 @@ async function preview(f: Fixture, caseId: string) {
   const approval = { version: "recovery-message-command.v1", action: "approve", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, recipient: v.message.recipient, body: v.message.body, amountPence: v.message.amountPence, packId: v.message.packId, contentHash: v.message.contentHash };
   return { input, approval, state: await repo.command(ctx, caseId, approval, actor), actor, ctx };
 }
+const previousEnvironment = process.env.JOBGUARD_ENV;
 beforeAll(async () => {
+  // The shared evidence fixture opens a practice session, which is synthetic-only (same as ch7-f21-reason-upgrade).
+  process.env.JOBGUARD_ENV = "synthetic_demo";
   expect(position).toBeGreaterThan(0);
   directory = await mkdtemp(join(tmpdir(), "jg-pursuit-upgrade-")); const port = await freePort(62400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
@@ -63,7 +66,7 @@ beforeAll(async () => {
   reminder = { f, followUp: due.latest! };
   tables.push("app.recovery_follow_up", "app.recovery_follow_up_event", "app.recovery_follow_up_owner");
 });
-afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
+afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment; });
 it("HistoricalPursuitPreserved: own migration alone, named rows/types/identities, successor migrations twice and immutable replays", async () => {
   const proof = await proofBefore(admin, tables); for (const [table, p] of Object.entries(proof)) expect(Object.keys(p.rows).length, table).toBeGreaterThan(0);
   const security = async () => ({
