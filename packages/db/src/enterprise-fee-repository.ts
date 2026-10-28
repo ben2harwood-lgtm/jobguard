@@ -92,13 +92,18 @@ export class EnterpriseFeeRepository {
         (await db.$client.query("SELECT app.ef_read_statement($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeeStatementRead);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  postStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
-    const input = this.parse(enterpriseFeePostStatementV1, raw);
-    return this.call<{ statementId: string; replayed: boolean; journals?: number }>(context, session, "SELECT app.ef_post_statement($1,$2,$3,$4) result",
-      [input.commandId, input.statementId, input.authorizationId]);
+  async postStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ statementId: string; replayed: boolean; journals?: number }> {
+    const input = this.parse(enterpriseFeePostStatementV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  readPostings(context: VerifiedTenantContext, session: string, statementId: string) {
-    if (!z.guid().safeParse(statementId).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
-    return this.call<EnterpriseFeePosting[]>(context, session, "SELECT app.ef_read_postings($1,$2) result", [statementId]);
+  async readPostings(context: VerifiedTenantContext, session: string, statementId: string): Promise<EnterpriseFeePosting[]> {
+    if (!z.guid().safeParse(statementId).success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_read_postings($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeePosting[]);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
 }
