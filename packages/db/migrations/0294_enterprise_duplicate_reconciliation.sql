@@ -157,16 +157,19 @@ BEGIN
   AND NOT EXISTS(SELECT 1 FROM app.extra_duplicate_link u WHERE(u.tenant_id,u.reverses_link_id)=(t,l.id))
   AND (l.duplicate_id IN(p_duplicate,p_canonical) OR l.canonical_id=p_duplicate)) THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  -- Compute the uncredited duplicate invoice balance from current stored, validated projections.
- -- Preserve exact net and gross (including each line's VAT ratio); no caller-supplied amount or payment fact.
+ -- Net pence stays a reduced exact fraction: cb_add cross-multiplies and uses integer div only for GCD reduction.
+ -- No per-correction rounding; half-even remains at the cumulative fee. Gross and its authorization are unchanged.
  SELECT coalesce(jsonb_agg(jsonb_build_object('runId',r.id,'exportLineId',e.id,'source',r.source,'invoiceNumber',r.invoice_number,
   'externalInvoiceLineId',m.external_invoice_line_id,'kind','credit_instruction',
-  'netPence',greatest(0,(x->'billedNet'->>'numerator')::numeric/(x->'billedNet'->>'denominator')::numeric-(x->'creditedNet'->>'numerator')::numeric/(x->'creditedNet'->>'denominator')::numeric),
+  'netPence',jsonb_build_object('numerator',greatest(0,balance.net[1])::text,'denominator',CASE WHEN balance.net[1]<=0 THEN '1' ELSE balance.net[2]::text END),
   'grossPence',greatest(0,(il->>'grossPence')::numeric-coalesce((SELECT sum((z->>'grossPence')::numeric) FROM app.billing_fact cf CROSS JOIN LATERAL jsonb_array_elements(cf.payload->'lineAdjustments') z
     WHERE cf.tenant_id=t AND cf.source=r.source AND cf.invoice_number=r.invoice_number AND cf.match_valid AND cf.payload->>'factType'='credited' AND z->>'externalInvoiceLineId'=m.external_invoice_line_id),0))) ORDER BY r.id,m.external_invoice_line_id),'[]'::jsonb)
  INTO fixes FROM app.billing_export_line e JOIN app.billing_line_match m ON(m.tenant_id,m.export_line_id)=(e.tenant_id,e.id)
  JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id)
  JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.source,r.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
  CROSS JOIN LATERAL jsonb_array_elements(r.projection->'lines') x
+ CROSS JOIN LATERAL (SELECT app.cb_add((x->'billedNet'->>'numerator')::numeric,(x->'billedNet'->>'denominator')::numeric,
+  -(x->'creditedNet'->>'numerator')::numeric,(x->'creditedNet'->>'denominator')::numeric) net) balance
  CROSS JOIN LATERAL jsonb_array_elements(f.payload->'composition'->'lines') il
  WHERE e.tenant_id=t AND e.job_id=p_job AND e.extra_id=p_duplicate AND x->>'lineId'=m.external_invoice_line_id AND il->>'externalInvoiceLineId'=m.external_invoice_line_id
  AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run nx WHERE nx.tenant_id=t AND nx.predecessor_id=r.id);

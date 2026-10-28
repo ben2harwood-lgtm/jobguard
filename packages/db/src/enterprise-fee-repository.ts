@@ -21,7 +21,7 @@ export const enterpriseReconcileExportedDuplicateV1 = z.object({ version: z.lite
   .refine(x => x.duplicateId !== x.canonicalId);
 export type EnterpriseDuplicateCorrection = { correctionId: string; linkId: string; contentHash: string; replayed: boolean;
   corrections: { runId: string; exportLineId: string; source: string; invoiceNumber: string; externalInvoiceLineId: string;
-    kind: "credit_instruction"; netPence: number; grossPence: number }[] };
+    kind: "credit_instruction"; netPence: { numerator: string; denominator: string }; grossPence: number }[] };
 export type EnterpriseFeePosting = { id: string; kind: "accrual" | "compensation"; agreementVersionId: string; amountPence: number; compensatesFeeId: string | null;
   environment: "synthetic_demo"; lines: { account: string; debitPence: number; creditPence: number }[] };
 export type EnterpriseFeeStatementRead = {

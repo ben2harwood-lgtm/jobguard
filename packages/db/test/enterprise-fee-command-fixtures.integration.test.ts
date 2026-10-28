@@ -133,7 +133,7 @@ it("ENT-F7: two billed-and-paid logs reconcile once, retain artifacts and origin
   const before = await snapshot(), command = { version: "enterprise-reconcile-exported-duplicate.v1", commandId: randomUUID(), jobId: t.w.s.jobId, duplicateId: t.w.s.extraId, canonicalId: duplicate };
   const results = await Promise.all([t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command), t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command)]);
   expect(results.filter(r => !r.replayed)).toHaveLength(1); expect(results[0]!.correctionId).toBe(results[1]!.correctionId);
-  expect(results[0]!.corrections).toEqual([expect.objectContaining({ kind: "credit_instruction", netPence: 15000, grossPence: 18000 })]);
+  expect(results[0]!.corrections).toEqual([expect.objectContaining({ kind: "credit_instruction", netPence: exact(15000), grossPence: 18000 })]);
   expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, canonicalId: command.duplicateId }))).toBe("INVALID_FEE_INPUT");
   expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, duplicateId: command.canonicalId, canonicalId: command.duplicateId }))).toBe("COMMAND_CONFLICT");
   expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, commandId: randomUUID() }))).toBe("COMMAND_CONFLICT");
@@ -146,6 +146,28 @@ it("ENT-F7: two billed-and-paid logs reconcile once, retain artifacts and origin
   const second = await post(t, p); expect(second.s.totalDeltaPence).toBe(-1500); expect(second.postings[0]).toMatchObject({ kind: "compensation", amountPence: 1500, compensatesFeeId: first.postings[0]!.id });
   await c.admin.query("UPDATE app.job SET status='paid' WHERE tenant_id=$1 AND id=$2", [t.w.w.p.tenantId, t.w.s.jobId]);
   expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command))).toBe("JOB_NOT_LIVE");
+});
+it("fractional duplicate credit preserves 250000/31 net pence in storage, replay and the authorized hash", async () => {
+  const t = await setup(24000), canonical = await addExtra(t, 24000);
+  await invoice(t, { [t.w.s.extraId]: 24000, [canonical]: 24000 });
+  // Owner-only synthetic boundary fixture: today's importer emits integer credit details. Append a fractional
+  // pro-rata projection without changing existing history; exercise the real reconciliation routine below.
+  const run = (await c.admin.query("SELECT id,projection FROM app.billing_allocation_run WHERE tenant_id=$1 AND job_id=$2 ORDER BY server_recorded_at DESC LIMIT 1", [t.w.w.p.tenantId, t.w.s.jobId])).rows[0];
+  const projection = { ...run.projection, lines: run.projection.lines.map((line: { lineId: string }) => line.lineId === t.w.s.extraId
+    ? { ...line, billedNet: exact(48000, "2"), creditedNet: exact(494000, "31") } : line) };
+  await c.admin.query(`INSERT INTO app.billing_allocation_run(tenant_id,id,job_id,client_contract_id,source,invoice_number,input_hash,projection,predecessor_id,command_id)
+    SELECT tenant_id,$3,job_id,client_contract_id,source,invoice_number,$5,$4::jsonb,id,command_id FROM app.billing_allocation_run WHERE tenant_id=$1 AND id=$2`,
+    [t.w.w.p.tenantId,run.id,randomUUID(),JSON.stringify(projection),"f".repeat(64)]);
+  const command = { version: "enterprise-reconcile-exported-duplicate.v1", commandId: randomUUID(), jobId: t.w.s.jobId, duplicateId: t.w.s.extraId, canonicalId: canonical };
+  const result = await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command);
+  expect(result.corrections).toEqual([expect.objectContaining({ netPence: exact("250000", "31"), grossPence: 28800 })]);
+  const net = result.corrections[0]!.netPence;
+  expect(BigInt(net.numerator) * 2n * 31n).toBe((48000n * 31n - 494000n * 2n) * BigInt(net.denominator));
+  const stored = (await c.admin.query(`SELECT c.corrections,c.content_hash,a.content_hash authorization_hash,a.amount_pence::int,
+    app.final_lock_hash(jsonb_build_object('version','enterprise-duplicate-correction.v1','jobId',c.job_id,'duplicateId',c.duplicate_id,'canonicalId',c.canonical_id,'corrections',c.corrections)) recomputed_hash
+    FROM app.enterprise_duplicate_correction c JOIN app.action_authorization a ON(a.tenant_id,a.id)=(c.tenant_id,c.authorization_id) WHERE c.tenant_id=$1 AND c.id=$2`, [t.w.w.p.tenantId,result.correctionId])).rows[0];
+  expect(stored).toEqual({ corrections: result.corrections, content_hash: result.contentHash, authorization_hash: result.contentHash, recomputed_hash: result.contentHash, amount_pence: 28800 });
+  expect(await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command)).toEqual({ ...result, replayed: true });
 });
 it("ENT-F8: office, client instructions and order lines contribute zero even when billed and paid", async () => {
   const t = await setup(), office = await addExtra(t, 50000, "office_entry"), client = await addExtra(t, 80000, "client_instruction");

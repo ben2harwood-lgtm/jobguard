@@ -12,7 +12,12 @@ computed from current validated invoice projections, including remaining uncredi
 export line and allocation-run references. These are synthetic correction instructions, not imported provider facts
 or a claim that an external credit has been issued. The explicit finance command creates a Decision, its approved
 resolution and an authorization bound to the generated correction hash and gross total in the same transaction.
-No amount comes from the application. No external action is performed.
+No amount comes from the application. No external action is performed. Correction `netPence` is a reduced exact
+fraction with decimal-string `numerator` and `denominator`, computed by `cb_add` cross-multiplication and integer
+GCD reduction; it is never divided into a rounded decimal. The non-negative clamp stores zero as `0/1`. No
+correction-level rounding occurs; half-even remains at the cumulative fee. Gross pence and the authorization amount
+are unchanged. A synthetic fractional-credit projection regression checks `250000/31` through the real command,
+immutable storage, replay and the authorized content hash.
 
 The existing duplicate-link trigger permits an exported link only when this private correction record binds the
 exact link, command, actor and members. Ordinary pre-export links and post-export unlink refusal retain their
