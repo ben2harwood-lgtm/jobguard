@@ -2,7 +2,7 @@
 
 Working-tree construction on accepted SV-5 #181 head `5da4b0b97ee277d894cda888eee51e94a5cb2011`. Branch already present: `codex/sandbox/sv5-guard`. No Git writes, commit, push, PR, merge, release, independent verdict or acceptance. The dispatcher owns commit/push; reviewer/CI owns real PostgreSQL execution. No dependency install or download command was run.
 
-Migration `0212_post_lock_upload_guard.sql` adds only `app.guard_post_lock_upload_transition()` and `app.evidence_upload.b_final_check_upload_transition`. The trigger runs after 0204's tenant/identity checks and job SHARE lock, so the existing serialization with lock/freeze remains intact. For a pre-cutoff nonverified upload, a state change after lock can only target rejected (`FINAL_CHECK_UPLOAD_TRANSITION_LOCKED`, SQLSTATE 55000 otherwise). C238 remains in 0204 and forbids verified-source transitions. Post-cutoff rows and same-state updates retain prior guards. No manifest/freeze changes, new grants, UI or HTTP changes.
+Migration `0245_post_lock_upload_guard.sql` adds only `app.guard_post_lock_upload_transition()` and `app.evidence_upload.b_final_check_upload_transition`. The trigger runs after 0204's tenant/identity checks and job SHARE lock, so the existing serialization with lock/freeze remains intact. For a pre-cutoff nonverified upload, a state change after lock can only target rejected (`FINAL_CHECK_UPLOAD_TRANSITION_LOCKED`, SQLSTATE 55000 otherwise). C238 remains in 0204 and forbids verified-source transitions. Post-cutoff rows and same-state updates retain prior guards. No manifest/freeze changes, new grants, UI or HTTP changes.
 
 The private function uses the existing migration/superuser setup exception, scopes context and the lock lookup to the row tenant/job, restores prior context and has fixed search_path. No new audit mechanism: allowed rejection becomes an immutable exclusion, with its reason, in the existing `final_check.sources_excluded` audit at manifest freeze. This is a freeze-time exclusion audit, not a claim that raw UPDATE itself appends an audit event. No new operational alert; the new database error identifies a refused state change.
 
@@ -38,8 +38,8 @@ Logs are local under `/private/tmp/jg-sv5-guard-*.log`; these are builder logs, 
 
 The lane allow list contains exactly these seven changed non-lane files; its own eighth changed file, `config/lanes/sv5-guard.json`, is implicitly authorized by the lane-file policy (that policy forbids putting lane-directory paths in allow):
 
-- `packages/db/migrations/0212_post_lock_upload_guard.sql`
-- `packages/db/migration-notes/0212_post_lock_upload_guard.md`
+- `packages/db/migrations/0245_post_lock_upload_guard.sql`
+- `packages/db/migration-notes/0245_post_lock_upload_guard.md`
 - `packages/db/test/post-lock-upload-guard.integration.test.ts`
 - `packages/db/test/tenancy.integration.test.ts`
 - `packages/db/test/serious-b5-upgrade.integration.test.ts`

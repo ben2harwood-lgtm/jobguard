@@ -58,7 +58,7 @@ it("C248 rejection cannot be reactivated; other jobs and post-lock uploads retai
  // A different tenant cannot discover or mutate the locked upload through runtime RLS.
  expect((await finalCheckTenant(f.runtime,randomUUID(),db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE id=$1",[id]))).rowCount).toBe(0);
 });
-it("C248 negative control: removing only 0212's trigger restores the reviewer's expired-upload race",async()=>{
+it("C248 negative control: removing only 0245's trigger restores the reviewer's expired-upload race",async()=>{
  const a=await seedFinalCheckJob(f),id=await upload(a);await a.lock();
  const db=await f.admin.connect();
  try {

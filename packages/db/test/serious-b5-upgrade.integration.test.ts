@@ -439,7 +439,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
-async function with0212Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
  expect(additions).toHaveLength(1);
@@ -474,7 +474,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
- Object.assign(expected, await with0212Additions(expected));
+ Object.assign(expected, await with0245Additions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
