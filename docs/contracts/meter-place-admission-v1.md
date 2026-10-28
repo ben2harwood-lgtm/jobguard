@@ -37,7 +37,7 @@ metadata, never evidence of source authority or a lasting admission permit.
 Parent MON1-L explicitly returns candidate commitments, empty intervals and
 `H-METER-CLOCK`. MON1-S consumes these held semantics. No accepted checked
 pre-mutation resolver exists for the proposed four-argument source interface.
-Consequently 0210 installs a PRIVATE SECURITY INVOKER boundary that never admits.
+Consequently 0244 installs a PRIVATE SECURITY INVOKER boundary that never admits.
 It requires migration-owner execution, exact transaction tenant and an already
 held tenant advisory lock 184, then always raises `METER_PLACE_SOURCE_HANDOFF_HELD`.
 No grant to runtime/meter/PUBLIC, new business table, receipt, Decision, audit,

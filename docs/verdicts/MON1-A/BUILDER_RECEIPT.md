@@ -606,7 +606,7 @@ Current local `origin/main` is
 `01f040d6a714ef1a7b12606e648a33624428b246` (no fetch/freshness claim). Its highest
 migration is `0208_meter_small_trip.sql`. Directory discovery and lexical ordering
 assertions confirm `0208_meter_small_trip.sql` < `0209_meter_lifecycle_source.sql`
-< `0210_meter_place_admission.sql`. No migration changed, no backfill, no new
+< `0244_meter_place_admission.sql`. No migration changed, no backfill, no new
 rollback impact. Existing SQL STOPs, held admission, independent exact-commit
 delta verdict, separate acceptance and all release gates remain.
 

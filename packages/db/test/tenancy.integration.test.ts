@@ -187,7 +187,7 @@ describe("migration and privilege catalog", () => {
     expect((await admin.query("SELECT count(*)::int AS count FROM app.account")).rows[0]?.count).toBe(2);
   });
 
-  // 0210 adds no tables. Its sole routine stays private; schema/name/arguments order.
+  // 0244 adds no tables. Its sole routine stays private; schema/name/arguments order.
   it("retains the private place-admission routine catalogue addition", async () => {
     expect((await admin.query(`
       SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args,

@@ -424,7 +424,7 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   routines: additive(expectedRoutines, routines, after.routines),
   relations: additive(expectedRelations, relations, after.relations), policies: additive(before.policies, [...policies, ...newSourcePolicies], after.policies) };
 }
-// Dispatcher-assigned catalogue row: 0210 creates only this private routine.
+// Dispatcher-assigned catalogue row: 0244 creates only this private routine.
 async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_admit_place"

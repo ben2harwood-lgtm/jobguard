@@ -34,7 +34,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
- // 0208/0209/0210 successor routines; catalogue order is schema, name, identity arguments.
+ // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
  WHERE n.nspname='app' AND p.proname IN ('mon1_admit_place','mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
