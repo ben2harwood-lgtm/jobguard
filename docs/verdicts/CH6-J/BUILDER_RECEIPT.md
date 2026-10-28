@@ -359,3 +359,69 @@ identity lists in tenancy.integration.test.ts and contractor-entitlement-upgrade
 integration.test.ts could share one test-only declared inventory. This would
 reduce expectation-list drift while keeping actual PostgreSQL catalogue reads
 independent from their expected values. No unrelated extraction was bundled.
+
+
+## 28 October 2026 — review locking and supplementary source follow-up (RED)
+
+Ready for router commit; migration 0309 is edited in place because it is not yet
+on main. No git mutation, database process, local listener, download, provider,
+real customer data or release was used. This follow-up still requires CI and
+independent RED review against the resulting head; the earlier review at ef1ffc9e
+does not review these new bytes.
+
+Replaced the 27 table-wide SHARE locks with explicitly ordered FOR SHARE locks
+on this tenant/job's source rows. Related-quote sources include the owned session
+jobs needed by that rule, sorted by UUID, with no other tenant/session included.
+Evidence invalidations are scoped through this job's evidence. The new priced
+revision source mapping is also row-locked. Session/membership/command locking,
+receipt replay, authorization rechecks and the final audit-head order remain.
+After lock waits the source readers/fingerprint use a fresh coherent statement
+snapshot (STABLE). This preserves exact aggregate/absence validation without
+claiming that row locks prevent inserts into an empty predicate. Family is also
+rechecked after the waits. No business lock is acquired after the audit append.
+
+Added CI-only PostgreSQL regressions:
+- Keep a successful review transaction open, actually update jobs in another
+  tenant and an unrelated session under a bounded lock timeout, and prove the
+  reviewed job still refuses a competing exclusive row lock. Exact replay still
+  returns the original result and only one receipt exists.
+- Hold this job, start a review, observe actual lock contention, then commit a
+  new payment before releasing it. The review must see the fresh source horizon,
+  reject the stale snapshot and leave no receipt/audit.
+- Publish a real Final Check, issue the locked final invoice, confirm/price/approve
+  its catch, assemble a descendant revision and issue the supplementary invoice
+  through the checked runtime repository with the actual practice-session pool.
+  Verify the baseline is not rebilled and the catch line is on the descendant.
+  An exact synthetic writeoff source then saves/replays an advisory review citing
+  that line and the original lock. No session_replication_role override is used
+  anywhere in this test. Existing projection-only fixtures remain labelled.
+
+That last path exposed an exact-ID gap: real assembled variation lines use the
+priced revision ID, while the old reader only matched the variation ID. The
+reader now resolves priced revisions back to their immutable origin variation,
+retaining compatibility with the earlier owner-loaded fictional source fixtures.
+Multiple possible invoiced catch lines still refuse exact attribution. No fee,
+ledger, allocation, meter or invoice command behavior was changed.
+
+Local checks actually executed, installed Node v24.17.0 / Vitest 4.1.12:
+- In packages/db: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 5 tests.
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs — PASS, 253 tests.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit — PASS.
+- node node_modules/typescript/bin/tsc -p /tmp/ch6-j-test-types.json — PASS;
+  temporary config extends the real root tsconfig and includes both changed DB
+  integration files and their transitive imports. Typecheck only, no DB execution.
+- git diff --check — PASS. Follow-up lane lists exactly its six changed source,
+  test and existing documentation paths, plus its implicitly allowed own file.
+
+One initial combined edit/check command used repository-relative paths from the
+DB directory and failed before editing or running tests. The paths were corrected;
+the successful commands above are the validation evidence.
+
+NOT RUN: PostgreSQL integration tests, migration fresh/upgrade suites, browser,
+full workspace suites or GitHub CI. The user explicitly reserves database/browser
+execution for GitHub CI because this sandbox cannot start PostgreSQL or bind
+localhost. These are pending checks, not passes. No new migration/backfill or
+privilege change is introduced. Independent RED review remains for the loop owner.
+The ready commit message is /tmp/ch6-j-20261028T195452Z-commit-msg.txt.

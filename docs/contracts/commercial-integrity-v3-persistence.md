@@ -147,7 +147,18 @@ These are named synthetic examples, not commercial or enforcement policy.
 
 0309 revalidates source facts, profile, kind-specific comparisons, canonical key
 and snapshot hash inside the existing checked feedback writer. The writer extends
-its synthetic source locks to the new ordinary/publication inputs. Historical
+its tenant/job-qualified FOR SHARE source locks to the new ordinary/publication
+inputs, in the explicit migration lock order. Related quotes also lock the owned
+session jobs they read; unrelated companies/sessions are not locked. STABLE
+source projection and fingerprint queries validate aggregates and absence against
+one fresh statement snapshot after the row-lock waits. Existing facts stay
+locked through the receipt/audit transaction; insert gaps are not locked.
+Historical
 0227 receipts replay before recomputation and retain their bytes. The migration
 note records object/grant, refusal and forward-fix details. DB/browser evidence
 is CI-only; this contract does not assert that those suites have run.
+
+A published catch's priced revision is resolved back to its immutable variation
+origin when finding the exact invoiced line, including a supplementary invoice
+on a descendant of the locked account. Its advisory snapshot still cites the
+original lock; multiple possible invoiced catch lines refuse attribution.

@@ -71,3 +71,50 @@ it("CH-6 cross-customer attack refuses another tenant's sources, feedback and ex
   "SELECT result FROM app.command_receipt WHERE command_id=$1",[review.commandId]));
  expect(rows.rows).toEqual([]);
 });
+
+it("CH-6 review holds only its source rows while writes in another tenant and job proceed",async()=>{
+ const {transaction}=await import("./commercial-integrity-v3-fixtures.js");
+ const {job}=await seedIntegrityJob(f),sameTenantJob=randomUUID(),review=await reviewFor(f,job);
+ await f.admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional separate session',$3,'capture')",[sameTenantJob,tenant,f.other.digest]);
+ const snapshot=(await f.repo.read(f.auth.context,actor,f.auth.digest,job)).result.findings[0]!.sourceSnapshot;
+ const foreignTenant=randomUUID(),foreignJob=randomUUID();
+ await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[foreignTenant]);
+ await f.admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional other company')",[foreignJob,foreignTenant]);
+ const holder=await f.runtime.connect(),writer=await f.admin.connect();
+ try{
+  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await holder.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify(review),JSON.stringify(snapshot)]);
+  // Keep the successful review transaction open: its locks really are still held.
+  await writer.query("BEGIN");await writer.query("SET LOCAL lock_timeout='500ms'");
+  for(const [t,j] of [[foreignTenant,foreignJob],[tenant,sameTenantJob]]){
+   await writer.query("SELECT set_config('app.tenant_id',$1,true)",[t]);
+   expect((await writer.query("UPDATE app.job SET title='Fictional concurrent write' WHERE tenant_id=$1 AND id=$2 RETURNING id",[t,j])).rowCount).toBe(1);
+  }
+  // The reviewed job stays protected, so removing all locks cannot pass this test.
+  await expect(writer.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[tenant,job])).rejects.toMatchObject({code:"55P03"});
+  await writer.query("ROLLBACK");await holder.query("COMMIT");
+  expect(await f.repo.review(f.auth.context,actor,f.auth.digest,job,review)).toHaveProperty("commandId",review.commandId);
+  expect((await transaction(f.admin,db=>db.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[tenant,review.commandId]))).rows[0].n).toBe(1);
+ }finally{await writer.query("ROLLBACK");await holder.query("ROLLBACK");writer.release();holder.release();}
+});
+
+it("CH-6 source validation takes a fresh snapshot after waiting for this job",async()=>{
+ const {job}=await seedIntegrityJob(f),review=await reviewFor(f,job),holder=await f.admin.connect();
+ const invoice=(await f.admin.query("SELECT id,authorization_id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0];
+ let pending:Promise<unknown>|undefined;
+ try{
+  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await holder.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[tenant,job]);
+  pending=f.repo.review(f.auth.context,actor,f.auth.digest,job,review).then(value=>({value}),error=>({error}));
+  const deadline=Date.now()+10000;for(;;){
+   const waiting=await f.admin.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE 'SELECT app.ch6_record_integrity_review%' AND pid<>pg_backend_pid()");
+   if(waiting.rowCount)break;if(Date.now()>deadline)throw new Error("Review did not reach job contention");await new Promise(r=>setTimeout(r,10));
+  }
+  await holder.query(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
+   VALUES($1,$2,$3,$4,$5,current_date,1000,'GBP','cash','Fictional concurrent receipt',true,'manual_builder_attestation')`,[randomUUID(),tenant,job,invoice.id,invoice.authorization_id]);
+  await holder.query("COMMIT");
+  expect(await pending).toMatchObject({error:{message:"INTEGRITY_SOURCE_CHANGED"}});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[tenant,review.commandId])).rows[0].n).toBe(0);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'commandId'=$2",[tenant,review.commandId])).rows[0].n).toBe(0);
+ }finally{await holder.query("ROLLBACK");holder.release();await pending;}
+});

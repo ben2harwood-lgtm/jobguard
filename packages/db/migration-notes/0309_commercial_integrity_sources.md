@@ -48,3 +48,28 @@ retry otherwise); historical receipt replay still precedes recomputation. The
 insert guard takes its job lock before the fresh aggregate capacity check. The
 feedback writer keeps its existing membership row locks rather than adding a
 membership table lock that could invert revocation lock order.
+
+Review locking follow-up (0309 is still unpublished): the feedback writer now
+uses tenant/job-qualified `FOR SHARE` row locks, with deterministic key order,
+instead of table-wide SHARE locks. Order is session, membership, command advisory,
+owned session jobs by UUID, then the source tables in the explicit SQL order,
+receipt and audit head. Related-quote rows are limited to those owned session
+jobs; evidence invalidations are joined back to this job's evidence. Other
+companies and unrelated sessions keep writing while a review transaction is open.
+
+The source readers and fingerprint are STABLE: the fingerprint statement after
+all source-lock waits gets one fresh READ COMMITTED snapshot for its CH-6 fact
+queries, aggregates and absence predicates. Row locks retain existing facts;
+insert gaps are not locked. A review records the exact coherent source snapshot
+at validation, rather than claiming to exclude every later insert. Family and
+wall-clock authority are rechecked after waits; no business locks follow audit.
+Exact receipt replay remains ahead of source locking/recomputation.
+
+Real supplementary catch lines resolve their priced `variation_revision` back
+to the immutable origin variation; legacy owner-loaded variation-ID fixtures
+remain readable. Ambiguous multiple invoiced lines still refuse exact attribution.
+The published-path regression confirms/prices/approves a catch, assembles a real
+descendant account revision and issues final and supplementary invoices through
+the checked runtime repository, with every trigger and FK enabled. Its exact-line
+writeoff review cites the supplementary line and the original lock. No replication
+role override is used in that test. PostgreSQL execution is deferred to CI.

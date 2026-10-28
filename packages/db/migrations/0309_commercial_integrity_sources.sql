@@ -72,7 +72,7 @@ $$;
 -- Private publication port. Called only AFTER the ordinary lock check by ch6_integrity_sources.
 -- Only already-published proof IDs enter this projection; no raw signal description, transcript or classifier output.
 CREATE FUNCTION app.ch6_integrity_published(t uuid,j uuid,d text) RETURNS jsonb
-LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$
 DECLARE l app.final_account_lock; r app.final_account_revision; reveal jsonb; catches jsonb; completions jsonb;
  receipts jsonb; corrections jsonb; allocations jsonb; missing text[]:=ARRAY['identifier_phone_source_unavailable','identifier_card_source_unavailable','writeoff_line_source_unavailable','receipt_line_source_handoff_unavailable'];
 BEGIN
@@ -95,7 +95,7 @@ BEGIN
  'source',app.ch6_source(t,j,d,p.signal_id::text,'published_catch',coalesce(db.created_at,p.first_available_at),
  jsonb_build_object('run',p.run_id,'lock',p.lock_id,'evidence',p.evidence_set_hash,'answer',db.answer,'disposition',db.disposition_id,'line',line.id,'gross',line.gross_pence),'published_final_check'),
  'catchId',p.signal_id::text,'status',CASE db.answer WHEN 'confirmed_extra' THEN 'confirmed' WHEN 'not_completed' THEN 'dismissed_not_completed' ELSE 'dismissed_other' END,
- 'includedInLockedAccount',EXISTS(SELECT 1 FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j AND fl.final_account_revision_id=l.final_account_revision_id AND fl.source_id=o.variation_id),
+ 'includedInLockedAccount',EXISTS(SELECT 1 FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j AND fl.final_account_revision_id=l.final_account_revision_id AND (fl.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=fl.source_id))),
  'value',jsonb_build_object('pence',coalesce(line.gross_pence,0),'currency','GBP','basis',CASE WHEN line.id IS NULL THEN 'unknown' ELSE 'gross' END),
  'invoiceLineId',line.id::text) ORDER BY p.signal_id),'[]') INTO catches
  FROM visible v JOIN app.final_check_reveal_proof p ON p.tenant_id=t AND p.job_id=j AND p.run_id=(reveal->>'runId')::uuid AND p.signal_id=(v.item->>'signalId')::uuid AND p.lock_id=l.id
@@ -103,8 +103,8 @@ BEGIN
  LEFT JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.source_signal_id)=(p.tenant_id,p.job_id,p.signal_id) AND o.kind='jobguard_catch'
  LEFT JOIN LATERAL (SELECT b.final_account_line_id id,b.gross_pence FROM app.final_account_invoiced_line b
   JOIN app.final_account_invoice_binding ib ON(ib.tenant_id,ib.job_id,ib.invoice_id)=(b.tenant_id,b.job_id,b.invoice_id)
-  WHERE b.tenant_id=t AND b.job_id=j AND b.source_id=o.variation_id AND ib.lock_id=l.id AND b.gross_pence BETWEEN 0 AND 1000000000000
-  AND (SELECT count(*) FROM app.final_account_invoiced_line all_lines WHERE all_lines.tenant_id=t AND all_lines.job_id=j AND all_lines.source_id=o.variation_id)=1) line ON true;
+  WHERE b.tenant_id=t AND b.job_id=j AND (b.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=b.source_id)) AND ib.lock_id=l.id AND b.gross_pence BETWEEN 0 AND 1000000000000
+  AND (SELECT count(*) FROM app.final_account_invoiced_line all_lines WHERE all_lines.tenant_id=t AND all_lines.job_id=j AND (all_lines.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=all_lines.source_id)))=1) line ON true;
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='confirmed' AND c->>'invoiceLineId' IS NULL) THEN missing:=missing||'catch_line_source_unavailable'; END IF;
  -- Proof must be a published, verified original completion photograph from before this lock.
  SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.signal_id::text||':'||e.id::text,'completion_evidence',e.server_received_at,
@@ -146,7 +146,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION app.ch6_integrity_sources(t uuid,j uuid,d text) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog STABLE AS $$
 DECLARE ordinary jsonb; quotes jsonb; activations jsonb; activity jsonb; events jsonb; assertions jsonb;
  published jsonb:=NULL; publication jsonb; availability jsonb; start_at text; end_at text; now_at text; has_lock boolean; actor uuid;
 BEGIN
@@ -212,7 +212,7 @@ END $$;
 
 -- Re-resolve all source facts on the checked review path. No caller-supplied source, lock, profile or compared value is trusted.
 CREATE OR REPLACE FUNCTION app.ch6_integrity_source_fingerprint(t uuid,j uuid,digest text,source_snapshot jsonb) RETURNS text
-LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$
 DECLARE inp jsonb; o jsonb; pub jsonb; p jsonb; win jsonb; kind text; facts jsonb; candidates jsonb; compared jsonb;
  a jsonb; b jsonb; c jsonb; proof jsonb; lock_fact jsonb; ids jsonb; expected jsonb; finding_key text; n numeric; total numeric; distance numeric;
 BEGIN
@@ -293,7 +293,7 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review(t uuid,j uuid,digest text,review jsonb,source_snapshot jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE actor uuid;user_id uuid;cid uuid;rh text;sh text;answer jsonb;prior app.command_receipt;canonical_review jsonb;
+DECLARE actor uuid;user_id uuid;cid uuid;rh text;sh text;answer jsonb;prior app.command_receipt;canonical_review jsonb;owned_jobs uuid[];
 BEGIN
  actor:=app.ch6_integrity_authority(t,j,digest);
  IF app.ch6_integrity_family(t,j)<>'v3' THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
@@ -321,10 +321,46 @@ BEGIN
   RETURN prior.result;
  END IF;
  IF current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'INTEGRITY_RETRY_REQUIRED' USING ERRCODE='40001'; END IF;
- -- Synthetic-only conservative source locks: block inserts as well as changes to absence predicates.
- -- No new role/grants, no assumption that other writers cooperate with an advisory lock.
- LOCK TABLE app.job,app.job_activation,app.job_activation_terms,app.job_commercial_track,app.customer_invoice,app.customer_payment,app.final_account_lock,app.quote_acceptance,app.acceptance_event,app.quote_document_version,app.job_party_binding,app.job_work_state_event,app.final_check_run_binding,app.final_check_reveal_proof,app.final_check_disposition_binding,app.evidence_object,app.evidence_upload,app.evidence_invalidation,app.extra_origin,app.final_account_revision,app.final_account_line,app.final_account_invoiced_line,app.final_account_invoice_binding,app.customer_payment_reversal,app.customer_credit_note,app.ch6_identifier_assertion,app.ch6_line_correction_source IN SHARE MODE;
+ -- Lock order: session, membership, command advisory, jobs (UUID order), then
+ -- source rows in the order below, receipt, audit head. No later business locks.
+ -- Related-quote facts also use owned jobs in this session, never another tenant.
+ WITH RECURSIVE owned AS (SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
+ UNION SELECT x.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
+ JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL)
+ SELECT array_agg(id ORDER BY id) INTO owned_jobs FROM owned;
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=ANY(owned_jobs) ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_activation WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_activation_terms WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j ORDER BY job_id FOR SHARE;
+ PERFORM 1 FROM app.customer_invoice WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.customer_payment WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.quote_acceptance WHERE tenant_id=t AND job_id=ANY(owned_jobs) ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.acceptance_event WHERE tenant_id=t AND job_id=ANY(owned_jobs) ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.quote_document_version WHERE tenant_id=t AND job_id=ANY(owned_jobs) ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_party_binding WHERE tenant_id=t AND job_id=ANY(owned_jobs) ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_check_run_binding WHERE tenant_id=t AND job_id=j ORDER BY run_id FOR SHARE;
+ PERFORM 1 FROM app.final_check_reveal_proof WHERE tenant_id=t AND job_id=j ORDER BY run_id,signal_id FOR SHARE;
+ PERFORM 1 FROM app.final_check_disposition_binding WHERE tenant_id=t AND job_id=j ORDER BY disposition_id FOR SHARE;
+ PERFORM 1 FROM app.evidence_object WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.evidence_upload WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=t AND e.job_id=j AND e.id=i.evidence_id) ORDER BY i.id FOR SHARE;
+ PERFORM 1 FROM app.extra_origin WHERE tenant_id=t AND job_id=j ORDER BY variation_id FOR SHARE;
+ PERFORM 1 FROM app.variation_revision WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_account_revision WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_account_line WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_account_invoiced_line WHERE tenant_id=t AND job_id=j ORDER BY invoice_id,final_account_line_id FOR SHARE;
+ PERFORM 1 FROM app.final_account_invoice_binding WHERE tenant_id=t AND job_id=j ORDER BY invoice_id FOR SHARE;
+ PERFORM 1 FROM app.customer_payment_reversal WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.customer_credit_note WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.ch6_identifier_assertion WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.ch6_line_correction_source WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ -- STABLE source readers/fingerprint use one fresh statement snapshot after
+ -- these waits: absence predicates and all aggregates share that same snapshot.
+ -- Row locks protect existing facts; they deliberately do not lock insert gaps.
  PERFORM app.ch6_integrity_authority(t,j,digest);
+ IF app.ch6_integrity_family(t,j)<>'v3' THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
  sh:=app.ch6_integrity_source_fingerprint(t,j,digest,source_snapshot);
  IF sh IS DISTINCT FROM review->>'findingSnapshotHash' OR source_snapshot->>'findingKey' IS DISTINCT FROM review->>'findingKey' THEN RAISE EXCEPTION 'INTEGRITY_SOURCE_CHANGED'; END IF;
  answer:=review||jsonb_build_object('jobId',j,'membershipId',actor,'identityUserId',user_id,'sessionDigest',digest,'recordedAt',to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
