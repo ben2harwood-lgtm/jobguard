@@ -54,3 +54,21 @@ Follow-up checks actually run using installed binaries (no downloads):
 - `git diff --check` — passed. Existing lane-policy loader and `lanePathAllowed` checked all eight follow-up paths successfully. The lane retains original DEMO-I PR paths and adds only the reused company fixture path; its own file is implicitly allowed by repository policy.
 
 The updated PostgreSQL adversaries and existing upgrade/browser suites require GitHub CI; no database/browser execution is claimed. The earlier RED review at 418e6115 does not cover this follow-up; the router must arrange the new exact-head RED review. No git writes performed; router owns commit, push, PR and work-list updates.
+
+## PR #387 repair round 1 — migration syntax
+
+The current-main merge arrived clean: no unresolved conflict entries or shared expectation-list conflicts. Re-read SIMPLE_LOOP, SIMPLICITY_RULE, repository instructions, DEMO-S plan scope, migration 0313, runner and affected tests.
+
+CI error position 6288 lands at the end of `WHEN 'snapshot'`, immediately before the CASE expression's `THEN` in the contract-version IF. The unparenthesized SQL CASE lets PL/pgSQL terminate its IF expression at that inner THEN, producing an incomplete SQL expression. Parenthesized that CASE expression; this is a one-line syntax repair with no ownership, replay, archival or synthetic-guard behavior change. The dollar delimiters and transaction were already complete.
+
+The migration runner reads the full file and submits one atomic query; it does not split statements or dollar-quoted bodies. Its only 0313 rewrite inserts migration bookkeeping before the terminal COMMIT. Added a runner regression to the existing repository unit suite proving the submitted batch equals the entire on-disk 0313 with precisely that bookkeeping insertion, including the routine's end. The existing lane already covers every repair path.
+
+Actual local checks, using installed binaries and no downloads:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 src/small-builder-demo-repository.test.ts src/migrate-discovery.test.ts` — 21 tests passed across two files, including the new complete-batch regression.
+- Static check of the entire SQL: five complete dollar-quoted bodies; balanced SQL quotes and parentheses inside/outside each body; body ENDs, closing statement semicolons, BEGIN/COMMIT and parenthesized CASE confirmed. This is structural validation, not a PostgreSQL parser execution.
+- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/small-builder-demo.integration.test.ts test/small-builder-demo-upgrade.integration.test.ts` — 14 cases collected, not executed. Existing tests exercise fresh migration, populated upgrade, repeated runner, all operations and ownership adversaries in CI.
+- `git diff --check` and existing lane-path validation — passed.
+
+The sandbox cannot start PostgreSQL, so actual PostgreSQL compilation and database assertions still require GitHub CI. No database success or new independent review is claimed. No git writes; router commits and pushes the repair. RED classification remains unchanged.

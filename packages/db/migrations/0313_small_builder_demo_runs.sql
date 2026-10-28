@@ -84,7 +84,7 @@ BEGIN
  IF operation IN('read','report') THEN
   IF (operation='read' AND v<>'{}'::jsonb) OR (operation='report' AND v-ARRAY['snapshotId']<>'{}'::jsonb) THEN RAISE EXCEPTION 'INVALID_DEMO_INPUT'; END IF;
  ELSE
-  IF v->>'contractVersion' IS DISTINCT FROM 'small-builder-demo.'||CASE operation WHEN 'snapshot' THEN 'report-snapshot' ELSE operation END||'.v1'
+  IF v->>'contractVersion' IS DISTINCT FROM 'small-builder-demo.'||(CASE operation WHEN 'snapshot' THEN 'report-snapshot' ELSE operation END)||'.v1'
    OR NOT v ? 'commandId' THEN RAISE EXCEPTION 'INVALID_DEMO_INPUT'; END IF;
   command:=(v->>'commandId')::uuid;
   IF command IS NULL THEN RAISE EXCEPTION 'INVALID_DEMO_INPUT'; END IF;
