@@ -842,3 +842,15 @@ describe("migration and privilege catalog", () => {
     ]);
   });
 });
+
+// C248: exact additive guard identity, private execution and fixed lookup context.
+it("SV5-GUARD catalogue retains a private migration-owned tenant-safe upload guard", async () => {
+ const routines=(await admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_execute,
+  has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow_execute
+  FROM pg_proc p WHERE p.oid IN ('app.guard_post_lock_upload_transition()'::regprocedure,'app.serialize_final_check_evidence()'::regprocedure)`)).rows;
+ expect(routines).toEqual(Array.from({length:2},()=>({owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog, app'],runtime_execute:false,shadow_execute:false})));
+ const triggers=(await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) definition FROM pg_trigger
+  WHERE tgrelid='app.evidence_upload'::regclass AND tgname='b_final_check_upload_transition'`)).rows;
+ expect(triggers).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O',definition:'CREATE TRIGGER b_final_check_upload_transition BEFORE UPDATE ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.guard_post_lock_upload_transition()'}]);
+});
