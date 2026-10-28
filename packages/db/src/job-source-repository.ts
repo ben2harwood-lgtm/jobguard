@@ -1,7 +1,7 @@
 import {z} from "zod";
 import type {Pool} from "pg";
 import {diaryReadV1,customerMessageReadV1,jobSourceIntakeReceiptV1,JobSourceError,JobWorkStateError,type DiaryRead,type CustomerMessageRead,type JobSourceIntakeReceipt} from "@jobguard/core";
-import {WatchdogError,requireLiveJob} from "./watchdog.js";
+import {WatchdogError} from "./watchdog.js";
 import {withTenant,type VerifiedTenantContext} from "./tenant-context.js";
 /** Persisted reads and the one checked intake routine. No context constructor or cached principal. */
 export class JobSourceRepository {
@@ -19,12 +19,12 @@ export class JobSourceRepository {
  }
  /** Off-site diary notes and fictional customer messages through app.sv7a_intake_job_source only.
   * `owner` is the practice session digest, or a trusted server membership id: the same CH-4 authority seam
-  * (app.ch4_require_command_owner) the work-state commands use. A watchdog live-only command (CH-2). */
+  * (app.ch4_require_command_owner) the work-state commands use. Routine-guarded live-only command (CH-2): the checked
+  * routine replays first, then refuses a new note on a job that is not live. */
  async intake(context:VerifiedTenantContext,jobId:string,owner:string,kind:"diary"|"customer_message",raw:unknown):Promise<JobSourceIntakeReceipt>{
   if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || !(/^[a-f0-9]{64}$/u.test(owner) || z.guid().safeParse(owner).success))throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");
   return withTenant(this.pool,context,async db=>{
    try{
-    await requireLiveJob(db,jobId);
     const result=(await db.$client.query<{result:unknown}>("SELECT app.sv7a_intake_job_source($1,$2,$3,$4,$5::jsonb) result",[context.tenantId,jobId,owner,kind,JSON.stringify(raw)])).rows[0]?.result;
     const parsed=jobSourceIntakeReceiptV1.safeParse(result);if(!parsed.success)throw new JobSourceError("SOURCE_NOT_FINALIZED");return parsed.data;
    }catch(error){

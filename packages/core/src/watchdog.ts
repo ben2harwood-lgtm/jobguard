@@ -235,5 +235,12 @@ export const watchdogCommandGuards = [
   { file: "evidence.ts", method: "beginUpload", calls: 1 },
   { file: "evidence.ts", method: "finalize", calls: 2 },
   { file: "proof-repository.ts", method: "complete", calls: 2 },
-  { file: "job-source-repository.ts", method: "intake", calls: 1 },
+] as const;
+
+/** Live-only commands whose one checked SQL routine owns the live check, after its own replay (SV-7A). The CH-2 harness gives
+ * them the same replay, changed-payload, other-job, cross-kind race, parallel-duplicate, previous-schema id and lock-order cases;
+ * only the TypeScript requireLiveJob source rule is replaced by a check that the routine calls app.require_watchdog_live before
+ * its first write. */
+export const watchdogRoutineGuards = [
+  { file: "job-source-repository.ts", method: "intake", routine: "app.sv7a_intake_job_source" },
 ] as const;
