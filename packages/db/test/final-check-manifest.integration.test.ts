@@ -104,7 +104,11 @@ it('C241b expiry between freezes and later upload state changes follow exactly t
   expect(m.sources).toEqual([]);
   expect(m.excludedUploads).toEqual(frozen.map(s=>({uploadId:s.upload_id,state:s.excluded_state,reason:s.excluded_reason})));
   // Even a privileged post-lock state change cannot replace 0204's frozen decision.
-  await finalCheckTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,upload]));
+  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,upload]))).rejects.toMatchObject({code:'55000',message:'FINAL_CHECK_UPLOAD_TRANSITION_LOCKED'});
+  await finalCheckTenant(f.admin,a.tenantId,async db=>{
+   await db.query('SET LOCAL session_replication_role = replica');
+   await db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,upload]);
+  });
   expect((await f.admin.query('SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2',[a.tenantId,upload])).rows[0].state).toBe('quarantined');
   expect(await worker.begin(a.context,a.jobId)).toEqual(m);
   expect(await worker.manifest(a.context,a.jobId,m.id)).toEqual(m);

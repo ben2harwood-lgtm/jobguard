@@ -120,7 +120,7 @@ it("[T4] two different active owners racing leave one approval and a typed confl
  const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(context,job,command(id),other)]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"RECOVERY_TERMS_COMMAND_CONFLICT"}});expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2",[T,id])).rows[0].n).toBe(1);
 });
-it("[T5] preview refusal writes nothing; [T6] approval then preview/approve/deliver succeeds unchanged",async()=>{
+it("V3ApprovedTermsStillWork: preview refusal writes nothing, approval then preview/approve/deliver succeeds unchanged",async()=>{
  const id=await newCase();await attached(id);const before=await counts();await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
  await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);const repo=new RecoveryMessageRepository(runtime),v=(await preview(id)).latest!;expect(v.status).toBe("previewed");const queued=await repo.command(context,id,approveMessage(v),messageActor);expect(queued.latest!.status).toBe("queued");
  const delivered=await repo.command(context,id,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:queued.latest!.revision,outcome:"success"},messageActor);expect(delivered.latest!.status).toBe("simulated_delivery");expect(delivered.sinkCount).toBe(1);
@@ -137,8 +137,13 @@ it("[T5] raw runtime writes on all three chase tables hit their added terms trig
  expect(await counts()).toEqual(before);
  expect((await counts()).recovery_message_sink).toBe(before.recovery_message_sink);
 });
-it("[T6] controls: non-withheld and no-policy cases require no terms",async()=>{
- for(const [type,target] of [["merchant_overcharge",job],["withheld_customer_payment",unbound]]){const id=await newCase(type,target);await attached(id);expect((await preview(id)).latest!.status).toBe("previewed");expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,target,id]))).rows[0].ok).toBe(true);}
+it("NonWithheldUnchanged: merchant control still previews without terms",async()=>{
+ const id=await newCase("merchant_overcharge",job);await attached(id);expect((await preview(id)).latest!.status).toBe("previewed");expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,job,id]))).rows[0].ok).toBe(true);
+});
+it("NullPolicyWithheldPursuitRefused: the issued C requirement supersedes the old exemption",async()=>{
+ const id=await newCase("withheld_customer_payment",unbound);await attached(id);const before=await counts();
+ expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,unbound,id]))).rows[0].ok).toBe(false);
+ await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
 });
 it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard",async()=>{
  const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);const ctx=testTenantContext(b);
