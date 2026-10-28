@@ -1480,6 +1480,7 @@
 {"identity":"function:app.request_final_check_run(uuid,uuid,text)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app, infrastructure","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["infrastructure.final_check_request"],"staticCalls":["app.final_check_builder"]},
 {"identity":"function:app.final_check_open_catch_case()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.recovery_case","app.recovery_case_event"],"staticCalls":["app.final_lock_hash"]},
 {"identity":"function:app.final_check_claim_catch_case()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.recovery_claim_revision"],"staticCalls":["app.final_lock_hash"]},
+{"identity":"function:app.final_check_refuse_catch_claim()","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.read_final_check_disputes(uuid,uuid,text)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_check_builder"]},
 {"identity":"function:app.final_check_post_lock_link()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.shadow_signal_ineligibility"],"staticCalls":["app.final_check_context"]},
 {"identity":"function:app.final_check_guard_fact()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_lock_hash"]},
@@ -2843,7 +2844,8 @@
 "identity.user_email|made_up_company_no_sign_in|app.practice_company_refuse_sign_in|BEFORE INSERT/UPDATE|O",
 "identity.verified_domain|immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O",
 "app.variation_revision|final_check_catch_case_open|app.final_check_open_catch_case|AFTER INSERT|O",
-"app.variation_approval|final_check_catch_case_claim|app.final_check_claim_catch_case|AFTER INSERT|O"
+"app.variation_approval|final_check_catch_case_claim|app.final_check_claim_catch_case|AFTER INSERT|O",
+"app.recovery_claim_revision|final_check_catch_claim_guard|app.final_check_refuse_catch_claim|BEFORE INSERT|O"
 ]
 },
 "held":[

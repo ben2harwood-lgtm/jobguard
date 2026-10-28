@@ -6,7 +6,8 @@ BEGIN;
 -- Restated from 0238 with one exception: the catch-case trigger below marks its own insert.
 CREATE OR REPLACE FUNCTION app.final_check_refuse_held_case() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
 BEGIN
- IF NEW.case_type='missed_variation_final_account' AND current_setting('app.final_check_catch_case',true) IS DISTINCT FROM NEW.id::text THEN RAISE EXCEPTION 'FINAL_CHECK_CONFIRMATION_HELD' USING ERRCODE='42501'; END IF;
+ -- The setting alone is forgeable by any session; only the migration-owned definer trigger below runs as jobguard_migration.
+ IF NEW.case_type='missed_variation_final_account' AND (current_user<>'jobguard_migration' OR current_setting('app.final_check_catch_case',true) IS DISTINCT FROM NEW.id::text) THEN RAISE EXCEPTION 'FINAL_CHECK_CONFIRMATION_HELD' USING ERRCODE='42501'; END IF;
  RETURN NEW;
 END $$;
 
@@ -30,6 +31,17 @@ END $$;
 ALTER FUNCTION app.final_check_open_catch_case() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.final_check_open_catch_case() FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
 CREATE TRIGGER final_check_catch_case_open AFTER INSERT ON app.variation_revision FOR EACH ROW EXECUTE FUNCTION app.final_check_open_catch_case();
+
+-- Claims on catch cases: only the customer-approval trigger below (definer, migration-owned) may add one.
+CREATE FUNCTION app.final_check_refuse_catch_claim() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF current_user<>'jobguard_migration' AND EXISTS(SELECT 1 FROM app.recovery_case c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.case_id AND c.case_type='missed_variation_final_account')
+ THEN RAISE EXCEPTION 'FINAL_CHECK_CONFIRMATION_HELD' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.final_check_refuse_catch_claim() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.final_check_refuse_catch_claim() FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
+CREATE TRIGGER final_check_catch_claim_guard BEFORE INSERT ON app.recovery_claim_revision FOR EACH ROW EXECUTE FUNCTION app.final_check_refuse_catch_claim();
 
 -- Customer approval: the approved positive amount becomes the case's first claim revision.
 CREATE FUNCTION app.final_check_claim_catch_case() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$

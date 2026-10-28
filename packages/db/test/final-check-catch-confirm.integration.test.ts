@@ -50,6 +50,13 @@ it("the builder's priced approval opens the catch case with no claim; the custom
  expect(await claims()).toEqual([]);
  // The raw runtime boundary still cannot create such a case directly.
  await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type) VALUES($1,$2,$3,1,'GBP','identified',0,true,'missed_variation_final_account')",[randomUUID(),a.tenantId,a.jobId]))).rejects.toBeDefined();
+ // Forging the trigger's session setting does not help: only the migration-owned trigger may insert.
+ const forged=randomUUID();
+ await expect(withTenant(f.runtime,a.context,async db=>{await db.$client.query("SELECT set_config('app.final_check_catch_case',$1,true)",[forged]);return db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type) VALUES($1,$2,$3,999999,'GBP','identified',0,true,'missed_variation_final_account')",[forged,a.tenantId,a.jobId]);})).rejects.toThrow(/FINAL_CHECK_CONFIRMATION_HELD/u);
+ // No claim can be added to the catch case before the customer approves.
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,50000,'GBP','membership:forged',$5)",[randomUUID(),a.tenantId,a.jobId,cases[0].id,"f".repeat(64)]))).rejects.toThrow(/FINAL_CHECK_CONFIRMATION_HELD/u);
+ expect(await claims()).toEqual([]);
+ expect(await count("recovery_case",a.tenantId,a.jobId)).toBe(1);
  const approval=approveVariation({...priced,state:"priced"} as never,{id:randomUUID(),revisionId:priced.id,revision:priced.revision,contentHash:priced.contentHash,signedDeltaPence:priced.signedDeltaPence,method:"builder_attestation",actorMembershipId:FINAL_CHECK_ACTOR,evidenceId:null,approvedAt:new Date("2026-10-28T10:00:00.000Z")});
  await withTenant(f.runtime,a.context,db=>approvePricedVariation(db,a.tenantId,confirmed.variationId,approval));
  expect(await claims()).toEqual([{revision:1,claimed_net_pence:"50000"}]);
