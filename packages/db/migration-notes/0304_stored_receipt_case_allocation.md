@@ -201,3 +201,33 @@ The stock local lane command includes uncommitted reverts in its union and thus
 still reports the restored bridge until the router commits; the bridge has zero
 net diff against merged origin/main, so it is intentionally absent from allow.
 No git writes, real data, provider calls, downloads or local listeners.
+
+
+## PR #383 CI repair try 3 — synthetic certificate format
+
+CI job 123132038367 reported 15 failures in the stored-receipt integration
+suite. Every failure stops in realReceiptFixture at the same source insert:
+synthetic_evidence_original_content_type_check rejects application/pdf. The
+0025 synthetic-original contract permits PNG, JPEG and WebP. The fixture now
+reuses pngBytes(23) from site-extra-evidence-fixtures and declares image/png
+consistently in evidence_upload, synthetic_evidence_original and evidence_object.
+SHA-256 and byte length remain derived from the actual bytes. The certificate
+evidence type, completion link, all constraints/triggers and all allocation,
+replay, reversal, tenant/job, approval and catch assertions remain unchanged.
+No test is weakened, skipped or excepted. No migration SQL changes.
+
+Resolved the main-merge conflict in SERIOUS-B5 by retaining both
+storedReceiptCaseAdditions and sourceIntakeAdditions; all main lines remain.
+The exact branch payload still matches the existing lane allow list.
+
+Local checks: three named Vitest files (stored-receipt-migration,
+stored-receipt-case-allocation-repository and lp-0-catalog) passed 47 tests
+with maxWorkers=2. Database package typecheck and separate strict fixture
+typecheck passed. Vitest list collected all 15 affected database tests plus
+SERIOUS-B5; this was discovery only, not PostgreSQL execution. All migration
+SQL bytes match their committed source (0303 from incoming main, all others
+from HEAD); 0304 SHA-256 remains
+ea32c619401eac70ac07ec2e16fc3729d4623a48ccf9c9bf3a4e59047409a73e.
+Conflict-marker scan, exact lane coverage and diff whitespace checks passed.
+PostgreSQL/migration execution remains in CI. Router stages the resolution,
+commits and pushes; no git-writing commands or local listeners were used here.

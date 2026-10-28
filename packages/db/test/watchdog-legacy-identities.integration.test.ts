@@ -39,6 +39,8 @@ const PERSISTED_BEFORE = [
   "discrepancy-repository.ts#evaluate", "discrepancy-repository.ts#review", "discrepancy-repository.ts#supersede", "evidence.ts#beginUpload",
   "inbox-relevance-repository.ts#dismiss", "inbox-relevance-repository.ts#seed", "proof-repository.ts#complete", "purchase-order-repository.ts#place",
   "readiness-repository.ts#advance", "readiness-repository.ts#record", "supplier-document-repository.ts#confirm", "supplier-match-repository.ts#correct", "supplier-match-repository.ts#create",
+  // SV-7A intake (routine-guarded): its command_receipt holds the id.
+  "job-source-repository.ts#intake",
 ];
 
 describe("previous-schema command ids cannot be claimed by another kind of command", () => {

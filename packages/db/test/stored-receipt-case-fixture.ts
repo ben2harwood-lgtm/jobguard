@@ -16,6 +16,7 @@ import {RecoveryLineAllocationRepository} from "../src/receipt-line-allocation-r
 import {withTenant} from "../src/tenant-context.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"){
  process.env.JOBGUARD_ENV="synthetic_demo";
@@ -30,16 +31,17 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,"Fictional receipt allocation",3360000,scoped,3360000,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
+ // Synthetic certificate image using the existing valid PNG fixture helper.
  // Genuine finalized source recipe before lock. No accounting or allocation rows
  // are seeded. Completion remains a normal evidence-link/stage input to assembly.
- const evidence=randomUUID(),upload=randomUUID(),link=randomUUID(),bytes=Buffer.from("%PDF-1.4\nFictional completion certificate\n%%EOF"),sha=createHash("sha256").update(bytes).digest("hex"),objectKey=`synthetic/allocator/${upload}`;
+ const evidence=randomUUID(),upload=randomUUID(),link=randomUUID(),bytes=Buffer.from(pngBytes(23)),sha=createHash("sha256").update(bytes).digest("hex"),objectKey=`synthetic/allocator/${upload}`;
  await finalCheckTenant(f.admin,DEMO_TENANT_ID,async db=>{
   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,$6,'application/pdf',1000,'standard_evidence',clock_timestamp()+interval '1 day','verified','allocator-v1',clock_timestamp())`,[upload,DEMO_TENANT_ID,jobId,scope,objectKey,sha]);
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',1000,'standard_evidence',clock_timestamp()+interval '1 day','verified','allocator-v1',clock_timestamp())`,[upload,DEMO_TENANT_ID,jobId,scope,objectKey,sha]);
   await db.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
-   VALUES($1,$2,$3,$4,$5,'allocator-v1','synthetic_demo','application/pdf',$6)`,[DEMO_TENANT_ID,upload,jobId,scope,objectKey,bytes]);
+   VALUES($1,$2,$3,$4,$5,'allocator-v1','synthetic_demo','image/png',$6)`,[DEMO_TENANT_ID,upload,jobId,scope,objectKey,bytes]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,'original','electrical_certificate',$6,'allocator-v1',$7,$8,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,DEMO_TENANT_ID,upload,jobId,scope,objectKey,sha,bytes.length]);
+   VALUES($1,$2,$3,$4,$5,'original','electrical_certificate',$6,'allocator-v1',$7,$8,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,DEMO_TENANT_ID,upload,jobId,scope,objectKey,sha,bytes.length]);
   await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'electrical_certificate')",[link,DEMO_TENANT_ID,evidence,jobId,scope]);
   await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'electrical_complete',$5,$6)",[randomUUID(),DEMO_TENANT_ID,jobId,scope,link,randomUUID()]);
  });
