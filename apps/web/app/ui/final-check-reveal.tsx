@@ -27,7 +27,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   if (busy) return;
   setBusy(true); setError("");
   try {
-   const response = await fetch(`/api/jobs/${jobId}/final-check/runs`, { method: "POST" });
+   const response = await fetch(`/api/jobs/${jobId}/final-check/runs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "final-check-run.request.v1" }) });
    if (response.ok) setRequested(true); else setError("The practice check could not be requested.");
   } catch { setError("The request may not have been saved. Try again."); }
   await load();

@@ -69,7 +69,8 @@ test("E (fixture-seeded): a revealed item answered Not done keeps that answer af
   const panel = page.getByTestId("final-check-reveal"), item = panel.getByTestId("final-check-item");
   await expect(panel.getByTestId("final-check-status")).toHaveText("JobGuard's final check found 1 thing that may be missing from your bill.");
   await expect(item).toContainText("Fitted an outside tap");
-  await expect(item.getByRole("button", { name: "Yes — this was extra work", exact: true })).toBeDisabled();
+  // Q2 enabled confirmation; E answers Not done instead.
+  await expect(item.getByRole("button", { name: "Yes — this was extra work", exact: true })).toBeEnabled();
   await item.getByLabel("Or answer").selectOption("not_completed");
   await item.getByRole("button", { name: "Save answer", exact: true }).click();
   await expect(item.getByTestId("final-check-disposition")).toHaveText("Your answer: Not done");

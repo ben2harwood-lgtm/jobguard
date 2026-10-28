@@ -15,7 +15,7 @@ export class FinalCheckController{
  @Post("catches") @ApiOperation({summary:"Confirm a revealed item as extra work: creates only an unpriced catch variation"})
  catch(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).confirmCatch(id,body));}
  @Post("runs") @ApiOperation({summary:"Practice only: ask the worker to run the final check for this locked job"})
- run(@Param("id")id:string,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).requestRun(id));}
+ run(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).requestRun(id,body));}
  @Get("disputes") @ApiOperation({summary:"Read unresolved attribution disputes for this job"})
  disputes(@Param("id")id:string,@Headers("cookie")cookie?:string){return boundary(()=>new FinalCheckApplication(this.pool,practiceCookie(cookie)).disputes(id));}
 }
