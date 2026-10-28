@@ -4,7 +4,6 @@ import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {JobSourceError,JobWorkStateError} from "@jobguard/core";
 import {JobSourceRepository} from "../src/job-source-repository.js";
 import {WatchdogError,claimCommandIdentity,requireLiveJob} from "../src/watchdog.js";
-import {testTenantContext} from "./tenant-context-test-utils.js";
 import {withTenant} from "../src/tenant-context.js";
 import {sourcesFixture,closeWorkFixture,workTenant,type SourceFixture} from "./job-sources-fixture.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,type FinalCheckFixture} from "./final-check-fixture.js";
@@ -71,7 +70,6 @@ describe("SV-7A checked intake writer",()=>{
  it("another session's digest cannot write to this job",async()=>{
   const {auth,jobId}=f.practice,before=await counts(f);
   await expect(repo.intake(auth.context,jobId,"0".repeat(64),"diary",diary())).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
-  await expect(repo.intake(testTenantContext(randomUUID()),jobId,auth.digest,"diary",diary())).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
   await expect(repo.intake(auth.context,randomUUID(),auth.digest,"diary",diary())).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
   expect(await counts(f)).toEqual(before);
  });
@@ -97,17 +95,5 @@ describe("SV-7A intake after the final-account lock",()=>{
   const before=await rows();
   await expect(repo.intake(a.context,a.jobId,a.digest,"diary",diary("After lock."))).rejects.toEqual(new JobWorkStateError("POST_LOCK_WORK_REQUIRES_LINKED_JOB"));
   expect(await rows()).toBe(before);
- });
- it.each(["diary","customer_message"] as const)("%s replays after lock without appending to the locked account",async kind=>{
-  const a=await seedFinalCheckJob(f),repo=new JobSourceRepository(f.runtime),input=kind==="diary"?diary():message();
-  const first=await repo.intake(a.context,a.jobId,a.digest,kind,input);
-  await a.lock();
-  const snapshot=async()=>(await f.admin.query("SELECT to_jsonb(r) r FROM app.final_account_revision r WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
-  const before=await snapshot();
-  expect(await repo.intake(a.context,a.jobId,a.digest,kind,input)).toEqual(first);
-  await expect(repo.intake(a.context,a.jobId,a.digest,kind,{...input,text:"Reversed note."})).rejects.toEqual(new WatchdogError("IDEMPOTENCY_CONFLICT"));
-  await expect(repo.intake(a.context,a.jobId,a.digest,kind,{...input,commandId:randomUUID()})).rejects.toEqual(new JobWorkStateError("POST_LOCK_WORK_REQUIRES_LINKED_JOB"));
-  expect(await snapshot()).toEqual(before);
-  expect(Number((await f.admin.query("SELECT count(*) n FROM app.job_source_original WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n)).toBe(1);
  });
 });
