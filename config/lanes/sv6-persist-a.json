@@ -8,8 +8,8 @@
       "receipt": "docs/verdicts/SV6-PERSIST-A/BUILDER_RECEIPT.md",
       "note": "C253 / 0213. Synthetic persistence foundation; accepted source adapter and runtime command acceptance dependency-bound. PostgreSQL checks in reviewer/CI.",
       "allow": [
-        "packages/db/migrations/0249_recovery_attribution.sql",
-        "packages/db/migration-notes/0249_recovery_attribution.md",
+        "packages/db/migrations/0260_recovery_attribution.sql",
+        "packages/db/migration-notes/0260_recovery_attribution.md",
         "packages/db/src/recovery-attribution-repository.ts",
         "packages/db/src/index.ts",
         "packages/core/src/index.ts",
