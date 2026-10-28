@@ -23,6 +23,42 @@ async function snapshot() {
  const policies = (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY schemaname,tablename,policyname")).rows;
  return { rows, routines, relations, policies };
 }
+// Ruling 110: only 0188's named objects may extend this snapshot. Existing rows
+// (including full routine privileges/configuration and relation/policy metadata)
+// remain compared without dropping fields or accepting arbitrary later additions.
+const billingTables = ["billing_export_batch", "billing_export_line", "billing_status_import", "billing_fact", "billing_line_match", "billing_quarantine", "billing_allocation_run", "billing_application_event", "contractor_receipt_line_allocation", "billing_export_delivery"];
+const billingRoutines = ["app.cb_authority(uuid,uuid,boolean)", "app.cb_begin(uuid,uuid,uuid,text,jsonb)", "app.cb_complete(uuid,uuid,uuid,jsonb)", "app.cb_unresolved(uuid,uuid)", "app.cb_candidates(uuid,uuid,uuid)", "app.cb_line_id(uuid,uuid)", "app.cb_csv_cell(text)", "app.cb_csv(jsonb)", "app.cb_export(uuid,uuid,uuid,jsonb,text,text)", "app.cb_ingest(uuid,uuid,uuid,jsonb)", "app.cb_inputs(uuid,uuid)", "app.cb_add(numeric,numeric,numeric,numeric)", "app.cb_validate(uuid,text,text,jsonb)", "app.cb_derive(uuid,uuid,uuid,text,text,text,jsonb)", "app.cb_delivery(uuid,uuid,uuid,jsonb)", "app.cb_audit(uuid,uuid,text,uuid)", "app.cb_delivery_step(uuid,uuid,uuid,text,jsonb)"];
+// Ruling 110: 0188's billing objects extend the snapshot additively, in the same style as
+// livePromptAdditions/subscriptionAdditions, so every object is reconstructed at its exact
+// server-sort position in `after` and no pre-existing row/privilege is dropped.
+async function billingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const allowedRoutines = (await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p WHERE p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid))`, [billingRoutines])).rows;
+ expect(allowedRoutines).toHaveLength(billingRoutines.length);
+ const isBillingRoutine = (r: typeof after.routines[number]) => r.nspname==='app' && allowedRoutines.some(a => a.proname===r.proname && a.args===r.args);
+ const routines = after.routines.filter(isBillingRoutine);
+ expect(routines).toHaveLength(billingRoutines.length);
+ // Bind indexes to these exact new tables through pg_index, never a name prefix.
+ const indexes = (await f.admin.query(`SELECT c.relname FROM pg_index i
+  JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_class t ON t.oid=i.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [billingTables])).rows.map(r => r.relname as string);
+ expect(indexes).toContain("billing_line_match_export_line_unique");
+ const relationNames = new Set([...billingTables, ...indexes]);
+ const relations = after.relations.filter(r => r.nspname==='app' && relationNames.has(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(r => r.schemaname==='app' && billingTables.includes(r.tablename) && r.policyname==='tenant_isolation');
+ expect(policies).toHaveLength(billingTables.length);
+ for (const table of billingTables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname===r.nspname && b.proname===r.proname && b.args===r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
+ return {
+  rows: Object.fromEntries(billingTables.map(t => [`app.${t}`, []])),
+  routines,
+  relations,
+  policies,
+ };
+}
 // Standing ruling 113: additive MON-2A-P objects only. Keep every predecessor
 // row and privilege in the comparison; no prefix or whole-schema exemption.
 async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
@@ -134,16 +170,17 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  // Insert only the named new rows at their server-sort positions. This preserves every
  // pre-existing expected row verbatim and avoids host-dependent JS/SQL collation.
  const subscription = await subscriptionAdditions(before, after);
+ const billing = await billingAdditions(before, after);
  const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
   const expected = [...old];
   for (const row of [...added].sort((a, b) => live.indexOf(a) - live.indexOf(b))) expected.splice(live.indexOf(row), 0, row);
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies], after.policies),
  };
 }
 // Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.
