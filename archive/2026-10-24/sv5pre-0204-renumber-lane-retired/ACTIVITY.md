@@ -1,0 +1,2 @@
+# Retired lane file: sv5pre-0204-renumber (24 Oct 2026)
+The separate lane for the 0199→0204 renumber/C238 repair branch (PR #309) is retired. #309's head 7ffd93ac is fast-forwarded onto #189's own branch codex/sandbox/sv5pre, and its files move into lane sv5pre (config/lanes/sv5pre.json). A stacked branch's separate lane cannot pass the main...tip lane check (reviewer B L10, jg-checks 24 Oct). Original kept byte-for-byte in the zip; git history also keeps it.

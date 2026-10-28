@@ -5,7 +5,7 @@ export const jobWorkTimingV1 = Object.freeze({ version: "job-work-timing.v1" as 
 export class WorkTimingError extends Error {
  constructor(readonly code: "INVALID_WORK_TIMING_INPUT" | "WORK_TIMING_CONVENTION_REQUIRED") { super(code); this.name = "WorkTimingError"; }
 }
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+function parse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
  const result=schema.safeParse(raw);
  if(!result.success) throw new WorkTimingError("INVALID_WORK_TIMING_INPUT");
  return result.data;

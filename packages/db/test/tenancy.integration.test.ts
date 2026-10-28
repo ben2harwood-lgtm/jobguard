@@ -187,6 +187,22 @@ describe("migration and privilege catalog", () => {
     expect((await admin.query("SELECT count(*)::int AS count FROM app.account")).rows[0]?.count).toBe(2);
   });
 
+  // 0244 adds no tables. Its sole routine stays private; schema/name/arguments order.
+  it("retains the private place-admission routine catalogue addition", async () => {
+    expect((await admin.query(`
+      SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args,
+             r.rolname AS owner, p.prosecdef, p.proconfig,
+             has_function_privilege('jobguard_runtime', p.oid, 'EXECUTE') AS runtime,
+             has_function_privilege('jobguard_meter', p.oid, 'EXECUTE') AS meter,
+             EXISTS (SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') AS public
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_roles r ON r.oid=p.proowner
+      WHERE n.nspname='app' AND p.proname='mon1_admit_place' ORDER BY 1,2,3
+    `)).rows).toEqual([
+      { nspname: "app", proname: "mon1_admit_place", args: "t uuid, j uuid, source_kind text, source_id uuid", owner: "jobguard_migration", prosecdef: false, proconfig: ["search_path=pg_catalog"], runtime: false, meter: false, public: false },
+    ]);
+  });
+
   it("automatically finds every business table protected by enabled and forced RLS plus a check policy", async () => {
     const result = await admin.query(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
@@ -275,6 +291,13 @@ describe("migration and privilege catalog", () => {
       { relname: "final_account_proof", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "final_account_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "final_account_scope_disposition", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_disposition_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_manifest", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_manifest_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_processing_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_reveal_proof", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_run_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_source_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "final_check_terms_acceptance", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "financial_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "finding_suppression", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -410,6 +433,10 @@ describe("migration and privilege catalog", () => {
       { relname: "shadow_break_glass_access", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_commercial_signal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_disclosure_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "shadow_final_check_completion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "shadow_final_check_reveal_proof", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "shadow_final_check_run_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "shadow_final_check_source_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_must_surface_firing", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_reconciliation_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_signal_classification", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -578,6 +605,13 @@ describe("migration and privilege catalog", () => {
       { relname: "final_account_proof", owner: "jobguard_migration" },
       { relname: "final_account_revision", owner: "jobguard_migration" },
       { relname: "final_account_scope_disposition", owner: "jobguard_migration" },
+      { relname: "final_check_disposition_binding", owner: "jobguard_migration" },
+      { relname: "final_check_manifest", owner: "jobguard_migration" },
+      { relname: "final_check_manifest_source", owner: "jobguard_migration" },
+      { relname: "final_check_processing_source", owner: "jobguard_migration" },
+      { relname: "final_check_reveal_proof", owner: "jobguard_migration" },
+      { relname: "final_check_run_binding", owner: "jobguard_migration" },
+      { relname: "final_check_source_attempt", owner: "jobguard_migration" },
       { relname: "final_check_terms_acceptance", owner: "jobguard_migration" },
       { relname: "financial_authorization", owner: "jobguard_migration" },
       { relname: "finding_suppression", owner: "jobguard_migration" },
@@ -713,6 +747,10 @@ describe("migration and privilege catalog", () => {
       { relname: "shadow_break_glass_access", owner: "jobguard_migration" },
       { relname: "shadow_commercial_signal", owner: "jobguard_migration" },
       { relname: "shadow_disclosure_event", owner: "jobguard_migration" },
+      { relname: "shadow_final_check_completion", owner: "jobguard_migration" },
+      { relname: "shadow_final_check_reveal_proof", owner: "jobguard_migration" },
+      { relname: "shadow_final_check_run_binding", owner: "jobguard_migration" },
+      { relname: "shadow_final_check_source_attempt", owner: "jobguard_migration" },
       { relname: "shadow_must_surface_firing", owner: "jobguard_migration" },
       { relname: "shadow_reconciliation_run", owner: "jobguard_migration" },
       { relname: "shadow_signal_classification", owner: "jobguard_migration" },

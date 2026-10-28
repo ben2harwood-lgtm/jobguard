@@ -33,7 +33,7 @@ function failure(error: unknown): never {
   throw new ExtraApprovalError("DATABASE_UNAVAILABLE", { cause: error });
 }
 
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const reason = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u);
 const pence = z.number().int().min(1).max(1_000_000_000_000);
 const common = { commandId: uuid, jobId: uuid };
@@ -46,11 +46,11 @@ export const rejectExtraV1 = z.object({ version: z.literal("reject-extra.v1"), .
 export const withdrawExtraV1 = z.object({ version: z.literal("withdraw-extra.v1"), ...common, extraId: uuid, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
 export const markDuplicateV1 = z.object({ version: z.literal("mark-duplicate.v1"), ...common, duplicateId: uuid, canonicalId: uuid }).strict();
 /** Owner-only send: the owner approves THIS request, recipient, amount and expiry. Practice recipients end in .invalid and nothing is delivered. */
-export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.string().email().refine(s => s.toLowerCase().endsWith(".invalid")),
+export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.email({ error: "Invalid email" }).refine(s => s.toLowerCase().endsWith(".invalid")),
   linkToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u), expiresAt: z.coerce.date() }).strict();
 export const revokeClientApprovalV1 = z.object({ version: z.literal("revoke-client-approval.v1"), ...common, linkId: uuid }).strict();
-export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email() }).strict();
-export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email(), revisionHash: hash, netPence: pence,
+export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }) }).strict();
+export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }), revisionHash: hash, netPence: pence,
   decision: z.enum(["approve", "reject"]), reasonCode: reason.optional(),
   /** Ben decision 20: a named fictional role, with the real tester recorded beside it. Neither may be omitted. */
   fictionalRoleName: z.string().trim().min(1).max(100), actualTesterReference: z.string().trim().min(1).max(100) }).strict();

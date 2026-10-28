@@ -32,9 +32,10 @@ describe("MON1-S normal-company lifecycle source adapter", () => {
   it("discovers lifecycle migration after repaired MON1-T on fresh installs", async () => {
     const { MIGRATION_URLS } = await import("./migrate.js");
     const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1));
-    const index = names.indexOf("0209_meter_lifecycle_source.sql");
+    const index = names.indexOf("0239_meter_lifecycle_source.sql");
     expect(index).toBeGreaterThan(0);
-    expect(names[index - 1]).toBe("0208_meter_small_trip.sql");
+    expect(names.slice(0, index)).toContain("0208_meter_small_trip.sql");
+    expect(names).not.toContain("0209_meter_lifecycle_source.sql");
     expect(names).not.toContain("0207_meter_lifecycle_source.sql");
   });
   it("replays canonical event identities through the stored-source adapter", () => {

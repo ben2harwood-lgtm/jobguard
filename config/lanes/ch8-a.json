@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch8-a": {
+      "branches": ["codex/sandbox/ch8-a"],
+      "receipt": "docs/verdicts/CH8-A/BUILDER_RECEIPT.md",
+      "note": "Issued CH8-A preparation only. Unbound specimens; no runtime, producer binding, enablement or acceptance.",
+      "allow": [
+        "docs/contracts/evidence-pack-v3.md",
+        "docs/fixtures/evidence-pack-v3.json",
+        "packages/core/src/evidence-pack-v3.ts",
+        "packages/core/src/evidence-pack-v3.test.ts",
+        "docs/verdicts/CH8-A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
