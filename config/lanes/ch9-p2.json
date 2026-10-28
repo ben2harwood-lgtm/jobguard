@@ -6,7 +6,7 @@
         "codex/sandbox/ch9-p2"
       ],
       "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
-      "note": "RED: CH-9 part 2 source-mapped value page and receipt. Exact paths edited by this piece, including the two supplied merge resolutions; inherited parent changes keep their own lanes. Own lane file is implicitly permitted. PostgreSQL/browser CI and independent RED review remain required.",
+      "note": "RED: CH-9 part 2 source-mapped value page and receipt, including cumulative job-fee rounding repair. Exact paths for the complete piece; inherited parent changes keep their own lanes. PostgreSQL/browser CI and independent RED review remain required.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/auth/application-auth.guard.ts",

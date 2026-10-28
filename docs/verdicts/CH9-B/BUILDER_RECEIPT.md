@@ -438,3 +438,40 @@ PASS. No code behavior changed in this metadata repair; the earlier production
 build, typecheck and 178 focused assertions remain the last code validation.
 No PostgreSQL/browser suites run here. The git-based lane tests use disposable
 fixture repositories; no git-writing command was issued against this worktree.
+
+
+## CH-9 part 2 cumulative job-fee rounding follow-up — 28 October 2026
+
+RED. Job totals now pass cumulative principal once through the existing v3
+`calculateCumulativeFee` kernel, matching MON-4A/M4-9-S rounding. Catch movement
+fee and remainder fields retain exact rational pence shares; the UI labels fee
+shares as unrounded and preserves a third decimal in pounds when needed. This
+changes those two movement fields from integer Money to exact rational pence in
+the still-unmerged mapped receipt contract; job totals remain integer Money.
+Window fees are differences between rounded cumulative job balances, preserving
+adjacent-window reconciliation and explicit negative reversals. No migration,
+financial posting, policy, eligibility, authorization or real provider change.
+
+Regression: three catches of 101p, 105p and 105p produce a 31p job fee, rather
+than the 30p sum of individually rounded fees. Their exact fee shares remain
+10.1p, 10.5p and 10.5p. Separate windows give 10p, 11p and 10p, and reversing
+the first catch gives -10p. Existing replay, foreign scope, lock, stale-source
+and fractional-principal refusals remain covered.
+
+Local checks (installed Node 24.17.0, cached pnpm 10.28.1; no downloads):
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/value-source-receipt.test.ts src/cumulative-fee.test.ts src/fee-statement.test.ts`: PASS, 122 tests (includes imported attribution fixture tests).
+- `pnpm --filter @jobguard/core build`: PASS (TypeScript compilation).
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/ui/mapped-value-receipt.test.tsx`: PASS, 5 tests.
+- `pnpm --filter @jobguard/web typecheck`: PASS.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/value/value-v3.application.test.ts src/value/company-value.application.test.ts`: PASS, 40 tests.
+- Core purity, money arithmetic and commercial boundary lints: PASS. Core purity reports existing computed-import notices.
+- `git diff --check`: PASS.
+- Default lane boundary lint: FAIL on inherited committed branch paths outside ch9-p2, including MON-1 and SV-6 hookup paths and their lane files. None of the repair's changed paths is in its refusal list. The gate was not weakened; the router must reconcile ancestry/current main before CI can be green.
+
+Database/browser suites and full root checks were not run, per sandbox/task
+constraints. Existing database reversal assertion was updated to the exact share
+shape for CI. Migration 0326 is unchanged. This is ready for the router's repair
+commit; it is not a CI pass, review of the changed head, merge or release claim.
+One independent RED review of the new head remains required. No git writes.
+Commit message: `/tmp/ch9-p2-20261028T215114Z-commit-msg.txt`.

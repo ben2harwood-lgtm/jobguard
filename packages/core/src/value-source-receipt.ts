@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { recoveryAttributionRevisionV1 } from "./recovery-attribution-persistence.js";
-import { calculateCumulativeFee } from "./cumulative-fee.js";
+import { exactPence, exactPenceV1, serializeExactPence, calculateCumulativeFee } from "./cumulative-fee.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 
@@ -35,7 +35,7 @@ export const valueJobSourcesV1=z.object({
 export type ValueJobSourcesV1=z.infer<typeof valueJobSourcesV1>;
 const amount=z.object({pence,currency:z.literal("GBP")}).strict();
 const movement=z.object({assessmentId:uuid,previousAssessmentId:uuid.nullable(),at:z.string().datetime(),
- kind:z.enum(["assessment","reassessment","reversal"]),recovered:amount,fee:amount,yoursBeforeVatAndTax:amount}).strict();
+ kind:z.enum(["assessment","reassessment","reversal"]),recovered:amount,fee:exactPenceV1,yoursBeforeVatAndTax:exactPenceV1}).strict();
 export const valueWindowV1=z.object({from:z.string().datetime(),toExclusive:z.string().datetime()}).strict().refine(w=>{try{return compareServerInstants(w.from,w.toExclusive)<0;}catch{return false;}});
 export type ValueWindowV1=z.infer<typeof valueWindowV1>;
 export const mappedValueReceiptV1=z.object({version:z.literal("mapped-value-receipt.v1"),
@@ -52,23 +52,30 @@ const money=(n:bigint)=>amount.parse({pence:Number(n),currency:"GBP"});
 export function mapValueReceipt(raw:unknown,window:ValueWindowV1|null=null):MappedValueReceiptV1{
  if(window)valueWindowV1.parse(window);
  const inside=(at:string)=>!window||(compareServerInstants(at,window.from)>=0&&compareServerInstants(at,window.toExclusive)<0);
- const sources=valueJobSourcesV1.parse(raw),latest=new Map<string,{net:bigint;fee:bigint;current:boolean}>();
- const movements:z.infer<typeof movement>[]=[];let unavailable=false;
+ const sources=valueJobSourcesV1.parse(raw),latest=new Map<string,{net:bigint;current:boolean}>();
+ const movements:z.infer<typeof movement>[]=[];let unavailable=false, beforeNet=0n;
  for(const {document:d,current} of sources.assessments){
   const key=[d.caseId,d.workId,d.lineId,d.lockId].join(":");
   const n=BigInt(d.remainingPrincipal.numerator),den=BigInt(d.remainingPrincipal.denominator);
   if(n%den!==0n){unavailable=true;continue;}
   const net=d.assessmentOutcome==="eligible_for_review"?n/den:0n;
-  const fee=BigInt(calculateCumulativeFee({version:"cumulative-fee.v1",cumulativeQualifyingPrincipal:{numerator:net.toString(),denominator:"1"},
-   rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},priorNetPostedPence:0,
-   priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:null}).cumulativeFee.pence);
-  const prior=latest.get(key)??{net:0n,fee:0n};
+  const prior=latest.get(key)??{net:0n};
+  const delta=net-prior.net;
+  if(window&&compareServerInstants(d.serverRecordedAt,window.from)<0)beforeNet+=delta;
   if(inside(d.serverRecordedAt))movements.push({assessmentId:d.assessmentId,previousAssessmentId:d.previousAssessmentId,at:d.serverRecordedAt,
-   kind:net<prior.net?"reversal":d.previousAssessmentId?"reassessment":"assessment",recovered:money(net-prior.net),fee:money(fee-prior.fee),yoursBeforeVatAndTax:money(net-prior.net-fee+prior.fee)});
-  latest.set(key,{net,fee,current});
+   kind:net<prior.net?"reversal":d.previousAssessmentId?"reassessment":"assessment",recovered:money(delta),
+   fee:serializeExactPence(exactPence(delta,10n)),yoursBeforeVatAndTax:serializeExactPence(exactPence(delta*9n,10n))});
+  latest.set(key,{net,current});
  }
  unavailable ||= !sources.foundComplete || sources.checkId===null || [...latest.values()].some(v=>!v.current);
- const net=movements.reduce((n,v)=>n+BigInt(v.recovered.pence),0n),fee=movements.reduce((n,v)=>n+BigInt(v.fee.pence),0n);
+ const net=movements.reduce((n,v)=>n+BigInt(v.recovered.pence),0n);
+ const cumulativeFee=(principal:bigint)=>BigInt(calculateCumulativeFee({version:"cumulative-fee.v1",
+  cumulativeQualifyingPrincipal:{numerator:principal.toString(),denominator:"1"},
+  rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},priorNetPostedPence:0,
+  priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:null}).cumulativeFee.pence);
+ // Job totals round once. A window is the change between rounded cumulative
+ // balances, so adjacent windows reconcile even across a fractional fee share.
+ const fee=cumulativeFee(beforeNet+net)-(window?cumulativeFee(beforeNet):0n);
  return mappedValueReceiptV1.parse({version:"mapped-value-receipt.v1",label:"mapped, inspectable",policyVersion:"reference_fee_policy_v3",derivationVersion:"cumulative-fee.v1",
   notice:"Illustration — proposed policy; principal only",window,sources,checkedCount:sources.checkId?(sources.checkedAt&&inside(sources.checkedAt)?sources.checked.length:0):null,
   tracked:money(sources.tracked.filter(l=>inside(l.at)).reduce((n,l)=>n+BigInt(l.netPence),0n)),trackedFee:money(0n),

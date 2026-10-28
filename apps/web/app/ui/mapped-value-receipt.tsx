@@ -2,6 +2,12 @@
 import React, { useEffect, useState } from "react";
 import { formatRecoveryMessagePounds, mappedValueReceiptV1, type MappedValueReceiptV1 } from "@jobguard/core";
 export const mappedMoney=(v:{pence:number;currency:"GBP"}|null)=>v===null?"Unavailable":`${v.pence<0?"−":""}£${formatRecoveryMessagePounds(Math.abs(v.pence))}`;
+// Catch shares are exact tenths of a penny, not separately rounded charges.
+export const mappedFeeShare=(v:{numerator:string;denominator:string})=>{
+ const n=BigInt(v.numerator),den=BigInt(v.denominator),absolute=n<0n?-n:n;
+ const tenths=absolute*10n/den;
+ return `${n<0n?"−":""}£${formatRecoveryMessagePounds(Number(tenths/10n))}${tenths%10n===0n?"":String(tenths%10n)}`;
+};
 export function MappedReceipt({receipt:r}:{receipt:MappedValueReceiptV1}){
  return <article>
   <p>{r.label} · {r.notice}</p>
@@ -11,7 +17,7 @@ export function MappedReceipt({receipt:r}:{receipt:MappedValueReceiptV1}){
   <section><h2>Found by JobGuard after your bill was complete</h2>
    <p>Recovered <span data-testid="found-recovered-net">{mappedMoney(r.found.recovered)}</span> · Fee <span data-testid="found-success-fee">{mappedMoney(r.found.fee)}</span> · Yours before VAT and tax <span data-testid="found-yours-before-tax">{mappedMoney(r.found.yoursBeforeVatAndTax)}</span></p>
    {r.found.state==="unavailable"&&<p>The sources need a current assessment before figures can be shown.</p>}
-   <ul>{r.found.movements.map(m=><li key={m.assessmentId}>{m.kind} · {m.at} · {mappedMoney(m.recovered)} recovered · {mappedMoney(m.fee)} fee · Assessment {m.assessmentId}</li>)}</ul>
+   <ul>{r.found.movements.map(m=><li key={m.assessmentId}>{m.kind} · {m.at} · {mappedMoney(m.recovered)} recovered · {mappedFeeShare(m.fee)} fee share (unrounded) · Assessment {m.assessmentId}</li>)}</ul>
   </section>
   <section><h2>Supplier recoveries</h2><p>No mapped recovery figures are available yet.</p></section>
   <section><h2>Withheld-payment recoveries</h2><p>No mapped recovery figures are available yet.</p></section>

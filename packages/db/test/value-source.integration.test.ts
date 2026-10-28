@@ -41,7 +41,7 @@ it("refund immediately refuses stale money, then exposes a linked negative movem
  await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional refund"});
  const {mapValueReceipt}=await import("@jobguard/core");expect(mapValueReceipt(await read()).found.recovered).toBeNull();
  await assess(x,1);const receipt=mapValueReceipt(await read());expect(receipt.found.recovered?.pence).toBe(0);
- expect(receipt.found.movements[1]).toMatchObject({kind:"reversal",recovered:{pence:-80000},fee:{pence:-8000}});
+ expect(receipt.found.movements[1]).toMatchObject({kind:"reversal",recovered:{pence:-80000},fee:{numerator:"-8000",denominator:"1"}});
 });
 it("only original locked bill builder captures are tracked and never fee-bearing",async()=>{
  const x=await realReceiptFixture(f,"F5"),raw=await finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);

@@ -182,8 +182,13 @@ Catch sources retain the corrected #346/#356/#368 writer guarantees; this reader
 calls the existing SV-6 resolver to check the latest source hash without appending
 an assessment or changing a commercial fact. Stale sources and unassessed catch
 cases make found figures unavailable. No local allocator or qualification policy
-substitutes for SV-6. Per-catch fees use its same `cumulative-fee.v1` v3 kernel.
-Fractional pence remain unavailable rather than being rounded in a value reader.
+substitutes for SV-6. Job fees round once on cumulative principal through the same `cumulative-fee.v1`
+v3 kernel as MON-4A/M4-9-S. Movement `fee` and `yoursBeforeVatAndTax` are exact
+rational pence (`numerator`/`denominator` strings), preserving unrounded catch
+shares; the UI labels them as such. Job totals remain integer-pence Money.
+Window fees subtract the rounded cumulative balance before the window from that
+at its end, so adjacent windows reconcile. Fractional principal pence remain
+unavailable rather than being rounded in a value reader.
 
 Receipt fields carry `reference_fee_policy_v3`, `cumulative-fee.v1`, full source
 assessment documents and their manifests, lock/revision IDs, invoice-line IDs,
