@@ -18,7 +18,7 @@ Acceptance of those boundaries does not supply missing operational semantics.
 
 1. **S-ADMISSION:** `packages/db/src/meter-place-admission.ts` exports
    `meterPlaceAdmissionHoldV1` and `meterPlaceAdmissionHold` only. There is no
-   executable TypeScript admission API. `0210_meter_place_admission.sql` defines
+   executable TypeScript admission API. `0244_meter_place_admission.sql` defines
    `app.mon1_admit_place(uuid,uuid,text,uuid)` as migration-owner-only SECURITY
    INVOKER, without runtime/meter EXECUTE. After tenant and lock checks it always
    raises `METER_PLACE_SOURCE_HANDOFF_HELD`. Its four arguments do not carry the
@@ -90,7 +90,7 @@ upstream contracts and CI evidence. Preflight tests prove only named held behavi
 
 No migration 0223 is emitted: no routine/schema/grant changes are safe or needed
 for this handoff. No own-step upgrade test is invented without an own migration.
-Existing 0210 upgrade coverage remains mandatory. No new route/page exists, so
+Existing 0244 upgrade coverage remains mandatory. No new route/page exists, so
 no Playwright spec is added. Later MON1-J owns the full browser journey.
 
 No shared barrel, catalogue, registration, provider or commercial authority changes.
