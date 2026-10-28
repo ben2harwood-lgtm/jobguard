@@ -38,7 +38,8 @@ it("real site evidence and work commands refresh the screen; replay and foreign 
  await workTenant(f.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query(`UPDATE app.job_activation SET activated_at=clock_timestamp()-interval '8 days' WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
-  await db.query(`UPDATE app.job_work_state_event SET fact_at=((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London',recorded_at=((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London' WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
+  // Preserve first-evidence-before-finish ordering when relocating these fictional facts.
+  await db.query(`UPDATE app.job_work_state_event SET fact_at=(((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London')+sequence*interval '1 microsecond',recorded_at=(((clock_timestamp() AT TIME ZONE 'Europe/London')::date-7+time '12:00') AT TIME ZONE 'Europe/London')+sequence*interval '1 microsecond' WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
  });
  expect((await read()).countedPlaces).toBe(0);
  await commands.command(a.context,a.jobId,a.actorId,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:2,action:"resume"});

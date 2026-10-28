@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
+import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { migrate } from "../src/migrate.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -36,7 +37,11 @@ export async function seedWorkJob(f: WorkFixture, tenantId = randomUUID()) {
  await workTenant(f.admin, tenantId, async db => {
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4')", [accountId, tenantId]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [actorId, tenantId, accountId, userId]);
-  await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional CH-4 site','live')", [jobId, tenantId]);
+  await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional CH-4 site','draft')", [jobId, tenantId]);
+  // Bind explicit fictional parties before entering live, including browser clusters
+  // that deliberately do not install the legacy fixture trigger.
+  await seedSyntheticPartyFixture(db, tenantId, jobId);
+  await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
  return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
