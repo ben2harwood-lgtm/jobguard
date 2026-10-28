@@ -240,7 +240,7 @@ async function baselineAdditions(before: Awaited<ReturnType<typeof snapshot>>, a
  expect(privileges).toEqual(identities.map(([proname]) => ({ proname, owner: "jobguard_migration", prosecdef: true,
   proconfig: ["search_path=pg_catalog"], runtime: proname !== "enterprise_baseline_actor", infrastructure: false, public: false })));
  const indexes = (await f.admin.query(`SELECT t.relname table_name,i.relname,x.indisunique,
-  ARRAY(SELECT a.attname FROM unnest(x.indkey) WITH ORDINALITY k(attnum,n)
+  ARRAY(SELECT a.attname::text FROM unnest(x.indkey) WITH ORDINALITY k(attnum,n)
    JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum ORDER BY k.n) columns
   FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
   JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [tables])).rows;
@@ -252,7 +252,9 @@ async function baselineAdditions(before: Awaited<ReturnType<typeof snapshot>>, a
  const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
- expect(policies.map(p => [p.tablename, p.policyname, p.roles, p.cmd]).sort()).toEqual(tables.map(t => [t, "tenant_isolation", ["jobguard_migration"], "ALL"]).sort());
+ const policyRows = await Promise.all(policies.map(async p => [p.tablename, p.policyname,
+  (await f.admin.query("SELECT $1::name[]::text[] roles", [p.roles])).rows[0].roles, p.cmd]));
+ expect(policyRows.sort()).toEqual(tables.map(t => [t, "tenant_isolation", ["jobguard_migration"], "ALL"]).sort());
  for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
