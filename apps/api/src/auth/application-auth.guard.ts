@@ -2,13 +2,22 @@ import { Inject, Injectable, UnauthorizedException, ForbiddenException, type Can
 import { IDENTITY_APPLICATION, cookieToken, identityStatus, type IdentityHttpRequest } from "./identity-http.js";
 import type { IdentityApplication } from "./identity.application.js";
 import { syntheticSessionAllowed } from "./synthetic-session.js";
+const SUBSCRIPTION_PATHS=new Set(["GET /subscriptions/current","POST /subscriptions/commands"]);
 /** Fail closed before any Nest controller, including when Next is bypassed. */
 @Injectable()
 export class ApplicationAuthGuard implements CanActivate {
   constructor(@Inject(IDENTITY_APPLICATION) private readonly application:()=>IdentityApplication) {}
   async canActivate(context:ExecutionContext):Promise<boolean> {
-    const request=context.switchToHttp().getRequest<IdentityHttpRequest & {path:string}>();
+    const request=context.switchToHttp().getRequest<IdentityHttpRequest & {path:string;method?:string}>();
     if(request.path==="/healthz" || request.path.startsWith("/auth/"))return true;
+    // MON-2A (Ben, 28 Oct): exact subscription paths take a real company session with Origin and CSRF, checked
+    // before the practice shortcut; a practice cookie never reaches them. Every other money path is unchanged.
+    if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`)){
+      try {
+        await this.application().context({sessionToken:cookieToken(request),requestedTenantId:request.body?.requested_tenant_id,tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin??(request.method==="GET"?this.application().allowedOrigin:undefined)});
+      }catch(error){const {code}=identityStatus(error);if(code==="TENANT_FORBIDDEN"||code==="ORIGIN_FORBIDDEN")throw new ForbiddenException({code});throw new UnauthorizedException({code:"UNAUTHENTICATED"});}
+      return true;
+    }
     const syntheticCookie=request.headers.cookie?.split(";").map(part=>part.trim()).find(part=>part.startsWith("jg_session="))?.slice(11);
     if(syntheticSessionAllowed(syntheticCookie,process.env.JOBGUARD_ENV))return true;
     try {
