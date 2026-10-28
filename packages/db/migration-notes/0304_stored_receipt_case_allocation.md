@@ -130,3 +130,26 @@ fixes require another migration after merge.
 
 Green GitHub CI and an independent RED review against the pushed head remain
 necessary. Local test discovery is not database verification or review.
+
+## PR #383 repair round 2 — migration parsing
+
+Parenthesised the two CASE expressions in the receipt producer's approval IF
+predicates. PL/pgSQL otherwise treats the inner CASE's THEN as the end of the IF
+condition and reports 42601. Only expression grouping changed; approval,
+reversal, tenant/job binding, line caps and locked-bill controls are unchanged.
+All other CASE uses in IF conditions were already nested in parentheses or a
+parenthesised subquery. All ten dollar-quoted blocks close with semicolons and
+the script retains its final COMMIT.
+
+Added a local regression through the actual migrate() runner with a recording
+query connection: only 0304 is pending, and its complete file must be submitted
+in one query, with bookkeeping inserted before the final COMMIT. A separate
+regression protects both parenthesised approval predicates. This verifies
+submission and the known syntax fix; it does not execute or parse PostgreSQL.
+
+Validation: packages/db/node_modules/.bin/vitest run --root packages/db
+--maxWorkers=2 src/stored-receipt-migration.test.ts src/migrate-discovery.test.ts
+passed (2 files, 5 tests); node_modules/.bin/tsc -p
+packages/db/tsconfig.json --noEmit passed; git diff --check passed. PostgreSQL
+migration and database suites remain for GitHub CI. RED review remains required
+against the repaired head. No git writes, packages downloaded or listeners started.

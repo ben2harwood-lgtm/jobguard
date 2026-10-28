@@ -525,13 +525,13 @@ BEGIN
  request:=p;
  IF action IN('approve','reverse') THEN
   SELECT * INTO review FROM app.receipt_allocation_fact_review WHERE tenant_id=t AND job_id=j AND id=(p->>'reviewId')::uuid;
-  IF review.id IS NULL OR review.expires_at<=clock_timestamp() OR review.operation IS DISTINCT FROM CASE WHEN action='reverse' THEN 'reversal' ELSE 'receipt' END
+  IF review.id IS NULL OR review.expires_at<=clock_timestamp() OR review.operation IS DISTINCT FROM (CASE WHEN action='reverse' THEN 'reversal' ELSE 'receipt' END)
    OR EXISTS(SELECT 1 FROM app.receipt_allocation_fact_revision rf WHERE rf.tenant_id=t AND rf.review_id=review.id)
    OR NOT EXISTS(SELECT 1 FROM app.receipt_allocation_fact_command c WHERE c.tenant_id=t AND c.command_id=review.command_id AND c.actor_membership_id=actor.membership_id AND c.actor_identity_user_id=actor.identity_user_id)
   THEN RAISE EXCEPTION 'RECEIPT_LINE_APPROVAL_CHANGED' USING ERRCODE='23514'; END IF;
   SELECT payload INTO request FROM app.receipt_allocation_fact_command WHERE tenant_id=t AND command_id=review.command_id;
   IF request->>'version' IS DISTINCT FROM 'receipt-line-facts-command.v1'
-   OR request->>'action' IS DISTINCT FROM CASE WHEN action='reverse' THEN 'review_reverse' ELSE 'review' END
+   OR request->>'action' IS DISTINCT FROM (CASE WHEN action='reverse' THEN 'review_reverse' ELSE 'review' END)
   THEN RAISE EXCEPTION 'RECEIPT_LINE_APPROVAL_CHANGED' USING ERRCODE='23514'; END IF;
  END IF;
  IF expected<>(app.receipt_fact_watermark(t,j)->>'revision')::bigint THEN RAISE EXCEPTION 'RECEIPT_LINE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;

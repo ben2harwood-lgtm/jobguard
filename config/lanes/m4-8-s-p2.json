@@ -6,7 +6,7 @@
         "codex/sandbox/m4-8-s-p2"
       ],
       "receipt": "packages/db/migration-notes/0304_stored_receipt_case_allocation.md",
-      "note": "M4-8-S part 2 / PR #383 repair r1: RED neutral synthetic receipt producer, exact original-lock/descendant bindings, case allocations and reversals. Migration 0304 edited before merge. DB/browser execution in CI. The lane metadata path config/lanes/m4-8-s-p2.json is implicitly owned by this lane.",
+      "note": "M4-8-S part 2 / PR #383: retain merged behaviour and RED controls; round 2 parenthesises two approval CASE predicates in migration 0304 and adds complete-runner-submission regression coverage. Database execution remains in CI. The lane metadata path config/lanes/m4-8-s-p2.json is implicitly owned by this lane.",
       "allow": [
         "apps/api/src/receipt-line-allocation.application.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
@@ -19,6 +19,7 @@
         "packages/db/src/receipt-line-allocation-repository.ts",
         "packages/db/src/stored-receipt-case-allocation-repository.test.ts",
         "packages/db/src/stored-receipt-case-allocation-repository.ts",
+        "packages/db/src/stored-receipt-migration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/stored-receipt-case-allocation-upgrade.integration.test.ts",
