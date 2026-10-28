@@ -250,7 +250,7 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
-// SV6-PERSIST-A / C253: exactly 0213 additions. No predecessor exclusion or wildcard.
+// SV6-PERSIST-A / C253: exactly 0249 additions. No predecessor exclusion or wildcard.
 async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const tables=["recovery_attribution_revision","recovery_attribution_command","recovery_attribution_reassessment"];
