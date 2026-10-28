@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-capture-src": {
+      "branches": [
+        "codex/sandbox/sv5-capture-src"
+      ],
+      "note": "RED. The job's own walk-it capture text stops being a non-processable Final Check source (unblocks merged SV-5 completion). One routine restated; synthetic only.",
+      "allow": [
+        "packages/db/migrations/0257_final_check_capture_text_not_source.sql",
+        "packages/db/migration-notes/0257_final_check_capture_text_not_source.md",
+        "packages/db/test/final-check-capture-text.integration.test.ts"
+      ]
+    }
+  }
+}
