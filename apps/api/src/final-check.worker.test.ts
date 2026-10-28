@@ -26,3 +26,10 @@ it("SV5-19 same frozen inventory resumes after a recorded failure and explicitly
  const worker=new FinalCheckWorker({read:async()=>structuredClone(m),process:async()=>({version:"final-check.source-result.v1",inputHash:"a".repeat(64),status:"zero_result",failureCode:null,signalIds:[]}),record:async()=>{m.sources[0]!.status="zero_result";},reconcile},"synthetic_demo");
  expect(await worker.execute(await context(),{version:"final-check.task.v1",jobId,manifestId})).toEqual({runId:manifestId});expect(reconcile).toHaveBeenCalledTimes(1);
 });
+it("the job's own walk-it text is listed but never processed or recorded, and does not hold completion",async()=>{
+ const m=manifest();m.sources[0]!.sourceKind="builder_capture_not_scanned";m.sources[0]!.evidenceId=null;m.sources[0]!.processable=false;
+ const process=vi.fn(),record=vi.fn(),reconcile=vi.fn(async()=>({runId:manifestId}));
+ const worker=new FinalCheckWorker({read:async()=>structuredClone(m),process,record,reconcile},"synthetic_demo");
+ expect(await worker.execute(await context(),{version:"final-check.task.v1",jobId,manifestId})).toEqual({runId:manifestId});
+ expect(process).not.toHaveBeenCalled();expect(record).not.toHaveBeenCalled();expect(reconcile).toHaveBeenCalledTimes(1);
+});

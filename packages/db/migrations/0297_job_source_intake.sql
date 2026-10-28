@@ -4,6 +4,49 @@ BEGIN;
 -- (Ben, 23 Oct): an on-site note is first site evidence and waits for MON-1 place admission, so it
 -- is refused like "resume"; any new source after the final-account lock gets the linked-job refusal.
 -- No shadow table is read or written and no detection is scheduled from here.
+-- Extend only the existing command-identity kind list (last set in 0201), keeping every value.
+ALTER TABLE app.watchdog_command_identity DROP CONSTRAINT watchdog_command_identity_command_type_check;
+ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identity_command_type_check CHECK(command_type IN(
+ 'readiness.record','readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede',
+ 'supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place',
+ 'supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete',
+ 'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link',
+ 'JobSource.diary','JobSource.customer_message'));
+-- Expose the watchdog job SHARE lock as its own statement, after authority checks.
+-- Lifecycle validation stays in intake after replay: an old receipt remains readable
+-- after live. This helper grants no write or lifecycle override.
+CREATE FUNCTION app.sv7a_require_watchdog_live_lock(t uuid,j uuid,digest text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ BEGIN PERFORM app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+ BEGIN PERFORM app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+END $$;
+ALTER FUNCTION app.sv7a_require_watchdog_live_lock(uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.sv7a_require_watchdog_live_lock(uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
+GRANT EXECUTE ON FUNCTION app.sv7a_require_watchdog_live_lock(uuid,uuid,text) TO jobguard_runtime;
+
+-- Source inserts must retain the existing SHARE lock. Upgrading to UPDATE while
+-- another replay holds SHARE and waits for the command-id lock forms a cycle.
+-- Final-account lock and close/reopen writers still serialize through UPDATE.
+CREATE OR REPLACE FUNCTION app.job_source_insert_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+  OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND job_track='small_builder' AND environment='synthetic_demo')
+ THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF TG_TABLE_NAME<>'job_source_original' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.actor_membership_id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ END IF;
+ PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;
+ IF TG_TABLE_NAME<>'job_source_original' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.actor_membership_id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
+ PERFORM app.ch4_require_open(NEW.tenant_id,NEW.job_id);
+ PERFORM app.require_watchdog_live(NEW.job_id);
+ RETURN NEW;
+END $$;
+
 CREATE FUNCTION app.sv7a_intake_job_source(t uuid,j uuid,digest text,source text,input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; cid uuid; request_digest text; prior app.command_receipt; allowed text[]; txt text; raw bytea; h text;
@@ -71,8 +114,9 @@ BEGIN
  out_result:=jsonb_build_object('version','job-source-intake-receipt.v1','jobId',j,'sourceKind',source,'record',rec_json,'environment','synthetic_demo','realExternalActions',0)
   ||CASE WHEN source='diary' THEN jsonb_build_object('notice','Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.','noticeVersion','job-diary-notice.v1') ELSE '{}'::jsonb END;
  -- Identifiers and hashes only in the audit chain; never the note text.
- PERFORM app.append_final_lock_audit(audit_id,actor,j,CASE WHEN source='diary' THEN 'job_source.diary_recorded' ELSE 'job_source.customer_message_recorded' END,
-  jsonb_build_object('commandId',cid,'sourceId',sid,'evidenceId',ev),jsonb_build_object('sha256',h));
+ -- Same per-tenant chain as other lock/check events; this helper takes any event type (append_final_lock_audit allows only four).
+ PERFORM app.append_final_check_audit(audit_id,'membership:'||actor::text,j,CASE WHEN source='diary' THEN 'job_source.diary_recorded' ELSE 'job_source.customer_message_recorded' END,
+  jsonb_build_object('commandId',cid,'sourceId',sid,'evidenceId',ev,'sha256',h));
  UPDATE app.command_receipt SET status='succeeded',result=out_result,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
  BEGIN PERFORM app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
  RETURN out_result;

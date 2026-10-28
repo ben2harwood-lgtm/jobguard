@@ -5,13 +5,14 @@
       "branches": [
         "codex/sandbox/sv7a-intake"
       ],
-      "note": "RED SV-7A intake writer: off-site diary notes and owner-entered fictional customer messages through one checked SQL routine (0248). On-site notes held for MON-1 place admission; post-lock refused with the linked-job offer. No shadow access, no detection scheduling, no UI.",
+      "note": "RED SV-7A intake writer: off-site diary notes and owner-entered fictional customer messages through one checked SQL routine (0297). On-site notes held for MON-1 place admission; post-lock refused with the linked-job offer. No shadow access, no detection scheduling, no UI.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/job-source.application.ts",
         "apps/api/src/job-source.controller.test.ts",
         "apps/api/src/job-source.controller.ts",
         "apps/api/src/job-source.errors.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "apps/api/src/workspace/application.ts",
         "apps/web/app/api/jobs/[id]/customer-messages/route.test.ts",
         "apps/web/app/api/jobs/[id]/customer-messages/route.ts",
@@ -20,10 +21,16 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0248_job_source_intake.md",
-        "packages/db/migrations/0248_job_source_intake.sql",
+        "packages/db/migration-notes/0297_job_source_intake.md",
+        "packages/db/migrations/0297_job_source_intake.sql",
         "packages/db/src/job-source-repository.ts",
-        "packages/db/test/job-source-intake.integration.test.ts"
+        "packages/db/src/watchdog.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/job-source-intake.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/watchdog-command-harness.ts",
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts",
+        "packages/db/test/watchdog-lock-order.integration.test.ts"
       ]
     }
   }

@@ -43,7 +43,9 @@ const finalCheck:Record<string,string>={
  "app.complete_final_check(uuid,uuid,uuid,jsonb)":"jobguard_shadow",
  "app.read_final_check_reveal(uuid,uuid,text)":"jobguard_runtime",
  "app.record_final_check_disposition(uuid,uuid,text,jsonb)":"jobguard_runtime",
- "app.read_final_check_disputes(uuid,uuid,text)":"jobguard_runtime"};
+ "app.read_final_check_disputes(uuid,uuid,text)":"jobguard_runtime",
+ // SV-5 Q2 (0281): the reviewed catch confirmation, runtime-only like the disposition.
+ "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"jobguard_runtime"};
 const finalCheckCalls:Record<string,string>={
  "app.begin_final_check(uuid,uuid,text,text)":"SELECT app.begin_final_check($1::uuid,$1::uuid,'x','x')",
  "app.read_final_check_manifest(uuid,uuid,uuid)":"SELECT app.read_final_check_manifest($1::uuid,$1::uuid,$1::uuid)",
@@ -51,7 +53,8 @@ const finalCheckCalls:Record<string,string>={
  "app.complete_final_check(uuid,uuid,uuid,jsonb)":"SELECT app.complete_final_check($1::uuid,$1::uuid,$1::uuid,'[]'::jsonb)",
  "app.read_final_check_reveal(uuid,uuid,text)":"SELECT app.read_final_check_reveal($1::uuid,$1::uuid,'x')",
  "app.record_final_check_disposition(uuid,uuid,text,jsonb)":"SELECT app.record_final_check_disposition($1::uuid,$1::uuid,'x','{}'::jsonb)",
- "app.read_final_check_disputes(uuid,uuid,text)":"SELECT app.read_final_check_disputes($1::uuid,$1::uuid,'x')"};
+ "app.read_final_check_disputes(uuid,uuid,text)":"SELECT app.read_final_check_disputes($1::uuid,$1::uuid,'x')",
+ "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"SELECT app.confirm_final_check_catch($1::uuid,$1::uuid,'x','{}'::jsonb)"};
 const finalCheckRuntime=Object.keys(finalCheck).filter(sig=>finalCheck[sig]==="jobguard_runtime");
 const tables=["shadow_commercial_signal","shadow_signal_evidence","shadow_signal_ineligibility","shadow_reconciliation_run","shadow_signal_classification","shadow_signal_disposition","shadow_disclosure_event","shadow_break_glass_access"];
 it("registers the issued expand migration",()=>{expect(MIGRATION_URLS.map(u=>u.pathname)).toContain(migrationURL.pathname)});
@@ -81,14 +84,14 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Catalog scan catches a newly added callable helper reaching any shadow table.
   const helpers=(await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AND p.proname<>'reveal_shadow_signals' AND p.oid<>ALL($2::text[]::regprocedure[]::oid[]) AND (p.prosrc ~ 'shadow_(commercial_signal|signal_|reconciliation_run|disclosure_event|break_glass_access)' OR EXISTS(SELECT 1 FROM pg_depend d JOIN pg_class c ON c.oid=d.refobjid WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND c.relname=ANY($1)))`,[tables,finalCheckRuntime])).rows;
   expect(helpers).toEqual([]);
-  // SV-5: each of the seven routines exists at its exact signature, is migration-owned SECURITY DEFINER with the
+  // SV-5: each of the eight routines exists at its exact signature, is migration-owned SECURITY DEFINER with the
   // pinned path, and has exactly one non-owner EXECUTE grantee (no PUBLIC). No same-name overload exists.
   const pinned=(await admin.query(`SELECT s AS sig,pg_get_userbyid(p.proowner) AS owner,p.prosecdef,p.proconfig,ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type='EXECUTE' AND a.grantee<>p.proowner ORDER BY 1)::text[] AS grantees
    FROM unnest($1::text[]) s JOIN pg_proc p ON p.oid=s::regprocedure`,[Object.keys(finalCheck)])).rows;
-  expect(pinned).toHaveLength(7);
+  expect(pinned).toHaveLength(8);
   for(const row of pinned){expect(row).toMatchObject({owner:"jobguard_migration",prosecdef:true,grantees:[finalCheck[row.sig]]});expect(row.proconfig).toContain("search_path=pg_catalog, app");}
   const names=Object.keys(finalCheck).map(sig=>sig.slice(4,sig.indexOf("(")));
-  expect((await admin.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1)",[names])).rows[0].n).toBe(7);
+  expect((await admin.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1)",[names])).rows[0].n).toBe(8);
  });
  it("closes inherited PUBLIC EXECUTE: neither new role can run an app routine beyond SV-2's explicit grants",async()=>{
   // 0128 gives both roles USAGE on schema app for the first time. Four older SECURITY DEFINER routines there had

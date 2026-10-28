@@ -5,11 +5,15 @@
       "branches": [
         "codex/sandbox/sv7a-pages"
       ],
-      "note": "RED SV-7A diary and customer-message pages over the checked intake writer (PR 354): standing notice only, on-site flag shown disabled until MON-1 admission, fictional customer name kept separate. UI and browser test only.",
+      "note": "RED SV-7A pages + SV7A-INT-O: standing notice only, session-bound intake 0297, Test O through createFinalCheckWorker, replay and locked-account attacks. Database and browser proofs run in CI.",
       "allow": [
         "apps/web/app/ui/job-sources.tsx",
         "apps/web/app/ui/workspace-shell.tsx",
-        "apps/web/e2e/SV-7A.spec.ts"
+        "apps/web/e2e/SV-7A.spec.ts",
+        "apps/api/src/job-source.application.test.ts",
+        "packages/db/test/job-source-test-o.integration.test.ts",
+        "packages/db/test/job-source-intake.integration.test.ts",
+        "config/lanes/sv7a-pages.json"
       ]
     }
   }
