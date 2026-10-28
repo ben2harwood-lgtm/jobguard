@@ -4,6 +4,14 @@ BEGIN;
 -- (Ben, 23 Oct): an on-site note is first site evidence and waits for MON-1 place admission, so it
 -- is refused like "resume"; any new source after the final-account lock gets the linked-job refusal.
 -- No shadow table is read or written and no detection is scheduled from here.
+-- Extend only the existing command-identity kind list (last set in 0201), keeping every value.
+ALTER TABLE app.watchdog_command_identity DROP CONSTRAINT watchdog_command_identity_command_type_check;
+ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identity_command_type_check CHECK(command_type IN(
+ 'readiness.record','readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede',
+ 'supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place',
+ 'supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete',
+ 'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link',
+ 'JobSource.diary','JobSource.customer_message'));
 CREATE FUNCTION app.sv7a_intake_job_source(t uuid,j uuid,digest text,source text,input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; cid uuid; request_digest text; prior app.command_receipt; allowed text[]; txt text; raw bytea; h text;
@@ -71,8 +79,9 @@ BEGIN
  out_result:=jsonb_build_object('version','job-source-intake-receipt.v1','jobId',j,'sourceKind',source,'record',rec_json,'environment','synthetic_demo','realExternalActions',0)
   ||CASE WHEN source='diary' THEN jsonb_build_object('notice','Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.','noticeVersion','job-diary-notice.v1') ELSE '{}'::jsonb END;
  -- Identifiers and hashes only in the audit chain; never the note text.
- PERFORM app.append_final_lock_audit(audit_id,actor,j,CASE WHEN source='diary' THEN 'job_source.diary_recorded' ELSE 'job_source.customer_message_recorded' END,
-  jsonb_build_object('commandId',cid,'sourceId',sid,'evidenceId',ev),jsonb_build_object('sha256',h));
+ -- Same per-tenant chain as other lock/check events; this helper takes any event type (append_final_lock_audit allows only four).
+ PERFORM app.append_final_check_audit(audit_id,'membership:'||actor::text,j,CASE WHEN source='diary' THEN 'job_source.diary_recorded' ELSE 'job_source.customer_message_recorded' END,
+  jsonb_build_object('commandId',cid,'sourceId',sid,'evidenceId',ev,'sha256',h));
  UPDATE app.command_receipt SET status='succeeded',result=out_result,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
  BEGIN PERFORM app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
  RETURN out_result;
