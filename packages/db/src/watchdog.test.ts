@@ -18,8 +18,8 @@ function fixture(tables: SourceTable[]) {
   const input = spec();
   const query = vi.fn(async (sql: string) => {
     if (sql.includes("pg_catalog.to_regclass")) return { rows: [...present].map(name => ({ name })) };
-    if (sql.includes("FROM app.planned_work_revision")) {
-      const rows = [...legacy];
+    if (sql.includes("FROM app.planned_work_revision") || sql.startsWith("SELECT 'JobSource.")) {
+      const rows = sql.includes("FROM app.planned_work_revision") ? [...legacy] : [];
       for (const table of Object.keys(sourceKinds) as SourceTable[]) if (sql.includes(`FROM ${table} `)) {
         if (!present.has(table)) throw new Error(`relation "${table}" does not exist`);
         if (owned.has(table)) rows.push({ kind: sourceKinds[table], job_id: input.jobId });

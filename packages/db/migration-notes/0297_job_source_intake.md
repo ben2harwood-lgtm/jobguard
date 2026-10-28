@@ -34,3 +34,8 @@ Repair round 2: the shared legacy-ID lookup checks source-table presence through
 `to_regclass` before including either source in its SQL. Pre-0164 upgrade fixtures
 keep working, and current schemas still refuse IDs owned by either source kind.
 Presence is checked per claim in the same transaction, with no cross-upgrade cache.
+
+Repair round 3: CSG-01 found a new unresolved dynamic-SQL edge in round 2,
+rather than stale exception fingerprints. The lookup now uses a fixed query for
+each present source table and combines the returned ownership rows before the
+same refusal check. No guard exception or fingerprint was changed.

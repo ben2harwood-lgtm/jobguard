@@ -613,6 +613,8 @@ function replayPool(select: (sql: string) => object[] | undefined) {
     if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") {
       return { rows: [{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }], rowCount: 2 };
     }
+    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+      sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return { rows: [], rowCount: 0 };
     if (sql.includes("UNION ALL")) return { rows: [], rowCount: 0 };
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return { rows: [{ command_id: replayCommand }], rowCount: 1 };
     throw new Error(`Unexpected replay query: ${sql}`);
