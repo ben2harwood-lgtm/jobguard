@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 /** Whole seconds since the epoch (JWT NumericDate). Milliseconds are never accepted under these names. */
 const seconds = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -29,7 +29,7 @@ const syncSourceRowV1 = z.object({ tenantId: uuid, jobId: uuid }).passthrough();
 /** Authority is parsed separately so that a missing or malformed value is an authority refusal, never an invalid request. */
 export const syncDownloadFactsV1 = z.object({
  version: z.literal("sync-download-facts.v1"), ...head, request: syncSubscriptionRequestV1,
- authority: z.unknown(), source: z.array(syncSourceRowV1).max(200000),
+ authority: z.unknown().optional(), source: z.array(syncSourceRowV1).max(200000),
 }).strict();
 
 export const syncJobProjectionV1 = z.object({
@@ -157,7 +157,7 @@ export const syncTokenClaimsV1 = z.object({
 export type SyncTokenClaimsV1 = z.infer<typeof syncTokenClaimsV1>;
 
 const syncTokenInputV1 = z.object({
- version: z.literal("sync-token-input.v1"), ...head, facts: z.unknown(), generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+ version: z.literal("sync-token-input.v1"), ...head, facts: z.unknown().optional(), generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
  issuedAtSeconds: seconds, expiresAtSeconds: seconds, audience: z.string().min(1).max(100),
 }).strict();
 
