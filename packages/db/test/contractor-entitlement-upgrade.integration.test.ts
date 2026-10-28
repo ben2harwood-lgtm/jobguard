@@ -33,6 +33,16 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_scope":[],
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
+ "app.billing_allocation_run":[],
+ "app.billing_application_event":[],
+ "app.billing_export_batch":[],
+ "app.billing_export_delivery":[],
+ "app.billing_export_line":[],
+ "app.billing_fact":[],
+ "app.billing_line_match":[],
+ "app.billing_quarantine":[],
+ "app.billing_status_import":[],
+ "app.contractor_receipt_line_allocation":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
