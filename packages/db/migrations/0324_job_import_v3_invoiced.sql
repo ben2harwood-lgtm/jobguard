@@ -1,12 +1,14 @@
 BEGIN;
 -- Invoiced imports never enter the live meter. Live admission remains at MON-1's held seam.
+-- Preserve every shape accepted by 0109, including historical capped v3 imports.
+-- Only the new invoiced v3 writer adds an imported baseline with no cap.
 ALTER TABLE app.job DROP CONSTRAINT job_baseline_shape;
 ALTER TABLE app.job ADD CONSTRAINT job_baseline_shape CHECK (
  (baseline_quote_version_id IS NULL AND accepted_net_value_pence IS NULL AND fee_policy_version IS NULL AND recovery_cap_pence IS NULL)
  OR (provenance='system_generated_quote' AND baseline_quote_version_id IS NOT NULL AND accepted_net_value_pence IS NOT NULL AND fee_policy_version IS NOT NULL AND
  ((fee_policy_version='reference_fee_policy_v3' AND recovery_cap_pence IS NULL) OR (fee_policy_version<>'reference_fee_policy_v3' AND recovery_cap_pence IS NOT NULL)))
  OR (provenance='imported' AND baseline_quote_version_id IS NULL AND accepted_net_value_pence IS NOT NULL AND fee_policy_version IS NOT NULL AND
- ((fee_policy_version='reference_fee_policy_v3' AND recovery_cap_pence IS NULL AND status='invoiced') OR (fee_policy_version<>'reference_fee_policy_v3' AND recovery_cap_pence IS NOT NULL)))
+ (recovery_cap_pence IS NOT NULL OR (fee_policy_version='reference_fee_policy_v3' AND recovery_cap_pence IS NULL AND status='invoiced')))
 );
 CREATE TABLE app.job_import_v3 (
  tenant_id uuid NOT NULL, id uuid NOT NULL, job_id uuid NOT NULL, source_job_id uuid NOT NULL,
@@ -32,7 +34,7 @@ GRANT SELECT ON app.job_import_v3 TO jobguard_runtime;
 CREATE TRIGGER imported_v3_immutable BEFORE UPDATE OR DELETE ON app.job_import_v3
  FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
 
--- Separate signature preserves 0224's private refusal and its compatibility tests.
+-- Separate signature preserves 0323's private refusal and its compatibility tests.
 CREATE FUNCTION app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE actor uuid; b app.job_party_binding; expected jsonb; h text; target uuid;

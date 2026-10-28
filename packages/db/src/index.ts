@@ -133,5 +133,7 @@ export * from "./final-check-source-reader.js";
 
 export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
 
+export * from "./meter-today-repository.js";
+export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 export * from "./enterprise-baseline-repository.js";
 export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";

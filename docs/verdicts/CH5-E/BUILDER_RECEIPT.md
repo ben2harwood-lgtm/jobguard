@@ -1,3 +1,70 @@
+## Repair round 1 for PR #386 — 28 October 2026
+
+RED; synthetic data only. This entry supersedes the earlier renumber-only state.
+No Git index writes, commit, push, PostgreSQL start, provider or release action.
+
+Cause and changes:
+
+- 0324's replacement baseline constraint rejected capped imported v3 rows that
+  0109 already accepted, breaking the recovery terms/timing fixtures and upgrade
+  compatibility. Restored that predecessor branch, while keeping the new
+  cap-free v3 import restricted to invoiced jobs. The checked writer body and
+  its grants are unchanged. Added a populated historical capped-v3 upgrade
+  regression and a cap-free-live refusal assertion; these require PostgreSQL CI.
+- The shared legacy PostgreSQL fixture hook pre-bound parties for an invoiced
+  import before the actual writer bound its supplied parties. Narrowed the hook
+  to leave the controlled invoiced-import path to the real writer. Existing
+  positive/replay/isolation assertions remain intact; no product grant changed.
+- Entitlement-upgrade's exact successor row list omitted app.job_import_v3.
+  Added that one table only. SERIOUS-B5's existing exact CH-5 additions and the
+  incoming main expectations are retained.
+- LP0-17's recorded routine identity list omitted adopt_invoiced_job_v3. Added
+  its source-derived protection record, new-table RLS/policy/trigger records,
+  and source/test references in the existing authority group. No bulk refresh
+  or extra grants. Both sides' inventory entries remain present.
+- Resolved the core barrel conflict by keeping both job-import-v3 and
+  meter-today exports. Updated 0323's upgrade predecessor to main's 0301.
+- Archived the inherited CH5-B/P lane JSON files, preserving their bytes, into
+  docs/archive/lanes. The sole active CH5-E lane lists exactly the real payload
+  against MERGE_HEAD, excluding lane metadata (its own file is implicit).
+- The optional changed-test typecheck found the existing insertPhoto default
+  indexed a possibly undefined enum option. Named the same pre_cover_photo
+  enum member explicitly, preserving the fixture's default behavior.
+
+Local validation actually executed:
+
+- Core TypeScript build, DB/API/web TypeScript checks: passed.
+- Changed PostgreSQL test TypeScript check via
+  `tsc -p /tmp/ch5-e-test-typecheck.json --noEmit`: passed after fixing the
+  existing fixture default type error.
+- API Vitest, maxWorkers=1: job-import-v3.application.test.ts and
+  imported-shadow-source-adapter.test.ts: 8 tests passed.
+- Core Vitest, maxWorkers=1: job-import-v3.test.ts and
+  imported-baseline-sources.test.ts: 20 tests passed.
+- Web route Vitest, maxWorkers=1: import-v3/route.test.ts: 3 tests passed.
+- DB scripted-transport describe selected by name, maxWorkers=1:
+  job-import-v3.integration.test.ts: 12 source-only tests passed. The 3
+  PostgreSQL tests were excluded from this local selection, remain unchanged
+  and mandatory in CI.
+- migrate-discovery.test.ts: 3 tests passed. An initial run also selected the
+  PostgreSQL describe in job-import-v3.integration.test.ts; its setup failed
+  at freePort because localhost binding is unavailable. No PostgreSQL result
+  is claimed and the database was not started.
+- LP-0 parse/path completeness and HEAD/MERGE_HEAD inventory union: passed.
+  Source comparison confirms the checked writer body and GRANT lines unchanged.
+- Exact payload/lane coverage against incoming main and archived lane-byte
+  comparisons: passed. Standard local lint still rejects pending merge/index
+  artifacts against old HEAD; the router must stage/finalize the merge outside
+  this read-only Git sandbox. No boundary enforcement was weakened.
+- git diff --check: passed.
+
+Remaining hold: the two CH-5 browser failures are not diagnosed from the supplied
+summary. GitHub API access failed in this sandbox; requested the first browser
+assertion/trace to identify its cause. No speculative UI change, skipped browser
+assertion or claim of a fixed browser journey. The listed DB failures need their
+real PostgreSQL CI rerun; source inspection and local unit checks are not DB
+verification or independent RED review.
+
 ## Renumber-only catch-up for PR #386 — 28 October 2026
 
 Renamed 0224_job_import_v3 to 0323_job_import_v3 and
