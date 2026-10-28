@@ -11,7 +11,7 @@ import {
   MIGRATION_URLS, migrate, withTenant, requireLiveJob, JobRepository,
   PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository,
   DiscrepancyRepository, ReadinessRepository, InboxRelevanceRepository,
-  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, JobWorkStateRepository,
+  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, JobWorkStateRepository, JobSourceRepository,
 } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
@@ -88,6 +88,7 @@ function attempts(jobId: string, uploadId: string) {
     ["beginUpload", () => evidence.beginUpload(context, { id: commandId, jobId, expectedSha256: "a".repeat(64), contentType: "image/png", maximumBytes: 100, expiresAt: new Date("2099-01-01") })],
     ["finalize", () => evidence.finalize(context, { uploadId, objectVersionId: "fictional-v1", evidenceType: "electrical_certificate" })],
     ["complete", () => proof.complete(context, { version: "proof.complete.v1", commandId, actorMembershipId: member, jobId, scopeItemId: id, stage: "electrical-stage", evidenceId: id, requiredEvidenceType: "electrical_certificate", decisionId: null })],
+    ["intake", () => new JobSourceRepository(runtime).intake(context, jobId, member, "diary", { version: "job-diary-input.v1", commandId, entryMode: "typed", onSite: false, text: "Fictional note." })],
   ] as const;
 }
 async function counts() {
