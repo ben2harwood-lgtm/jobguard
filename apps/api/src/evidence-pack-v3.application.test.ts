@@ -21,14 +21,14 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("CH-8 part 2 checked worker dispatch", () => {
-  it("refuses v3 generation and approval before any request or legacy writer while SV-6 is unbound", async () => {
-    await expect(app().generate(id, id, generation)).rejects.toThrow("EVIDENCE_PACK_V3_DEPENDENCY_HELD");
-    await expect(app().approveAttachment(id, id, id, approval)).rejects.toThrow("EVIDENCE_PACK_V3_DEPENDENCY_HELD");
-    expect(EvidencePackV3Repository.prototype.request).not.toHaveBeenCalled();
-    expect(EvidencePackV3Repository.prototype.read).not.toHaveBeenCalled();
+  it("queues v3 generation and exact path-bound approval without a legacy write", async () => {
+    await app().generate(id, id, generation);
+    expect(EvidencePackV3Repository.prototype.request).toHaveBeenLastCalledWith({ tenantId: id }, id, digest, generation);
+    await app().approveAttachment(id, id, id.toUpperCase(), approval);
+    expect(EvidencePackV3Repository.prototype.request).toHaveBeenLastCalledWith({ tenantId: id }, id, digest, { ...approval, packId: id });
+    expect(EvidencePackV3Repository.prototype.read).toHaveBeenCalledTimes(2);
     expect(EvidencePackRepository.prototype.generate).not.toHaveBeenCalled();
     expect(EvidencePackRepository.prototype.approveAttachment).not.toHaveBeenCalled();
-    expect(EvidencePackRepository.prototype.list).not.toHaveBeenCalled();
   });
   it.each(["UNAUTHENTICATED", "NOT_FOUND", "FORBIDDEN", "SYNTHETIC_MODE_REQUIRED"])("%s precedes parsing or dependency disclosure", async code => {
     vi.mocked(PracticeAccess.prototype.case).mockRejectedValue(new Error(code));

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-7c": {
+      "branches": [
+        "codex/sandbox/ent-7c"
+      ],
+      "note": "ENT-7c RED PR #359 catch-up onto current main: union shared expectation lists only; migration 0298 SQL unchanged; synthetic only.",
+      "allow": [
+        "packages/db/migrations/0298_enterprise_fee_posting.sql",
+        "packages/db/migration-notes/0298_enterprise_fee_posting.md",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}

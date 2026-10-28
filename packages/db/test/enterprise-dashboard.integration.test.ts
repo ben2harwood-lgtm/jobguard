@@ -86,6 +86,25 @@ describe("ENT-9B scoped persisted reads", () => {
     expect((await read(s)).report.closeoutRate).toMatchObject({ status: "computed", numerator: 1, denominator: 1 });
     expect((await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows).toEqual(before);
   });
+  it("[E9D] close-out observations cite only covered visits, are replay-stable and disappear after reassignment", async () => {
+    const w = await chainWorld(c), other = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime);
+    for (const subject of [w, other]) for (let i = 0; i < 5; i++) {
+      const actor = subject.members.operative.member;
+      const started = await visits.startVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId });
+      await visits.completeVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
+    }
+    const first = (await read(s)).signals;
+    expect(first.observations.filter(o => o.kind === "no_closeout_observation")).toHaveLength(1);
+    expect(first.observations[0]!.jobId).toBe(w.jobId);
+    const sources = (await c.admin.query("SELECT id FROM app.closeout_answer WHERE tenant_id=$1 ORDER BY id", [w.p.tenantId])).rows.map(r => r.id);
+    expect(first.observations[0]!.sourceIds).toEqual(sources);
+    expect(JSON.stringify(first)).not.toContain(other.jobId);
+    expect((await read(s)).signals).toEqual(first);
+    await command(c, w, { kind: "team.move", membershipId: w.members.operative.member.membershipId, fromTeamId: w.demo.teamId, toTeamId: w.otherDemo.teamId });
+    const after = (await read(s)).signals;
+    expect(after.observations).toEqual([]);
+    for (const source of sources) expect(JSON.stringify(after)).not.toContain(source);
+  });
   it("[E9-14 E9-26 E9-28 E9-31] reads and observations preserve canonical business rows and give runtime no new privilege", async () => {
     const w = await chainWorld(c), s = await session(w);
     await new SiteExtraRepository(c.runtime).logSorSiteExtra(w.ctx, w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });

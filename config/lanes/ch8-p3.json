@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch8-p3": {
+      "branches": [
+        "codex/sandbox/ch8-p3"
+      ],
+      "receipt": "docs/verdicts/CH8-P3/BUILDER_RECEIPT.md",
+      "note": "RED CH-8 part 3: synthetic v3 activation, source-to-settlement pack journey, canonical parity and pre-lock isolation. Built on ch8-rest plus sv6-hookup; shared source edits serialize. CI PostgreSQL/browser execution and independent Claude review required.",
+      "allow": [
+        "apps/api/src/evidence-pack-v3.application.test.ts",
+        "apps/api/src/evidence-pack-v3.controller.test.ts",
+        "apps/api/src/evidence-pack.application.ts",
+        "apps/web/e2e/CH-8.spec.ts",
+        "docs/contracts/evidence-pack-v3.md",
+        "docs/operations/evidence-pack-v3.md",
+        "docs/verdicts/CH8-P3/BUILDER_RECEIPT.md",
+        "packages/db/migration-notes/0327_evidence_pack_v3_activation.md",
+        "packages/db/migrations/0306_evidence_pack_v3.sql",
+        "packages/db/migrations/0327_evidence_pack_v3_activation.sql",
+        "packages/db/src/index.ts",
+        "packages/db/test/evidence-pack-v3-activation-upgrade.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-catch-fixture.ts",
+        "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-post-lock.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts"
+      ]
+    }
+  }
+}

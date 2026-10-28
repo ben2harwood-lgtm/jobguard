@@ -107,6 +107,7 @@ export function deriveAttributionBillingPaymentProof(raw: unknown) {
     }
     if (p.allocation === null) paymentFailures.push("missing_allocation_proof");
     else {
+      if (b && BigInt(p.allocation.net.numerator) > BigInt(b.invoiceLine.netPence) * BigInt(p.allocation.net.denominator)) paymentFailures.push("allocation.exceeds_line_net");
       if (BigInt(p.allocation.net.numerator) === 0n) paymentFailures.push("allocation.zero");
       if (p.allocation.tenantId !== t.tenantId) paymentFailures.push("allocation.tenantId");
       if (p.allocation.jobId !== t.jobId) paymentFailures.push("allocation.jobId");

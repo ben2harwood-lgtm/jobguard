@@ -133,3 +133,7 @@ export * from "./final-check-source-reader.js";
 
 export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
 export * from "./evidence-pack-v3-repository.js";
+export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
+export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
+
+export * from "./enterprise-baseline-repository.js";
