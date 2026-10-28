@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { Pool } from "pg";
-import { groupShadowProposals, observationV1, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
+import { randomUUID } from "node:crypto";
+import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
+import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
+import { decodeJobSourceFixture } from "./job-source-fixtures.js";
+import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
 const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.guid({ error: "Invalid uuid" }),
@@ -144,4 +148,59 @@ export class FinalCheckCompletionRepository {
    return {checkId:c.checkId,runId:c.runId};
   });}catch(error){return typed(error);}
  }
+}
+
+/** SV-5 Q6 practice run (Ben, 28 Oct). Worker-only ports for FinalCheckWorker. Each frozen source is examined
+ * honestly: diary/message originals through the reviewed fixture decoder (read with the runtime login), the
+ * generated practice proof photo through a practice-only reader, and anything else is "unsupported", never a
+ * claimed zero result. Reconciliation is the same pure rule as the test harness. */
+export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string) {
+  const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
+  const practicePhoto = "Practice photo: painted walls";
+  async function observe(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]) {
+    const base = { version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
+      evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } };
+    if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
+      const kind = s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request";
+      const row = await withTenant(runtimePool, context, async db => (await db.$client.query<{ text: string; ref: string | null }>(
+        "SELECT convert_from(bytes,'UTF8') text,synthetic_fixture_ref ref FROM app.job_source_original WHERE tenant_id=$1 AND evidence_id=$2", [context.tenantId, s.evidenceId])).rows[0]);
+      const decoded = row ? decodeJobSourceFixture(row.ref, row.text, kind) : null;
+      return decoded ? observationV1.parse({ ...base, kind, ...decoded }) : null;
+    }
+    if (s.sha256 === practicePhotoSha256) return observationV1.parse({ ...base, kind: "completion_photo", text: practicePhoto,
+      facts: { workReference: "practice:painted-walls", scopeArea: "job", description: "painted walls", status: "completed", estimatedValuePence: null, safetyImplication: false,
+        customerClearlyRequested: false, needsPriorWrittenAgreement: false, significantWork: null, activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false },
+      citations: [{ start: 0, end: practicePhoto.length, quote: practicePhoto }] });
+    return null;
+  }
+  return {
+    read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
+    async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+      if (s.evidenceId === null && s.processable) {
+        const decoded = await readPracticeStructuredSource(runtimePool, context, m, s);
+        return { version: "final-check.source-result.v1", inputHash: s.inputHash,
+          status: decoded ? "zero_result" : "unsupported", failureCode: decoded ? null : "UNSUPPORTED_SOURCE", signalIds: [] };
+      }
+      const observation = s.processable ? await observe(context, m, s) : null;
+      if (!observation || observationMustSurface(observation).firedRules.length)
+        return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: s.processable ? "UNSUPPORTED_SOURCE" : "SOURCE_INVALID", signalIds: [] };
+      const captures = m.comparisons.captures.map(c => shadowCaptureV1.parse(c));
+      await sink.persist(context, { version: "shadow-detection-batch.v1", jobId: m.comparisons.jobId, observations: [observation], captures, proposals: detectShadowObservations([observation], captures, new Date().toISOString()) });
+      const fresh = await repo.manifest(context, m.comparisons.jobId, m.id), signalIds = fresh.signals.filter(x => x.evidenceIds.includes(s.evidenceId!)).map(x => x.signalId);
+      return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: signalIds.length ? "detected" : "zero_result", failureCode: null, signalIds };
+    },
+    record: (context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number], result: FinalCheckSourceResult) => repo.record(context, m.comparisons.jobId, m.id, s.id, randomUUID(), result),
+    async reconcile(context: VerifiedTenantContext, m: FinalCheckManifest) {
+      if (m.result) return { runId: m.result.runId, lockId: m.result.lockId, zeroResult: m.result.zeroResult };
+      const baseline = m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
+        revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
+      const locked = { ...m.comparisons, captures: [...m.comparisons.captures, ...baseline] };
+      const classifications = m.signals.map(s => {
+        const result = reconcileFinalCheck({ tenantId: context.tenantId, jobId: m.comparisons.jobId, signalId: s.signalId, description: s.description, scopeArea: "job", scopeItemId: s.scopeItemId,
+          coalescedIntoSignalId: s.coalescedIntoSignalId, hasEvidence: s.evidenceIds.length > 0, permanentExclusion: s.permanentExclusion }, locked);
+        return { signalId: s.signalId, expectedRevision: s.revision, ...result, comparisons: { ...result.comparisons, captureIds: m.comparisons.captures.map(c => shadowCaptureV1.parse(c).id) } };
+      });
+      return repo.reconcile(context, m.comparisons.jobId, m.id, classifications);
+    },
+  };
 }
