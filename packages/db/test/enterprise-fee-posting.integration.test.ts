@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
 
-// CI ONLY. ENT-7c: posting into platform_enterprise_fee from an approved statement (migration 0291).
+// CI ONLY. ENT-7c: posting into platform_enterprise_fee from an approved statement (migration 0298).
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await cluster(); }, 240000);
 afterAll(async () => { await c?.close(); });

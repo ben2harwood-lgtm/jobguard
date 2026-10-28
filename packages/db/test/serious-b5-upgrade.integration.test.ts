@@ -129,7 +129,7 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
-// ENT-7c (0291): only the fee book's two tables, their indexes, policies and three routines.
+// ENT-7c (0298): only the fee book's two tables, their indexes, policies and three routines.
 async function enterprisePostingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["platform_enterprise_fee", "platform_enterprise_fee_line"];
  const indexNames = ["platform_enterprise_fee_pkey", "platform_enterprise_fee_line_pkey",

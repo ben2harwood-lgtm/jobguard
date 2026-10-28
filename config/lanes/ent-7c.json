@@ -5,10 +5,10 @@
       "branches": [
         "codex/sandbox/ent-7c"
       ],
-      "note": "ENT-7c RED catch-up onto main: migration 0291 fee posting, compensation and unchanged-next-month regression; synthetic only.",
+      "note": "ENT-7c RED catch-up onto main: migration 0298 fee posting, compensation and unchanged-next-month regression; synthetic only.",
       "allow": [
-        "packages/db/migrations/0291_enterprise_fee_posting.sql",
-        "packages/db/migration-notes/0291_enterprise_fee_posting.md",
+        "packages/db/migrations/0298_enterprise_fee_posting.sql",
+        "packages/db/migration-notes/0298_enterprise_fee_posting.md",
         "packages/db/src/enterprise-fee-repository.ts",
         "packages/db/test/enterprise-fee-posting.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
