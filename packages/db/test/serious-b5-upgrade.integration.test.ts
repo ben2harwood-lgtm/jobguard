@@ -129,7 +129,7 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
-// ENT-7 leftovers (0294): one private correction table and one checked command only.
+// ENT-7 leftovers (0299): one private correction table and one checked command only.
 async function enterpriseReconciliationAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["enterprise_duplicate_correction"];
  const indexNames = ["enterprise_duplicate_correction_pkey", "enterprise_duplicate_correction_tenant_id_command_id_key", "enterprise_duplicate_correction_tenant_id_link_id_key"];
@@ -153,7 +153,7 @@ async function enterpriseReconciliationAdditions(before: Awaited<ReturnType<type
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
 
-// ENT-7c (0291): only the fee book's two tables, their indexes, policies and three routines.
+// ENT-7c (0298): only the fee book's two tables, their indexes, policies and three routines.
 async function enterprisePostingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["platform_enterprise_fee", "platform_enterprise_fee_line"];
  const indexNames = ["platform_enterprise_fee_pkey", "platform_enterprise_fee_line_pkey",
@@ -668,13 +668,21 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
-// SV-5 catch (0281-0283): only its five routines; their table, triggers and constraint sit outside this snapshot.
+// SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
+// their table, triggers and constraint sit outside this snapshot.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [["confirm_final_check_catch", "t uuid, j uuid, d text, p jsonb"], ["final_check_claim_catch_case", ""], ["final_check_open_catch_case", ""],
-  ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"]];
+  ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"],
+  ["final_check_practice_source_current", "s app.final_check_processing_source"]];
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines).toHaveLength(identities.length);
+ const helper = routines.find(r => r.proname === "final_check_practice_source_current");
+ expect(helper).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog, app"]});
+ const helperAcl = (await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid='app.final_check_practice_source_current(app.final_check_processing_source)'::regprocedure`)).rows;
+ expect(helperAcl).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration"]}]);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };

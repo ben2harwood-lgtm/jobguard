@@ -83,10 +83,95 @@ BEGIN
  RETURN NEW;
 END $$;
 
+-- Audit v1 requires strings for revision/journal-count references as well as IDs.
+CREATE OR REPLACE FUNCTION app.ef_audit(a uuid,p_type text,p_subject_type text,p_subject uuid,payload jsonb) RETURNS void
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; seq bigint; prev text; ts timestamptz; ph text; eh text;
+BEGIN
+ payload:=jsonb_set(payload,'{references}',(SELECT jsonb_object_agg(key,
+  CASE WHEN jsonb_typeof(value)='number' THEN to_jsonb(value::text) ELSE value END) FROM jsonb_each(payload->'references')));
+ SELECT sequence,event_hash INTO seq,prev FROM app.lock_audit_head();
+ seq:=seq+1; ts:=date_trunc('milliseconds',clock_timestamp()); ph:=app.final_lock_hash(payload);
+ eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,'membership:'||a::text,p_type,p_subject_type,p_subject::text,to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(prev,'')),'UTF8')),'hex');
+ INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
+ VALUES(gen_random_uuid(),t,seq,'audit.v1','membership:'||a::text,p_type,p_subject_type,p_subject::text,ts,payload,ph,prev,eh);
+ PERFORM app.advance_audit_head(seq,eh);
+END $$;
+ALTER FUNCTION app.ef_audit(uuid,text,text,uuid,jsonb) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ef_audit(uuid,text,text,uuid,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+
+
+-- ENT-F5/F6: match immutable identities, not equality between approved and billed net.
+CREATE OR REPLACE FUNCTION app.cb_ingest(p_session uuid,p_job uuid,p_command uuid,p_payload jsonb) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; replay jsonb; imp uuid:=gen_random_uuid(); f uuid; e jsonb; l jsonb; valid boolean; prior app.billing_fact; h text; contract uuid; quarantine_reason text;
+BEGIN
+ replay:=app.cb_begin(p_session,p_job,p_command,'ImportBillingStatus',p_payload); IF replay IS NOT NULL THEN RETURN replay; END IF;
+ a:=app.cb_authority(p_session,p_job,true);
+ SELECT contract_id INTO contract FROM app.work_order WHERE tenant_id=t AND job_id=p_job;
+ IF jsonb_array_length(p_payload->'events') NOT BETWEEN 1 AND 10000 THEN RAISE EXCEPTION 'BILLING_INVALID'; END IF;
+ INSERT INTO app.billing_status_import(tenant_id,id,job_id,command_id,transport,source_hash,actor_membership_id)
+ VALUES(t,imp,p_job,p_command,p_payload->>'transport',p_payload->>'sourceHash',a);
+ FOR e IN SELECT value FROM jsonb_array_elements(p_payload->'events') LOOP
+  IF e->>'version' IS DISTINCT FROM 'billing-status.v1' OR(e->>'clientContractId')::uuid IS DISTINCT FROM contract THEN RAISE EXCEPTION 'BILLING_NOT_FOUND'; END IF;
+  IF e->>'reconciliationId' IS NOT NULL AND EXISTS(SELECT 1 FROM app.billing_fact b WHERE b.tenant_id=t AND b.job_id<>p_job AND b.payload->>'reconciliationId'=e->>'reconciliationId') THEN RAISE EXCEPTION 'BILLING_CONFLICT' USING ERRCODE='23505'; END IF;
+  -- Transport bytes are on the import; facts bind their canonical semantic event instead.
+  h:=app.final_lock_hash(e);
+  SELECT * INTO prior FROM app.billing_fact WHERE tenant_id=t AND source=e->>'source' AND source_event_id=e->>'sourceEventId';
+  IF prior.id IS NOT NULL THEN
+   IF prior.payload_hash<>h OR prior.job_id<>p_job THEN RAISE EXCEPTION 'BILLING_CONFLICT' USING ERRCODE='23505'; END IF;
+   CONTINUE;
+  END IF;
+  valid:=true; quarantine_reason:='INVALID_COMPOSITION_OR_MATCH';
+  IF jsonb_typeof(e->'composition')='object' THEN
+   IF jsonb_array_length(e->'composition'->'lines')=0 OR
+    (SELECT sum((x->>'netPence')::numeric) FROM jsonb_array_elements(e->'composition'->'lines') x) IS DISTINCT FROM(e->'composition'->'declared'->>'netPence')::numeric OR
+    (SELECT sum((x->>'grossPence')::numeric) FROM jsonb_array_elements(e->'composition'->'lines') x) IS DISTINCT FROM(e->'composition'->'declared'->>'grossPence')::numeric THEN valid:=false; END IF;
+   FOR l IN SELECT value FROM jsonb_array_elements(e->'composition'->'lines') LOOP
+    -- Amount differences are reconciled and capped, never mistaken for a foreign revision. Keep amount limits.
+    IF NOT coalesce((l->>'netPence')::numeric BETWEEN 0 AND 1000000000000
+     AND (l->>'vatPence')::numeric BETWEEN 0 AND 1000000000000 AND (l->>'grossPence')::numeric BETWEEN 1 AND 1000000000000
+     AND (l->>'netPence')::numeric=trunc((l->>'netPence')::numeric) AND (l->>'vatPence')::numeric=trunc((l->>'vatPence')::numeric)
+     AND (l->>'grossPence')::numeric=trunc((l->>'grossPence')::numeric)
+     AND (l->>'netPence')::numeric+(l->>'vatPence')::numeric=(l->>'grossPence')::numeric,false) THEN valid:=false; END IF;
+    IF l->>'kind'='extra' THEN
+     IF NOT EXISTS(SELECT 1 FROM app.billing_export_line b WHERE(b.tenant_id,b.job_id,b.client_contract_id,b.id)=(t,(l->'match'->>'jobId')::uuid,contract,(l->'match'->>'exportLineId')::uuid)
+      AND b.extra_id=(l->'match'->>'extraId')::uuid AND b.scope_item_id=(l->'match'->>'scopeItemId')::uuid AND b.revision_id=(l->'match'->>'revisionId')::uuid
+      AND b.revision_hash=l->'match'->>'revisionHash') THEN valid:=false; END IF;
+    ELSIF l->'match' IS DISTINCT FROM 'null'::jsonb OR l->>'kind' NOT IN('original_order','other') THEN valid:=false;
+    END IF;
+   END LOOP;
+  END IF;
+  -- cb_begin holds the tenant billing fence (618), including across anchor jobs.
+  -- Same-fact replay has already been skipped above. Never invalidate the first match.
+  -- Movements validate their composition above; only invoice facts own export-line matches.
+  IF valid AND e->>'factType'='invoiced' AND EXISTS(
+   SELECT 1 FROM jsonb_array_elements(e->'composition'->'lines') x
+   JOIN app.billing_line_match m ON m.tenant_id=t AND m.export_line_id=(x->'match'->>'exportLineId')::uuid
+   WHERE x->>'kind'='extra'
+  ) THEN valid:=false; quarantine_reason:='EXPORT_LINE_ALREADY_MATCHED'; END IF;
+  f:=gen_random_uuid();
+  INSERT INTO app.billing_fact(tenant_id,id,job_id,client_contract_id,import_id,source,source_event_id,invoice_number,payload,payload_hash,match_valid)
+  VALUES(t,f,p_job,contract,imp,e->>'source',e->>'sourceEventId',e->>'invoiceNumber',e,h,valid);
+  IF NOT valid THEN
+   INSERT INTO app.billing_quarantine(tenant_id,id,job_id,client_contract_id,fact_id,reason) VALUES(t,gen_random_uuid(),p_job,contract,f,quarantine_reason);
+  ELSIF e->>'factType'='invoiced' THEN
+   FOR l IN SELECT value FROM jsonb_array_elements(e->'composition'->'lines') WHERE value->>'kind'='extra' LOOP
+    INSERT INTO app.billing_line_match(tenant_id,id,job_id,client_contract_id,fact_id,external_invoice_line_id,export_line_id,line_job_id)
+    VALUES(t,gen_random_uuid(),p_job,contract,f,l->>'externalInvoiceLineId',(l->'match'->>'exportLineId')::uuid,(l->'match'->>'jobId')::uuid);
+   END LOOP;
+  END IF;
+ END LOOP;
+ RETURN jsonb_build_object('importId',imp);
+END $$;
+
+
 -- Preserve the original version and fee eligibility even when finance selects a later canonical member.
 CREATE OR REPLACE FUNCTION app.ef_inputs(t uuid,ag app.enterprise_agreement_version,p_period text) RETURNS jsonb
 LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
 DECLARE cutoff timestamptz; qrows jsonb; inputs jsonb; p_agreement uuid:=ag.id;
+ rawrows jsonb; capped jsonb:='[]'::jsonb; extra_ref text; cap_row jsonb; allocation_row jsonb;
+ paid numeric[]; bill numeric[]; eligible numeric[]; share numeric[]; approved numeric;
 BEGIN
  -- Calendar month in Europe/London; cumulative principal is everything recorded before the cut-off.
  cutoff:=((p_period||'-01 00:00:00')::timestamp+interval '1 month') AT TIME ZONE 'Europe/London';
@@ -97,9 +182,9 @@ BEGIN
  -- exported, and carrying payment-allocated extra principal on the allocation run current at the cut-off.
  -- Office, client-instructed and order-line amounts, duplicates, unexported and unpaid amounts never appear here.
  SELECT coalesce(jsonb_agg(jsonb_build_object('allocation_id',q.allocation_id,'run_id',q.run_id,'rule',q.rule,'n',q.n::text,'dd',q.dd::text,
-  'export_line_id',q.export_line_id,'job_id',q.job_id,'extra_id',q.extra_id,'origin_kind',q.origin_kind) ORDER BY q.allocation_id),'[]'::jsonb) INTO qrows FROM(
+  'export_line_id',q.export_line_id,'job_id',q.job_id,'extra_id',q.extra_id,'origin_kind',q.origin_kind,'approved',q.approved,'billed',q.billed,'credited',q.credited) ORDER BY q.allocation_id),'[]'::jsonb) INTO qrows FROM(
  SELECT al.id allocation_id, al.run_id, al.rule, al.matched_extra_numerator n, al.matched_extra_denominator dd,
-  l.id export_line_id, l.job_id, o.variation_id extra_id, effective.kind origin_kind
+  l.id export_line_id, l.job_id, o.variation_id extra_id, effective.kind origin_kind, l.approved_net_pence approved, invoice_line->'billedNet' billed, invoice_line->'creditedNet' credited
  FROM app.extra_origin o
  -- Canonical commercial identity and effective origin are distinct: use the earliest group member at this cutoff.
  JOIN LATERAL (
@@ -116,12 +201,39 @@ BEGIN
  JOIN app.billing_export_batch b ON(b.tenant_id,b.id)=(l.tenant_id,l.batch_id) AND b.server_recorded_at<cutoff
  JOIN app.contractor_receipt_line_allocation al ON(al.tenant_id,al.line_job_id,al.export_line_id)=(l.tenant_id,l.job_id,l.id)
  JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.id)=(al.tenant_id,al.job_id,al.run_id) AND r.server_recorded_at<cutoff
+ JOIN LATERAL jsonb_array_elements(r.projection->'lines') invoice_line ON invoice_line->>'lineId'=al.external_invoice_line_id
  WHERE o.tenant_id=t AND o.job_track='contractor' AND effective.kind IN('site_user','jobguard_surfaced_confirmed') AND o.server_recorded_at<cutoff
   AND (SELECT v.id FROM app.enterprise_agreement_version v WHERE v.tenant_id=t AND v.effective_from<=effective.server_recorded_at ORDER BY v.effective_from DESC LIMIT 1)=p_agreement
   AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run nx WHERE nx.tenant_id=r.tenant_id AND nx.predecessor_id=r.id AND nx.server_recorded_at<cutoff)
   AND NOT EXISTS(SELECT 1 FROM app.extra_duplicate_link k WHERE k.tenant_id=t AND k.duplicate_id=o.variation_id AND k.kind='link' AND k.server_recorded_at<cutoff
    AND NOT EXISTS(SELECT 1 FROM app.extra_duplicate_link u WHERE u.tenant_id=t AND u.reverses_link_id=k.id AND u.kind='unlink' AND u.server_recorded_at<cutoff))
   AND al.matched_extra_numerator<>0) q;
+
+
+ -- ENT-F3/F5/F6: Q_g=max(0,min(approved,invoiced-credited,net paid after reversals)).
+ -- Receipt allocations retain their historical net ratios. Cap their exact cumulative sum per extra, not each
+ -- receipt; distribute any cap proportionally over the signed source allocations so the drill-down sums to Q_g.
+ rawrows:=qrows;
+ FOR extra_ref IN SELECT DISTINCT x->>'extra_id' FROM jsonb_array_elements(rawrows) x ORDER BY 1 LOOP
+  paid:=ARRAY[0::numeric,1::numeric];
+  FOR allocation_row IN SELECT x FROM jsonb_array_elements(rawrows) x WHERE x->>'extra_id'=extra_ref LOOP
+   paid:=app.cb_add(paid[1],paid[2],(allocation_row->>'n')::numeric,(allocation_row->>'dd')::numeric);
+   cap_row:=allocation_row;
+  END LOOP;
+  IF paid[1]<=0 THEN CONTINUE; END IF;
+  approved:=(cap_row->>'approved')::numeric;
+  bill:=app.cb_add((cap_row->'billed'->>'numerator')::numeric,(cap_row->'billed'->>'denominator')::numeric,
+   -(cap_row->'credited'->>'numerator')::numeric,(cap_row->'credited'->>'denominator')::numeric);
+  eligible:=paid;
+  IF eligible[1]>approved*eligible[2] THEN eligible:=ARRAY[approved,1::numeric]; END IF;
+  IF eligible[1]*bill[2]>bill[1]*eligible[2] THEN eligible:=bill; END IF;
+  IF eligible[1]<=0 THEN CONTINUE; END IF;
+  FOR allocation_row IN SELECT x FROM jsonb_array_elements(rawrows) x WHERE x->>'extra_id'=extra_ref LOOP
+   share:=app.cb_add(0,1,(allocation_row->>'n')::numeric*eligible[1]*paid[2],(allocation_row->>'dd')::numeric*eligible[2]*paid[1]);
+   capped:=capped||jsonb_build_array((allocation_row-'approved'-'billed'-'credited')||jsonb_build_object('n',share[1]::text,'dd',share[2]::text));
+  END LOOP;
+ END LOOP;
+ SELECT coalesce(jsonb_agg(x ORDER BY (x->>'allocation_id')::uuid),'[]'::jsonb) INTO qrows FROM jsonb_array_elements(capped) x;
 
  inputs:=jsonb_build_object('agreement',ag.id,'agreementHash',ag.content_hash,'period',p_period,
   'cutoff',to_char(cutoff AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
@@ -130,6 +242,83 @@ BEGIN
 END $$;
 ALTER FUNCTION app.ef_inputs(uuid,app.enterprise_agreement_version,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.ef_inputs(uuid,app.enterprise_agreement_version,text) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+
+
+-- Self-check: exact posting-command identity, including zero-result replay and authorization on new keys.
+CREATE OR REPLACE FUNCTION app.ef_post_statement(p_session uuid,p_command uuid,p_statement uuid,p_authorization uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; a uuid; st app.enterprise_fee_statement; ap app.enterprise_fee_statement_approval; z app.action_authorization;
+ sec record; ag app.enterprise_agreement_version; f uuid; prior uuid; posted integer:=0;
+ req text; receipt app.command_receipt; outcome jsonb;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'FEE_GATE_CLOSED' USING ERRCODE='42501'; END IF;
+ t:=nullif(current_setting('app.tenant_id',true),'')::uuid; PERFORM app.ef_actor(p_session);
+ SELECT * INTO st FROM app.enterprise_fee_statement WHERE tenant_id=t AND id=p_statement;
+ IF st.id IS NULL THEN RAISE EXCEPTION 'FEE_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ a:=app.ef_statement_begin(p_session,st.period);
+ IF p_command IS NULL OR p_authorization IS NULL THEN RAISE EXCEPTION 'INVALID_FEE_INPUT' USING ERRCODE='22023'; END IF;
+ req:=app.final_lock_hash(jsonb_build_object('command','PostEnterpriseFeeStatement','statement',st.id,'authorization',p_authorization,'actor',a));
+ SELECT * INTO receipt FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
+ IF receipt.command_id IS NOT NULL THEN
+  IF receipt.command_type<>'PostEnterpriseFeeStatement' OR receipt.request_hash<>req OR receipt.status<>'succeeded' THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.audit_event WHERE tenant_id=t AND event_type='enterprise_fee.statement_posted' AND subject_type='enterprise_fee_statement' AND subject_ref=st.id::text) THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+  -- Legacy runtime result-column grants cannot rewrite an authoritative replay outcome.
+  RETURN jsonb_build_object('statementId',st.id,'replayed',true,'journals',(SELECT count(*) FROM app.platform_enterprise_fee WHERE tenant_id=t AND statement_id=st.id));
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.platform_enterprise_fee WHERE tenant_id=t AND command_id=p_command
+  AND (statement_id<>st.id OR authorization_id<>p_authorization OR actor_membership_id<>a)) THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+ SELECT * INTO ap FROM app.enterprise_fee_statement_approval WHERE tenant_id=t AND statement_id=st.id;
+ SELECT * INTO z FROM app.action_authorization WHERE tenant_id=t AND id=p_authorization FOR SHARE;
+ IF ap.statement_id IS NULL OR z.id IS NULL OR ap.authorization_id<>z.id OR z.action_type<>'enterprise_fee_statement'
+  OR z.revoked_at IS NOT NULL OR z.expires_at<=clock_timestamp() OR z.content_hash<>st.content_hash OR z.aggregate_revision<>st.revision
+  OR z.amount_pence IS DISTINCT FROM abs(st.total_delta_pence) OR z.currency<>'GBP' OR z.policy_version<>'enterprise_site_capture_policy_v1'
+  OR NOT EXISTS(SELECT 1 FROM app.decision_resolution r WHERE r.tenant_id=t AND r.id=z.resolution_id AND r.decision_id=z.decision_id AND r.resolution='approved')
+  OR EXISTS(SELECT 1 FROM app.enterprise_fee_statement n WHERE n.tenant_id=t AND n.predecessor_id=st.id)
+  OR EXISTS(SELECT 1 FROM app.enterprise_fee_statement_dispute WHERE tenant_id=t AND statement_id=st.id) THEN
+  RAISE EXCEPTION 'STATEMENT_AUTHORITY_INVALID' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+ VALUES(t,p_command,'PostEnterpriseFeeStatement','enterprise-fee-post:'||p_command::text,req,'processing',a);
+ -- Even a zero-delta statement has a durable outcome; a new key cannot manufacture a second posting audit.
+ IF EXISTS(SELECT 1 FROM app.platform_enterprise_fee WHERE tenant_id=t AND statement_id=st.id)
+  OR EXISTS(SELECT 1 FROM app.audit_event WHERE tenant_id=t AND event_type='enterprise_fee.statement_posted' AND subject_type='enterprise_fee_statement' AND subject_ref=st.id::text) THEN
+  outcome:=jsonb_build_object('statementId',st.id,'replayed',true);
+  UPDATE app.command_receipt SET status='succeeded',result=outcome,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=p_command;
+  PERFORM app.ef_audit(a,'enterprise_fee.statement_post_replayed','enterprise_fee_statement',st.id,
+   jsonb_build_object('references',jsonb_build_object('statement',st.id::text,'command',p_command::text,'authorization',z.id::text,'environment','synthetic_demo'),'hashes',jsonb_build_object('content',st.content_hash)));
+  RETURN outcome;
+ END IF;
+ FOR sec IN SELECT * FROM app.enterprise_fee_statement_section WHERE tenant_id=t AND statement_id=st.id ORDER BY agreement_version_id LOOP
+  SELECT * INTO ag FROM app.enterprise_agreement_version WHERE tenant_id=t AND id=sec.agreement_version_id FOR SHARE;
+  IF app.ef_inputs(t,ag,st.period)->>'hash' IS DISTINCT FROM sec.input_hash OR app.ef_posted_net(t,sec.agreement_version_id)<>sec.prior_net_posted_pence THEN
+   RAISE EXCEPTION 'STALE_FACTS' USING ERRCODE='40001';
+  END IF;
+ END LOOP;
+ FOR sec IN SELECT * FROM app.enterprise_fee_statement_section WHERE tenant_id=t AND statement_id=st.id AND delta_pence<>0 ORDER BY agreement_version_id LOOP
+  f:=gen_random_uuid(); prior:=NULL;
+  IF sec.delta_pence<0 THEN
+   -- A compensation links to the latest accrual it reduces.
+   SELECT id INTO prior FROM app.platform_enterprise_fee WHERE tenant_id=t AND agreement_version_id=sec.agreement_version_id AND kind='accrual'
+    ORDER BY server_recorded_at DESC,id DESC LIMIT 1;
+   IF prior IS NULL THEN RAISE EXCEPTION 'INVALID_FEE_INPUT' USING ERRCODE='22023'; END IF;
+  END IF;
+  INSERT INTO app.platform_enterprise_fee(tenant_id,id,kind,statement_id,agreement_version_id,derivation_id,authorization_id,amount_pence,compensates_fee_id,environment,command_id,actor_membership_id)
+  VALUES(t,f,CASE WHEN sec.delta_pence>0 THEN 'accrual' ELSE 'compensation' END,st.id,sec.agreement_version_id,sec.derivation_id,z.id,abs(sec.delta_pence),prior,'synthetic_demo',p_command,a);
+  INSERT INTO app.platform_enterprise_fee_line(tenant_id,fee_id,line_no,account,debit_pence,credit_pence) VALUES
+   (t,f,1,CASE WHEN sec.delta_pence>0 THEN 'contractor_fee_receivable' ELSE 'platform_fee_revenue' END,abs(sec.delta_pence),0),
+   (t,f,2,CASE WHEN sec.delta_pence>0 THEN 'platform_fee_revenue' ELSE 'contractor_fee_receivable' END,0,abs(sec.delta_pence));
+  posted:=posted+1;
+ END LOOP;
+ outcome:=jsonb_build_object('statementId',st.id,'replayed',false,'journals',posted);
+ UPDATE app.command_receipt SET status='succeeded',result=outcome,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=p_command;
+ PERFORM app.ef_audit(a,'enterprise_fee.statement_posted','enterprise_fee_statement',st.id,
+  jsonb_build_object('references',jsonb_build_object('statement',st.id::text,'command',p_command::text,'authorization',z.id::text,'journals',posted,'environment','synthetic_demo'),
+   'hashes',jsonb_build_object('content',st.content_hash)));
+ RETURN outcome;
+END $$;
+ALTER FUNCTION app.ef_post_statement(uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.ef_post_statement(uuid,uuid,uuid,uuid) FROM PUBLIC,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.ef_post_statement(uuid,uuid,uuid,uuid) TO jobguard_runtime;
 
 
 CREATE FUNCTION app.ef_reconcile_exported_duplicate(p_session uuid,p_command uuid,p_job uuid,p_duplicate uuid,p_canonical uuid) RETURNS jsonb
@@ -150,7 +339,10 @@ BEGIN
  SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
  IF prior.command_id IS NOT NULL THEN
   IF prior.command_type<>'ReconcileExportedDuplicate' OR prior.request_hash<>req OR prior.status<>'succeeded' THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
-  RETURN prior.result||jsonb_build_object('replayed',true);
+  SELECT jsonb_build_object('correctionId',c.id,'linkId',c.link_id,'contentHash',c.content_hash,'corrections',c.corrections,'replayed',true) INTO outcome
+   FROM app.enterprise_duplicate_correction c WHERE c.tenant_id=t AND c.command_id=p_command AND c.actor_membership_id=a;
+  IF outcome IS NULL THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+  RETURN outcome;
  END IF;
  IF (SELECT count(*) FROM app.billing_export_line WHERE tenant_id=t AND job_id=p_job AND extra_id IN(p_duplicate,p_canonical))<>2 THEN RAISE EXCEPTION 'FEE_NOT_FOUND' USING ERRCODE='P0002'; END IF;
  IF EXISTS(SELECT 1 FROM app.extra_duplicate_link l WHERE l.tenant_id=t AND l.job_id=p_job AND l.kind='link'

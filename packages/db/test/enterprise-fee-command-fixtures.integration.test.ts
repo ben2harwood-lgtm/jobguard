@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { statementLines, exactPence } from "@jobguard/core";
+import { statementLines, exactPence, sumExactPence } from "@jobguard/core";
 import { EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository, WorkOrderRepository, demoFile, demoRow, withTenant } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
-import { approveInput } from "./extra-approval-chain-fixtures.js";
+import { approveInput, newJob, raiseOn } from "./extra-approval-chain-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { reference } from "./enterprise-fee-reference-fixtures.js";
 import { direct, chain, type Actor } from "./site-extra-fixtures.js";
@@ -51,8 +51,8 @@ async function invoice(t: Setup, nets: Record<string, number>, orderNet = 0) {
   await w.repo.import(w.ctx, w.session, w.s.jobId, w.importInput([inv]));
   return inv;
 }
-async function pay(t: Setup, net: number) {
-  const e = t.w.event("paid", { effectiveAt: "2026-10-03T12:00:00Z", reconciliationId: randomUUID(), amount: amount(net) });
+async function pay(t: Setup, net: number, effectiveAt = "2026-10-03T12:00:00Z") {
+  const e = t.w.event("paid", { effectiveAt, reconciliationId: randomUUID(), amount: amount(net) });
   await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([e]));
   return e;
 }
@@ -70,6 +70,7 @@ async function post(t: Setup, p = t.p) {
   const { authorizationId } = await t.repo.approveStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-approve-statement.v1", commandId: randomUUID(), statementId,
     contentHash: s.contentHash, totalDeltaPence: s.totalDeltaPence, expiresAt: new Date(Date.now() + 600000).toISOString() });
   await t.repo.postStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(), statementId, authorizationId });
+  await chain(c, t.w.w);
   return { s, postings: await t.repo.readPostings(t.w.ctx, t.w.session, statementId) };
 }
 
@@ -106,6 +107,8 @@ it("ENT-F3 / ENT-F12: credit after an approved month compensates next month, pre
   const second = await post(t, p); expect(second.s.totalDeltaPence).toBe(-500); expect(second.postings[0]).toMatchObject({ kind: "compensation", amountPence: 500, compensatesFeeId: first.postings[0]!.id });
   expect(await t.repo.readStatement(t.w.ctx, t.w.session, first.s.id)).toEqual({ ...first.s, approval: expect.any(Object) });
   expect(await t.repo.readPostings(t.w.ctx, t.w.session, first.s.id)).toEqual(first.postings);
+  await derive(t); // Fresh inputs isolate the closed-month guard from the separate stale-derivation guard.
+  expect(await code(t.repo.prepareStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-prepare-statement.v1", commandId: randomUUID(), period: t.p }))).toBe("COMMAND_CONFLICT");
 });
 it("ENT-F4: a reversed £180 payment compensates the entire 1500p fee", async () => {
   const t = await setup(); await invoice(t, { [t.w.s.extraId]: 15000 }); const paid = await pay(t, 15000); await derive(t); const first = await post(t);
@@ -201,6 +204,100 @@ it("ReconcileExportedDuplicate retains the earlier agreement when the later log 
   const second = await post(t, p); expect(second.s.totalDeltaPence).toBe(-1200);
   expect(second.postings).toEqual([expect.objectContaining({ kind: "compensation", agreementVersionId: v2, amountPence: 1200 })]);
 });
+it("Self-check: cumulative approval/credit caps survive signed partial reversals and replay without rounding", async () => {
+  const t = await setup(), inv = await invoice(t, { [t.w.s.extraId]: 20000 });
+  await pay(t, 10000); const second = await pay(t, 10000, "2026-10-04T12:00:00Z");
+  let read = await derive(t); expect(read.qualifyingPrincipal).toEqual(exact(15000));
+  expect(read.contributions.map(x => x.qualifyingPrincipal)).toEqual([exact(7500), exact(7500)]);
+  await post(t);
+  // Credit follows both receipts; its cap applies to their cumulative principal, not to each receipt separately.
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("credited", { originalEventId: inv.sourceEventId,
+    effectiveAt: "2026-10-05T12:00:00Z", amount: amount(10000), lineAdjustments: [{ externalInvoiceLineId: t.w.s.extraId, ...amount(10000) }] })]));
+  const reversal = t.w.event("payment_reversed", { originalEventId: second.sourceEventId, reconciliationId: randomUUID(), effectiveAt: "2026-10-06T12:00:00Z", amount: amount(5000) });
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([reversal]));
+  const p = next(t.p); read = await derive(t, p);
+  expect(read.qualifyingPrincipal).toEqual(exact(10000));
+  expect(read.cumulativeFeePence).toBe(reference(t, [{ approved: 15000, billed: 20000, paid: exact(15000), credit: 10000 }]).cumulativeFee.pence);
+  const shares = read.contributions.map(x => exactPence(BigInt(x.qualifyingPrincipal.numerator), BigInt(x.qualifyingPrincipal.denominator)));
+  expect(sumExactPence(shares)).toEqual(exactPence(10000n)); expect(shares.some(x => x.numerator < 0n)).toBe(true);
+  expect(read.contributions.map(x => x.qualifyingPrincipal.denominator)).toEqual(["3", "3", "3"]);
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([reversal]));
+  expect((await derive(t, p)).id).toBe(read.id);
+  expect((await post(t, p)).s.totalDeltaPence).toBe(-500);
+});
+it("Self-check: wrong locked export revision and oversized amounts cannot create fee contributions", async () => {
+  const t = await setup(), batch = await t.w.exported(), view = await t.w.repo.read(t.w.ctx, t.w.session, t.w.s.jobId);
+  const line = view.exports.find(e => e.id === batch.batchId)!.artifact.lines[0]!;
+  const badInvoice = t.w.event("invoiced", { amount: amount(15000), composition: { declared: amount(15000), lines: [{ externalInvoiceLineId: "wrong-revision", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...amount(15000),
+    match: { exportLineId: line.exportLineId, jobId: line.jobId, extraId: line.extraId, scopeItemId: line.scopeItemId, revisionId: randomUUID(), revisionHash: line.revisionHash } }] } });
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([badInvoice])); await pay(t, 15000);
+  expect((await t.w.repo.read(t.w.ctx, t.w.session, t.w.s.jobId)).quarantine).toHaveLength(1);
+  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+  expect(await code(t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("paid", { amount: { netPence: 1000000000001, vatPence: 0, grossPence: 1000000000001 } })])))).toBe("BILLING_INVALID");
+  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+  // Try the SQL entrypoint too, bypassing the application's Zod schema. It must quarantine the oversized line.
+  const tooLarge = { netPence: 1000000000001, vatPence: 0, grossPence: 1000000000001 };
+  const directInvoice = t.w.event("invoiced", { invoiceNumber: "fictional-oversized", amount: tooLarge, composition: { declared: tooLarge,
+    lines: [{ externalInvoiceLineId: "oversized", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...tooLarge,
+      match: { exportLineId: line.exportLineId, jobId: line.jobId, extraId: line.extraId, scopeItemId: line.scopeItemId, revisionId: line.revisionId, revisionHash: line.revisionHash } }] } });
+  const cmd = t.w.importInput([directInvoice]);
+  await withTenant(c.runtime, t.w.ctx, async db => {
+    const r = (await db.$client.query("SELECT app.cb_ingest($1,$2,$3,$4::jsonb) result", [t.w.session,t.w.s.jobId,cmd.commandId,JSON.stringify(cmd)])).rows[0].result;
+    await db.$client.query("SELECT app.cb_complete($1,$2,$3,$4::jsonb)", [t.w.session,t.w.s.jobId,cmd.commandId,JSON.stringify(r)]);
+  });
+  expect((await c.admin.query("SELECT match_valid FROM app.billing_fact WHERE tenant_id=$1 AND source_event_id=$2", [t.w.w.p.tenantId,directInvoice.sourceEventId])).rows).toEqual([{ match_valid: false }]);
+  expect((await derive(t)).qualifyingPrincipal).toEqual(exact(0));
+});
+it("Self-check: posting command IDs bind the exact statement and authorization, including zero-result replays", async () => {
+  const t = await setup(5); await invoice(t, { [t.w.s.extraId]: 5 }); await pay(t, 5); await derive(t);
+  const approve = async (period: string) => {
+    const { statementId } = await t.repo.prepareStatement(t.w.ctx,t.w.session,{ version: "enterprise-fee-prepare-statement.v1",commandId: randomUUID(),period });
+    const st = await t.repo.readStatement(t.w.ctx,t.w.session,statementId);
+    const { authorizationId } = await t.repo.approveStatement(t.w.ctx,t.w.session,{ version: "enterprise-fee-approve-statement.v1",commandId: randomUUID(),statementId,contentHash: st.contentHash,totalDeltaPence: st.totalDeltaPence,expiresAt: new Date(Date.now()+600000).toISOString() });
+    return { statementId, authorizationId };
+  };
+  const first = await approve(t.p), commandId = randomUUID();
+  const cmd = { version: "enterprise-fee-post-statement.v1",commandId,...first };
+  expect(await t.repo.postStatement(t.w.ctx,t.w.session,cmd)).toMatchObject({ replayed: false, journals: 0 });
+  await withTenant(c.runtime,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ statementId: randomUUID(),journals: 999 }),commandId]));
+  expect(await t.repo.postStatement(t.w.ctx,t.w.session,cmd)).toEqual({ statementId: first.statementId,replayed: true,journals: 0 });
+  expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,authorizationId: randomUUID() }))).toBe("COMMAND_CONFLICT");
+  expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,commandId: randomUUID(),authorizationId: randomUUID() }))).toBe("STATEMENT_AUTHORITY_INVALID");
+  expect(await t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,commandId: randomUUID() })).toMatchObject({ replayed: true });
+  const p = next(t.p); await derive(t,p); const second = await approve(p);
+  expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ version: "enterprise-fee-post-statement.v1",commandId,...second }))).toBe("COMMAND_CONFLICT");
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='enterprise_fee.statement_posted'",[t.w.w.p.tenantId])).rows[0].n).toBe(1);
+  expect(await t.repo.readPostings(t.w.ctx,t.w.session,first.statementId)).toEqual([]); await chain(c,t.w.w);
+});
+it("Self-check: approved statements reject stale credit inputs without changing the locked bill or posting", async () => {
+  const t = await setup(), inv = await invoice(t, { [t.w.s.extraId]: 15000 }); await pay(t, 15000); await derive(t);
+  const { statementId } = await t.repo.prepareStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-prepare-statement.v1", commandId: randomUUID(), period: t.p });
+  const before = await t.repo.readStatement(t.w.ctx, t.w.session, statementId);
+  const { authorizationId } = await t.repo.approveStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-approve-statement.v1", commandId: randomUUID(), statementId, contentHash: before.contentHash, totalDeltaPence: before.totalDeltaPence, expiresAt: new Date(Date.now()+600000).toISOString() });
+  const approved = await t.repo.readStatement(t.w.ctx, t.w.session, statementId);
+  await credit(t, inv, 5000);
+  expect(await code(t.repo.postStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(), statementId, authorizationId }))).toBe("STALE_FACTS");
+  expect(await t.repo.readStatement(t.w.ctx, t.w.session, statementId)).toEqual(approved);
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, statementId)).toEqual([]); await chain(c, t.w.w);
+});
+it("Self-check: cross-tenant replay, reads and cross-job duplicate references disclose no foreign data", async () => {
+  const t = await setup(), canonical = await addExtra(t, 15000), foreign = await setup();
+  await invoice(t, { [t.w.s.extraId]: 15000, [canonical]: 15000 });
+  const command = { version: "enterprise-reconcile-exported-duplicate.v1", commandId: randomUUID(), jobId: t.w.s.jobId, duplicateId: t.w.s.extraId, canonicalId: canonical };
+  const correction = await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command);
+  await withTenant(c.runtime,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ correctionId: foreign.w.s.extraId }),command.commandId]));
+  expect(await t.repo.reconcileExportedDuplicate(t.w.ctx,t.w.session,command)).toEqual({ ...correction,replayed: true });
+  expect(await code(t.repo.reconcileExportedDuplicate(foreign.w.ctx, foreign.w.session, command))).toBe("FEE_NOT_FOUND");
+  expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, commandId: randomUUID(), canonicalId: foreign.w.s.extraId }))).toBe("FEE_NOT_FOUND");
+  const otherJob = await newJob(c, t.w.w), otherExtra = await raiseOn(c, t.w.w, otherJob);
+  expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, commandId: randomUUID(), canonicalId: otherExtra }))).toBe("FEE_NOT_FOUND");
+  const read = await derive(t); expect(await code(t.repo.read(foreign.w.ctx, foreign.w.session, read.id))).toBe("FEE_NOT_FOUND");
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.enterprise_duplicate_correction WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(1);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.enterprise_duplicate_correction WHERE tenant_id=$1", [foreign.w.w.p.tenantId])).rows[0].n).toBe(0);
+  // The new entrypoint grants no shadow-role execution and its audited outputs contain references/hashes only.
+  expect((await c.admin.query("SELECT has_function_privilege('jobguard_shadow','app.ef_reconcile_exported_duplicate(uuid,uuid,uuid,uuid,uuid)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
+  await chain(c, t.w.w);
+});
 it("ENT-F10: three 5p extras round cumulatively to 2p; largest-remainder trace is 1p/1p/0p by ID", async () => {
   const t = await setup(5), b = await addExtra(t, 5), d = await addExtra(t, 5), ids = [t.w.s.extraId, b, d].sort();
   await invoice(t, Object.fromEntries(ids.map(id => [id, 5]))); await pay(t, 15); const r = await derive(t);
@@ -214,7 +311,7 @@ for (const [net, fee] of [[5, 0], [15, 2], [25, 2]] as const) it(`ENT-F11: Q=${n
 });
 it("ENT-F11: two 5p receipts accumulate to 1p rather than rounding each receipt down", async () => {
   const t = await setup(10); await invoice(t, { [t.w.s.extraId]: 10 }); await pay(t, 5); await check(t, 10, 10, 5, 0); await post(t);
-  await pay(t, 5); const p = next(t.p), r = await derive(t, p); expect(r.qualifyingPrincipal).toEqual(exact(10)); expect(r.cumulativeFeePence).toBe(reference(t, [{ approved: 10, billed: 10, paid: exact(10) }]).cumulativeFee.pence); expect((await post(t, p)).s.totalDeltaPence).toBe(1);
+  await pay(t, 5, "2026-10-04T12:00:00Z"); const p = next(t.p), r = await derive(t, p); expect(r.qualifyingPrincipal).toEqual(exact(10)); expect(r.cumulativeFeePence).toBe(reference(t, [{ approved: 10, billed: 10, paid: exact(10) }]).cumulativeFee.pence); expect((await post(t, p)).s.totalDeltaPence).toBe(1);
 });
 it("ReconcileExportedDuplicate refuses non-live jobs, wrong tenant/session and direct runtime writes", async () => {
   const t = await setup(), duplicate = await addExtra(t, 15000); await invoice(t, { [t.w.s.extraId]: 15000, [duplicate]: 15000 });
