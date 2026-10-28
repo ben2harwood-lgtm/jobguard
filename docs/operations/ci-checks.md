@@ -11,7 +11,7 @@ The paused `integration/own-mind-reconciled-2026-08-21` belongs to `ben2harwood-
 1. The lane checker reads validated immutable GitHub event SHAs. PRs compare the merge base to the PR head; pushes compare the complete before/after range; first pushes inspect the tracked tree. Missing history, self-comparisons, checkout mismatches and unknown events fail rather than passing an empty substitute check. Renames check both old/new paths. Local runs additionally include staged, unstaged and untracked files.
 2. Lane policy has no default or blanket all-files grant. Actual task names and file locations are registered. Unknown/ambiguous branches and conflicting overrides fail. Main has an explicitly identified integration scope, not a PR fallback. The repair lane permits package manifests and named test/type configuration files, not arbitrary application-source or migration changes. Its regression assertion was updated to reflect the user-authorised dependency subtask while continuing to deny broad source access.
 3. The `dependency-review` job now runs a real pnpm vulnerability audit on PRs and main pushes, including private repositories and production/development/optional dependencies. Findings, registry failures and malformed/incomplete responses fail. No exclusions or severity waivers were added. This is not a licence, provenance or production-security certification.
-4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with one worker in CI and no retries. Earlier mandatory suites remain enabled. Workflow concurrency queues runs without cancelling an in-progress run.
+4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with one worker in CI and no retries. Earlier mandatory suites remain enabled. The original workflow queued runs without cancelling an in-progress run; CI-SPEED below supersedes that scheduling policy.
 
 ## Dependency remediation
 
@@ -35,23 +35,30 @@ Read PR #15's latest pinned head SHA and its complete CI result. Do not infer su
 
 Primary references: https://pnpm.io/10.x/cli/audit ; https://docs.github.com/en/actions/reference/workflows-and-actions/contexts ; https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9 .
 
-## Concurrent checks and reruns (CI-SPLIT-1)
+## Parallel checks and reruns (CI-SPEED, 28 October 2026)
 
-The `core`, `web`, `secrets` and `dependency-review` jobs run concurrently:
+Plan piece: **CI-SPEED**, branch `codex/sandbox/ci-speed`. **RED**: this changes the merge gate and requires one independent Claude review of the exact head. Any suspected weakening goes to Ben. No product code, migrations, providers or releases change.
 
-| Job | Checks |
+| Execution job | Checks |
 | --- | --- |
-| `core` | Frozen install, `pnpm typecheck`, `pnpm lint`, `pnpm test` (including the existing embedded-PostgreSQL tests). |
-| `web` | Frozen install, `pnpm build`, Playwright Chromium installation, `pnpm test:e2e` against the production build. |
-| `secrets` | Existing gitleaks scan. |
-| `dependency-review` | Existing dependency audit across all dependency scopes. |
+| `core-checks` | Frozen install, `pnpm typecheck`, `pnpm lint`, root Node tool tests, then every non-DB workspace test via Turbo. This retains the API OpenAPI check and AI fixture tests. |
+| `core-db` (four shards) | Frozen install, DB/dependency builds, then the existing DB test script with Vitest's `--shard=N/4`. One worker per runner, separate embedded PostgreSQL instances. |
+| `web-shards` (four shards) | Frozen install, full `pnpm build`, Chromium installation, then `pnpm test:e2e --shard=N/4` against the production build. Each shard retains both projects, one worker, zero retries and its own synthetic database. |
+| `secrets` | Existing gitleaks scan, unchanged. |
+| `dependency-review` | Existing audit across all dependency scopes, unchanged. |
 
-Both `core` and `web` print `git rev-parse HEAD` immediately after checkout and fail unless it equals the run's `github.sha`. Worker counts, retries, projects and timeouts in the test suites are unchanged. Each execution job has a 90-minute job limit.
+The root `pnpm test` script is unchanged for developers. CI partitions its work: `node --test tools/*.test.mjs` and `turbo run test --filter='!@jobguard/db'` run in `core-checks`; the excluded DB command runs in full across the four `core-db` shards, after its build prerequisites. There is no test-name, file, changed-path or viewport selection. Native runner sharding automatically includes new tests. Each matrix has `fail-fast: false`, so one failed shard does not cancel its siblings.
 
-The required `checks` job always evaluates all four job results, including after failure or cancellation. It succeeds only when every result is exactly `success`; failure, cancelled, skipped, empty or missing results fail the gate. It has a five-minute limit, no checkout and no secrets.
+The required names remain `core`, `web`, `secrets`, `dependency-review` and `checks`. `core` always aggregates `core-checks` and the complete DB matrix; `web` always aggregates the complete browser matrix. Both require exact `success` results. The unchanged `checks` gate always requires all four required results to be exactly `success`. Failure, cancellation, skipped, empty or missing results fail the corresponding gate. All execution jobs and the `core`/`web` summaries retain 90-minute limits; `checks` retains five minutes. Suite timeouts are unchanged.
 
-To retry a failed job, open the workflow run in GitHub Actions and choose **Re-run jobs → Re-run failed jobs**. GitHub reruns failed jobs and their dependent `checks` gate, keeping successful independent jobs. To select a specific failed job, use **Re-run this job** on that job; its dependent gate runs again too. A rerun re-tests the same recorded `github.sha` (for pull requests, the original merge candidate); it does not pick up a newer `main`. Check the printed candidate SHA in the job log.
+Every execution job derived from core/web prints `git rev-parse HEAD` and compares it with `github.sha`. Existing pnpm store caching stays enabled. No test-result or build-output caching is added. Newer runs cancel older in-progress runs only for the same PR ref; main never cancels in progress. Runs for different PRs remain independent.
 
-When `web` fails, its final upload step retains `apps/web/playwright-report/` and `apps/web/test-results/` as **playwright-evidence-<run_attempt>** for 14 days. Find it under **Artifacts** on the workflow run's summary page. Download and extract it to inspect the HTML report and retained failure traces (for example, `pnpm --filter @jobguard/web exec playwright show-trace <path-to-trace.zip>`). CI adds the HTML reporter with `open: "never"` alongside the list reporter; traces remain `retain-on-failure`. An early failure may produce no report or trace, in which case the upload warns about missing files.
+GitHub's **Re-run failed jobs** reruns failed jobs and their dependent gates on the same recorded candidate SHA; it does not pick up a newer main. CI adds no retries. Each failed browser shard uploads **playwright-evidence-<shard>-<run_attempt>** for 14 days, containing `apps/web/playwright-report/` and `apps/web/test-results/`. An early failure may produce no report, in which case upload warns. HTML reports and retained traces remain enabled.
 
-Local structural and shell tests do not prove hosted scheduling, artifact upload or full PostgreSQL/browser execution. GitHub CI evidence and an independent verdict bound to the exact final commit remain required before technical acceptance (AGENTS §5.13).
+### Timing and validation
+
+Today's six green runs (`~/.local/share/full-steam/ci-timings-2026-10-28.txt`) measured core **37–60 minutes**, including `pnpm test` **36–59 minutes**; web **22–31 minutes**, including browsers **21–28 minutes** and build about **one minute**. With four shards each, expect core **12–20 minutes** and web **8–12 minutes**, subject to the longest individual file, runner load and available GitHub concurrency. These are estimates, not measured results. Four-way sharding increases simultaneous runner demand; queue time may limit the wall-clock gain when several PRs run together.
+
+Local validation: workflow regression tests exercise the actual shell of all three gates with success, failure, cancelled, skipped and missing results; retain setup, SHA, timeout and artifact assertions; and verify complete matrix definitions and test-script composition. YAML parsing and Turbo dry-run inspection validate structure and workspace inclusion. Discovery-only inventory checks compare the DB file set via the installed Vitest sequencer and the browser test set via Playwright `--list`, proving exact shard unions without duplicates, including both projects. Discovery is not test execution.
+
+Database/browser execution and actual speed measurements require GitHub CI after the router pushes: this sandbox cannot start PostgreSQL or bind localhost. Full CI on current main and independent RED review remain required. This piece overlaps `.github/workflows/ci.yml`, `tools/ci-workflow.test.mjs` and this document with other CI work; serialize conflicting changes.
