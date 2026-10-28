@@ -132,3 +132,6 @@ export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
 export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+
+export * from "./meter-today-repository.js";
+export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";

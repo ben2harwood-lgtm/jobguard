@@ -94,3 +94,5 @@ export * from "../contractor/practice-worker-switch.application.js";
 export * from "../subscription.application.js";
 export * from "../subscription.authority.js";
 export * from "../contractor/billing.application.js";
+
+export * from "../meter-today.application.js";
