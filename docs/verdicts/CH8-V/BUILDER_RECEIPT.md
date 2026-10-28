@@ -454,3 +454,48 @@ PostgreSQL integration/migration and browser execution remain for GitHub CI
 after the router pushes, as required by this sandbox. No package download,
 localhost binding or git write was attempted. The ready conventional commit
 message is /tmp/ch8-v-catchup-20261028T184354Z-commit-msg.txt.
+
+## PR #381 repair round 2 — 28 October 2026
+
+Ready for router commit of this bounded CH-8 part 1 repair. RED; current-head
+green CI and independent review are still required. No unmerged index entries
+or conflict markers were present in the affected files after the main merge.
+No shared expectation-list rows were changed or removed.
+
+The isolation error originates in withTenant's tenant set_config SELECT, which
+runs before the source callback. Setting transaction isolation in that callback
+is already too late. Both the production snapshot callback and fixture reader
+had this ordering. Added the local withEvidencePackV3Snapshot adapter, which
+changes only the existing helper's BEGIN to BEGIN ISOLATION LEVEL REPEATABLE
+READ, READ ONLY on its acquired client. The source snapshot and fixture now use
+that same adapter. This keeps the shared withTenant API, genuine-context stamp
+check, transaction-local tenant setting, rollback and release behavior intact;
+there is no new context constructor or scanner exception. The adapter is local
+to the evidence-pack source module to avoid widening the shared transaction API
+or changing the source-pinned practice authentication bridge.
+
+Reauthentication and ordinary-source verification still run inside each fresh
+snapshot, on both sides of the external handoff. Lock/reveal producer calls and
+the handoff remain outside the snapshot transaction. Existing conflict,
+revocation, noninterference, integrity and no-write assertions remain unchanged.
+V3 generation and attachment approval still refuse unconditionally. No schema,
+grants, migration, hidden-source access or provider action was added.
+
+Local validation with installed tools and maxWorkers=2:
+
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/auth/context-boundary.test.ts src/evidence-pack-v3.application.test.ts
+  src/evidence-pack-v3.controller.test.ts — PASS, 166 tests. New regression tests
+  assert the exact snapshot BEGIN precedes the tenant and source queries, commit
+  and failure rollback each release the client once, and forged context is
+  refused before connection. The full 145-test context-boundary suite passes.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: Vitest list --maxWorkers=2 for the three v3 integration files
+  (commands, isolation, sources) — PASS, 17 tests collected; not executed.
+  A new PostgreSQL test checks transaction_isolation, transaction_read_only and
+  the tenant setting on the actual snapshot client in CI.
+- git diff --check — PASS; git ls-files -u — empty.
+
+PostgreSQL and browser execution remain for GitHub CI after the router pushes.
+No package download, PostgreSQL start, localhost binding or git write occurred.
+Ready message: /tmp/ch8-v-catchup-20261028T192818Z-commit-msg.txt.

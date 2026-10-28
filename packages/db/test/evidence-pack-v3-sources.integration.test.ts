@@ -3,12 +3,18 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { withTenant } from "../src/tenant-context.js";
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
 import { issuePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
-import { prepareEvidencePackV3Sources, verifyEvidencePackV3Case, loadEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
+import { withEvidencePackV3Snapshot, prepareEvidencePackV3Sources, verifyEvidencePackV3Case, loadEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
 import { heldEvidencePackV3Ports } from "../src/evidence-pack-v3-ports.js";
 import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, type V3Fixture } from "./evidence-pack-v3-fixture.js";
 let f: V3Fixture;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture(); }, 90_000);
 afterAll(async () => { if (f) await closeEvidencePackV3Fixture(f); vi.unstubAllEnvs(); });
+it("source snapshots use repeatable-read and read-only mode with transaction-local tenant context", async () => {
+  const settings = await withEvidencePackV3Snapshot(f.runtime, f.auth.context, async tx =>
+    (await tx.$client.query(`SELECT current_setting('transaction_isolation') isolation,
+      current_setting('transaction_read_only') read_only, current_setting('app.tenant_id') tenant_id`)).rows[0]);
+  expect(settings).toEqual({ isolation: "repeatable read", read_only: "on", tenant_id: f.source.tenantId });
+});
 it("reads the actually commanded owned case and exact ordinary versions without certifying v3", async () => {
   const result = await readOrdinary(f);
   expect(result.scope).toMatchObject({ tenantId: f.source.tenantId, jobId: f.source.jobId, caseId: f.caseId });

@@ -134,6 +134,39 @@ it("malformed session digest fails before principal or source SQL (unit boundary
   expect(query).not.toHaveBeenCalled();
 });
 
+it.each([false, true])("snapshot mode precedes tenant/source queries and releases its client (failure=%s)", async fail => {
+  const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+  const context = testTenantContext(id), statements: Array<{ sql: string; values?: unknown[] }> = [];
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    statements.push({ sql, values });
+    return { rows: [], rowCount: 0 };
+  });
+  const release = vi.fn(), pool = { connect: vi.fn(async () => ({ query, release })) };
+  const work = source.withEvidencePackV3Snapshot(pool, context, async (tx: { $client: { query: typeof query } }) => {
+    await tx.$client.query("SELECT snapshot_source", [id]);
+    if (fail) throw new Error("SOURCE_FAILURE");
+    return "snapshot";
+  });
+  if (fail) await expect(work).rejects.toThrow("SOURCE_FAILURE");
+  else await expect(work).resolves.toBe("snapshot");
+  expect(statements).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+    { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [id] },
+    { sql: "SELECT snapshot_source", values: [id] },
+    { sql: fail ? "ROLLBACK" : "COMMIT", values: undefined },
+  ]);
+  expect(pool.connect).toHaveBeenCalledTimes(1);
+  expect(release).toHaveBeenCalledTimes(1);
+});
+
+it("snapshot setup preserves the genuine-context check before connecting", async () => {
+  const connect = vi.fn(), work = vi.fn();
+  await expect(source.withEvidencePackV3Snapshot({ connect }, { tenantId: id }, work))
+    .rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
+  expect(connect).not.toHaveBeenCalled();
+  expect(work).not.toHaveBeenCalled();
+});
+
 it("C261 binds real public SV-5 services, gates disclosure on lock and verification, and requires the exact completed run", async () => {
   const { bindEvidencePackV3LockReveal, createEvidencePackV3SourcePorts } = ports;
   const { FinalAccountLockRepository } = await import(new URL("../../../packages/db/src/final-account-lock-repository.ts", import.meta.url).href);

@@ -7,8 +7,7 @@ import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { createLockFixture, closeLockFixture } from "./recovery-attribution-fixture.js";
 import { authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
-import { withTenant } from "../src/tenant-context.js";
-import { verifyEvidencePackV3Case, loadEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
+import { withEvidencePackV3Snapshot, verifyEvidencePackV3Case, loadEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
 
 export async function createEvidencePackV3Fixture() {
   const f = await createLockFixture();
@@ -28,8 +27,7 @@ export async function createEvidencePackV3Fixture() {
 export const closeEvidencePackV3Fixture = closeLockFixture;
 export type V3Fixture = Awaited<ReturnType<typeof createEvidencePackV3Fixture>>;
 export function readOrdinary(f: V3Fixture, caseId = f.caseId) {
-  return withTenant(f.runtime, f.auth.context, async tx => {
-    await tx.$client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+  return withEvidencePackV3Snapshot(f.runtime, f.auth.context, async tx => {
     const binding = await verifyEvidencePackV3Case(tx, f.source.tenantId, caseId, f.auth.digest);
     return loadEvidencePackV3Sources(tx, binding);
   });
