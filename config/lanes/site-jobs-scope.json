@@ -7,7 +7,8 @@
       "allow": [
         "packages/db/src/site-visit-repository.ts",
         "packages/db/src/site-jobs-scope.test.ts",
-        "packages/db/test/site-jobs-scope.integration.test.ts"
+        "packages/db/test/site-jobs-scope.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
