@@ -18,15 +18,16 @@ export class BillingController {
  async download(@Param("id") job:string,@Param("batchId") batch:string,@Headers("cookie") cookie?:string){
   try{return (await this.application.download(session(cookie),job,batch)).csv;}catch(e){return fail(e);}
  }
- @Post(":action") @HttpCode(200) @Header("Cache-Control","no-store") @ApiOperation({summary:"Finance-only synthetic billing export, status import or exact delivery approval"})
- @ApiParam({name:"id",type:String,format:"uuid"}) @ApiParam({name:"action",enum:["export","import","approve-delivery"]})
- @ApiBody({schema:{type:"object",description:"Versioned strict command: billing-finalise.v1, billing-import-request.v1, or billing-approve-delivery.v1"}})
+ @Post(":action") @HttpCode(200) @Header("Cache-Control","no-store") @ApiOperation({summary:"Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile"})
+ @ApiParam({name:"id",type:String,format:"uuid"}) @ApiParam({name:"action",enum:["export","import","approve-delivery","advance-delivery"]})
+ @ApiBody({schema:{type:"object",description:"Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"}})
  write(@Param("id") job:string,@Param("action") action:string,@Headers("cookie") cookie:string|undefined,@Headers("origin") origin:string|undefined,@Body() raw:unknown){
   const allowed=(process.env.JOBGUARD_ALLOWED_ORIGINS??"http://localhost:3000").split(",").map(v=>v.trim());
   if(!origin||!allowed.includes(origin))return fail(new ContractorBillingError("BILLING_FORBIDDEN"));
   if(action==="export")return this.application.finalise(session(cookie),job,raw).catch(fail);
   if(action==="import")return this.application.import(session(cookie),job,raw).catch(fail);
   if(action==="approve-delivery")return this.application.approveDelivery(session(cookie),job,raw).catch(fail);
+  if(action==="advance-delivery")return this.application.advance(session(cookie),job,raw).catch(fail);
   return fail(new ContractorBillingError("BILLING_INVALID"));
  }
 }

@@ -56,6 +56,7 @@ export class BillingApplication {
   if(!parsed.success)throw new ContractorBillingError("BILLING_INVALID");
   const delivery=new ContractorBillingDelivery(this.pool,adapters),{outboxActionId,action}=parsed.data;
   await delivery[action](context,session as string,job,outboxActionId);
-  return this.repository.read(context,session as string,job);
+  // The stripped projection, never the repository read: CSV bytes leave only through the download gate.
+  return this.read(session,job);
  }
 }

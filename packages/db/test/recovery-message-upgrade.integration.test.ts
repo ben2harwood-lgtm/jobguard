@@ -93,7 +93,7 @@ describe('0107 upgrade from a populated previous supported schema (through 0106)
     expect(again.id).not.toBe(packId);
   }, 60_000);
 
-  it('lets a case that existed before the upgrade be previewed over its already-approved pack', async () => {
+  it('refuses a new v1 withheld pursuit after successors while preserving its approved pack', async () => {
     // The newest pack (the rebuild above) is not yet approved: an old approval does not carry across a revision.
     const repo = new RecoveryMessageRepository(runtime);
     const actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
@@ -103,7 +103,35 @@ describe('0107 upgrade from a populated previous supported schema (through 0106)
     await packs.approveAttachment(context, fixture.customerCaseId, ready.readiness.packId!, { commandId: randomUUID(), expectedManifestHash: manifestHash, expectedContentHash: contentHash }, actor.actorRef);
     const next = await repo.read(context, fixture.customerCaseId);
     expect(next.readiness).toMatchObject({ eligible: true, outstandingPence: 32000 });
-    const state = await repo.preview(context, fixture.customerCaseId, { version: 'recovery-message-preview.v1', commandId: randomUUID(), expectedCaseRevision: next.readiness.caseRevision, packId: next.readiness.packId! }, actor);
-    expect(state.latest).toMatchObject({ status: 'previewed', message: { amountPence: 32000, recipient: 'practice-customer@example.invalid' } });
+    // 0107's own upgrade proof above remains intact. After all successors, 0207
+    // refuses new withheld pursuit on this unchanged legacy v1 job.
+    const effects = async () => Promise.all(['recovery_message', 'recovery_message_approval', 'recovery_message_event', 'recovery_message_sink', 'action_outbox', 'command_receipt', 'decision', 'decision_resolution', 'action_authorization', 'audit_event'].map(async table =>
+      (await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [fixture.tenantId])).rows[0].n));
+    const before = await effects();
+    await expect(repo.preview(context, fixture.customerCaseId, { version: 'recovery-message-preview.v1', commandId: randomUUID(), expectedCaseRevision: next.readiness.caseRevision, packId: next.readiness.packId! }, actor)).rejects.toMatchObject({ code: 'RECOVERY_TERMS_NOT_APPROVED' });
+    expect(await effects()).toEqual(before);
+    for (const table of ['recovery_message', 'recovery_message_approval', 'recovery_message_sink']) {
+      expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`, [fixture.tenantId, fixture.customerCaseId])).rows[0].n).toBe(0);
+    }
+    expect(await repo.read(context, fixture.customerCaseId)).toEqual(next);
+  });
+
+  it('previews a supported supplier correction at current schema with its exact sources and amount', async () => {
+    const caseId = fixture.caseId, actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
+    // The original supplier case has actual rate/invoice/delivery sources and a
+    // claim revision; add its normal opening event before generating the pack.
+    await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
+      [randomUUID(), fixture.tenantId, fixture.jobId, caseId, randomUUID(), createHash('sha256').update(`open:${caseId}`).digest('hex')]);
+    const packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime);
+    const pack = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(context, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    const ready = await repo.read(context, caseId);
+    expect(ready.readiness).toMatchObject({ eligible: true, outstandingPence: 32000 });
+    const state = await repo.preview(context, caseId, { version: 'recovery-message-preview.v1', commandId: randomUUID(), expectedCaseRevision: ready.readiness.caseRevision, packId: pack.id }, actor);
+    expect(state.latest).toMatchObject({ status: 'previewed', message: {
+      caseType: 'merchant_overcharge', amountPence: 32000, currency: 'GBP', recipient: 'practice-supplier@example.invalid',
+      sourceRefs: [fixture.rateId, fixture.supplierInvoiceId, fixture.supplierDeliveryId],
+      body: 'Practice message — not sent. Our practice supplier records show £320.00 net is questioned in this supplier correction case. Please review the attached example supplier records.',
+    } });
   });
 });
