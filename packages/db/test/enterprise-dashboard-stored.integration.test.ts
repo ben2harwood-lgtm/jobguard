@@ -24,10 +24,17 @@ it("stored ENT-6 billed/paid totals conserve full-composition allocation and tra
   const f = await world(c), invoice = await f.invoice();
   await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([invoice]));
   await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([f.event("paid", {
-    reconciliationId: "fictional-receipt", amount: { netPence: 12000, vatPence: 2400, grossPence: 14400 },
+    effectiveAt: "2026-10-03T12:00:00Z", reconciliationId: "fictional-receipt", amount: { netPence: 12000, vatPence: 2400, grossPence: 14400 },
   })]));
+  // Establish valid stored producer facts before testing the dashboard's scoped read.
+  const storedInvoice = (await f.repo.read(f.ctx, f.session, f.s.jobId)).invoices[0]!.projection;
+  expect(storedInvoice.held).toEqual([]);
+  const storedExtra = storedInvoice.lines.find(l => l.lineId === "extra")!;
+  expect(storedExtra.billedNet).toEqual({ numerator: "24000", denominator: "1" });
+  expect(storedExtra.matchedExtraNet).toEqual({ numerator: "72000", denominator: "31" });
   const s = await session(f.w.members.supervisor.member), context = await contractorSessionContext(c.runtime, s);
   const repo = new EnterpriseDashboardRepository(c.runtime), report = await repo.readBilling(context, s, query);
+  expect(report.complete).toBe(true);
   expect(report.totals.billed.known.pence).toBe(24000);
   // 14400 / 148800 of the whole invoice, then 24000 net extra: 72000/31 pence.
   expect(report.totals.paid.exactPence).toEqual({ numerator: "72000", denominator: "31" });
@@ -38,7 +45,7 @@ it("stored ENT-6 billed/paid totals conserve full-composition allocation and tra
   expect(report.contributions.every(r => r.runId && r.exportLineId && r.factId && r.inputHash)).toBe(true);
   expect(await repo.readBilling(context, s, query)).toEqual(report);
   await f.repo.import(f.ctx, f.session, f.s.jobId, f.importInput([
-    f.event("credited", { originalEventId: invoice.sourceEventId, amount: { netPence: 4000, vatPence: 800, grossPence: 4800 },
+    f.event("credited", { effectiveAt: "2026-10-04T12:00:00Z", originalEventId: invoice.sourceEventId, amount: { netPence: 4000, vatPence: 800, grossPence: 4800 },
       lineAdjustments: [{ externalInvoiceLineId: "extra", netPence: 4000, vatPence: 800, grossPence: 4800 }] }),
   ]));
   const credited = await repo.readBilling(context, s, query);

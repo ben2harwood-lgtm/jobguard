@@ -1,4 +1,4 @@
-# 0275 — ENT-9C stored baseline history
+# 0285 — ENT-9C stored baseline history
 
 Expand-only: two immutable tenant tables and three checked routines; no existing table, row, grant or routine changes. No backfill. Fresh installs and upgrades discover the migration automatically. Forward-fix errors with a later migration; retain historical batches, mappings and audit events. Disable callers if needed; do not delete history.
 

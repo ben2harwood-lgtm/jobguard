@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { deriveUnambiguousBilling } from "./contractor-billing.js";
 import { projectStoredDashboardBilling } from "./enterprise-dashboard-stored-billing.js";
 import { exactPence, parseExactPence, serializeExactPence, sumExactPence } from "./cumulative-fee.js";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -52,4 +53,28 @@ it("refuses duplicate or cross-job stored matches and malformed fractions", () =
   expect(() => projectStoredDashboardBilling(facts, query, [{ ...row(6), jobId: id(99) }])).toThrow("DASHBOARD_INVALID");
   expect(() => projectStoredDashboardBilling(facts, query, [{ ...row(6), paidNet: fraction(1, 0) }])).toThrow("DASHBOARD_INVALID");
   expect(serializeExactPence(exactPence(0n))).toEqual(fraction(0));
+});
+
+it("projects ENT-6's complete stored invoice and partial payment, and keeps equal-time facts held", () => {
+  const invoice = { version: "billing-status.v1", clientContractId: id(5), source: "fictional", sourceEventId: "invoice", invoiceNumber: "Fictional-1",
+    factType: "invoiced", effectiveAt: "2026-10-02T12:00:00Z", remittanceReference: null, reconciliationId: null, originalEventId: null,
+    amount: { netPence: 124000, vatPence: 24800, grossPence: 148800 }, explicit: null, separateInvoice: false, lineAdjustments: [],
+    composition: { declared: { netPence: 124000, vatPence: 24800, grossPence: 148800 }, lines: [
+      { externalInvoiceLineId: "order", kind: "original_order", existedAt: "2026-10-01T00:00:00Z", netPence: 100000, vatPence: 20000, grossPence: 120000, match: null },
+      { externalInvoiceLineId: "extra", kind: "extra", existedAt: "2026-10-01T00:00:00Z", netPence: 24000, vatPence: 4800, grossPence: 28800,
+        match: { exportLineId: id(46), jobId: id(1), extraId: id(6), scopeItemId: id(100), revisionId: id(56), revisionHash: "a".repeat(64) } },
+    ] } };
+  const paid = { ...invoice, factType: "paid", composition: null, sourceEventId: "receipt", reconciliationId: "fictional-receipt",
+    amount: { netPence: 12000, vatPence: 2400, grossPence: 14400 } };
+  // Same timestamps used by the old database fixture are an unresolved ordering, not a payable invoice.
+  expect(() => deriveUnambiguousBilling([invoice, paid])).toThrow("BILLING_POLICY_HELD");
+  const stored = deriveUnambiguousBilling([invoice, { ...paid, effectiveAt: "2026-10-03T12:00:00Z" }]);
+  expect(stored.held).toEqual([]);
+  const summary = stored.lines.find(l => l.lineId === "extra")!;
+  const report = projectStoredDashboardBilling(facts, query, [{ ...row(6), billedNet: summary.billedNet, creditedNet: summary.creditedNet,
+    paidNet: summary.matchedExtraNet, rejected: summary.rejected }]);
+  expect(report.complete).toBe(true);
+  expect(report.totals.billed.known.pence).toBe(24000);
+  expect(report.totals.paid.exactPence).toEqual({ numerator: "72000", denominator: "31" });
+  expect(report.groups[0]?.totals).toEqual(report.totals);
 });
