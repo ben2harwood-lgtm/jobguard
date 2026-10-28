@@ -112,8 +112,6 @@
 {"key":"owner|routine|function:app.record_final_check_disposition(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.confirm_final_check_catch(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.request_final_check_run(uuid,uuid,text)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.final_check_open_catch_case()|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.final_check_claim_catch_case()|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.read_final_check_disputes(uuid,uuid,text)|jobguard_runtime|EXECUTE|-","group":"a-sv5-final-check"},
 {"key":"owner|routine|function:app.read_final_check_disputes(uuid,uuid,text)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},

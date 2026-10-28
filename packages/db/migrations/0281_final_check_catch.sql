@@ -8,7 +8,7 @@ ALTER TABLE app.final_check_disposition_binding ADD CONSTRAINT final_check_dispo
 
 CREATE FUNCTION app.confirm_final_check_catch(t uuid,j uuid,d text,p jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE actor record;prior app.command_receipt;proof app.final_check_reveal_proof;sig app.shadow_commercial_signal;l app.final_account_lock;cid uuid;
- request_digest text;result jsonb;disposition uuid:=gen_random_uuid();event uuid:=gen_random_uuid();scope uuid:=gen_random_uuid();label text;
+ request_digest text;out_result jsonb;disposition uuid:=gen_random_uuid();event uuid:=gen_random_uuid();scope uuid:=gen_random_uuid();label text;
 BEGIN
  SELECT * INTO actor FROM app.final_check_builder(t,j,d,true);
  SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
@@ -43,10 +43,10 @@ BEGIN
  INSERT INTO app.final_check_disposition_binding(tenant_id,job_id,disposition_id,run_id,signal_id,lock_id,expected_signal_revision,command_id,actor_membership_id,identity_user_id,answer,selected_reference_id,selected_reference_kind,request_hash,audit_event_id)
  VALUES(t,j,disposition,proof.run_id,proof.signal_id,l.id,sig.revision,cid,actor.member_id,actor.user_id,'confirmed_extra',NULL,NULL,request_digest,event);
  UPDATE app.shadow_commercial_signal SET state='confirmed_extra',revision=revision+1 WHERE tenant_id=t AND job_id=j AND id=sig.id;
- result:=jsonb_build_object('dispositionId',disposition,'signalId',sig.id,'runId',proof.run_id,'lockId',l.id,'disposition','confirmed_extra','variationId',cid);
- UPDATE app.command_receipt SET status='succeeded',result=result,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
+ out_result:=jsonb_build_object('dispositionId',disposition,'signalId',sig.id,'runId',proof.run_id,'lockId',l.id,'disposition','confirmed_extra','variationId',cid);
+ UPDATE app.command_receipt SET status='succeeded',result=out_result,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
  PERFORM app.append_final_check_audit(event,'membership:'||actor.member_id::text,j,'final_check.catch_confirmed',jsonb_build_object('dispositionId',disposition,'signalId',sig.id,'commandId',cid,'runId',proof.run_id,'variationId',cid));
- RETURN result;
+ RETURN out_result;
 END $$;
 ALTER FUNCTION app.confirm_final_check_catch(uuid,uuid,text,jsonb) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.confirm_final_check_catch(uuid,uuid,text,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure,jobguard_shadow_emergency_access;
