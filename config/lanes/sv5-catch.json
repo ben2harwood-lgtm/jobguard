@@ -33,7 +33,8 @@
         "apps/web/app/api/jobs/[id]/final-check/runs/route.test.ts",
         "apps/web/e2e/global-setup.ts",
         "apps/web/e2e/SV-5.spec.ts",
-        "apps/api/src/shadow-detection.worker.test.ts"
+        "apps/api/src/shadow-detection.worker.test.ts",
+        ".env.example"
       ]
     }
   }
