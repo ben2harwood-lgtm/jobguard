@@ -1,193 +1,192 @@
-// CI ONLY: real PostgreSQL. Parent/source facts are explicitly synthetic fixture
-// setup, not evidence that the held 0258 producer has been enabled.
-import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
-import { mapRecoveryReceiptToLines, calculateCumulativeFee } from "@jobguard/core";
-import { createLockFixture, closeLockFixture, type LockFixture } from "./recovery-attribution-fixture.js";
-import { seedWorkPractice, workTenant } from "./job-work-state-fixtures.js";
-import { StoredReceiptCaseAllocationRepository } from "../src/stored-receipt-case-allocation-repository.js";
-let f: LockFixture;
-const oldEnvironment = process.env.JOBGUARD_ENV;
-beforeAll(async () => { f = await createLockFixture(); }, 120000);
-afterAll(async () => { if (f) await closeLockFixture(f); if (oldEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV=oldEnvironment; });
-const hash = "a".repeat(64);
-async function fixture(kind: "F5" | "F7" = "F7", options: { wrongJob?: boolean; wrongRevision?: boolean; net?: string } = {}) {
- const p = await seedWorkPractice(f), tenant=p.auth.context.tenantId, job=p.jobId;
- const line=randomUUID(), base=randomUUID(), revision=randomUUID(), lock=randomUUID(), invoice=randomUUID(), payment=randomUUID(), movement=randomUUID();
- const check=randomUUID(), mainInvoice=randomUUID(), source=randomUUID(), fact=randomUUID(), allocationRevision=randomUUID(), scope=randomUUID(), commercial=randomUUID(), caseId=randomUUID(), workId=randomUUID(), account=randomUUID();
- const receiptGross = kind === "F5" ? 1464000 : 96000;
- const lines=[{id:line,invoiceId:invoice,netPence:80000,grossPence:96000,outstandingGross:{numerator:"96000",denominator:"1"},existedAt:"2026-10-02T00:00:00Z"}];
- if(kind === "F5") lines.push({id:base,invoiceId:invoice,netPence:3360000,grossPence:4032000,outstandingGross:{numerator:"2832000",denominator:"1"},existedAt:"2026-10-01T00:00:00Z"});
- const mapped=mapRecoveryReceiptToLines({version:"recovery-receipt-facts.v1",environment:"synthetic_demo",direction:"receipt",compositionComplete:true,
-  receipt:{id:payment,invoiceId:invoice,gross:{numerator:String(receiptGross),denominator:"1"},effectiveAt:"2026-10-03T00:00:00Z",sourceRef:movement},lines,
-  explicit:null,separateInvoice:kind === "F7" ? {invoiceId:invoice,sourceRef:invoice} : null});
- const catchShare=mapped.find(x=>x.lineId===line)!;
- await workTenant(f.admin,tenant,async db=>{
-  // All tested commands below restore origin mode and use the runtime login.
-  await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
-   VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional catch line',80000,1)`,[line,tenant,job,options.wrongRevision?randomUUID():revision,commercial,scope]);
-  await db.query(`INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
-   VALUES($1,$2,$3,$4,$5,$6,$6,$6,$6,'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1','synthetic_final_check_terms.v1',$7,'2026-10-02', $8,$8)`,[tenant,job,lock,revision,randomUUID(),hash,p.auth.membershipId,randomUUID()]);
-  await db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status)
-   VALUES($1,$2,$3,$4,'2026-10-02','completed')`,[tenant,job,check,lock]);
-  await db.query(`INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,lock_id,revision_id,check_id)
-   VALUES($1,$2,$3,$4,$5,$6,$7)`,[tenant,job,invoice,kind === "F5"?"final":"supplementary",lock,revision,check]);
-  const insertInvoice=async (id:string,rev:string,net:number)=>db.query(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
-   VALUES($1,$2,$3,$4,$5,$6,'2026-10-02','{}','candidate_m1_standard_v1','GBP',$7,$8,$9,$10,$10,$11,true,'SYNTHETIC - NOT A REAL INVOICE')`,[id,tenant,job,rev,randomUUID(),`SYN-${id.slice(0,18)}`,net,Number(BigInt(net)/5n),Number(BigInt(net)*6n/5n),hash,Buffer.from("synthetic fixture PDF placeholder")]);
-  await insertInvoice(invoice,revision,kind === "F5"?3440000:80000);
-  if(kind === "F7") await insertInvoice(mainInvoice,randomUUID(),3360000);
-  await db.query(`INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence)
-   VALUES($1,$2,$3,$4,$5,$6,$7,'baseline',$7,80000,16000,96000)`,[tenant,job,invoice,line,revision,scope,commercial]);
-  await db.query(`INSERT INTO app.customer_payment(tenant_id,job_id,id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
-   VALUES($1,$2,$3,$4,$5,'2026-10-03',$6,'GBP','bank_transfer','Fictional receipt',true,'manual_builder_attestation')`,[tenant,job,payment,invoice,randomUUID(),receiptGross]);
-  await db.query(`INSERT INTO app.practice_feed_event(id,tenant_id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash)
-   VALUES($1,$2,$3,$4,$5,'settled',$6,'settled-'||$6,'identified','feed',$7,'GBP','settled','synthetic_demo','practice-feed-event.v1',$8)`,[movement,tenant,options.wrongJob?randomUUID():job,account,randomUUID(),kind === "F5" ? "receipt-14640":"receipt-960",receiptGross,hash]);
-  await db.query(`INSERT INTO app.practice_feed_receipt_match(id,tenant_id,job_id,account_id,command_id,payment_id,movement_key,settled_event_id,matched_pence,currency,environment)
-   VALUES($1,$2,$3,$4,$5,$6,$7,'settled-'||$7,$8,'GBP','synthetic_demo')`,[randomUUID(),tenant,job,account,randomUUID(),payment,kind === "F5"?"receipt-14640":"receipt-960",receiptGross]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_revision(tenant_id,job_id,id,command_id,review_id,payment_id,source_hash,source_revision,direction)
-   VALUES($1,$2,$3,$4,$5,$6,$7,1,'receipt')`,[tenant,job,allocationRevision,randomUUID(),randomUUID(),payment,hash]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_source(tenant_id,job_id,id,allocation_revision_id,payment_id,movement_id,movement_hash,invoice_id,revision_id,lock_id,check_id,invoice_kind,source_manifest,receipt_effective_at)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{}','2026-10-03')`,[tenant,job,source,allocationRevision,payment,movement,hash,invoice,revision,lock,check,kind === "F5"?"final":"supplementary"]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_line(tenant_id,job_id,id,source_id,invoice_id,line_id,scope_item_id,commercial_revision_id,rule,source_ref,gross_numerator,gross_denominator,net_numerator,net_denominator,original_line_net_pence,original_line_gross_pence,line_existed_at)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,80000,96000,'2026-10-02')`,[tenant,job,fact,source,invoice,line,scope,commercial,catchShare.rule,catchShare.sourceRef,options.net?"108000":catchShare.gross.numerator,catchShare.gross.denominator,options.net??catchShare.net.numerator,catchShare.net.denominator]);
-  if(kind === "F5") {
-   const deposit=randomUUID(),depositRevision=randomUUID(),depositSource=randomUUID(),depositMovement=randomUUID();
-   const baseline=lines.find(l=>l.id===base)!;
-   const depositShares=mapRecoveryReceiptToLines({version:"recovery-receipt-facts.v1",environment:"synthetic_demo",direction:"receipt",compositionComplete:true,
-    receipt:{id:deposit,invoiceId:invoice,gross:{numerator:"1200000",denominator:"1"},effectiveAt:"2026-10-01T12:00:00Z",sourceRef:depositMovement},
-    lines:[{...baseline,outstandingGross:{numerator:"4032000",denominator:"1"}},lines[0]!],explicit:null,separateInvoice:null});
-   expect(depositShares.some(row=>row.lineId===line)).toBe(false);
-   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
-    VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional main work',3360000,2)`,[base,tenant,job,revision,randomUUID(),scope]);
-   await db.query(`INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence)
-    SELECT tenant_id,job_id,$1,id,final_account_revision_id,scope_item_id,commercial_revision_id,'baseline',source_id,3360000,672000,4032000 FROM app.final_account_line WHERE tenant_id=$2 AND id=$3`,[invoice,tenant,base]);
-   await db.query(`INSERT INTO app.customer_payment(tenant_id,job_id,id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
-    VALUES($1,$2,$3,$4,$5,'2026-10-01',1200000,'GBP','bank_transfer','Fictional pre-lock deposit',true,'manual_builder_attestation')`,[tenant,job,deposit,invoice,randomUUID()]);
-   await db.query(`INSERT INTO app.practice_feed_event(id,tenant_id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash,created_at)
-    VALUES($1,$2,$3,$4,$5,'settled','receipt-12000','settled-receipt-12000','identified','feed',1200000,'GBP','settled','synthetic_demo','practice-feed-event.v1',$6,'2026-10-01T12:00:00Z')`,[depositMovement,tenant,job,account,randomUUID(),hash]);
-   await db.query(`INSERT INTO app.practice_feed_receipt_match(id,tenant_id,job_id,account_id,command_id,payment_id,movement_key,settled_event_id,matched_pence,currency,environment)
-    VALUES($1,$2,$3,$4,$5,$6,'receipt-12000','settled-receipt-12000',1200000,'GBP','synthetic_demo')`,[randomUUID(),tenant,job,account,randomUUID(),deposit]);
-   await db.query(`INSERT INTO app.receipt_allocation_fact_revision(tenant_id,job_id,id,command_id,review_id,payment_id,source_hash,source_revision,direction)
-    VALUES($1,$2,$3,$4,$5,$6,$7,1,'receipt')`,[tenant,job,depositRevision,randomUUID(),randomUUID(),deposit,hash]);
-   await db.query(`INSERT INTO app.receipt_allocation_fact_source(tenant_id,job_id,id,allocation_revision_id,payment_id,movement_id,movement_hash,invoice_id,revision_id,lock_id,check_id,invoice_kind,source_manifest,receipt_effective_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'final','{}','2026-10-01T12:00:00Z')`,[tenant,job,depositSource,depositRevision,deposit,depositMovement,hash,invoice,revision,lock,check]);
-   for(const [src,share] of [[depositSource,depositShares[0]!],[source,mapped.find(row=>row.lineId===base)!]] as const) {
-    await db.query(`INSERT INTO app.receipt_allocation_fact_line(tenant_id,job_id,id,source_id,invoice_id,line_id,scope_item_id,commercial_revision_id,rule,source_ref,gross_numerator,gross_denominator,net_numerator,net_denominator,original_line_net_pence,original_line_gross_pence,line_existed_at)
-     SELECT tenant_id,job_id,$1,$2,$3,id,scope_item_id,commercial_revision_id,$4,$5,$6,$7,$8,$9,3360000,4032000,'2026-10-01' FROM app.final_account_line WHERE tenant_id=$10 AND id=$11`,[randomUUID(),src,invoice,share.rule,share.sourceRef,share.gross.numerator,share.gross.denominator,share.net.numerator,share.net.denominator,tenant,base]);
-   }
-  }
-  await db.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,synthetic,source_refs) VALUES($1,$2,$3,200000,'GBP','identified',true,$4::jsonb)`,[caseId,tenant,job,JSON.stringify([invoice])]);
-  await db.query(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,200000,'GBP','fixture',$5)`,[randomUUID(),tenant,job,caseId,hash]);
-  await db.query(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened','identified','fixture',$5,$6)`,[randomUUID(),tenant,job,caseId,randomUUID(),hash]);
-  await db.query("SET LOCAL session_replication_role='origin'");
- });
- const command={version:"stored-receipt-case-command.v1" as const,action:"review" as const,commandId:randomUUID(),caseId,workId,factLineId:fact,expectedCaseRevision:2};
- const repo=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo");
- return {...p,tenant,line,base,revision,lock,invoice,mainInvoice,payment,movement,source,fact,scope,commercial,caseId,workId,repo,command,receiptGross,catchShare};
+// CI ONLY: real PostgreSQL and real writer chains. No replica-mode fixtures.
+import {randomUUID} from "node:crypto";
+import {beforeAll,afterAll,expect,it} from "vitest";
+import {calculateCumulativeFee} from "@jobguard/core";
+import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
+import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
+import {testTenantContext} from "./tenant-context-test-utils.js";
+let f:FinalCheckFixture;const environment=process.env.JOBGUARD_ENV;
+beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
+afterAll(async()=>{await closeFinalCheckFixture(f);if(environment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=environment;});
+type Fixture=Awaited<ReturnType<typeof realReceiptFixture>>;
+const repo=()=>new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo");
+async function command(x:Fixture,factLineId=x.fact.lineAllocationId,workId=x.workId){
+ const caseRevision=(await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.caseId])).rows[0].revision as number;
+ return {version:"stored-receipt-case-command.v1" as const,commandId:randomUUID(),action:"review" as const,factLineId,caseId:x.caseId,workId,expectedCaseRevision:caseRevision};
 }
-type Fixture=Awaited<ReturnType<typeof fixture>>;
-const execute=(x:Fixture,command:unknown)=>x.repo.command(x.auth.context,x.jobId,x.auth.digest,command);
-async function save(x:Fixture) {
- const review=await execute(x,x.command);
- const command={...x.command,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash};
- return {result:await execute(x,command),command};
+const execute=(x:Fixture,p:unknown)=>repo().command(x.context,x.jobId,x.auth.digest,p);
+async function save(x:Fixture,factLineId=x.fact.lineAllocationId,workId=x.workId){
+ const p=await command(x,factLineId,workId),review=await execute(x,p),approval={...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash};
+ return {result:await execute(x,approval),approval};
 }
-it.each(["F5","F7"] as const)("saves %s exactly from stored lines; fee rounding stays in the shared kernel",async kind=>{
- const x=await fixture(kind),{result,command}=await save(x);
+it.each(["F5","F7"] as const)("saves %s from real invoice/feed/receipt/producer writers and preserves exact SH-1 money",async kind=>{
+ const x=await realReceiptFixture(f,kind),{result,approval}=await save(x);
  expect(result.facts.net).toEqual({numerator:kind==="F5"?"40000":"80000",denominator:"1"});
  expect(result.facts.rule).toBe(kind==="F5"?"pro_rata":"separate_invoice");
- const stored=(await f.admin.query("SELECT net_numerator,net_denominator,gross_numerator,gross_denominator FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND id=$2",[x.tenant,result.allocationId])).rows[0];
- expect(stored).toEqual({net_numerator:result.facts.net.numerator,net_denominator:"1",gross_numerator:result.facts.gross.numerator,gross_denominator:"1"});
+ const saved=(await f.admin.query("SELECT net_numerator,net_denominator FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,result.allocationId])).rows;
+ expect(saved).toEqual([{net_numerator:result.facts.net.numerator,net_denominator:"1"}]);
+ // Fee arithmetic only; allocation never creates fee entitlement or a posting.
  expect(calculateCumulativeFee({version:"cumulative-fee.v1",cumulativeQualifyingPrincipal:result.facts.net,rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},priorNetPostedPence:0,priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:null}).cumulativeFee.pence).toBe(kind==="F5"?4000:8000);
- if(kind === "F5") {
-  const deposit=(await f.admin.query("SELECT id FROM app.customer_payment WHERE tenant_id=$1 AND job_id=$2 AND amount_pence=1200000 AND paid_on='2026-10-01'",[x.tenant,x.jobId])).rows[0];
-  expect(deposit).toBeDefined();
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_line l JOIN app.receipt_allocation_fact_source s ON(s.tenant_id,s.job_id,s.id)=(l.tenant_id,l.job_id,l.source_id) WHERE l.tenant_id=$1 AND s.payment_id=$2 AND l.line_id=$3",[x.tenant,deposit.id,x.line])).rows).toEqual([{n:0}]);
+ expect(await execute(x,approval)).toEqual({...result,replayed:true});
+ if(kind==="F5"){
+  const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+  expect(snapshot.rows.filter(r=>r.paymentId===x.deposit).every(r=>r.lineId!==x.line)).toBe(true);
+  expect(snapshot.rows.filter(r=>r.paymentId===x.deposit)).toHaveLength(1);
+ }else{
+  expect(x.fact.invoiceBinding.revisionId).not.toBe(x.lock.finalAccountRevisionId);
+  expect((await f.admin.query("SELECT total_pence::text gross FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,x.main.invoiceId])).rows).toEqual([{gross:"4032000"}]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_payment WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.main.invoiceId])).rows).toEqual([{n:0}]);
  }
- if(kind === "F7") {
-  expect((await f.admin.query("SELECT total_pence::text gross FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2",[x.tenant,x.mainInvoice])).rows).toEqual([{gross:"4032000"}]);
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_payment WHERE tenant_id=$1 AND invoice_id=$2",[x.tenant,x.mainInvoice])).rows).toEqual([{n:0}]);
- }
- expect(await execute(x,command)).toEqual({...result,replayed:true});
 });
-it("#346: rejects a movement in another job of the same tenant",async()=>{
- const x=await fixture("F7",{wrongJob:true});await expect(execute(x,x.command)).rejects.toThrow("STORED_RECEIPT_SETTLEMENT_REQUIRED");
+it("#346: another job and another customer's tenant cannot consume the receipt",async()=>{
+ const x=await realReceiptFixture(f),other=await realReceiptFixture(f);
+ await expect(repo().command(x.context,other.jobId,other.auth.digest,await command(x))).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ await expect(repo().command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,await command(x))).rejects.toThrow();
+ // The neutral producer cannot repurpose another job's matched payment either.
+ await expect(other.producer.command(other.context,other.actor,other.auth.digest,other.jobId,{version:"receipt-line-facts-command.v1",action:"review",commandId:randomUUID(),paymentId:x.paymentId,expectedSourceRevision:2})).rejects.toThrow("RECEIPT_LINE_FORBIDDEN");
 });
-it("#368: rejects a line outside the revision bound by lock_id",async()=>{
- const x=await fixture("F7",{wrongRevision:true});await expect(execute(x,x.command)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+it("#368: original-bill references cannot masquerade as supplementary descendants or cite a different lock",async()=>{
+ const x=await realReceiptFixture(f),binding=x.fact.invoiceBinding;
+ const attempt=(invoice:string,line:string,revision:string,lock:string)=>finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("SELECT app.receipt_fact_invoice_line($1,$2,$3,$4,$5,$6,$7)",[x.context.tenantId,x.jobId,invoice,line,revision,lock,binding.checkId]));
+ await expect(attempt(x.invoiceId,x.line,x.lock.finalAccountRevisionId,binding.lockId)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ await expect(attempt(x.main.invoiceId,x.line,binding.revisionId,binding.lockId)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ await expect(attempt(x.invoiceId,x.line,binding.revisionId,randomUUID())).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ // Even a preserved baseline copied into the descendant is excluded: it was on
+ // the original bill and the real supplementary writer never issued it again.
+ const baseline=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[x.context.tenantId,x.jobId,binding.revisionId])).rows[0].id;
+ await expect(attempt(x.invoiceId,baseline,binding.revisionId,binding.lockId)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
 });
-it("#356: rejects net above the immutable line net",async()=>{
- const x=await fixture("F7",{net:"90000"});await expect(execute(x,x.command)).rejects.toThrow("RECEIPT_LINE_CAPACITY_EXCEEDED");
+it("#356: exact line cap, two work items, duplicate facts and conflicting replays fail",async()=>{
+ const x=await realReceiptFixture(f),{approval}=await save(x);
+ await expect(execute(x,await command(x,x.fact.lineAllocationId,randomUUID()))).rejects.toThrow("STORED_RECEIPT_LINE_ALREADY_BOUND");
+ await expect(save(x)).rejects.toThrow("RECEIPT_LINE_CAPACITY_EXCEEDED");
+ await expect(execute(x,{...approval,workId:randomUUID()})).rejects.toThrow("STORED_RECEIPT_IDEMPOTENCY_CONFLICT");
+ const before=(await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_line WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows;
+ await expect(x.produce(x.paymentId)).rejects.toThrow("RECEIPT_LINE_NOT_AVAILABLE");
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_line WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual(before);
 });
-it("#356: two work items cannot cite the same line; a second spend cannot reuse the fact",async()=>{
- const x=await fixture();await save(x);
- await expect(execute(x,{...x.command,commandId:randomUUID(),workId:randomUUID()})).rejects.toThrow("STORED_RECEIPT_LINE_ALREADY_BOUND");
- await expect(save(x)).rejects.toThrow();
- expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows).toEqual([{n:1}]);
-});
-it("concurrent alternate work assignments conserve the line and append one allocation",async()=>{
- const x=await fixture(),other={...x.command,commandId:randomUUID(),workId:randomUUID()};
- const a=await execute(x,x.command),b=await execute(x,other);
- const results=await Promise.allSettled([execute(x,{...x.command,action:"approve",commandId:randomUUID(),reviewId:a.reviewId,approvalHash:a.approvalHash}),execute(x,{...other,action:"approve",commandId:randomUUID(),reviewId:b.reviewId,approvalHash:b.approvalHash})]);
+it("concurrent alternate assignments conserve the line",async()=>{
+ const x=await realReceiptFixture(f),a=await command(x),b=await command(x,x.fact.lineAllocationId,randomUUID());
+ const ar=await execute(x,a),br=await execute(x,b);
+ const results=await Promise.allSettled([execute(x,{...a,action:"approve",commandId:randomUUID(),reviewId:ar.reviewId,approvalHash:ar.approvalHash}),execute(x,{...b,action:"approve",commandId:randomUUID(),reviewId:br.reviewId,approvalHash:br.approvalHash})]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
 });
-it.each(["refund","credit"] as const)("appends a stored %s reversal, preserving original money and exact net",async kind=>{
- const x=await fixture(),{result:original}=await save(x),negative=randomUUID(),source=randomUUID(),revision=randomUUID(),credit=randomUUID();
- const originalRows=(await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows;
- await workTenant(f.admin,x.tenant,async db=>{
-  await db.query("SET LOCAL session_replication_role='replica'");
-  if(kind==="refund") await db.query("INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason) VALUES($1,$2,$3,$4,$5,'Fictional refund')",[randomUUID(),x.tenant,x.jobId,x.payment,randomUUID()]);
-  else await db.query(`INSERT INTO app.customer_credit_note(id,tenant_id,job_id,invoice_id,authorization_id,net_pence,tax_pence,total_pence,amount_pence,currency,reason,credit_number)
-   VALUES($1,$2,$3,$4,$5,-80000,-16000,-96000,96000,'GBP','Fictional credit','SYN-'||$1::text)`,[credit,x.tenant,x.jobId,x.invoice,randomUUID()]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_revision(tenant_id,job_id,id,command_id,review_id,payment_id,source_hash,source_revision,direction)
-   VALUES($1,$2,$3,$4,$5,$6,$7,2,'reversal')`,[x.tenant,x.jobId,revision,randomUUID(),randomUUID(),x.payment,hash]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_source(tenant_id,job_id,id,allocation_revision_id,payment_id,movement_id,movement_hash,invoice_id,revision_id,lock_id,check_id,invoice_kind,source_manifest,receipt_effective_at)
-   SELECT tenant_id,job_id,$1,$2,payment_id,movement_id,movement_hash,invoice_id,revision_id,lock_id,check_id,invoice_kind,$3::jsonb,receipt_effective_at FROM app.receipt_allocation_fact_source WHERE tenant_id=$4 AND id=$5`,[source,revision,JSON.stringify(kind==="credit"?{creditNoteId:credit}:{}),x.tenant,x.source]);
-  await db.query(`INSERT INTO app.receipt_allocation_fact_line(tenant_id,job_id,id,source_id,invoice_id,line_id,scope_item_id,commercial_revision_id,rule,source_ref,gross_numerator,gross_denominator,net_numerator,net_denominator,original_line_net_pence,original_line_gross_pence,line_existed_at,reverses_line_allocation_id)
-   SELECT tenant_id,job_id,$1,$2,invoice_id,line_id,scope_item_id,commercial_revision_id,rule,source_ref,'-96000','1','-80000','1',original_line_net_pence,original_line_gross_pence,line_existed_at,id FROM app.receipt_allocation_fact_line WHERE tenant_id=$3 AND id=$4`,[negative,source,x.tenant,x.fact]);
-  await db.query("SET LOCAL session_replication_role='origin'");
- });
- const reversed=await save({...x,command:{...x.command,commandId:randomUUID(),factLineId:negative}});
- expect(reversed.result.facts).toMatchObject({net:{numerator:"-80000",denominator:"1"},reversesId:original.allocationId});
- const after=(await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows;
- expect(after).toHaveLength(2);expect(after).toContainEqual(originalRows[0]);
- expect((await f.admin.query("SELECT sum(net_numerator::numeric) n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows).toEqual([{n:"0"}]);
+it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutable, replay-safe reversal",async kind=>{
+ const x=await realReceiptFixture(f),{result:original}=await save(x),originalBytes=(await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,original.allocationId])).rows[0];
+ let sourceId:string;
+ if(kind==="refund"){
+  // Loss/revocation of the original proof cannot prevent a negative correction.
+  await finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),x.context.tenantId,x.evidence,x.actor.membershipId]));
+  await finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id::text=$2",[x.context.tenantId,x.fact.approvalRef]));
+  await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional full refund"});
+  sourceId=(await f.admin.query("SELECT id FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",[x.context.tenantId,x.paymentId])).rows[0].id;
+ }else{
+  const preview=await x.invoices.previewCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,netPence:80000,reason:"Fictional item credit"});
+  sourceId=(await x.invoices.issueCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),netPence:80000,reason:"Fictional item credit",previewHash:preview.previewHash})).creditNoteId;
+ }
+ const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
+ const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-facts-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:kind==="refund"?"payment_reversal":"credit_note",sourceId},expectedSourceRevision:snapshot.revision});
+ const approval={version:"receipt-line-facts-command.v1",action:"reverse",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision};
+ if(kind==="refund"){
+  await f.admin.query(`CREATE FUNCTION app.receipt_r1_source_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='receipt_facts.reverse' THEN RAISE EXCEPTION 'RECEIPT_R1_SOURCE_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;
+   CREATE TRIGGER receipt_r1_source_audit_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.receipt_r1_source_audit_failure()`);
+  try{
+   await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,approval)).rejects.toThrow("RECEIPT_R1_SOURCE_AUDIT_FAILURE");
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_revision WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:1}]);
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_command WHERE tenant_id=$1 AND command_id=$2",[x.context.tenantId,approval.commandId])).rows).toEqual([{n:0}]);
+  }finally{await f.admin.query("ALTER TABLE app.audit_event DISABLE TRIGGER receipt_r1_source_audit_failure");}
+ }
+ const negative=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,approval);
+ expect(await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,approval)).toEqual({...negative,replayed:true});
+ const after=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId}),line=after.rows.find(r=>r.direction==="reversal"&&r.lineId===x.line)!;
+ expect(line.net).toEqual({numerator:"-80000",denominator:"1"});
+ expect(line.reversesLineAllocationId).toBe(x.fact.lineAllocationId);
+ if(kind==="refund"){expect(after.holds).toContain("INVALIDATED_EVIDENCE");expect(after.holds).toContain("APPROVAL_REVOKED");}
+ const reversed=await save(x,line.lineAllocationId);
+ expect(reversed.result.facts.reversesId).toBe(original.allocationId);
+ expect((await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,original.allocationId])).rows[0]).toEqual(originalBytes);
+ await expect(save(x,line.lineAllocationId)).rejects.toThrow();
 });
-it("strict SQL boundary refuses injected amounts and runtime cannot read private bridge or allocation tables",async()=>{
- const x=await fixture();
- await expect(workTenant(f.runtime,x.tenant,db=>db.query("SELECT * FROM app.stored_receipt_case_allocation"))).rejects.toMatchObject({code:"42501"});
- await expect(workTenant(f.runtime,x.tenant,async db=>{
-  await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
-  await db.query("SELECT app.allocate_stored_receipt_line($1,$2,$3,$4::jsonb)",[x.tenant,x.jobId,x.auth.digest,JSON.stringify({...x.command,netPence:1})]);
- })).rejects.toThrow("INVALID_STORED_RECEIPT_COMMAND");
+it("forged money and artifacts are refused at SQL, and private tables have no runtime grant",async()=>{
+ const x=await realReceiptFixture(f);
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT * FROM app.receipt_allocation_fact_line"))).rejects.toMatchObject({code:"42501"});
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");return db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,$5::jsonb)",[x.context.tenantId,x.jobId,x.auth.digest,{version:"receipt-line-facts-command.v1",action:"review",commandId:randomUUID(),paymentId:x.paymentId,expectedSourceRevision:2,grossPence:1},{grossPence:1}]);})).rejects.toThrow("INVALID_RECEIPT_LINE_COMMAND");
 });
-it("a deposit before the catch existed cannot be allocated to it",async()=>{
- const x=await fixture("F5");
- await workTenant(f.admin,x.tenant,async db=>{
-  await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.receipt_allocation_fact_source SET receipt_effective_at='2026-10-01' WHERE tenant_id=$1 AND id=$2",[x.tenant,x.source]);
-  await db.query("SET LOCAL session_replication_role='origin'");
- });
- await expect(execute(x,x.command)).rejects.toThrow("STORED_RECEIPT_NOT_AVAILABLE");
+it("positive producer replay is exact; a changed payload and a stale watermark cannot authorize new work",async()=>{
+ const x=await realReceiptFixture(f),p={version:"receipt-line-facts-command.v1",action:"approve",commandId:x.produced.commandId,reviewId:x.produced.reviewId,approvalHash:x.produced.approvalHash,expectedSourceRevision:x.produced.sourceRevision};
+ expect(await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,p)).toEqual({...x.produced,replayed:true});
+ await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{...p,approvalHash:"b".repeat(64)})).rejects.toThrow("RECEIPT_LINE_IDEMPOTENCY_CONFLICT");
+ await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:p.version,action:"review",commandId:randomUUID(),paymentId:x.paymentId,expectedSourceRevision:1})).rejects.toThrow("RECEIPT_LINE_SOURCE_CHANGED");
 });
-it("approval tampering and revoked sessions leave allocations absent",async()=>{
- const x=await fixture(),review=await execute(x,x.command);
- await expect(execute(x,{...x.command,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:"b".repeat(64)})).rejects.toThrow("STORED_RECEIPT_APPROVAL_CHANGED");
+it("unmatched and pending attestations never become neutral money",async()=>{
+ const x=await realReceiptFixture(f,"F5"),payment=await x.invoices.recordReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:38400,method:"bank_transfer",reference:"Fictional unmatched receipt"});
+ const review={version:"receipt-line-facts-command.v1",action:"review",commandId:randomUUID(),expectedSourceRevision:3,paymentId:payment.paymentId};
+ await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,review)).rejects.toThrow("RECEIPT_LINE_SETTLEMENT_REQUIRED");
+ const {PracticeFeedRepository}=await import("../src/practice-feed-repository.js"),feed=new PracticeFeedRepository(f.runtime,"synthetic_demo"),view=await feed.view(x.context,x.actor,x.auth.digest,x.jobId);
+ await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action:"advance",commandId:randomUUID(),expectedRevision:view.revision,movement:"receipt-384",step:"pending"});
+ await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{...review,commandId:randomUUID()})).rejects.toThrow("RECEIPT_LINE_SETTLEMENT_REQUIRED");
+ const creditPreview=await x.invoices.previewCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,netPence:32000,reason:"Fictional earlier credit"});
+ await x.invoices.issueCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),netPence:32000,reason:"Fictional earlier credit",previewHash:creditPreview.previewHash});
+ const pending=await feed.view(x.context,x.actor,x.auth.digest,x.jobId);
+ const settled=await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action:"advance",commandId:randomUUID(),expectedRevision:pending.revision,movement:"receipt-384",step:"settled"});
+ await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action:"match_receipt",commandId:randomUUID(),expectedRevision:settled.revision,movement:"receipt-384",paymentId:payment.paymentId});
+ await expect(x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{...review,commandId:randomUUID()})).rejects.toThrow("RECEIPT_LINE_CREDIT_COMPOSITION_REQUIRED");
+});
+it("approval tampering and a revoked session cannot allocate",async()=>{
+ const x=await realReceiptFixture(f),p=await command(x),review=await execute(x,p);
+ await expect(execute(x,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:"b".repeat(64)})).rejects.toThrow("STORED_RECEIPT_APPROVAL_CHANGED");
  await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[x.auth.digest]);
- await expect(execute(x,x.command)).rejects.toThrow();
- expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows).toEqual([{n:0}]);
+ await expect(execute(x,p)).rejects.toThrow();
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0}]);
 });
-it("an audit failure rolls back allocation, authorization, resolution and command together",async()=>{
- const x=await fixture(),review=await execute(x,x.command),command={...x.command,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash};
- const decision=(await f.admin.query("SELECT decision_id FROM app.stored_receipt_case_command WHERE tenant_id=$1 AND command_id=$2",[x.tenant,review.reviewId])).rows[0].decision_id;
- await f.admin.query(`CREATE FUNCTION app.stored_receipt_test_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='recovery.stored_receipt_allocated' THEN RAISE EXCEPTION 'STORED_RECEIPT_TEST_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;
-  CREATE TRIGGER stored_receipt_test_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.stored_receipt_test_audit_failure()`);
- try {
-  await expect(execute(x,command)).rejects.toThrow("STORED_RECEIPT_TEST_AUDIT_FAILURE");
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_command WHERE tenant_id=$1 AND command_id=$2",[x.tenant,command.commandId])).rows).toEqual([{n:0}]);
-  for(const table of ["action_authorization","decision_resolution"]) expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND decision_id=$2`,[x.tenant,decision])).rows).toEqual([{n:0}]);
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.tenant,x.jobId])).rows).toEqual([{n:0}]);
- } finally { await f.admin.query("ALTER TABLE app.audit_event DISABLE TRIGGER stored_receipt_test_failure"); }
- await expect(execute(x,command)).resolves.toMatchObject({replayed:false});
+it("audit failure rolls back the consumer's money, authorization, resolution and command",async()=>{
+ const x=await realReceiptFixture(f),p=await command(x),review=await execute(x,p),approval={...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash};
+ const decision=(await f.admin.query("SELECT decision_id FROM app.stored_receipt_case_command WHERE tenant_id=$1 AND command_id=$2",[x.context.tenantId,review.reviewId])).rows[0].decision_id;
+ await f.admin.query(`CREATE FUNCTION app.receipt_r1_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='recovery.stored_receipt_allocated' THEN RAISE EXCEPTION 'RECEIPT_R1_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;
+ CREATE TRIGGER receipt_r1_audit_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.receipt_r1_audit_failure()`);
+ try{
+  await expect(execute(x,approval)).rejects.toThrow("RECEIPT_R1_AUDIT_FAILURE");
+  for(const table of ["action_authorization","decision_resolution"])expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND decision_id=$2`,[x.context.tenantId,decision])).rows).toEqual([{n:0}]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_command WHERE tenant_id=$1 AND command_id=$2",[x.context.tenantId,approval.commandId])).rows).toEqual([{n:0}]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0}]);
+ }finally{await f.admin.query("ALTER TABLE app.audit_event DISABLE TRIGGER receipt_r1_audit_failure");}
+ await expect(execute(x,approval)).resolves.toMatchObject({replayed:false});
+});
+it("RED catch requirement 1: supplementary binding needs this exact lock and completed check",async()=>{
+ const x=await realReceiptFixture(f),other=await realReceiptFixture(f),b=x.fact.invoiceBinding;
+ const bound=(await f.admin.query(`SELECT b.invoice_kind,b.lock_id,b.revision_id,b.check_id,ch.status
+  FROM app.final_account_invoice_binding b JOIN app.final_account_lock_check ch
+  ON(ch.tenant_id,ch.job_id,ch.lock_id,ch.id)=(b.tenant_id,b.job_id,b.lock_id,b.check_id)
+  WHERE b.tenant_id=$1 AND b.job_id=$2 AND b.invoice_id=$3`,[x.context.tenantId,x.jobId,x.invoiceId])).rows;
+ expect(bound).toEqual([{invoice_kind:"supplementary",lock_id:x.lock.id,revision_id:b.revisionId,check_id:b.checkId,status:"completed"}]);
+ const attempt=(invoice:string,check:string)=>finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("SELECT app.receipt_fact_invoice_line($1,$2,$3,$4,$5,$6,$7)",[x.context.tenantId,x.jobId,invoice,x.line,b.revisionId,x.lock.id,check]));
+ await expect(attempt(x.invoiceId,b.checkId)).resolves.toBeDefined();
+ // Another genuinely completed check does not authorize this invoice/lock.
+ await expect(attempt(x.invoiceId,other.fact.invoiceBinding.checkId)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ // The real original invoice is final, never this catch's supplementary binding.
+ await expect(attempt(x.main.invoiceId,b.checkId)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+});
+it("RED catch requirement 2: the case's own variation/revision is mandatory; invoice refs cannot borrow its catch",async()=>{
+ const x=await realReceiptFixture(f),{RecoveryCaseRepository}=await import("../src/recovery-case-repository.js");
+ const identity=(await f.admin.query(`SELECT c.source_refs,vr.id revision_id,vr.variation_id
+  FROM app.recovery_case c JOIN app.variation_revision vr ON vr.tenant_id=c.tenant_id AND vr.job_id=c.job_id AND vr.id=$3
+  WHERE c.tenant_id=$1 AND c.id=$2`,[x.context.tenantId,x.caseId,x.fact.commercialRevisionId])).rows[0];
+ expect(identity.source_refs).toContain(`variation:${identity.variation_id}`);
+ expect(identity.source_refs).toContain(`revision:${identity.revision_id}`);
+ const foreignCase=await new RecoveryCaseRepository(x.scoped).command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional unrelated recovery",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[x.invoiceId],claimedNetPence:80000},x.actor);
+ const p={...await command(x),caseId:foreignCase.id};
+ await expect(execute(x,p)).rejects.toThrow("STORED_RECEIPT_CASE_SOURCE_REQUIRED");
+ // Produce a genuine settled original-bill fact, then try assigning it to the
+ // catch case. Its correct locked revision must not make it a catch variation.
+ const payment=await x.invoices.recordReceipt(x.context,{jobId:x.jobId,invoiceId:x.main.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:38400,method:"bank_transfer",reference:"Fictional original-bill receipt"});
+ const {PracticeFeedRepository}=await import("../src/practice-feed-repository.js"),feed=new PracticeFeedRepository(f.runtime,"synthetic_demo"),view=await feed.view(x.context,x.actor,x.auth.digest,x.jobId);
+ const settled=await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action:"advance",commandId:randomUUID(),expectedRevision:view.revision,movement:"receipt-384",step:"settled"});
+ await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action:"match_receipt",commandId:randomUUID(),expectedRevision:settled.revision,movement:"receipt-384",paymentId:payment.paymentId});
+ await x.produce(payment.paymentId);
+ const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId}),original=snapshot.rows.find(row=>row.paymentId===payment.paymentId)!;
+ expect(original.invoiceBinding).toMatchObject({invoiceKind:"final",revisionId:x.lock.finalAccountRevisionId});
+ await expect(execute(x,await command(x,original.lineAllocationId))).rejects.toThrow("STORED_RECEIPT_CASE_SOURCE_REQUIRED");
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0}]);
+ await expect(save(x)).resolves.toMatchObject({result:{facts:{caseId:x.caseId,lineId:x.line}}});
 });

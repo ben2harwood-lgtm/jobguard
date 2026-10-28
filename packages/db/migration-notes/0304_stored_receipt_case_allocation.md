@@ -1,69 +1,132 @@
-# M4-8-S part 2 — stored receipt-line consumer (RED)
+# M4-8-S part 2 — neutral receipt producer and case consumer (RED)
 
-0304 adds a synthetic-only SQL writer and repository for reviewing and approving
-allocation of immutable 0258 receipt lines to a recovery case and work item.
-Commands carry IDs and expected case revisions; neither amounts nor an artifact
-are accepted. Exact signed gross/net fractions, rule, source, movement, lock,
-case revision and reference-policy version are reconstructed in SQL. Tax is the
-exact difference between gross and net; no deemed amount is rounded. Approval
-creates an approved Decision resolution and an authorization bound by the hash
-of the exact rational artifact, including GBP. The integer authorization amount
-and currency columns remain NULL together; the exact fractions and their
-currency are bound in the content hash rather than rounded into integer pence. It is not a fee authorization or entitlement.
+Repair round 1 for PR #383, migration 0304 edited in place before merge.
+The original implementation incorrectly required supplementary catches to use
+exactly the original locked revision, used replica-mode F5/F7 fixtures, and left
+the receipt producer held. Those were implementation defects, not release gates.
 
-The source projection binds the movement to both tenant and job (#346), the
-actual and invoiced line to the revision behind the exact lock (#368), and the
-invoice binding to its completed lock check. Exact cumulative historical
-positive net/gross cannot exceed the line; gross cannot exceed the matched
-receipt (#356). A permanent line/work/case binding prevents a second work item
-claiming the line. Source facts are consumed once. Receipt, case, command and
-line locks precede audit; replay reauthenticates and returns the original result.
-Same-ID/different-payload replay fails. Commit/transport ambiguity is left as an
-error; retry uses the original command ID. There are no network actions.
+## Revision and source authority
 
-Reversals consume stored negative bridge lines linked to their original saved
-allocation. A stored payment reversal or invoice credit is required. Reversal
-magnitudes are bounded by the original allocation; a credit's total consumption
-is also bounded across lines. Original rows and bindings remain immutable;
-reversals do not silently replenish historical positive capacity. The legacy
-case writer is guarded against reusing a receipt consumed by this path, under
-its existing receipt lock. New tables have FORCE RLS, owner-only access and
-append-only guards. The sole new runtime capability is the checked command.
+`receipt_fact_invoice_line` is shared by producer, reader and consumer. An
+original final-invoice line must be on the locked revision. A supplementary line
+must belong to its actual issued invoice's descendant revision, with a same-job,
+same-tenant, same-baseline, strictly decreasing ancestry chain reaching exactly
+the original lock. Cycles cannot qualify. The supplementary line's immutable
+commercial identity must not occur on the locked bill, including where a new
+line UUID was minted for a preserved baseline. Its invoice binding and completed
+check remain exact. The invoice writer's descendant contract is preserved.
 
-The existing 0258 source producer/read routines remain held. This change consumes
-stored bridge rows; it does not create or clear source facts, enable the held
-producer, change the legacy money projections, issue fees, or expose a new HTTP
-or UI route. The DB fixtures explicitly seed made-up predecessor/source rows with
-replication triggers disabled, restore origin mode, then execute real runtime
-commands. Saved F5/F7 are consumer persistence proofs, not a complete upstream
-receipt/lock/invoice journey. F5 uses SH-1's kernel with £29,280 outstanding after
-the earlier £12,000 deposit and saves £400 exact catch net (£40 fee illustration).
-F7 saves £800 exact (£80 illustration) on the £960 supplementary invoice with
-the £40,320 main invoice still unpaid. No fee is posted by either test.
+`receipt_fact_source_approved` additionally requires the new producer's durable
+command and exact approved authorization. Quarantined 0258 storage fixtures,
+JSON brands or an arbitrary non-null approval reference are not released facts.
+Source approval is historical proof of creation: revocation holds new positive
+use and appears in the read snapshot, while a negative correction remains
+possible after original proof invalidation or approval revocation. The existing
+job-bound movement check (#346), cumulative line net/gross and
+receipt caps, and permanent one-work-item-per-line binding (#356) remain.
 
-Verification in this sandbox:
+## RED reviewer catch-line addendum
 
-- Installed Vitest: 11 boundary tests passed, two workers, one named file;
-  26 LP-0 comparator tests passed in a separate one-file run.
-- Installed TypeScript: database package typecheck passed; core/storage dependencies built
-  to resolve test imports, without downloading packages.
-- Vitest collection: 14 new PostgreSQL/upgrade tests discovered; no hooks or DB
-  suites executed. They cover F5/F7, all three RED conditions, concurrent alternate
-  assignments, replay, refund/credit preservation, deposit exclusion, SQL input
-  rejection, private-table denial, approval/session refusal and atomic rollback on audit failure.
-- Money arithmetic, commercial boundary and core purity checks passed.
-- Additional strict typecheck of integration imports found the existing
-  `test/job-work-state-fixtures.ts:45` string/undefined diagnostic; no change to
-  that shared helper is included. This is separate from the passing package check.
-- Lane JSON/schema and all 10 working-tree paths match exactly. The full lane
-  range check refuses self-comparison before the router creates a commit.
-- PostgreSQL, migrations and browser execution are CI-only under this sandbox.
-  No local PostgreSQL, localhost binding, git writes, providers or releases.
+The supplementary binding requirement is enforced by the shared line guard:
+`final_account_invoice_binding.invoice_kind = supplementary`, this exact lock,
+this issued revision and a completed check belonging to that binding. A new
+writer-driven regression proves the valid binding and refuses a different
+completed check and the original final invoice.
 
-LP-0 records the three routines and sole runtime grant. SERIOUS-B5 records only
-0304's named tables, indexes, policies and signatures, preserving predecessor
-comparisons. The dedicated populated-predecessor upgrade proof checks rows,
-types, keys, mutation controls and replay. No backfill. Application rollback can
-stop calling the new command while retaining all history. Forward fixes use a
-new migration; no history is dropped. Exact-head RED review and green CI remain
-required before merge.
+Catch cases and actual `jobguard_catch` origin lines now use a dedicated source
+rule. The line must be a supplementary variation whose commercial revision and
+scope match `variation_revision`, whose server-written origin is
+`jobguard_catch`, and whose variation ID **and exact revision ID** occur in the
+case's own `variation:` and `revision:` source references. An invoice reference
+alone cannot borrow a catch. The real-writer regression rejects an unrelated
+invoice-referencing recovery case and a genuinely produced original-bill receipt
+assigned to the catch case, then proves the correct catch case still succeeds.
+The original locked-revision rule and original-bill exclusion remain unchanged.
+No replica mode or disabled financial integrity guards are used.
+
+## Neutral producer
+
+The existing SQL `read_receipt_allocation_facts` and
+`write_receipt_allocation_facts` signatures now implement the synthetic producer.
+The new strict `receipt-line-facts-command.v1` protocol accepts IDs/revisions and
+review hashes only. Review names a stored matched receipt. Reversal review names
+the original allocation revision and a stored refund/credit ID; the amount comes
+from that stored source. Application amounts, ratios, shares and artifacts are
+refused. The old build-ahead command protocol remains explicitly refused, so an
+old amount-bearing reversal cannot acquire authority accidentally.
+
+SQL derives the complete composition from issued immutable line snapshots and
+settled matched practice events; it checks actual invoice totals and, for new
+positive distributions, the current final-check certificate. Negative
+corrections retain the original issued/check binding without requiring
+invalidated evidence to become valid again. Explicit persisted verified remittance has priority,
+then an actual supplementary invoice, then pro-rata outstanding gross. Multiple
+conflicting remittances fail closed. A payment reference is not remittance
+proof. Line existence uses server scope/commercial creation times, never an
+application/device timestamp. Earlier matched receipts must be processed first. An earlier unprocessed
+refund distribution holds a later receipt. A prior invoice credit requires a
+corrected, line-bound commercial composition before later positive receipts; a
+negative credit allocation does not silently reopen receipt capacity. The
+producer refuses rather than guessing the credit principal denominator.
+Refunds use original paid shares net of linked reversals; credits cannot consume
+more than their stored value across receipts. Reversal time is the stored refund
+or credit time, so a later credit cannot change an earlier receipt denominator.
+No deemed amount or net/tax ratio is rounded.
+
+The repository runs SH-1's existing kernel over the returned stored input and
+checks every SQL proposal before returning it or committing. SQL's independent
+exact derivation is necessary because the database cannot accept application
+money. This uses the existing 0258 tables, exact fraction helpers and append-only
+guards, rather than introducing another settlement store or allocation policy.
+
+Reviews, exact approved Decisions/authorizations, consumption, replay results and
+audit are transactional. Source hashes include current stored money facts and
+invalidations; approval re-derives them. Identical replays reauthenticate and
+return their first result; changed payloads fail. SSI starts at BEGIN, before
+practice/tenant setup, preserving 0258's isolation requirement. Transport/commit
+ambiguity and serialization failures remain errors: retry the same command ID.
+Runtime still has no direct source/allocation table grants. Private helper
+routines have no runtime/public EXECUTE. Live/pilot environments remain refused.
+
+## Writer-driven proofs and attacks
+
+F5/F7 now run normal quote/send/accept/activation, variation, final-account,
+lock/check, invoice, practice-feed, receipt and producer writers. Initial fake
+source/evidence recipes retain every trigger and FK. No replica mode or disabled
+financial integrity guard is used. F5 settles its £12,000 deposit before the
+later variation exists, then saves £400 exact line net from £14,640 against
+£29,280 outstanding. This original-bill builder capture is fee-free; the £40
+kernel assertion is arithmetic only, not fee entitlement. F7 confirms/prices and
+customer-approves a real post-lock catch, assembles a descendant, issues the £960
+supplementary invoice and saves £800 exact, while the £40,320 original remains
+unpaid. Its £80 kernel assertion likewise makes no fee posting.
+
+Tests cover original-bill/descendant/different-lock references, cross-job/customer
+access, reused cash and facts, line caps, competing work assignments, positive
+and negative replay, altered payloads, stale hashes, unmatched/pending receipts,
+refund/credit sources, preserved originals, private grants, approval/session
+refusals, and rollback on producer/consumer audit failure. The legacy writer's
+shared receipt lock and anti-reuse trigger remain. No legacy money projection,
+HTTP route, fee entitlement, provider, release or real-data gate is enabled.
+
+LP-0 records four new private helpers and the changed source-routine call/write
+surface. SERIOUS-B5 unions their exact signatures with the existing expectations;
+predecessor metadata/rows are still compared. 0304 is additive: no backfill or
+historical rewrite. Rollback stops new calls but retains all history; forward
+fixes require another migration after merge.
+
+## Local verification
+
+- Database package typecheck passed.
+- Strict typecheck of the replacement writer-driven integration fixture passed.
+- Focused producer/consumer boundary tests: 19 passed (one named file).
+- API caller-boundary tests: 13 passed (one named file).
+- LP-0 comparator tests: 26 passed (one named file).
+- Money arithmetic and commercial boundary lint passed.
+- Database tests were collected only; PostgreSQL, migration execution and browser
+  suites are CI-only in this sandbox. No PostgreSQL/local listener was started.
+- Exact lane path comparison, conflict-marker scan and diff whitespace check are
+  recorded in the repair handoff. No git-writing commands or downloads.
+
+Green GitHub CI and an independent RED review against the pushed head remain
+necessary. Local test discovery is not database verification or review.
