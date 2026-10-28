@@ -608,3 +608,37 @@ No dependency downloads, git writes, PostgreSQL startup, localhost binding, real
 customer data, providers, money actions or releases. PostgreSQL upgrade/security,
 browser and full CI checks remain for GitHub CI after the router pushes; RED
 review remains the loop owner's gate against the resulting exact head.
+
+## 28 October 2026 main-merge conflict catch-up
+
+Catch-up only for RED M4-17-S; no new behavior or completion of the
+dependency-bound full task. Resolved the workspace/core export conflicts by
+retaining both sides, and unioned LP-0 entries/routines with main. All main
+routine definitions, including its updated evidence-pack routine, remain exact.
+Main's shared upgrade expectations remain in order with the branch's three
+additive routine identities retained. The lane adds the workspace export path.
+
+All 133 migration files already on origin/main are byte-identical to main and
+therefore drop out of the branch diff. The inherited 0302 prerequisite remains.
+Own migration 0310 is byte-identical to HEAD, SHA-256
+`a67fead829fe896aa8a0ba0dd665c1d4ac5155602d9ab724f5f38f63b5f4027e`.
+
+Checks actually run, using Node v24.17.0 and the cached pinned pnpm 10.28.1
+launcher (no package downloads):
+
+- Core Vitest `src/money-trail-reconciliation.test.ts`: 18 passed.
+- Database Vitest `src/money-trail-repository.test.ts`: 8 passed.
+  Both invoked via `pnpm --filter <package> exec vitest run --maxWorkers=2`
+  with one named file per run; runs were serial.
+- Installed TypeScript `tsc -p <package>/tsconfig.json --noEmit` for
+  `packages/core`, `packages/db` and `apps/api`: all passed.
+- Core-purity, money-arithmetic and commercial-boundary tools: passed;
+  core purity reports existing computed-module-name notices.
+- `git diff --check`: passed. Filesystem conflict-marker, export preservation,
+  exact inventory union, main upgrade-expectation preservation, migration byte
+  identity and lane path checks: passed.
+
+No git writes: the router must stage the resolved files to clear the read-only
+index's unmerged entries, commit, push and open the PR. PostgreSQL, migration
+execution, browser and full CI checks remain for GitHub CI after push. One
+independent RED review against the resulting exact head remains required.

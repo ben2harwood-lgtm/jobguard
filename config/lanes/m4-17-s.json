@@ -8,6 +8,7 @@
       "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
       "note": "M4-17-S RED catch-up on M4-12-S; migration 0310. Synthetic reference comparison and read-only availability; run authority remains dependency-bound. No attribution or allocation writer.",
       "allow": [
+        "apps/api/src/workspace/index.ts",
         "packages/core/src/index.ts",
         "packages/core/src/money-trail-reconciliation.ts",
         "packages/core/src/money-trail-reconciliation.test.ts",
