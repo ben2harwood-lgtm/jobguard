@@ -43,6 +43,7 @@ export function PlanScreen() {
     return () => { active = false; };
   }, []);
   return <main className="workspace-page"><h1>Plans and subscription</h1>
+    <p><a href="/meter">Jobs on the go</a></p>
     <p>Synthetic demonstration with made-up company data. Figures are hypothetical. No real payments are taken.</p>
     {error ? <p role="alert">{error === "sign-in" ? <>Sign in to an authorised company to read its subscription. <a href="/sign-in">Company sign-in</a></>
       : "Subscription details are unavailable. Reload to try again."}</p>
