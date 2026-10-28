@@ -615,7 +615,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
-// SV-5 catch/readers (0281-0284): five catch routines and the private practice-source predicate;
+// SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
 // their table, triggers and constraint sit outside this snapshot.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();

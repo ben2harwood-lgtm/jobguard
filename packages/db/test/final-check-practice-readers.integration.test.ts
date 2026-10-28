@@ -70,12 +70,12 @@ it("the source port and SQL refuse a non-synthetic job, and the runtime cannot w
   await expect(repo.begin(a.context,a.jobId)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
 });
 
-it("0284 preserves existing frozen manifests, owners and grants on upgrade; migrate is repeatable", async () => {
+it("0295 preserves existing frozen manifests, owners and grants on upgrade; migrate is repeatable", async () => {
   const { readFile }=await import("node:fs/promises"), { MIGRATION_URLS,migrate }=await import("../src/migrate.js");
   const { installLegacySyntheticPartyFixtures }=await import("./pool-test-utils.js");
   const u=await createFinalCheckFixture(false);
   try {
-    const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0284_final_check_practice_readers.sql"));
+    const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0295_final_check_practice_readers.sql"));
     expect(own).toBeGreaterThan(0);
     await u.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for(const url of MIGRATION_URLS.slice(0,own)) {
