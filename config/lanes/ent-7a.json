@@ -14,7 +14,8 @@
         "packages/db/src/index.ts",
         "packages/db/test/enterprise-fee-derivation.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
-        "docs/contracts/lp-0-effective-privileges-v1.json"
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
       ]
     }
   }
