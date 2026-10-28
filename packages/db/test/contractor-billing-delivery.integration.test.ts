@@ -11,7 +11,11 @@ it("E6-23 E6-24 outcome_unknown delivery is reconciled, never blindly retried",a
  const action=await w.repo.approveDelivery(w.ctx,w.session,w.s.jobId,{version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_sftp",destination:"fictional.invalid",contentHash:v.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()});
  await delivery.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);await delivery.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);expect(calls).toBe(1);
  await delivery.reconcile(w.ctx,w.session,w.s.jobId,action.outboxActionId);expect(reconciliations).toBe(1);expect(calls).toBe(1);
- expect((await w.repo.read(w.ctx,w.session,w.s.jobId)).deliveries[0]).toMatchObject({status:"succeeded"});
+ const after=await w.repo.read(w.ctx,w.session,w.s.jobId);
+ expect(after.deliveries[0]).toMatchObject({status:"succeeded",outbox_action_id:action.outboxActionId});
+ // The screen offers export only to contracts on this job's own work orders.
+ expect(after.clientContractIds).toEqual((await c.admin.query("SELECT DISTINCT contract_id::text id FROM app.work_order WHERE job_id=$1 ORDER BY 1",[w.s.jobId])).rows.map(r=>r.id));
+ expect(after.clientContractIds.length).toBeGreaterThan(0);
 });
 it("E6-23 wrong content hash refuses before creating durable delivery",async()=>{const w=await world(c),batch=await w.exported();expect(await code(w.repo.approveDelivery(w.ctx,w.session,w.s.jobId,{version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:"0".repeat(64),expiresAt:new Date(Date.now()+3600000).toISOString()}))).toBe("BILLING_INVALID");});
 it("E6-25 download retrieves only persisted authorized bytes after the fake action succeeds",async()=>{
