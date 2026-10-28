@@ -65,7 +65,7 @@ describe("DEMO-P1 documentation and fixture contract only", () => {
       expect(binding?.commandSchemaAndRoute).toContain(port);
       for (const other of ["DemoMeterCommands", "DemoSubscriptionCommands", "DemoTrialCommands"].filter(p => p !== port)) expect(binding?.commandSchemaAndRoute).not.toContain(other);
   });
-  it.each(["core-1000", "recovery-18800", "shadow-30000"])("r1 B parses %s source with the installed capture parser", async family => {
+  it.each(["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"])("r1 B parses %s source with the installed capture parser", async family => {
     // Load the actual pure parser source through Vitest without adding an AI dependency
     // to core's production graph or pulling another package under core's rootDir.
     const parserUrl = new URL("../../ai/src/capture-fixture-parser.ts", import.meta.url);
