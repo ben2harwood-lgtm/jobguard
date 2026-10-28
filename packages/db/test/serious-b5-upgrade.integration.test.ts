@@ -129,7 +129,7 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
-// M4-8-S m48-b1 (0241): only the receipt-line source bridge's own five tables, their indexes, policies and six routines.
+// M4-8-S m48-b1 (0258): only the receipt-line source bridge's own five tables, their indexes, policies and six routines.
 async function receiptFactAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["receipt_allocation_fact_command", "receipt_allocation_fact_line", "receipt_allocation_fact_review", "receipt_allocation_fact_revision", "receipt_allocation_fact_source"];
  const indexNames = [

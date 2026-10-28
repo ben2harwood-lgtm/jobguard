@@ -9,8 +9,8 @@
       "note": "Issued build ahead only. Fail-closed persistence boundary; source authority, coordinator integration, CI and independent acceptance remain held.",
       "allow": [
         "packages/db/src/receipt-line-allocation-repository.ts",
-        "packages/db/migrations/0241_receipt_line_source_bridge.sql",
-        "packages/db/migration-notes/0241_receipt_line_source_bridge.md",
+        "packages/db/migrations/0258_receipt_line_source_bridge.sql",
+        "packages/db/migration-notes/0258_receipt_line_source_bridge.md",
         "packages/db/test/receipt-line-allocation-facts.integration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
         "packages/db/test/receipt-line-allocation-facts-races.integration.test.ts",

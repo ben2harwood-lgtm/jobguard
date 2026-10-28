@@ -1,12 +1,12 @@
-# 0241 receipt-line source bridge — held build-ahead storage
+# 0258 receipt-line source bridge — held build-ahead storage
 
 Round r1 actual base: `acaad61e89401bf3f96c6c5e39b8d7c68d2e602c`
 (dispatcher lane assignment after `43412768`, accepted C0 `e55f1c69`).
 The latest preceding migration actually present is
 `0198_contractor_entitlement_authority.sql`. 0210 belongs to unrelated MON1-A;
-it is not a prerequisite. Additive discovery installs 0241 without a runner edit.
+it is not a prerequisite. Additive discovery installs 0258 without a runner edit.
 Renumbered 0211 -> 0241 on 28 Oct catch-up to main (latest there 0239; 0240 is
-PR 335). PostgreSQL NOT RUN here.
+PR 335). Renumbered 0241 -> 0258 on the second catch-up (main then held 0243; 0244-0257 claimed). PostgreSQL NOT RUN here.
 
 Five empty append-only tenant/job-qualified tables have FORCE RLS and no runtime
 SELECT/INSERT/UPDATE/DELETE/TRUNCATE. Both runtime routines authenticate their
@@ -44,7 +44,7 @@ numeric range overflow rejects a write rather than approximating wide fractions.
 Integration tests explicitly seed synthetic predecessor parents with replication
 triggers disabled, then restore origin mode before every tested insert. They are
 storage tests, not a genuine receipt/source/approval journey. Upgrade proof applies
-only 0241 over populated actual predecessors, compares named rows/types/PKs, uses
+only 0258 over populated actual predecessors, compares named rows/types/PKs, uses
 mutation/retype controls, then runs successors and reruns. No backfill is needed.
 All database and browser checks remain NOT RUN in this sandbox.
 
