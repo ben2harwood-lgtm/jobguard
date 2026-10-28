@@ -81,3 +81,24 @@ by deterministic tenant/date/input keys rather than appended on every GET.
 The public final-account SQL routine takes 184 before job/variation/audit locks,
 so direct SQL entry does not rely on the refresh trigger to acquire it late.
 Required real-PostgreSQL and browser runs remain CI work in this sandbox.
+
+## Last CI repair: source-scoped locking and canonical fact order
+
+0305 SQL changes in this repair: existing live/source guards join capacity
+lock 184 before job SHARE for normal-company small-builder sources.
+General `withTenant` transactions no longer acquire it, preserving the financial
+preflight boundary, receipt identity waits and contractor authority gate 54.
+Builder capture takes 184 before receipt/source/audit; checked work mutations
+take it before the job guard. Direct final-account SQL keeps its early lock.
+The two amended existing guards retain their signatures, owner, ACL and search
+path. Their older LP-0 recorded definition hashes predate this amendment; actual
+PostgreSQL definition capture and runtime verification remain CI evidence.
+
+The SQL commitment clock now uses the core's timestamp/UUID ordering, with
+sequence only breaking the cutoff sentinel tie. The existing reversed-UUID
+finish/evidence comparison stays enforced. CH-4 fixtures insert their explicit
+synthetic commercial track before live so authority, source guards, shadow
+foreign keys and unsupported-import detection are exercised as intended.
+
+All other migration files remain unchanged. No timeout, concurrency assertion,
+permission expectation or negative control was relaxed.

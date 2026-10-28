@@ -841,18 +841,7 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
       const response = await route[endpoint.verb ?? "POST"](new Request("https://synthetic.invalid", { method: endpoint.verb ?? "POST", ...(endpoint.verb ? {} : { body: "{}" }) }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
       expect({ status: response.status, body: await response.json() }).toEqual(expected);
       if (scenario === "missing") { expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); }
-      const lockSql="SELECT pg_advisory_xact_lock(hashtextextended($1,184))";
-      const calls=query.mock.calls;
-      for(let i=0;i<calls.length;i++) {
-       const [sql,values]=calls[i]!;
-       if(sql===lockSql) {
-        expect(scenario).toBe("stranger");
-        expect(values).toEqual(["11111111-1111-4111-8111-111111111111"]);
-        expect(calls[i-1]).toEqual(["SELECT set_config('app.tenant_id', $1, true)",["11111111-1111-4111-8111-111111111111"]]);
-        expect(calls[i+1]![0]).toMatch(/practice_session_digest/);
-       } else expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
-      }
-      expect(calls.filter(([sql])=>sql===lockSql)).toHaveLength(scenario==="stranger"?calls.filter(([sql])=>sql==="BEGIN").length:0);
+      for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
     }
   });
 });

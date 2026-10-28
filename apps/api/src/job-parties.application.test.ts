@@ -36,9 +36,8 @@ describe("CH-3a application boundary", () => {
 });
 
 function expectAccessQueries(calls: Array<[string, (unknown[] | undefined)?]>) {
-  for (const [sql, values] of calls) {
-    if (sql === "SELECT pg_advisory_xact_lock(hashtextextended($1,184))") expect(values).toEqual([DEMO_TENANT_ID]);
-    else expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+  for (const [sql] of calls) {
+    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
   }
 }
 

@@ -152,7 +152,6 @@ it.each([false, true])("snapshot mode precedes tenant/source queries and release
   expect(statements).toEqual([
     { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
     { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [id] },
-    { sql: "SELECT pg_advisory_xact_lock(hashtextextended($1,184))", values: [id] },
     { sql: "SELECT snapshot_source", values: [id] },
     { sql: fail ? "ROLLBACK" : "COMMIT", values: undefined },
   ]);

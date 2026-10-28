@@ -22,7 +22,7 @@ BEGIN
  FOR e IN SELECT kind,fact_at,id,sequence FROM app.job_work_state_event
   WHERE tenant_id=t AND job_id=j AND fact_at<=cutoff AND recorded_at<=cutoff
   UNION ALL SELECT '__now',cutoff,'ffffffff-ffff-4fff-bfff-ffffffffffff'::uuid,9223372036854775807::bigint
-  ORDER BY fact_at,sequence,id LOOP
+  ORDER BY fact_at,id,sequence LOOP
   LOOP
    quiet:=NULL; tail:=NULL; due:=NULL; stop_due:=true;
    IF state='counting' THEN quiet:=(((anchor AT TIME ZONE 'Europe/London')::date+30)::timestamp AT TIME ZONE 'Europe/London'); END IF;
@@ -158,6 +158,27 @@ BEGIN
    DETAIL='Your Solo plan and grace place are full. Move to Builder before starting this site work.';
  END IF;
  -- Builder additions remain unblocked. This routine creates no obligation or charge.
+END $$;
+
+-- Capacity belongs to site-source transactions, not every tenant read or financial
+-- command. Join the serializer before the existing job SHARE lock, only for a
+-- normal-company small-builder job. Reuse the existing
+-- guarded entrypoints; preserve their signatures, owners, grants and authority.
+DO $$ DECLARE original text; changed text; marker text; gate text; BEGIN
+ original:=pg_get_functiondef('app.require_watchdog_live(uuid)'::regprocedure);
+ marker:='  SELECT status INTO lifecycle FROM app.job WHERE tenant_id=tenant AND id=p_job FOR SHARE;';
+ gate:='  IF tenant<>''11111111-1111-4111-8111-111111111111''::uuid AND EXISTS(SELECT 1 FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=tenant AND j.id=p_job AND j.practice_session_digest IS NULL AND c.job_track=''small_builder'' AND c.environment=''synthetic_demo'') THEN'||chr(10)||
+  '   PERFORM pg_advisory_xact_lock(hashtextextended(tenant::text,184));'||chr(10)||'  END IF;'||chr(10);
+ changed:=replace(original,marker,gate||marker);
+ IF changed=original THEN RAISE EXCEPTION 'unexpected watchdog live guard definition'; END IF;
+ EXECUTE changed;
+ original:=pg_get_functiondef('app.ch4_source_job(uuid,uuid)'::regprocedure);
+ marker:=' SELECT * INTO job FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;';
+ gate:=' IF t<>''11111111-1111-4111-8111-111111111111''::uuid AND EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest IS NULL) THEN'||chr(10)||
+  '  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));'||chr(10)||' END IF;'||chr(10);
+ changed:=replace(original,marker,gate||marker);
+ IF changed=original THEN RAISE EXCEPTION 'unexpected site source guard definition'; END IF;
+ EXECUTE changed;
 END $$;
 
 -- Preserve the checked command, exact replay/actor/revision semantics and its ACL.

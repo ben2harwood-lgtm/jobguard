@@ -126,6 +126,8 @@ export class VariationRepository{
   return withTenant(this.pool,context,async db=>{
    const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,input.actorMembershipId])).rows[0];
    if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
+   // Builder capture may restart site work: serialize before receipt, source and audit locks.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,184))",[context.tenantId]);
    const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1,$2,'LogBuilderExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,input.actorMembershipId]);
    if(!claimed.rowCount){

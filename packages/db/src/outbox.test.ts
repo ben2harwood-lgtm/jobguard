@@ -58,7 +58,6 @@ describe("ActionExecutor adapter ownership", () => {
     expect(query.mock.calls.map(([sql]) => sql)).toEqual([
       "BEGIN",
       "SELECT set_config('app.tenant_id', $1, true)",
-      "SELECT pg_advisory_xact_lock(hashtextextended($1,184))",
       "SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))",
       expect.stringMatching(/^SELECT o\.\* FROM app\.action_outbox.*FOR UPDATE OF o$/u),
       "COMMIT",

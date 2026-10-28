@@ -5,9 +5,8 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED MON-1 parts 4-5, PR #388 CI repair. Verify exact tenant serializer SQL/order/bindings at access boundaries; preserve both SERIOUS-B5 additions. Current-photo fixtures use PostgreSQL transaction time rather than millisecond-truncated JS timestamps, preserving activation-before-evidence validation and all grace/cap assertions. PostgreSQL/browser execution remains GitHub CI.",
+      "note": "RED MON-1 PR #388 last CI repair. Scope capacity locks to source/work commands, preserve generic transaction and contractor authority order, add explicit synthetic fixture tracks, and align SQL timestamp/UUID replay with core. Migration 0305 SQL changed for these defects; all other SQL unchanged. PostgreSQL concurrency/security and browser verification remain GitHub CI.",
       "allow": [
-        "apps/api/src/evidence-pack-v3.application.test.ts",
         "apps/api/src/job-parties.application.test.ts",
         "apps/api/src/job-work-state-capacity.test.ts",
         "apps/api/src/job-work-state.errors.ts",
@@ -31,15 +30,13 @@
         "packages/db/migrations/0305_meter_work_admission.sql",
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
         "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/job-work-state-capacity-lock.test.ts",
         "packages/db/src/job-work-state-repository.ts",
         "packages/db/src/meter-lifecycle-repository.test.ts",
         "packages/db/src/meter-today-repository.test.ts",
         "packages/db/src/meter-today-repository.ts",
         "packages/db/src/meter-work-admission.test.ts",
-        "packages/db/src/outbox.test.ts",
-        "packages/db/src/site-jobs-scope.test.ts",
-        "packages/db/src/tenant-context.test.ts",
-        "packages/db/src/tenant-context.ts",
+        "packages/db/src/variation-repository.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/job-work-state-fixtures.ts",

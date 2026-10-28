@@ -48,6 +48,8 @@ export class JobWorkStateRepository {
       (membershipAuthority ? " AND $3::text IS NOT NULL" : " AND c.job_id IN(SELECT id FROM practice_owned_job)")+") allowed",
       [context.tenantId,jobId,digest,actor])).rows[0]?.allowed;
      if(!owner)throw new JobWorkStateError("WORK_STATE_FORBIDDEN");
+     // Match the SQL command's capacity-before-job ordering after authentication.
+     await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,184))",[context.tenantId]);
      await precheck(db);
     }
     const sql=input.data.action==="link"?"SELECT app.ch4_link_post_lock_job($1,$2,$3,$4::jsonb) result":"SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result";

@@ -118,3 +118,22 @@ including when called without withTenant. No fee or payment authority is added.
 
 Grace upgrade Decision delivery and immediate Builder track-review Decision
 creation remain unimplemented follow-up; this repair does not claim them.
+
+## CI repair: scope the capacity serializer to source commands
+
+`withTenant` only installs verified tenant context; it does not acquire lock 184.
+Unrelated reads, financial preflight/execute transactions and contractor authority
+gates keep their existing locks and concurrency. The existing SQL live/source
+guards acquire 184 before job SHARE for normal-company small-builder
+source jobs; shared practice and contractor data do not feed that meter. Builder
+capture acquires 184 after membership verification and before its receipt. Checked
+work commands acquire it before their job guard, and SQL final-account lock keeps
+its early serializer. No business lock is introduced after an audit append.
+
+CH-4 fixtures explicitly insert their synthetic small-builder commercial track
+before entering live; status alone supplies no track or environment authority.
+
+The commitment replay uses the core clock's `(fact_at, id)` order. Sequence is
+only a final tie-break for its synthetic cutoff sentinel, not a replacement for
+the canonical fact order. Simultaneous finish/evidence therefore agrees with the
+independent core comparator, including reversed UUID and sequence order.

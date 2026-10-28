@@ -18,10 +18,6 @@ it.each([0, 200, 201])("the request uses the scope query and preserves projectio
    expect(values).toEqual([actor.membershipId, null]);
    return { rows: [{ decision: "not_found", reason_code: "job_out_of_scope" }] };
   }
-  if (sql === "SELECT pg_advisory_xact_lock(hashtextextended($1,184))") {
-   expect(values).toEqual([actor.tenantId]);
-   return { rows: [] };
-  }
   if (sql === "BEGIN" || sql === "COMMIT" || sql.startsWith("SELECT set_config")) return { rows: [] };
   throw new Error(`Unexpected SQL: ${sql}`);
  });

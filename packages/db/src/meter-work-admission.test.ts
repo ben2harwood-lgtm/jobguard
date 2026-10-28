@@ -47,5 +47,15 @@ it("source reuse keys include tenant, London date and builder source changes; SQ
  expect(migration).toContain("captured:=app.mon1_lifecycle_rebuild(t,digest,existing.id)");
  expect(migration).toContain("captured:=app.mon1_lifecycle_capture(t,digest,source_key,start_day,expected)");
  expect(migration).toContain("pg_advisory_xact_lock(hashtextextended(p_tenant::text,184))");
- expect(migration).toContain("ORDER BY fact_at,sequence,id LOOP");
+ expect(migration).toContain("ORDER BY fact_at,id,sequence LOOP");
+});
+
+it("capacity source gates precede job locks without serializing general tenant transactions", () => {
+ const context=readFileSync(new URL("./tenant-context.ts",import.meta.url),"utf8");
+ expect(context).not.toContain("pg_advisory_xact_lock");
+ for(const signature of ["app.require_watchdog_live(uuid)","app.ch4_source_job(uuid,uuid)"]) expect(migration).toContain(`pg_get_functiondef('${signature}'::regprocedure)`);
+ expect(migration).toContain("changed:=replace(original,marker,gate||marker)");
+ expect(migration).toContain("j.practice_session_digest IS NULL AND c.job_track=''small_builder''");
+ expect(migration).toContain("IF tenant<>''11111111-1111-4111-8111-111111111111''::uuid");
+ expect(migration).toContain("IF t<>''11111111-1111-4111-8111-111111111111''::uuid");
 });

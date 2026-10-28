@@ -41,6 +41,8 @@ export async function seedWorkJob(f: WorkFixture, tenantId = randomUUID()) {
   // Bind explicit fictional parties before entering live, including browser clusters
   // that deliberately do not install the legacy fixture trigger.
   await seedSyntheticPartyFixture(db, tenantId, jobId);
+  // Explicit synthetic authority: current main no longer infers a track from status.
+  await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [tenantId, jobId]);
   await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
