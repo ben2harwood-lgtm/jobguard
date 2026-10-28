@@ -79,6 +79,7 @@ function previousDefinition(definition:string){
   .replace("'reasonHeld',false)\n  ORDER BY","'reasonHeld',NEW.fixture='F21')\n  ORDER BY");
 }
 beforeAll(async()=>{await start();});
+// Installs every predecessor migration, then a fresh database twice; the 5 s default is too short under CI load.
 it("F21FreshInstallAndOwnMigrationUpgrade",async()=>{
  expect(position).toBeGreaterThan(0);expect(names).toEqual([...names].sort());
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -107,7 +108,7 @@ it("F21FreshInstallAndOwnMigrationUpgrade",async()=>{
  // Separate empty database exercises fresh directory-discovered installation.
  const database=`f21_fresh_${randomUUID().replaceAll('-','')}`;await admin.query(`CREATE DATABASE ${database}`);
  const fresh=new Pool({...adminConfig,database});try{await migrate(fresh);await migrate(fresh);expect((await fresh.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names);}finally{await closeTestPools(fresh);}
-});
+},120000);
 it("F21LegacyReplayAfterUpgrade",async()=>{
  expect(await historical.repo.review(ctx,historical.jobId,command,actor,historical.auth.digest)).toEqual(saved);
  const next=await historical.repo.review(ctx,historical.jobId,review(historical.c,"F21",1),actor,historical.auth.digest);
