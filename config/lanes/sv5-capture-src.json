@@ -7,8 +7,8 @@
       ],
       "note": "RED. Ben 28 Oct 'Yes, builder capture': the job's own walk-it text is listed in the Final Check inventory as builder_capture_not_scanned and does not hold completion. Synthetic only.",
       "allow": [
-        "packages/db/migrations/0257_final_check_builder_capture_not_scanned.sql",
-        "packages/db/migration-notes/0257_final_check_builder_capture_not_scanned.md",
+        "packages/db/migrations/0264_final_check_builder_capture_not_scanned.sql",
+        "packages/db/migration-notes/0264_final_check_builder_capture_not_scanned.md",
         "packages/db/test/final-check-capture-text.integration.test.ts",
         "docs/contracts/final-check-v1.md",
         "packages/core/src/final-check.ts",
