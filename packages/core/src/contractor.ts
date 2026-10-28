@@ -16,7 +16,7 @@ export const contractorPermissionMatrix: Record<ContractorRole, readonly Contrac
   read_only: ["contract.read", "job.read", "dashboard.read"],
   client_approver: ["contract.read", "extra.approve"],
 };
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const pence = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
 export const contractorScopeV1 = z.object({ kind: z.enum(["tenant", "region", "branch", "team", "client"]), id: uuid }).strict();
 export type ContractorScope = z.infer<typeof contractorScopeV1>;
@@ -57,13 +57,13 @@ const date = z.string().date();
 export const clientContractDocumentV1 = z.object({
   version: z.literal("client-contract.v1"), reference: z.string().min(1).max(80), startsOn: date, endsOn: date.nullable(),
   sorVersionIds: z.array(uuid).max(100), tenderedAdjustment: z.object({ numerator: z.string().regex(/^-?(0|[1-9]\d{0,11})$/u), denominator: z.string().regex(/^[1-9]\d{0,11}$/u) }).strict(),
-  photoRule: z.enum(["required", "optional"]), vatCode: z.literal("synthetic-unreviewed"), exportedNotBilledAlertDays: z.number().int().min(1).max(3650).default(30),
+  photoRule: z.enum(["required", "optional"]), vatCode: z.literal("synthetic-unreviewed"), exportedNotBilledAlertDays: z.number().int().min(1).max(3650).prefault(30),
 }).strict().refine(v => !v.endsOn || v.endsOn >= v.startsOn, { message: "End date precedes start date", path: ["endsOn"] });
 const base = { version: z.literal("contractor-command.v1"), environment: z.literal("synthetic_demo"), commandId: uuid, expectedRevision: z.number().int().nonnegative(), id: uuid };
 export const contractorCommandV1 = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("unit.create"), unitKind: z.enum(["region", "branch"]), parentId: uuid, name: z.string().min(1).max(100) }).strict(),
   z.object({ ...base, kind: z.literal("team.create"), branchId: uuid, name: z.string().min(1).max(100) }).strict(),
-  z.object({ ...base, kind: z.literal("member.invite"), role: z.enum(contractorRoles), email: z.string().email().endsWith(".invalid"), clientId: uuid.nullable(), contractId: uuid.nullable(), scope: contractorScopeV1 }).strict(),
+  z.object({ ...base, kind: z.literal("member.invite"), role: z.enum(contractorRoles), email: z.email({ error: "Invalid email" }).endsWith(".invalid"), clientId: uuid.nullable(), contractId: uuid.nullable(), scope: contractorScopeV1 }).strict(),
   z.object({ ...base, kind: z.literal("grant.create"), membershipId: uuid, role: z.enum(contractorRoles), scope: contractorScopeV1, contractId: uuid.nullable() }).strict(),
   z.object({ ...base, kind: z.literal("grant.revoke"), grantId: uuid }).strict(),
   z.object({ ...base, kind: z.literal("membership.revoke"), membershipId: uuid }).strict(),
@@ -95,7 +95,7 @@ export const contractorWorkspaceV1 = z.object({
  version: z.literal("contractor-workspace.v1"), environment: z.literal("synthetic_demo"), tenantId: uuid, membershipId: uuid, revision: z.number().int().nonnegative(), realExternalActions: z.literal(0),
  units: z.array(z.object({id:uuid,kind:z.enum(["tenant","region","branch"]),parent_id:uuid.nullable(),name:z.string()})),
  teams: z.array(z.object({id:uuid,branch_id:uuid,name:z.string()})),
- members: z.array(z.object({membership_id:uuid,email:z.string().email().endsWith(".invalid"),client_id:uuid.nullable(),revoked:z.boolean()})),
+ members: z.array(z.object({membership_id:uuid,email:z.email({ error: "Invalid email" }).endsWith(".invalid"),client_id:uuid.nullable(),revoked:z.boolean()})),
  grants: z.array(z.object({id:uuid,membership_id:uuid,role:z.enum(contractorRoles),scope_kind:contractorScopeV1.shape.kind,scope_id:uuid,revoked:z.boolean()})),
  teamMemberships: z.array(z.object({membership_id:uuid,team_id:uuid,active:z.boolean()})),
  clients: z.array(z.object({id:uuid,name:z.string(),branch_id:uuid})),
