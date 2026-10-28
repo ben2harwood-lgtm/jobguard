@@ -6,6 +6,18 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 /** ENT-7a: finance asks the database to derive; it supplies no amount, rate, origin or allocation. */
 export const enterpriseFeeDeriveCommandV1 = z.object({ version: z.literal("enterprise-fee-derive.v1"), commandId: z.guid(),
   agreementVersionId: z.guid(), period: z.string().regex(/^[2-9]\d{3}-(?:0[1-9]|1[0-2])$/u) }).strict();
+const period = z.string().regex(/^[2-9]\d{3}-(?:0[1-9]|1[0-2])$/u);
+/** ENT-7b: finance prepares, disputes and approves an exact statement revision. Amounts are only echoed for binding. */
+export const enterpriseFeePrepareStatementV1 = z.object({ version: z.literal("enterprise-fee-prepare-statement.v1"), commandId: z.guid(), period }).strict();
+export const enterpriseFeeDisputeStatementV1 = z.object({ version: z.literal("enterprise-fee-dispute-statement.v1"), commandId: z.guid(), statementId: z.guid(),
+  reasonCode: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u) }).strict();
+export const enterpriseFeeApproveStatementV1 = z.object({ version: z.literal("enterprise-fee-approve-statement.v1"), commandId: z.guid(), statementId: z.guid(),
+  contentHash: z.string().regex(/^[0-9a-f]{64}$/u), totalDeltaPence: z.number().int().refine(Number.isSafeInteger), expiresAt: z.iso.datetime({ offset: true }) }).strict();
+export type EnterpriseFeeStatementRead = {
+  id: string; period: string; revision: number; predecessorId: string | null; contentHash: string; totalDeltaPence: number;
+  sections: { agreementVersionId: string; derivationId: string; cumulativeFeePence: number; priorNetPostedPence: number; deltaPence: number }[];
+  superseded: boolean; dispute: { reason: string } | null; approval: { authorizationId: string; expiresAt: string } | null;
+};
 export type EnterpriseFeeDerivationRead = {
   id: string; agreementVersionId: string; period: string; recordedCutoff: string; inputHash: string;
   qualifyingPrincipal: { numerator: string; denominator: string }; cumulativeFeePence: number;
@@ -41,5 +53,30 @@ export class EnterpriseFeeRepository {
       return await withTenant(this.pool, context, async db =>
         (await db.$client.query("SELECT app.ef_read($1,$2) result", [session, derivationId])).rows[0].result as EnterpriseFeeDerivationRead);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  private async call<T>(context: VerifiedTenantContext, session: string, sql: string, values: unknown[]): Promise<T> {
+    if (!z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    try { return await withTenant(this.pool, context, async db => (await db.$client.query(sql, [session, ...values])).rows[0].result as T); }
+    catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  private parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
+    const parsed = schema.safeParse(raw); if (!parsed.success) throw new EnterpriseFeeError("INVALID_FEE_INPUT"); return parsed.data;
+  }
+  prepareStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
+    const input = this.parse(enterpriseFeePrepareStatementV1, raw);
+    return this.call<{ statementId: string; replayed: boolean }>(context, session, "SELECT app.ef_prepare_statement($1,$2,$3) result", [input.commandId, input.period]);
+  }
+  disputeStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
+    const input = this.parse(enterpriseFeeDisputeStatementV1, raw);
+    return this.call<{ disputeId: string; replayed: boolean }>(context, session, "SELECT app.ef_dispute_statement($1,$2,$3,$4) result", [input.commandId, input.statementId, input.reasonCode]);
+  }
+  approveStatement(context: VerifiedTenantContext, session: string, raw: unknown) {
+    const input = this.parse(enterpriseFeeApproveStatementV1, raw);
+    return this.call<{ authorizationId: string; replayed: boolean }>(context, session, "SELECT app.ef_approve_statement($1,$2,$3,$4,$5,$6) result",
+      [input.commandId, input.statementId, input.contentHash, input.totalDeltaPence, input.expiresAt]);
+  }
+  readStatement(context: VerifiedTenantContext, session: string, statementId: string) {
+    if (!z.guid().safeParse(statementId).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    return this.call<EnterpriseFeeStatementRead>(context, session, "SELECT app.ef_read_statement($1,$2) result", [statementId]);
   }
 }

@@ -46,6 +46,10 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.enterprise_agreement_version":[],
  "app.enterprise_fee_contribution":[],
  "app.enterprise_fee_derivation":[],
+ "app.enterprise_fee_statement":[],
+ "app.enterprise_fee_statement_approval":[],
+ "app.enterprise_fee_statement_dispute":[],
+ "app.enterprise_fee_statement_section":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
  // 0208/0209 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
