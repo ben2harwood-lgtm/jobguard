@@ -15,6 +15,13 @@ export const enterpriseFeeApproveStatementV1 = z.object({ version: z.literal("en
   contentHash: z.string().regex(/^[0-9a-f]{64}$/u), totalDeltaPence: z.number().int().refine(Number.isSafeInteger), expiresAt: z.iso.datetime({ offset: true }) }).strict();
 /** ENT-7c: finance posts an approved revision by presenting the exact authorisation its approval created. */
 export const enterpriseFeePostStatementV1 = z.object({ version: z.literal("enterprise-fee-post-statement.v1"), commandId: z.guid(), statementId: z.guid(), authorizationId: z.guid() }).strict();
+/** ReconcileExportedDuplicate: explicit finance approval; amounts come only from stored billing facts. */
+export const enterpriseReconcileExportedDuplicateV1 = z.object({ version: z.literal("enterprise-reconcile-exported-duplicate.v1"),
+  commandId: z.guid(), jobId: z.guid(), duplicateId: z.guid(), canonicalId: z.guid() }).strict()
+  .refine(x => x.duplicateId !== x.canonicalId);
+export type EnterpriseDuplicateCorrection = { correctionId: string; linkId: string; contentHash: string; replayed: boolean;
+  corrections: { runId: string; exportLineId: string; source: string; invoiceNumber: string; externalInvoiceLineId: string;
+    kind: "credit_instruction"; netPence: number; grossPence: number }[] };
 export type EnterpriseFeePosting = { id: string; kind: "accrual" | "compensation"; agreementVersionId: string; amountPence: number; compensatesFeeId: string | null;
   environment: "synthetic_demo"; lines: { account: string; debitPence: number; creditPence: number }[] };
 export type EnterpriseFeeStatementRead = {
@@ -97,6 +104,14 @@ export class EnterpriseFeeRepository {
     try {
       return await withTenant(this.pool, context, async db =>
         (await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  async reconcileExportedDuplicate(context: VerifiedTenantContext, session: string, raw: unknown): Promise<EnterpriseDuplicateCorrection> {
+    const input = this.parse(enterpriseReconcileExportedDuplicateV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db =>
+        (await db.$client.query("SELECT app.ef_reconcile_exported_duplicate($1,$2,$3,$4,$5) result",
+          [session, input.commandId, input.jobId, input.duplicateId, input.canonicalId])).rows[0].result as EnterpriseDuplicateCorrection);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
   async readPostings(context: VerifiedTenantContext, session: string, statementId: string): Promise<EnterpriseFeePosting[]> {
