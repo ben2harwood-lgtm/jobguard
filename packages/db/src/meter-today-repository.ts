@@ -9,7 +9,7 @@ export class MeterTodayRepository {
     if (!/^[a-f0-9]{64}$/u.test(digest)) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     try {
       return await withTenant(this.pool, context, async transaction => {
-        const raw = (await transaction.$client.query("SELECT app.mon1_counted_meter_today($1,$2) result", [context.tenantId, digest])).rows[0]?.result;
+        const raw = (await transaction.$client.query("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [context.tenantId, digest])).rows[0]?.result;
         const parsed = meterTodayReadV1.safeParse(raw);
         if (!parsed.success) throw new MeterLifecyclePersistenceError("METER_PROJECTION_MISMATCH");
         return parsed.data;

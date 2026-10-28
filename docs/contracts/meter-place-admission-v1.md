@@ -55,3 +55,20 @@ operations card deduplication remain unimplemented, not implied by oracle labels
 No route/UI/browser workflow belongs to this leaf. MON1-I and CH-5/SV-7A own
 consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
+
+
+## MON-1 remainder, migration 0305
+
+The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
+Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
+refresh of `meter_work_ledger` before admission and after source mutation. The
+ledger stores committed membership, not touched-day billing counts. No caller
+receives a reusable permit or can supply projected numbers. Source fingerprint
+replays verify the stored result; mismatches refuse the entire command.
+
+Normal-company accepted activations are supported. Shared practice aggregation,
+missing agreements and legacy live imports without accepted activation/trip terms
+remain refused. MON1-J's automatic daily-ledger/screen refresh is unfinished;
+`mon1_fresh_counted_meter_today` refuses stale sources with `METER_UNAVAILABLE`.
+Administrative bootstrap assigns its narrow owner and retires the older runtime
+reader in the same transaction. No financial action is introduced.

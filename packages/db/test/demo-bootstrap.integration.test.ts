@@ -27,7 +27,9 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       'ALTER FUNCTION app.mon1_lifecycle_rebuild(uuid,text,uuid) OWNER TO jobguard_meter_owner',
       'ALTER FUNCTION app.mon1_lifecycle_read(uuid,text,uuid) OWNER TO jobguard_meter_owner',
       'ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
     ]);
+    expect(sql).toContain('REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime');
     expect(sql).toContain('GRANT jobguard_migration TO "synthetic_owner" WITH INHERIT FALSE, SET TRUE');
     expect(sql.indexOf('REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner')).toBeLessThan(sql.indexOf('COMMIT'));
     expect(sql.at(-2)).toBe('REVOKE jobguard_meter_owner FROM "synthetic_owner"');

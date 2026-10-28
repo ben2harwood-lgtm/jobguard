@@ -8,7 +8,7 @@ const context = verifiedTenantContextFromMembership({ tenantId, identityUserId: 
 const view = { version: "meter-today-read.v1", hypothetical: true, date: "2026-10-28", plan: "Builder", countedPlaces: 5, freeSmallPlaces: 0 };
 function fixture(raw: unknown = view, error?: Error) {
   const query = vi.fn(async (sql: string, _values?: unknown[]) => {
-    if (sql.includes("mon1_counted_meter_today")) { if (error) throw error; return { rows: [{ result: raw }] }; }
+    if (sql.includes("mon1_fresh_counted_meter_today")) { if (error) throw error; return { rows: [{ result: raw }] }; }
     return { rows: [] };
   });
   const release = vi.fn(), connect = vi.fn(async () => ({ query, release }));
@@ -17,7 +17,7 @@ function fixture(raw: unknown = view, error?: Error) {
 it("reads only the authorized routine with tenant context and digest, committing and releasing", async () => {
   const f = fixture(); expect(await f.repository.read(context, digest)).toEqual(view);
   expect(f.query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-  expect(f.query).toHaveBeenCalledWith("SELECT app.mon1_counted_meter_today($1,$2) result", [tenantId, digest]);
+  expect(f.query).toHaveBeenCalledWith("SELECT app.mon1_fresh_counted_meter_today($1,$2) result", [tenantId, digest]);
   expect(f.query).toHaveBeenLastCalledWith("COMMIT"); expect(f.release).toHaveBeenCalledOnce();
 });
 it("rejects malformed persisted counts instead of displaying zero", async () => {
