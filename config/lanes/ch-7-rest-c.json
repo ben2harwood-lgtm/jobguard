@@ -21,7 +21,8 @@
         "packages/db/test/later-outbox.integration.test.ts",
         "packages/db/test/later-recovery-message-attempt.integration.test.ts",
         "packages/db/test/migfix-8.integration.test.ts",
-        "packages/db/test/recovery-message-upgrade.integration.test.ts"
+        "packages/db/test/recovery-message-upgrade.integration.test.ts",
+        "apps/api/src/recovery-case-terms.application.test.ts"
       ]
     }
   }
