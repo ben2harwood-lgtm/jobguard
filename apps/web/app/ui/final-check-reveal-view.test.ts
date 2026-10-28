@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_RUNNING_TEXT, finalCheckDispositionV1 } from "@jobguard/core";
-import { dispositionCommand, finalCheckReadV1, referenceChoices, revealStatus, type LockedLine } from "./final-check-reveal-view";
+import { FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_RUNNING_TEXT, finalCheckCatchV1, finalCheckDispositionV1 } from "@jobguard/core";
+import { catchCommand, dispositionCommand, finalCheckReadV1, referenceChoices, revealStatus, type LockedLine } from "./final-check-reveal-view";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const lines: LockedLine[] = [
@@ -26,5 +26,8 @@ describe("final check reveal view", () => {
   const included = dispositionCommand(completed, completed.items[0]!, "already_included", id(1), id(9));
   expect(finalCheckDispositionV1.parse(included)).toEqual({ version: "final-check.disposition.v1", commandId: id(9), lockId: id(7), runId: id(8), signalId: id(5), expectedSignalRevision: 1, answer: "already_included", referenceId: id(1) });
   expect(dispositionCommand(completed, completed.items[0]!, "not_completed", id(1), id(9)).referenceId).toBeNull();
+ });
+ it("builds a strict catch confirmation bound to lock, run and signal revision", () => {
+  expect(finalCheckCatchV1.parse(catchCommand(completed, completed.items[0]!, id(9)))).toEqual({ version: "final-check.catch.v1", commandId: id(9), lockId: id(7), runId: id(8), signalId: id(5), expectedSignalRevision: 1 });
  });
 });

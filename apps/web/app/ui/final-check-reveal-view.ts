@@ -27,6 +27,7 @@ export const dispositionLabels: Readonly<Record<string, string>> = {
  already_included: "Already included in a locked line", in_original_scope: "Part of the original quote",
  not_completed: "Not done", not_chargeable: "Not chargeable", wrong_job_or_evidence: "Wrong job or evidence",
  attribution_disputed: "Disputed: paused with no fee until an independent review exists",
+ confirmed_extra: "Yes, extra work: added to your extras as a draft. Price and approve it there; nothing is charged until your customer approves",
 };
 
 /** Screen state only; every answer is checked again by the server. */
@@ -47,4 +48,8 @@ export function referenceChoices(answer: RevealAnswer, lines: readonly LockedLin
 export function dispositionCommand(read: FinalCheckRead, revealed: RevealItem, answer: RevealAnswer, referenceId: string | null, commandId: string) {
  return { version: "final-check.disposition.v1" as const, commandId, lockId: read.lockId!, runId: read.runId!, signalId: revealed.signalId,
   expectedSignalRevision: revealed.signalRevision, answer, referenceId: answer === "already_included" || answer === "in_original_scope" ? referenceId : null };
+}
+
+export function catchCommand(read: FinalCheckRead, revealed: RevealItem, commandId: string) {
+ return { version: "final-check.catch.v1" as const, commandId, lockId: read.lockId!, runId: read.runId!, signalId: revealed.signalId, expectedSignalRevision: revealed.signalRevision };
 }
