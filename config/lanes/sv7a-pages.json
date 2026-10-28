@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-pages": {
+      "branches": [
+        "codex/sandbox/sv7a-pages"
+      ],
+      "note": "RED SV-7A diary and customer-message pages over the checked intake writer (PR 354): standing notice only, on-site flag shown disabled until MON-1 admission, fictional customer name kept separate. UI and browser test only.",
+      "allow": [
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/SV-7A.spec.ts"
+      ]
+    }
+  }
+}
