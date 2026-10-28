@@ -3,7 +3,7 @@ import { exactPenceV1, MAX_ALLOCATION_LINES, parseExactPence } from "./cumulativ
 import { MAX_MONEY_PENCE } from "./money.js";
 import { instantV1 } from "./receipt-allocation.js";
 
-const uuid = z.string().uuid();
+const uuid = z.string().uuid().transform(value => value.toLowerCase());
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const reference = z.string().min(1).max(300).refine(value => value.trim().length > 0);
 const amount = z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
@@ -35,11 +35,12 @@ export const receiptLineAllocationSourceV1 = z.object({
   receiptEffectiveAt: instantV1, lineExistedAt: instantV1, ...shares,
   originalLineNetPence: amount, originalLineGrossPence: positiveAmount, approvalRef: reference,
   evidence: z.array(z.object({ evidenceId: uuid, objectVersionId: reference, sha256: hash,
-    serverReceivedAt: instantV1 }).strict()).min(1).max(MAX_ALLOCATION_LINES),
+    serverReceivedAt: instantV1 }).strict()).max(MAX_ALLOCATION_LINES),
 }).strict().superRefine((value, ctx) => {
   // Refinements can run after a primitive failed; never BigInt unvalidated strings.
   if (!exact.safeParse(value.gross).success || !exact.safeParse(value.net).success) return;
   const fail = (message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  if (value.direction === "receipt" && value.evidence.length === 0) fail("Receipt requires evidence");
   if (value.invoiceBinding.invoiceId !== value.invoiceId) fail("Invoice binding mismatch");
   if (!signedShares(value, value.direction === "reversal")) fail("Direction/sign/link mismatch");
   if (value.reversesLineAllocationId === value.lineAllocationId) fail("Cannot reverse self");
@@ -98,6 +99,9 @@ const receiptV1 = z.object({ paymentId: uuid, invoiceId: uuid, grossPence: posit
 export function deriveReceiptLineAllocationStatus(value: {
   holds: readonly string[]; rows: readonly unknown[]; review: null | { state: string };
 }): "source_held" | "review_stale" | "review_ready" | "saved_distribution" | "no_distribution" {
+  // Safest synthetic choice: no reversal clearance authority has been released.
+  // Keep the negative fact even without new evidence; hold cash until explicit clearance exists.
+  if (value.rows.some(row => typeof row === "object" && row !== null && "direction" in row && row.direction === "reversal")) return "source_held";
   if (value.holds.some(hold => hold !== "APPROVAL_EXPIRED" && hold !== "APPROVAL_REVOKED")) return "source_held";
   if (value.holds.length || (value.review && ["stale", "expired", "revoked"].includes(value.review.state))) return "review_stale";
   if (value.review?.state === "ready") return "review_ready";
@@ -119,7 +123,9 @@ export const receiptLineAllocationViewV1 = z.object({ version: z.literal("receip
 export type ReceiptLineAllocationViewV1 = z.infer<typeof receiptLineAllocationViewV1>;
 export const receiptLineAllocationSelectorV1 = z.object({ jobId: uuid, invoiceId: uuid.optional(), paymentId: uuid.optional() }).strict();
 export const receiptLineAllocationSnapshotV1 = z.object({ revision, sourceHash: hash,
-  rows: z.array(receiptLineAllocationSourceV1).max(MAX_ALLOCATION_LINES), holds: z.array(receiptLineAllocationHoldCodeV1).max(11) }).strict();
+  rows: z.array(receiptLineAllocationSourceV1).max(MAX_ALLOCATION_LINES), holds: z.array(receiptLineAllocationHoldCodeV1).max(11) }).strict().refine(
+  value => !value.rows.some(row => row.direction === "reversal") || value.holds.includes("REVERSED_MOVEMENT"),
+  "Reversed cash requires an explicit hold until clearance authority is released");
 export type ReceiptLineAllocationSelector = z.infer<typeof receiptLineAllocationSelectorV1>;
 export type ReceiptLineAllocationSnapshot = z.infer<typeof receiptLineAllocationSnapshotV1>;
 export class ReceiptLineAllocationContractError extends Error {

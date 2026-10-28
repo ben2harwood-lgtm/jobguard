@@ -35,6 +35,13 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  const real=await page.request.post("/api/auth/request",{headers:{origin},data:{version:"identity-request.v1",email:"person@example.com",purpose:"signup"}});expect(real.status()).toBe(403);expect(await real.json()).toEqual({code:"IDENTITY_ROUTE_BLOCKED"});
  const elevation=await page.request.post("/api/auth/request",{headers:{origin},data:{version:"identity-request.v1",email,purpose:"signup",role:"admin"}});expect(elevation.status()).toBe(400);
  const session=await api(page,"/api/auth/session");expect(session.status).toBe(200);
+ // The plans screen must forward this company session's CSRF token and tenant, not fall back to practice sign-in.
+ await page.goto("/plans");
+ await expect(page.getByRole("heading",{name:"Solo and Builder",exact:true})).toBeVisible();
+ await expect(page.getByRole("region",{name:"Your subscription",exact:true})).toContainText("No accepted subscription agreement.");
+ await expect(page.getByRole("link",{name:"Company sign-in",exact:true})).toHaveCount(0);
+ await page.goto("/sign-in");
+ await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
  const wrongTenant=await api(page,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":crypto.randomUUID()},data:{version:"identity-invitation.v1",email:"invitee@practice.invalid",requested_tenant_id:tenant,role:"foreman"}});expect(wrongTenant.status).toBe(403);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  // Jobs still uses its separately scoped demo session; returning to identity preserves its own tenant.
