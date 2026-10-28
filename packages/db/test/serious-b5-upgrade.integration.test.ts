@@ -129,6 +129,39 @@ async function finalCheckAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
+// M4-8-S m48-b1 (0258): only the receipt-line source bridge's own five tables, their indexes, policies and six routines.
+async function receiptFactAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["receipt_allocation_fact_command", "receipt_allocation_fact_line", "receipt_allocation_fact_review", "receipt_allocation_fact_revision", "receipt_allocation_fact_source"];
+ const indexNames = [
+  "receipt_allocation_fact_command_pkey", "receipt_allocation_fact_command_tenant_id_job_id_command_id_key",
+  "receipt_allocation_fact_line_pkey", "receipt_allocation_fact_line_tenant_id_job_id_id_key", "receipt_allocation_fact_line_tenant_id_source_id_line_id_key",
+  "receipt_allocation_fact_review_pkey", "receipt_allocation_fact_review_tenant_id_command_id_key", "receipt_allocation_fact_review_tenant_id_job_id_id_key",
+  "receipt_allocation_fact_revis_tenant_id_job_id_id_payment_i_key", "receipt_allocation_fact_revision_pkey", "receipt_allocation_fact_revision_tenant_id_command_id_key",
+  "receipt_allocation_fact_revision_tenant_id_job_id_id_key", "receipt_allocation_fact_revision_tenant_id_review_id_key",
+  "receipt_allocation_fact_sourc_tenant_id_allocation_revision_key", "receipt_allocation_fact_sourc_tenant_id_job_id_id_invoice_i_key",
+  "receipt_allocation_fact_source_pkey", "receipt_allocation_fact_source_tenant_id_job_id_id_key", "receipt_allocation_one_receipt_interpretation"];
+ const routineIdentities = [
+  ["assert_receipt_fact_bound", "parts jsonb, limit_n numeric, limit_d numeric"], ["assert_receipt_fact_scope", "p_tenant uuid, p_job uuid, p_session_digest text"],
+  ["guard_receipt_fact_line", ""], ["read_receipt_allocation_facts", "p_tenant uuid, p_job uuid, p_session_digest text, p_selector jsonb, p_expected jsonb"],
+  ["receipt_fact_projection_safe", "p jsonb"], ["write_receipt_allocation_facts", "p_tenant uuid, p_job uuid, p_session_digest text, p_command jsonb, p_artifact jsonb"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "receipt_fact_tenant"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
 // Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
 // Ruling 113 also extends it to ENT-8A-P's own live-prompt objects (livePromptAdditions).
 // Existing rows, routine privileges, relations and policies still compare in full.
@@ -136,6 +169,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const after = await snapshot();
  const livePrompt = await livePromptAdditions(before, after);
  const finalCheck = await finalCheckAdditions(before, after);
+ const receiptFacts = await receiptFactAdditions(before, after);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -177,10 +211,10 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies], after.policies),
  };
 }
 // Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.
