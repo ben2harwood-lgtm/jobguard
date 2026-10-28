@@ -147,3 +147,21 @@ Actual local checks using installed tools, no downloads:
 - `git diff --check` — passed.
 
 Database and browser suites remain for GitHub CI under the issued sandbox limits. No new independent review is claimed; the brief reports the pre-catch-up head as RED-passed. Router stages the resolved conflict, commits and pushes, and updates the work-list state. No provider, release or real-data action.
+
+
+## PR #387 catch-up after CH-8 part 2 (#389)
+
+Catch-up only for DEMO-I / DEMO-S (RED), based on the brief's RED-passed head `4bd9118d`. Resolved three working-file conflicts by retaining both sides: LP-0 groups, entries, authority paths and routine records; contractor-entitlement expected tables; SERIOUS-B5 successor additions. SERIOUS-B5 applies 0306 evidence-pack additions before 0313 demo additions. No new behavior, grants, SQL or weakened expectations. The existing DEMO-I lane retains exactly the 24 PR payload paths plus its implicitly allowed own lane file; its note records this catch-up.
+
+Actual local validation:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed after the final conflict resolution.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts src/small-builder-demo-repository.test.ts` — 45 tests passed in two files.
+- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts` — 18 tests collected, not database-executed.
+- Exact both-side record retention and unique identities checked for the LP-0 union. Every line from each source side remains in the entitlement, SERIOUS-B5 and tenancy tests. Shadow privilege expectations are byte-identical to current main. Exact lane coverage and conflict-marker scan passed.
+- All migration SQL bytes match their source side: incoming 0306 matches main, every other migration matches HEAD. Migration 0313 is byte-identical to `4bd9118d`, SHA-256 `53c3ce08833a3804ea3f00442047193d9c15b7ad6fd99921bdfd939a494d7601`.
+- `git diff --check` — passed.
+
+The initial Vitest attempt used a nonexistent root binary; the package-local installed runner above passed. An initial edit used package-relative paths from the package directory and made no changes; rerun from the explicit repository root succeeded. A blanket old-line-retention assertion encountered main's deliberate replacement of the shadow routine allowlist; the correct check confirmed that entire file matches main exactly.
+
+No git writes performed. The index still marks three paths unmerged until the router stages these resolved working files and completes the merge. PostgreSQL and browser execution remain for GitHub CI after router push; no new independent review, commit, push, merge or release is claimed. This repeat catch-up adds no initial-review simplification finding.
