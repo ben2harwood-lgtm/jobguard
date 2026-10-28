@@ -8,23 +8,11 @@
       "receipt": "docs/verdicts/MON1-I/BUILDER_RECEIPT.md",
       "note": "RED build-ahead decision 74. Consumer integration STOP: accepted MON1-A exposes only held boundary, not an executable admission seam. No runtime wiring or migration enabled. CI-only boundary tests do not satisfy positive command acceptance.",
       "allow": [
-        "packages/db/src/activation-repository.ts",
-        "packages/db/src/job-work-state-repository.ts",
-        "packages/db/src/job-work-state-sources.ts",
-        "packages/db/src/variation-repository.ts",
-        "packages/db/src/final-account-repository.ts",
-        "packages/db/src/proof-repository.ts",
-        "packages/db/src/evidence.ts",
-        "packages/db/src/supplier-document-repository.ts",
-        "packages/db/src/subscription-meter-source.ts",
-        "packages/db/test/meter-source-command-wiring.integration.test.ts",
-        "packages/db/test/meter-source-command-races.integration.test.ts",
-        "packages/db/test/meter-subscription-source.integration.test.ts",
-        "packages/db/test/meter-command-wiring-upgrade.integration.test.ts",
-        "packages/db/migrations/0223_meter_command_wiring.sql",
-        "packages/db/migration-notes/0223_meter_command_wiring.md",
         "docs/contracts/meter-command-consumers-v1.md",
-        "docs/verdicts/MON1-I/BUILDER_RECEIPT.md"
+        "docs/verdicts/MON1-I/BUILDER_RECEIPT.md",
+        "packages/db/test/meter-source-command-races.integration.test.ts",
+        "packages/db/test/meter-source-command-wiring.integration.test.ts",
+        "packages/db/test/meter-subscription-source.integration.test.ts"
       ]
     }
   }
