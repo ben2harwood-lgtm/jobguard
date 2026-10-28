@@ -11,6 +11,19 @@ DO $$ BEGIN
   RAISE EXCEPTION 'unsafe meter role posture' USING ERRCODE='42501';
  END IF;
 END $$;
+-- Bootstrap pre-provisions this role. Direct administrative test migrations may
+-- create it too, but only the administrative bootstrap assigns routine ownership.
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_meter_owner') THEN
+  CREATE ROLE jobguard_meter_owner NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ END IF;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='jobguard_meter_owner' AND
+  (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls)) OR
+  EXISTS(SELECT 1 FROM pg_auth_members WHERE member='jobguard_meter_owner'::regrole) THEN
+  RAISE EXCEPTION 'unsafe meter owner role posture' USING ERRCODE='42501';
+ END IF;
+END $$;
+GRANT USAGE ON SCHEMA app TO jobguard_meter_owner;
 GRANT USAGE ON SCHEMA app TO jobguard_meter;
 CREATE TABLE app.meter_lifecycle_scope (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id), id uuid NOT NULL,
@@ -83,7 +96,7 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
-  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I TO jobguard_migration,jobguard_meter USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
+  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I TO jobguard_migration,jobguard_meter,jobguard_meter_owner USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
   EXECUTE format('REVOKE ALL ON app.%I FROM PUBLIC,jobguard_runtime',n);
   EXECUTE format('CREATE TRIGGER immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON app.%I FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation()',n);
  END LOOP;
@@ -91,10 +104,22 @@ END $$;
 GRANT SELECT,INSERT ON app.meter_lifecycle_scope,app.meter_lifecycle_source,app.meter_lifecycle_source_ref,app.meter_lifecycle_computation,app.meter_lifecycle_day_ledger,app.meter_lifecycle_alert TO jobguard_meter;
 GRANT SELECT ON app.meter_lifecycle_place_binding,app.meter_lifecycle_correction TO jobguard_meter;
 
--- The sole migration-owned bridge returns only current identity. Existing
--- synthetic normal-company SSO checks are retained; no practice fallback.
+-- Exact source reads only; no shadow relation or schema is granted. Separate
+-- SELECT policies preserve every existing policy and apply tenant context.
+DO $$ DECLARE n text; BEGIN
+ FOREACH n IN ARRAY ARRAY['membership','subscription_agreement_revision','job_activation','job_activation_terms','job','job_party_binding','job_work_state_event','final_account_lock','job_small_trip_event','job_small_trip_observation','job_link'] LOOP
+  EXECUTE format('GRANT SELECT ON app.%I TO jobguard_meter_owner',n);
+  EXECUTE format('CREATE POLICY meter_lifecycle_source_read ON app.%I FOR SELECT TO jobguard_meter_owner USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),%L)::uuid)',n,'');
+ END LOOP;
+END $$;
+GRANT SELECT,INSERT ON app.meter_lifecycle_scope,app.meter_lifecycle_source,app.meter_lifecycle_source_ref,app.meter_lifecycle_computation,app.meter_lifecycle_day_ledger,app.meter_lifecycle_alert TO jobguard_meter_owner;
+GRANT EXECUTE ON FUNCTION app.mon1_company_actor(uuid,text) TO jobguard_meter_owner;
+
+-- Private actor check uses the existing, separately reviewed identity bridge.
+-- All four lifecycle routines are invokers until bootstrap assigns their narrow
+-- owner and enables SECURITY DEFINER atomically. Runtime fails closed meanwhile.
 CREATE FUNCTION app.mon1_lifecycle_actor(t uuid,digest text,mutation boolean) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE actor uuid;
 BEGIN
  actor:=app.mon1_company_actor(t,digest);
@@ -108,7 +133,7 @@ REVOKE ALL ON FUNCTION app.mon1_lifecycle_actor(uuid,text,boolean) FROM PUBLIC,j
 GRANT EXECUTE ON FUNCTION app.mon1_lifecycle_actor(uuid,text,boolean) TO jobguard_meter;
 
 CREATE FUNCTION app.mon1_lifecycle_read(t uuid,digest text,computation uuid) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE c app.meter_lifecycle_computation; s app.meter_lifecycle_source; bad boolean;
 BEGIN
  PERFORM app.mon1_lifecycle_actor(t,digest,false);
@@ -129,7 +154,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION app.mon1_lifecycle_rebuild(t uuid,digest text,p_source uuid) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE s app.meter_lifecycle_source; c uuid;
 BEGIN
  PERFORM app.mon1_lifecycle_actor(t,digest,true);
@@ -150,7 +175,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION app.mon1_lifecycle_capture(t uuid,digest text,command uuid,start_day date,expected integer) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; scope uuid; old app.meter_lifecycle_source; agreement app.subscription_agreement_revision;
  v_revision integer; finish date; cutoff timestamptz; src jsonb; jobs jsonb; source_uuid uuid; j jsonb;
 BEGIN
@@ -169,8 +194,7 @@ BEGIN
  END IF;
  SELECT coalesce(max(s.revision),0) INTO v_revision FROM app.meter_lifecycle_source s WHERE (s.tenant_id,s.scope_id,s.period_start)=(t,scope,start_day);
  IF v_revision<>expected THEN RAISE EXCEPTION 'METER_LIFECYCLE_CONFLICT' USING ERRCODE='40001'; END IF;
- -- Source reads execute with migration-owner privileges through this checked
- -- definer; no source-table privileges are granted to runtime or meter.
+ -- Source reads use only the dedicated owner grants after bootstrap finalization.
  SELECT * INTO agreement FROM app.subscription_agreement_revision ar WHERE ar.tenant_id=t AND ar.effective_date<=start_day ORDER BY ar.effective_date DESC,ar.revision DESC LIMIT 1;
  IF agreement.id IS NULL OR agreement.cadence<>'monthly' THEN RAISE EXCEPTION 'METER_LIFECYCLE_TERMS_UNAVAILABLE' USING ERRCODE='22023'; END IF;
  IF extract(day FROM start_day)::integer<>least(agreement.anchor_day,extract(day FROM date_trunc('month',start_day)+interval '1 month - 1 day')::integer) THEN RAISE EXCEPTION 'INVALID_METER_LIFECYCLE_INPUT' USING ERRCODE='22023'; END IF;

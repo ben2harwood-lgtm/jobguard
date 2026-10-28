@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
+import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { migrate, MIGRATION_URLS } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
@@ -671,6 +672,8 @@ export async function startLp0Database(portBase: number): Promise<Lp0Database> {
   await control.query(`CREATE DATABASE ${databaseName}`); await control.end();
   const admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: databaseName, max: 4 });
   await migrate(admin);
+  const bootstrap = await admin.connect();
+  try { await finalizeMeterLifecycleOwnership(bootstrap); } finally { bootstrap.release(); }
   const { Client } = await import("pg");
   return {
     port, databaseName, admin, dir, migrationNames: MIGRATION_URLS.map(u => u.pathname.split("/").at(-1)!),

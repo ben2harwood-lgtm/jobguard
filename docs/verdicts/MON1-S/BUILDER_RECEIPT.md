@@ -570,3 +570,669 @@ This is builder evidence only; the single exact-commit independent delta verdict
 and separate acceptance remain pending. Logs:
 `/private/tmp/jg-mon1-s-run2-*.log`. Intended commit message:
 `/private/tmp/jg-msg-mon1-s-catchup.txt`.
+
+## extra round: structural shadow isolation
+
+25 October 2026. Ben explicitly authorized this extra repair before merge of PR
+#325, starting at `220a9959474c430dc9b031fd69c0c8a82b42416f` on
+`codex/sandbox/mon1-s`. Scope: H-MON1S-SHADOW-PRIV / AGENTS §5.14 / M1S-08.
+This is builder evidence, not independent verification or acceptance. No commit,
+push, merge, deployment or release was performed.
+
+### Change and permission reasoning
+
+- Chose the dedicated-owner option: invokers called by the existing runtime
+  would need broader runtime source grants. Existing `jobguard_meter` and
+  runtime privileges are preserved. New `jobguard_meter_owner` has the existing
+  restricted-role posture and holder checks, eleven source SELECT grants with
+  tenant-only SELECT policies, six lifecycle SELECT/INSERT grants and EXECUTE
+  on the pre-existing company-identity bridge. No shadow grant is introduced.
+- 0209 leaves all four lifecycle routines migration-owned SECURITY INVOKER;
+  runtime cannot use them until the administrative bootstrap atomically assigns
+  the dedicated owner and enables SECURITY DEFINER after migrations. Numbered
+  SQL does not attempt the previously failing ownership transfer. There is no
+  change to the four routines' business logic, snapshots, hashes or held results.
+- Reasoned through the actual `creates roles…` path: ensureRoles pre-creates and
+  checks the owner; migrations run as jobguard_migration; RESET ROLE restores
+  the CREATEROLE admin; finalization uses a pinned connection and a transaction.
+  The admin temporarily inherits migration ownership, can SET the target role,
+  and grants the target schema CREATE. It transfers each routine, removes schema
+  CREATE, restores its own original migration-membership options, and revokes
+  its explicit target-role grant. PostgreSQL 16's separately superuser-granted
+  ADMIN-only creator membership is preserved, rather than leaving an additional
+  self-granted holder behind. Rollback undoes every temporary change on failure.
+  Rerun handles already-owned routines. These requirements were checked against
+  [PostgreSQL 16 ALTER FUNCTION](https://www.postgresql.org/docs/16/sql-alterfunction.html)
+  and [GRANT](https://www.postgresql.org/docs/16/sql-grant.html); this is not an
+  executed PostgreSQL result.
+- Catalogue regression discovers every mon1_lifecycle routine and checks its
+  executing principal against all shadow relations, columns, owned sequences
+  and dedicated shadow schemas. The shared app schema necessarily has USAGE;
+  that conveys no shadow relation privilege. A rolled-back negative control
+  restores the old migration-owner principal and requires the same assertion
+  to reject all four routines. Additional rolled-back probes test schema,
+  sequence and column grants. **Old-head FAIL / repaired-head PASS on PostgreSQL
+  has NOT RUN here**; these controls are ready for the reviewer's embedded run.
+- LP-0 now records the owner, exact ACL additions, dedicated authority group,
+  role and policy expectations. Its setup invokes the same admin finalizer on
+  a pinned connection before taking the catalogue. The lane adds precisely
+  `packages/db/test/lp-0-catalog.ts` for that setup change. Existing catalogue
+  assertions are retained. Upgrade comparisons preserve every prior ACL entry
+  and policy, excluding only the explicitly added owner SELECT entries/policies;
+  a separate exact-grant/policy test verifies the entire addition independently.
+- Fresh installation, 0208 upgrade and second-database migration tests use the
+  admin finalizer; the real non-superuser bootstrap test exercises repeat runs,
+  exact ADMIN-only owner holders, removed transfer privileges and refusal of
+  an unexpected owner-role holder. All remain PostgreSQL CI proofs, not local
+  successes. Forward-fix/rollback guidance and the persistence contract were
+  updated. No new operational alert or commercial authority is introduced.
+
+### Commands actually run
+
+All substantive pnpm runs used the already cached pinned 10.28.1 CLI through
+`PATH=/private/tmp/jg-mon1-l-bin:$PATH`; Node is 24.17.0. No install was run.
+Logs: `/private/tmp/jg-mon1-s-extra-*.log`.
+
+| Check | Result |
+| --- | --- |
+| DB typecheck with all five package dist directories absent; restore in finally | PASS; exit 0, all five remained absent during the check |
+| `pnpm typecheck --concurrency=2 --force` | PASS; 7/7 packages, forced with no cached tasks |
+| `pnpm build --concurrency=2` | PASS twice, 7/7 packages; final run includes final administrative cleanup code |
+| `pnpm turbo run lint --concurrency=2` | PASS, 7/7 packages |
+| `LANE_BASE_REF=8d95874d pnpm lint:lanes` | PASS |
+| `LANE_BASE_REF=8d95874d node tools/lint.mjs` | PASS; purity, lane, money and commercial boundary checks |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | FAIL; inherited config/lanes/mon1-l.json and MON1-L receipt are outside this lane; package checks pass separately |
+| Core source unit suite, `--maxWorkers=2` | PASS; 129 files / 3,009 tests |
+| All 26 DB src unit files plus LP-0 catalogue unit file, `--maxWorkers=2` | FAIL on both runs; 250 pass, unchanged audit-checkpoint-handoff C-OPS-1 source scan exceeds its existing 5-second timeout |
+| Audit unit file alone, `--maxWorkers=2` | Same timeout; 70 pass, 1 fail. No assertion or timeout was changed |
+| MON1-S repository + LP-0 catalogue units, `--maxWorkers=2` | PASS; 2 files / 35 tests |
+| Bootstrap SQL trace, `--maxWorkers=2 -t 'bootstrap SQL trace'` | PASS; 4 mocked tests, 3 real DB tests skipped; not a PostgreSQL bootstrap proof |
+| Four lifecycle integration files, `--maxWorkers=2 -t '^$'` | Import/parse check only; 11 tests skipped, no DB proof |
+| `pnpm openapi:check` | Blocked: tsx launcher IPC listen EPERM |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS; same OpenAPI comparison without tsx's IPC launcher |
+| `git diff --check` | PASS |
+
+Initial default pnpm launchers were interrupted before typecheck/trace execution;
+all results above use the cached pinned CLI. The first trace import encountered
+stale generated core output; rebuilding dependencies resolved it and the final
+four trace tests pass. An initial lane check overlapped the temporary no-dist
+renames and saw those temporary paths; after restoring them, the assigned-base
+lane and boundary checks pass. No temporary dist directory remains. Existing
+nonfatal Turbo cache IO and Next tracing/CSS warnings are not suppressed.
+
+H-MON1S-SHADOW-PRIV is implemented but remains a verification hold until real
+PostgreSQL proves the old-principal negative control and repaired catalogue,
+fresh/0208-upgrade/second-database paths, real non-superuser bootstrap reruns,
+and LP-0 comparison. DB/migration/browser suites were not started in this
+no-localhost sandbox. The unchanged audit scan timeout, origin/main inherited
+lane differences, exact-commit RED verdict and separate acceptance remain
+explicit outstanding evidence. Earlier product, security, commercial and
+release holds remain. The builder does not accept its own work.
+
+Size: +411/−73 lines across 13 files; largest touched logic file: 690 lines (packages/db/test/lp-0-catalog.ts); new abstractions: one administrative finalizer, needed to transfer routine ownership outside numbered migrations and roll back temporary permissions.
+
+## 26 October 2026 — B1–B3 in-lane bookkeeping repair (partial)
+
+Continues the existing MON1-S session at `820ef530554b9a80f5ace7559d98070debdd9a4f`,
+under the issued C264/C266/C280 scope. Read assigned AGENTS, BUILD_PLAN MON-1,
+the persistence contract, current SIMPLICITY_RULE rev 2 and the complete checker
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-mon1-s-claude-A-820ef530-20261025.md`,
+including its final repair note. This is a delta repair, not an initial review;
+no new LATER / SIMPLICITY finding is issued.
+
+Preflight: registered branch `codex/sandbox/mon1-s`, clean working tree, HEAD and
+cached origin branch both `820ef530554b9a80f5ace7559d98070debdd9a4f`; cached
+origin/main `319120a35f06a6db9223edc751b941d70f79a18d`. Read-only `git ls-remote`
+for both live heads failed because github.com could not resolve. These are cached
+identities, not verified current remote heads. Actual Node is 24.17.0; .nvmrc/CI
+pin 24.15.0. Used the existing cached pnpm 10.28.1 CLI directly; no install,
+runtime change, shared Git metadata write or dispatch of another worker occurred.
+
+Changed facts only:
+
+- B1: added exactly `owner|rel:table|app.subscription_agreement_revision|jobguard_migration`
+  in `a-mon1s-lifecycle`. Every other JSON fact is unchanged.
+- B2: both upgrade ACL projections use `coalesce(relacl, acldefault('r', relowner))`.
+  The exact existing meter-owner exclusion and every other assertion remain.
+- B3: SERIOUS-B5 retains migrate-only setup and explicitly expects all four
+  lifecycle routines to be migration-owned invokers, with the existing exact
+  grantors, executors and pinned search path. It records the six lifecycle-table
+  owner INSERT/SELECT ACLs and eight existing tenant policies' third role.
+  The eleven source SELECT ACLs/policies and the company-actor EXECUTE addition
+  are now part of the exact expected snapshot. Original ACLs are retained plus
+  the single owner SELECT entry; subscription/trip tables created after the
+  predecessor snapshot use explicit baseline ACLs. Their three source policies
+  are captured by the existing subscription/trip collectors and validated with
+  the other eight, avoiding duplicate expected rows. Source-policy roles,
+  permissiveness, SELECT command, tenant predicate and null WITH CHECK are exact.
+  Existing row/hash, FORCE RLS, policy, rejection and full-snapshot comparisons
+  remain. Reused the existing ACL conversion and ordered additive helpers;
+  no production SQL, bootstrap, role, permission or generic filter was changed.
+
+Actual focused checks (no local PostgreSQL/browser execution):
+
+- TypeScript `transpileModule` syntax diagnostics: PASS for both changed tests.
+- JSON parse, unique keys and exact B1 entry/group: PASS. The existing
+  `loadReviewedInventory` parser also passes via the installed tsx loader.
+- Static baseline comparison: PASS; JSON differs only by B1, B2 differs only by
+  the two symmetric default-ACL expressions, and SERIOUS-B5's eleven explicit
+  source identities match unchanged 0209 SQL. Retained RLS/snapshot assertions
+  and the exact four permitted paths were checked.
+- Actual repository runner discovery:
+  `pnpm --filter @jobguard/db exec vitest list test/meter-lifecycle-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts --maxWorkers=2`
+  passes and discovers all three upgrade cases. Collection/import only; their
+  PostgreSQL assertions were NOT RUN. No heavy test, broad Turbo run, timeout
+  increase or repeat of an unchanged passing suite was performed.
+- `git diff --check`: PASS.
+
+B4 (`job-work-state-upgrade.integration.test.ts`) and B5
+(`audit-export.integration.test.ts`) remain HELD for their proper reserved
+two-path allowance and are untouched. This four-file phase is deliberately
+PARTIAL / MUST NOT INTEGRATE; it does not complete or accept the five-item
+candidate. After the authorised B4/B5 continuation, current-main required CI
+(including real PostgreSQL upgrades/catalogues and applicable browser proofs)
+and independent RED delta review remain required. All product, permission,
+real-data, release and independent-acceptance holds remain. No commit, push,
+PR, merge or product-acceptance request was made.
+
+Size: +114/−10 lines across 4 files; largest touched logic file: 398 lines (packages/db/test/serious-b5-upgrade.integration.test.ts); new abstractions: none.
+
+## 26 October 2026 — authorised B4/B5 continuation, same MON1-S leaf
+
+Continues saved session `01a173ec-c191-74f0-99bb-c4e49c79a9db`. Verified branch
+`codex/sandbox/mon1-s` at issued HEAD `291991ac4b94c3c26c5ee328c46e605be66ad523`.
+That commit changes only the lane config, adding exactly the two test paths;
+no lane edit was made here. Authority: Ben's 13:08:08.402Z approval,
+`msg_01a17853-5052-7d21-a239-17e69beaae05`, and this bounded continuation.
+Reread the current simplicity rule, applicable AGENTS §§5.1/5.13/5.14, BUILD_PLAN
+MON-1, lane allowance, receipt and the checker's B4/B5 notes. Simplicity rev 2
+SHA-256: `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. C280 RED delta review remains required; this continuation
+is not an initial review and adds no LATER / SIMPLICITY observation.
+
+The three B1–B3 source files retain their previously recorded bytes; their
+SHA-256 values were checked, without rerunning their passing checks:
+
+- `docs/contracts/lp-0-effective-privileges-v1.json`:
+  `8b54d115f26f35d431829581e456aa3351f3c7aef050a5a50ecb82beb5afbd68`
+- `packages/db/test/meter-lifecycle-upgrade.integration.test.ts`:
+  `b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`
+- `packages/db/test/serious-b5-upgrade.integration.test.ts`:
+  `9e5f8b1c9191c2bf4bf22a8240612be7aba570ee1daa77a37c5325cb1a87ddaa`
+
+Changed only these two test files and this appended receipt:
+
+- B4 / CH4-A24 records six complete `meter_lifecycle_source_read` policy rows
+  on `final_account_lock`, `job`, `job_activation`, `job_activation_terms`,
+  `job_party_binding`, `membership`. Each is PERMISSIVE, SELECT, only
+  jobguard_meter_owner, exact tenant predicate, null WITH CHECK. The existing
+  comparator accepts these rows only in its post-successor call. Its default
+  remains the original policies for the own-migration and widening controls;
+  both sides sort by name to avoid host/database collation differences. The
+  full old-table filter and every isolation/refusal/data/type assertion remain.
+  SHA-256: `38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`.
+- B5 / MO5-e records exactly ten reviewed difference strings: five SELECT grants
+  to jobguard_meter_owner and five named policies on `app.job`,
+  `app.job_activation`, `app.job_activation_terms`, `app.job_party_binding`,
+  `app.membership`. The existing privilege-fact reader/comparator and its
+  negative controls remain unchanged. No prefix filter or generic exemption.
+  SHA-256: `06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+
+Actual focused checks, using existing Node 24.17.0 and cached pnpm 10.28.1
+(.nvmrc/CI still pin Node 24.15.0; no runtime/dependency change):
+
+- TypeScript transpileModule syntax diagnostics: PASS for both affected files.
+- Static synthetic execution of the changed B4 helper: exact six rows pass;
+  missing row, extra policy, changed predicate, and the original unapproved
+  stage-policy widening control reject. These are synthetic comparator checks,
+  not PostgreSQL permission evidence.
+- Existing B5 comparator with synthetic facts: exact five SELECT grants and
+  five policies produce precisely the ten expected differences; missing source
+  and extra UPDATE privilege reject. Comparator source unchanged.
+- `pnpm --filter @jobguard/db exec vitest list test/job-work-state-upgrade.integration.test.ts test/audit-export.integration.test.ts --maxWorkers=2`:
+  PASS; actual runner imports/collects 12 cases (CH4-A24 plus 11 audit-export
+  cases). Discovery only; no PostgreSQL/browser assertions executed.
+- B1–B3 source hashes preserved; previous receipt prefix preserved byte-for-byte.
+  `git diff --check`: PASS. No broad Turbo, heavy suite, local DB, timeout
+  increase, repeated passing B1–B3 suite, or shared Git metadata write.
+
+The earlier B4/B5 path hold is superseded by this exact allowance and source
+repair. All five repair items now have source corrections ready for the
+dispatcher's scoped checkpoint; this is NOT technical/product acceptance or
+integration permission. Exact-current-main required GitHub CI, including real
+PostgreSQL/browser assertions, and independent RED delta review of the complete
+five-item candidate remain outstanding. Preserve every real-data, privacy,
+finance, permission and release gate. No commit, push, PR, main merge or
+acceptance was performed by the builder.
+
+Size: +86/−3 lines across 3 files in this continuation; largest touched logic file: 409 lines; new abstractions: none (extended the existing policy comparison helper).
+
+## 26 October 2026 — current-main integration catch-up preflight
+
+Bounded order `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, C264/C266/C280;
+this is a delta catch-up, with no new simplicity observation. Source inspection
+and deterministic comparisons only; **HOLD for local execution setup, current-main
+GitHub CI and independent RED delta verdict**. No compatibility defect has been
+demonstrated, so the builder changed only this receipt.
+
+```yaml
+session_record_version: 1
+task_id: MON1-S-CATCHUP-CURRENT-MAIN-20261026
+project: JobGuard
+role: builder
+thread_id: 01a1788c-21e1-7012-9d6b-a031d6aaa817
+surface: codex-cli
+host: Ben's Mac
+authorised_route_ref: C266; /Users/benharwood/.codex-ben2
+repository: ben2harwood-lgtm/jobguard
+integration_target: main into codex/sandbox/mon1-s
+integration_target_revision: 319120a35f06a6db9223edc751b941d70f79a18d
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon1-s
+branch: codex/sandbox/mon1-s
+starting_base_revision: d922674470e6a9136823518fd863f5778983dc4f
+source_pin: d922674470e6a9136823518fd863f5778983dc4f
+candidate_revision: uncommitted merge; input tree d6d61eb1f26082c4df879b4d5864da15e5518a90
+last_validated_revision: input tree d6d61eb1f26082c4df879b4d5864da15e5518a90; static only
+allowed_files_ref: config/lanes/mon1-s.json; issued compatibility-only restriction
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md MON-1; both meter-lifecycle contracts
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: gpt-6.1-sol
+effort_runtime_confirmed: medium
+runtime_confirmation_ref: own rollout session_meta and turn_context, 2026-10-26T14:10:12.090Z
+last_completed_turn: unknown; first catch-up turn in progress at receipt preparation
+last_receipt_ref: this file, authorised B4/B5 continuation
+state: prepared merge source-inspected; execution setup held
+resumed_from_thread_id: none; distinct materially changed integration phase
+successor_reason: new bounded catch-up; source history retained, not reused or replaced
+preflight_ref: this section; /private/tmp/mon1-current-main-driver-20261026.sh
+result_id: unknown
+acknowledgement_ref: unknown
+ci_evidence_ref: unknown; current candidate CI required
+reviewer: unknown
+review_evidence_ref: unknown; independent RED comparison of both parents required
+accepting_actor: unknown
+acceptance_evidence_ref: unknown
+outstanding_holds: execution setup; remote refresh; current-main CI; RED delta review; existing product/release holds
+builder_finished_at: unknown at receipt preparation
+coordinator_acknowledged_at: unknown
+integrated_at: none
+merged_revision: none
+```
+
+Provenance: original source session `01a173ec-c191-74f0-99bb-c4e49c79a9db`,
+completed `2026-10-26T13:29:46.550Z` per issued order; its B1–B5 checkpoint is
+`d922674470e6a9136823518fd863f5778983dc4f`. Earlier source/catch-up history stays
+in this receipt and Git history. The legacy `mon1-s-catchup` checkout was not
+accessed. Original receipt prefix: 63,274 bytes, SHA-256
+`f353918f92ad0ec34b6791bdea23b8731f01d626c368548b527872d2518d0eba`.
+
+Read applicable AGENTS, BUILD_PLAN §2/C1–C8, §10.1.4–6/MON-1, both lifecycle
+contracts, current build rules, both 25 October handovers, session policy and
+simplicity rev 2. Current build-rules SHA-256:
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`;
+simplicity SHA-256:
+`6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+C280 supersedes old JobGuard caps; no cap/allowance helper was run.
+
+### Prepared input and actual checks
+
+- HEAD is the exact source pin; MERGE_HEAD is exact main above. The existing
+  dispatcher driver requires clean source/index and live remote source/main
+  equality before its no-ff/no-commit merge. Builder observed the prepared
+  merge, not that earlier remote execution. Builder `git ls-remote` failed:
+  `Could not resolve host: github.com`; no current remote success is claimed.
+- `git diff --cached --quiet d6d61eb1f26082c4df879b4d5864da15e5518a90`:
+  exit 0. `git ls-files -u`: empty. Initial unstaged diff: empty. No Git metadata
+  writes, staging, commit, push or merge command was executed by this builder.
+- Python/Git blob comparisons: PASS. Every existing allowlisted source path
+  equals the source parent and pinned merge tree. All 72 incoming staged paths
+  equal the main parent byte-for-byte. Both shared barrels, package manifests,
+  lockfile and runtime pin equal the source parent. The two historical 0207
+  allowlist paths do not exist at the source pin; no file was invented for them.
+- All B1–B5 hashes match the preceding receipt exactly (in order):
+  `8b54d115f26f35d431829581e456aa3351f3c7aef050a5a50ecb82beb5afbd68`,
+  `b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`,
+  `9e5f8b1c9191c2bf4bf22a8240612be7aba570ee1daa77a37c5325cb1a87ddaa`,
+  `38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`,
+  `06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+- Inspected lifecycle source/repository, their callers and tests, architecture
+  guard, ownership finalizer references and incoming executable delta. Main's
+  diary schema retains its UTF-16 length bound; CH-2 retains its authoritative
+  completion wait/assertion. New main core modules remain as merged. No changed
+  input to lifecycle code, its shared exports, SQL, grants or bootstrap needs a
+  manual resolution. Byte preservation is not behavioral execution evidence.
+- `git diff --cached --check`: FAIL (exit 2), inherited whitespace in the
+  main-parent MON-3C-CAL build/lint/typecheck/unit logs. Those bytes were confirmed
+  identical to main and left untouched outside this lane. Initial unstaged
+  `git diff --check`: PASS. Do not describe the full prepared diff as whitespace-clean.
+
+### Exact execution needs and dispatcher handoff
+
+Installed package metadata confirms TypeScript 5.8.3, Zod 4.6.6, Vitest 4.1.12
+and cached pnpm 10.28.1. `.nvmrc` pins Node 24.15.0; available
+`/usr/local/bin/node --version` reports 24.17.0. No alternative/global runtime,
+install, version change or package-manager fallback was attempted. TypeScript
+syntax/typecheck/build/test commands were NOT RUN on this new candidate: the
+order requires the pinned runtime. `ps` is denied (`operation not permitted`),
+so current process/load/memory/heavy-slot clearance cannot be verified here.
+The existing heavy-slot helper requires successful process observation; it was
+read, not launched into its waiting loop. No local PostgreSQL/browser assertion
+or broad/repeated B1–B5 suite was run.
+
+Admission files observed: this order's
+`claim-91343-9b8905931ba64ca5885fe6286a4b9bbc` and disjoint
+`WORKFLOW-RULES-ENFORCEMENT-20261026` claim
+`claim-90776-e99d0f6ebb774393a2d059e5db1938a3`. No claim was edited and no worker
+was launched. Actual owner reconciliation/capacity clearance remains the sole
+coordinator's responsibility; these files alone are not a fresh clearance.
+
+Normal dispatcher must refresh live heads, provide the configured runtime and
+fresh resource observations, then arrange the focused changed-input checks
+once under the existing gate. Preserve both parents and this input tree when
+recording the receipt-only merge candidate; its final tree will differ by this
+append. Dispatcher owns scoped merge commit and feature push. Current-main
+GitHub CI must prove PostgreSQL/browser guarantees, and one independent RED
+delta verdict must compare both parents on the exact committed candidate.
+Earlier CI/verdict/acceptance is not carried forward as PASS. All existing
+source/security/commercial/real-data/release holds remain. No new migrations,
+alerts, product changes or complexity were introduced; no acceptance is claimed.
+
+### Dispatcher execution setup resolved — 2026-10-26T14:22:18.175726+00:00
+
+Existing pinned runtime `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node` verified Node24.15.0; pnpm10.28.1. No installation, dependency or version change. The existing heavy-slot helper successfully observed processes/resources and admitted the single targeted check job. Core and DB package `typecheck` and `build` each PASS (four actual commands), with no local PostgreSQL/browser assertion and no unchanged B1–B5 suite repeated. Execution log SHA256 `bfbe4106bc1a0524975bc5ba0f7d8dc3109282bcef35b3722e14158206a9fc29`, private evidence `/private/tmp/mon1-current-main-focused-checks-20261026.log`. Prepared index still exactly d6d61eb1f26082c4df879b4d5864da15e5518a90 before staging this receipt. Inherited main-parent log whitespace is preserved as recorded above. Normal feature merge checkpoint/push follows; required current-main CI and actual independent RED delta review remain open. This dispatcher is not an accepting actor.
+## 26 October 2026 — PR189 current-main union continuation
+
+Same saved Gmail builder session `01a1788c-21e1-7012-9d6b-a031d6aaa817`,
+bounded leaf `MON1-S-CATCHUP-CURRENT-MAIN-20261026`. Authority: checker ACK
+`mon1-s-8b6961dd-needs-catchup`, ACKS.tsv, `2026-10-26T14:53:22Z`, and issued
+two-path continuation. C280 remains in force; no round-cap request or new
+simplicity observation. Retained applicable readings; refreshed current rules,
+simplicity, applicable AGENTS/MON-1 sections, both parent versions of the test,
+its snapshot/catalogue fixture and relevant ownership-finalizer context.
+AGENTS and BUILD_PLAN identities remain the previously recorded hashes.
+
+Dispatcher-prepared parents: source/HEAD
+`8b6961dd77ee341e3d41f16ab5301ab72a1211da`, incoming/MERGE_HEAD
+`a6778b4ae923ec15ba39377ee0c4ca2006f31040`. Merge base is
+`319120a35f06a6db9223edc751b941d70f79a18d`. Exactly one unmerged index path:
+`packages/db/test/contractor-entitlement-upgrade.integration.test.ts`; stages
+1/2/3 are `40948f8db2eeefd2bbe24a245412c052ce7e50bf`,
+`aedec136457aa4056727a63ce6b28a846464ebe2`,
+`453282837c98760c1823882fb82233930e13fc65`. Builder did not stage or alter this
+index; the dispatcher must mark the worktree resolution resolved. No final
+merge tree/commit exists yet, and live remote equality was not reverified here.
+
+Resolved only that file: retain main's six named Final Check tables and exact
+snapshot assertions after each of the two migration calls; add all eight
+feature lifecycle tables. Retain feature's five exact routine identity rows,
+including the small-trip routine, in schema/name/identity-arguments order.
+Both parents' full predecessor snapshot, least-privilege assertions and
+row/grant/shape negative controls survive unchanged. No exclusions, expected
+error codes, fingerprints, SQL, grants, roles, bootstrap or migrations changed.
+
+Actual checks (synthetic source/import checks, not PostgreSQL evidence):
+
+- PASS: exact full-file reconstruction from main plus source's eight table
+  rows and ordered routine query/rows equals the resolved file byte-for-byte.
+  No conflict markers remain in that file. All bytes outside the additive
+  union and explanatory successor comment equal the corresponding parent.
+- PASS: all nonblank feature-added lines versus merge base survive in each
+  B1–B5 file; the initially missing-base-file diagnostic was handled as an
+  absent predecessor file, then all five comparisons completed successfully.
+  Those files were not edited by the builder. B1 and B3 also retain main's
+  automatically merged additions, so their full hashes have legitimately changed.
+- PASS: TypeScript 5.8.3 `transpileModule` syntax diagnostics for this one test,
+  using installed pinned Node `v24.15.0` from
+  `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin`.
+- PASS: same pinned Node with cached pnpm 10.28.1,
+  `--filter @jobguard/db exec vitest list test/contractor-entitlement-upgrade.integration.test.ts --maxWorkers=2`:
+  six cases discovered, exit 0. Discovery/import only; no hooks or PostgreSQL
+  assertions executed. `git diff --check -- <resolved test>` passes.
+- Process observation `/bin/ps -axo pid=` remains denied. Heavy execution
+  clearance is unavailable; no heavy helper loop or test run was launched.
+  No core/DB build/typecheck or unchanged B1–B5 suite was repeated; no install.
+
+SHA-256 of the conflicted test's parent bytes and resolved candidate:
+
+- Source: `025dd895b89502a50e14a18d76b1ed048636ebab14c070e5e9355dd070dd3c00`.
+- Main: `f35c317122b47ae06808b55a2f12198b34bbaed3192d8fcab23a9b58f5d912d2`.
+- Resolved: `863bc3b3c16ce21e7af3943fba282a907aba55d89f29cef1b792b9344c58afa4`.
+
+Current B1–B5 hashes, respectively:
+`6557582af03e724f8063ee57cd5febe989c9691a492c0809b8e0c8b1063f33e1`,
+`b602201a41bd1d511236b0beed2d771b7eb87f300eb02b0afee400dbeee0e9ea`,
+`a833705aba377f0fe05bd383a86dc39760561eabf7bdbb6ec20acbd4cf16bbbf`,
+`38e515d349fceccdaa40d1858d386d343e6e225748c0b39f0bf70599e34dcf90`,
+`06b4445f323e5e3af9c8504247a41950a9823bc309db4a83cdd96ba7a3675aee`.
+
+Current managed coding claim is `claim-24322-57122a9c7b4a43b4bfbaed8925c01a0f`;
+its child boundary records this exact leaf/cwd/saved session, prompt hash
+`ff7d5f7c065aae7f8c6067cd894001e1797827eae27acab8ae30982b559fc39f`,
+and current rules/simplicity hashes `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28` /
+`6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+No worker, reviewer or driver was launched here. Coordinator retains global
+capacity/owner reconciliation. Only the authorised test and this receipt were
+edited. Original receipt bytes are preserved; prior length 71,982 and SHA-256
+`a6dc637f652740d46f420d12290c05d0fa73f9acdbd7d965d4dc653bb048a55e`.
+
+Return resolved source for dispatcher staging, scoped two-parent commit and
+feature push, current-main GitHub CI and independent conflict-delta recheck.
+Required PostgreSQL/browser assertions remain CI-only. This is not acceptance
+or integration permission; all existing product/security/real-data/release
+holds remain. No Git metadata write, commit, push, main merge or release.
+
+## 26 October 2026 — approved 0209 → 0239 forward renumber
+
+Same bounded leaf/session `MON1-S-CATCHUP-CURRENT-MAIN-20261026` /
+`01a1788c-21e1-7012-9d6b-a031d6aaa817`. Starting clean HEAD
+`b39edde6c3aa2423624c0477b0645bfd6636e612`; earlier union `1aed0829`
+and main `a6778b4ae923ec15ba39377ee0c4ca2006f31040` retained. Authority:
+Ben `msg_01a1793a-8fad-7813-b382-a8750b81b4e4`, issued exact lane batch and
+independent static proposal manifest
+`a749a70f64b0b91129a759ac5c660077d45d047906c0a6137ae475effed67fab`.
+No approval/config/archive installation repeated. Current AGENTS/BUILD_PLAN
+identities remain unchanged; retained applicable contracts/session policy and
+refreshed current rules, simplicity, lane and actual migration consumers.
+This delta adds no simplicity observation or product acceptance claim.
+
+Before removing originals, opened committed archive
+`archive/2026-10-26/mon1-s-0209-forward-preservation/original-0209.zip`:
+SHA-256 `b0091e7103bfc66d136fccc07808bd22e2172c11f8ad8af142d7894dab158300`.
+ZIP CRC check passed, both members exactly equal HEAD originals and live bytes.
+Original SQL SHA-256
+`807d99fd25bcf4cadab35a4077dd4f378d25510fbab7ae596811d1b9f7b46a58`;
+original note `350dae84483bedd5bb2cc49ab86cd6f9894631b33d7722b1afc06e23a8e80b20`.
+Archive/config/instructions were not edited.
+
+Renamed SQL to `0239_meter_lifecycle_source.sql` byte-for-byte. Renamed note
+with only `# 0209` → `# 0239` heading change. Persistence contract and LP-0 JSON
+changed only the exact migration stem, not numbers embedded in fingerprints,
+ACLs, routine definitions or historical narrative. The two test consumers use
+the new filename; upgrade describe label now says own-0239. Discovery checks
+retain 0208 as a required earlier migration rather than immediate predecessor,
+because SV5 now intervenes. Existing 0207 absence check remains; source discovery
+also explicitly rejects the retired 0209 lifecycle filename. Upgrade still
+installs every predecessor, compares full preserved rows/types/ACL/policies,
+finalizes ownership, runs successors twice and tests the second database.
+B1–B5 corrections and union catalogue controls are preserved; no runtime or SQL
+semantics, permissions, expected error code or protected fingerprint changed.
+
+Checks actually executed using installed Node 24.15.0 at
+`/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin` and cached pnpm
+10.28.1; no install, global fallback, Git write or heavy execution:
+
+- PASS archive/committed/live equality before removal; SQL equality after rename;
+  note heading-only and contract/catalogue stem-only byte comparisons.
+- Inspected/reused `planRenumber` and `MIGRATION_PATH` from existing tooling.
+  Pure plan with the approved SV5 0238 predecessor reservation selects precisely
+  0239. Did not call the mutating renumber helper or `--write`.
+- PASS actual `MIGRATION_URLS` / `migrationListProblem` discovery, unique numbers,
+  exactly one 0239 and no old live 0209 file. Current local tail is
+  0208 / 0237 / 0239; the separate SV5 forward rename to 0238 is not in this
+  checkout yet. Required integration order remains SV5 0238 → MON1S 0239 →
+  MON3 0240, performed only by the independent C282 checker after its gates.
+- PASS TypeScript 5.8.3 syntax diagnostics for both changed tests; LP-0 JSON parse.
+  First direct import attempted unavailable root `tsx` and failed before checks;
+  corrected to Node 24's built-in TypeScript loading, which passed. No dependency
+  was added or substituted.
+- PASS actual runner: `pnpm --filter @jobguard/db exec vitest run
+  src/meter-lifecycle-repository.test.ts --maxWorkers=2 -t 'discovers lifecycle migration after repaired MON1-T on fresh installs'`:
+  1 pass, 8 unselected. Only changed discovery behavior executed.
+- PASS `pnpm --filter @jobguard/db exec vitest list
+  test/meter-lifecycle-upgrade.integration.test.ts --maxWorkers=2`: 2 cases
+  collected; PostgreSQL hooks/assertions NOT RUN. DB/browser remain CI-only.
+- PASS `git diff --check`; exact footprint/preservation checks recorded below.
+  No repeated build/typecheck/B1–B5 suites, heavy helper loop or new driver.
+  Parent-provided admission/resource observations are authority for this child;
+  no new claim or process count was manufactured in the sandbox.
+
+Candidate SHA-256: SQL remains `807d99fd25bcf4cadab35a4077dd4f378d25510fbab7ae596811d1b9f7b46a58`;
+note `0a65aaf867fb131df32d8efa56777d38598c240d8480b3a076fbf7a905860243`;
+repository test `e7f87906b044a57e4f78455383ef78b2086001fc0d010b2cf5a611601fbf206c`;
+upgrade test `7fa39c536efd1f54cf4666121e6f07d2e034779ae4acb9af210b5bd51c4f182e`.
+Earlier receipt prefix preserved: 77,095 bytes, SHA-256
+`28b5ac29353e49bbeb0d95f13dd70ec1546d1df6e5a9ac21ec0e4972471ddb56`.
+
+Source result only. Shared catalogue editing phase is complete for this leaf;
+coordinator may sequence MON3 next. Normal dispatcher checkpoint/feature push,
+current-main CI, independent RED delta review and separate acceptance remain
+outstanding. No Git stage/commit/push/merge, product acceptance, main merge,
+release, spending or real data. All existing source/security/release holds remain.
+
+## 26 October 2026 — approved MON1-A28/A29 role-posture regression repair
+
+Same bounded leaf `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, saved Gmail session
+`01a1788c-21e1-7012-9d6b-a031d6aaa817`. Authority: Ben's direct response
+“Approve exact repair and review” to coordinator question
+`call_c397d21d45974d89baea6109b53b4584`, following the same Claude checker's
+REPAIR amendment on pushed `1dabafe66fb7a79de75a7928d2a1ad9316548eef`.
+Issued CI evidence: core run `40371911865` versus main `a6778b4a` passes
+3184/3185 and rejects the obsolete role-absence expectation; that is supplied
+CI provenance, not a new local PostgreSQL result. Starting HEAD
+`e81e52db58eb99d748ddf794b8a51b3f4fba4f44` is the normal lane-only checkpoint;
+initial working tree clean. Its added path permission is installed, not edited
+by this builder. No new allowance, worker, review session or driver was launched.
+
+Retained required readings; refreshed current rules/simplicity and applicable
+AGENTS §5.1 / BUILD_PLAN MON-1. Their identities remain recorded unchanged.
+Inspected the full affected test, its fixture caller chain, 0239 role creation,
+`ensureRoles` and ownership-finalizer validators, the real PostgreSQL 16 bootstrap
+membership tests and lifecycle isolation assertions, and the persistence
+contract's ADMIN-only exception. The validators allow zero holders or the
+current creator's ADMIN-only membership (INHERIT/SET false); they forbid these
+roles being members of any other role. Reused those SQL patterns directly,
+without new helpers, runtime changes or incompatible membership rules.
+
+Changed ONLY the obsolete title and absence assertion in
+`packages/db/test/meter-persistence.integration.test.ts` (+17/−2 lines):
+
+- Both `jobguard_meter` and `jobguard_meter_owner` must exist, one row each,
+  with LOGIN, INHERIT, BYPASSRLS, SUPERUSER, CREATEDB, CREATEROLE and REPLICATION
+  all false, and no outgoing `pg_auth_members` membership.
+- Holder rows, if present, must exactly match the existing current-creator
+  ADMIN-only shape; runtime cannot be that holder. Explicit `pg_has_role`
+  USAGE and SET checks reject indirect runtime inheritance/assumption paths.
+- Both roles have no applicable privilege on any app `shadow_%` ordinary or
+  partitioned table, view, materialized view, foreign table or sequence:
+  table SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER, column
+  SELECT/INSERT/UPDATE/REFERENCES, sequence USAGE/SELECT/UPDATE are checked.
+- All earlier runtime-DML denial, FORCE RLS, fixture EXECUTE denial, nonempty
+  shadow inventory, runtime-shadow denial and other tenant/privacy assertions
+  remain byte-for-byte unchanged. The 0239 SQL, B1–B5/union source and every
+  other source file remain untouched. No protected fingerprint/code changed.
+
+Actual focused checks with installed Node 24.15.0, TypeScript 5.8.3 and cached
+pnpm 10.28.1, without installation or fallback:
+
+- PASS narrow `transpileModule` syntax diagnostics for the changed file.
+- PASS actual runner discovery:
+  `pnpm --filter @jobguard/db exec vitest list test/meter-persistence.integration.test.ts --maxWorkers=2`;
+  all 11 cases collected. No PostgreSQL hooks/assertions executed.
+- PASS synthetic evaluation of the exact added assertion block using mocked
+  catalogue results: 4 safe/no-holder/ADMIN-only probes accepted, 34 probes
+  rejected across both roles (missing role, every unsafe attribute/membership,
+  wrong holder/admin/INHERIT/SET, runtime USAGE/SET, shadow relation/sequence).
+  Initial ad hoc mock misrouted a nested SQL substring; corrected its routing
+  and reran the synthetic checks. This tests assertion sensitivity, not actual
+  PostgreSQL catalog semantics, query execution or tenant isolation.
+- PASS exact reverse reconstruction proves that replacing the added block
+  with the old assertion and restoring the title reproduces HEAD's full file.
+  PASS whitespace and exact two-path footprint checks; original receipt prefix
+  preserved. No broad build/typecheck or previously passing DB suite repeated.
+
+Original test SHA-256:
+`2b4c9bff668c980d7cc4b43e77b0065414c087d78e3342ea0439f1bb46f8d71d`.
+Candidate test SHA-256:
+`f0748b2cc79464c75675467dbfd80f6ca323f087500085a603c7b9d49215b307`.
+Earlier receipt prefix: 82,218 bytes, SHA-256
+`40e869ebc56ae7272545934ae829038f153226aee00143a1e57ddb01b1bb6cf1`.
+
+Parent admission/resource observation covers this continuation; no denied
+process observation was interpreted as zero, and no heavy execution was
+attempted. PostgreSQL/browser remain CI-only. Dispatcher next: normal scoped
+checkpoint/feature push, current-main exact-head CI executing this regression
+and dependent guards, same original Claude RED delta recheck, separate
+acceptance, then actual C282 checker merge only after all gates. No local DB
+PASS, new independent review, acceptance, Git metadata write, commit/push,
+main merge, live action, real data, spending or release is claimed. Existing
+holds remain. This is a delta repair, with no new simplicity observation.
+
+
+## 27 October 2026 — current-main catalogue comparison HOLD (SV5 predecessor)
+
+Same issued leaf `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, saved Gmail session `01a1788c-21e1-7012-9d6b-a031d6aaa817`. This is a delta continuation, not a new review or acceptance. Parent dispatcher prepared the merge; builder made no Git metadata writes. Current rules SHA-256 `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`; full Simplicity SHA-256 `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. C280 current-main CI/RED delta and C282 independent merge remain required; no new simplicity observation on this recheck.
+
+Exact feature parent HEAD `ad9652f8d36171a9ae59989ec80b9927efc125f3`; MERGE_HEAD `6fa1692c740c8f6373e05ece2832b4daafa1ad53` (SV5 PR181); merge base `a6778b4ae923ec15ba39377ee0c4ca2006f31040`. Only unmerged path is `docs/contracts/lp-0-effective-privileges-v1.json`. Stage 1/base blob `8083606bc61ba98156ea6510ac7b818b78b3db2b`, SHA-256 `b28c18f291b19bd9324b3772a8ec12c1f1f36a1e1556e23a7d3aa2d9b77b3959`; stage 2/feature blob `c6d19bfb7c60c316dd1006aaf1296dfb2595f16d`, SHA-256 `e4ccecf044933940e01217dda1b1fbc9ca24348f83e3b3dc3754fc1f87141568`; stage 3/main blob `2370c02d2c7fa04410c30e4f3a6721af0b27322a`, SHA-256 `373f0988f3fd36b4edd6d3dbff4ffca2a393471dff0e140e8309c9d8d32c113f`.
+
+Cheap JSON parsing of all three stage blobs passed. Stable keysets below use SHA-256 of sorted identities, newline-separated with a trailing newline. All common objects in these five collections are identical in both parents; duplicate stable keys absent. Union counts are comparison results only, not a resolved candidate.
+
+| Collection | Base count / keyset SHA-256 | Feature count / keyset SHA-256 | Main count / keyset SHA-256 | Union count |
+|---|---|---|---|---|
+| groups | 61 / `979ce1a510751b81eb60b77321408a1079d509402491ae5af78a08b0f329bc9c` | 62 / `16f463c640287d5b43d6c54a2ef022bb601c4c306b7bba6593ebf949468418ef` | 62 / `ce55ee1c6026612e06a6b06813125924741fdea3683d2d994048d84b57268855` | 63 |
+| entries | 1213 / `4e8f5722d5dc9ce5008a06da247be2dc42d2c44aec4e42db580e05d0bb690acd` | 1273 / `8f3837bf32ae8fe355cffe604b73bba1f2ea1aaaf0ba265b55914594b045d59b` | 1227 / `fdc8f83892459b6ab0548aa1777a3f988f943fa1078a8acde7dbb1181479e037` | 1287 |
+| authorityPaths | 36 / `df0b98d7fefffe8c3789d92e3ad7dfe5efdc3f33430e5467e5c2f12600b96c0e` | 36 / `df0b98d7fefffe8c3789d92e3ad7dfe5efdc3f33430e5467e5c2f12600b96c0e` | 37 / `32631bf395495e0d8364e6f223b08f6d19c8bbd90a096562176c1338c4498afd` | 37 |
+| targetState | 12 / `46d6eec6fe45050292efe6831d198ea3b574c900b5625c67717ca947b034faf7` | 12 / `46d6eec6fe45050292efe6831d198ea3b574c900b5625c67717ca947b034faf7` | 12 / `46d6eec6fe45050292efe6831d198ea3b574c900b5625c67717ca947b034faf7` | 12 |
+| held | 2 / `aa49e7e79480ba67f2e832fe7cd87538afc9bbe4e20191bf76a277d3c0da9e00` | 2 / `aa49e7e79480ba67f2e832fe7cd87538afc9bbe4e20191bf76a277d3c0da9e00` | 2 / `aa49e7e79480ba67f2e832fe7cd87538afc9bbe4e20191bf76a277d3c0da9e00` | 2 |
+
+Feature-only group `a-mon1s-lifecycle` contains the existing 0239 source paths; main-only group `a-sv5-final-check` contains accepted 0238 paths. Feature adds 60 entry keys, main adds 14; main adds `ap-sv5-final-check`. Recorded routine identities count 381/385/397 (base/feature/main), potential union 401. Four feature-only and sixteen main-only recorded routines have distinct identities. Shared recorded routine objects match except the following exact security difference.
+
+**HOLD under the issued instruction “If same identity differs in role/grant/security meaning, stop with specific HOLD.”** Recorded identity `function:app.mon1_company_actor(uuid,text)` has feature `otherExecute=["jobguard_meter_owner"]`, `reachable=true`; main and base have `otherExecute=[]`, `reachable=false`. All other fields are equal, including owner `jobguard_migration`, SECURITY DEFINER, runtimeExecute=false, publicExecute=false, search_path=pg_catalog and definition SHA-256 `76823d98ad9264c9d429a3c58e2ab9d2013d83f604edf934d6516210bc89e287`. Main equals base for this object; this is a one-sided preexisting MON1-S change, not a new SV5 change. Nevertheless the explicit same-identity security-difference hold prevents the builder from selecting or claiming preservation of both unequal parent objects. Dispatcher/coordinator must reconcile this exact preexisting delta with the authorised checker before resolution proceeds. No invented grant or security weakening.
+
+Attempted existing parser/schema reuse via pinned Node24.15.0 and installed apps/api tsx loader importing `packages/db/test/lp-0-catalog.ts`. Import failed before `parseInventory` execution: `packages/db/src/final-check-repository.ts:3`, `@jobguard/core` does not provide export `FinalCheckError` (automerged SV5 source versus installed package exports). No schema PASS is claimed; no rebuild, dependency installation, fallback parser, or unrelated source repair attempted. JSON comparison above used Python's standard JSON decoder only. No local test suites, PostgreSQL/browser assertions, or heavy execution/resource observations ran.
+
+Conflict markers deliberately retained, no JSON bytes changed: unresolved worktree SHA-256 `46a6a1e95137a62d300fb4c8f78b903c4c9582c4db567d8be20589dbbbd293e4`. No resolved hash or both-parent content-union PASS exists. All automerged main files, 0239 SQL, posture tests, archives and config left untouched. Sole authored change is this receipt append; prior receipt prefix 87220 bytes / SHA-256 `50f7879549e37be80c3bea29d9f9a8da8f0f47358dd2a60fefdaed3aaf71acab` preserved. Index manifest before append SHA-256 `03ad2213e378fea468d512555df812df7e5271289421fc1b6af09e1d6679f945` (`git ls-files --stage`, stripped final newline); unmerged stages preserved. No stage/commit/push/merge/abort/reset/cleanup. Diff whitespace check of the appended receipt is required below; whole-conflict marker check cannot pass while intentionally held.
+
+Next action: dispatcher/coordinator resolves the exact same-identity security comparison and parser import gate, then resumes the bounded JSON action if authorised. Normal checkpoint/hooks, current-main CI (including dependent privilege/shadow/tenant guards), actual independent C280 RED delta, separate acceptance and actual C282 PR325 merge before MON3 PR335 remain outstanding. No prior-main green/review/acceptance carries and no delivery/release claim is made.
+
+Final cheap verification: `git diff --check -- docs/verdicts/MON1-S/BUILDER_RECEIPT.md` passed (exit 0). `git ls-files -u` still shows exactly the three original JSON stages above; worktree unstaged paths are the preexisting unresolved JSON and this appended receipt only. JSON bytes and complete index manifest were compared before/after append and are unchanged.
+
+
+## 27 October 2026 — clarified three-way current-main catalogue resolution
+
+Continuation of the same issued `MON1-S-CATCHUP-CURRENT-MAIN-20261026`, saved Gmail session `01a1788c-21e1-7012-9d6b-a031d6aaa817`. Direct continuation clarifies preservation using three-way evidence: main==base retains feature, feature==base retains main, identical parents retained once; only different changes by BOTH parents to the same identity hold. This supersedes the preceding conservative same-identity HOLD for this bounded source action. It adds no permission, grant or product behaviour. Prior HOLD evidence and every earlier receipt remain intact.
+
+Revalidated exact HEAD `ad9652f8d36171a9ae59989ec80b9927efc125f3`, MERGE_HEAD `6fa1692c740c8f6373e05ece2832b4daafa1ad53`, merge base `a6778b4ae923ec15ba39377ee0c4ca2006f31040` and the same three stage blobs/full parent SHA-256s recorded immediately above. Current AGENTS and BUILD_PLAN identities match retained full readings (`ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`, `16b262d2f465868f5d5b349cb4d6830eae34b48162166343747200898bac0aa0`); applicable C1–C8/MON1 contract readings retained. Full current BUILD_RULES and Simplicity reread, hashes `72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28` and `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. This is a delta recheck: no new simplicity observation. C280 RED delta/current-main CI and C282 independent merge policy remain applicable.
+
+Resolved ONLY the existing JSON conflict by removing six conflict-marker lines and retaining every other prepared worktree byte in order, including both sides of both additive hunks. No reserialization, whole-file formatting, catalogue regeneration or manual grant changes. Stable identity comparison covered groups/id, entries/key, authorityPaths/id, targetState/id, held/id, recorded routines/identity, RLS/relation, policies/relation+policy and triggers/relation+trigger. Exact keyset union and full chosen-object equality checked for every identity; no duplicate keys, deleted base identities, lost feature-only/main-only objects, unexpected records or genuine both-changed mismatches. Unchanged top-level metadata, gaps and recorded note checked against all parents.
+
+`function:app.mon1_company_actor(uuid,text)` is the ONLY unequal common object across those collections: main is byte-content-equivalent as JSON to base; feature's existing `otherExecute=["jobguard_meter_owner"]`, `reachable=true` is retained unchanged. All its other protection fields match all parents. Inspected unchanged `packages/db/migrations/0239_meter_lifecycle_source.sql:116`: `GRANT EXECUTE ON FUNCTION app.mon1_company_actor(uuid,text) TO jobguard_meter_owner;`. No grant was invented or edited. The retained feature object records that already reviewed one-sided source change. All other common objects are identical between parents. All 60 feature-only entry keys/four feature-only recorded routines and 14 main-only entry keys/sixteen main-only recorded routines survive unchanged; feature lifecycle group and main SV5 group/authority path preserve exact content and paths.
+
+Counts below are base / feature / main / resolved. Keyset SHA-256 uses sorted stable identities joined by newline with a trailing newline, as in the preceding proof.
+
+| Collection | Counts | Resolved keyset SHA-256 |
+|---|---|---|
+| groups | 61 / 62 / 62 / 63 | `7a1140bca606c89e61037dc62c754d427657ad71655401f1b6a067cfa89cc2ba` |
+| entries | 1213 / 1273 / 1227 / 1287 | `1c9ba335246f9920a72c8d386813796eb3c0413ec52804f7865cddadfd290203` |
+| authorityPaths | 36 / 36 / 37 / 37 | `32631bf395495e0d8364e6f223b08f6d19c8bbd90a096562176c1338c4498afd` |
+| targetState | 12 / 12 / 12 / 12 | `46d6eec6fe45050292efe6831d198ea3b574c900b5625c67717ca947b034faf7` |
+| held | 2 / 2 / 2 / 2 | `aa49e7e79480ba67f2e832fe7cd87538afc9bbe4e20191bf76a277d3c0da9e00` |
+| recorded.routines | 381 / 385 / 397 / 401 | `304930b949aadca352c9f4813de33c1625f95997eaf9e817860d337103d68236` |
+| recorded.rls | 249 / 257 / 249 / 257 | `33efe1baaf3a0608b54428e4e72b26e864549205cdee9f44292be0477f3dbef4` |
+| recorded.policies | 265 / 284 / 265 / 284 | `d50cdf8144a8b6de9913faeacde5bd164a604a01d1aa05ac871ba52516130301` |
+| recorded.triggers | 393 / 401 / 393 / 401 | `6f569e3df42fc3812ed3df7ffb91dabb66eb0e01cd3e71197fc2d4703352ee41` |
+
+Cheap checks actually executed: Python JSON decoding and complete keyed three-way content equality; all conflict markers absent; `git diff --check -- docs/contracts/lp-0-effective-privileges-v1.json docs/verdicts/MON1-S/BUILDER_RECEIPT.md` passed. Existing strict `parseInventory`/Zod validation PASSED for all three parents and resolved JSON using pinned Node24.15.0 and installed TypeScript/Zod: TypeScript AST selected the exact existing pure validator declarations (LP_CARDS, cardId, GROUP_KINDS, AUTHORITY_KINDS, target/group/path/routine/inventory schemas, InventoryError, parseInventory), transpiled those declarations in memory and executed them with installed Zod. Exact selected declaration text plus Zod import SHA-256 `84c5bd523082a5514a9deac187fd713b9833cfc101e0f5f30717ade7f7b735f9`. No alternative validator, source helper file or schema edits. This isolated source check avoids unrelated DB/runtime imports; it does not claim the whole-module import failure recorded above is fixed, or claim a build/DB execution PASS. No local suites, PostgreSQL/browser execution, heavy execution, dependency installs or unaffected build/typecheck reruns.
+
+Resolved JSON SHA-256 `ced872bc3ae6cc3a95d0de947d21f9d7a3d4117f86eb258e089bec3189bd1855`; Git blob hash (read-only `git hash-object`, no -w) `3ca5657d9a9778e65486a97872453fc9dde013c3`. All 2,698 other present tracked files were SHA-256 snapshotted before JSON edit and confirmed identical afterward, including 0239 SQL, posture tests, archives, config, instructions and inherited automerged main changes. Complete `git ls-files --stage` bytes unchanged: SHA-256 `b5ea17505ca22d4757f3d366ef1a3c86b9f27c24d181959e4f611cfe436f7c06` (includes trailing newline; prior HOLD used stripped newline). Unmerged stages intentionally remain for parent dispatcher to stage. No Git metadata writes, stage/commit/push/merge/reset/abort/stash/cleanup. Only authored paths are the resolved JSON and this appended receipt. Prior receipt prefix 93988 bytes / SHA-256 `112b8b4787bc07e957719709cd4466256bc57dc0273980969292be6ab6457ba3` preserved exactly.
+
+Source result ready for normal dispatcher scoped checkpoint/hooks/feature push. Current-main exact-head CI must still execute required PostgreSQL/browser and dependent privilege/tenant/shadow checks; whole-module/package export build state remains for normal checks. Actual independent C280 RED delta, separate technical acceptance and C282 PR325 merge before MON3 PR335 remain outstanding. No old-main acceptance, independent review, integration, delivery, release, real data or spending claim.
