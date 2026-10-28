@@ -372,3 +372,40 @@ merge, real customer data, provider activity, live money or release is claimed.
 Git's index still reports the two resolved files as unmerged because no git-write
 command was run; the router must stage the resolved content and migration rename.
 Commit text: `/tmp/m4-9-s-20261028T175022Z-commit-msg.txt`.
+
+## 28 October 2026 — PR #380 catch-up after #372 and #379 (RED)
+
+Router scope: M4-9-S, branch `codex/sandbox/m4-9-s`, migration 0302;
+prior RED pass reported by the router. This run is a catch-up only, with no new
+behaviour or test-expectation changes beyond the union with merged main.
+No new independent review is claimed by this builder.
+
+Resolved the LP-0 and core-export conflicts by retaining both sides exactly.
+Deterministic checks confirm LP-0 entries (1,366) and recorded routines (453)
+are the exact deduplicated union of HEAD and origin/main. SERIOUS-B5 equals
+main plus precisely the two 0302 routine identities. Contractor-entitlement
+and tenancy expectations are byte-identical to main. Main's ENT-9C baseline
+and MON-4A changes remain intact. No attribution/allocation writer changed.
+
+Migration 0302 still matches HEAD byte-for-byte, SHA-256
+`1c8490a2ecb398311635e5a657fbc488b4091786b0780743618932f61a6f9611`.
+Every main migration is retained byte-for-byte. The existing lane file now
+records this catch-up and lists exactly the 28 non-lane PR paths; its own path
+is implicitly allowed by the repository lane policy (29 PR paths total).
+
+Local checks, using installed dependencies and the cached pnpm 10.28.1 launcher
+at `/private/tmp/jg-sv6-bin/pnpm`, Node v24.17.0:
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/index.test.ts src/success-fee-posting.test.ts src/payment-fee-authority.test.ts`: PASS, 3 files / 73 tests.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts src/success-fee-repository.test.ts`: PASS, 2 files / 30 tests; comparator/scripted tests, not PostgreSQL proof.
+- `pnpm --filter @jobguard/core typecheck`: PASS.
+- `pnpm --filter @jobguard/db exec tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts`: PASS; compilation only.
+- Working-tree checks using `loadLanePolicy`, `lanePathAllowed` and `migrationOrderViolations`: PASS, all 29 PR paths permitted, exact allow list, migration order preserved.
+- Exact union, preserved main migration bytes and absence of resolved-file conflict markers: PASS.
+- `git diff --check`: PASS.
+
+No PostgreSQL, browser, localhost listener, package download, provider activity,
+real data, live money or release was attempted. Database/browser execution and
+required CI remain with GitHub after router push. No git-writing command ran;
+the index still holds unmerged entries until the router stages the resolved
+files. Commit message: `/tmp/m4-9-s-20261028T184254Z-commit-msg.txt`.
