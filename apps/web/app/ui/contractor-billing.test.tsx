@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { BillingView, contractorBillingReadV1, exactPounds } from "./contractor-billing";
+import { BillingView, advanceCommand, contractorBillingReadV1, deliveryCommand, exactPounds, exportCommand, importCommand } from "./contractor-billing";
 
 vi.stubGlobal("React", React);
 
@@ -16,7 +16,8 @@ const read = {
     totals: { billedNet: p("50000"), creditedNet: p("0"), paidNet: p("2500000", "31"), paidGross: p("0"), matchedExtraNet: p("0") },
     allocations: [], held: [{ sourceEventId: "evt-9", reason: "COMPOSITION_REQUIRED" }] } }],
   quarantine: [{ fact_id: "fact-0001-bbbb", reason: "INVOICE_REQUIRED" }],
-  deliveries: [{ id: "d1", batch_id: "batch-0001-aaaa", status: "succeeded", adapter: "fake_download" }],
+  deliveries: [{ id: "d1", batch_id: "batch-0001-aaaa", outbox_action_id: "box-1", status: "succeeded", adapter: "fake_download" }],
+  clientContractIds: ["contract-1"],
   reconciliation: {
     approvedNotExported: [{ extraId: "extra-0001", net: p("12000") }],
     unbilledExports: [{ exportLineId: "line-0002", net: p("30000"), alertDays: 30, overdue: true }],
@@ -53,5 +54,33 @@ describe("ENT-6 billing and reconciliation screen", () => {
     const html = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: contractorBillingReadV1.parse(pending) }));
     expect(html).toContain("Download: outcome_unknown.");
     expect(html).not.toContain("Download CSV");
+  });
+  it("builds each action as one exact versioned command", () => {
+    expect(exportCommand("contract-1", "cmd-1")).toEqual({ action: "export", body: { version: "billing-finalise.v1", commandId: "cmd-1", clientContractId: "contract-1" } });
+    expect(importCommand("csv", "a,b\n1,2", "cmd-2").body).toEqual({ version: "billing-import-request.v1", commandId: "cmd-2", input: { version: "billing-import.v1", transport: "csv", csv: "a,b\n1,2" } });
+    expect(importCommand("json", '{"version":"billing-status.v1"}', "cmd-3").body).toMatchObject({ input: { transport: "api", events: [{ version: "billing-status.v1" }] } });
+    expect(importCommand("json", "[1,2]", "cmd-4").body).toMatchObject({ input: { events: [1, 2] } });
+    expect(() => importCommand("json", "not json", "cmd-5")).toThrow();
+    // Approval binds the batch's exact JSON content hash and expires.
+    expect(deliveryCommand({ id: "batch-1", jsonHash: "h".repeat(64) }, "fake_sftp", "client.invalid", "cmd-6", new Date("2026-10-28T10:00:00Z")).body).toEqual({
+      version: "billing-approve-delivery.v1", commandId: "cmd-6", batchId: "batch-1", channel: "fake_sftp", destination: "client.invalid",
+      contentHash: "h".repeat(64), expiresAt: "2026-10-28T10:15:00.000Z" });
+  });
+  it("retries only a retryable delivery and only reconciles an unknown outcome", () => {
+    expect(advanceCommand({ outbox_action_id: "box-1", status: "retryable" })?.body).toEqual({ version: "billing-advance-delivery.v1", outboxActionId: "box-1", action: "execute" });
+    expect(advanceCommand({ outbox_action_id: "box-1", status: "outcome_unknown" })?.body).toEqual({ version: "billing-advance-delivery.v1", outboxActionId: "box-1", action: "reconcile" });
+    for (const status of ["succeeded", "pending", "executing", "failed"]) expect(advanceCommand({ outbox_action_id: "box-1", status })).toBeNull();
+  });
+  it("shows the action controls only when the screen can send, and the right delivery follow-up", () => {
+    const view = contractorBillingReadV1.parse({ ...read, deliveries: [{ ...read.deliveries[0]!, status: "outcome_unknown" }] });
+    expect(renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view }))).not.toContain("Export approved extras");
+    const html = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view, send: () => undefined }));
+    expect(html).toContain("Export approved extras");
+    expect(html).toContain("Approve delivery");
+    expect(html).toContain("Import status");
+    expect(html).toContain("Check Download delivery outcome");
+    expect(html).not.toContain("delivery again");
+    const none = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: { ...view, clientContractIds: [] }, send: () => undefined }));
+    expect(none).toContain("This job has no client contract to export to.");
   });
 });
