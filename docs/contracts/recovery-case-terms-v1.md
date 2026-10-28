@@ -10,7 +10,7 @@ Approval applies only to synthetic workbench `withheld_customer_payment` cases w
 
 CH-7-REST-C supersedes the former non-v3 policy exemption for **new** pursuit. Every withheld-payment preview, approval and sink insert requires an actual applicable immutable terms approval, including jobs with null/v1 policy. The existing approval writer still refuses those policies; no job conversion, inferred approval or new terms authority exists. A null/v1 job therefore cannot start a new withheld-payment pursuit. Non-withheld behavior is unchanged. Existing saved messages, approvals, deliveries and exact command replays remain immutable; their presence does not authorize a new insert.
 
-Migration `0242_recovery_pursuit_terms_required.sql` replaces only `app.recovery_case_terms_approved(uuid,uuid,uuid)`. It preserves the existing tenant/job/case join, invoker security, owner/ACL, search path and stability. All three existing insert triggers keep their shared case advisory key. Reminders create message rows through those same gates. No rows, tables, grants, callers, money rules or outbound providers change.
+Migration `0244_recovery_pursuit_terms_required.sql` replaces only `app.recovery_case_terms_approved(uuid,uuid,uuid)`. It preserves the existing tenant/job/case join, invoker security, owner/ACL, search path and stability. All three existing insert triggers keep their shared case advisory key. Reminders create message rows through those same gates. No rows, tables, grants, callers, money rules or outbound providers change.
 
 A builder's agreement to the proposed fee terms for a case is not approval of the fee policy and authorises no charge.
 
