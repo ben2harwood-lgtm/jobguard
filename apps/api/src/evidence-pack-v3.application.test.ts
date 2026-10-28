@@ -151,6 +151,7 @@ it("C261 binds real public SV-5 services, gates disclosure on lock and verificat
   const reveal = vi.spyOn(FinalCheckRepository.prototype, "read");
   try {
     const port = createEvidencePackV3SourcePorts({} as never, context, digest).lockReveal;
+    expect(Object.isFrozen(port)).toBe(true);
     read.mockResolvedValue({ lock: null } as never);
     await expect(port.requirePublishedBinding(scope)).rejects.toMatchObject({ hold: "HOLD-EP-SV5-BINDING" });
     expect(verify).not.toHaveBeenCalled(); expect(reveal).not.toHaveBeenCalled();

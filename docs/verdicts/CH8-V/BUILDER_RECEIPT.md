@@ -409,3 +409,48 @@ suites remain for GitHub CI after an eventual ready change is pushed.
 The requested /tmp/ch8-v-catchup-20261028T175202Z-commit-msg.txt says
 "do not commit" and names the incomplete pieces. This is a partial catch-up,
 not an independently verified finished CH-8 card or a release authorization.
+
+## PR #381 repair round 1 — 28 October 2026
+
+Ready for the router to commit this bounded CH-8 part 1 repair. RED; current-head
+green CI and independent RED review remain required. This supersedes the prior
+catch-up's commit-message disposition for this repair only; full CH-8 runtime
+acceptance and the producer/writer holds above remain outstanding.
+
+- Reproduced the M0-6L failure at evidence-pack-v3-ports.ts:72. It reported
+  an allow-list violation, not a new context-constructor call: returning the port
+  directly through Object.freeze classified the local binding factory as an
+  object helper. Bind a typed port, freeze that port, and return it whole. The
+  context still comes from authenticatePracticeSession's existing reviewed bridge
+  and is forwarded unchanged to the lock/check repositories. No constructor,
+  scanner exception, fingerprint or protected check changed. Added an explicit
+  frozen-port assertion to the existing service-binding regression.
+- The shared database fixture now opens its case through RecoveryCaseRepository
+  .command and uses the returned view's id. The source-change test reads through
+  listForMember and amends through .command. Both retain the authenticated
+  practice-scoped pool. Neither uses the landing-only joined writer; no source,
+  isolation, conflict or no-effect assertion was weakened.
+- V3 generation and attachment approval still refuse unconditionally. No writer,
+  schema, grants, migration, provider action or hidden-source access was added.
+- The worktree had no unmerged index entries; no conflict resolution was needed.
+
+Local validation (installed tools, Node v24.17.0; each Vitest invocation at most
+three named files and maxWorkers=2):
+
+- API Vitest: src/auth/context-boundary.test.ts,
+  src/evidence-pack-v3.application.test.ts and
+  src/evidence-pack-v3.controller.test.ts — PASS, 163 tests. This includes the
+  entire unchanged 145-test context-boundary suite.
+- After adding the frozen-port assertion, API
+  src/evidence-pack-v3.application.test.ts — PASS, 16 tests.
+- DB test/recovery-case-join.test.ts — PASS, 13 unit tests; includes rejection
+  of forbidden joined actions. No PostgreSQL involved in this suite.
+- DB tsc -p tsconfig.json --noEmit — PASS.
+- DB Vitest list for evidence-pack-v3-commands, -isolation and -sources
+  integration files — PASS, 16 tests collected. Collection is not execution.
+- git diff --check — PASS; git ls-files -u — empty.
+
+PostgreSQL integration/migration and browser execution remain for GitHub CI
+after the router pushes, as required by this sandbox. No package download,
+localhost binding or git write was attempted. The ready conventional commit
+message is /tmp/ch8-v-catchup-20261028T184354Z-commit-msg.txt.

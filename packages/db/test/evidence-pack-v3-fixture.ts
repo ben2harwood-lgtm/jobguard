@@ -16,13 +16,13 @@ export async function createEvidencePackV3Fixture() {
     const source = await seedEvidencePackFixture(f.admin, { practice: true });
     const auth = await authenticatePracticeSession(f.runtime, source.sessionToken);
     const scoped = practiceMaterialPool(f.runtime, auth.digest);
-    const opened = await withTenant(scoped, auth.context, tx => new RecoveryCaseRepository(scoped).commandInTransaction(tx, auth.context, source.jobId, {
+    const opened = await new RecoveryCaseRepository(scoped).command(auth.context, source.jobId, {
       version: "recovery-case-command.v1", action: "open", commandId: randomUUID(),
       caseType: "withheld_customer_payment", claimedNetPence: 32000,
       counterparty: "Fictional pack customer", book: "builder_customer", sourceType: "customer_invoice",
       sourceRefs: [source.invoiceId], expectedRevision: 0,
-    }, { membershipId: auth.membershipId, identityUserId: auth.identityUserId }));
-    return { ...f, source, auth, caseId: opened.caseId };
+    }, { membershipId: auth.membershipId, identityUserId: auth.identityUserId });
+    return { ...f, source, auth, caseId: opened.id };
   } catch (error) { await closeLockFixture(f); throw error; }
 }
 export const closeEvidencePackV3Fixture = closeLockFixture;

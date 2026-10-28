@@ -47,7 +47,7 @@ export function bindEvidencePackV3LockReveal(
   locks: Pick<FinalAccountLockRepository, "read" | "verify">,
   checks: Pick<FinalCheckRepository, "read">,
 ): EvidencePackLockRevealPort {
-  return Object.freeze({
+  const port: EvidencePackLockRevealPort = {
     async requirePublishedBinding(scope: EvidencePackV3Scope) {
       if (scope.tenantId !== context.tenantId) throw new EvidencePackV3SourceConflict();
       const view = await locks.read(context, scope.jobId);
@@ -62,7 +62,9 @@ export function bindEvidencePackV3LockReveal(
       if (reveal.lockId !== view.lock.id || !reveal.runId) throw new EvidencePackV3SourceConflict();
       return Object.freeze({ lock: view.lock, reveal });
     },
-  });
+  };
+  Object.freeze(port);
+  return port;
 }
 
 export function createEvidencePackV3SourcePorts(

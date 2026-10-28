@@ -65,13 +65,12 @@ it("source change across a test-only handoff is a conflict, not a mixed snapshot
       requestCheck: async () => "opaque-test-only",
       readCompletion: async () => {
         const scoped = practiceMaterialPool(f.runtime, f.auth.digest);
-        await withTenant(scoped, f.auth.context, async tx => {
-          const current = (await tx.$client.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2", [f.source.tenantId, f.caseId])).rows[0];
-          await new RecoveryCaseRepository(scoped).commandInTransaction(tx, f.auth.context, f.source.jobId, {
-            version: "recovery-case-command.v1", action: "amend_claim", commandId: randomUUID(),
-            caseId: f.caseId, claimedNetPence: 33000, expectedRevision: Number(current.revision),
-          }, { membershipId: f.auth.membershipId, identityUserId: f.auth.identityUserId });
-        });
+        const repository = new RecoveryCaseRepository(scoped);
+        const current = (await repository.listForMember(f.auth.context, f.source.jobId, f.auth)).find(c => c.id === f.caseId)!;
+        await repository.command(f.auth.context, f.source.jobId, {
+          version: "recovery-case-command.v1", action: "amend_claim", commandId: randomUUID(),
+          caseId: f.caseId, claimedNetPence: 33000, expectedRevision: current.revision,
+        }, { membershipId: f.auth.membershipId, identityUserId: f.auth.identityUserId });
       },
     },
   })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
