@@ -12,6 +12,7 @@
         "apps/api/src/job-source.controller.test.ts",
         "apps/api/src/job-source.controller.ts",
         "apps/api/src/job-source.errors.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "apps/api/src/workspace/application.ts",
         "apps/web/app/api/jobs/[id]/customer-messages/route.test.ts",
         "apps/web/app/api/jobs/[id]/customer-messages/route.ts",
@@ -23,9 +24,12 @@
         "packages/db/migration-notes/0280_job_source_intake.md",
         "packages/db/migrations/0280_job_source_intake.sql",
         "packages/db/src/job-source-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/job-source-intake.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/watchdog-command-harness.ts",
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts",
+        "packages/db/test/watchdog-lock-order.integration.test.ts",
         "packages/db/test/watchdog.integration.test.ts"
       ]
     }
