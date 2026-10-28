@@ -26,7 +26,7 @@
         "packages/core/src/recovery-fee-illustration.test.ts",
         "packages/core/src/recovery-fee-illustration.ts",
         "packages/core/src/recovery-fee-illustration.type.test.ts",
-        "packages/db/test/recovery-attribution.integration.test.ts"
+        "packages/db/test/recovery-attribution-proof.integration.test.ts"
       ]
     }
   }
