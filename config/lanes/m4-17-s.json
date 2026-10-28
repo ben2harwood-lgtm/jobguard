@@ -14,7 +14,7 @@
         "packages/db/src/index.ts",
         "packages/db/src/money-trail-repository.ts",
         "packages/db/src/money-trail-repository.test.ts",
-        "packages/db/migrations/0222_money_trail_reconciliation.sql",
+        "packages/db/migrations/0252_money_trail_reconciliation.sql",
         "packages/db/MIGRATIONS.md",
         "packages/db/test/money-trail-security.integration.test.ts",
         "packages/db/test/money-trail-upgrade.integration.test.ts",

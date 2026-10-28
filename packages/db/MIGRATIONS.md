@@ -1222,7 +1222,7 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0222 — M4-17-S dependency availability
+### 0252 — M4-17-S dependency availability (renumbered from 0222)
 
 C262 adds only `app.read_money_trail_availability(uuid,text)`, discovered from
 this directory without changing the closed historical migration list. It calls
