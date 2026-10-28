@@ -6,15 +6,16 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "CH-6 RED review-lock follow-up: tenant/job source rows, coherent validation snapshot and real supplementary published catch regression. Exact paths edited in this follow-up; own lane file is implicitly permitted. CI PostgreSQL/migration checks and independent RED review required.",
+      "note": "CH-6 RED variation-revision lookup follow-up: both catch lookups use exact priced revision identity; shared published fixture uses real command writers. Main merge conflicts retain both export sets and catalogue expectation rows. Exact follow-up paths; own lane is implicitly permitted. CI PostgreSQL and independent RED review required.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "docs/contracts/commercial-integrity-v3-persistence.md",
         "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
         "packages/db/migration-notes/0309_commercial_integrity_sources.md",
         "packages/db/migrations/0309_commercial_integrity_sources.sql",
+        "packages/db/src/index.ts",
         "packages/db/test/commercial-integrity-v3-published.integration.test.ts",
-        "packages/db/test/commercial-integrity-v3-review.integration.test.ts"
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
       ]
     }
   }

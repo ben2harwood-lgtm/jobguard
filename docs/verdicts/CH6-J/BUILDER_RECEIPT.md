@@ -425,3 +425,64 @@ execution for GitHub CI because this sandbox cannot start PostgreSQL or bind
 localhost. These are pending checks, not passes. No new migration/backfill or
 privilege change is introduced. Independent RED review remains for the loop owner.
 The ready commit message is /tmp/ch6-j-20261028T195452Z-commit-msg.txt.
+
+
+## 28 October 2026 — exact catch revision mapping and main merge repair (RED)
+
+Ready for router staging/commit. This entry supersedes the earlier note about
+compatibility with owner-loaded variation-ID line fixtures: no such fallback
+remains. Migration 0309 is still unpublished and was edited in place.
+
+Both `ch6_integrity_published` catch lookups now join the source line's tenant,
+job and source_id to `variation_revision` tenant, job and id, then match
+`variation_revision.variation_id` to the immutable `extra_origin.variation_id`.
+The locked-account inclusion check and exact invoice-line lateral query both
+use this representation; the ambiguity count also resolves revision identities.
+A bare variation ID cannot match a real line. The existing tenant/job, original
+lock, gross bounds, ambiguity refusals and source row locks remain.
+
+Converted the shared published financial-parent fixture to reuse the actual
+confirmed/priced/approved catch and final/supplementary invoice path. The
+supplementary descendant contains the exact priced source revision, scope,
+approval and approved description, and asserts that the baseline was not billed
+again. Its financial facts now use PracticeInvoiceRepository recordReceipt,
+previewCredit/issueCredit and reverseReceipt. The entire published suite contains
+no session_replication_role override and fabricates no invoice, invoice binding,
+invoiced line, extra origin, disposition, payment, credit or reversal rows.
+The initial baseline and descendant account assembly remain explicit synthetic
+fixture setup with triggers/FKs enabled; this is not an end-to-end quote journey.
+
+The receipts comparison now proves 132001p versus the locked 120000p plus the
+real 12000p catch, with reversal removing the finding. Credit and writeoff
+findings run against that same actual catch-line representation. A real 83p net
+credit yields 100p gross, retaining the original 60p versus 41p overflow and
+competing 60p mapping tests without weakening their capacity boundaries.
+The supplementary writeoff test separately proves the saved catch line cites
+the original immutable lock and differs from the variation identity.
+
+Resolved both incoming-main conflicts in working files, preserving the union:
+- packages/db/src/index.ts: both meter exports and enterprise baseline export.
+- contractor-entitlement-upgrade.integration.test.ts: both CH-6 source-table and
+  platform enterprise fee-table expectation rows.
+No markers remain. The Git index still lists conflicts because this sandbox
+cannot write .git; the router must stage the resolved files. Other incoming-main
+changes were left in place, with no unrelated refactor.
+
+Local evidence actually executed (installed dependencies only, max one worker):
+- DB input Vitest: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts in packages/db — PASS, 5 tests.
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs — PASS, 253 tests.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit — PASS.
+- node node_modules/typescript/bin/tsc -p /tmp/ch6-j-test-types.json — PASS;
+  checks the changed published suite, existing review suite and resolved
+  contractor-entitlement upgrade suite with their transitive imports.
+- git diff --check — PASS; explicit source assertions confirm no conflict markers,
+  no direct source_id-to-variation-ID comparison and no replication-role override
+  in the published suite. The lane lists exactly this follow-up's edited paths
+  plus its implicitly permitted own file, excluding unrelated staged merge work.
+
+NOT RUN: PostgreSQL, fresh/upgrade migrations, browser suites, full workspace CI
+or independent RED review. Database execution remains CI-only under the user's
+sandbox brief. No git write, download, live provider, real data or release action.
+Ready message: /tmp/ch6-j-20261028T200215Z-commit-msg.txt.

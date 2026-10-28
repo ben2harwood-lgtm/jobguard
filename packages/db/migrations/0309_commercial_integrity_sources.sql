@@ -95,16 +95,17 @@ BEGIN
  'source',app.ch6_source(t,j,d,p.signal_id::text,'published_catch',coalesce(db.created_at,p.first_available_at),
  jsonb_build_object('run',p.run_id,'lock',p.lock_id,'evidence',p.evidence_set_hash,'answer',db.answer,'disposition',db.disposition_id,'line',line.id,'gross',line.gross_pence),'published_final_check'),
  'catchId',p.signal_id::text,'status',CASE db.answer WHEN 'confirmed_extra' THEN 'confirmed' WHEN 'not_completed' THEN 'dismissed_not_completed' ELSE 'dismissed_other' END,
- 'includedInLockedAccount',EXISTS(SELECT 1 FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j AND fl.final_account_revision_id=l.final_account_revision_id AND (fl.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=fl.source_id))),
+ 'includedInLockedAccount',EXISTS(SELECT 1 FROM app.final_account_line fl JOIN app.variation_revision vr ON(vr.tenant_id,vr.job_id,vr.id)=(fl.tenant_id,fl.job_id,fl.source_id) WHERE fl.tenant_id=t AND fl.job_id=j AND fl.final_account_revision_id=l.final_account_revision_id AND vr.variation_id=o.variation_id),
  'value',jsonb_build_object('pence',coalesce(line.gross_pence,0),'currency','GBP','basis',CASE WHEN line.id IS NULL THEN 'unknown' ELSE 'gross' END),
  'invoiceLineId',line.id::text) ORDER BY p.signal_id),'[]') INTO catches
  FROM visible v JOIN app.final_check_reveal_proof p ON p.tenant_id=t AND p.job_id=j AND p.run_id=(reveal->>'runId')::uuid AND p.signal_id=(v.item->>'signalId')::uuid AND p.lock_id=l.id
  LEFT JOIN app.final_check_disposition_binding db ON(db.tenant_id,db.job_id,db.run_id,db.signal_id,db.lock_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id,l.id)
  LEFT JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.source_signal_id)=(p.tenant_id,p.job_id,p.signal_id) AND o.kind='jobguard_catch'
  LEFT JOIN LATERAL (SELECT b.final_account_line_id id,b.gross_pence FROM app.final_account_invoiced_line b
+  JOIN app.variation_revision vr ON(vr.tenant_id,vr.job_id,vr.id)=(b.tenant_id,b.job_id,b.source_id)
   JOIN app.final_account_invoice_binding ib ON(ib.tenant_id,ib.job_id,ib.invoice_id)=(b.tenant_id,b.job_id,b.invoice_id)
-  WHERE b.tenant_id=t AND b.job_id=j AND (b.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=b.source_id)) AND ib.lock_id=l.id AND b.gross_pence BETWEEN 0 AND 1000000000000
-  AND (SELECT count(*) FROM app.final_account_invoiced_line all_lines WHERE all_lines.tenant_id=t AND all_lines.job_id=j AND (all_lines.source_id=o.variation_id OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=j AND vr.variation_id=o.variation_id AND vr.id=all_lines.source_id)))=1) line ON true;
+  WHERE b.tenant_id=t AND b.job_id=j AND vr.variation_id=o.variation_id AND ib.lock_id=l.id AND b.gross_pence BETWEEN 0 AND 1000000000000
+  AND (SELECT count(*) FROM app.final_account_invoiced_line all_lines JOIN app.variation_revision all_revisions ON(all_revisions.tenant_id,all_revisions.job_id,all_revisions.id)=(all_lines.tenant_id,all_lines.job_id,all_lines.source_id) WHERE all_lines.tenant_id=t AND all_lines.job_id=j AND all_revisions.variation_id=o.variation_id)=1) line ON true;
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='confirmed' AND c->>'invoiceLineId' IS NULL) THEN missing:=missing||'catch_line_source_unavailable'; END IF;
  -- Proof must be a published, verified original completion photograph from before this lock.
  SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.signal_id::text||':'||e.id::text,'completion_evidence',e.server_received_at,

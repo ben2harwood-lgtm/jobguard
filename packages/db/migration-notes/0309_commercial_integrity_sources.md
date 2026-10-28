@@ -66,10 +66,14 @@ wall-clock authority are rechecked after waits; no business locks follow audit.
 Exact receipt replay remains ahead of source locking/recomputation.
 
 Real supplementary catch lines resolve their priced `variation_revision` back
-to the immutable origin variation; legacy owner-loaded variation-ID fixtures
-remain readable. Ambiguous multiple invoiced lines still refuse exact attribution.
+to the immutable origin variation. Both the invoice-line lookup and locked-bill
+inclusion check require that revision join; bare variation IDs are not line
+sources. Ambiguous multiple invoiced lines still refuse exact attribution.
 The published-path regression confirms/prices/approves a catch, assembles a real
 descendant account revision and issues final and supplementary invoices through
 the checked runtime repository, with every trigger and FK enabled. Its exact-line
 writeoff review cites the supplementary line and the original lock. No replication
-role override is used in that test. PostgreSQL execution is deferred to CI.
+role override is used in the published suite. Its shared financial fixture also
+uses the actual receipt, credit and reversal writers; credit/line limits and
+reversal assertions retain their original boundaries. PostgreSQL execution is
+deferred to CI.

@@ -30,25 +30,20 @@ it("CH-6 published not-completed advice cites the exact verified original eviden
  await expect(finalCheckTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[x.a.tenantId,x.a.jobId,x.a.digest,JSON.stringify({...raw,commandId:randomUUID()}),JSON.stringify(forged)]))).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
  const visible=await new CommercialIntegrityV3Repository(f.runtime).read(x.a.context,actor,x.a.digest,x.a.jobId);expect(visible.published).toBeNull();
 });
-// Projection fixture only: the financial parent INSERTs below are synthetic setup with predecessor checks disabled.
-// The CH-6 line-source guard, FK boundaries, source reader, review writer and RLS run with all checks enabled.
+// All financial parents use the real synthetic command writers with triggers and FKs enabled.
 async function financialParents(x:Awaited<ReturnType<typeof published>>,withCredit=true){
- const invoice=randomUUID(),payment=randomUUID(),line=randomUUID(),credit=randomUUID(),variation=randomUUID(),scope=randomUUID();
- await finalCheckTenant(f.admin,x.a.tenantId,async db=>{
-  await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
-  VALUES($1,$2,$3,$4,$5,$6,current_date,'{}','candidate_m1_standard_v1','GBP',200000,0,200000,repeat('a',64),repeat('a',64),$7,true,'SYNTHETIC')`,[invoice,x.a.tenantId,x.a.jobId,x.a.revisionId,randomUUID(),`CH6-${invoice.replaceAll('-','').slice(0,24)}`,Buffer.from('fictional')]);
-  await db.query(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
-  VALUES($1,$2,$3,$4,$5,current_date,130001,'GBP','cash','fictional',true,'manual_builder_attestation')`,[payment,x.a.tenantId,x.a.jobId,invoice,randomUUID()]);
-  if(withCredit)await db.query(`INSERT INTO app.customer_credit_note(id,tenant_id,job_id,invoice_id,authorization_id,credit_number,amount_pence,currency,reason) VALUES($1,$2,$3,$4,$5,$6,100,'GBP','fictional')`,[credit,x.a.tenantId,x.a.jobId,invoice,randomUUID(),`CN-${credit.replaceAll('-','').slice(0,24)}`]);
-  await db.query(`INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,lock_id,revision_id,check_id) VALUES($1,$2,$3,'final',$4,$5,$6)`,[x.a.tenantId,x.a.jobId,invoice,x.lockId,x.a.revisionId,randomUUID()]);
-  await db.query(`INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence) VALUES($1,$2,$3,$4,$5,$6,$7,'variation',$8,10000,0,10000)`,[x.a.tenantId,x.a.jobId,invoice,line,x.a.revisionId,scope,randomUUID(),variation]);
-  await db.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id) VALUES($1,$2,$3,'small_builder','jobguard_catch',$4,$5,'owner','command',$6)`,[x.a.tenantId,x.a.jobId,variation,randomUUID(),FINAL_CHECK_ACTOR,x.signal]);
-  // A genuine published confirmation is represented by this ordinary binding, with an already-published proof.
-  await db.query(`INSERT INTO app.final_check_disposition_binding(tenant_id,job_id,disposition_id,run_id,signal_id,lock_id,expected_signal_revision,command_id,actor_membership_id,identity_user_id,answer,request_hash,audit_event_id)
-  VALUES($1,$2,$3,$4,$5,$6,1,$7,$8,$9,'confirmed_extra',repeat('a',64),$10)`,[x.a.tenantId,x.a.jobId,randomUUID(),x.runId,x.signal,x.lockId,randomUUID(),FINAL_CHECK_ACTOR,FINAL_CHECK_USER,randomUUID()]);
-  await db.query("SET LOCAL session_replication_role='origin'");
- });return {invoice,payment,line,credit};
+ const {PracticeInvoiceRepository}=await import("../src/practice-invoice-repository.js");
+ const {practiceMaterialPool}=await import("../src/practice-session.js");
+ const ids=await invoicedCatch(x),repo=new PracticeInvoiceRepository(practiceMaterialPool(f.runtime,x.a.digest));
+ const {paymentId:payment}=await repo.recordReceipt(x.a.context,{jobId:x.a.jobId,invoiceId:ids.invoice,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:132001,method:"cash",reference:"Fictional receipt"});
+ let credit:string|null=null;
+ if(withCredit){
+  const input={jobId:x.a.jobId,invoiceId:ids.invoice,netPence:83,reason:"Fictional whole-invoice credit"};
+  const preview=await repo.previewCredit(x.a.context,input);
+  const issued=await repo.issueCredit(x.a.context,{...input,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),previewHash:preview.previewHash});
+  expect(issued.totalPence).toBe(-100);credit=issued.creditNoteId;
+ }
+ return {...ids,payment,credit,repo};
 }
 it("CH-6 whole-invoice credits refuse attribution; exact synthetic line sources conserve credit/line limits and cite this bill",async()=>{
  const x=await published(),ids=await financialParents(x),repo=new CommercialIntegrityV3Repository(f.runtime);
@@ -64,12 +59,8 @@ it("CH-6 whole-invoice credits refuse attribution; exact synthetic line sources 
 it("CH-6 receipts compare to the exact locked gross bill, deduplicate reads and remove reversed receipts",async()=>{
  const x=await published(),ids=await financialParents(x,false);
  const {finding}=await save(x.a,"receipts_exceed_locked_account_and_confirmed_catches");
- expect(finding.sourceSnapshot.compared).toMatchObject({receiptPence:"130001",accountPence:"130000",lockId:x.lockId,basis:"gross"});
- await finalCheckTenant(f.admin,x.a.tenantId,async db=>{
-  await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason) VALUES($1,$2,$3,$4,$5,'fictional reversal')",[randomUUID(),x.a.tenantId,x.a.jobId,ids.payment,randomUUID()]);
-  await db.query("SET LOCAL session_replication_role='origin'");
- });
+ expect(finding.sourceSnapshot.compared).toMatchObject({receiptPence:"132001",accountPence:"132000",lockId:x.lockId,basis:"gross"});
+ await ids.repo.reverseReceipt(x.a.context,{jobId:x.a.jobId,invoiceId:ids.invoice,paymentId:ids.payment,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),reason:"Fictional reversal"});
  const view=await new CommercialIntegrityV3Repository(f.runtime).read(x.a.context,actor,x.a.digest,x.a.jobId);
  expect(view.result.findings.some(f=>f.kind==="receipts_exceed_locked_account_and_confirmed_catches")).toBe(false);expect(view.published).toBeNull();
 });
@@ -102,13 +93,13 @@ it("CH-6 competing line mappings cannot overrun one credit and unsupported isola
  }finally{await db.query("ROLLBACK");db.release();}
 });
 
-it("CH-6 published catch on a real supplementary descendant cites its issued line and original lock",async()=>{
+async function invoicedCatch(x:Awaited<ReturnType<typeof published>>){
  const {priceVariation,approveVariation}=await import("@jobguard/core");
  const {insertPricedVariation,approvePricedVariation}=await import("../src/variation-repository.js");
  const {withTenant}=await import("../src/tenant-context.js");
  const {FinalAccountLockRepository}=await import("../src/final-account-lock-repository.js");
  const {practiceMaterialPool}=await import("../src/practice-session.js");
- const x=await published(),a=x.a,invoices=new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest));
+ const a=x.a,invoices=new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest));
  const input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),invoiceKind:"final" as const,recipient:"fictional@example.invalid",issuedOn:"2026-10-28"};
  const main=await invoices.issueInvoice(a.context,input);
  const confirmed=await new FinalCheckRepository(f.runtime).confirmCatch(a.context,a.jobId,a.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:x.lockId,runId:x.runId,signalId:x.signal,expectedSignalRevision:1}) as {variationId:string};
@@ -128,17 +119,22 @@ it("CH-6 published catch on a real supplementary descendant cites its issued lin
   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
    SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal FROM app.final_account_line WHERE tenant_id=$2 AND job_id=$3 AND final_account_revision_id=$4`,[descendant,a.tenantId,a.jobId,a.revisionId]);
   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
-   VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$7,'Fictional confirmed catch',10000,2)`,[line,a.tenantId,a.jobId,descendant,priced.id,v.scope_item_id,approval.id]);
+   VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$7,$8,10000,2)`,[line,a.tenantId,a.jobId,descendant,priced.id,v.scope_item_id,approval.id,v.description]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND job_id=$3",[descendant,a.tenantId,a.jobId]);
  });
  const supplementary=await invoices.issueInvoice(a.context,{...input,commandId:randomUUID(),finalAccountRevisionId:descendant,expectedSourceHash:hash,invoiceKind:"supplementary"});
  expect(supplementary).toMatchObject({lockId:x.lockId,netPence:10000,taxPence:2000,totalPence:12000});
  expect((await f.admin.query("SELECT final_account_line_id,revision_id,source_id FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,supplementary.invoiceId])).rows).toEqual([{final_account_line_id:line,revision_id:descendant,source_id:priced.id}]);
  expect((await f.admin.query("SELECT final_account_line_id FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,main.invoiceId])).rows).toEqual([{final_account_line_id:a.lineId}]);
+ return {invoice:supplementary.invoiceId,line,pricedRevision:priced.id,variation:confirmed.variationId};
+}
+it("CH-6 published catch on a real supplementary descendant cites its issued line and original lock",async()=>{
+ const x=await published(),a=x.a,ids=await invoicedCatch(x);
+ expect(ids.pricedRevision).not.toBe(ids.variation);
  const evidence=await insertFinalCheckEvidence(f,a,"writeoff_record","application/pdf",1);
  await finalCheckTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.ch6_line_correction_source(tenant_id,job_id,id,session_digest,correction_kind,invoice_id,line_id,lock_id,evidence_id,amount_pence,authority_ref)
-  VALUES($1,$2,$3,$4,'writeoff',$5,$6,$7,$8,1,'synthetic_fixture:supplementary-writeoff')`,[a.tenantId,a.jobId,randomUUID(),a.digest,supplementary.invoiceId,line,x.lockId,evidence]));
+  VALUES($1,$2,$3,$4,'writeoff',$5,$6,$7,$8,1,'synthetic_fixture:supplementary-writeoff')`,[a.tenantId,a.jobId,randomUUID(),a.digest,ids.invoice,ids.line,x.lockId,evidence]));
  const {finding}=await save(a,"catch_line_credit_or_writeoff");
- expect(finding.sourceSnapshot.compared).toMatchObject({lineId:line,lockId:x.lockId,correctionKind:"writeoff"});
- expect(finding.sourceSnapshot.facts.find(f=>"catchId" in f)).toMatchObject({catchId:x.signal,invoiceLineId:line,includedInLockedAccount:false,value:{pence:12000,basis:"gross"}});
+ expect(finding.sourceSnapshot.compared).toMatchObject({lineId:ids.line,lockId:x.lockId,correctionKind:"writeoff"});
+ expect(finding.sourceSnapshot.facts.find(f=>"catchId" in f)).toMatchObject({catchId:x.signal,invoiceLineId:ids.line,includedInLockedAccount:false,value:{pence:12000,basis:"gross"}});
 });

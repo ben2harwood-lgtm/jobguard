@@ -159,6 +159,7 @@ note records object/grant, refusal and forward-fix details. DB/browser evidence
 is CI-only; this contract does not assert that those suites have run.
 
 A published catch's priced revision is resolved back to its immutable variation
-origin when finding the exact invoiced line, including a supplementary invoice
+origin for both the locked-bill inclusion check and exact invoiced-line lookup.
+A bare variation ID cannot stand in for a priced revision. This includes an invoice
 on a descendant of the locked account. Its advisory snapshot still cites the
 original lock; multiple possible invoiced catch lines refuse attribution.
