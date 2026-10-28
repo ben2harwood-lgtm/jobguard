@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { SubscriptionApplication, subscriptionFailure } from "./subscription.application.js";
-const command = { version: "subscription-command.v1", kind: "onboarding", usualPlaces: 8, siteStaffLogExtras: false };
+const command = { version: "subscription-command.v1", kind: "accept", plan: "Solo", cadence: "monthly", anchorDay: 1, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", maximumPence: 4900, expectedRevision: 0 };
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function fixture(environment = "synthetic_demo") {
  const repository = { command: vi.fn().mockResolvedValue({ hypothetical: true }), read: vi.fn().mockResolvedValue({ hypothetical: true }) };
@@ -30,5 +30,56 @@ describe("subscription application", () => {
  });
  it("typed failures disclose no foreign company facts", () => {
   expect(subscriptionFailure(new Error("foreign company secret"))).toEqual({version:"subscription-error.v1",code:"SUBSCRIPTION_UNAVAILABLE"});
+ });
+});
+
+describe("MON-2A C2 public action attacks", () => {
+ it("binds the exact terms selection to the authenticated company on the server", async () => {
+  const f=fixture(); await f.app.command("session",id,command);
+  const {subscriptionTermsContentHash}=await import("@jobguard/db");
+  const {version: _v,kind: _k,...selection}=command;
+  expect(f.repository.command).toHaveBeenCalledWith(expect.objectContaining({tenantId:id}),"a".repeat(64),id,
+   {...command,contentHash:subscriptionTermsContentHash(id,selection)});
+ });
+ it("rejects forged settlement, issuance, annual terms and a wrong maximum", async () => {
+  const f=fixture();
+  for(const raw of [
+   {...command,maximumPence:16900}, {...command,cadence:"annual"}, {...command,contentHash:"a".repeat(64)},
+   {version:"subscription-command.v1",kind:"issue",periodStart:"2099-01-01",expectedRevision:0},
+   {version:"subscription-command.v1",kind:"record_simulation",workId:id,resultId:id,outcome:"settled",expectedRevision:0},
+   {version:"subscription-command.v1",kind:"execute_simulation",workId:id,expectedRevision:0},
+  ]) await expect(f.app.command("session",id,raw)).rejects.toThrow("INVALID_SUBSCRIPTION_INPUT");
+  expect(f.repository.command).not.toHaveBeenCalled();
+ });
+ it("Origin, CSRF, expired sessions and foreign membership fail before persistence", async () => {
+  for(const patch of [{origin:"https://foreign.invalid"},{csrfToken:"wrong-token-with-at-least-24-characters"},{tenantHeader:id,requestedTenantId:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}]) {
+   const f=fixture();f.authority.resolve.mockResolvedValue({credentials:{...(await f.authority.resolve()).credentials,...patch},digest:"a".repeat(64)});
+   await expect(f.app.command("session",id,command)).rejects.toThrow();expect(f.repository.command).not.toHaveBeenCalled();
+  }
+  for(const method of ["authenticate","findMembership"] as const) {
+   const f=fixture();f.authority.provider[method].mockResolvedValue(null);
+   await expect(f.app.command("session",id,command)).rejects.toThrow();expect(f.repository.command).not.toHaveBeenCalled();
+  }
+ });
+ it("approved simulation uses the adapter and records one settlement; replay never executes again", async () => {
+  const f=fixture();const workId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const approval={workId,statementId:id,environment:"synthetic_demo",amountPence:4900,contentHash:"a".repeat(64),currency:"GBP",revision:1};
+  const snapshot={attempts:[],results:[]} as {attempts:{work_id:string}[];results:unknown[]};
+  f.repository.read.mockImplementation(async()=>snapshot);
+  f.repository.command.mockImplementation(async(_context,_digest,_id,raw)=>{
+   if(raw.kind==="execute_simulation")snapshot.attempts.push({work_id:workId});
+   if(raw.kind==="record_simulation")snapshot.results.push(raw);
+   return approval;
+  });
+  const raw={version:"subscription-command.v1",kind:"approve_simulation",statementId:id,expectedRevision:1,contentHash:"a".repeat(64),amountPence:4900};
+  expect(await f.app.command("session",id,raw)).toEqual(approval);
+  expect(await f.app.command("session",id,raw)).toEqual(approval);
+  expect(snapshot.results).toHaveLength(1);expect(snapshot.results[0]).toMatchObject({outcome:"settled"});
+  expect(f.repository.command.mock.calls.map(call=>call[3].kind)).toEqual(["approve_simulation","execute_simulation","record_simulation","approve_simulation"]);
+ });
+ it("a prior unknown attempt is never retried or presented as settled", async () => {
+  const f=fixture();f.repository.command.mockResolvedValue({workId:id});f.repository.read.mockResolvedValue({attempts:[{work_id:id}],results:[]});
+  await f.app.command("session",id,{version:"subscription-command.v1",kind:"approve_simulation",statementId:id,expectedRevision:1,contentHash:"a".repeat(64),amountPence:4900});
+  expect(f.repository.command).toHaveBeenCalledTimes(1);
  });
 });

@@ -250,3 +250,45 @@ Every row below names the files for one sequential `pnpm exec vitest run --maxWo
 ## Final preservation check
 
 `node /private/tmp/jg-m410-working-tree-check.mjs` exited 0: exactly six own-lane working-tree paths, precisely one additive core export, no migration or existing catalogue/test/auth/API changes, and no malformed whitespace. `git diff --check` exited 0. This custom delta check is labelled separately from the failing official origin/main stack-lane check; it neither overrides that failure nor proves PostgreSQL behavior. Final `pnpm typecheck --concurrency=1` and `pnpm build --concurrency=1` both exited 0 with seven successful tasks. Intended conventional commit subject/body saved to `/private/tmp/jg-msg-m4-10-s.txt`; dispatcher owns commit/push and subsequent review routing.
+
+
+## 28 October 2026 — current-main catch-up only (RED)
+
+Reconciled the in-progress main merge on `codex/sandbox/m4-10-s` without
+new behaviour. Unioned core/workspace exports and LP-0 entries/routine facts.
+Every main LP-0 entry and routine fact is unchanged; the only additions are
+M4-9-S's two exact routine identities and four ownership/EXECUTE entries.
+Contractor-entitlement and tenancy expectations match main byte-for-byte.
+SERIOUS-B5 matches main plus precisely the two inherited success-fee routines.
+All 133 main migration files match main byte-for-byte. Inherited
+`0302_success_fee_v3.sql` matches pre-merge HEAD, SHA-256
+`1c8490a2ecb398311635e5a657fbc488b4091786b0780743618932f61a6f9611`.
+No new migration, renumbering, SQL edit or product implementation.
+Updated this piece's existing lane with exact conflict-resolution paths;
+the lane's own file is implicitly authorized by the lane validator.
+
+Local validation (cached pnpm 10.28.1 via `/private/tmp/jg-sv6-bin`,
+installed Vitest 4.1.12; each Vitest run uses `--maxWorkers=2`):
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/simulation-fee-statement.test.ts src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts`: 125 passed.
+- `pnpm typecheck --concurrency=1`: seven successful tasks, two cached;
+  Turbo reported cache IO permission warnings, no failed tasks.
+- `pnpm --filter @jobguard/core build`: passed. Regenerated ignored core dist
+  after API/repository imports initially failed on its stale double-unwrap
+  schema call; no source fix was needed.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/success-fee.application.test.ts`: rerun 11 passed.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/success-fee-repository.test.ts`: rerun 4 passed.
+- Lane policy loading/schema and exact branch validation passed.
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`: passed. Core purity reported
+  existing computed-import diagnostics.
+- `git diff --check`, export union assertions, catalogue/main comparisons,
+  migration byte comparisons and tracked source merge-marker scan: passed.
+
+The default PATH pnpm was v11 and stalled before test execution; both initial
+commands were interrupted and rerun using the existing cached pinned launcher.
+No dependencies downloaded. No git writes, database/browser suites, providers,
+real customer data or releases. Router stages the resolved files and completes
+the existing merge; git's index remains unmerged until that authorized step.
+CI database/browser checks and independent exact-head RED review remain owed.
+The catch-up does not complete the outstanding full M4-10-S plan work above.
