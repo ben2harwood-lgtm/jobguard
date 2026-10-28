@@ -1,4 +1,4 @@
-# 0253 enterprise fee posting (ENT-7c)
+# 0291 enterprise fee posting (ENT-7c)
 
 Adds the `platform_enterprise_fee` book (accrual and compensation journals) and its balanced `platform_enterprise_fee_line`
 pairs. Both are FORCE RLS with the standard tenant policy, append-only by trigger, and give the runtime no table privilege.

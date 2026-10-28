@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
 
-// CI ONLY. ENT-7c: posting into platform_enterprise_fee from an approved statement (migration 0253).
+// CI ONLY. ENT-7c: posting into platform_enterprise_fee from an approved statement (migration 0291).
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await cluster(); }, 240000);
 afterAll(async () => { await c?.close(); });
@@ -45,6 +45,17 @@ it("posts an approved statement once: one balanced accrual of the exact delta; r
   const postings = await t.repo.readPostings(t.w.ctx, t.w.session, statementId);
   expect(postings).toEqual([expect.objectContaining({ kind: "accrual", agreementVersionId: t.id, amountPence: 806, compensatesFeeId: null, environment: "synthetic_demo",
     lines: [{ account: "contractor_fee_receivable", debitPence: 806, creditPence: 0 }, { account: "platform_fee_revenue", debitPence: 0, creditPence: 806 }] })]);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.platform_enterprise_fee WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(1);
+});
+
+it("an unchanged next month subtracts prior posted net: zero delta and no new journal", async () => {
+  const t = await setUp(), first = await t.approvedStatement(t.p);
+  await t.post(first.statementId, first.authorizationId);
+  const second = await t.approvedStatement(nextMonth(t.p));
+  expect(second.statement).toMatchObject({ totalDeltaPence: 0 });
+  expect(second.statement.sections).toEqual([expect.objectContaining({ cumulativeFeePence: 806, priorNetPostedPence: 806, deltaPence: 0 })]);
+  expect(await t.post(second.statementId, second.authorizationId)).toMatchObject({ journals: 0 });
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, second.statementId)).toEqual([]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.platform_enterprise_fee WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(1);
 });
 

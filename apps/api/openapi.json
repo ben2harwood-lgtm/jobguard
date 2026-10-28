@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/billing": {
       "get": {
         "operationId": "BillingController_read",
@@ -135,6 +165,36 @@
           }
         },
         "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/runs": {
+      "post": {
+        "operationId": "FinalCheckController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Practice only: ask the worker to run the final check for this locked job",
         "tags": [
           "final check"
         ]

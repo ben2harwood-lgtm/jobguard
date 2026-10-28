@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-catch": {
+      "branches": [
+        "codex/sandbox/sv5-catch"
+      ],
+      "note": "RED SV-5 Q2 (Ben 28 Oct): 'Yes, this was extra work' creates only an unpriced jobguard_catch variation via one checked routine (0254); no case, price, approval or claim. The case on the builder's priced approval is a separate PR. Plus the Q6 practice run (0256): owner request routine, worker-only practice ports and tasks, e2e worker in practice-only mode, Test D.",
+      "allow": [
+        ".env.example",
+        "apps/api/openapi.json",
+        "apps/api/src/final-check.application.ts",
+        "apps/api/src/final-check.controller.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/final-check/catches/route.test.ts",
+        "apps/web/app/api/jobs/[id]/final-check/catches/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/runs/route.test.ts",
+        "apps/web/app/api/jobs/[id]/final-check/runs/route.ts",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/global-setup.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/final-check.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0281_final_check_catch.md",
+        "packages/db/migration-notes/0282_final_check_catch_case.md",
+        "packages/db/migration-notes/0283_final_check_practice_run.md",
+        "packages/db/migrations/0281_final_check_catch.sql",
+        "packages/db/migrations/0282_final_check_catch_case.sql",
+        "packages/db/migrations/0283_final_check_practice_run.sql",
+        "packages/db/src/final-check-repository.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/final-check-catch-confirm.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts"
+      ]
+    }
+  }
+}

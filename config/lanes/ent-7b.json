@@ -5,16 +5,17 @@
       "branches": [
         "codex/sandbox/ent-7b"
       ],
-      "note": "ENT-7b (stacked on ENT-7a #353): migration 0250 statement revisions, disputes and exact finance approval; no posting.",
+      "note": "ENT-7b (stacked on ENT-7a #353): migration 0290 statement revisions, disputes and exact finance approval; no posting.",
       "allow": [
-        "packages/db/migrations/0250_enterprise_fee_statement.sql",
-        "packages/db/migration-notes/0250_enterprise_fee_statement.md",
+        "packages/db/migrations/0290_enterprise_fee_statement.sql",
+        "packages/db/migration-notes/0290_enterprise_fee_statement.md",
         "packages/db/src/enterprise-fee-repository.ts",
         "packages/db/src/enterprise-fee-repository.test.ts",
         "packages/db/test/enterprise-fee-statement.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
-        "docs/contracts/lp-0-effective-privileges-v1.json"
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
