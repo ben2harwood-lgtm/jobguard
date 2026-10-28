@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
 
-// CI ONLY. ENT-7a: stored agreement versions and the locked, finance-only derivation (migration 0265).
+// CI ONLY. ENT-7a: stored agreement versions and the locked, finance-only derivation (migration 0276).
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await cluster(); }, 240000);
 afterAll(async () => { await c?.close(); });
