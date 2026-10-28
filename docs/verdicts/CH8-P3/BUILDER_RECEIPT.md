@@ -57,3 +57,34 @@ LATER / SIMPLICITY — packages/db/src/evidence-pack-v3-command.ts and the old p
 once compatibility consumers are migrated, consolidate the held sentinel/preparation seam around
 the installed worker repository. This reduces competing entry-point explanations; it is outside
 this activation and does not block it.
+
+## RED repair round 1 — reviewer FAIL at 33414dcd
+
+Fixed the disclosure defect in the activation candidate. 0327 now selects reveal and disposition
+records only for a reveal classification bound to the current case's catch, via extra_origin,
+variation_revision, case source references and the final-account line's actual revision-valued
+source_id/commercial_revision_id. Processing sources and attempts export explicit ID/hash projections.
+The wider hidden-path check also found whole-run classifications in the run-binding JSON and another
+catch's signal ID in ordinary extra_origin rows: these are now projected/scoped too. Public original
+evidence, accepted documents and commercial line history remain ordinary sources; hidden detector
+inputs, classification lists and unrelated catch proofs are excluded. No grants or money writers change.
+
+The PostgreSQL regression uses the real reconciler with three signals on one completed run: own
+reveal, not_enough_evidence and a second revealed/confirmed catch. Negative controls verify all three
+proofs actually exist. It checks exact own proof/disposition selection, explicit ID/hash-only source
+shapes, absence of the two excluded signal IDs/descriptions from the full artifact, rejected hidden
+proof injection and a separate ordinary recovery case receiving no catch proofs at all.
+
+0306 restored byte for byte from origin/codex/sandbox/ch8-rest c0ac3776 (PR #389), verified with cmp.
+The previous receipt's statement about removing unreachable 0306 code is superseded by this repair.
+Resolved the current-main conflict in packages/core/src/index.ts by preserving evidence-pack and
+meter-today exports. Verified the shared privilege expectation identities contain both HEAD and
+origin/main sets; staged expectation rows from the router merge were preserved.
+
+Local repair validation: 73 core evidence-pack v3/assembly tests and 25 API v3 application/worker/
+controller tests passed using installed Vitest 4.1.12 with maxWorkers=1. Core and db package builds,
+db typecheck, web typecheck, money/commercial boundary checks, changed PostgreSQL fixture/test syntax
+and diff whitespace checks passed. PostgreSQL is unavailable in this sandbox: the new same-run
+regression, migration installation, SQL canonical parity, earlier adversarial allocation suites and
+browser journeys remain CI execution requirements, followed by the independent Claude RED recheck.
+The router must stage the resolved index; no git-writing command was run.

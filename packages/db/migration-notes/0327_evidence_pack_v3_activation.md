@@ -9,6 +9,9 @@ Apply after all predecessors, including 0311. The upgrade test installs the actu
 populates business rows, applies only 0327, compares row/type/primary-key preservation, then exercises
 successors and migration reruns. Fresh-install, PostgreSQL and browser suites run in CI.
 
-0306 retains its fail-closed bodies; their unreachable code was moved into this forward activation.
+0306 is restored byte for byte to PR #389; all activation and disclosure changes live in 0327.
+Reveal/disposition proofs are limited to this case's catch and a reveal classification. Processing
+source and attempt records contain IDs/hashes only; the run binding omits classifications. Ordinary
+catch-origin records are limited to this case, preventing another catch's signal ID from leaking.
 To stop creation, disable the v3 entry points/worker and forward-fix these routines to refuse again;
 retain every historical request, artifact and approval. No destructive rollback.

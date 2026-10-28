@@ -184,3 +184,15 @@ with zero/many hidden signals. These are tests awaiting execution in CI, not ind
 Pre-lock material exits before hidden SQL; must-surface processing remains worker-owned and completes
 before ordinary export. Timing coverage checks statement shape and hidden-query exclusion; it does not
 claim wall-clock constancy or production side-channel certification.
+
+## RED repair round 1: export disclosure boundary
+
+0327 projects processing sources and attempts to IDs and input/result hashes only. Neither frozen
+processing input nor signal lists are exported. The reconciliation run projection retains only run,
+manifest and lock IDs plus manifest/result hashes; its classifications and zero-result flag stay private.
+Reveal and disposition records require a `reveal` classification and this case's own catch origin,
+traced through its referenced variation revision and a matching final-account line `source_id` and
+`commercial_revision_id`. A variation ID alone does not bind a real line. Non-catch cases receive no
+reveal/disposition rows. Ordinary catch-origin records also exclude other catches' signal IDs.
+The original pre-lock branch still returns before any hidden query. 0306 remains exactly PR #389;
+these changes are confined to the not-yet-merged 0327 activation.

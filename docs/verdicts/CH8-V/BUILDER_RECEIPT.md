@@ -409,3 +409,93 @@ suites remain for GitHub CI after an eventual ready change is pushed.
 The requested /tmp/ch8-v-catchup-20261028T175202Z-commit-msg.txt says
 "do not commit" and names the incomplete pieces. This is a partial catch-up,
 not an independently verified finished CH-8 card or a release authorization.
+
+## PR #381 repair round 1 — 28 October 2026
+
+Ready for the router to commit this bounded CH-8 part 1 repair. RED; current-head
+green CI and independent RED review remain required. This supersedes the prior
+catch-up's commit-message disposition for this repair only; full CH-8 runtime
+acceptance and the producer/writer holds above remain outstanding.
+
+- Reproduced the M0-6L failure at evidence-pack-v3-ports.ts:72. It reported
+  an allow-list violation, not a new context-constructor call: returning the port
+  directly through Object.freeze classified the local binding factory as an
+  object helper. Bind a typed port, freeze that port, and return it whole. The
+  context still comes from authenticatePracticeSession's existing reviewed bridge
+  and is forwarded unchanged to the lock/check repositories. No constructor,
+  scanner exception, fingerprint or protected check changed. Added an explicit
+  frozen-port assertion to the existing service-binding regression.
+- The shared database fixture now opens its case through RecoveryCaseRepository
+  .command and uses the returned view's id. The source-change test reads through
+  listForMember and amends through .command. Both retain the authenticated
+  practice-scoped pool. Neither uses the landing-only joined writer; no source,
+  isolation, conflict or no-effect assertion was weakened.
+- V3 generation and attachment approval still refuse unconditionally. No writer,
+  schema, grants, migration, provider action or hidden-source access was added.
+- The worktree had no unmerged index entries; no conflict resolution was needed.
+
+Local validation (installed tools, Node v24.17.0; each Vitest invocation at most
+three named files and maxWorkers=2):
+
+- API Vitest: src/auth/context-boundary.test.ts,
+  src/evidence-pack-v3.application.test.ts and
+  src/evidence-pack-v3.controller.test.ts — PASS, 163 tests. This includes the
+  entire unchanged 145-test context-boundary suite.
+- After adding the frozen-port assertion, API
+  src/evidence-pack-v3.application.test.ts — PASS, 16 tests.
+- DB test/recovery-case-join.test.ts — PASS, 13 unit tests; includes rejection
+  of forbidden joined actions. No PostgreSQL involved in this suite.
+- DB tsc -p tsconfig.json --noEmit — PASS.
+- DB Vitest list for evidence-pack-v3-commands, -isolation and -sources
+  integration files — PASS, 16 tests collected. Collection is not execution.
+- git diff --check — PASS; git ls-files -u — empty.
+
+PostgreSQL integration/migration and browser execution remain for GitHub CI
+after the router pushes, as required by this sandbox. No package download,
+localhost binding or git write was attempted. The ready conventional commit
+message is /tmp/ch8-v-catchup-20261028T184354Z-commit-msg.txt.
+
+## PR #381 repair round 2 — 28 October 2026
+
+Ready for router commit of this bounded CH-8 part 1 repair. RED; current-head
+green CI and independent review are still required. No unmerged index entries
+or conflict markers were present in the affected files after the main merge.
+No shared expectation-list rows were changed or removed.
+
+The isolation error originates in withTenant's tenant set_config SELECT, which
+runs before the source callback. Setting transaction isolation in that callback
+is already too late. Both the production snapshot callback and fixture reader
+had this ordering. Added the local withEvidencePackV3Snapshot adapter, which
+changes only the existing helper's BEGIN to BEGIN ISOLATION LEVEL REPEATABLE
+READ, READ ONLY on its acquired client. The source snapshot and fixture now use
+that same adapter. This keeps the shared withTenant API, genuine-context stamp
+check, transaction-local tenant setting, rollback and release behavior intact;
+there is no new context constructor or scanner exception. The adapter is local
+to the evidence-pack source module to avoid widening the shared transaction API
+or changing the source-pinned practice authentication bridge.
+
+Reauthentication and ordinary-source verification still run inside each fresh
+snapshot, on both sides of the external handoff. Lock/reveal producer calls and
+the handoff remain outside the snapshot transaction. Existing conflict,
+revocation, noninterference, integrity and no-write assertions remain unchanged.
+V3 generation and attachment approval still refuse unconditionally. No schema,
+grants, migration, hidden-source access or provider action was added.
+
+Local validation with installed tools and maxWorkers=2:
+
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/auth/context-boundary.test.ts src/evidence-pack-v3.application.test.ts
+  src/evidence-pack-v3.controller.test.ts — PASS, 166 tests. New regression tests
+  assert the exact snapshot BEGIN precedes the tenant and source queries, commit
+  and failure rollback each release the client once, and forged context is
+  refused before connection. The full 145-test context-boundary suite passes.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: Vitest list --maxWorkers=2 for the three v3 integration files
+  (commands, isolation, sources) — PASS, 17 tests collected; not executed.
+  A new PostgreSQL test checks transaction_isolation, transaction_read_only and
+  the tenant setting on the actual snapshot client in CI.
+- git diff --check — PASS; git ls-files -u — empty.
+
+PostgreSQL and browser execution remain for GitHub CI after the router pushes.
+No package download, PostgreSQL start, localhost binding or git write occurred.
+Ready message: /tmp/ch8-v-catchup-20261028T192818Z-commit-msg.txt.

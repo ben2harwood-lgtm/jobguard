@@ -17,7 +17,7 @@ import {withTenant} from "../src/tenant-context.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 const hash="a".repeat(64);
-export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7", baselineNetPence=3360000){
+export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7", baselineNetPence=3360000, mixedFinalCheck=false){
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
@@ -63,16 +63,17 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  let drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId});
  await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
- const signal=randomUUID();
- if(kind==="F7")await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
-  await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Fictional catch','low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signal,workId]);
+ const signal=randomUUID(), hiddenSignal=randomUUID(), otherCatchSignal=randomUUID();
+ const signals=mixedFinalCheck?[signal,hiddenSignal,otherCatchSignal]:[signal];
+ if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
+  await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,signalId===signal?workId:randomUUID(),signalId===hiddenSignal?'CH8-R1 unrevealed description':signalId===otherCatchSignal?'CH8-R1 other catch proof':'Fictional catch']);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
-  await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signal,evidence,e.object_version_id,e.sha256,e.received]);
+  await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
  const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?[signal]:[]});}
- const classifications:FinalCheckClassification[]=kind==="F7"?[{signalId:signal,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}}]:[];
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
+ const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
  const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  const main=await issue("final");let invoiceId=main.invoiceId;
@@ -80,6 +81,10 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   const confirm=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:signal,expectedSignalRevision:1}) as {variationId:string};
   variationId=confirm.variationId;await price(variationId,"Fictional catch");drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
   invoiceId=(await issue("supplementary")).invoiceId;
+  if(mixedFinalCheck){
+   const other=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:otherCatchSignal,expectedSignalRevision:1}) as {variationId:string};
+   await price(other.variationId,"Fictional second confirmed catch");
+  }
  }
  const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation'",[DEMO_TENANT_ID,jobId,drafted.id])).rows[0].id as string;
  const invoices=new PracticeInvoiceRepository(scoped);
@@ -98,8 +103,8 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  if(kind==="F5"){deposit=await receipt(1200000,"receipt-12000",true);await produce(deposit);}
  const paymentId=await receipt(kind==="F5"?1464000:96000,kind==="F5"?"receipt-14640":"receipt-960"),produced=await produce(paymentId);
  let caseId:string;
- if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account'",[DEMO_TENANT_ID,jobId])).rows[0].id;
+ if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
  const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId}),fact=snapshot.rows.find(r=>r.paymentId===paymentId&&r.lineId===line)!;
- return {f,context,actor,auth,session,jobId,scope,evidence,lock,main,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,produce,fact};
+ return {f,context,actor,auth,session,jobId,scope,evidence,lock,main,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
 }

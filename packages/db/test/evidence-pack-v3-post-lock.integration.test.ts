@@ -1,7 +1,7 @@
 // CI-only real PostgreSQL. Fresh source fixture inputs; all commercial effects use real writers.
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
-import { assembleEvidencePackV3, verifyStandalonePackV3 } from "@jobguard/core";
+import { assembleEvidencePackV3, evidencePackMaterialV3, verifyStandalonePackV3 } from "@jobguard/core";
 import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
 import { shadowPackCatch } from "./evidence-pack-v3-catch-fixture.js";
 import { EvidencePackV3Repository, EvidencePackV3WorkerRepository } from "../src/evidence-pack-v3-repository.js";
@@ -68,4 +68,54 @@ it("SQL canonicaliser equals renderStandalonePackV3 byte for byte across escapin
     expect(Buffer.from(sql.rows[0].text)).toEqual(Buffer.from(pack.artifactText));
     expect(sql.rows[0].hash).toBe(pack.manifestHash);
   }
+});
+it("a case pack excludes unrevealed findings and the second catch in the same completed run", async () => {
+  const { realReceiptFixture } = await import("./stored-receipt-case-fixture.js");
+  const x = await realReceiptFixture(f, "F7", 3000000, true);
+  const runtime = new EvidencePackV3Repository(f.runtime), worker = new EvidencePackV3WorkerRepository(f.shadow);
+  // Negative control: the real reconciler persisted all three proof rows, including
+  // not_enough_evidence; the second revealed catch also has its own disposition.
+  const proofs = (await f.admin.query(`SELECT p.signal_id,c.outcome FROM app.final_check_reveal_proof p
+    JOIN app.shadow_signal_classification c ON(c.tenant_id,c.job_id,c.id)=(p.tenant_id,p.job_id,p.classification_id)
+    WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.run_id=$3 ORDER BY p.signal_id`, [x.context.tenantId, x.jobId, x.run.runId])).rows;
+  expect(proofs).toHaveLength(3);
+  expect(proofs).toContainEqual({ signal_id: x.hiddenSignal, outcome: "not_enough_evidence" });
+  expect(proofs).toContainEqual({ signal_id: x.otherCatchSignal, outcome: "reveal" });
+  const before = await runtime.read(x.context, x.caseId, x.auth.digest), commandId = randomUUID();
+  await runtime.request(x.context, x.caseId, x.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
+  const prepared = await worker.prepare(x.context, commandId);
+  const material = evidencePackMaterialV3.parse(prepared.material);
+  const ownProof = material.records.find(r => r.kind === "reveal")!;
+  await expect(worker.finish(x.context, commandId, { ...material, records: [...material.records,
+    { ...ownProof, sourceId: `final_check_reveal_proof:${x.hiddenSignal}`, content: "attempted hidden proof injection" },
+  ] })).rejects.toThrow("EVIDENCE_PACK_V3_SOURCE_CONFLICT");
+  await worker.finish(x.context, commandId, prepared.material);
+  const pack = (await runtime.read(x.context, x.caseId, x.auth.digest)).packs[0]!;
+  expect(pack.sources.filter(s => s.kind === "reveal").map(s => JSON.parse(s.content).signal_id)).toEqual([x.signal]);
+  expect(pack.sources.filter(s => s.kind === "disposition").map(s => JSON.parse(s.content).signal_id)).toEqual([x.signal]);
+  for (const source of pack.sources.filter(s => ["source_observations", "reconciliation"].includes(s.kind))) {
+    expect(Object.keys(JSON.parse(source.content)).sort()).toEqual(source.sourceId.startsWith("final_check_processing_source:")
+      ? ["id", "input_hash", "manifest_id"] : source.sourceId.startsWith("final_check_source_attempt:")
+      ? ["id", "input_hash", "result_hash", "source_id"] : ["lock_id", "manifest_hash", "manifest_id", "result_hash", "run_id"]);
+  }
+  expect(pack.artifactText).not.toContain("CH8-R1 unrevealed description");
+  expect(pack.artifactText).not.toContain("CH8-R1 other catch proof");
+  expect(pack.artifactText).not.toContain(x.hiddenSignal);
+  expect(pack.artifactText).not.toContain(x.otherCatchSignal);
+  expect(pack.artifactText).not.toMatch(/"(?:frozen_input|signal_ids|classifications)"/u);
+  expect(verifyStandalonePackV3(pack.artifactText).contentMatches).toBe(true);
+  const { RecoveryCaseRepository } = await import("../src/recovery-case-repository.js");
+  const ordinaryCase = await new RecoveryCaseRepository(x.scoped).command(x.context, x.jobId, {
+    version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), expectedRevision: 0,
+    caseType: "withheld_customer_payment", counterparty: "Fictional ordinary case", book: "builder_customer",
+    sourceType: "customer_invoice", sourceRefs: [x.invoiceId], claimedNetPence: 80000,
+  }, x.actor);
+  const ordinaryBefore = await runtime.read(x.context, ordinaryCase.id, x.auth.digest), ordinaryCommand = randomUUID();
+  await runtime.request(x.context, ordinaryCase.id, x.auth.digest, { version: "evidence-pack-command.v3", commandId: ordinaryCommand, format: "TEXT", expectedVisibleSourceRevision: ordinaryBefore.visibleSourceRevision });
+  const ordinaryPrepared = await worker.prepare(x.context, ordinaryCommand);
+  await worker.finish(x.context, ordinaryCommand, ordinaryPrepared.material);
+  const ordinaryPack = (await runtime.read(x.context, ordinaryCase.id, x.auth.digest)).packs[0]!;
+  expect(ordinaryPack.sources.filter(s => ["reveal", "disposition"].includes(s.kind))).toEqual([]);
+  for (const id of [x.signal, x.hiddenSignal, x.otherCatchSignal]) expect(ordinaryPack.artifactText).not.toContain(id);
+
 });

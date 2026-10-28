@@ -15,6 +15,7 @@
         "docs/contracts/evidence-pack-v3.md",
         "docs/operations/evidence-pack-v3.md",
         "docs/verdicts/CH8-P3/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
         "packages/db/migration-notes/0327_evidence_pack_v3_activation.md",
         "packages/db/migrations/0306_evidence_pack_v3.sql",
         "packages/db/migrations/0327_evidence_pack_v3_activation.sql",

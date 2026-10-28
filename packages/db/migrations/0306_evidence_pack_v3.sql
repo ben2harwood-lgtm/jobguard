@@ -151,11 +151,28 @@ BEGIN
 END $$;
 CREATE FUNCTION app.request_evidence_pack_v3(t uuid,c uuid,d text,q jsonb) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,infrastructure AS $$
-DECLARE j uuid;cid uuid;
+DECLARE j uuid;cid uuid;prior app.evidence_pack_v3_request;
 BEGIN
  j:=app.evidence_pack_v3_owner(t,c,d);cid:=(q->>'commandId')::uuid;
  -- CH-8 part 2 installs preparation only. Part 3 owns runtime SV-6 activation.
  RAISE EXCEPTION 'EVIDENCE_PACK_V3_DEPENDENCY_HELD';
+ PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext('pack-v3-command:'||cid::text));
+ PERFORM app.evidence_pack_v3_owner(t,c,d);
+ SELECT * INTO prior FROM app.evidence_pack_v3_request WHERE tenant_id=t AND command_id=cid;
+ IF FOUND THEN
+  IF prior.case_id<>c OR prior.session_digest<>d OR prior.command<>q THEN RAISE EXCEPTION 'EVIDENCE_PACK_COMMAND_CONFLICT'; END IF;
+  RETURN;
+ END IF;
+ IF q->>'version'='evidence-pack-command.v3' THEN
+  IF q-ARRAY['version','commandId','format','expectedVisibleSourceRevision']<>'{}'::jsonb OR q->>'format' IS DISTINCT FROM 'TEXT'
+  OR q->>'expectedVisibleSourceRevision' IS DISTINCT FROM app.final_lock_hash(app.evidence_pack_v3_ordinary(t,c)) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+ ELSIF q->>'version'='evidence-pack-attachment-approval.v3' THEN
+  IF q-ARRAY['version','commandId','packId','expectedManifestHash','expectedContentHash']<>'{}'::jsonb
+  OR NOT EXISTS(SELECT 1 FROM app.evidence_pack_v3 WHERE tenant_id=t AND case_id=c AND id=(q->>'packId')::uuid AND manifest_hash=q->>'expectedManifestHash' AND content_hash=q->>'expectedContentHash') THEN RAISE EXCEPTION 'EVIDENCE_PACK_STALE_APPROVAL'; END IF;
+ ELSE RAISE EXCEPTION 'INVALID_COMMAND'; END IF;
+ INSERT INTO app.evidence_pack_v3_request VALUES(t,j,c,cid,d,q,NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j),clock_timestamp());
+ INSERT INTO infrastructure.evidence_pack_v3_request(tenant_id,command_id) VALUES(t,cid);
+ PERFORM app.append_final_check_audit(gen_random_uuid(),'system:evidence-pack',j,'evidence_pack.v3_requested',jsonb_build_object('commandId',cid));
 END $$;
 -- Only the worker can fetch the request or authoritative material, including after-lock sources.
 CREATE FUNCTION app.prepare_evidence_pack_v3(t uuid,cid uuid) RETURNS jsonb
@@ -183,7 +200,7 @@ END $$;
 -- A supplied envelope is checked against the exact current server inventory under the job/case locks.
 CREATE FUNCTION app.finish_evidence_pack_v3(t uuid,cid uuid,m jsonb,artifact text,mh text) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE r app.evidence_pack_v3_request;j uuid;
+DECLARE r app.evidence_pack_v3_request;j uuid;p app.evidence_pack_v3;envelope jsonb;expected_sources jsonb;expected_entries jsonb;expected_sections jsonb;
 BEGIN
  IF NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
  PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext('pack-v3-command:'||cid::text));
@@ -197,6 +214,51 @@ BEGIN
  j:=app.evidence_pack_v3_owner(t,r.case_id,r.session_digest);
  -- Independent database fence: queued/stale/direct worker calls cannot mint a pack or approval.
  RAISE EXCEPTION 'EVIDENCE_PACK_V3_DEPENDENCY_HELD';
+ IF EXISTS(SELECT 1 FROM app.evidence_pack_v3 WHERE tenant_id=t AND id=cid) OR EXISTS(SELECT 1 FROM app.evidence_pack_v3_approval WHERE tenant_id=t AND command_id=cid) THEN RETURN; END IF;
+ IF m->'lifecycle'->>'state'='pre_lock' AND NOT EXISTS(SELECT 1 FROM app.evidence_pack_v3_check WHERE tenant_id=t AND command_id=cid AND visible_revision=app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id))) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_DEPENDENCY_HELD'; END IF;
+ IF m IS DISTINCT FROM app.evidence_pack_v3_material(t,r.case_id,r.pre_lock) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+ IF r.command->>'version'='evidence-pack-attachment-approval.v3' THEN
+  SELECT * INTO p FROM app.evidence_pack_v3 WHERE tenant_id=t AND case_id=r.case_id AND id=(r.command->>'packId')::uuid;
+  IF p.material IS DISTINCT FROM m OR p.manifest_hash IS DISTINCT FROM r.command->>'expectedManifestHash' OR p.content_hash IS DISTINCT FROM r.command->>'expectedContentHash' THEN RAISE EXCEPTION 'EVIDENCE_PACK_STALE_APPROVAL'; END IF;
+  INSERT INTO app.evidence_pack_v3_approval VALUES(t,j,r.case_id,cid,p.id);
+ ELSE
+  IF r.command->>'expectedVisibleSourceRevision' IS DISTINCT FROM app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id)) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+  envelope:=artifact::jsonb;
+  IF envelope->>'version' IS DISTINCT FROM 'evidence-pack-export.v3' OR envelope->'manifest'->>'binding' IS DISTINCT FROM 'synthetic-records'
+   OR envelope->'manifest'->>'tenantId' IS DISTINCT FROM t::text OR envelope->'manifest'->>'jobId' IS DISTINCT FROM j::text OR envelope->'manifest'->>'caseId' IS DISTINCT FROM r.case_id::text
+   OR envelope->'manifest'->'lifecycle' IS DISTINCT FROM m->'lifecycle'
+   OR jsonb_array_length(envelope->'sources') IS DISTINCT FROM jsonb_array_length(m->'records')
+   OR EXISTS(SELECT 1 FROM jsonb_array_elements(m->'records') x WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(envelope->'sources') y WHERE y->>'sourceId'=x->>'sourceId' AND y->>'kind'=x->>'kind' AND y->>'content'=x->>'content' AND y->>'recordedAt'=x->>'recordedAt'))
+   OR (m->'lifecycle'->>'state'='pre_lock' AND (envelope->'manifest'->'sections'<>'[]'::jsonb OR EXISTS(SELECT 1 FROM jsonb_array_elements(envelope->'sources') x WHERE x->>'kind'<>'ordinary')))
+  THEN RAISE EXCEPTION 'EVIDENCE_PACK_CONTENT_MISMATCH'; END IF;
+  SELECT coalesce(jsonb_agg(x||jsonb_build_object('tenantId',t,'jobId',j,'caseId',r.case_id,
+   'sourceVersion',encode(sha256(convert_to(x->>'content','UTF8')),'hex'),
+   'objectVersion','database-record:'||encode(sha256(convert_to(x->>'content','UTF8')),'hex'),'links','[]'::jsonb) ORDER BY x->>'sourceId' COLLATE "C"),'[]') INTO expected_sources FROM jsonb_array_elements(m->'records') x;
+  SELECT coalesce(jsonb_agg((x-'content')||jsonb_build_object('contentHash',encode(sha256(convert_to(x->>'content','UTF8')),'hex')) ORDER BY x->>'sourceId' COLLATE "C"),'[]') INTO expected_entries FROM jsonb_array_elements(expected_sources) x;
+  SELECT CASE WHEN m->'lifecycle'->>'state'='pre_lock' THEN '[]'::jsonb ELSE jsonb_agg(
+   CASE WHEN EXISTS(SELECT 1 FROM jsonb_array_elements(expected_sources) x WHERE x->>'kind'=k) THEN
+    jsonb_build_object('kind',k,'status','present','sourceIds',(SELECT jsonb_agg(x->>'sourceId' ORDER BY x->>'sourceId' COLLATE "C") FROM jsonb_array_elements(expected_sources) x WHERE x->>'kind'=k))
+   ELSE jsonb_build_object('kind',k,'status','absent','reason',CASE WHEN k='settlement' THEN 'unpaid' ELSE 'not_yet_available' END) END ORDER BY k COLLATE "C") END INTO expected_sections
+   FROM unnest(ARRAY['lock','capture_snapshot','source_observations','reconciliation','reveal','disposition','attribution_revision','settlement']) k;
+  IF envelope->'sources' IS DISTINCT FROM expected_sources OR envelope->'manifest'->'entries' IS DISTINCT FROM expected_entries
+   OR envelope->'manifest'->'sections' IS DISTINCT FROM expected_sections
+   OR envelope->>'banner' IS DISTINCT FROM 'Practice sandbox — synthetic data; nothing is sent or charged'
+   OR envelope->'manifest'->'trustLimitations' IS DISTINCT FROM jsonb_build_array(
+    'Synthetic database records only; no production entitlement or external verification is asserted.',
+    'Content mapping does not establish the truth of a claim.',
+    'Checkpoint trust must be assessed independently.',
+    'Evidence integrity does not establish that work occurred or that a debt is valid.')
+   OR envelope->>'mediaType' IS DISTINCT FROM 'text/plain'
+   OR envelope->'manifest'->>'version' IS DISTINCT FROM 'evidence-pack-manifest.v3'
+   OR envelope->'manifest'-ARRAY['version','binding','tenantId','jobId','caseId','lifecycle','sections','entries','trustLimitations']<>'{}'::jsonb
+   OR envelope-ARRAY['version','mediaType','banner','manifest','sources']<>'{}'::jsonb
+   OR mh IS DISTINCT FROM encode(sha256(convert_to(app.canonical_evidence_pack_v3(envelope->'manifest'),'UTF8')),'hex')
+   OR artifact IS DISTINCT FROM app.canonical_evidence_pack_v3(envelope)
+  THEN RAISE EXCEPTION 'EVIDENCE_PACK_CONTENT_MISMATCH'; END IF;
+  INSERT INTO app.evidence_pack_v3 VALUES(t,j,r.case_id,cid,m,artifact,mh,encode(sha256(convert_to(artifact,'UTF8')),'hex'),clock_timestamp());
+ END IF;
+ UPDATE infrastructure.evidence_pack_v3_request SET completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
+ PERFORM app.append_final_check_audit(gen_random_uuid(),'system:evidence-pack',j,'evidence_pack.v3_completed',jsonb_build_object('commandId',cid));
 END $$;
 ALTER FUNCTION app.evidence_pack_v3_owner(uuid,uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.evidence_pack_v3_owner(uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure;

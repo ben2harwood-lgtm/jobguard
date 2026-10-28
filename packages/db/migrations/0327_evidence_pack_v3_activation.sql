@@ -1,5 +1,39 @@
 BEGIN;
 -- CH-8 part 3 RED: synthetic source-backed packs only. Existing grants remain unchanged.
+CREATE OR REPLACE FUNCTION app.evidence_pack_v3_ordinary(t uuid,c uuid) RETURNS jsonb
+ LANGUAGE sql STABLE SET search_path=pg_catalog,app SET timezone='UTC' AS $$
+ SELECT coalesce(jsonb_agg(jsonb_build_object('kind','ordinary','sourceId',x.sid,'recordedAt',to_char(x.ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'content',x.body::text) ORDER BY x.sid),'[]')
+ FROM app.recovery_case rc CROSS JOIN LATERAL (
+ SELECT 'recovery_case:'||r.id::text sid,rc.created_at ts,to_jsonb(r) body FROM app.recovery_case r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND r.id=rc.id
+ UNION ALL
+ SELECT 'recovery_claim_revision:'||r.id::text sid,rc.created_at ts,to_jsonb(r) body FROM app.recovery_claim_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND r.case_id=rc.id
+ UNION ALL
+ SELECT 'recovery_case_event:'||r.id::text sid,rc.created_at ts,to_jsonb(r) body FROM app.recovery_case_event r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND r.case_id=rc.id
+ UNION ALL
+ SELECT 'quote_document_version:'||r.id::text sid,r.created_at ts,to_jsonb(r) body FROM app.quote_document_version r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'quote_acceptance:'||r.id::text sid,r.recorded_at ts,to_jsonb(r) body FROM app.quote_acceptance r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'variation_revision:'||r.id::text sid,r.created_at ts,to_jsonb(r) body FROM app.variation_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'variation_approval:'||r.id::text sid,r.created_at ts,to_jsonb(r) body FROM app.variation_approval r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'customer_invoice:'||r.id::text sid,rc.created_at ts,(to_jsonb(r)-'pdf_bytes')||jsonb_build_object('pdfBase64',encode(r.pdf_bytes,'base64')) body FROM app.customer_invoice r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'evidence_object:'||r.id::text sid,r.server_received_at ts,to_jsonb(r) body FROM app.evidence_object r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND r.kind='original' AND r.server_verified_at IS NOT NULL
+ UNION ALL
+ SELECT 'job_source_original:'||r.evidence_id::text sid,r.source_received_at ts,(to_jsonb(r)-'bytes')||jsonb_build_object('originalBytesBase64',encode(r.bytes,'base64')) body FROM app.job_source_original r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL
+ SELECT 'synthetic_evidence_original:'||r.upload_id::text sid,rc.created_at ts,(to_jsonb(r)-'bytes')||jsonb_build_object('originalBytesBase64',encode(r.bytes,'base64')) body FROM app.synthetic_evidence_original r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND true
+ UNION ALL SELECT 'supplier_document_version:'||r.id::text,r.created_at,to_jsonb(r) FROM app.supplier_document_version r WHERE r.tenant_id=t AND r.job_id=rc.job_id
+ UNION ALL SELECT 'purchase_order_revision:'||r.id::text,r.created_at,to_jsonb(r) FROM app.purchase_order_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id
+ UNION ALL SELECT 'final_account_revision:'||r.id::text,r.created_at,to_jsonb(r) FROM app.final_account_revision r WHERE r.tenant_id=t AND r.job_id=rc.job_id
+ UNION ALL SELECT 'final_account_line:'||r.id::text,rc.created_at,to_jsonb(r) FROM app.final_account_line r WHERE r.tenant_id=t AND r.job_id=rc.job_id
+ UNION ALL SELECT 'extra_origin:'||r.variation_id::text,rc.created_at,to_jsonb(r) FROM app.extra_origin r WHERE r.tenant_id=t AND r.job_id=rc.job_id AND (r.kind<>'jobguard_catch' OR EXISTS(SELECT 1 FROM app.variation_revision vr WHERE vr.tenant_id=t AND vr.job_id=rc.job_id AND vr.variation_id=r.variation_id AND rc.source_refs ? ('revision:'||vr.id::text) AND rc.source_refs ? ('variation:'||r.variation_id::text)))
+ UNION ALL SELECT 'evidence_invalidation:'||r.id::text,r.invalidated_at,to_jsonb(r) FROM app.evidence_invalidation r
+ WHERE r.tenant_id=t AND EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=t AND e.job_id=rc.job_id AND e.id=r.evidence_id)
+ ) x WHERE rc.tenant_id=t AND rc.id=c
+$$;
 CREATE OR REPLACE FUNCTION app.evidence_pack_v3_material(t uuid,c uuid,ordinary_only boolean DEFAULT false) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog,app SET timezone='UTC' AS $$
 DECLARE j uuid;l app.final_account_lock;b app.final_check_run_binding;rows jsonb;ordinary jsonb;
@@ -14,11 +48,25 @@ BEGIN
  SELECT coalesce(jsonb_agg(jsonb_build_object('kind',x.kind,'sourceId',x.sid,'recordedAt',to_char(x.ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'content',x.body::text) ORDER BY x.kind,x.sid),'[]') INTO rows FROM (
  SELECT 'lock' kind,'final_account_lock:'||l.id::text sid,l.locked_at ts,to_jsonb(l) body
  UNION ALL SELECT 'capture_snapshot','capture_snapshot:'||l.id::text,l.locked_at,l.snapshot
- UNION ALL SELECT 'reconciliation','final_check_run_binding:'||b.run_id::text,b.available_at,to_jsonb(b)
- UNION ALL SELECT 'source_observations','final_check_processing_source:'||r.id::text,r.source_received_at,to_jsonb(r) FROM app.final_check_processing_source r WHERE r.tenant_id=t AND r.job_id=j AND r.manifest_id=b.manifest_id
- UNION ALL SELECT 'reconciliation','final_check_source_attempt:'||r.id::text,r.created_at,to_jsonb(r) FROM app.final_check_source_attempt r WHERE r.tenant_id=t AND r.job_id=j AND r.manifest_id=b.manifest_id
- UNION ALL SELECT 'reveal','final_check_reveal_proof:'||r.signal_id::text,r.first_available_at,to_jsonb(r) FROM app.final_check_reveal_proof r WHERE r.tenant_id=t AND r.job_id=j AND r.run_id=b.run_id
- UNION ALL SELECT 'disposition','final_check_disposition_binding:'||r.disposition_id::text,r.created_at,to_jsonb(r) FROM app.final_check_disposition_binding r WHERE r.tenant_id=t AND r.job_id=j AND r.run_id=b.run_id
+ UNION ALL SELECT 'reconciliation','final_check_run_binding:'||b.run_id::text,b.available_at,jsonb_build_object('run_id',b.run_id,'manifest_id',b.manifest_id,'lock_id',b.lock_id,'manifest_hash',b.manifest_hash,'result_hash',b.result_hash)
+ UNION ALL SELECT 'source_observations','final_check_processing_source:'||r.id::text,r.source_received_at,jsonb_build_object('id',r.id,'manifest_id',r.manifest_id,'input_hash',r.input_hash) FROM app.final_check_processing_source r WHERE r.tenant_id=t AND r.job_id=j AND r.manifest_id=b.manifest_id
+ UNION ALL SELECT 'reconciliation','final_check_source_attempt:'||r.id::text,r.created_at,jsonb_build_object('id',r.id,'source_id',r.source_id,'input_hash',r.input_hash,'result_hash',r.result_hash) FROM app.final_check_source_attempt r WHERE r.tenant_id=t AND r.job_id=j AND r.manifest_id=b.manifest_id
+ UNION ALL SELECT 'reveal','final_check_reveal_proof:'||r.signal_id::text,r.first_available_at,to_jsonb(r) FROM app.final_check_reveal_proof r WHERE r.tenant_id=t AND r.job_id=j AND r.run_id=b.run_id AND EXISTS(SELECT 1 FROM app.recovery_case rc
+  JOIN app.variation_revision vr ON vr.tenant_id=rc.tenant_id AND vr.job_id=rc.job_id
+   AND rc.source_refs ? ('revision:'||vr.id::text) AND rc.source_refs ? ('variation:'||vr.variation_id::text)
+  JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(vr.tenant_id,vr.job_id,vr.variation_id)
+  WHERE rc.tenant_id=t AND rc.job_id=j AND rc.id=c AND rc.case_type='missed_variation_final_account'
+   AND o.kind='jobguard_catch' AND o.source_signal_id=r.signal_id
+   AND EXISTS(SELECT 1 FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j
+    AND fl.line_kind='variation' AND fl.source_id=vr.id AND fl.commercial_revision_id=vr.id AND fl.scope_item_id=vr.scope_item_id)) AND EXISTS(SELECT 1 FROM app.shadow_signal_classification cl WHERE cl.tenant_id=t AND cl.job_id=j AND cl.run_id=b.run_id AND cl.id=r.classification_id AND cl.signal_id=r.signal_id AND cl.outcome='reveal')
+ UNION ALL SELECT 'disposition','final_check_disposition_binding:'||r.disposition_id::text,r.created_at,to_jsonb(r) FROM app.final_check_disposition_binding r WHERE r.tenant_id=t AND r.job_id=j AND r.run_id=b.run_id AND EXISTS(SELECT 1 FROM app.recovery_case rc
+  JOIN app.variation_revision vr ON vr.tenant_id=rc.tenant_id AND vr.job_id=rc.job_id
+   AND rc.source_refs ? ('revision:'||vr.id::text) AND rc.source_refs ? ('variation:'||vr.variation_id::text)
+  JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(vr.tenant_id,vr.job_id,vr.variation_id)
+  WHERE rc.tenant_id=t AND rc.job_id=j AND rc.id=c AND rc.case_type='missed_variation_final_account'
+   AND o.kind='jobguard_catch' AND o.source_signal_id=r.signal_id
+   AND EXISTS(SELECT 1 FROM app.final_account_line fl WHERE fl.tenant_id=t AND fl.job_id=j
+    AND fl.line_kind='variation' AND fl.source_id=vr.id AND fl.commercial_revision_id=vr.id AND fl.scope_item_id=vr.scope_item_id)) AND EXISTS(SELECT 1 FROM app.shadow_signal_classification cl WHERE cl.tenant_id=t AND cl.job_id=j AND cl.run_id=b.run_id AND cl.signal_id=r.signal_id AND cl.outcome='reveal')
  UNION ALL SELECT 'attribution_revision','recovery_attribution_revision:'||r.id::text,r.created_at,to_jsonb(r) FROM app.recovery_attribution_revision r WHERE r.tenant_id=t AND r.job_id=j AND r.case_id=c AND r.lock_id=l.id
  UNION ALL SELECT 'settlement','stored_receipt_case_allocation:'||r.id::text,r.created_at,to_jsonb(r) FROM app.stored_receipt_case_allocation r WHERE r.tenant_id=t AND r.job_id=j AND r.case_id=c AND r.lock_id=l.id
  UNION ALL SELECT 'settlement','receipt_allocation_fact_line:'||r.id::text,r.line_existed_at,to_jsonb(r) FROM app.receipt_allocation_fact_line r WHERE r.tenant_id=t AND r.job_id=j AND EXISTS(SELECT 1 FROM app.stored_receipt_case_allocation a WHERE a.tenant_id=t AND a.job_id=j AND a.case_id=c AND a.fact_line_id=r.id)
