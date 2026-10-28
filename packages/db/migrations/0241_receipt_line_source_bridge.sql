@@ -171,7 +171,7 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
-  EXECUTE format('CREATE POLICY receipt_fact_tenant ON app.%I FOR SELECT TO jobguard_runtime,jobguard_migration USING(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN current_setting(''app.tenant_id'',true)::uuid END)',n);
+  EXECUTE format('CREATE POLICY receipt_fact_tenant ON app.%I FOR ALL TO jobguard_runtime,jobguard_migration USING(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN current_setting(''app.tenant_id'',true)::uuid END) WITH CHECK(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN current_setting(''app.tenant_id'',true)::uuid END)',n);
   EXECUTE format('REVOKE ALL ON app.%I FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access',n);
   -- No builder SELECT grant until reviewed source/session policies are installed.
   EXECUTE format('CREATE TRIGGER receipt_fact_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON app.%I FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation()',n);
