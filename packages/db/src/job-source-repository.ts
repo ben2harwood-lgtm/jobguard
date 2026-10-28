@@ -25,6 +25,9 @@ export class JobSourceRepository {
   if(!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success || !(/^[a-f0-9]{64}$/u.test(owner) || z.guid().safeParse(owner).success))throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");
   return withTenant(this.pool,context,async db=>{
    try{
+    // Separate first lock, with authority checked before and after the wait.
+    // The writer rechecks lifecycle after replay, so post-live retries still work.
+    await db.$client.query("SELECT app.sv7a_require_watchdog_live_lock($1,$2,$3)",[context.tenantId,jobId,owner]);
     const result=(await db.$client.query<{result:unknown}>("SELECT app.sv7a_intake_job_source($1,$2,$3,$4,$5::jsonb) result",[context.tenantId,jobId,owner,kind,JSON.stringify(raw)])).rows[0]?.result;
     const parsed=jobSourceIntakeReceiptV1.safeParse(result);if(!parsed.success)throw new JobSourceError("SOURCE_NOT_FINALIZED");return parsed.data;
    }catch(error){

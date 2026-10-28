@@ -1,6 +1,6 @@
 # 0297 — SV-7A checked intake writer
 
-Adds `app.sv7a_intake_job_source(uuid,uuid,text,text,jsonb)`: one SECURITY DEFINER routine,
+Adds `app.sv7a_intake_job_source(uuid,uuid,text,text,jsonb)`: a SECURITY DEFINER routine,
 migration-owned, runtime EXECUTE only, that records an off-site job-diary note or an owner-entered
 message from a named fictional customer on a live, unlocked synthetic small-builder job.
 
@@ -19,3 +19,13 @@ reference is set by the server only for the exact fictional texts. No shadow tab
 written and no detection is scheduled.
 
 Rollback/forward-fix: revoke runtime EXECUTE in a later migration; recorded sources stay immutable.
+
+Repair round 1: `app.sv7a_require_watchdog_live_lock(uuid,uuid,text)` checks the same
+CH-4 owner authority before and after taking the job SHARE lock in a separate statement.
+The writer repeats authority checks and defers lifecycle validation until after durable
+replay. The source-insert trigger retains SHARE instead of upgrading to UPDATE, avoiding
+a cycle with another replay waiting for the command-ID advisory lock. Final-lock and
+close/reopen writers still serialize with SHARE through their UPDATE lock. The shared
+legacy-ID lookup includes immutable diary and customer-message rows, so other command
+kinds cannot claim their IDs when modern bookkeeping is absent. No privilege is broadened
+on job tables; both entry points remain migration-owned with runtime EXECUTE only.

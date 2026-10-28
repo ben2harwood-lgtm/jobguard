@@ -1,9 +1,10 @@
-// SV-7A intake writer (0248). Real PostgreSQL; CI only.
+// SV-7A intake writer (0297). Real PostgreSQL; CI only.
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {JobSourceError,JobWorkStateError} from "@jobguard/core";
 import {JobSourceRepository} from "../src/job-source-repository.js";
-import {WatchdogError} from "../src/watchdog.js";
+import {WatchdogError,claimCommandIdentity,requireLiveJob} from "../src/watchdog.js";
+import {withTenant} from "../src/tenant-context.js";
 import {sourcesFixture,closeWorkFixture,workTenant,type SourceFixture} from "./job-sources-fixture.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,type FinalCheckFixture} from "./final-check-fixture.js";
 
@@ -41,6 +42,23 @@ describe("SV-7A checked intake writer",()=>{
   await expect(repo.intake(auth.context,jobId,auth.digest,"diary",{...input,text:"Changed note."})).rejects.toEqual(new WatchdogError("IDEMPOTENCY_CONFLICT"));
   await expect(repo.intake(auth.context,jobId,auth.digest,"customer_message",message("Hello",input.commandId))).rejects.toEqual(new WatchdogError("IDEMPOTENCY_CONFLICT"));
   expect(await counts(f)).toEqual(before);
+ });
+ it.each(["diary","customer_message"] as const)("%s parallel retries return one receipt and one source",async kind=>{
+  const {auth,jobId}=f.practice,input=kind==="diary"?diary("Concurrent diary."):message("Concurrent message.");
+  const receipts=await Promise.all([1,2,3].map(()=>repo.intake(auth.context,jobId,auth.digest,kind,input)));
+  expect(receipts[1]).toEqual(receipts[0]);expect(receipts[2]).toEqual(receipts[0]);
+  expect(Number((await f.admin.query("SELECT count(*) n FROM app.job_source_original WHERE tenant_id=$1 AND job_id=$2 AND source_id=$3",[auth.context.tenantId,jobId,receipts[0]!.record.id])).rows[0].n)).toBe(1);
+ });
+ it.each(["diary","customer_message"] as const)("%s history reserves its command id without modern bookkeeping",async kind=>{
+  const {auth,jobId}=f.practice,input=kind==="diary"?diary("Legacy diary."):message("Legacy message.");
+  const first=await repo.intake(auth.context,jobId,auth.digest,kind,input);
+  await f.admin.query("DELETE FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2",[auth.context.tenantId,input.commandId]);
+  await expect(withTenant(f.runtime,auth.context,async db=>{
+   await requireLiveJob(db,jobId);
+   await claimCommandIdentity(db,{tenantId:auth.context.tenantId,jobId,commandId:input.commandId,kind:"readiness.record",requestHash:"a".repeat(64)});
+  })).rejects.toEqual(new WatchdogError("IDEMPOTENCY_CONFLICT"));
+  expect(Number((await f.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2",[auth.context.tenantId,input.commandId])).rows[0].n)).toBe(0);
+  expect(await repo.intake(auth.context,jobId,auth.digest,kind,input)).toEqual(first);
  });
  it("on-site notes wait for place admission and malformed input is refused, with no effects",async()=>{
   const {auth,jobId}=f.practice,before=await counts(f);

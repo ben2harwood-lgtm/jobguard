@@ -58,7 +58,9 @@ const LEGACY_COMMAND_OWNERS = `
   UNION ALL SELECT 'proof.complete', job_id FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'evidence.begin_upload', job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2
   UNION ALL SELECT CASE kind WHEN 'finished_on_site' THEN 'WorkState.finish' WHEN 'finished_cancelled' THEN 'WorkState.cancel_finish' WHEN 'closed' THEN 'WorkState.close' WHEN 'reopened' THEN 'WorkState.reopen' ELSE 'WorkState.unrecognised' END, job_id FROM app.job_work_state_event WHERE tenant_id=$1 AND command_id=$2 AND source_receipt_id IS NULL
-  UNION ALL SELECT 'WorkState.link', predecessor_job_id FROM app.job_link WHERE tenant_id=$1 AND command_id=$2`;
+  UNION ALL SELECT 'WorkState.link', predecessor_job_id FROM app.job_link WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'JobSource.diary', job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'JobSource.customer_message', job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2`;
 
 /** An id the previous schema persisted belongs to the kind and job that persisted it. It can be claimed only by that kind on that job
  * (its own replay); any other kind, or the same kind on another job, is a conflict, so a command whose original has not replayed yet cannot
