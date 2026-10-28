@@ -29,3 +29,29 @@ it("a stale signal revision or another session confirms nothing",async()=>{
  await expect(repo.confirmCatch(a.context,a.jobId,"f".repeat(64),{...command,commandId:randomUUID(),expectedSignalRevision:1})).rejects.toBeDefined();
  expect(await count("variation",a.tenantId,a.jobId)).toBe(0);
 });
+
+it("the builder's priced approval opens the catch case with no claim; the customer's approval adds the claim",async()=>{
+ const {priceVariation,approveVariation}=await import("@jobguard/core");
+ const {insertPricedVariation,approvePricedVariation}=await import("../src/variation-repository.js");
+ const {withTenant}=await import("../src/tenant-context.js");
+ const {FINAL_CHECK_ACTOR}=await import("./final-check-fixture.js");
+ const a=await seedFinalCheckJob(f),r=await availableFinalCheck(f,a),repo=new FinalCheckRepository(f.runtime);
+ const confirmed=await repo.confirmCatch(a.context,a.jobId,a.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:r.lockId,runId:r.runId,signalId:r.signalId,expectedSignalRevision:1}) as {variationId:string};
+ const v=(await f.admin.query("SELECT scope_item_id,description FROM app.variation WHERE tenant_id=$1 AND id=$2",[a.tenantId,confirmed.variationId])).rows[0];
+ const proposal={version:"variation-proposal.v1" as const,id:confirmed.variationId,jobId:a.jobId,scopeItemId:v.scope_item_id,existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text" as const,captureText:v.description,description:v.description,suggestion:null};
+ const priced=priceVariation({id:randomUUID(),variationId:confirmed.variationId,previous:null,proposal,description:v.description,contentHash:"e".repeat(64),
+  confirmed:{quantity:"1",unit:"item",unitRatePence:50000,direction:"addition",confirmedByMembershipId:FINAL_CHECK_ACTOR,rateProvenance:{kind:"human_entered",sourceRef:"synthetic://builder-entered",sourceHash:"8".repeat(64),rateVersion:"builder-price-v1"}}});
+ await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,priced));
+ const cases=(await f.admin.query("SELECT id,state,claim_pence,case_type,book,source_refs FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
+ expect(cases).toHaveLength(1);
+ expect(cases[0]).toMatchObject({state:"identified",claim_pence:"50000",case_type:"missed_variation_final_account",book:"builder_customer"});
+ expect(cases[0].source_refs).toEqual([`variation:${confirmed.variationId}`,`revision:${priced.id}`,`signal:${r.signalId}`]);
+ const claims=async()=>(await f.admin.query("SELECT revision,claimed_net_pence FROM app.recovery_claim_revision WHERE tenant_id=$1 AND case_id=$2",[a.tenantId,cases[0].id])).rows;
+ expect(await claims()).toEqual([]);
+ // The raw runtime boundary still cannot create such a case directly.
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type) VALUES($1,$2,$3,1,'GBP','identified',0,true,'missed_variation_final_account')",[randomUUID(),a.tenantId,a.jobId]))).rejects.toBeDefined();
+ const approval=approveVariation({...priced,state:"priced"} as never,{id:randomUUID(),revisionId:priced.id,revision:priced.revision,contentHash:priced.contentHash,signedDeltaPence:priced.signedDeltaPence,method:"builder_attestation",actorMembershipId:FINAL_CHECK_ACTOR,evidenceId:null,approvedAt:new Date("2026-10-28T10:00:00.000Z")});
+ await withTenant(f.runtime,a.context,db=>approvePricedVariation(db,a.tenantId,confirmed.variationId,approval));
+ expect(await claims()).toEqual([{revision:1,claimed_net_pence:"50000"}]);
+ expect(await count("recovery_case",a.tenantId,a.jobId)).toBe(1);
+});

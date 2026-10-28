@@ -22,7 +22,9 @@
         "apps/web/app/ui/final-check-reveal.tsx",
         "apps/web/app/ui/final-check-reveal-view.ts",
         "apps/web/app/ui/final-check-reveal-view.test.ts",
-        "docs/contracts/lp-0-effective-privileges-v1.json"
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migrations/0255_final_check_catch_case.sql",
+        "packages/db/migration-notes/0255_final_check_catch_case.md"
       ]
     }
   }
