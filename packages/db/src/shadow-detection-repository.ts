@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
 import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
 import { decodeJobSourceFixture } from "./job-source-fixtures.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
-
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
 const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.guid({ error: "Invalid uuid" }),

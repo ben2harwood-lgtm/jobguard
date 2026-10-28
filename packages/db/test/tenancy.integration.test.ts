@@ -265,6 +265,9 @@ describe("migration and privilege catalog", () => {
       { relname: "decision_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_finding_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_review_outcome", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "enterprise_agreement_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "enterprise_fee_contribution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "enterprise_fee_derivation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_invalidation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_object", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -410,6 +413,9 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_allocation_line_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_allocation_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_attribution_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_attribution_reassessment", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_attribution_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_case", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_case_allocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_case_allocation_reversal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -594,6 +600,9 @@ describe("migration and privilege catalog", () => {
       { relname: "decision_resolution", owner: "jobguard_migration" },
       { relname: "discrepancy_finding_revision", owner: "jobguard_migration" },
       { relname: "discrepancy_review_outcome", owner: "jobguard_migration" },
+      { relname: "enterprise_agreement_version", owner: "jobguard_migration" },
+      { relname: "enterprise_fee_contribution", owner: "jobguard_migration" },
+      { relname: "enterprise_fee_derivation", owner: "jobguard_migration" },
       { relname: "evidence_invalidation", owner: "jobguard_migration" },
       { relname: "evidence_link", owner: "jobguard_migration" },
       { relname: "evidence_object", owner: "jobguard_migration" },
@@ -739,6 +748,9 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_allocation_line_source", owner: "jobguard_migration" },
       { relname: "recovery_allocation_review", owner: "jobguard_migration" },
       { relname: "recovery_approval", owner: "jobguard_migration" },
+      { relname: "recovery_attribution_command", owner: "jobguard_migration" },
+      { relname: "recovery_attribution_reassessment", owner: "jobguard_migration" },
+      { relname: "recovery_attribution_revision", owner: "jobguard_migration" },
       { relname: "recovery_case", owner: "jobguard_migration" },
       { relname: "recovery_case_allocation", owner: "jobguard_migration" },
       { relname: "recovery_case_allocation_reversal", owner: "jobguard_migration" },
@@ -841,4 +853,16 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_revision", owner: "jobguard_migration" },
     ]);
   });
+});
+
+// C248: exact additive guard identity, private execution and fixed lookup context.
+it("SV5-GUARD catalogue retains a private migration-owned tenant-safe upload guard", async () => {
+ const routines=(await admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_execute,
+  has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow_execute
+  FROM pg_proc p WHERE p.oid IN ('app.guard_post_lock_upload_transition()'::regprocedure,'app.serialize_final_check_evidence()'::regprocedure)`)).rows;
+ expect(routines).toEqual(Array.from({length:2},()=>({owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog, app'],runtime_execute:false,shadow_execute:false})));
+ const triggers=(await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) definition FROM pg_trigger
+  WHERE tgrelid='app.evidence_upload'::regclass AND tgname='b_final_check_upload_transition'`)).rows;
+ expect(triggers).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O',definition:'CREATE TRIGGER b_final_check_upload_transition BEFORE UPDATE ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.guard_post_lock_upload_transition()'}]);
 });
