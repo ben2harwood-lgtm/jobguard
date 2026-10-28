@@ -7,7 +7,7 @@ export class RecoveryAllocationApplicationError extends Error {
   constructor(readonly code: "UNAUTHENTICATED" | "NOT_FOUND" | "SYNTHETIC_ONLY" | "INVALID_COMMAND" | "INVALID_QUERY") { super(code); }
 }
 type Store = Pick<RecoveryAllocationRepository, "view" | "command">;
-const identifier = z.string().uuid();
+const identifier = z.guid({ error: "Invalid uuid" });
 export class RecoveryAllocationApplication {
   private readonly repository: Store;
   constructor(private readonly pool: Pool, repository?: Store) { this.repository = repository ?? new RecoveryAllocationRepository(pool, process.env.JOBGUARD_ENV ?? "unconfigured"); }

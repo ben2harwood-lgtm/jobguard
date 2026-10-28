@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-int-c": {
+      "branches": ["codex/sandbox/sv7a-int-c"],
+      "receipt": "docs/verdicts/SV7A-INT-C/BUILDER_RECEIPT.md",
+      "note": "Issued build-ahead only, decision 74, 23 October 2026. C1 pure contract; no web journey. Parent/runtime, review and acceptance holds remain; Ben merges.",
+      "allow": [
+        "packages/core/src/job-source-intake.ts",
+        "packages/core/src/job-source-intake.test.ts",
+        "packages/core/src/job-sources.ts",
+        "docs/contracts/job-source-intake-v1.md",
+        "docs/verdicts/SV7A-INT-C/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

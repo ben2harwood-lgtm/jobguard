@@ -12,9 +12,9 @@ import { readOrderFacts, readReplay, readStoredPriced, searchItems, type StoredP
 /** ENT-3c: what a priced log answers. The price itself is never part of an answer (Q7). */
 export type StoredSorExtra = Pick<StoredPriced, "variationId" | "jobId" | "coverage" | "sorCode" | "unit" | "claimedQuantity" | "instructedQuantity" | "extraQuantity" | "orderLineScopeItemId" | "priceSource">;
 const commandType = "LogSiteExtra";
-const inputV1 = z.object({ commandId: z.string().uuid(), jobId: z.string().uuid(), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)), siteVisitId: z.string().uuid().optional() }).strict();
+const inputV1 = z.object({ commandId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)), siteVisitId: z.guid({ error: "Invalid uuid" }).optional() }).strict();
 type Input = z.infer<typeof inputV1>;
-const inputV3 = inputV1.extend({ photoEvidenceId: z.string().uuid().optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional() }).strict();
+const inputV3 = inputV1.extend({ photoEvidenceId: z.guid({ error: "Invalid uuid" }).optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional() }).strict();
 type InputV3 = z.infer<typeof inputV3>;
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
@@ -23,7 +23,7 @@ type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reas
 type SiteExtraRefusal = Refusal | EvidenceRefusal;
 type Authority = { grant: string } | Refusal;
 const answerV1 = z.discriminatedUnion("decision", [
- z.object({ decision: z.literal("allowed"), reason_code: z.literal("allowed"), raising_grant: z.string().uuid() }).strict(),
+ z.object({ decision: z.literal("allowed"), reason_code: z.literal("allowed"), raising_grant: z.guid({ error: "Invalid uuid" }) }).strict(),
  z.object({ decision: z.literal("forbidden"), reason_code: z.enum(["member_inactive", "command_type_not_permitted", "role_not_permitted"]), raising_grant: z.null() }).strict(),
  z.object({ decision: z.literal("not_found"), reason_code: z.literal("job_out_of_scope"), raising_grant: z.null() }).strict(),
 ]);
@@ -287,7 +287,7 @@ export class SiteExtraRepository {
  /** Search of THIS job's price list. The text is required. Writes nothing and records no refusal. */
  async sorItems(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, rawQuery: unknown): Promise<{ sorVersionId: string; items: Array<{ code: string; description: string; unit: string }>; truncated: boolean }> {
   const query = parseSorItemsQuery(rawQuery);
-  if (!z.string().uuid().safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
   const authority = await this.sorAuthority(context, actor, jobId);
   if ("code" in authority) throw new SorSiteExtraError(authority.code);
   const tenant = context.tenantId.toLowerCase();
@@ -300,7 +300,7 @@ export class SiteExtraRepository {
  /** The order check as a read: the same outcome the command then acts on, already-on-the-order included as a result. Writes nothing and records no refusal. */
  async orderCheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, rawQuery: unknown): Promise<SiteOrderCheck["orderCheck"]> {
   const query = parseOrderCheckQuery(rawQuery);
-  if (!z.string().uuid().safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
   const authority = await this.sorAuthority(context, actor, jobId);
   if ("code" in authority) throw new SorSiteExtraError(authority.code);
   const tenant = context.tenantId.toLowerCase();

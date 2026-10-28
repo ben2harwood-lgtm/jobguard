@@ -3,7 +3,7 @@ import { z } from "zod";
 import { detectShadowObservations, groupShadowProposals, shadowDetectionId } from "@jobguard/core";
 import { ShadowFixtureProposer, shadowFixtureCorpusV1 } from "./shadow-proposal.js";
 export const shadowEvaluationClasses = ["genuine_extra", "contracted_work", "ambiguity", "chat", "alternative_material", "duplicates", "cancelled_or_unfinished_request", "supplier_spares", "builder_mistake", "already_captured", "extra_several_sources"] as const;
-const workIdentityV2 = z.object({ tenantId: z.string().uuid(), jobId: z.string().uuid(),
+const workIdentityV2 = z.object({ tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }),
   scopeArea: z.string().min(1), workReference: z.string().min(1) }).strict();
 const labelsV2 = z.object({ version: z.literal("shadow-labels.v2"), cases: z.array(z.object({
   id: z.string().min(1), class: z.enum(shadowEvaluationClasses), expectedWork: z.array(workIdentityV2),

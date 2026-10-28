@@ -70,12 +70,12 @@ export async function approvePricedVariation(db:TenantTransaction,tenantId:strin
 
 export type VariationWorkspaceRow={id:string;scopeItemId:string;existingScopeItemId:string|null;lineageParentScopeItemId:string|null;description:string;captureText:string;state:string;currentRevisionId:string|null;revisions:Array<{id:string;revision:number;description:string;quantity:string;unit:string;unitRatePence:number;signedDeltaPence:number;contentHash:string;approved:boolean;rejected:boolean;actor:string;source:string}>};
 const builderCaptureV1 = z.object({
- version: z.literal("log-builder-extra.v1"), proposal: z.unknown(), actorMembershipId: z.string().uuid(),
+ version: z.literal("log-builder-extra.v1"), proposal: z.unknown(), actorMembershipId: z.guid({ error: "Invalid uuid" }),
  price: z.unknown(), deviceId: z.string().min(1).max(200).nullable(), deviceCapturedAt: z.string().nullable(),
 }).strict();
 const withdrawalV1 = z.object({
- version: z.literal("variation-withdrawal.v1"), id: z.string().uuid(), jobId: z.string().uuid(), variationId: z.string().uuid(),
- actorMembershipId: z.string().uuid(), reasonCode: z.enum(["not_completed", "duplicate_capture", "entered_in_error", "builder_withdrawn"]),
+ version: z.literal("variation-withdrawal.v1"), id: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), variationId: z.guid({ error: "Invalid uuid" }),
+ actorMembershipId: z.guid({ error: "Invalid uuid" }), reasonCode: z.enum(["not_completed", "duplicate_capture", "entered_in_error", "builder_withdrawn"]),
 }).strict();
 export class BuilderCaptureError extends Error {
  constructor(readonly code: "INVALID_BUILDER_CAPTURE" | "FORBIDDEN" | "COMMAND_CONFLICT") { super(code); }
@@ -192,4 +192,4 @@ export class VariationRepository{
  }
 }
 
-const finalReviewCaptureV1 = z.object({version:z.literal("final-review-extra.v1"),proposal:z.unknown(),actorMembershipId:z.string().uuid(),price:z.unknown(),deviceId:z.string().min(1).max(200).nullable(),deviceCapturedAt:z.string().nullable()}).strict();
+const finalReviewCaptureV1 = z.object({version:z.literal("final-review-extra.v1"),proposal:z.unknown(),actorMembershipId:z.guid({ error: "Invalid uuid" }),price:z.unknown(),deviceId:z.string().min(1).max(200).nullable(),deviceCapturedAt:z.string().nullable()}).strict();
