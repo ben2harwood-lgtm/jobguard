@@ -129,3 +129,21 @@ Actual validation with installed tools, no downloads:
 - `git diff --check` — passed.
 
 Database suites still run in GitHub CI because this sandbox cannot start PostgreSQL. No live database success, new review, git write, commit or push is claimed. Ready commit message written to the issued /tmp path; router stages the resolved merge file, completes the merge as needed, commits/pushes and updates work-list state. RED review and CI gates remain unchanged.
+
+
+## PR #387 catch-up after SV-7A intake (#354)
+
+Catch-up only for DEMO-I / DEMO-S (RED). Incoming main includes SV-7A migration 0303. Resolved the single SERIOUS-B5 conflict by retaining both `sourceIntakeAdditions` and `demoRunAdditions`, in migration order. No behavior, SQL, grants or expected predecessor records changed. The index still records the conflict until the router stages the resolved working file; no git writes were performed.
+
+Verified every expectation line from both HEAD and origin/main remains in LP-0 privileges, SERIOUS-B5, contractor entitlement and tenancy. LP-0 groups, entries, authority paths and routine protection records preserve the exact records from both sides with unique identities. The existing DEMO-I lane registration matches exactly all 24 payload paths in the prospective PR, plus its own implicitly allowed lane path (25 paths total); no extra lane grant is needed.
+
+Actual local checks using installed tools, no downloads:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts src/small-builder-demo-repository.test.ts src/migrate-discovery.test.ts` — 48 tests passed across three named files.
+- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/serious-b5-upgrade.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts test/tenancy.integration.test.ts` — 18 tests collected; collection only, no database execution.
+- Both-side expectation retention, exact LP-0 union, exact lane allowlist, and conflict-marker scan — passed.
+- All tracked SQL bytes match their source side: incoming 0303 matches origin/main; all other SQL matches HEAD. Migration 0313 remains unchanged, SHA-256 `53c3ce08833a3804ea3f00442047193d9c15b7ad6fd99921bdfd939a494d7601`. The initial all-HEAD comparison encountered incoming 0303, which exists only on main; the corrected source-side comparison passed.
+- `git diff --check` — passed.
+
+Database and browser suites remain for GitHub CI under the issued sandbox limits. No new independent review is claimed; the brief reports the pre-catch-up head as RED-passed. Router stages the resolved conflict, commits and pushes, and updates the work-list state. No provider, release or real-data action.
