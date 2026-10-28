@@ -1,3 +1,40 @@
+## catch-up 1 — C261 — 24 October 2026
+
+Working-tree conflict resolution only, on `codex/sandbox/sv5pre-catchup`, HEAD `a8b71da8745d54b270cc5cf4b705b780b25ec254`, merging `origin/main` `4b1a779008505c86ca85db78fb38eda412394fe4`. Dispatcher started the merge and owns staging, commit and push to #189's `codex/sandbox/sv5pre`. No Git-writing command, dependency installation/download, PostgreSQL start, browser execution, independent review or self-acceptance was performed. Read AGENTS.md, BUILD_PLAN.md SV-4/SV-5, and the final-account-lock/completion contracts. No intended behaviour change, migration, privilege change, new alert or release authorization.
+
+Each conflict hunk (one per file):
+
+| Hunk | Main had | SV5PRE had | Kept |
+| --- | --- | --- | --- |
+| `apps/web/app/api/jobs/[id]/customer-invoices/route.ts`, entire route | C246 `routeErrorCode` classifies validation before business codes; status derives from the code rather than Zod text | C135/completion guard error mapping, `final-check-invoice-error.v1` and `FINAL_ACCOUNT_*` typed refusals, practice-access precedence, no-store, exact known-error allowlist, sanitized unexpected errors | Main's shared validation/code classification plus SV5PRE's route. Validation (including legacy Zod errors) and malformed JSON return its `INVALID_INPUT`/400. Exact approved stale codes retain POST 409 / GET 400; arbitrary diagnostics cannot select status. Typed `FinalAccountLockError` retains 409/version/code. Authentication, successful projections and sanitization remain intact. |
+| `packages/db/src/final-account-lock-repository.ts`, constant/UUID schema | Zod 4 `z.guid({ error: "Invalid uuid" })`; auto-merged email uses `z.email` | Exported 5000ms upload wait constant and original UUID schema; C238 logic elsewhere | Both wait constant and Zod 4 schema. C238 tenant/job-keyed advisory in-flight probe and both `FINAL_ACCOUNT_LOCK_BUSY` / `FINAL_ACCOUNT_UPLOADS_IN_PROGRESS` are unchanged. |
+| `packages/db/src/shadow-detection-repository.ts`, completion import/batch schema | Zod 4 batch `jobId` schema | Completion error/type import and original batch UUID schema | Completion import plus main's `z.guid({ error: "Invalid uuid" })`; all detection and completion implementation stays intact. |
+
+Preservation: a SHA-256 inventory captured before edits covers all tracked working-tree files, including the coordinator's already merged files. Only the three files above and this receipt may differ. No test or expectation changes. C244's every-pending SQL clause and the entire migration remain byte-identical to handoff. Git still reports the index conflicts because staging is reserved to the dispatcher; conflict markers have been removed from the working files.
+
+Validation commands were run sequentially with cached pnpm **10.28.1**, Node **24.17.0**, and every Vitest run used `--maxWorkers=2`. The default pnpm launcher stalled with only a newer-pnpm warning; those initial launcher attempts were interrupted. A temporary PATH symlink to the existing Corepack cache selected the pinned pnpm without installing/downloading anything.
+
+| Check | Actual result | Log in `/private/tmp/` |
+| --- | --- | --- |
+| `pnpm typecheck` | PASS, 7 tasks | `sv5pre-catchup-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL at lane check: temporary catch-up branch matches no registered lane; core purity passed | `sv5pre-catchup-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same unregistered-branch failure; no lane edit/override | `sv5pre-catchup-lanes.log` |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint` | PASS, 7 package lint tasks; supplemental evidence, does not replace the failed root lane gate | `sv5pre-catchup-package-lint.log` |
+| API source units, selection below | PASS after build: 125 files / 2,468 tests | `sv5pre-catchup-api-built.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | FAIL after build: 41 files passed / 1 failed; 1,017 tests passed / 3 failed, detailed below. Includes unchanged invoice-route tests. | `sv5pre-catchup-web-built.log` |
+| `pnpm build` | PASS, 7 tasks; Turbo cache IO, workspace-root and CSS warnings | `sv5pre-catchup-build.log` |
+| `pnpm openapi:check` | BLOCKED/exit 1: tsx CLI IPC `listen EPERM` | `sv5pre-catchup-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check via loader without CLI IPC | `sv5pre-catchup-openapi-loader.log` |
+| SHA-256/source preservation comparison; `git diff --check` | PASS: exact four-file scope, no working-file conflict markers, both repositories equal HEAD plus main's applicable Zod 4 substitutions, every test/migration unchanged from handoff | `sv5pre-catchup-preservation.log` |
+
+API command: `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'`, plus the established sandbox exclusions: `src/final-account-lock.isolation.test.ts`, `src/sv5pre-invoice.http.test.ts`, `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/auth/sso/action-paths.test.ts` (each via `--exclude`). These suites remain required in reviewer/CI.
+
+Initial API/web executions before build failed because workspace package exports were unbuilt: API 110 failed / 15 passed files, 5 failed / 356 passed tests; web 33 failed / 9 passed files, 15 failed / 176 passed tests. Logs: `sv5pre-catchup-api.log`, `sv5pre-catchup-web.log`. Build supplied missing artifacts; identical selections were rerun without changing sources or expectations.
+
+**Review hold — incompatible inherited assertions, left unchanged:** `apps/web/app/lib/route-error-code.test.ts`, customer-invoices compatibility, fails its two `returns 400 for a field containing STALE/CONFLICT` cases because main expects `{code:"DATABASE_UNAVAILABLE"}` while SV5PRE's existing route test requires `{code:"INVALID_INPUT"}` for schema errors. Both return 400. Its `keeps every business outcome byte-identical to main, including genuine 409s` case expects untyped `Error("STALE_REVISION")` to be public 409; SV5PRE's explicit public-code allowlist sanitizes it to 500. Returning arbitrary STALE-containing diagnostics would contradict existing SV5PRE guard tests. No test, expected value or guard was changed to conceal these conflicts. Web is RED, not acceptance evidence.
+
+NOT RUN: PostgreSQL suites (including final-account-lock and sv5pre-completion), migrations, browser suites and full root `pnpm test`; sandbox cannot bind localhost or start PostgreSQL. Reviewer/GitHub CI owns these executions. No prompt/model changes: eval/live-model gate inapplicable. Dependencies were supplied, so no clean-install claim. Independent exact-commit verdict, separate acceptance and remaining production gates are still owed. Intended commit subject/body: `/private/tmp/jg-msg-sv5pre-catchup.txt`. Dispatcher must stage the resolved files; the read-only index still lists them as unmerged.
+
 ## Repair r12 — explicit fixture UUID casts (14 October 2026, dispatcher 5)
 
 PR #189; task SV5PRE; branch `codex/sandbox/sv5pre`. First command `git rev-parse HEAD` returned the required head `4f4017ca1bf43d779c2c11dc560be37fcab92c9b`; initial working tree was clean. Working-tree repair only: no Git-writing command, commit, push, dependency install, database start, self-acceptance or independent verdict. Dispatcher owns the resulting commit and CI/verdict/acceptance loop. This section supersedes prior round status; historical receipts remain below.
@@ -1362,7 +1399,7 @@ Task: SV5PRE-0204-RESERVED-RENUMBER-20261022. SOURCE-ONLY uncommitted candidate 
 
 Exact source HEAD: `b6b18e84dc7b2c9d00274ec59e75ea46647264a5`. Branch: `codex/sandbox/sv5pre-0204-renumber`. Target is remote `refs/heads/main` at `dc5721230fd8aedbf2d9d0457789074b66b48765`, freshly read with `git ls-remote --refs origin refs/heads/main`. Historical local main `694e9e1755f2a5680898eb0fa04af48afd66c86b` is preserved. Prior turn stopped before writes on the apparent target mismatch; root's target-context refresh clarified the remote target without changing source authority.
 
-C216 already reserved 0204 for #189 and 0205 for #181. This order only moves `0199_final_check_prerequisites.sql` to `0204_final_check_prerequisites.sql` and its note, changes only the note's leading heading number, and substitutes the exact stem in two contract references and two test filename constants. No number is allocated. SQL bytes are identical to the old committed blob: SHA-256 `625b9eed1216735762900c3ae2e6e654792c855834355f3ec472e7a36d6ae1f7`. Assertions, SQL statements, grants, policies, locks, functions and business meaning are unchanged by construction and byte comparison. Historical receipt bytes are retained as an unchanged prefix.
+C216 already reserved 0204 for #189 and 0205 for #181. This order only moves `0199_final_check_prerequisites.sql` to `0237_final_check_prerequisites.sql` and its note, changes only the note's leading heading number, and substitutes the exact stem in two contract references and two test filename constants. No number is allocated. SQL bytes are identical to the old committed blob: SHA-256 `625b9eed1216735762900c3ae2e6e654792c855834355f3ec472e7a36d6ae1f7`. Assertions, SQL statements, grants, policies, locks, functions and business meaning are unchanged by construction and byte comparison. Historical receipt bytes are retained as an unchanged prefix.
 
 Source-inspected `tools/migration-renumber.mjs`: only --base and --write are supported; planRenumber chooses highest base number + 1, with no exact reserved target. DC's highest migration is 0198, so its automatic target would be 0199, not reserved 0204. The exact-map order supersedes generic selection; the tool was neither run nor edited, and no artificial base was used.
 
@@ -1481,7 +1518,7 @@ Available raw usage provenance (baseline only, no cumulative counters added):
 
 Both guarded invoice routine bodies, both legacy audit events (`customer_invoice.lock_bound_issued` and `customer_invoice.synthetic_issued`), and all C135 invoice gates remain unchanged. Protected money tests remain byte-for-byte as at 09452727: the whole recovery-line-allocation test file is unchanged; the S30/S31/S32 historical test span is byte-identical. These are deterministic source comparisons, not execution of the money integration tests.
 
-Migration `0204_final_check_prerequisites.sql` is an unmerged migration repaired in place under this order; resulting SHA-256 `e3dacbd072a2237ac65a16066f7b2e3daea2a4b7df9cd4fa0360aac21cfd5ab7`. No column, stored state enum or production permission is added. Existing rows receive no backfill. If an environment has already applied this candidate, use an additive forward repair; do not remove the lock/check gate or rewrite commercial/audit history. Fresh/upgrade PostgreSQL verification remains owed in CI.
+Migration `0237_final_check_prerequisites.sql` is an unmerged migration repaired in place under this order; resulting SHA-256 `e3dacbd072a2237ac65a16066f7b2e3daea2a4b7df9cd4fa0360aac21cfd5ab7`. No column, stored state enum or production permission is added. Existing rows receive no backfill. If an environment has already applied this candidate, use an additive forward repair; do not remove the lock/check gate or rewrite commercial/audit history. Fresh/upgrade PostgreSQL verification remains owed in CI.
 
 ### Commands actually run and results
 
@@ -1609,3 +1646,90 @@ Logs: `/private/tmp/jg-sv5pre-r7-typecheck.log`, `jg-sv5pre-r7-lint-task-base.lo
 Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv5pre-0204-renumber.txt`. Only the test fixture file and this append are changed. PostgreSQL/browser CI, main-base lane handling, fresh exact-commit independent verdict, separate acceptance, D12/D13 and all production/release gates remain HOLD.
 
 Final deterministic verification: PASS `git diff --check`, exact two-file scope, unchanged assertions/expectations outside the assertion-free fixture helper, unchanged C244 SQL, unchanged historical receipt prefix, and commit-message file present. Source-only evidence; no database or independent-verdict claim.
+
+## catch-up 2 — C263 — 24 October 2026
+
+Builder working-tree repair for #189, starting from clean HEAD `ffe1bfafccb75d17010f557a16b5bc0620545f91` on `codex/sandbox/sv5pre-catchup`. Ben's C263 authorizes the customer-invoice expectation changes following dispatcher's report of CI run `40078766728` (three failing shared route cases). That CI report is supplied context, not a locally rerun CI result. Read AGENTS.md, BUILD_PLAN.md §10.2.6 and SV-4/SV-5, and `docs/contracts/final-account-lock-v1.md` / `sv5pre-completion-v1.md`.
+
+Changes are confined to the invoice route, its customer-invoice compatibility expectations in the shared route test, and this receipt append. The route's existing `publicFailures`, typed `FinalAccountLockError` 409 / `final-check-invoice-error.v1`, validation/SyntaxError `INVALID_INPUT` 400, non-Error fallback, authentication, practice-access precedence and no-store behavior are unchanged. Only the fallback gains handling for unlisted symbolic business codes: echo the code; `STALE` or `CONFLICT` gives 409, otherwise 400. In particular `STALE_REVISION` now gives 409. Diagnostics and the six typed-only invoice-lock refusals retain the existing sanitized 500 behavior when supplied as ordinary Errors, preserving every existing invoice-route test expectation.
+
+The single existing customer-invoices row now expects `INVALID_INPUT` for validation and 409 for stale/conflict business codes. Six customer-invoice-only cases appended to that file assert the exact typed lock envelope and no-store. Every original byte outside that row remains unchanged; every other route row and shared assertion is byte-identical. `customer-invoices/route.test.ts` is byte-identical to HEAD. No migration, backfill, grant, financial computation, approval path, provider integration, alert or production-release authorization changed. Earlier receipt bytes remain an unchanged prefix (original SHA-256 `95d1c777c6b132b2c4e50f250d78037361a363ec36842eba79879159c7f80860`).
+
+### Checks actually executed
+
+Installed dependencies used without installation/download. Node `v24.17.0`, pinned pnpm `10.28.1` via the existing `/private/tmp/jg-sv5pre-bin/pnpm` launcher on PATH. The initial system-pnpm focused-test launch stalled after a newer-pnpm warning and was interrupted; the pinned launcher completed the checks below. Every Vitest invocation uses `--maxWorkers=2`.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/lib/route-error-code.test.ts 'app/api/jobs/[id]/customer-invoices/route.test.ts'` | PASS, 2 files / 159 tests, including all unchanged invoice-route expectations |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 42 files / 1,026 tests |
+| `pnpm typecheck --concurrency=1` | PASS, 7 tasks (6 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL at lane boundary: temporary `codex/sandbox/sv5pre-catchup` branch matches zero registered lanes; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same unregistered temporary branch; no lane edit or bypass |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --concurrency=1` | PASS, all 7 package tasks; supplemental evidence, does not replace the failed root lint gate |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS, supplemental boundary checks after root lint stopped at lane gate |
+| `pnpm build --concurrency=1` | PASS, 7 tasks (6 cached); existing Turbo cache-write warnings nonfatal |
+| `pnpm openapi:check` | BLOCKED/exit 1, tsx CLI IPC socket `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, identical generator/check through the socket-free loader |
+| Selected tooling units (command below) | PASS, 24 tests |
+
+Other-package source units use `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/dist/**'`. DB additionally excludes `test/free-port.test.ts`. API additionally excludes `src/final-account-lock.isolation.test.ts`, `src/sv5pre-invoice.http.test.ts`, `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-visit.http.test.ts`, and `src/auth/sso/action-paths.test.ts`, retaining the prior catch-up sandbox selection. No suite is made optional in CI. Web uses its existing configured e2e exclusion.
+
+Tooling command: `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs`. Git-writing lane/train fixture tests were not run under the dispatcher's no-Git-writes instruction.
+
+Logs and exact commands/results are under `/private/tmp/jg-sv5pre-catchup2-*`: `checks.py`, `results.json`, `focused.log`, `web.log`, `typecheck.log`, `lint.log`, `lanes.log`, `package-lint.log`, `build.log`, `openapi.log`, `openapi-loader.log`, `units.py`, `unit-results.json`, per-package `unit-*.log` and `unit-tools.log`.
+
+Full `pnpm test`, PostgreSQL integration/migration/worker suites and browser suites were NOT RUN: this sandbox cannot bind localhost or start PostgreSQL. GitHub CI after dispatcher's commit/push owns these mandatory executions and the main-base lane check on the registered PR branch. No fresh-install, database, browser or live-provider success is claimed. No AI prompt/model/parser changes; no live-model gate is implicated by this route-only repair. Independent exact-commit verdict, separate acceptance, D12/D13 and all existing real-data/production/release gates remain HOLD. This receipt is builder evidence, not independent review or task acceptance. No subagent, Git-writing command, commit, push, database startup or browser execution was performed.
+
+Intended conventional commit subject and body: `/private/tmp/jg-msg-sv5pre-catchup.txt`. Dispatcher owns commit and push after this turn.
+
+Other-package unit result: PASS, core 2,964; config 86; storage 2; ai 147; db 422; api 2,468; web 1,026. Total 7,115 source unit tests, plus 24 selected tooling tests. Focused 159 cases overlap the full web run. These selected source suites do not replace PostgreSQL/browser CI.
+
+Final deterministic preservation checks PASS: exact three-file scope; route bytes unchanged outside the fallback insertion; all original shared-test bytes outside the customer-invoices row unchanged; invoice-route tests unchanged; receipt append-only; HEAD unchanged; intended commit-message file present; `git diff --check` clean. No independent-verdict claim.
+
+## catch-up 3 — C273 — 25 October 2026
+
+Builder working-tree repair for #189 from HEAD `7620a554` on `codex/sandbox/sv5pre-catchup`, with main `28416d1e` already merged. Read AGENTS.md, BUILD_PLAN.md §10.2.6 and SV-4/SV-5, and the final-account lock, completion and CH-4-C work-state contracts. No Git-writing command, install/download, database startup or browser suite was run.
+
+### Actual core failures and causes
+
+The requested `gh run view 40197368831 --log-failed` failed because the sandbox could not connect to api.github.com. The connected GitHub tool retrieved run jobs and core job **121181017295** logs. Those logs show **two**, not three, failures in `job-work-state-commands-boundaries.integration.test.ts`; the third is in the races file. Core reported 297 passed files / two failed files, 3,137 passed tests / three failed tests (plus one expected failure and two todo). These are retrieved prior-run results, not verification of this working tree.
+
+1. **Open result use retains existing lock and completed-check gates**, boundary file :58: expected `FINAL_ACCOUNT_LOCK_REQUIRED`, received `FORBIDDEN`. 0204 replaces 0201’s same-signature invoice routine. Its early session-scoped actor check rejects this owner fixture before CH-4-C’s documented lock/check refusals. Restored owner checks before/after the job wait, CH-4-C’s open-state gate after authenticated replay, then lock and authoritative check gates. Session-scoped authority remains mandatory on replay and before any new issue effect. The authoritative predicate retains latest failed/pending/missing-check refusal codes while additionally requiring the SV5PRE certificate and full proof.
+2. **Closed completed-result use refused and new completed check cannot bypass closure**, boundary file :62: setup’s bare completed-row INSERT throws `DISCLOSURE_TERMS_NOT_ACCEPTED`. Added explicit synthetic terms acceptance through the real owner routine in `seedWorkPractice`, before tests take snapshots. Further source inspection identifies another setup incompatibility: the same INSERT has no run/proof certificate, so SV5PRE intentionally refuses it as `FINAL_CHECK_NOT_COMPLETE` once terms are accepted. C273 currently permits fixture-file-only setup edits. Requested a bounded extension for this historical-row setup alone; no expectation or assertion has been changed. Do not bypass the publication trigger in shared fixture callbacks or permit uncertified completion in production.
+3. **Close versus check completion/reveal/invoice use serializes on the job**, `job-work-state-commands-races.integration.test.ts` :69: `backend 14764 did not reach lock wait` at `waitForJobLock` :42. The invoice iteration’s early session check returns `FORBIDDEN` before waiting for the concurrent close; it also lacks 0201’s subsequent closure gate. The repaired invoice routine waits on the job before extra session scope validation and checks open state after the committed close. The existing `A0_ch4_check_admission` trigger already locks the job and rejects closed check inserts before `a_final_check_completion`; it is unchanged. Database execution of this diagnosis remains owed to reviewer/CI.
+
+### Scope and preservation
+
+0204 is unmerged and repaired in place; 0201 is byte-identical. Compared both complete invoice bodies: differences are the stronger authoritative-check record/predicate and its check-ID references, session-authorized replay/new issuance, and the explanatory comment; all commercial line selection, amount arithmetic, source snapshots, PDF generation, effect writes and audit content are preserved. No grant, schema/table shape, historical row, backfill, provider, fee policy or alert changes. Already-applied candidates need an additive forward repair; never remove either gate or erase history.
+
+LP-0’s existing invoice protection row gains exactly the authoritative predicate and actor helper in staticCalls; `ch4_require_open` and owner checks remain. The definition hash was already null and remains explicitly uncaptured, pending real PostgreSQL catalogue capture. SERIOUS-B5 snapshot rows contain routine identity/owner/ACL/configuration, not function bodies; no matching expected row changes are needed. No CH-4-C or SV5PRE assertion/expected code has changed.
+
+The requested `config/lanes/sv5pre.json` did not exist: SV5PRE was still in the shared legacy register. Moved that exact own lane to the per-piece file, retaining its existing allow scope, adding this exact catch-up branch and the authorized shared fixture path. The per-piece format forbids granting the shared register itself, so its old self-grant is removed. Main-base lint now identifies only the legacy register removal as outside the per-piece lane; coordinator-owned lane migration approval/check handling remains needed. No checker bypass or widening to other lanes is introduced.
+
+### Checks
+
+Checks run one at a time through `/private/tmp/jg-sv5pre-catchup3-checks.py`, installed Node `v24.17.0` / cached pinned pnpm `10.28.1`, Turbo concurrency one, every Vitest invocation `--maxWorkers=2`. The runner waits in 30-second intervals if one-minute load exceeds 20. No package download/install. Exact commands, exits and logs are recorded in `/private/tmp/jg-sv5pre-catchup3-results.json` and `/private/tmp/jg-sv5pre-catchup3-*.log`. Final results appended below after execution.
+
+Full `pnpm test`, PostgreSQL integration/migration/worker suites and browser suites are NOT RUN: sandbox cannot bind localhost or start PostgreSQL. Required reviewer executions include both CH-4-C boundary **and race** files and all SV5PRE database suites, then the ordinary full CI gates. Source-only checks do not prove the SQL or historical fixture behavior. No changed prompt/model/parser, no live provider integration or independent review is claimed. Exact-commit independent verdict, separate acceptance, D12/D13 and all real-data/production/release gates remain HOLD.
+
+Final local check results:
+
+| Check | Actual result |
+| --- | --- |
+| `pnpm typecheck --concurrency=1` | PASS, seven tasks (two cached) |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL: only `config/agent-lane-assignments.json` lies outside the migrated per-piece lane; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL, same legacy-register migration restriction |
+| `pnpm exec turbo run lint --concurrency=1` | PASS, seven package tasks; supplemental, does not replace root lint |
+| Money/commercial boundary lint | PASS, both checks |
+| Selected tooling units | PASS, 24 tests; no Git-writing fixture tests run |
+| Source unit suites, `--maxWorkers=2` | PASS after build refresh: core 2,979; config 86; storage 2; AI 147; DB 422; API 2,482; web 1,034 (7,152 total) |
+| `pnpm build --concurrency=1` | PASS, seven tasks (three cached); existing cache-write/workspace-root warnings nonfatal |
+| `pnpm openapi:check` | BLOCKED/exit 1: tsx CLI IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same generator/check without CLI IPC listener |
+
+Initial API unit execution before build had seven failures across work-state command/registry tests due to stale compiled core/DB exports; rebuilding the unchanged workspace exports and rerunning the identical API selection passed all 2,482 tests. No source repair or expectation change was used for that result. Other source-unit commands exclude `**/*.integration.test.ts` and `**/dist/**`; DB additionally excludes `test/free-port.test.ts`; API retains the exact sandbox socket-suite exclusions listed in catch-up 2. Web retains its configured browser exclusion. These selections do not make any CI suite optional. Exact commands/exclusions are in the results JSON and runner. Observed one-minute load before checks stayed below 20 (maximum 11.24); no load wait was needed.
+
+The proposed, **unapplied** historical setup change is `/private/tmp/jg-sv5pre-catchup3-proposed-historical-setup.patch`: wrap only the pre-close historical check INSERT in the admin fixture’s transaction-local `session_replication_role='replica'`, matching the existing `boundaryLock` historical setup convention. The original INSERT and every assertion/expected code remain identical, and all current-guard refusal assertions run in later normal transactions. Applying it requires C273’s fixture-file-only restriction to be extended to this test setup plus its own lane path. No shared callback interception, default, trigger suppression or production completion exception has been added.
+
+**HOLD — do not commit.** The current working tree intentionally leaves that historical setup untouched pending the requested scope ruling; accepting terms alone would expose `FINAL_CHECK_NOT_COMPLETE` at that INSERT. The product rules themselves are preserved: old history may exist, but new uncertified completion must fail. A bounded historical fixture edit is needed, not a changed expectation. Main-base lane migration also requires coordinator handling because the checker refuses editing the legacy register from a per-piece lane. Do not treat either hold as green CI. Intended conventional commit subject/body, with this do-not-commit hold, is written to `/private/tmp/jg-msg-sv5pre-catchup.txt`. No commit or push has occurred.

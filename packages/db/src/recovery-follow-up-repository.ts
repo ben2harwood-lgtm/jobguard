@@ -39,7 +39,7 @@ const canonical = (value: unknown): string => value === null || typeof value !==
   ? `[${value.map(canonical).join(",")}]`
   : `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(",")}}`;
 const requestHashOf = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
-const uuidArg = (value: string) => z.string().uuid().parse(value).toLowerCase();
+const uuidArg = (value: string) => z.guid({ error: "Invalid uuid" }).parse(value).toLowerCase();
 /** A deterministic UUID from a seed, so a retried command derives the very same M4-5-S preview command and can be replayed, not repeated. */
 const derivedId = (seed: string) => { const h = createHash("sha256").update(seed).digest("hex"); return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`; };
 const APPROVAL_LIFETIME_MS = 3_600_000;

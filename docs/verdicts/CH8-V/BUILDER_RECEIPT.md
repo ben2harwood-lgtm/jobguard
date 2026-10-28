@@ -342,3 +342,70 @@ seven-package lint, seven-task build, direct OpenAPI check and `git diff --check
 passed. Both conflicted upgrade test files also passed a TypeScript syntax-only
 transpile check; this is explicitly not their database acceptance. The index still
 reports seven UU paths until the dispatcher stages and commits the resolved files.
+
+## 28 October 2026 — CH-8 catch-up onto current main
+
+Plan piece: **RED — BUILD_PLAN.md §10.4 CH-8, finish-list row 11**, evidence
+packs with lock, reveal, attribution and settlement; packs ordered before lock
+must contain no hidden/shadow data. This entry supersedes earlier handoff and
+review-process statements: SIMPLE_LOOP.md now requires one independent Claude
+review for RED, plus green required CI. This is builder evidence only.
+
+Resolved all six working-file conflicts. AppModule keeps main's complete
+controller/provider union. The core barrel and privilege contract preserve
+main's full union. Both upgrade expectation lists retain every earlier
+CH8-V/SV-5/SV-6 expectation and all newer main additions, including attribution;
+no predecessor comparison was removed. These five resolved files are byte-for-byte
+identical to origin/main. Regenerated OpenAPI from the combined controllers;
+it too matches main exactly. The Git index remains unmerged because this sandbox
+cannot write .git; the router must stage resolutions if work is resumed.
+
+The migration directories match origin/main exactly: obsolete 0204/0205/0213
+copies are absent; main's 0237/0238/0277 copies remain. There is no CH8-V-owned
+migration to renumber, and 0303 was not consumed.
+
+**Not ready to commit as finished CH-8.** Inspection confirms that the inherited
+HTTP application unconditionally refuses v3 creation/approval. The checked
+writer, real must-surface request/completion handoff, eight-section producer
+assembly and successful source-to-settlement/UI/verifier journey are still
+missing. Merged SV-5/SV-6 APIs have not automatically supplied those bindings.
+This catch-up does not invent producer provenance or expose hidden tables to
+complete the card. The pre-lock seam still reads only ordinary sources and
+returns the uniform dependency failure before any artifact write; no claim of
+full runtime CH-8 acceptance is made.
+
+Added config/lanes/ch8-v-catchup.json with the exact branch and concrete payload
+paths differing from main. The new lane file is implicitly permitted by the
+repository validator. The inherited config/lanes/ch8-v.json remains an original
+branch artifact; the validator prohibits granting another lane file from the
+catch-up lane. No policy bypass or unrelated lane edit was attempted. A final
+committed-range lane check must follow router reconciliation; none is claimed
+here while the read-only index still contains the pending main merge.
+
+Local checks used installed dependencies, cached pnpm 10.28.1, Node v24.17.0,
+Vitest 4.1.12 with explicit maxWorkers=2, at most three named files per run:
+
+- core/db/API typecheck: PASS.
+- core evidence-pack-v3.test.ts + evidence-pack.test.ts: PASS, 96 tests.
+- API evidence-pack.application.test.ts + evidence-pack-v3.application.test.ts
+  + evidence-pack-v3.controller.test.ts: PASS, 32 tests after dependency rebuild.
+- web evidence-packs/route-v3.test.ts: PASS, 2 tests.
+- core/storage/db/config/ai dependency builds: PASS; no full app build claimed.
+- direct OpenAPI generation and check (`node --import tsx` in apps/api): PASS.
+- money arithmetic and commercial boundary lints: PASS.
+- both conflicted upgrade files: TypeScript syntax PASS, not database execution.
+- git diff --check: PASS after conflict resolution.
+
+Initial API import failed on stale compiled Zod schemas; initial generator imports
+failed on stale db/config exports. Rebuilding the installed workspace dependencies
+fixed these, with passing reruns above. Global pnpm invocations stalled and were
+interrupted (130); the cached pinned executable was used afterwards. A guessed
+migration-order helper path did not exist (MODULE_NOT_FOUND); no migration-lint
+pass is claimed. Process listing was sandbox denied. No download/install, git
+write, PostgreSQL, localhost listener, browser suite, real provider, real money,
+customer data or release was used. PostgreSQL/migration/isolation and browser
+suites remain for GitHub CI after an eventual ready change is pushed.
+
+The requested /tmp/ch8-v-catchup-20261028T175202Z-commit-msg.txt says
+"do not commit" and names the incomplete pieces. This is a partial catch-up,
+not an independently verified finished CH-8 card or a release authorization.

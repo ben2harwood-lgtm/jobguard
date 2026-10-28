@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { attributionPredicates, assertAttributionBinding, qualifiesAttribution, shadowAttributionV1 } from "./shadow-domain/attribution.js";
 import { freezeShadow, shadowId as baseShadowId, shadowRef } from "./shadow-domain/types.js";
-import { exactPenceV1 } from "./cumulative-fee.js";
+import { compareExactPence, parseExactPence, exactPenceV1 } from "./cumulative-fee.js";
 import { MAX_MONEY_PENCE } from "./money.js";
 import { instantV1 } from "./receipt-allocation.js";
 // Canonical wire identities must match PostgreSQL UUID equality without silent rewriting.
@@ -116,3 +116,48 @@ export const currentAttributionQualificationV1 = z.discriminatedUnion("state", [
   if (v.state === "qualified" && (v.source.assessmentId !== v.latestAssessmentId || v.source.sourceRevision !== v.currentSourceRevision))
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Stale qualification" });
 }).readonly();
+
+/** Pure consistency failure, never evidence of a persisted command or authenticated source. */
+export class RecoveryAttributionReassessmentError extends Error {
+  readonly code = "INVALID_RECOVERY_ATTRIBUTION_REASSESSMENT";
+  constructor() { super("Invalid recovery attribution reassessment or stale source"); this.name = "RecoveryAttributionReassessmentError"; }
+}
+const reassessmentFailure = (): never => { throw new RecoveryAttributionReassessmentError(); };
+/**
+ * Validate an immediate successor supplied by the source owner. Does not execute a source change,
+ * allocate receipts, save history, approve review or choose an automatic reassessment mechanism.
+ */
+export function reassessRecoveryAttribution(previous: unknown, next: unknown): RecoveryAttributionRevisionV1 {
+  const before = recoveryAttributionRevisionV1.safeParse(previous), after = recoveryAttributionRevisionV1.safeParse(next);
+  if (!before.success || !after.success) return reassessmentFailure();
+  const p = before.data, n = after.data;
+  for (const key of ["tenantId", "jobId", "caseId", "workId", "lineId", "lockId", "policyBundleRef"] as const)
+    if (p[key] !== n[key]) return reassessmentFailure();
+  if (n.previousAssessmentId !== p.assessmentId || n.revision !== p.revision + 1 || n.caseRevision < p.caseRevision)
+    return reassessmentFailure();
+  if (n.sourceRevision === p.sourceRevision || n.sourceHash === p.sourceHash) return reassessmentFailure();
+  return freezeShadow(n);
+}
+/** Excluded evidence never erases actual remaining receipts; only the qualifying contribution is zero. */
+export function qualifyingAttributionPrincipal(raw: unknown): z.infer<typeof exactPenceV1> {
+  const parsed = recoveryAttributionRevisionV1.safeParse(raw);
+  if (!parsed.success) return reassessmentFailure();
+  return freezeShadow(parsed.data.assessmentOutcome === "eligible_for_review"
+    ? parsed.data.remainingPrincipal : { numerator: "0", denominator: "1" });
+}
+/** Internal owner-resolved watermark; JSON validation alone cannot establish that it is current. */
+export const attributionCurrentSourceV1 = z.object({
+  version: z.literal("attribution-current-source.v1"), ...simulation, ...selector, ...policies,
+  tenantId: shadowId, assessmentId: shadowId, assessmentRevision: revision,
+  sourceRevision: shadowRef, sourceHash: hash, remainingPrincipal: principal,
+}).strict().readonly();
+/** Fail closed before using a historical positive result. Owner must read this watermark under source locks. */
+export function requireCurrentAttributionQualification(qualification: unknown, current: unknown): z.infer<typeof currentAttributionQualificationV1> {
+  const result = currentAttributionQualificationV1.safeParse(qualification), watermark = attributionCurrentSourceV1.safeParse(current);
+  if (!result.success || !watermark.success || result.data.state !== "qualified") return reassessmentFailure();
+  const q = result.data, s = q.source, c = watermark.data;
+  for (const key of ["tenantId", "jobId", "caseId", "workId", "lineId", "lockId", "policyBundleRef", "assessmentId", "assessmentRevision", "sourceRevision", "sourceHash"] as const)
+    if (s[key] !== c[key]) return reassessmentFailure();
+  if (compareExactPence(parseExactPence(s.exactRemainingPrincipal), parseExactPence(c.remainingPrincipal)) !== 0) return reassessmentFailure();
+  return freezeShadow(q);
+}
