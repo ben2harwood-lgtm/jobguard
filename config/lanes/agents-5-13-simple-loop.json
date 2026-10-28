@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "agents-5-13-simple-loop": {
+      "branches": [
+        "codex/sandbox/agents-5-13-simple-loop"
+      ],
+      "note": "Doc only (Ben, 28 Oct: make the rulebook edits): AGENTS.md section 5.13 restated for the simple loop. No other section changed.",
+      "allow": [
+        "AGENTS.md"
+      ]
+    }
+  }
+}
