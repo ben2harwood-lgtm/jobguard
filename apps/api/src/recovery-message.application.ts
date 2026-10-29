@@ -1,5 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
+import { draftPracticePursuit } from "@jobguard/ai";
+import { recoveryMessageSourceOf } from "@jobguard/core";
 import { RecoveryMessageRepository, RecoveryMessageError, PracticeAccessError, practiceMaterialPool } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 import {
@@ -33,7 +35,11 @@ export class RecoveryMessageApplication {
 
   async preview(sessionId: string | undefined, caseId: string, raw: unknown) {
     const { ctx, actor, repo } = await this.authorize(sessionId, caseId);
-    return this.respond(repo.preview(ctx, recoveryMessageIdV1.parse(caseId), recoveryMessagePreviewCommandV1.parse(raw), actor));
+    const result = await this.respond(repo.preview(ctx, recoveryMessageIdV1.parse(caseId), recoveryMessagePreviewCommandV1.parse(raw), actor));
+    // Repository access, source/evidence validation and replay remain authoritative.
+    // The fixture draft is a proposal only, and cannot alter the stored preview.
+    const drafting = result.latest ? await draftPracticePursuit(recoveryMessageSourceOf(result.latest.message)) : null;
+    return { ...result, drafting };
   }
 
   async command(sessionId: string | undefined, caseId: string, messageId: string, raw: unknown) {

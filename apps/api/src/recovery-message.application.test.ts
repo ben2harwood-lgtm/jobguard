@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+import { buildRecoveryMessage } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import { PracticeAccessError, RecoveryMessageError } from "@jobguard/db";
 import { RecoveryMessageApplication } from "./recovery-message.application.js";
@@ -66,6 +67,18 @@ describe("recovery message API boundaries", () => {
     expect(repository.preview).toHaveBeenCalledTimes(1);
     await app.command(sessionId, caseId, messageId, approve);
     expect(repository.command).toHaveBeenCalledWith(expect.anything(), caseId, approve, { membershipId, actorRef: `membership:${membershipId}` });
+  });
+
+  it("returns a cited synthetic fixture proposal for the exact authorized repository preview", async () => {
+    const message = buildRecoveryMessage({ caseId, jobId: id(7), caseType: "withheld_customer_payment", caseRevision: 1,
+      amountPence: 32000, sourceRefs: [id(8)], packId, packRevision: 1, manifestHash: hash, attachmentHash: "b".repeat(64) });
+    repository.preview.mockResolvedValue({ ...state, latest: { message } });
+    const response = await new RecoveryMessageApplication(pool).preview(sessionId, caseId, preview);
+    expect(response).toMatchObject({ drafting: { legalReview: "D10_PENDING", environment: "synthetic_demo",
+      preview: { contentHash: message.contentHash, sender: message.sender, recipient: message.recipient,
+        attachmentHash: message.attachmentHash, body: message.body },
+      provenance: { provider: "recorded-fixture", deployment: "local-only" } } });
+    expect(repository.command).not.toHaveBeenCalled();
   });
 
   it("rejects invented authority, a real recipient and a path that disagrees with the body", async () => {
