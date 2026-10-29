@@ -6,13 +6,13 @@ import { serverEntitlement } from "../src/plan-entitlement-service.js";
 import { migrate, withTenant } from "../src/index.js";
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
-it("MON-8 0318 and 0319 preserve every pre-existing row and refuse legacy new work without status", async () => {
-  c = await startBeforeMigration("0318_server_plan_entitlements.sql");
+it("MON-8 0352 and 0353 preserve every pre-existing row and refuse legacy new work without status", async () => {
+  c = await startBeforeMigration("0352_server_plan_entitlements.sql");
   const f = await company(c), before = await snapshot(c.admin), retained = await read(c, f);
   expect((await c.admin.query("SELECT * FROM app.contractor_agreement_status_revision")).rows).toEqual([]);
-  await applyMigration(c, "0318_server_plan_entitlements.sql");
+  await applyMigration(c, "0352_server_plan_entitlements.sql");
   expect(await snapshot(c.admin)).toEqual(before);
-  await applyMigration(c, "0319_contractor_feature_guards.sql");
+  await applyMigration(c, "0353_contractor_feature_guards.sql");
   expect(await snapshot(c.admin)).toEqual(before);
   expect(await withTenant(c.runtime, f.context, db => serverEntitlement(db, f.p.membershipId, "work_orders"))).toMatchObject({ executable: false, entitlement: "held" });
   expect(await read(c, f)).toEqual(retained);

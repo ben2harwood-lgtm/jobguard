@@ -1,7 +1,8 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 // ENT-3d application boundary: log-site-extra.v3 beside v1. Written before the application, controller and repository changes.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { ContractorRepository, SiteExtraRepository, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus, siteExtraLoggedV3, siteExtraLoggedV1, siteExtraContentSha256V1 } from "@jobguard/core";
@@ -13,6 +14,7 @@ const v1 = () => ({ version: "log-site-extra.v1", commandId: crypto.randomUUID()
 const v3 = (extra: Record<string, unknown> = {}) => ({ ...v1(), version: "log-site-extra.v3", ...extra });
 const member = () => ({ tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() }) as AuthenticatedMembership;
 const forbiddenKeys = ["evidenceId", "residentConfirmationEvidenceId", "confirmationId", "document", "documentText", "documentSha256", "contentHash", "contentSha256", "content", "label", "statement", "residentName", "name", "signature", "signedAt", "confirmedAt", "confirmedBy", "evidenceType", "contentType", "sha256", "photoSha256", "photo", "objectKey", "objectVersionId", "uploadId", "siteVisitId", "tenantId", "membershipId", "role", "commandType", "grantId"];
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("ENT-3d application boundary", () => {

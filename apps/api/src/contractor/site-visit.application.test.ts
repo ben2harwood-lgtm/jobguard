@@ -1,7 +1,8 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as ts from "typescript";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { ContractorRepository, SiteExtraRepository, SiteVisitRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import * as bridge from "@jobguard/db";
@@ -17,6 +18,7 @@ const authorityFields = ["commandType", "actorMembershipId", "membershipId", "gr
 const principalOf = (sessionId = id()) => ({ version: "contractor-principal.v1", sessionId });
 const started = () => ({ visitId: id(), startedAt: "2026-10-13T09:00:00.123456Z" });
 const completed = (visitId = id()) => ({ visitId, completedAt: "2026-10-13T09:30:00.123456Z", closeoutAnswer: "yes" as const });
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const synthetic = () => vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
 const visitMethods = ["log", "startVisit", "completeVisit", "assignedJobs", "orderLines"] as const;

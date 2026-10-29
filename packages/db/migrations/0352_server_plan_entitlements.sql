@@ -221,9 +221,15 @@ BEGIN
  decision:='not_found'; reason_code:='worker';
  SELECT m.identity_user_id INTO member_user FROM app.membership m
  WHERE m.tenant_id=rule.company AND m.id=p_worker AND m.id<>rule.owner_member
- AND m.role IN('operative','supervisor','surveyor','client_approver') AND app.contractor_member_active(m.id)
+ AND (m.role IN('operative','supervisor','surveyor','client_approver') OR (
+  m.role='finance' AND EXISTS(SELECT 1 FROM app.northside_run n WHERE n.tenant_id=rule.company)
+  AND EXISTS(SELECT 1 FROM app.contractor_member c WHERE(c.tenant_id,c.membership_id)=(m.tenant_id,m.id)
+   AND c.email='finance@northside-fictional.invalid')))
+ AND app.contractor_member_active(m.id)
  AND NOT EXISTS(SELECT 1 FROM app.role_grant g WHERE g.tenant_id=rule.company AND g.membership_id=m.id
   AND g.role NOT IN('operative','supervisor','surveyor','client_approver')
+  AND NOT (m.role='finance' AND g.role IN('finance','read_only') AND g.scope_kind='tenant'
+   AND g.scope_id=rule.company AND g.contract_id IS NULL)
   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=rule.company AND r.grant_id=g.id))
  AND NOT EXISTS(SELECT 1 FROM identity.user_email e WHERE e.user_id=m.identity_user_id)
  AND NOT EXISTS(SELECT 1 FROM identity.membership_locator l WHERE l.user_id=m.identity_user_id)

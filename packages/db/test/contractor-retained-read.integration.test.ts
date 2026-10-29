@@ -17,7 +17,7 @@ it("historical reads survive track change but not revocation",async()=>{
  const revoked=await startSession(c);await new ContractorRepository(c.runtime).command(revoked.p,await currentCommand(c,revoked,{kind:"membership.revoke",membershipId:revoked.p.membershipId}));await expect(read(c,revoked)).rejects.toThrow();
 });
 it("missing status does not hide authorized old records",async()=>{
- const legacy=await startBeforeMigration("0318_server_plan_entitlements.sql");
+ const legacy=await startBeforeMigration("0352_server_plan_entitlements.sql");
  try {
   const f=await company(legacy);expect((await legacy.admin.query("SELECT * FROM app.contractor_agreement_status_revision WHERE tenant_id=$1",[f.p.tenantId])).rows).toEqual([]);
   const before=await read(legacy,f);await migrate(legacy.admin);

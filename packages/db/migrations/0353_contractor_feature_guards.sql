@@ -721,4 +721,51 @@ BEGIN
  INSERT INTO identity.security_event VALUES(gen_random_uuid(),'identity.verified',c.id,clock_timestamp());
  RETURN u;
 END $$;
+-- MON-8-P-B slice 1. No data backfill and no changes to retained-read predicates.
+CREATE FUNCTION app.mon8_require_operative_agreement(t uuid) RETURNS void
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE assignment app.commercial_track_assignment; agreement_status text;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN
+  RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ IF t IS NULL OR t IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ -- Lock first; subsequent queries use a fresh READ COMMITTED snapshot after any wait.
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+ SELECT status INTO agreement_status FROM app.contractor_agreement_status_revision
+ WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+ IF assignment.commercial_track IS DISTINCT FROM 'contractor' OR agreement_status IS DISTINCT FROM 'active' THEN
+  RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+END $$;
+ALTER FUNCTION app.mon8_require_operative_agreement(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon8_require_operative_agreement(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+
+CREATE FUNCTION app.mon8_operative_write_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF TG_TABLE_NAME='extra_origin' THEN
+  IF NEW.kind IN('site_user','jobguard_surfaced_confirmed') THEN
+   PERFORM app.mon8_require_operative_agreement(NEW.tenant_id);
+  END IF;
+ ELSIF NEW.role='operative' THEN
+  IF TG_OP='UPDATE' THEN
+   -- Revocation/expiry updates and historical reads still work after agreement loss.
+   IF NEW.role IS NOT DISTINCT FROM OLD.role AND NEW.tenant_id IS NOT DISTINCT FROM OLD.tenant_id THEN RETURN NEW; END IF;
+  END IF;
+  PERFORM app.mon8_require_operative_agreement(NEW.tenant_id);
+ END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.mon8_operative_write_guard() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon8_operative_write_guard() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+CREATE TRIGGER mon8_operative_membership BEFORE INSERT OR UPDATE ON app.membership FOR EACH ROW EXECUTE FUNCTION app.mon8_operative_write_guard();
+CREATE TRIGGER mon8_operative_grant BEFORE INSERT ON app.role_grant FOR EACH ROW EXECUTE FUNCTION app.mon8_operative_write_guard();
+CREATE TRIGGER mon8_operative_invitation BEFORE INSERT ON identity.invitation FOR EACH ROW EXECUTE FUNCTION app.mon8_operative_write_guard();
+-- Run before existing provenance triggers, including for a forged job_track value.
+CREATE TRIGGER extra_origin_00_entitlement BEFORE INSERT ON app.extra_origin FOR EACH ROW EXECUTE FUNCTION app.mon8_operative_write_guard();
+
 COMMIT;

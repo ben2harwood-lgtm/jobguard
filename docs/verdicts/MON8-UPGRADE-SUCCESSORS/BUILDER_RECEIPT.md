@@ -1,6 +1,6 @@
 # MON8-UPGRADE-SUCCESSORS builder receipt
 
-Status: HOLD — source candidate only; not technically accepted.
+Status: current combined catch-up handoff is recorded in the 29 October section below; earlier entries are historical.
 
 Base: `dc5721230fd8aedbf2d9d0457789074b66b48765` (HEAD and frozen observed origin/main), branch `codex/sandbox/mon8-upgrade-successors`. No commit, push, PR, merge or rebase by builder. Only the three issued files are writable. No production, migration, fixture, shared helper, manifest, routing or inventory changes.
 
@@ -369,3 +369,96 @@ against the resulting head. PostgreSQL, migration, browser and current-head CI
 execution remain pending under the issued sandbox constraints. The router owns
 finish-list/work-list state and delivery. Commit message:
 `/tmp/mon8-upgrade-successors-20261028T212412Z-commit-msg.txt`.
+
+## 29 October 2026 — combined MON-8 catch-up, ready for router delivery (RED)
+
+Current status: implementation and relevant local checks complete; ready for router
+commit/push and CI. This supersedes the historical HOLD entries above, not the
+required PostgreSQL/CI or exact-head independent RED review. Prior reviewed heads
+were a6c2cab5 (this branch) and 07d7cab1 (operative); neither review verifies this
+combined uncommitted candidate.
+
+1. Resolved the supplied main catch-up conflicts in the db exports and contractor
+   entitlement upgrade proof. Kept both exports and the union of all explicit
+   successor-table assertions, alongside the branch's named-column/identity/type
+   and multiset preservation proofs. Renumbered own migrations 0318/0319 to the
+   issued reserved 0352/0353, including executable fixture/upgrade references and
+   lane paths. Used `planRenumber` exported by `tools/migration-renumber.mjs` with
+   the reserved-number floor, applying filesystem moves/reference rewrites only.
+   Its normal CLI requires a clean tree and runs git add, both incompatible with
+   this supplied pending merge and read-only .git. No tool or git policy changed.
+2. Rebuilt `practice_worker_switch_decision` from the exact 0332 definition,
+   preserving its Northside fictional finance/read_only allowance, owner/session
+   binding, forbidden wider grants and no-sign-in predicates. The existing MON-8
+   entitlement guard precedes worker selection; volatility remains VOLATILE for
+   lock/snapshot correctness. A deterministic source comparison tests the entire
+   0332 definition plus only those intended differences. The Northside upgrade
+   test now supplies explicit active fictional agreements after migrating, since
+   MON-8 deliberately never backfills predecessor authority.
+3. Folded operative 0402's membership/grant/invitation and site-origin guards into
+   0353, including forged job-track refusal and same-role membership revocation/
+   expiry updates after agreement loss. There is exactly one replacement
+   `mon8_agreement_status_guard`, in 0352: insert-only immutability, synthetic-mode
+   restriction, exclusive tenant fence and server timestamp. Included operative
+   application boundaries, strict parsers, mock caller adaptations and tests.
+   `codex/sandbox/mon8-operative` is superseded and must not be merged separately.
+   Its automatic active-agreement bootstrap was intentionally not imported: the
+   current branch's explicit owner-only positive fixtures remain authoritative,
+   and missing status continues to hold new work without backfill.
+
+Self-attack tests cover forged flags; replay/conflict; small-builder denial at
+membership, grant, invitation and both site-origin kinds; cross-tenant denial;
+contractor→small-builder→contractor reassignment without a current status;
+missing legacy status; retained rows; membership expiry/revocation and scoped grant
+revocation after suspension; and callable helper/trigger ACLs. The concurrency
+case inserts suspension first and relies on the actual status trigger's exclusive
+lock (no manually acquired substitute), then requires the blocked operative insert
+to observe suspension after commit. These PostgreSQL assertions are authored and
+collected, not executed locally. No CASE expression occurs inside a PL/pgSQL IF
+condition in these two migrations; existing parenthesised expressions remain.
+
+Local checks actually run (Node v24.17.0, installed tools, no downloads):
+
+- `node packages/db/node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit`:
+  passed. DB build using the same config without --noEmit also passed.
+- Same installed tsc with `-p apps/api/tsconfig.json --noEmit`: passed, including
+  the adjusted membership-refusal mock. Config and AI package builds also passed
+  to populate missing local dist dependencies for caller tests.
+- Strict standalone tsc (`--noEmit --strict --noUncheckedIndexedAccess
+  --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext
+  --moduleResolution NodeNext`) on the operative integration, operative upgrade,
+  contractor entitlement upgrade and Northside finance upgrade files: passed.
+- From packages/db, `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/mon8-combined-migration.test.ts src/plan-entitlement-service.test.ts
+  src/outbox.test.ts`: 3 files, 13 tests passed.
+- From apps/api, Vitest with `run --maxWorkers=2` and no more than three named files
+  per invocation: operative-entitlements.application (11 passed) and
+  site-extra-pricing.application (71 passed); site-extra.application,
+  contractor-retained-read.application and offline-risk.application (48 passed);
+  site-extra-evidence.application, site-visit.application and
+  plan-entitlements.persisted (69 passed). Earlier attempts exposed missing db,
+  config and AI dist outputs; rebuilt installed packages. Two initial membership
+  tests then failed because their legacy SQL stub omitted the new entitlement
+  projection; supplied a positive projection to preserve the real independent
+  inactive-member check, then both passed. No assertions were weakened.
+- From packages/db, Vitest `list --maxWorkers=2` on operative-entitlements,
+  operative-entitlements-upgrade and northside-finance-upgrade integration files:
+  all 12 cases collected. Listing does not run hooks or PostgreSQL assertions.
+- Core purity (10 existing computed-import notices), money arithmetic and commercial
+  boundary tools: passed. `git diff --check`: passed. Working-tree lane coverage
+  checked with the existing `loadLanePolicy` / `lanePathAllowed` APIs against
+  MERGE_HEAD plus untracked files: 67 paths covered. This is a deterministic path
+  check, not committed-head lane CI or independent review.
+
+Delivery boundary: the supplied catch-up MERGE_HEAD is fe80add539fc9f97028b90420918d16759f636ee;
+observed origin/main has advanced to 32411c4e45a094cbe65ae90ee1d5debd1f266e2a
+(including 0340). Router must stage the two resolved files, finish the supplied
+merge, catch up as needed, commit/push and run current-main CI. Index entries stay
+UU because the builder cannot write .git; source conflict markers are gone.
+Database, migrations, browser and full-repository suites remain for GitHub CI under
+the issued sandbox constraint. No PostgreSQL server, localhost, customer data,
+live money, providers, release, git mutation or independent acceptance occurred.
+
+No new reporting mechanism or speculative abstraction was introduced. Existing
+receipt, contract and exact lane file carry this handoff. Commit message:
+`/tmp/mon8-upgrade-successors-20261029T063054Z-commit-msg.txt`.

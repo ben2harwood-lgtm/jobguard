@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { subscriptionPlanView } from "@jobguard/core";
-import { loadSubscriptionPlan, PlanDetails, PlanScreen } from "./plan-screen";
+import { loadSubscriptionPlan, loadSubscriptionWorkspace, PlanDetails, PlanScreen, submitSubscriptionAction, subscriptionActionMessage } from "./plan-screen";
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
 const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
@@ -64,4 +64,49 @@ it("does not request company data without a valid current session and membership
     await expect(loadSubscriptionPlan(fetcher)).rejects.toThrow("SIGN_IN_REQUIRED");
     expect(fetcher).toHaveBeenCalledTimes(1);
   }
+});
+
+it("posts explicit reviewed terms with refreshed CSRF while retaining the displayed company", async () => {
+  const command={version:"subscription-command.v1",kind:"accept",plan:"Solo",maximumPence:4900};
+  const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({revision:1}));
+  await submitSubscriptionAction(session.memberships[0]!.tenantId,"command-id",command,fetcher);
+  expect(fetcher).toHaveBeenNthCalledWith(2,"/api/subscriptions/commands",expect.objectContaining({method:"POST",cache:"no-store",credentials:"same-origin",
+    headers:expect.objectContaining({"x-csrf-token":session.csrfToken,"x-tenant-id":session.memberships[0]!.tenantId}),
+    body:JSON.stringify({version:"subscription-http-command.v1",commandId:"command-id",command})}));
+});
+it("lost company access and rejected commands never become a success",async()=>{
+  const lost=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({...session,memberships:[]}));
+  await expect(submitSubscriptionAction(session.memberships[0]!.tenantId,"id",{},lost)).rejects.toThrow("Company access changed");
+  expect(lost).toHaveBeenCalledTimes(1);
+  for(const status of [400,403,409,503]) {
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({},{status}));
+    await expect(submitSubscriptionAction(session.memberships[0]!.tenantId,"same-retry-id",{},fetcher)).rejects.toThrow("check the saved result");
+  }
+});
+
+it("selects the second company and preserves it when session membership order changes", async () => {
+  const second = "00000000-0000-4000-8000-000000000099";
+  for (const memberships of [[...session.memberships, {tenantId: second}], [{tenantId: second}, ...session.memberships]]) {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({...session, memberships})).mockResolvedValueOnce(Response.json(empty));
+    expect((await loadSubscriptionWorkspace(fetcher, second)).tenantId).toBe(second);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/subscriptions/current", expect.objectContaining({headers: {"x-csrf-token": session.csrfToken, "x-tenant-id": second}}));
+  }
+});
+it("a foreign or revoked company selection cannot load another company's figures", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session));
+  await expect(loadSubscriptionWorkspace(fetcher, "foreign-company")).rejects.toThrow("SIGN_IN_REQUIRED");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it("preserves saved-approval and pending-payment wording after a successful HTTP response", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json({workId: "saved", paymentStatus: "pending"}, {status: 201}));
+  const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
+  expect(subscriptionActionMessage(result)).toBe("Approval saved. Simulated payment is pending. Reload to check its progress; do not approve it again.");
+});
+
+it("keeps the authenticated company switcher available when the first company's read is forbidden", async () => {
+ const companies=vi.fn();
+ const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({}, {status:403}));
+ await expect(loadSubscriptionWorkspace(fetcher,undefined,companies)).rejects.toThrow("SIGN_IN_REQUIRED");
+ expect(companies).toHaveBeenCalledWith(session.memberships,session.memberships[0]!.tenantId);
 });

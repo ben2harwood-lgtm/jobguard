@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-j": {
+      "branches": [
+        "codex/sandbox/ch9-j"
+      ],
+      "receipt": "docs/verdicts/CH9-J/BUILDER_RECEIPT.md",
+      "note": "CH9-J server/application build ahead only; real producers and shared composition HELD.",
+      "allow": [
+        "packages/db/src/value-v3-reader.ts",
+        "packages/db/test/value-v3-reader.integration.test.ts",
+        "apps/api/src/value/value-v3.application.ts",
+        "apps/api/src/value/value-v3.application.test.ts",
+        "apps/api/src/value/value-v3.controller.ts",
+        "apps/api/src/value/value-v3.controller.test.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.test.ts",
+        "apps/web/app/jobs/[id]/value/v3/page.tsx",
+        "apps/web/app/ui/job-value-v3.tsx",
+        "apps/web/e2e/CH-9-job.spec.ts",
+        "docs/integration-patches/ch9-j-composition.patch",
+        "docs/verdicts/CH9-J/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

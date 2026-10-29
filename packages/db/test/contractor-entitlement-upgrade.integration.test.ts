@@ -153,6 +153,16 @@ it("actual catalogs retain least privilege",async()=>{
 });
 // Preserve main's explicit empty successor-table expectations as well as the general proof.
 const emptySuccessors=[
+ "small_builder_demo_run",
+ "small_builder_demo_receipt",
+ "small_builder_demo_report",
+ "stored_receipt_case_allocation",
+ "stored_receipt_case_binding",
+ "stored_receipt_case_command",
+ "enterprise_duplicate_correction",
+ "platform_enterprise_fee",
+ "platform_enterprise_fee_line",
+
  "job_small_trip_event",
  "job_small_trip_observation",
  "meter_lifecycle_alert",

@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
 import { SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
-import { ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
+import { ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 import { SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
 import { SiteVisitRepository } from "@jobguard/db";
@@ -13,6 +13,13 @@ export class SiteExtraApplication {
  private readonly repository: SiteExtraRepository;
  private readonly visits: SiteVisitRepository;
  constructor(private readonly pool: Pool) { this.repository = new SiteExtraRepository(pool); this.visits = new SiteVisitRepository(pool); }
+ private async requireSiteOrigin(sessionId: string): Promise<void> {
+  try { await new ContractorEntitlementAuthorityRepository(this.pool).requireFeature(sessionId, "site_origin_capture"); }
+  catch (error) {
+   if ((error as { code?: string }).code === "FORBIDDEN") throw new SiteExtraError("EXTRA_FORBIDDEN");
+   throw error;
+  }
+ }
  private async resolveContext(sessionId: string, member: AuthenticatedMembership): Promise<VerifiedTenantContext> {
   try {
    const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
@@ -33,6 +40,7 @@ export class SiteExtraApplication {
    const body = logBodyOf(raw), bodyV3 = body ? undefined : logSiteExtraV3.safeParse(raw);
    if (!body && !bodyV3?.success) throw new SiteExtraError("INVALID_COMMAND");
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SiteExtraError("NOT_FOUND");
+   await this.requireSiteOrigin(session.data.sessionId);
    const context = await this.resolveContext(session.data.sessionId, member);
    if (bodyV3?.success) {
     const v3 = bodyV3.data, shown = v3.residentConfirmation?.shownContentSha256;
@@ -59,7 +67,7 @@ export class SiteExtraApplication {
  }
  private sorError(error: unknown): SorSiteExtraError {
   if (error instanceof SorSiteExtraError) return error;
-  if (error instanceof SiteExtraError && error.code === "UNAUTHENTICATED") return new SorSiteExtraError("UNAUTHENTICATED");
+  if (error instanceof SiteExtraError && (error.code === "UNAUTHENTICATED" || error.code === "EXTRA_FORBIDDEN")) return new SorSiteExtraError(error.code);
   if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") return new SorSiteExtraError("UNAUTHENTICATED");
   return new SorSiteExtraError("SITE_PRICING_UNAVAILABLE");
  }
@@ -69,6 +77,7 @@ export class SiteExtraApplication {
    const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
    const body = parseLogSorSiteExtra(raw);
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   await this.requireSiteOrigin(sessionId);
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note });
    return sorSiteExtraLoggedV1.parse({ version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
