@@ -18,6 +18,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
   "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
   // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/payment-fees": "post_live_billing",
+  "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
   "nest:/jobs/:id/success-fees": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
@@ -80,6 +82,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Party setup/corrections and adoption are operational prerequisites, never watchdog inputs.
   "/api/jobs/[id]/parties": "pre_live_allowed",
   "/api/jobs/[id]/parties/import": "pre_live_allowed",
+  "/api/jobs/[id]/parties/import-v3": "pre_live_allowed",
+  "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
@@ -140,6 +144,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:finding.resolve": "pre_live_allowed",
   "command:inbox.seed": "watchdog_live_only",
   "command:job.adopt_in_flight": "pre_live_allowed",
+  "command:job.adopt_in_flight_v3": "pre_live_allowed",
   "command:job.switch_live": "pre_live_allowed",
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
@@ -182,6 +187,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/materials": "pre_live_allowed",
   "nest:/jobs/:id/parties": "pre_live_allowed",
   "nest:/jobs/:id/parties/import": "pre_live_allowed",
+  "nest:/jobs/:id/parties/import-v3": "pre_live_allowed",
+  "nest:/jobs/:id/parties/import-v3/preview": "pre_live_allowed",
   "nest:/jobs/:id/practice-feed": "pre_live_allowed",
   "nest:/jobs/:id/practice-facts": "pre_live_allowed",
   "nest:/jobs/:id/prevention-checks/:action": "pre_live_allowed",
