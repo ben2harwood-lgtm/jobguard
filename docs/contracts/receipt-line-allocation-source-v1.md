@@ -1,7 +1,7 @@
 # Receipt-line allocation contracts v1 — M48-C0
 
-Current synthetic status: 0335 enables the neutral no-amount producer described
-in the final section. Earlier held-status statements below describe 0258 and its
+Current synthetic status: 0377 enables both v1 command protocols through the
+0335 neutral producer described in the final sections. Earlier held-status statements below describe 0258 and its
 superseded build-ahead command protocol, which remains refused.
 
 Build-only, synthetic contracts at base `dc5721230fd8aedbf2d9d0457789074b66b48765`.
@@ -82,3 +82,29 @@ catch variation and exact commercial revision in the case's `variation:` and
 `revision:` references. The catch must use an actual supplementary binding to
 this lock and its completed check. A generic invoice reference cannot borrow
 another case's catch or turn an original-bill line into a catch.
+
+## 0377 — v1 command producer
+
+`receipt-line-allocation-command.v1` now uses the same synthetic producer, saved
+review, exact authorization, SH-1 validation and immutable fact tables as
+`receipt-line-facts-command.v1`. The earlier statements that the allocation
+protocol remains refused describe the historical 0258/0335 deployment.
+
+Both protocols return `receipt-line-facts-result.v1` through the repository;
+this change does not implement the proposed view or command-result projection
+above. SV-6 continues to consume the same source snapshot reader.
+
+The allocation protocol keeps its strict existing core schema. For
+`review_reverse`, `grossPence` must equal the complete available reversal
+derived from a persisted refund or credit. A smaller or larger requested amount
+is refused; client money never sizes a distribution. Optional remittance
+evidence must match the existing persisted, verified source. The no-amount
+protocol is unchanged. Approvals must use the protocol of their saved review;
+command identity/payload conflicts across protocols remain errors.
+
+0377 replaces the latest writer and source-approval validator from 0335 only.
+It adds no tables, routines, grants, policies, provider calls or fee eligibility.
+Existing no-amount commands retain their stored results and replay behavior.
+Forward fix by a later migration; do not rewrite immutable saved rows or reverse
+the schema to remove facts. PostgreSQL integration and populated-upgrade tests
+are CI gates, followed by the independent RED review.

@@ -19,7 +19,7 @@ import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
-export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"){
+export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocol="receipt-line-facts-command.v1"){
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
@@ -103,8 +103,8 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const producer=new RecoveryLineAllocationRepository(f.runtime,"synthetic_demo");
  const produce=async(paymentId:string)=>{
   const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId});
-  const review=await producer.command(context,actor,auth.digest,jobId,{version:"receipt-line-facts-command.v1",commandId:randomUUID(),action:"review",paymentId,expectedSourceRevision:snapshot.revision});
-  return producer.command(context,actor,auth.digest,jobId,{version:"receipt-line-facts-command.v1",commandId:randomUUID(),action:"approve",reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision});
+  const review=await producer.command(context,actor,auth.digest,jobId,{version:protocol,commandId:randomUUID(),action:"review",paymentId,expectedSourceRevision:snapshot.revision});
+  return producer.command(context,actor,auth.digest,jobId,{version:protocol,commandId:randomUUID(),action:"approve",reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision});
  };
  let deposit:string|null=null;
  if(kind==="F5"){deposit=await receipt(1200000,"receipt-12000",true);await produce(deposit);}

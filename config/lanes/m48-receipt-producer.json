@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m48-receipt-producer": {
+      "branches": [
+        "codex/sandbox/m48-receipt-producer"
+      ],
+      "receipt": "docs/contracts/receipt-line-allocation-source-v1.md",
+      "note": "RED M4-8-S: v1 commands use the existing synthetic receipt producer; no new privileges. Lane file implicitly owned.",
+      "allow": [
+        "docs/contracts/receipt-line-allocation-source-v1.md",
+        "packages/db/migrations/0377_receipt_line_command_producer.sql",
+        "packages/db/src/receipt-line-allocation-repository.ts",
+        "packages/db/src/receipt-line-command-producer.test.ts",
+        "packages/db/src/stored-receipt-case-allocation-repository.test.ts",
+        "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
+        "packages/db/test/receipt-line-allocation-facts-races.integration.test.ts",
+        "packages/db/test/receipt-line-allocation-facts.integration.test.ts",
+        "packages/db/test/receipt-line-command-producer-upgrade.integration.test.ts",
+        "packages/db/test/receipt-line-command-producer.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts"
+      ]
+    }
+  }
+}
