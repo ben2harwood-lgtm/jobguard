@@ -516,6 +516,7 @@ describe("migration and privilege catalog", () => {
       { relname: "supplier_match_allocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_match_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_match_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "sync_snapshot_checkpoint", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "synthetic_evidence_original", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "synthetic_obligation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "synthetic_recovery_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },

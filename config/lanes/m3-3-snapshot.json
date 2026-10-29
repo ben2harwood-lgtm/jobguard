@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-3-snapshot": {
+      "branches": ["codex/sandbox/m3-3-snapshot"],
+      "note": "RED. M3-3 dark authenticated snapshot/checkpoint slice, built on unmerged m3-3-server. Own lane file implicitly allowed. Provider remains a synthetic transaction port; no mounted endpoint or deployment.",
+      "allow": [
+        "apps/api/src/sync/download.application.ts",
+        "apps/api/src/sync/snapshot.adapter.ts",
+        "apps/api/src/sync/snapshot.adapter.test.ts",
+        "packages/db/migrations/0454_sync_snapshot_checkpoint.sql",
+        "packages/db/test/sync-snapshot.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "docs/contracts/sync-download-v1.md"
+      ]
+    }
+  }
+}

@@ -130,6 +130,7 @@ export class SyntheticSyncDownloadApplication {
     const decision = evaluateSyncDownloadV1(facts);
     const cleanup = planSyncReconcileV1({ version: "sync-reconcile.v1", delivered, decision });
     const page = pageSyncDownloadV1({ facts, afterJobId, pageSize });
-    return { version: "sync-server-download-result.v1" as const, page, cleanup };
+    return { version: "sync-server-download-result.v1" as const, page, cleanup,
+      resync: page.outcome === "refused" ? "required" as const : "none" as const };
   }
 }
