@@ -1,4 +1,4 @@
-# 0367 — MON-1 committed-place admission and transactional refresh (RED)
+# 0380 — MON-1 committed-place admission and transactional refresh (RED)
 
 Capacity admission uses committed places, which include live jobs that have not
 started counting today. Daily counted places remain the separate billing/screen
@@ -36,8 +36,7 @@ no runtime/meter/shadow table grants. Existing rows, grants and policies stay in
 
 ## Explicit remaining scope
 
-MON1-J adds `mon1_today_source` to this same unmerged migration (0367 is not
-renumbered; its admission SQL is preserved). This checked entrypoint reuses
+MON1-J adds `mon1_today_source` to this same unmerged migration (its admission SQL is preserved). This checked entrypoint reuses
 lifecycle capture under lock 184. The application derives today's display from
 the captured immutable facts with the existing pure counter. There is no new
 runtime table grant, credential, supplied count, billing action or issued-period
@@ -129,3 +128,10 @@ A fixture's optional tenant parameter is explicitly typed string rather than
 inferred as randomUUID's template literal, fixing the reported web typecheck.
 These local source/protocol checks do not prove PostgreSQL races; CI and a fresh
 RED review remain necessary. This is Ben's last allowed repair round.
+
+## Renumber-only catch-up, 29 October
+
+Reserved 0367 to 0380 uses `tools/migration-renumber.mjs` planning with the
+reserved predecessor 0379. SQL bytes are unchanged from catch-up 476b0336.
+Current main through MON-3 0373 is preserved, including trial expectations and
+privilege inventories. PostgreSQL and browser suites remain GitHub CI checks.
