@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0330_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0333_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -867,3 +867,33 @@ router's one Ben card under SIMPLE_LOOP, not another automatic repair round.
 Router owns commit/push, current-head CI, independent RED review binding and
 work-list updates. Ready message:
 /tmp/ch6-j-20261029T023130Z-commit-msg.txt.
+
+### PR #392 renumber-only catch-up — 29 October 2026
+
+CH-6 (RED): main already merged cleanly through migration 0332. Used
+`tools/migration-renumber.mjs` with its final staging call disabled in an
+in-memory sandbox copy; the repository tool and Git metadata are unchanged.
+Renamed this branch's receipt migration 0330 → 0333 and source migration
+0331 → 0334, preserving relative order and both SQL files byte for byte.
+The tool renamed their notes and updated full-stem references, including the
+shared LP-0 inventory; both main and branch entries remain. Existing bare
+historical migration labels in prior receipts/notes remain historical text.
+Updated this branch's existing lane with the new paths; no new behaviour.
+
+Checks actually executed for this catch-up:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Tool dry-run: exactly the two requested renames.
+- SHA-256 comparison before/after: both SQL files unchanged.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS.
+- From packages/db, installed `./node_modules/.bin/vitest run --maxWorkers=2
+  test/commercial-integrity-v3-input.test.ts`: 6/6 PASS.
+- Existing lane loader/path checker: exact 56 aggregate PR paths including the
+  automatically allowed lane file, no missing/extra payload permissions.
+- Existing migration order checker: PASS, own migrations above main's 0332.
+- `git diff --check`, unmerged-index and focused conflict-marker scans: PASS.
+
+No database or browser suite run: sandbox cannot start PostgreSQL or bind
+localhost. GitHub CI and independent RED review remain the router's gates.
+No Git writes performed. Router commits/pushes this ready change using
+`/tmp/ch6-j-20261029T025135Z-commit-msg.txt`.
