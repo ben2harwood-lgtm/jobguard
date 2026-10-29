@@ -18,7 +18,8 @@ export function evaluateReadiness(input:ReadinessInput):ReadinessResult {
   if(input.version!=="readiness-input.v1"||!input.taskId||input.taskRevision<1||!input.ruleRevision)throw new Error("INVALID_READINESS_INPUT");
   if(!finiteNonNegative(input.material.requiredUnits)||!finiteNonNegative(input.material.landedUnits))throw new Error("INVALID_MATERIAL_QUANTITY");
   const reasons:string[]=[];
-  if(input.predecessors.some(x=>x.complete!==true))reasons.push("A predecessor is not complete");
+  if(input.predecessors.some(x=>x.complete===false))reasons.push("A predecessor is not complete");
+  if(input.predecessors.some(x=>x.complete==="unknown"))reasons.push("Predecessor completion unknown");
   const shortage=Math.max(0,input.material.requiredUnits-input.material.landedUnits);
   if(shortage>0)reasons.push(`${shortage} units still needed`);
   if(input.access!==true)reasons.push(input.access==="unknown"?"Access availability unknown":"Access is not available");
@@ -40,9 +41,22 @@ export function nextWorkday(date:string,jurisdiction:Jurisdiction,holidays:Reado
 }
 
 export function dueAtLocalTime(date:string,time:string,timeZone:string):string {
- // Noon-offset sampling avoids the midnight side of a DST transition. Synthetic scheduling only.
- const desired=Date.parse(`${date}T${time}:00Z`),sample=new Date(`${date}T12:00:00Z`);
- const parts=new Intl.DateTimeFormat("en-GB",{timeZone,hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(sample);
- const localMinutes=Number(parts.find(x=>x.type==="hour")?.value)*60+Number(parts.find(x=>x.type==="minute")?.value);
- return new Date(desired-(localMinutes-720)*60_000).toISOString();
+ const desired=Date.parse(`${date}T${time}:00Z`);
+ if(!/^\d{4}-\d{2}-\d{2}$/u.test(date)||!Number.isFinite(desired)||new Date(desired).toISOString().slice(0,10)!==date||!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(time))throw new Error("INVALID_LOCAL_TIME");
+ const formatter=new Intl.DateTimeFormat("en-GB",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+ const local=(stamp:number)=>{
+  const parts=formatter.formatToParts(new Date(stamp));
+  const part=(name:string)=>parts.find(p=>p.type===name)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}:00Z`;
+ };
+ // Sample both sides of a transition, then verify the complete wall-clock date/time.
+ // A skipped time fails closed; a repeated time runs at its first occurrence.
+ const candidates=new Set<number>();
+ for(const delta of [-86_400_000,0,86_400_000]){
+  const sample=desired+delta,offset=Date.parse(local(sample))-sample;
+  const candidate=desired-offset;
+  if(local(candidate)===`${date}T${time}:00Z`)candidates.add(candidate);
+ }
+ if(candidates.size===0)throw new Error("NONEXISTENT_LOCAL_TIME");
+ return new Date(Math.min(...candidates)).toISOString();
 }
