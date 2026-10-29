@@ -799,3 +799,36 @@ PostgreSQL/browser suites were not run here, per sandbox constraints. No real
 customer data, providers, releases, git mutation or fresh RED review occurred.
 Prior RED evidence is c98b9fda; this receipt does not claim review of a new head.
 Commit message: /tmp/mon8-upgrade-successors-20261029T103153Z-commit-msg.txt.
+
+## 29 October 2026 — post-main A17 fixture catch-up
+
+PR #302 / MON-8 RED; catch-up after router merged main, not a new repair round.
+Read codex-runs/mon8-upgrade-successors-ci-traces-1131.txt: exactly one reported
+failure, site-extras route [A17], expected 201 but received 503 at line 45.
+The context-stamp fixture mocked session lookup and the site-extra writer but
+not MON-8's server-side contractor entitlement lookup. That lookup reached the
+fixture's deliberately rejecting pool.connect before the writer, producing the
+503. Added a positive requireFeature test stub scoped to A17, using the same
+pattern as the other site-extra application fixtures. Its existing finally block
+restores the spy. Every existing test statement and tamper assertion is identical;
+production authorization and refusal handling are unchanged. Added this test path
+to the existing lane. No pending conflicts were present.
+
+Local verification:
+- Installed web Vitest --maxWorkers=2 on
+  app/api/contractor/jobs/[id]/site-extras/route.test.ts and
+  app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts: 2 files, 78 passed.
+- Installed tsc -p tsconfig.json in apps/api, packages/core and packages/db:
+  passed. These restored missing/stale ignored dependency build outputs before
+  the final route run. Earlier collection attempts failed for absent API dist
+  and then stale core dist; no production source repair was needed.
+- Byte comparisons against starting HEAD f0b062de: 0365/0366 SQL, S9 fingerprint
+  registry, all three re-pinned source files, and the protected
+  docs/contracts/lp-downstream-effects-v1.md unchanged.
+- Removing only the two added fixture lines reproduces the original test file
+  byte-for-byte; all A17 assertions are preserved. git diff --check passed.
+
+Ready for router commit/push and CI. No git writes, PostgreSQL startup, real data,
+provider calls, releases or new independent RED review. Database suites remain
+for GitHub CI. Commit message:
+/tmp/mon8-upgrade-successors-20261029T113200Z-commit-msg.txt.

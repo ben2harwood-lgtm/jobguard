@@ -8,6 +8,7 @@
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
       "note": "MON-8 RED catch-up: reserved 0365/0366, preserve 0332 Northside finance worker logic, combine operative membership/grant/invitation and site-origin guards with one exclusive agreement-status guard. Supersedes mon8-operative; no automatic agreement activation or historical backfill. Router owns git writes, CI and exact-head RED review.",
       "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/route.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",
         "apps/api/src/contractor/contractor.application.ts",
         "apps/api/src/contractor/offline-risk.application.test.ts",
