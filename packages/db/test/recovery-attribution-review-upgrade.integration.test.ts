@@ -8,8 +8,8 @@ import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(false); }, 120_000);
 afterAll(async () => { await closeFinalCheckFixture(f); });
-it("A8: populated actual base -> only 0376 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
- const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0376_recovery_attribution_review.sql"));
+it("A8: populated actual base -> only 0383 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
+ const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0383_recovery_attribution_review.sql"));
  expect(own).toBeGreaterThan(0);
  const allocator = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0335_stored_receipt_case_allocation.sql"));
  expect(allocator).toBeGreaterThan(0);
@@ -32,7 +32,7 @@ it("A8: populated actual base -> only 0376 -> named rows/types/PKs unchanged -> 
  const keys = async () => (await f.admin.query(`SELECT c.oid::regclass::text name,pg_get_constraintdef(k.oid) definition FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND k.contype='p' ORDER BY c.relname`)).rows;
  const originalKeys = await keys();
  await f.admin.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0376_recovery_attribution_review.sql')");
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0383_recovery_attribution_review.sql')");
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  expect(await keys()).toEqual(originalKeys);
  await rolledBack(f.admin, async db => {
