@@ -34,7 +34,7 @@ export class IntegrityJourney {
  private pending: { target: ReviewTarget; body: ReviewBody } | null = null;
  private saving = false;
  readonly jobId: string;
- constructor(jobId: string, private readonly publish: (state: IntegrityState) => void, private readonly request: typeof fetch = fetch) { this.jobId = jobId.toLowerCase(); }
+ constructor(jobId: string, private readonly publish: (state: IntegrityState) => void, private readonly request: typeof fetch = (input, init) => fetch(input, init)) { this.jobId = jobId.toLowerCase(); }
  private set(state: IntegrityState) { this.state = state; this.publish(state); }
  clear() { ++this.generation; this.pending = null; this.saving = false; this.set({ status: "loading" }); }
  async load() {

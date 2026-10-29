@@ -103,8 +103,11 @@ async function invoicedCatch(x:Awaited<ReturnType<typeof published>>){
  const input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),invoiceKind:"final" as const,recipient:"fictional@example.invalid",issuedOn:"2026-10-28"};
  // Reconciliation produces a verified result; invoice authority is a separate,
  // explicit worker publication through the normal certificate trigger.
+ // The shadow worker cannot read ordinary lock rows. Supply the exact immutable
+ // cutoff read by the fixture admin; the worker trigger independently verifies it.
+ const lock=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
  await finalCheckTenant(f.shadow,a.tenantId,db=>db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status,run_id)
-  SELECT tenant_id,job_id,$3,id,locked_at,'completed',$4 FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),x.runId]));
+  VALUES($1,$2,$3,$4,$5::timestamptz,'completed',$6)`,[a.tenantId,a.jobId,randomUUID(),lock.id,lock.cutoff,x.runId]));
  const main=await invoices.issueInvoice(a.context,input);
  const confirmed=await new FinalCheckRepository(f.runtime).confirmCatch(a.context,a.jobId,a.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:x.lockId,runId:x.runId,signalId:x.signal,expectedSignalRevision:1}) as {variationId:string};
  const v=(await f.admin.query("SELECT scope_item_id,description FROM app.variation WHERE tenant_id=$1 AND id=$2",[a.tenantId,confirmed.variationId])).rows[0];

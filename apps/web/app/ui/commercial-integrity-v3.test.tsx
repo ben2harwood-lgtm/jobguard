@@ -181,3 +181,14 @@ it("CH-6 legacy review failure never creates optimistic saved feedback", async (
  const state = s.latest(); if (state.status !== "v1") throw Error("Expected saved v1");
  expect(state.view.findings[0]!.dismissed).toBe(false);
 });
+
+it("default browser transport calls fetch without an IntegrityJourney receiver",async()=>{
+ const states:IntegrityState[]=[];
+ vi.stubGlobal("fetch",function(this:unknown,url:RequestInfo|URL){
+  // Browser fetch rejects a class instance as its Web IDL receiver.
+  if(this!==undefined && this!==globalThis)throw new TypeError("Illegal invocation");
+  return Promise.resolve(new Response(JSON.stringify(String(url).endsWith("/family")?family("v1"):legacy)));
+ });
+ try {await new IntegrityJourney(job,state=>states.push(state)).load();expect(states.at(-1)?.status).toBe("v1");}
+ finally {vi.unstubAllGlobals();}
+});

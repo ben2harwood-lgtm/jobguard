@@ -768,3 +768,51 @@ reported DB and end-to-end failures. No Git writes, exceptions, downloads,
 customer data or live actions. The router owns commit/push, CI and RED review
 binding for the repaired head. Ready message:
 /tmp/ch6-j-20261029T013134Z-commit-msg.txt.
+
+## PR #392 CI-fix try 2 — 29 October 2026, 02:11 run
+
+RED. Read the supplied ch6-j-ci-traces-0211.txt. No merge conflicts were present.
+Three remaining root causes repaired, with all existing assertions retained:
+
+- CH-6 saved-v1/fresh-v3 and M1-16-S draft/activated browser failures (both
+  desktop and mobile): downloaded the existing CI artifact
+  playwright-evidence-3-1 (12866772246, run 40801349894) through the GitHub
+  connector. The error contexts show the panel's unavailable state, and the
+  CH-6 network traces contain no integrity request at all. IntegrityJourney
+  stored native fetch as a method and invoked it with a class-instance receiver,
+  which browser Web IDL rejects before sending a request. The default transport
+  now forwards through an arrow function. A regression models the native receiver
+  check using the default transport: FAIL before the fix (error instead of v1),
+  PASS after. Injected transport and all validation/failure paths remain intact.
+- Five published financial regressions: the shadow worker has no SELECT grant
+  on final_account_lock. Following the existing fixture boundary, the admin
+  reads the immutable ID/cutoff, then the shadow worker supplies them as VALUES
+  to the existing completion trigger. The trigger still verifies the exact
+  run/lock/cutoff. No grants, replication override or guard bypass added.
+- Lifecycle replay regression: sequence is bigint; the previous explicit integer
+  interval operand still conflicted with its inferred parameter type. Cast both
+  occurrences of parameter $4 as bigint, matching the actual column.
+
+Local validation actually executed:
+- Web Vitest, maxWorkers=2: commercial-integrity-v3 UI, family route and v3 route:
+  3 files, 68/68 PASS. The new default-fetch regression first reproduced failure
+  in a single-file maxWorkers=1 run (48 existing passes, one expected debugging
+  failure), before the implementation fix.
+- Web tsc --noEmit PASS.
+- Focused integration-fixture tsc --noEmit PASS using the existing
+  /tmp/ch6-j-20261029T013134Z-types.json (published, sources, upgrade suites).
+- Node boundary/current-source-guard tests: 253/253 PASS,
+  /tmp/ch6-j-20261029T021132Z-boundary.log.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions. Existing migration ordering check PASS.
+- Tracked-file conflict-marker scan and git diff --check PASS.
+- Migrations 0330 and 0331 are byte-identical to this run's HEAD. SHA-256:
+  0330 bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605;
+  0331 312ac5de619bdc47263ec098c86f5b00a26348e4f6bac3b49f8da7cc91870993.
+
+No tests skipped/weakened, exceptions changed, SQL edited, privileges widened,
+Git writes, packages installed, real customer data or live actions. PostgreSQL
+and browser reruns remain for GitHub CI. Local scripted/unit evidence is not
+independent RED review or proof that those CI suites pass. Router owns commit,
+push, current-head CI, RED review binding and status updates.
+Ready message: /tmp/ch6-j-20261029T021132Z-commit-msg.txt.
