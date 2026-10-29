@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
-import { auditEventInputV1Schema, canonicalAuditHash } from "./audit.js";
+import { auditEventInputV1Schema } from "./audit.js";
 
 export class SsoRepositoryError extends Error {
   constructor(readonly code:string, options?:ErrorOptions) { super(code,options); this.name="SsoRepositoryError"; }
@@ -56,9 +56,7 @@ export class EnterpriseIdentityRepository {
   async audit(client:PoolClient,connectionId:string,eventType:string,actorRef="identity:saml",code?:string,commandHash?:string):Promise<void> {
     const payload={references:{environment:"synthetic_demo",...(code?{code}: {})},...(commandHash?{hashes:{document:commandHash}}:{}),classifications:{action:"security" as const}};
     const input=auditEventInputV1Schema.parse({id:randomUUID(),version:"audit.v1",actorRef,eventType,subjectType:"sso-connection",subjectRef:connectionId,payload});
-    const h=(await client.query<{tenant_id:string;sequence:string;previous_hash:string|null;occurred_at:Date}>("SELECT * FROM identity.sso_audit_head($1)",[connectionId])).rows[0]!;
-    const e={...input,tenantId:h.tenant_id,sequence:Number(h.sequence),previousHash:h.previous_hash,occurredAt:h.occurred_at,payloadHash:hash(canonical(payload))};
-    await client.query("SELECT identity.sso_audit_append($1,$2::jsonb)",[connectionId,JSON.stringify({...e,eventHash:canonicalAuditHash(e)})]);
+    await client.query("SELECT identity.sso_audit_append($1,$2::jsonb)",[connectionId,JSON.stringify(input)]);
   }
   async refusal(route:string,code:string):Promise<void> {
     // Unknown/malformed routes have no tenant authority. Always append the global bootstrap event.

@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { appendAuditBatch, auditEventInputV1Schema, verifyAuditChain, type AuditCheckpoint, type AuditEvent } from "./audit.js";
+import { appendAuditBatch, auditEventTrust, auditStoredInputSchema, verifyAuditChain, type AuditCheckpoint, type AuditEvent } from "./audit.js";
 import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.js";
 
 export const AUDIT_EXPORT_NOTICE = "The signature proves export integrity only";
@@ -10,7 +10,7 @@ const uuid = z.string().uuid(), digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const sequence = z.number().int().positive().safe();
 const timestamp = z.string().datetime();
 export const auditExportRequestV1 = z.object({ version: z.literal("audit-export-request.v1"), commandId: uuid }).strict();
-const eventV1 = auditEventInputV1Schema.extend({ tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest }).strict();
+const eventV1 = auditStoredInputSchema.extend({ tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest }).strict();
 const checkpointV1 = z.object({ tenantId: uuid, sequence, eventHash: digest, recordedAt: timestamp }).strict();
 export const auditExportPayloadV1 = z.object({
   version: z.literal("audit-export.v1"), environment: z.literal("synthetic_demo"), notice: z.literal(AUDIT_EXPORT_NOTICE), sandbox: z.literal(AUDIT_EXPORT_SANDBOX),
@@ -53,7 +53,7 @@ export function verifySignedAuditExport(raw: unknown, trustedPublicKeyPem?: stri
     for (const checkpoint of payload.checkpoints) verifyAuditChain(events, { ...checkpoint, recordedAt: new Date(checkpoint.recordedAt) });
     const tail = events.at(-1)!;
     if (tail.eventHash !== payload.headHash || tail.id !== payload.exportId || tail.eventType !== "audit.export.created" || tail.subjectRef !== payload.exportId || tail.occurredAt.toISOString() !== payload.createdAt) throw new Error();
-    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, notice: AUDIT_EXPORT_NOTICE, payload };
+    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, notice: AUDIT_EXPORT_NOTICE, evidenceTrust: events.map(event => ({ id: event.id, trust: auditEventTrust(event) })), payload };
   } catch { throw new AuditExportError("AUDIT_EXPORT_INVALID"); }
 }
 export interface AuditExportActor { membershipId: string; identityUserId: string; }

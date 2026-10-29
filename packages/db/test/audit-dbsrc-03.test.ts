@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -84,10 +85,10 @@ class BillingSql {
         }
         if (sql.includes("FROM app.audit_event")) return rows(this.auditedPayments.has(values[1]) ? [{}] : []);
         if (sql.includes("SELECT authorization_id FROM app.customer_payment")) return rows([...pendingPayments, ...this.payments].filter(p => p.id === values[1]));
-        if (sql.includes("INSERT INTO app.audit_event")) {
-          const payload = JSON.parse(values[9]);
-          if (payload.references?.paymentId) this.auditedPayments.add(payload.references.paymentId);
-          return rows([]);
+        if (sql.includes("FROM app.append_audit(")) {
+          const events = fakeAuditAppend(values[0], this.fixture.tenantId);
+          for (const event of events) if (event.payload.references?.paymentId) this.auditedPayments.add(event.payload.references.paymentId);
+          return rows(events);
         }
         if (sql.includes("FROM app.customer_invoice")) {
           const credited = this.credits.reduce((n, c) => n + c.amount_pence, 0);

@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +53,8 @@ class RecordedSql {
     if (sql.includes("FROM app.proposal_review")) return rows(sql.includes("OR proposal_id") ? [] : [{ revision: this.review.revision, state: "reviewing" }]);
     if (sql.includes("SELECT 1 FROM app.scope_identity")) return rows([{}]);
     if (sql.includes("SELECT revision,status FROM app.job")) return rows([{ revision: 0, status: this.status }]);
-    if (sql.includes("app.transition_job")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+    if (sql.includes("app.start_quote_from_review")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+    if (sql.includes("FROM app.append_audit(")) return rows(fakeAuditAppend(values[0] as string, tenantId));
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("current_setting('app.tenant_id') tenant")) return rows([{ tenant: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);
@@ -62,7 +64,7 @@ class RecordedSql {
   };
   transaction() { return { $client: { query: this.query } } as unknown as TenantTransaction; }
   pool() { return { connect: async () => ({ query: this.query, release() {} }) } as unknown as Pool; }
-  inserts(table: string) { return this.calls.filter(call => call.sql.includes(`INSERT INTO app.${table}`)); }
+  inserts(table: string) { return this.calls.filter(call => (table === "audit_event" ? call.sql.includes("FROM app.append_audit(") : call.sql.includes(`INSERT INTO app.${table}`))); }
 }
 
 afterEach(() => vi.restoreAllMocks());

@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -65,6 +66,7 @@ function fixture() {
     if (sql.startsWith("INSERT INTO app.action_authorization")) { state.authorizations.push(values); return result(); }
     if (sql.startsWith("INSERT INTO app.action_outbox")) { state.effects.push(values); return result(); }
     if (sql.includes("current_setting('app.tenant_id'")) return result([{ tenant_id: tenant }]);
+    if (sql.includes("FROM app.append_audit(")) { state.audits.push(...JSON.parse(values[0] as string)); return result(fakeAuditAppend(values[0] as string, tenant)); }
     if (sql.includes("lock_audit_head")) return result();
     if (sql.includes("clock_timestamp() AS occurred_at")) return result([{ occurred_at: new Date("2026-10-13T12:00:00Z") }]);
     if (sql.startsWith("INSERT INTO app.audit_event")) { state.audits.push(values); return result(); }
@@ -148,7 +150,7 @@ describe("purchase-order blocking audit regressions", () => {
     expect(lock).toBeGreaterThan(-1);
     expect(lock).toBeLessThan(at(q => q.sql.startsWith("INSERT INTO app.watchdog_command_identity")));
     expect(lock).toBeLessThan(at(q => q.sql.includes("max(revision)")));
-    expect(lock).toBeLessThan(at(q => q.sql.includes("lock_audit_head")));
+    expect(lock).toBeLessThan(at(q => q.sql.includes("FROM app.append_audit(")));
   });
   it("refuses an unknown pack size instead of recording a fabricated comparison", async () => {
     const f = fixture(); Object.assign(f.rates[0]!, { price_pence: 20000, price_unit: "box" });

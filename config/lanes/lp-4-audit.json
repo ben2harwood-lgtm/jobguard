@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-4-audit": {
+      "branches": [
+        "codex/sandbox/lp-4-audit"
+      ],
+      "note": "LP-4 part 1 RED: dark synthetic-only database sealing. Full reserved-type enforcement and authority-consumer closure REFUSED / not built; no LP-2/LP-3 implementation changes.",
+      "allow": [
+        "docs/contracts/audit-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migrations/0456_lp4_database_audit.sql",
+        "packages/db/src/audit-checkpoint-handoff.test.ts",
+        "packages/db/src/audit-checkpoint-handoff.ts",
+        "packages/db/src/audit-export-repository.ts",
+        "packages/db/src/audit.ts",
+        "packages/db/src/enterprise-identity-repository.ts",
+        "packages/db/src/lp4-audit.test.ts",
+        "packages/db/src/serious-b7.test.ts",
+        "packages/db/test/audit-api-capture.test.ts",
+        "packages/db/test/audit-api-file-final-account.test.ts",
+        "packages/db/test/audit-api-file-supplier-document.test.ts",
+        "packages/db/test/audit-dbsrc-03.test.ts",
+        "packages/db/test/audit-protocol-fixture.ts",
+        "packages/db/test/audit.integration.test.ts",
+        "packages/db/test/lp4-audit-upgrade.integration.test.ts",
+        "packages/db/test/lp4-audit.integration.test.ts",
+        "packages/db/test/purchase-order-audit.test.ts",
+        "packages/db/test/recovery-case-join.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

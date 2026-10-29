@@ -17,8 +17,17 @@ export const auditEventInputV1Schema = z.object({
   eventType: identifier.max(100), subjectType: identifier.max(100), subjectRef: identifier,
   payload: auditPayloadV1Schema,
 });
+/** Requests remain v1; only the database emits v2. Legacy history has no trust assertion. */
+export const auditStoredInputSchema = auditEventInputV1Schema.extend({ version: z.enum(["audit.v1", "audit.v2"]) });
+export function auditEventTrust(event: Pick<AuditEvent, "version" | "payload">): "legacy" | "lower_trust" | "checked_operation" {
+  if (event.version === "audit.v1") return "legacy";
+  const trust = event.payload.references?.auditTrust;
+  if (trust !== "lower_trust" && trust !== "checked_operation") throw new AuditVerificationError("Invalid audit trust label");
+  return trust;
+}
 export type AuditEventInput = z.infer<typeof auditEventInputV1Schema>;
-export interface AuditEvent extends AuditEventInput {
+export interface AuditEvent extends Omit<AuditEventInput, "version"> {
+  version: "audit.v1" | "audit.v2";
   tenantId: string; sequence: number; occurredAt: Date; payloadHash: string;
   previousHash: string | null; eventHash: string;
 }
@@ -29,61 +38,39 @@ export class AuditVerificationError extends Error {
   constructor(message: string) { super(message); this.name = "AuditVerificationError"; }
 }
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
-const canonicalJson = (value: unknown): string => {
+const canonicalJson = (value: unknown, version = "audit.v1"): string => {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`).join(",")}}`;
+  if (Array.isArray(value)) return `[${value.map(child => canonicalJson(child, version)).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => version === "audit.v1" ? a.localeCompare(b) : a < b ? -1 : a > b ? 1 : 0)
+    .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child, version)}`).join(",")}}`;
 };
 export const canonicalAuditHash = (event: Omit<AuditEvent, "eventHash" | "payload">): string =>
-  sha256([event.version, event.tenantId, String(event.sequence), event.actorRef, event.eventType,
+  sha256([event.version, ...(event.version === "audit.v2" ? [event.id] : []), event.tenantId, String(event.sequence), event.actorRef, event.eventType,
     event.subjectType, event.subjectRef, event.occurredAt.toISOString(), event.payloadHash,
     event.previousHash ?? ""].join("\u001f"));
 
 /** Append after domain mutation: the per-tenant head row MUST be the transaction's final lock. */
 export async function appendAuditBatch(database: TenantTransaction, inputs: readonly AuditEventInput[]): Promise<AuditEvent[]> {
   if (inputs.length === 0) return [];
-  const parsed = inputs.map((input) => auditEventInputV1Schema.parse(input));
-  const context = await database.$client.query<{ tenant_id: string }>(
-    "SELECT nullif(current_setting('app.tenant_id', true), '')::uuid::text AS tenant_id",
-  );
-  const tenantId = context.rows[0]?.tenant_id;
-  if (!tenantId) throw new AuditVerificationError("Missing transaction-local tenant context");
-  const head = await database.$client.query<{ sequence: string; event_hash: string }>(
-    "SELECT sequence::text, event_hash FROM app.lock_audit_head()",
-  );
-  let sequence = Number(head.rows[0]?.sequence ?? 0);
-  let previousHash: string | null = head.rows[0]?.event_hash ?? null;
-  const appended: AuditEvent[] = [];
-  for (const input of parsed) {
-    const timestamp = await database.$client.query<{ occurred_at: Date }>("SELECT clock_timestamp() AS occurred_at");
-    const occurredAt = timestamp.rows[0]!.occurred_at;
-    const payloadHash = sha256(canonicalJson(input.payload));
-    const event = { ...input, tenantId, sequence: ++sequence, occurredAt, payloadHash, previousHash };
-    const eventHash = canonicalAuditHash(event);
-    await database.$client.query(
-      `INSERT INTO app.audit_event (id, tenant_id, sequence, version, actor_ref, event_type,
-       subject_type, subject_ref, occurred_at, payload, payload_hash, previous_hash, event_hash)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,
-      [input.id, tenantId, sequence, input.version, input.actorRef, input.eventType, input.subjectType,
-        input.subjectRef, occurredAt, canonicalJson(input.payload), payloadHash, previousHash, eventHash],
-    );
-    appended.push({ ...event, eventHash });
-    previousHash = eventHash;
-  }
-  await database.$client.query("SELECT app.advance_audit_head($1, $2)", [sequence, previousHash]);
-  return appended;
+  const parsed = inputs.map((input) => auditEventInputV1Schema.strict().parse(input));
+  const result = await database.$client.query<AuditEvent>(`SELECT id, version, tenant_id AS "tenantId",
+    sequence::int, actor_ref AS "actorRef", event_type AS "eventType", subject_type AS "subjectType",
+    subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload, payload_hash AS "payloadHash",
+    previous_hash AS "previousHash", event_hash AS "eventHash" FROM app.append_audit($1::jsonb)`,
+  [JSON.stringify(parsed)]);
+  return result.rows;
 }
 
 export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: AuditCheckpoint): void {
   let previous: string | null = null;
   let expectedSequence = 1;
   for (const event of events) {
-    if (!auditEventInputV1Schema.safeParse(event).success || event.sequence !== expectedSequence ||
-        event.previousHash !== previous || sha256(canonicalJson(event.payload)) !== event.payloadHash ||
+    if (!auditStoredInputSchema.safeParse(event).success || event.sequence !== expectedSequence ||
+        event.previousHash !== previous || sha256(canonicalJson(event.payload, event.version)) !== event.payloadHash ||
         canonicalAuditHash(event) !== event.eventHash) {
       throw new AuditVerificationError(`Invalid audit chain at sequence ${event.sequence}`);
     }
+    auditEventTrust(event);
     previous = event.eventHash;
     expectedSequence += 1;
   }

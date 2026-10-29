@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +24,7 @@ class RecordedSql {
     if (sql.includes("FROM app.supplier_fact_proposal")) return rows([{ id: randomUUID(), document_type: "invoice", quantity_decimal: "10.000000", unit_price_pence: "2500", net_pence: "25000", issues: [] }]);
     if (sql.includes("SELECT count(*) n FROM app.supplier_fact_revision")) return rows([{ n: "0" }]);
     if (sql.includes("FROM app.goods_receipt")) return rows([{ revision: 1, ordered_quantity: "10.000000", order_draft_id: randomUUID(), document_id: documentId }]);
+    if (sql.includes("FROM app.append_audit(")) return rows(fakeAuditAppend(values[0] as string, tenant));
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenant }]);
     if (sql.includes("clock_timestamp() AS occurred_at")) return rows([{ occurred_at: new Date() }]);
     if (sql.includes("UNION ALL") || sql.includes("SELECT payload_hash,revision,job_id")) return rows([]);
@@ -30,7 +32,7 @@ class RecordedSql {
     throw new Error(`Unexpected SQL: ${sql}`);
   };
   pool() { return { connect: async () => ({ query: this.query, release() {} }) } as unknown as Pool; }
-  inserts(table: string) { return this.calls.filter(call => call.sql.includes(`INSERT INTO app.${table}`)); }
+  inserts(table: string) { return this.calls.filter(call => (table === "audit_event" ? call.sql.includes("FROM app.append_audit(") : call.sql.includes(`INSERT INTO app.${table}`))); }
 }
 const application = (db: RecordedSql) => {
   vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue({ context } as never);
