@@ -1,6 +1,34 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/payment-fees": {
+      "get": {
+        "operationId": "PaymentFeeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read verified synthetic receipt statements and current approval/dispute state",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentFeeController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare, approve the exact hash, or pause a synthetic receipt fee statement",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      }
+    },
     "/auth/oidc/{connectionId}/start": {
       "post": {
         "operationId": "OidcController_start",
@@ -290,6 +318,49 @@
         "summary": "Validate synthetic fee review/approval intent; posting dependency-bound",
         "tags": [
           "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3/preview": {
+      "post": {
+        "operationId": "JobImportV3Controller_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the server-selected fictional v3 import and its availability",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3": {
+      "post": {
+        "operationId": "JobImportV3Controller_adopt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      },
+      "get": {
+        "operationId": "JobImportV3Controller_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned immutable v3 imported baseline and zero-count exclusion",
+        "tags": [
+          "job-import-v3"
         ]
       }
     },
