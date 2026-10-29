@@ -3,11 +3,11 @@ import type { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "./migrate.js";
 
-const target = "0304_stored_receipt_case_allocation.sql";
+const target = "0335_stored_receipt_case_allocation.sql";
 const source = () => readFile(new URL(`../migrations/${target}`, import.meta.url), "utf8");
 
 describe("M4-8-S part 2 migration submission", () => {
-  it("submits all of 0304 in one query with bookkeeping before its final COMMIT", async () => {
+  it("submits all of 0335 in one query with bookkeeping before its final COMMIT", async () => {
     expect(MIGRATION_URLS.filter(url => url.pathname.endsWith(`/${target}`))).toHaveLength(1);
     const sent: string[] = [];
     const connection = { query: async (sql: string, values?: unknown[]) => {

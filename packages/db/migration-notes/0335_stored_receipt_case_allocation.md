@@ -231,3 +231,51 @@ ea32c619401eac70ac07ec2e16fc3729d4623a48ccf9c9bf3a4e59047409a73e.
 Conflict-marker scan, exact lane coverage and diff whitespace checks passed.
 PostgreSQL/migration execution remains in CI. Router stages the resolution,
 commits and pushes; no git-writing commands or local listeners were used here.
+
+
+## PR #383 CI repair round 4 — real facts writer and completion publication
+
+Ben authorized one additional round on 29 October. CI job 123142144375
+reported two setup errors shared by the 15 stored-receipt integration cases.
+F5 and the pending/unmatched-attestation case sent receipt-12000 and
+receipt-14640 through practice-feed-command.v1. Those keys belong to the
+existing additive practice-facts-command.v1 catalogue. The fixture now uses
+PracticeFeedRepository.factsCommand for both advancement and receipt matching
+of those two keys, preserving feed.command for receipt-960 and the shared
+persisted command revision. Deposit settlement still precedes creation of the
+later line, and all original monetary assertions remain exact.
+
+F7, #346, #368, #356, concurrency, refund/credit, forged money, replay/stale
+watermark, approval/session, audit rollback and both RED catch cases reached
+invoice issue with a reconciled run but no published completion certificate.
+The fixture now calls FinalCheckCompletionRepository.publish after reconcile
+and before either invoice is issued. The real publication trigger verifies
+source processing, result, run and lock binding. No certificate or financial
+row is inserted directly, no trigger is disabled, and no assertion is removed
+or relaxed. The existing five targeted attack tests remain unchanged.
+
+Merged main's exports and LP-0/SERIOUS-B5/entitlement expectation rows with the
+branch's own rows. LP-0's checked-billing sources/tests are unioned and main's
+expanded ENT-7 description is retained. Incoming reviewed routine metadata
+remains intact alongside the branch's changed receipt-reader/writer metadata.
+
+Renumbered 0304_stored_receipt_case_allocation to
+0335_stored_receipt_case_allocation, including its note, lane, LP-0 source
+reference, current contract and tests. Historical receipt entries above retain
+the original number. Used tools/migration-renumber.mjs's exported planner
+with the requested 0335 floor, then applied filesystem moves/reference updates.
+The CLI --write mode stages Git changes and requires a clean index, so it was
+not used in this read-only-index merge sandbox. Router stages the final rename.
+The upgrade assertion now checks predecessors against 335, preserving its
+original strict ordering invariant. SQL bytes are identical: SHA-256
+ ea32c619401eac70ac07ec2e16fc3729d4623a48ccf9c9bf3a4e59047409a73e.
+No SQL bug was found or edited; approval CASE expressions stay parenthesised.
+
+Local validation: 48 tests passed in three named DB unit/comparator files;
+22 existing practice-facts domain tests passed in one named core file. All
+Vitest runs used at most two workers. Database package and separate strict
+fixture typechecks passed. Vitest discovered the 15 receipt cases, upgrade and
+SERIOUS-B5 (17 cases); none was executed against PostgreSQL locally. Exact
+LP-0 identity union (1,394 entries, 479 routines), preservation of main's
+shared-list lines, conflict scan, exact lane payload and diff whitespace checks
+passed. PostgreSQL and migration execution remain required in GitHub CI.

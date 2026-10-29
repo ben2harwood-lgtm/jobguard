@@ -1,7 +1,7 @@
+import { EvidencePackV3HeldError } from "./evidence-pack.errors.js";
 import { PracticeAccess } from "./practice-access.js";
 import type { Pool } from "pg";
-import { EvidencePackRepository, practiceMaterialPool } from "@jobguard/db";
-import { EvidencePackV3HeldError } from "./evidence-pack.errors.js";
+import { EvidencePackRepository, EvidencePackV3Repository, practiceMaterialPool } from "@jobguard/db";
 import {
   evidencePackAttachmentCommand, evidencePackGenerationCommand, evidencePackIdV1, evidencePackInspectionQueryV1} from "./evidence-pack.contracts.js";
 
@@ -10,7 +10,7 @@ export class EvidencePackApplication {
 
   private async authorize(sessionId: string | undefined, caseId: string) {
     const auth = await new PracticeAccess(this.pool, sessionId).case(caseId);
-    return {ctx:auth.context, actorRef:`membership:${auth.membershipId}`,
+    return {ctx:auth.context, digest:auth.digest, v3:new EvidencePackV3Repository(this.pool), actorRef:`membership:${auth.membershipId}`,
       repo:new EvidencePackRepository(practiceMaterialPool(this.pool,auth.digest))};
   }
 
@@ -22,11 +22,19 @@ export class EvidencePackApplication {
       packs: await repo.list(ctx, evidencePackIdV1.parse(caseId))};
   }
 
+  async listV3(sessionId: string | undefined, caseId: string) {
+    const { ctx, digest, v3 } = await this.authorize(sessionId, caseId);
+    return { version: "evidence-pack-response.v3" as const, environment: "synthetic_demo" as const,
+      realExternalActions: 0, ...(await v3.read(ctx, caseId, digest)) };
+  }
+
   async generate(sessionId: string | undefined, caseId: string, raw: unknown) {
     const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
     const parsed = evidencePackGenerationCommand.parse(raw);
-    // No v3 artifact may fall through to the legacy runtime-writable writer.
-    if (parsed.version === "evidence-pack-command.v3") throw new EvidencePackV3HeldError();
+    if (parsed.version === "evidence-pack-command.v3") {
+      // CH-8 part 3 must bind the runtime attribution producer before activation.
+      throw new EvidencePackV3HeldError();
+    }
     const { version: _version, ...command } = parsed;
     await repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
     return this.list(sessionId, caseId);
@@ -35,22 +43,37 @@ export class EvidencePackApplication {
   async approveAttachment(sessionId: string | undefined, caseId: string, packId: string, raw: unknown) {
     const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
     const parsed = evidencePackAttachmentCommand.parse(raw);
-    if (parsed.version === "evidence-pack-attachment-approval.v3") throw new EvidencePackV3HeldError();
+    if (parsed.version === "evidence-pack-attachment-approval.v3") {
+      throw new EvidencePackV3HeldError();
+    }
     const { version: _version, ...command } = parsed;
     await repo.approveAttachment(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), command, actorRef);
     return this.list(sessionId, caseId);
   }
 
   async inspect(sessionId: string | undefined, caseId: string, packId: string, raw: unknown = {}) {
-    const { ctx, repo } = await this.authorize(sessionId, caseId);
+    const { ctx, repo, v3, digest } = await this.authorize(sessionId, caseId);
     const { scenario } = evidencePackInspectionQueryV1.parse(raw);
-    return {
+    try {
+      return {
       ...(await repo.inspect(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), scenario)),
       version: "evidence-pack-inspection.v1" as const, environment: "synthetic_demo" as const, scenario};
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "EVIDENCE_PACK_NOT_FOUND") throw error;
+      const result = await v3.inspect(ctx, caseId, digest, packId, scenario);
+      if (!result) throw error;
+      return { ...result, version: "evidence-pack-inspection.v3" as const, environment: "synthetic_demo" as const, scenario };
+    }
   }
 
   async download(sessionId: string | undefined, caseId: string, packId: string) {
-    const { ctx, repo } = await this.authorize(sessionId, caseId);
-    return repo.download(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId));
+    const { ctx, repo, v3, digest } = await this.authorize(sessionId, caseId);
+    try { return await repo.download(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId)); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== "EVIDENCE_PACK_NOT_FOUND") throw error;
+      const artifact = await v3.download(ctx, caseId, digest, packId);
+      if (!artifact) throw error;
+      return artifact;
+    }
   }
 }

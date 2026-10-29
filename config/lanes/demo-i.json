@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-i": {
+      "branches": [
+        "codex/sandbox/demo-i"
+      ],
+      "receipt": "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
+      "note": "DEMO-S / DEMO-I RED lifecycle metadata with company/member ownership across fresh sign-ins; consolidated inherited DEMO-P2 payload and archived registration. All five journey executors refuse pending J1-J5 bindings. PR #387 catch-up after CH-8 part 2 (#389): union shared catalogue expectations; migration 0313 unchanged.",
+      "allow": [
+        "apps/api/src/small-builder-demo.application.test.ts",
+        "apps/api/src/small-builder-demo.application.ts",
+        "apps/api/src/small-builder-demo.contracts.ts",
+        "archive/2026-10-28/demo-i-inherited-lanes/demo-p2.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "docs/contracts/small-builder-demo-trace-v1.md",
+        "docs/fixtures/small-builder-demo-trace-cases.json",
+        "docs/verdicts/DEMO-I/BUILDER_RECEIPT.md",
+        "docs/verdicts/DEMO-P2/BUILDER_RECEIPT.md",
+        "packages/core/src/small-builder-demo-trace.test.ts",
+        "packages/core/src/small-builder-demo-trace.ts",
+        "packages/db/migration-notes/0313_small_builder_demo_runs.md",
+        "packages/db/migrations/0313_small_builder_demo_runs.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/small-builder-demo-repository.test.ts",
+        "packages/db/src/small-builder-demo-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/lp-0-catalog.test.ts",
+        "packages/db/test/meter-persistence-fixtures.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-demo-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-demo.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

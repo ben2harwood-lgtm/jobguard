@@ -5,15 +5,15 @@
       "branches": [
         "codex/sandbox/m4-8-s-p2"
       ],
-      "receipt": "packages/db/migration-notes/0304_stored_receipt_case_allocation.md",
-      "note": "M4-8-S part 2 / PR #383 CI repair try 3: use the existing valid PNG helper and matching image/png metadata for synthetic certificate evidence; retain both SERIOUS-B5 successor additions after the main merge. No test assertions, exceptions or migration SQL changed. This lane metadata file is implicitly owned.",
+      "receipt": "packages/db/migration-notes/0335_stored_receipt_case_allocation.md",
+      "note": "M4-8-S part 2 / PR #383 CI repair round 4, authorized 29 Oct: route F5 movements through the existing facts writer, publish the real Final Check certificate before invoicing, retain both sides of shared-list conflicts, and renumber 0304 to 0335 with identical SQL bytes. This lane metadata file is implicitly owned.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/receipt-line-allocation.application.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/receipt-line-allocation-source-v1.md",
-        "packages/db/migration-notes/0304_stored_receipt_case_allocation.md",
-        "packages/db/migrations/0304_stored_receipt_case_allocation.sql",
+        "packages/db/migration-notes/0335_stored_receipt_case_allocation.md",
+        "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
         "packages/db/src/demo-seed.ts",
         "packages/db/src/index.ts",
         "packages/db/src/receipt-line-allocation-repository.ts",

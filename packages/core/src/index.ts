@@ -106,6 +106,7 @@ export * from "./contractor-entitlement-authority.js";
 
 export * from "./recovery-attribution-persistence.js";
 export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
 export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
 
@@ -116,4 +117,8 @@ export * from "./meter-lifecycle.js";
 export * from "./enterprise-dashboard-stored-billing.js";
 export * from "./subscription-plan-view.js";
 
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
+
+export * from "./small-builder-demo-lifecycle.js";
