@@ -8,7 +8,7 @@ const pence = z.number().int().min(0).max(MAX_MONEY_PENCE);
 const ref = z.object({ tenantId: uuid, id: uuid, hash }).strict();
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u);
 const provenance = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("subscription"), statement: ref, period, policyVersion: z.literal("subscription_pricing_policy_v4") }).strict(),
+  z.object({ kind: z.literal("subscription"), statement: ref, approval: ref, period, policyVersion: z.literal("subscription_pricing_policy_v4") }).strict(),
   z.object({ kind: z.literal("success_fee"), statement: ref, derivation: ref, proof: ref, approval: ref,
     finalAccountLock: ref, policyVersion: z.literal("reference_fee_policy_v3"),
     proofState: z.literal("verified"), disclosedBeforeLock: z.literal(false), builderCaptured: z.literal(false),
@@ -28,6 +28,18 @@ export const platformInvoiceRequestV1 = z.object({ version: z.literal("platform-
   kind: z.enum(["invoice", "credit_note"]), originalNumber: z.string().regex(/^SIM-PLATFORM-[1-9]\d*$/u).nullable(),
   lines: z.array(line).min(1).max(100), taxPolicy: z.literal("D02-pending-approval-example"),
 }).strict();
+/** Writer boundary: principal, source principal and provenance are never request fields.
+ * Tax is caller-supplied ONLY as a D02-pending synthetic example. */
+export const platformInvoiceIssueCommandV1 = z.object({
+  version: z.literal("platform-invoice-issue.v1"), environment: z.literal("synthetic_demo"),
+  commandId: uuid, issuerId: uuid, actorMembershipId: uuid,
+  kind: z.enum(["invoice", "credit_note"]),
+  originalNumber: z.string().regex(/^SIM-PLATFORM-[1-9]\d*$/u).nullable(),
+  lines: z.array(z.object({ id: uuid, sourceKind: z.enum(["subscription", "success_fee", "contractor_fee"]),
+    sourceId: uuid, expectedSourceHash: hash, taxPence: pence }).strict()).min(1).max(100),
+  taxPolicy: z.literal("D02-pending-approval-example"),
+}).strict();
+export type PlatformInvoiceIssueCommand = z.infer<typeof platformInvoiceIssueCommandV1>;
 export type PlatformInvoiceRequest = z.infer<typeof platformInvoiceRequestV1>;
 export type PlatformInvoiceProfile = z.infer<typeof platformInvoiceProfileV1>;
 export const PLATFORM_INVOICE_WARNING = "Simulation only — D02 tax examples pending approval; not a tax invoice or real amount due";
@@ -38,7 +50,7 @@ export type PlatformInvoiceDocument = Readonly<{
   warning: typeof PLATFORM_INVOICE_WARNING; collectionStarted: false;
 }>;
 export class PlatformInvoiceError extends Error {
-  constructor(readonly code: "INVALID_PLATFORM_INVOICE" | "PLATFORM_INVOICE_FORBIDDEN" | "PLATFORM_INVOICE_CONFLICT" | "PLATFORM_INVOICE_LIMIT" | "PLATFORM_INVOICE_LIVE_DISABLED") {
+  constructor(readonly code: "INVALID_PLATFORM_INVOICE" | "PLATFORM_INVOICE_FORBIDDEN" | "PLATFORM_INVOICE_CONFLICT" | "PLATFORM_INVOICE_LIMIT" | "PLATFORM_INVOICE_LIVE_DISABLED" | "PLATFORM_INVOICE_SOURCE_UNAVAILABLE") {
     super(code); this.name = "PlatformInvoiceError";
   }
 }
@@ -64,15 +76,15 @@ function sum(values: number[]): number {
   catch { return fail("PLATFORM_INVOICE_LIMIT"); }
 }
 function sourceKey(value: z.infer<typeof provenance>): string {
-  return value.kind === "subscription" ? `${value.kind}:${value.statement.id}` : `${value.kind}:${value.derivation.id}`;
+  return `${value.kind}:${value.statement.id}`;
 }
 function checkTenant(tenantId: string, value: unknown): void {
   if (!value || typeof value !== "object") return;
   if ("tenantId" in value && value.tenantId !== tenantId) fail("PLATFORM_INVOICE_FORBIDDEN");
   Object.values(value).forEach(child => checkTenant(tenantId, child));
 }
-/** Fixture-only issuance kernel. History MUST come from the locked durable store, never a client request.
- * References are fictional provenance, not independently verified production proof or authorisation. */
+/** Internal representation kernel, NOT the writer input boundary. Both hydrated request and history
+ * MUST come from the repository's locked storage reads. This function alone proves no source authority. */
 export function issuePlatformInvoiceFixture(profileRaw: unknown, raw: unknown, history: readonly PlatformInvoiceDocument[]) {
   const issuer = parse(platformInvoiceProfileV1, profileRaw), request = parse(platformInvoiceRequestV1, raw);
   checkTenant(issuer.tenantId, request);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { downloadPlatformInvoice, issuePlatformInvoiceFixture, platformInvoiceAccountFixture,
-  refuseLivePlatformInvoice, type PlatformInvoiceRequest, type PlatformInvoiceProfile } from "./platform-tax-invoice.js";
+  refuseLivePlatformInvoice, platformInvoiceIssueCommandV1, type PlatformInvoiceRequest, type PlatformInvoiceProfile } from "./platform-tax-invoice.js";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const tenantId = id(1), issuerId = id(2);
 const ref = (n: number) => ({ tenantId, id: id(n), hash: "a".repeat(64) });
@@ -81,7 +81,7 @@ describe("M4-10 dark platform invoices", () => {
       expect(() => issuePlatformInvoiceFixture(profile, r, [])).toThrow();
     }
     const r = request(); r.lines.push({ id: id(30), principalPence: 4900, taxPence: 980, sourcePrincipalPence: 4900,
-      provenance: { kind: "subscription", statement: ref(31), period: "2026-10", policyVersion: "subscription_pricing_policy_v4" } });
+      provenance: { kind: "subscription", statement: ref(31), approval: ref(32), period: "2026-10", policyVersion: "subscription_pricing_policy_v4" } });
     expect(() => issuePlatformInvoiceFixture(profile, r, [])).toThrow("INVALID_PLATFORM_INVOICE");
     const sub = { ...r, lines: [r.lines[1]!] }, fee = issuePlatformInvoiceFixture(profile, request(), []);
     expect(issuePlatformInvoiceFixture(profile, { ...sub, commandId: id(40) }, [fee]).number).toBe("SIM-PLATFORM-2");
@@ -96,4 +96,15 @@ describe("M4-10 dark platform invoices", () => {
       expect(() => issuePlatformInvoiceFixture(profile, bad, [])).toThrow();
     }
   });
+});
+
+it("writer commands cannot supply principal, source amounts or claimed provenance", () => {
+  const command = { version: "platform-invoice-issue.v1", environment: "synthetic_demo", commandId: id(3), issuerId,
+    actorMembershipId: id(4), kind: "invoice", originalNumber: null, taxPolicy: "D02-pending-approval-example",
+    lines: [{ id: id(5), sourceKind: "subscription", sourceId: id(6), expectedSourceHash: "a".repeat(64), taxPence: 980 }] };
+  expect(platformInvoiceIssueCommandV1.safeParse(command).success).toBe(true);
+  for (const patch of [{ principalPence: 1 }, { sourcePrincipalPence: 1 }, { provenance: request().lines[0]!.provenance }]) {
+    expect(platformInvoiceIssueCommandV1.safeParse({ ...command, lines: [{ ...command.lines[0], ...patch }] }).success).toBe(false);
+  }
+  expect(platformInvoiceIssueCommandV1.safeParse({ ...command, tenantId }).success).toBe(false);
 });
