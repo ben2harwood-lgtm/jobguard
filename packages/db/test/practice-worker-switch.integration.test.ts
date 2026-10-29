@@ -139,7 +139,7 @@ it.each(["routine", "audit", "commit"])("[PW10] injected %s failure rolls back b
    const client = await target.connect();
    return new Proxy(client, { get(connection, key) {
     if (key !== "query") { const value = Reflect.get(connection, key, connection); return typeof value === "function" ? value.bind(connection) : value; }
-    return async (sql: string, args?: unknown[]) => { if ((seam === "routine" && sql.includes("SELECT app.practice_worker_switch_")) || (seam === "audit" && sql.includes("INSERT INTO app.audit_event")) || (seam === "commit" && sql === "COMMIT")) throw new Error("PWS_INJECTED_FAILURE"); return connection.query(sql, args); };
+    return async (sql: string, args?: unknown[]) => { if ((seam === "routine" && sql.includes("SELECT app.practice_worker_switch_")) || (seam === "audit" && sql.includes("FROM app.append_audit(")) || (seam === "commit" && sql === "COMMIT")) throw new Error("PWS_INJECTED_FAILURE"); return connection.query(sql, args); };
    } });
   };
  } });
@@ -157,7 +157,7 @@ it("[PW10] no business lock is acquired after the audit append", async () => {
  const f = await company(c), observed = new ObservedPool(c.runtime, c.admin), repository = new PracticeWorkerSwitchRepository(observed.pool), mutable = await mutableTables(c.admin);
  for (const work of [() => repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative }), () => repository.switchOff(f.context, f.p, f.session, off())]) {
   const { transactions } = await observed.record(work); expect(transactions).toHaveLength(1);
-  const statements = transactions[0]!.statements, index = statements.findIndex(s => s.sql.includes("app.lock_audit_head")); expect(index).toBeGreaterThanOrEqual(0);
+  const statements = transactions[0]!.statements, index = statements.findIndex(s => s.sql.includes("FROM app.append_audit(")); expect(index).toBeGreaterThanOrEqual(0);
   const head = statements[index]!.footprint;
   for (const statement of statements.slice(index + 1)) {
    expect([...statement.footprint.advisory].every(k => head.advisory.has(k))).toBe(true);

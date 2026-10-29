@@ -468,7 +468,7 @@ describe("ENT-3b the audit event is in the same transaction", () => {
  for (const kind of ["start", "complete"] as const) it(`[B12] ${kind}: a failure at the receipt insert, the routine call, the audit insert or the commit leaves nothing written`, async () => {
   const f = await visitFixture(c), a = f.members.operative;
   const open = kind === "complete" ? await start(f, a) : undefined;
-  const fragments = ["INSERT INTO app.command_receipt", kind === "start" ? "app.ent3b_start_visit" : "app.ent3b_complete_visit", "INSERT INTO app.audit_event", "COMMIT"];
+  const fragments = ["INSERT INTO app.command_receipt", kind === "start" ? "app.ent3b_start_visit" : "app.ent3b_complete_visit", "FROM app.append_audit(", "COMMIT"];
   for (const fragment of fragments) {
    const before = await snapshot(c, f.p.tenantId), head = await auditHead(c, f.p.tenantId);
    const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
@@ -596,7 +596,7 @@ describe("ENT-3b the refusal record", () => {
    wrapped.add(client);
    const original = client.query.bind(client);
    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
-    if (String(sql).includes("INSERT INTO app.audit_event")) { reached++; throw new Error("injected failure"); }
+    if (String(sql).includes("FROM app.append_audit(")) { reached++; throw new Error("injected failure"); }
     return original(sql, params);
    }) as any);
    return client;

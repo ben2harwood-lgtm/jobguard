@@ -103,7 +103,7 @@ describe("ENT-4b immutable links", () => {
  });
  it("[DW5a] link, raw unlink and order writes roll back at receipt, fact, audit and commit failures", async () => {
   const f = await fixture(c), [a, b, d] = await extras(f), A = a!.variationId, B = b!.variationId, D = d!.variationId, first = await rawLink(f, A, B), line = await laterRevision(c, f);
-  for (const kind of ["link", "unlink", "order"]) for (const fragment of ["INSERT INTO app.command_receipt", kind === "order" ? "INSERT INTO app.extra_order_line_link" : "INSERT INTO app.extra_duplicate_link", "INSERT INTO app.audit_event", "COMMIT"]) {
+  for (const kind of ["link", "unlink", "order"]) for (const fragment of ["INSERT INTO app.command_receipt", kind === "order" ? "INSERT INTO app.extra_order_line_link" : "INSERT INTO app.extra_duplicate_link", "FROM app.append_audit(", "COMMIT"]) {
    const before = Object.fromEntries(await Promise.all(["command_receipt", "extra_duplicate_link", "extra_order_line_link", "audit_event"].map(async table => [table, (await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows[0].n])));
    // Round 1: verify the chain and actual head before/after each injected rollback (NOT RUN).
    const headBefore = await verifiedHead(f);

@@ -234,9 +234,9 @@ async function assertConcurrent() {
 }
 it("[A7] two simultaneous operators create only one hand-off", assertConcurrent);
 it("[A7] two operators demonstrably wait on the held head then serialize", async () => {
-  const blocker = await runtime.connect(); let pending: Promise<void> | undefined;
+  const blocker = await admin.connect(); let pending: Promise<void> | undefined;
   try {
-    await blocker.query("BEGIN"); await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await blocker.query("SELECT * FROM app.lock_audit_head()");
+    await blocker.query("BEGIN"); await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await blocker.query("SELECT * FROM audit_control.audit_head WHERE tenant_id=$1 FOR UPDATE", [a.tenantId]);
     pending = assertConcurrent();
     const deadline = Date.now() + 3000; let waiting: number[] = [];
     while (Date.now() < deadline) {

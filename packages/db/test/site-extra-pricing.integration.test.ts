@@ -454,7 +454,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
   it("[C15] a failure forced at each statement leaves nothing written, and the audit event is in the same transaction", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, tenant = f.p.tenantId;
     const original = ExtraRepository.prototype.raiseExtra;
-    for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "SELECT app.require_watchdog_live", "SELECT app.ent3a_require_extra_authority", "SELECT app.ent3c_record_sor_revision", "INSERT INTO app.audit_event", "COMMIT"]) {
+    for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "SELECT app.require_watchdog_live", "SELECT app.ent3a_require_extra_authority", "SELECT app.ent3c_record_sor_revision", "FROM app.append_audit(", "COMMIT"]) {
       const raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }), before = await written(c, tenant), head = await chainHead(c, tenant);
       vi.spyOn(ExtraRepository.prototype, "raiseExtra").mockImplementationOnce(async function (this: ExtraRepository, context, input, seam) {
         const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");

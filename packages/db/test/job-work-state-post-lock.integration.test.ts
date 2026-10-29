@@ -166,7 +166,7 @@ describe("r10 scripted source projections",()=>{
   const {SupplierDocumentRepository}=await import("../src/supplier-document-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,f.offer);
   await expect(new SupplierDocumentRepository(db.pool).intake(f.context,f.jobId,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId:"materials-B-invoice",channel:"picker",expectedRevision:0})).rejects.toMatchObject({code:f.offer.code,offer:f.offer});
   expect(db.calls.filter(sql=>sql.includes("ch4_locked_offer"))).toHaveLength(1);
-  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO app.supplier_document")||sql.startsWith("INSERT INTO app.audit_event"))).toBe(false);
+  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO app.supplier_document")||(sql.startsWith("INSERT INTO app.audit_event")||sql.includes("FROM app.append_audit(")))).toBe(false);
   expect(db.calls.at(-1)).toBe("ROLLBACK");
  });
  it.each([true,false])("reads a non-live linked offer only after rollback in a fresh transaction: locked=%s",async locked=>{

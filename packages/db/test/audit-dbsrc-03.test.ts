@@ -166,7 +166,7 @@ describe("dbsrc-03 audit reproductions with query doubles", () => {
     await expect(service.credit(testTenantContext(f.tenantId), creditInput(f, 3))).rejects.toThrow("INVALID_CREDIT_AMOUNT");
     expect(sql.credits).toHaveLength(0);
     expect(sql.receipts.size).toBe(0);
-    expect(sql.calls.some(call => call.includes("lock_audit_head"))).toBe(false);
+    expect(sql.calls.some(call => (call.includes("lock_audit_head") || call.includes("FROM app.append_audit(")))).toBe(false);
   });
 
   it("allows separate receipts sharing a bank reference", async () => {

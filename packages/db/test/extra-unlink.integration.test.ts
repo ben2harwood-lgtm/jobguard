@@ -333,7 +333,7 @@ describe("ENT-4c un-link command", () => {
  it("[D14] the audit event commits or rolls back with the command", async () => {
   const f = await organisation(), l = await linked(f);
   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId), async () => { throw new Error(noteCanary); }), "DATABASE_UNAVAILABLE");
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.extra_duplicate_link", "INSERT INTO app.audit_event", "UPDATE app.command_receipt", "COMMIT"]) {
+  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.extra_duplicate_link", "FROM app.append_audit(", "UPDATE app.command_receipt", "COMMIT"]) {
    await spyQueries((sql, result) => { if (sql.includes(fragment)) throw new Error(descriptionCanary); return result; }, async () => {
     await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId)), "DATABASE_UNAVAILABLE");
    });

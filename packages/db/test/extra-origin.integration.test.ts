@@ -62,7 +62,7 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[DW5a] failures at each write, seam, audit and commit leave no facts or receipt", async () => {
   const f = await fixture(c);
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "INSERT INTO app.audit_event", "COMMIT"]) {
+  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "FROM app.append_audit(", "COMMIT"]) {
    const raw = raise(f, { clientCaptureId: randomUUID() }), capture = raw.clientCaptureId as string;
    const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
    spy.mockImplementation((async () => { const client = await connect(); const original = client.query.bind(client); const querySpy = vi.spyOn(client, "query"); querySpy.mockImplementation((async (sql: any, params?: any) => { const value = await original(sql, params); if (String(sql).includes(fragment)) { if (fragment === "COMMIT") throw new Error("COMMIT injection must be before execution"); throw new Error(noteCanary); } return value; }) as any); if (fragment === "COMMIT") querySpy.mockImplementation((async (sql: any, params?: any) => { if (sql === "COMMIT") { await original("SET CONSTRAINTS ALL IMMEDIATE"); throw new Error(noteCanary); } return original(sql, params); }) as any); return client; }) as any);

@@ -210,7 +210,7 @@ describe("previous-schema writers and claimed ids", () => {
       // Prove the intended interleaving with real PostgreSQL wait information, not just a sleeping promise.
       const blocked = (await h.admin.query<{ query: string }>("SELECT query FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [oldPid])).rows;
       expect(blocked).toHaveLength(1);
-      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /lock_audit_head/u : /pg_advisory_xact_lock/u);
+      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /FROM app\.append_audit\(/u : /pg_advisory_xact_lock/u);
     } finally { resume(); await Promise.all([old, current]); }
     const outcomes = await Promise.all([old, current]);
     expect(outcomes.map(outcome => outcome.outcome).sort()).toEqual(["committed", "error"]);

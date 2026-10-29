@@ -366,12 +366,12 @@ it("audited command completeness and audit-append failure both roll back all new
   // Inject an actual SQL failure precisely at the audit append, inside the real transaction, without replacing the database.
   const failurePool=new Proxy(runtime,{get(target,key){
     if(key==="connect")return async()=>{const client=await target.connect();return new Proxy(client,{get(connection,property){
-      if(property==="query")return (sql:string,values?:unknown[])=>sql.includes("INSERT INTO app.audit_event")?connection.query("SELECT 1/0"):connection.query(sql,values);
+      if(property==="query")return (sql:string,values?:unknown[])=>sql.includes("FROM app.append_audit(")?connection.query("SELECT 1/0"):connection.query(sql,values);
       const value=Reflect.get(connection,property);return typeof value==="function"?value.bind(connection):value;
     }});};
     const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
   }});
-  // Fail the actual INSERT INTO app.audit_event; the owner has already been registered.
+  // Fail the actual app.append_audit call; the owner has already been registered.
   await expect(new PracticeFeedRepository(failurePool,"synthetic_demo").factsCommand(context,actor,digestOf(f.sessionId),f.jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:1,action:"advance",movement:"receipt-12000",step:"settled"})).rejects.toMatchObject({code:"22012"});
   expect(await rows()).toEqual(before);expect((await admin.query("SELECT row_to_json(r)::text v FROM app.audit_event r WHERE tenant_id=$1 ORDER BY sequence",[DEMO_TENANT_ID])).rows).toEqual(auditBefore);
 });
