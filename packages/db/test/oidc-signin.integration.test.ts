@@ -43,6 +43,14 @@ describe('OIDC actual adapter/local issuer and PostgreSQL authority',()=>{
   b.issuer.claims.email=a.email;await expect(b.callback(await b.start())).rejects.toMatchObject({code:'OIDC_REFUSED'});
   expect(await a.callback(s)).toHaveProperty('sessionToken');
  });
+ it('refuses another company administrator registering or linking an OIDC connection',async()=>{
+  const a=await oidcFixture(h),b=await oidcFixture(h);
+  const before=await h.admin.query('SELECT count(*)::int n FROM identity.sso_connection');
+  await expect(b.oidc.admin({version:'oidc-admin.v1',action:'connection.create',requested_tenant_id:a.principal.tenantId,connection:{...a.config,config:{...a.config.config,connectionId:randomUUID()}}},b.ordinary)).rejects.toMatchObject({code:'OIDC_REFUSED'});
+  await expect(b.oidc.start(a.connectionId,{version:'oidc-start.v1',action:'signin',linkExisting:true},b.ordinary)).rejects.toMatchObject({code:'OIDC_REFUSED'});
+  expect((await h.admin.query('SELECT count(*)::int n FROM identity.sso_connection')).rows).toEqual(before.rows);
+  expect((await h.admin.query('SELECT count(*)::int n FROM identity.oidc_request WHERE connection_id=$1',[a.connectionId])).rows[0].n).toBe(0);
+ });
  it('SSO-required retains bound session access while refusing ordinary email-code access',async()=>{
   const f=await oidcFixture(h);f.issuer.claims.email=f.email;
   const bound=await f.callback(await f.start(true));

@@ -16,7 +16,7 @@ function harness() {
  const config={version:"oidc-connection.v1",protocol:"oidc",revision:1,sessionLimitSeconds:900,config:fixtureConfig};
  const transport=issuer.transport;
  Object.defineProperty(issuer,"transport",{value:async(...args:Parameters<typeof transport>)=>{expect(held).toBe(false);trace.push(args[0].endsWith('/token')?'exchange':'discovery');return transport(...args);}});
- const repository={load:vi.fn(async()=>config),refusal:vi.fn(async()=>{}),save:vi.fn(async(_id:string,request:unknown)=>{stored=request;}),
+ const repository={load:vi.fn(async():Promise<unknown>=>config),refusal:vi.fn(async()=>{}),save:vi.fn(async(_id:string,request:unknown)=>{stored=request;}),
   claim:vi.fn(async()=>{if(claimed)throw new Error('consumed');claimed=true;trace.push('claim-committed');return {connection:config,request:stored,linkSessionId:null};}),
   fail:vi.fn(async()=>{}),transaction:vi.fn(async(work:(c:unknown)=>Promise<unknown>)=>{held=true;try{return await work({});}finally{held=false;}}),
   finish:vi.fn(async():Promise<{tenantId:string;membershipId:string}|{code:string}>=>({tenantId:fixtureConfig.tenantId,membershipId:'member'})),audit:vi.fn(async()=>{})};
@@ -39,6 +39,21 @@ describe('OIDC orchestration (repository double, not PostgreSQL evidence)',()=>{
   expect(h.repository.fail).toHaveBeenCalledOnce();expect(h.repository.finish).not.toHaveBeenCalled();
   await expect(callback(h,s)).rejects.toMatchObject({message:'OIDC_REFUSED'});
   expect(h.trace.filter(x=>x==='exchange')).toHaveLength(1);
+ });
+ it('refuses a connection loaded for another company before saving or contacting the issuer',async()=>{
+  const h=harness();
+  h.repository.load.mockResolvedValueOnce({...connection,config:{...fixtureConfig,tenantId:'10000000-0000-4000-8000-000000000001',connectionId:'20000000-0000-4000-8000-000000000002'}});
+  await expect(started(h)).rejects.toMatchObject({code:'OIDC_REFUSED'});
+  expect(h.repository.save).not.toHaveBeenCalled();expect(h.trace).toEqual([]);
+ });
+ it('refuses callback-supplied finance and commercial-manager permissions before claiming state',async()=>{
+  const h=harness(),s=await started(h);
+  await expect(h.app.callback(fixtureConfig.connectionId,{version:'oidc-callback.v1',callback:s.callback,groups:['finance','commercial_manager']},s.browser,h.app.allowedOrigin)).rejects.toMatchObject({code:'OIDC_REFUSED'});
+  expect(h.repository.claim).not.toHaveBeenCalled();expect(h.repository.finish).not.toHaveBeenCalled();
+  // Rejecting the untrusted extra fields must leave the original request usable once.
+  expect(await callback(h,s)).toHaveProperty('sessionToken');
+  await expect(callback(h,s)).rejects.toMatchObject({code:'OIDC_REFUSED'});
+  expect(h.repository.finish).toHaveBeenCalledOnce();
  });
  it('redacts commit-time authority failure',async()=>{
   const h=harness(),s=await started(h);h.repository.finish.mockRejectedValueOnce(new Error('private authority detail'));

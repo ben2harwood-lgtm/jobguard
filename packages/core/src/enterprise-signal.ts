@@ -3,15 +3,16 @@ import { instantV1 } from "./receipt-allocation.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 import { sha256 } from "./evidence-pack.js";
 import { dashboardParse, dashboardCanonical, dashboardFreeze, dashboardCompareText, EnterpriseDashboardError } from "./enterprise-dashboard.js";
-const uuid = z.string().uuid().transform(v => v.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase());
 const quantity = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,6})?$/u);
 const scaled = (s: string) => { const [whole, fraction = ""] = s.split("."); return BigInt(whole!) * 1000000n + BigInt(fraction.padEnd(6, "0")); };
 export const enterpriseSignalFactsV1 = z.object({ version: z.literal("enterprise-signal-facts.v1"),
+  billingSource: z.enum(["unconfigured", "scoped_stored_other_lines"]).prefault("unconfigured"),
   extras: z.array(z.object({ jobId: uuid, extraId: uuid, sourceId: uuid, sorVersionId: uuid.nullable(), sorCode: z.string().max(80).nullable(), linked: z.boolean(),
     withdrawal: z.object({ sourceId: uuid, at: instantV1, reason: z.string().max(40), scopeItemId: uuid.nullable() }).strict().nullable() }).strict()).max(100000),
   orderLines: z.array(z.object({ jobId: uuid, sourceId: uuid, scopeItemId: uuid, sorVersionId: uuid, sorCode: z.string().min(1).max(80),
     at: instantV1, quantity, previousQuantity: quantity.nullable(), unit: z.string().min(1).max(80), previousUnit: z.string().min(1).max(80).nullable() }).strict()).max(100000),
-  billedVariations: z.array(z.object({ jobId: uuid, sourceId: uuid, kind: z.enum(["variation", "original_order", "other"]), extraId: uuid.nullable() }).strict()).max(100000),
+  billedVariations: z.array(z.object({ jobId: uuid, sourceId: uuid, kind: z.enum(["variation", "original_order", "other"]), extraId: uuid.nullable(), sourceIds: z.array(uuid).max(10).prefault([]) }).strict()).max(100000),
   closeouts: z.array(z.object({ jobId: uuid, sourceId: uuid, operativeId: uuid, at: instantV1, answer: z.enum(["yes", "no"]).nullable() }).strict()).max(100000),
   outlierPolicy: z.object({ version: z.literal("synthetic-closeout-rule.v1"), from: instantV1, until: instantV1, minimumAnswered: z.number().int().min(1).max(100000),
     maximumNoRate: z.object({ numerator: z.number().int().min(0).max(100000), denominator: z.number().int().min(1).max(100000) }).strict(),
@@ -19,7 +20,7 @@ export const enterpriseSignalFactsV1 = z.object({ version: z.literal("enterprise
     .refine(v => v.maximumNoRate.numerator <= v.maximumNoRate.denominator && compareServerInstants(v.from, v.until) < 0).nullable(),
 }).strict();
 type Observation = { id: string; kind: "billed_variation_without_extra" | "order_matches_unlinked_extra" | "withdrawn_then_quantity_increased" | "no_closeout_observation"; jobId: string; extraIds: string[]; sourceIds: string[] };
-const method = { version: "enterprise-signal-method.v1", text: "Synthetic cited observations only: explicit unmatched billed variations; exact same-job SoR-version/code candidates for unlinked extras; already_on_order withdrawals before a same-scope, same-unit quantity increase. A no-answer comparison requires an explicit supplied synthetic window, sample and exact ratio with comparison-source identities. No observation approves, links, counts, prices, changes state, posts or sends anything. Unconfigured runtime billing and outlier sources remain held." };
+const method = { version: "enterprise-signal-method.v2", text: "Synthetic cited observations only: explicit unmatched billed variations, including possible variations from unmatched other invoice lines (classification requires human review); exact same-job SoR-version/code candidates for unlinked extras; already_on_order withdrawals before a same-scope, same-unit quantity increase. A no-answer comparison requires an explicit supplied synthetic window, sample and exact ratio with comparison-source identities. No observation approves, links, counts, prices, changes state, posts or sends anything. Stored billing facts are supplied only by the scoped adapter; unconfigured billing and outlier sources remain held." };
 /** Supplied scoped facts only. Returned observations carry no authoritative value, command, approval or execution capability. */
 export function enterpriseSignals(raw: unknown) {
   const facts = dashboardParse(enterpriseSignalFactsV1, raw);
@@ -37,10 +38,10 @@ export function enterpriseSignals(raw: unknown) {
   const observations = new Map<string, Observation>();
   const add = (kind: Observation["kind"], jobId: string, extraIds: string[], sourceIds: string[]) => {
     const content = { kind, jobId, extraIds: [...new Set(extraIds)].sort(dashboardCompareText), sourceIds: [...new Set(sourceIds)].sort(dashboardCompareText) };
-    const id = sha256(dashboardCanonical({ method: "enterprise-signal-method.v1", policy: kind === "no_closeout_observation" ? facts.outlierPolicy : null, ...content }));
+    const id = sha256(dashboardCanonical({ method: method.version, policy: kind === "no_closeout_observation" ? facts.outlierPolicy : null, ...content }));
     observations.set(id, { id, ...content });
   };
-  for (const b of facts.billedVariations) if (b.kind === "variation" && b.extraId === null) add("billed_variation_without_extra", b.jobId, [], [b.sourceId]);
+  for (const b of facts.billedVariations) if (b.kind === "variation" && b.extraId === null) add("billed_variation_without_extra", b.jobId, [], [b.sourceId, ...b.sourceIds]);
   type Line = z.infer<typeof enterpriseSignalFactsV1>["orderLines"][number];
   const bySor = new Map<string, Line[]>(), byScope = new Map<string, Line[]>();
   for (const l of facts.orderLines) for (const [map, key] of [[bySor, `${l.jobId}/${l.sorVersionId}/${l.sorCode}`], [byScope, `${l.jobId}/${l.scopeItemId}`]] as const) {
@@ -66,6 +67,8 @@ export function enterpriseSignals(raw: unknown) {
   }
   const result = { version: "enterprise-signals.v1", method: { ...method, hash: sha256(dashboardCanonical(method)) },
     inputHash: sha256(dashboardCanonical({ facts, method })), observations: [...observations.values()].sort((a, b) => dashboardCompareText(a.id, b.id)),
-    billing: { status: "held", prerequisite: "ENT-6B persisted billed-variation source" }, outliers: policy ? { status: "supplied_synthetic_policy", policy } : { status: "held", prerequisite: "versioned outlier policy" } };
+    billing: facts.billingSource === "scoped_stored_other_lines"
+      ? { status: "supplied_stored_facts", text: "Possible variations only; unmatched other lines do not prove a variation or fee entitlement." }
+      : { status: "held", prerequisite: "ENT-6B persisted billed-variation source" }, outliers: policy ? { status: "supplied_synthetic_policy", policy } : { status: "held", prerequisite: "versioned outlier policy" } };
   return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
 }

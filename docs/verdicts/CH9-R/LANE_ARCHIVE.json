@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-r": {
+      "branches": ["codex/sandbox/ch9-r"],
+      "receipt": "docs/verdicts/CH9-R/BUILDER_RECEIPT.md",
+      "note": "CH9-R build-ahead report/fixture preparation only over CH9-S. Producer bindings, storage, independent review and enablement held.",
+      "allow": [
+        "packages/core/src/value-v3-receipt.ts",
+        "packages/core/src/value-v3-receipt.test.ts",
+        "packages/core/src/value-v3-copy.test.ts",
+        "docs/fixtures/value-v3-receipt-cases.json",
+        "docs/verdicts/CH9-R/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

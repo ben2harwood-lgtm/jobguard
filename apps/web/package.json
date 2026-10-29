@@ -11,10 +11,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "next": "15.5.27",
+    "next": "15.5.28",
     "react": "19.1.9",
     "react-dom": "19.1.9",
-    "zod": "3.25.67",
+    "zod": "4.6.6",
     "@jobguard/ai": "workspace:*",
     "@jobguard/core": "workspace:*",
     "@jobguard/db": "workspace:*",
@@ -29,6 +29,6 @@
     "@types/react-dom": "19.1.6",
     "embedded-postgres": "16.10.0-beta.15",
     "typescript": "5.8.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }

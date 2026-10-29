@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { PurchaseOrderApplication } from "./purchase-order.application.js";
 import { ReadinessApplication } from "./readiness.application.js";
-import { jobMutationRegistry, watchdogCommandGuards } from "@jobguard/core";
+import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { EvidenceError, ProofCommandError, WatchdogError } from "@jobguard/db";
 import { ProofApplication, ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
@@ -342,7 +342,7 @@ describe("CH-2 command coverage and lock order", () => {
     }
     expect(found.length).toBeGreaterThan(25);
     assertClassified(found, jobMutationRegistry);
-    expect(found.sort()).toEqual(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).sort());
+    expect(found.sort()).toEqual([...new Set(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).map(key => key.replace(/#[^#]+$/u, "")))].sort());
   });
   it("new public mutations in watchdog modules cannot omit classification and the guard", async () => {
     for(const file of new Set(watchdogCommandGuards.map(entry=>entry.file))) {
@@ -379,11 +379,34 @@ describe("CH-2 command coverage and lock order", () => {
     const afterAudit = body.split("appendAuditBatch(").slice(1).join("");
     expect(afterAudit).not.toMatch(/FOR (?:UPDATE|SHARE)|pg_advisory_xact_lock/u);
   });
+  it.each(watchdogRoutineGuards)("$file $method: its checked routine $routine takes the live guard before its first write", async entry => {
+    const repository = await readFile(new URL(`packages/db/src/${entry.file}`, root), "utf8");
+    expect(repository).toContain(`SELECT ${entry.routine}(`);
+    const migrations = await readdir(new URL("packages/db/migrations/", root));
+    const sources = await Promise.all(migrations.filter(name => name.endsWith(".sql")).map(name => readFile(new URL(`packages/db/migrations/${name}`, root), "utf8")));
+    const defining = sources.filter(sql => sql.includes(`FUNCTION ${entry.routine}(`));
+    expect(defining).toHaveLength(1);
+    const sql = defining[0]!, body = sql.slice(sql.indexOf(`FUNCTION ${entry.routine}(`), sql.indexOf("END $$;", sql.indexOf(`FUNCTION ${entry.routine}(`)));
+    const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+  });
+  it("CH-4 finish/cancel retain SHARE locks and serialize facts before checking revision", async () => {
+    const sql = await readFile(new URL("packages/db/migrations/0201_job_work_state_commands.sql", root), "utf8");
+    const body = sql.slice(sql.indexOf("CREATE FUNCTION app.ch4_work_state_command("), sql.indexOf("CREATE FUNCTION app.ch4_record_work_state("));
+    expect(body).toContain("IF action IN('finish','cancel_finish') THEN\n  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;\n ELSE\n  PERFORM 1 FROM app.job WHERE tenant_id=t AND id IN(j,successor) ORDER BY id FOR UPDATE;");
+    const serializer = body.indexOf("pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,144))");
+    expect(serializer).toBeGreaterThan(-1);
+    expect(serializer).toBeLessThan(body.indexOf("IF expected<>revision"));
+    const storage = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.ch4_storage_integrity()"), sql.indexOf("CREATE FUNCTION app.ch4_require_open("));
+    expect(storage).toContain("IF NEW.kind IN('finished_on_site','finished_cancelled') THEN\n    PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR SHARE;");
+    expect(body.slice(body.indexOf("SET CONSTRAINTS"))).not.toMatch(/FOR (?:UPDATE|SHARE)|pg_advisory_xact_lock/u);
+  });
   it("documents 409 without removing earlier successful responses", async () => {
     const spec=JSON.parse(await readFile(new URL("apps/api/openapi.json",root),"utf8"));
     for(const [key,phase] of Object.entries(jobMutationRegistry)) {
       if(!key.startsWith("nest:")||phase!=="watchdog_live_only")continue;
-      const path=key.slice(5).replace(/:([A-Za-z0-9]+)/gu,"{$1}");
+      const path=key.slice(5).replace(/#[^#]+$/u, "").replace(/:([A-Za-z0-9]+)/gu,"{$1}");
       const responses=spec.paths[path]?.post?.responses;
       expect(responses,path).toBeDefined();
       expect(responses["201"],path).toBeDefined();
@@ -587,6 +610,11 @@ function replayPool(select: (sql: string) => object[] | undefined) {
     const rows = select(sql);
     if (rows) return { rows, rowCount: rows.length };
     if (/^(?:BEGIN|COMMIT|ROLLBACK|SELECT set_config|SELECT pg_advisory_xact_lock|SELECT app.require_watchdog_live)/u.test(sql)) return { rows: [], rowCount: 0 };
+    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") {
+      return { rows: [{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }], rowCount: 2 };
+    }
+    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+      sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return { rows: [], rowCount: 0 };
     if (sql.includes("UNION ALL")) return { rows: [], rowCount: 0 };
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return { rows: [{ command_id: replayCommand }], rowCount: 1 };
     throw new Error(`Unexpected replay query: ${sql}`);

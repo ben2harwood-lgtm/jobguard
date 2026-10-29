@@ -76,11 +76,11 @@ export async function seedDemo(environment: DemoEnvironment, boundary: DemoComma
  * rows; quote send, acceptance and activation use their ordinary commands.
  * Not an application endpoint; callers must select an isolated synthetic database.
  */
-export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTenantContext,name:string,acceptedNetPence:number, runtime:Pool=owner, highestSentNetPence=acceptedNetPence){
+export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTenantContext,name:string,acceptedNetPence:number, runtime:Pool=owner, highestSentNetPence=acceptedNetPence, practiceDigest:string|null=null){
  if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
  const jobId=randomUUID(),scope=randomUUID(),scopeRevision=randomUUID();
  await withTenant(owner,context,async db=>{
-  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,$3,'quoting')`,[jobId,context.tenantId,name]);
+  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,'quoting',$4::text,CASE WHEN $4::text IS NULL THEN NULL ELSE 'capture' END)`,[jobId,context.tenantId,name,practiceDigest]);
   await seedSyntheticPartyFixture(db.$client,context.tenantId,jobId);
   await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`,[scope,context.tenantId,jobId]);
   await db.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Generated fictional work','1','item',$5,$5)`,[scopeRevision,context.tenantId,jobId,scope,acceptedNetPence]);

@@ -99,6 +99,472 @@
         ]
       }
     },
+    "/jobs/{id}/success-fees": {
+      "get": {
+        "operationId": "SuccessFeeController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "jobId",
+                    "environment",
+                    "state",
+                    "dependency",
+                    "productionEnabled",
+                    "realExternalActions"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "success-fee-availability.v1"
+                      ]
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "synthetic_demo"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "dependency_bound"
+                      ]
+                    },
+                    "dependency": {
+                      "type": "string",
+                      "enum": [
+                        "accepted_attribution_source_adapter"
+                      ]
+                    },
+                    "productionEnabled": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "realExternalActions": {
+                      "type": "integer",
+                      "enum": [
+                        0
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read synthetic success-fee availability; source-backed calculation dependency-bound",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action",
+                      "reviewId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "reviewId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "503": {
+            "description": "No business effects; accepted attribution source adapter is missing"
+          }
+        },
+        "summary": "Validate synthetic fee review/approval intent; posting dependency-bound",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/value": {
+      "get": {
+        "operationId": "BusinessValueController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read business value availability; producer and billing-period bindings held",
+        "tags": [
+          "value"
+        ]
+      }
+    },
+    "/jobs/{id}/value/v3": {
+      "get": {
+        "operationId": "ValueV3Controller_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read job value v3 availability; producer bindings held",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fee-attribution": {
+      "get": {
+        "operationId": "RecoveryAttributionController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic proposed principal-only attribution history; current qualification held",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAttributionController_post",
+        "parameters": [],
+        "responses": {
+          "503": {
+            "description": "Execution held pending accepted source, authorization and audit dependencies"
+          }
+        },
+        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      }
+    },
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing": {
+      "get": {
+        "operationId": "BillingController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted immutable export artifacts, current allocation runs, quarantine history and delivery status"
+          }
+        },
+        "summary": "Read persisted synthetic contractor billing and reconciliation",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{batchId}/download": {
+      "get": {
+        "operationId": "BillingController_download",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact persisted CSV after approved fake download delivery",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{action}": {
+      "post": {
+        "operationId": "BillingController_write",
+        "parameters": [
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "export",
+                "import",
+                "approve-delivery",
+                "advance-delivery"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check": {
+      "get": {
+        "operationId": "FinalCheckController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read lock-bound synthetic final-check result",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/dispositions": {
+      "post": {
+        "operationId": "FinalCheckController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/runs": {
+      "post": {
+        "operationId": "FinalCheckController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Practice only: ask the worker to run the final check for this locked job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/disputes": {
+      "get": {
+        "operationId": "FinalCheckController_disputes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read unresolved attribution disputes for this job",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/possible-extras": {
       "get": {
         "operationId": "EnterpriseLivePromptController_list",
@@ -572,6 +1038,114 @@
         "tags": [
           "JobSource"
         ]
+      },
+      "post": {
+        "operationId": "JobSourceController_recordDiary",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "entryMode",
+                  "onSite",
+                  "text"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "job-diary-input.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "entryMode": {
+                    "type": "string",
+                    "enum": [
+                      "typed",
+                      "dictated_text"
+                    ]
+                  },
+                  "onSite": {
+                    "type": "boolean"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "job-source-intake-receipt.v1 with the saved note, exact evidence binding and the standing notice"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept new sources. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Record an off-site synthetic diary note on a live, unlocked job; on-site notes wait for MON-1 place admission",
+        "tags": [
+          "JobSource"
+        ]
       }
     },
     "/jobs/{id}/customer-messages": {
@@ -584,6 +1158,124 @@
           }
         },
         "summary": "Read synthetic customer-message sources; creation authority held",
+        "tags": [
+          "JobSource"
+        ]
+      },
+      "post": {
+        "operationId": "JobSourceController_recordMessage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "fictionalCustomer",
+                  "text"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "customer-message-input.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "fictionalCustomer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "named_fictional_customer"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "job-source-intake-receipt.v1 with the saved message, named fictional customer and actual tester"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept new sources. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Record a message from a named fictional customer, entered by the job owner, on a live, unlocked synthetic job",
         "tags": [
           "JobSource"
         ]
@@ -5151,7 +5843,51 @@
             "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
           }
         },
-        "summary": "Read immutable synthetic work facts; interval and command policies held",
+        "summary": "Read immutable synthetic work facts",
+        "tags": [
+          "JobWorkState"
+        ]
+      },
+      "post": {
+        "operationId": "JobWorkStateController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Durable first command result; replay returns the same snapshot"
+          },
+          "400": {
+            "description": "INVALID_WORK_STATE_INPUT: strict versioned action required"
+          },
+          "404": {
+            "description": "NOT_FOUND: current owner/session authority required"
+          },
+          "409": {
+            "description": "State/revision conflict or unavailable capacity admission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site"
+          }
+        },
+        "summary": "Record owner-authorized synthetic work state",
         "tags": [
           "JobWorkState"
         ]

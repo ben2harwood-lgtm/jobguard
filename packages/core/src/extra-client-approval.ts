@@ -1,9 +1,10 @@
+import { offsetDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 import { readExtraConstraint } from "./extra-approval.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 const reference = z.string().trim().min(1).max(300), hash = z.string().regex(/^[a-f0-9]{64}$/u);
-const instant = z.string().datetime({ offset: true });
-const recipient = z.string().email().refine(s => s.toLowerCase().endsWith(".invalid"));
+const instant = offsetDatetimeV1;
+const recipient = z.email({ error: "Invalid email" }).refine(s => s.toLowerCase().endsWith(".invalid"));
 const binding = { requestId: reference, recipient, packHash: hash, revisionId: reference, expiresAt: instant };
 export const extraSendConstraintV1 = z.object({ version: z.literal("extra-send-constraint.v1"), ...binding, now: instant, cancelled: z.boolean(),
   approval: z.object({ ...binding, status: z.enum(["approved", "dismissed", "rejected", "revoked", "expired", "superseded"]) }).strict().nullable() }).strict();
