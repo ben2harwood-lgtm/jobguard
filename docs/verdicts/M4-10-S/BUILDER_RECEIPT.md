@@ -292,3 +292,36 @@ real customer data or releases. Router stages the resolved files and completes
 the existing merge; git's index remains unmerged until that authorized step.
 CI database/browser checks and independent exact-head RED review remain owed.
 The catch-up does not complete the outstanding full M4-10-S plan work above.
+
+
+## 29 October 2026 — PR #394 catch-up only (RED)
+
+Resolved the two pending merge conflicts by retaining main's LP-0 additions
+and this branch's simulation-fee-statement core export. No product behaviour
+changed. LP-0 inventory, LP-0 comparator, SERIOUS-B5, contractor entitlement,
+tenancy and shadow catalogue expectations match origin/main byte-for-byte.
+All 137 main migration files match byte-for-byte, including inherited 0302;
+no migration was added or SQL edited. Both parents' core exports survive.
+
+The lane now lists exactly the five non-lane paths in the PR diff against
+origin/main; its own lane file is implicitly authorized by the existing guard.
+Removed stale workspace and LP-0 permissions because neither differs from main.
+
+Local deterministic checks, using installed package binaries directly:
+
+- In packages/core: `./node_modules/.bin/vitest run --maxWorkers=2 src/simulation-fee-statement.test.ts src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts`: 125 passed.
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/lp-0-catalog.test.ts`: 27 passed; pure comparator fixtures, not PostgreSQL proof.
+- In packages/core: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- Lane policy loading, exact branch and exact PR path assertions: passed.
+- `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs`: passed.
+- Shared-file and migration byte comparisons, tracked source conflict-marker scan,
+  core export union assertion, LP-0 JSON parsing and `git diff --check`: passed.
+
+The PATH pnpm version probe stalled and was interrupted; no install or package
+download was run. One initial lane check rejected explicit self-permission;
+removed it as the existing guard requires and reran successfully.
+No git writes, database/browser suites, live providers, customer data or release.
+The brief reports the existing RED review passed; no new independent review is
+claimed here. Router must stage resolutions and finish the merge; the read-only
+index still reports conflicts until then. Database/browser and full CI checks
+run after router push. Existing incomplete full-plan scope above is unchanged.

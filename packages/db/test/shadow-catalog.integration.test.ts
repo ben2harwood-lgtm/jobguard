@@ -103,7 +103,8 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
    .toEqual(older.map(proname=>({proname,prosecdef:true,owner:"jobguard_migration",runtime:true,grantees:["jobguard_migration","jobguard_runtime"]})));
   // Every non-trigger routine in app that each new role can execute, by catalog. Trigger functions are not callable
   // directly (checked below). Two pure arithmetic INVOKER helpers keep their default PUBLIC EXECUTE by design.
-  const explicit:Record<string,string[]>={jobguard_shadow:["begin_final_check","complete_final_check","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+  // 0306 adds exactly three worker-only evidence-pack entrypoints; emergency access is unchanged.
+  const explicit:Record<string,string[]>={jobguard_shadow:["begin_final_check","complete_evidence_pack_v3_check","complete_final_check","finish_evidence_pack_v3","prepare_evidence_pack_v3","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
   const pureHelpers=["half_even_ratio","reference_recovery_cap"];
   const callable=(await admin.query(`SELECT r.rolname AS role,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
    CROSS JOIN (VALUES ('jobguard_shadow'),('jobguard_shadow_emergency_access')) r(rolname)
