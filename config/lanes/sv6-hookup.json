@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/sv6-hookup"
       ],
-      "note": "RED SV-6 / PR #400 CI repair try 1: preserve authority-boundary rejections, record the exact owner-only resolver in catalogue and upgrade expectations, and attach rejection handlers before enterprise isolation attempts start. 0340 SQL changed only for the early fail-closed payload guard. No grants, exceptions or test assertions weakened; PostgreSQL CI and independent RED review remain required. Own lane file is implicitly permitted.",
+      "note": "RED SV-6 / PR #400 CI repair try 2: reject malformed session digests at the existing dependency-bound input gate. Original SV6-20 assertions unchanged; add malformed-digest and valid-shaped-unauthenticated attacks. 0340 SQL changes only the digest guard and comment. No grants, exceptions or access assertions widened; PostgreSQL CI and independent RED review remain required. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/recovery-attribution-value.ts",

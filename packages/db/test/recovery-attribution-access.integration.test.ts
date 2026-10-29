@@ -15,6 +15,13 @@ it("SV6-20 tenant context and composite bindings fail closed (private storage)",
  }
  const client=await f.runtime.connect();try{expect((await client.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();}finally{client.release();}
 });
+it("SV6-20 malformed session digests cannot reach the checked writer; digest shape alone grants no authority",async()=>{
+ const {p,command}=await storedAttributionFixture(f);
+ const attempt=(digest:string|null)=>asFixtureTenant(f.runtime,p.tenantId,db=>db.query("SELECT app.assess_recovery_attribution($1,$2,$3)",[p.jobId,digest,command]));
+ for(const digest of [null,"","forged","a".repeat(63),"a".repeat(65),"g".repeat(64),"A".repeat(64)])await expect(attempt(digest)).rejects.toThrow("DEPENDENCY_BOUND");
+ await expect(attempt("a".repeat(64))).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+ expect((await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE job_id=$1",[p.jobId]))).rows).toEqual([]);
+});
 it("SV6-19 runtime history refuses unowned fixture jobs without disclosing stored sources",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);
  await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]));
