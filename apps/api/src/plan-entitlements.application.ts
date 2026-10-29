@@ -4,7 +4,7 @@ import {
 } from "@jobguard/core";
 
 /**
- * Request-scoped server port; no implementation until MON-2A persists effective plans.
+ * Request-scoped server port; SubscriptionPlanEntitlementAuthority links MON-2A effective plans.
  * The adapter must resolve the persisted session, current membership and subject access
  * before invoking useFacts, and select the applicable immutable job track for job checks.
  * It must retain its transaction/locks through the callback. No cached or client facts.
@@ -15,7 +15,7 @@ export interface PlanEntitlementAuthorityPort {
 }
 const disabledEnablement = () => ({ version: "plan-entitlement-enablement.v1", environment: "synthetic_demo", enabled: [] });
 
-/** Internal server helper only. No route, default authority adapter or business executor is installed. */
+/** Internal server helper only. No route or business executor is installed. */
 export class PlanEntitlementsApplication {
   constructor(private readonly authority: PlanEntitlementAuthorityPort, private readonly readEnablement: () => unknown = disabledEnablement) {}
   check(raw: unknown): Promise<PlanEntitlementDecision> { return this.evaluate(raw, false); }

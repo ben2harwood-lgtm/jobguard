@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon8-lifecycle": {
+      "branches": [
+        "codex/sandbox/mon8-lifecycle"
+      ],
+      "note": "RED MON-8 slice 3: synthetic subscription/lifecycle link-up. CI PostgreSQL execution and independent review required.",
+      "allow": [
+        "apps/api/src/plan-entitlements.application.ts",
+        "apps/api/src/plan-entitlements.lifecycle.ts",
+        "apps/api/src/plan-entitlements.lifecycle.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/plan-entitlement-lifecycle-repository.ts",
+        "packages/db/src/plan-entitlement-lifecycle-repository.test.ts",
+        "packages/db/migrations/0404_plan_entitlement_lifecycle.sql",
+        "packages/db/migration-notes/0404_plan_entitlement_lifecycle.md",
+        "packages/db/test/plan-entitlement-lifecycle.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}
