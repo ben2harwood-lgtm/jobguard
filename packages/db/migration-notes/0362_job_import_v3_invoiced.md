@@ -18,6 +18,14 @@ source imports; the unique source/fixture key rejects a second command rather th
 creating another job. Identical replay retains the original IDs. Audit appends and
 the completed command share the writer transaction; audit locks come last.
 
+LP-2 compatibility: after the existing exact authorization checks, the writer
+creates the same private adoption permit used by main's checked v1 writer. The
+permit binds the backend, transaction, tenant, target job, exact insert shape,
+actor, processing command and approval. The unchanged job guard consumes it on
+insert; the unchanged deferred trigger rejects an unconsumed permit. No grants,
+guards or insert exceptions are widened. This repairs the SQL incompatibility
+exposed by moving this branch's migration after LP-2.
+
 The baseline constraint permits imported v3 jobs with no cap only at `invoiced`.
 It preserves the v1 branch and every historical column. The immutable aggregate
 has tenant-qualified foreign keys, FORCE RLS and SELECT-only runtime access. The

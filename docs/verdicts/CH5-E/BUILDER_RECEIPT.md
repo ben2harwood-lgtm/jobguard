@@ -861,3 +861,59 @@ Database/browser suites, final normal lane lint and all required CI remain with
 the router/GitHub CI after staging and pushing. No PostgreSQL/listener, git write,
 commit, push, provider call or release. This is builder verification, not an
 independent RED review.
+
+## Catch-up 2 continuation — CI traces 1109, 29 October 2026
+
+CH-5 / ch5-e, PR #386, RED. This continues catch-up 2, not a new repair round.
+Read the full supplied ch5-e-ci-traces-1109.txt. Entry HEAD c74daded already
+contains current main 959da0d2; the worktree was clean and had no merge conflicts.
+
+Root causes and focused fixes:
+
+- Upgrade test `CH-5 0362 preserves existing job rows...` inserted a historical
+  capped import after LP-2's 0356 guard replaced the old GUC protocol, causing
+  JOB_INSERT_PERMIT_REQUIRED at line 27. Seed that historical row before 0356,
+  then apply every remaining predecessor before taking the existing 0362 proof.
+  No predecessor is omitted. Row/type preservation, repeat migration, cap-shape
+  rejection and privilege/RLS assertions are unchanged.
+- Positive PostgreSQL test `stores v3 terms, stable scope, linked overlap...`
+  fails inside the real SQL writer with JOB_INSERT_PERMIT_REQUIRED. The same
+  failed import leaves the browser without its receipt on desktop and mobile
+  (`CH-5.spec.ts:18`), rather than proving a stale locator or expected count.
+  The SQL bug is in this branch's own new 0362 migration: it had not adopted
+  main's private LP-2 permit protocol. Under the brief's explicit SQL-bug
+  exception, add the exact insert-shape/transaction/backend-bound adoption
+  permit immediately after the existing authorization checks and before the
+  existing job insert. Reuse main's lp_job_insert_shape and permit columns;
+  bind the checked actor, command and authorization. The main guard consumes
+  the permit; no guard, grant, exception or runtime table privilege changes.
+  The existing duplicate/replay test additionally checks no permit survives.
+  No browser expectation, selector, timeout or behavior was changed.
+- LP-0's existing new-writer effect row now lists the permit table and shape
+  helper. All other catalogue rows remain intact. Updated the migration's
+  existing operational note to describe this compatibility fix.
+
+SQL exception disclosure: 0362 SQL bytes changed by one six-line additive permit
+block, because the failure is in the SQL. Removing that block reproduces entry
+HEAD exactly. 0361 is unchanged. All 147 migrations already on origin/main are
+byte-for-byte unchanged. No CASE occurs inside an IF condition in these two own
+migrations, so no parenthesization edit is applicable.
+
+Actual local checks, installed dependencies, no downloads, at most two workers:
+
+- DB Vitest `run --maxWorkers=1 test/job-import-v3.integration.test.ts -t source-only`:
+  12 passed, 3 PostgreSQL cases deselected locally, still mandatory in CI.
+- DB Vitest catalogue/comparator run (selected the two files via --exclude of
+  the upgrade file): 45 passed. Exact invocation:
+  `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts test/audit-export-privilege-comparator.test.ts test/job-import-v3-upgrade.integration.test.ts -t 'orders 0361 immediately|.' --exclude test/job-import-v3-upgrade.integration.test.ts`.
+- DB `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- `node tools/lint.mjs`: passed, including core purity, normal lane boundary
+  against current main and money arithmetic (computed imports reported only).
+- `git diff --check`: passed.
+- Read-only byte comparisons and catalogue uniqueness assertions: passed.
+
+PostgreSQL and browser suites were NOT RUN under the supplied sandbox constraint;
+CI must execute both failing DB tests and both browser projects after router push.
+No tests weakened/skipped in source, no exceptions widened, no Git writes, provider
+calls or release. Router owns commit/push and CI; independent RED review remains
+separate from these builder checks.
