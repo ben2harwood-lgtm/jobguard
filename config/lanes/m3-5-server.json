@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-5-server": {
+      "branches": ["codex/sandbox/m3-5-server"],
+      "note": "M3-5 server slice. RED, dark synthetic resumable evidence only; migration 0419.",
+      "allow": [
+        "packages/db/src/evidence.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/resumable-evidence.ts",
+        "packages/db/src/resumable-evidence.test.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/migrations/0419_resumable_evidence.sql",
+        "packages/db/migration-notes/0419_resumable_evidence.md",
+        "docs/contracts/resumable-evidence-v1.md"
+      ]
+    }
+  }
+}

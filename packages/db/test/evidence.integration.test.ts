@@ -44,3 +44,68 @@ describe("verified evidence lifecycle",()=>{
  it("gates concurrent completion, audits only identity/hash, and raises rework on invalidation",async()=>{const bytes=validPng();const upload=await begin(bytes);storage.put(upload.objectKey,"proof-v1",bytes);await service.finalize(context,{uploadId:upload.id,objectVersionId:"proof-v1",evidenceType:"completion_photo"});const command={version:"proof.complete.v1" as const,commandId:randomUUID(),actorMembershipId:MEMBER,jobId:JOB,scopeItemId:SCOPE,stage:"completion",evidenceId:upload.id,requiredEvidenceType:"completion_photo",decisionId:null};const [a,b]=await Promise.all([proof.complete(context,command),proof.complete(context,command)]);expect(a).toEqual(b);await withTenant(runtime,context,async db=>{expect((await db.$client.query("SELECT * FROM app.stage_completion")).rows).toHaveLength(1);const audit=(await db.$client.query<{payload:Record<string,unknown>}>("SELECT payload FROM app.audit_event WHERE event_type='proof.completed'")).rows[0]!;expect(JSON.stringify(audit.payload)).toContain(hash(bytes));expect(JSON.stringify(audit.payload)).not.toContain(Buffer.from(bytes).toString("base64"));});await proof.invalidate(context,{version:"proof.invalidate.v1",commandId:randomUUID(),actorMembershipId:MEMBER,evidenceId:upload.id,reasonCode:"object_revoked"});await withTenant(runtime,context,async db=>{expect((await db.$client.query("SELECT event_type FROM app.stage_review_event")).rows).toEqual([{event_type:"proof_rework_required"}]);expect((await db.$client.query("SELECT * FROM app.stage_completion")).rows).toHaveLength(1);});await withTenant(runtime,otherContext,async db=>expect((await db.$client.query("SELECT * FROM app.stage_completion")).rows).toEqual([]));});
 
 });
+
+// M3-5 server slice: real runtime/RLS, deterministic in-database transfer only.
+describe("dark resumable evidence", () => {
+ async function transfer() {
+  const { ResumableEvidenceService } = await import("../src/resumable-evidence.js");
+  const resumable = new ResumableEvidenceService(runtime, true), bytes = validPng();
+  const uploadId = randomUUID(), scope = randomUUID();
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($3,$1,$2,'confirmed')",[TENANT,JOB,scope]);
+  await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[TENANT,JOB,scope]);
+  const input = { version: "resumable-evidence.v1", uploadId, jobId: JOB, actorMembershipId: MEMBER };
+  const begun = await resumable.begin(context, { version: input.version, id: uploadId, jobId: JOB,
+   actorMembershipId: MEMBER, scopeItemId: scope, expectedSha256: hash(bytes), contentType: "image/png",
+   maximumBytes: bytes.length, deviceCapturedAt: new Date("2000-01-01"), expiresAt: new Date(Date.now()+60_000) });
+  return { ResumableEvidenceService, resumable, bytes, input, begun, scope };
+ }
+ it("persists interruption, rejects pending proof, resumes and finalizes one server-verified original", async () => {
+  const f = await transfer();
+  expect(f.begun.upload).not.toHaveProperty("uploadUrl");
+  const first = { ...f.input, offset: 0, bytes: f.bytes.subarray(0,20) };
+  await Promise.all([f.resumable.append(context,first),f.resumable.append(context,first)]);
+  await expect(service.linkAndAssertProof(context,{id:randomUUID(),evidenceId:f.input.uploadId,jobId:JOB,scopeItemId:f.scope,requiredEvidenceType:"site_photo"})).rejects.toBeInstanceOf(EvidenceError);
+  const complete = { ...f.input, commandId:randomUUID(), evidenceType:"site_photo" };
+  const stageProof = new ProofCommandService(runtime,f.resumable.storageForProof(context,f.input));
+  const proofCommand = {version:"proof.complete.v1",commandId:randomUUID(),actorMembershipId:MEMBER,
+   jobId:JOB,scopeItemId:f.scope,stage:"completion",evidenceId:f.input.uploadId,requiredEvidenceType:"site_photo",decisionId:null};
+  await expect(stageProof.complete(context,proofCommand)).rejects.toMatchObject({code:"PROOF_NOT_FINAL"});
+  await expect(f.resumable.finalize(context,complete)).rejects.toMatchObject({code:"INCOMPLETE"});
+  const resumed = new f.ResumableEvidenceService(runtime,true);
+  expect(await resumed.status(context,f.input)).toMatchObject({nextOffset:20,state:"pending"});
+  await resumed.append(context,{...f.input,offset:20,bytes:f.bytes.subarray(20)});
+  const [a,b]=await Promise.all([resumed.finalize(context,complete),resumed.finalize(context,complete)]);
+  expect(a).toEqual(b);expect(a.sha256.trim()).toBe(hash(f.bytes));
+  expect(a.object_version_id).toBe(`synthetic-${hash(f.bytes)}`);
+  expect(a.device_captured_at).toEqual(new Date("2000-01-01"));
+  expect(a.server_verified_at).toBeInstanceOf(Date);expect(a.server_received_at).not.toEqual(a.device_captured_at);
+  await expect(service.linkAndAssertProof(context,{id:randomUUID(),evidenceId:f.input.uploadId,jobId:JOB,scopeItemId:f.scope,requiredEvidenceType:"site_photo"})).resolves.toHaveProperty("evidence_id",f.input.uploadId);
+  await expect(resumed.finalize(context,{...complete,evidenceType:"other"})).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
+  await expect(resumed.append(context,first)).rejects.toMatchObject({code:"CONFLICT"});
+  await expect(stageProof.complete(context,proofCommand)).resolves.toMatchObject({state:"complete"});
+  const reversal={version:"proof.invalidate.v1",commandId:randomUUID(),actorMembershipId:MEMBER,evidenceId:f.input.uploadId,reasonCode:"object_revoked"};
+  await stageProof.invalidate(context,reversal);await stageProof.invalidate(context,reversal);
+  // Finalize replay cannot undo invalidation and authorize a new completion.
+  await resumed.finalize(context,complete);
+  await expect(stageProof.complete(context,{...proofCommand,commandId:randomUUID()})).rejects.toMatchObject({code:"PROOF_NOT_FINAL"});
+ });
+ it("refuses tenant/job substitution and changed replay bytes; chunks enforce real RLS and grants",async()=>{
+  const f=await transfer();
+  await f.resumable.append(context,{...f.input,offset:0,bytes:f.bytes});
+  await expect(f.resumable.append(context,{...f.input,offset:0,bytes:new Uint8Array([9])})).rejects.toMatchObject({code:"CONFLICT"});
+  await expect(f.resumable.status(otherContext,f.input)).rejects.toMatchObject({code:"NOT_FOUND"});
+  await expect(f.resumable.status(context,{...f.input,jobId:randomUUID()})).rejects.toMatchObject({code:"NOT_FOUND"});
+  await withTenant(runtime,otherContext,async db=>{
+   expect((await db.$client.query("SELECT * FROM app.synthetic_evidence_chunk")).rows).toEqual([]);
+  });
+  await expect(withTenant(runtime,otherContext,db=>db.$client.query("INSERT INTO app.synthetic_evidence_chunk VALUES($1,$2,0,$3)",[TENANT,f.input.uploadId,Buffer.from([1])]))).rejects.toMatchObject({code:"42501"});
+  await expect(withTenant(runtime,context,db=>db.$client.query("UPDATE app.synthetic_evidence_chunk SET bytes=$1",[Buffer.from([1])]))).rejects.toMatchObject({code:"42501"});
+  const catalog=(await admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.synthetic_evidence_chunk'::regclass")).rows[0];
+  expect(catalog).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:"jobguard_migration"});
+ });
+ it("rechecks revoked membership before exposing transfer state",async()=>{
+  const f=await transfer(), revoked=randomUUID();
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at) VALUES($1,$2,'76000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000001','owner',clock_timestamp())",[revoked,TENANT]);
+  await expect(f.resumable.status(context,{...f.input,actorMembershipId:revoked})).rejects.toMatchObject({code:"NOT_FOUND"});
+ });
+});
