@@ -153,11 +153,11 @@ async function enterpriseReconciliationAdditions(before: Awaited<ReturnType<type
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
 
-// ENT-7c (0298): only the fee book's two tables, their indexes, policies and three routines.
+// ENT-7c (0298/0337): only the fee book's two tables, their current indexes, policies and three routines.
 async function enterprisePostingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["platform_enterprise_fee", "platform_enterprise_fee_line"];
  const indexNames = ["platform_enterprise_fee_pkey", "platform_enterprise_fee_line_pkey",
-  "platform_enterprise_fee_tenant_id_statement_id_agreement_ve_key"];
+  "enterprise_fee_section_accrual", "enterprise_fee_section_compensation"];
  const routineIdentities = [
   ["ef_posted_net", "t uuid, p_agreement uuid"],
   ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid"],
