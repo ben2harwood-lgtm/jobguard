@@ -3,15 +3,16 @@ BEGIN;
 CREATE TABLE app.recovery_billability_command (
  tenant_id uuid NOT NULL, command_id uuid NOT NULL, job_id uuid NOT NULL, case_id uuid NOT NULL,
  actor_membership_id uuid NOT NULL, requester_membership_id uuid NOT NULL,
+ actor_identity_user_id uuid NOT NULL, requester_identity_user_id uuid NOT NULL,
  action text NOT NULL CHECK(action IN('review','approve')), review_command_id uuid,
  payload jsonb NOT NULL, result jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  PRIMARY KEY(tenant_id,command_id), UNIQUE(tenant_id,job_id,case_id,command_id),
  FOREIGN KEY(tenant_id,job_id,case_id) REFERENCES app.recovery_case(tenant_id,job_id,id),
- FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id),
- FOREIGN KEY(tenant_id,requester_membership_id) REFERENCES app.membership(tenant_id,id),
+ FOREIGN KEY(tenant_id,actor_membership_id,actor_identity_user_id) REFERENCES app.membership(tenant_id,id,identity_user_id),
+ FOREIGN KEY(tenant_id,requester_membership_id,requester_identity_user_id) REFERENCES app.membership(tenant_id,id,identity_user_id),
  FOREIGN KEY(tenant_id,job_id,case_id,review_command_id) REFERENCES app.recovery_billability_command(tenant_id,job_id,case_id,command_id),
- CHECK((action='review' AND review_command_id IS NULL AND actor_membership_id=requester_membership_id)
- OR (action='approve' AND review_command_id IS NOT NULL AND actor_membership_id<>requester_membership_id))
+ CHECK((action='review' AND review_command_id IS NULL AND actor_membership_id=requester_membership_id AND actor_identity_user_id=requester_identity_user_id)
+ OR (action='approve' AND review_command_id IS NOT NULL AND actor_membership_id<>requester_membership_id AND actor_identity_user_id<>requester_identity_user_id))
 );
 ALTER TABLE app.recovery_billability_command OWNER TO jobguard_migration;
 ALTER TABLE app.recovery_billability_command ENABLE ROW LEVEL SECURITY;
@@ -66,7 +67,7 @@ CREATE FUNCTION app.recovery_billability(j uuid,digest text,p jsonb,document jso
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a record; authority jsonb;
  c uuid; w uuid; l uuid; prior app.recovery_billability_command; reviewed app.recovery_billability_command;
- s jsonb; cmd jsonb; expected jsonb; requester uuid; principal numeric;
+ s jsonb; cmd jsonb; expected jsonb; requester uuid; requester_person uuid; principal numeric;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_runtime','USAGE')
  THEN RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -78,9 +79,14 @@ BEGIN
  IF p->>'action'='review' THEN
   SELECT * INTO a FROM app.authenticate_practice_session(digest,t);
  ELSE
-  SELECT m.tenant_id,m.id membership_id,m.identity_user_id INTO a FROM identity.session x JOIN app.membership m ON m.identity_user_id=x.user_id
+  -- A session identifies a person, not a membership. Ambiguity fails closed.
+  BEGIN
+  SELECT m.tenant_id,m.id membership_id,m.identity_user_id INTO STRICT a FROM identity.session x JOIN app.membership m ON m.identity_user_id=x.user_id
   WHERE x.token_digest=digest AND x.environment='synthetic_demo' AND x.revoked_at IS NULL AND x.expires_at>clock_timestamp()
   AND m.tenant_id=t AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp());
+  EXCEPTION WHEN no_data_found OR too_many_rows THEN
+   RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='42501';
+  END;
  END IF;
  IF NOT FOUND THEN RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='42501'; END IF;
  -- No hidden source lookup until an authenticated owner has a locked practice job.
@@ -99,13 +105,14 @@ BEGIN
   PERFORM 1 FROM identity.session WHERE token_digest=digest FOR SHARE;
  END IF;
  PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=a.membership_id FOR SHARE;
- IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=a.membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=a.membership_id AND m.identity_user_id=a.identity_user_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
  OR (p->>'action'='review' AND NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(digest,t)))
+ OR (p->>'action'='approve' AND (SELECT count(*) FROM app.membership m WHERE m.tenant_id=t AND m.identity_user_id=a.identity_user_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))<>1)
  OR (p->>'action'='approve' AND NOT EXISTS(SELECT 1 FROM identity.session x WHERE x.token_digest=digest AND x.user_id=a.identity_user_id AND x.environment='synthetic_demo' AND x.revoked_at IS NULL AND x.expires_at>clock_timestamp()))
  THEN RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT * INTO prior FROM app.recovery_billability_command WHERE tenant_id=t AND command_id=(p->>'commandId')::uuid;
  IF FOUND THEN
-  IF prior.job_id<>j OR prior.actor_membership_id<>a.membership_id OR prior.payload<>p
+  IF prior.job_id<>j OR prior.actor_membership_id<>a.membership_id OR prior.actor_identity_user_id<>a.identity_user_id OR prior.payload<>p
   THEN RAISE EXCEPTION 'BILLABILITY_REPLAY_CONFLICT' USING ERRCODE='23514'; END IF;
   RETURN jsonb_build_object('replay',prior.result);
  END IF;
@@ -119,7 +126,7 @@ BEGIN
   OR coalesce(p->>'claimedEligiblePrincipalPence','') !~ '^(0|[1-9][0-9]*)$'
   THEN RAISE EXCEPTION 'INVALID_BILLABILITY_INPUT' USING ERRCODE='23514'; END IF;
   IF (p->>'claimedEligiblePrincipalPence')::numeric>1000000000000 THEN RAISE EXCEPTION 'INVALID_BILLABILITY_INPUT' USING ERRCODE='23514'; END IF;
-  requester:=a.membership_id;
+  requester:=a.membership_id; requester_person:=a.identity_user_id;
   cmd:=jsonb_build_object('version','recovery-billability-review-command.v1','commandId',p->'commandId','expected',s->'binding','claimedEligiblePrincipalPence',p->'claimedEligiblePrincipalPence','reasons',trim(p->>'reasons'));
  ELSE
   IF p ?| ARRAY['claimedEligiblePrincipalPence','reasons'] OR NOT(p ? 'reviewCommandId')
@@ -127,10 +134,10 @@ BEGIN
   SELECT * INTO reviewed FROM app.recovery_billability_command WHERE tenant_id=t AND job_id=j AND case_id=c AND command_id=(p->>'reviewCommandId')::uuid AND action='review';
   IF NOT FOUND OR reviewed.payload->>'workId' IS DISTINCT FROM w::text OR reviewed.payload->>'lineId' IS DISTINCT FROM l::text
   THEN RAISE EXCEPTION 'BILLABILITY_STALE' USING ERRCODE='23514'; END IF;
-  requester:=reviewed.requester_membership_id;
-  IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=requester AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
+  requester:=reviewed.requester_membership_id; requester_person:=reviewed.requester_identity_user_id;
+  IF requester=a.membership_id OR requester_person=a.identity_user_id THEN RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='23514'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=requester AND m.identity_user_id=requester_person AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()))
   THEN RAISE EXCEPTION 'BILLABILITY_STALE' USING ERRCODE='40001'; END IF;
-  IF requester=a.membership_id THEN RAISE EXCEPTION 'BILLABILITY_FORBIDDEN' USING ERRCODE='23514'; END IF;
   IF reviewed.result->'snapshot'<>s THEN RAISE EXCEPTION 'BILLABILITY_STALE' USING ERRCODE='40001'; END IF;
   principal:=(reviewed.result->'command'->>'claimedEligiblePrincipalPence')::numeric;
   IF reviewed.result->'assessment'->>'classification' IS DISTINCT FROM 'eligible_for_review'
@@ -154,8 +161,8 @@ BEGIN
   expected:=jsonb_build_object('version','recovery-billability-approval.v1','command',cmd,'review',reviewed.result,'approvedBy',authority,'productionEnabled',false);
  END IF;
  IF document IS DISTINCT FROM expected THEN RAISE EXCEPTION 'INVALID_BILLABILITY_INPUT' USING ERRCODE='23514'; END IF;
- INSERT INTO app.recovery_billability_command(tenant_id,command_id,job_id,case_id,actor_membership_id,requester_membership_id,action,review_command_id,payload,result)
- VALUES(t,(p->>'commandId')::uuid,j,c,a.membership_id,requester,p->>'action',(p->>'reviewCommandId')::uuid,p,document);
+ INSERT INTO app.recovery_billability_command(tenant_id,command_id,job_id,case_id,actor_membership_id,requester_membership_id,actor_identity_user_id,requester_identity_user_id,action,review_command_id,payload,result)
+ VALUES(t,(p->>'commandId')::uuid,j,c,a.membership_id,requester,a.identity_user_id,requester_person,p->>'action',(p->>'reviewCommandId')::uuid,p,document);
  -- References only. Reasons and hidden attribution facts never enter audit.
  PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||a.membership_id::text,j,'recovery.billability.'||(p->>'action'),
  jsonb_build_object('commandId',p->>'commandId','caseId',c,'sourceHash',s->'binding'->>'evidenceHash'));

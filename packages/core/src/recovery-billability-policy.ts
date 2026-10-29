@@ -141,7 +141,7 @@ export function approveBillability(raw: unknown, review: unknown, current: unkno
     || command.reviewCommandId !== r.command.commandId
     || !same(r.assessment, evaluateBillabilityPolicy(s)))
     throw new RecoveryBillabilityError("BILLABILITY_STALE");
-  if (r.reviewer.membershipId === reviewer.membershipId) throw new RecoveryBillabilityError("BILLABILITY_FORBIDDEN");
+  if (r.reviewer.membershipId === reviewer.membershipId || r.reviewer.identityUserId === reviewer.identityUserId) throw new RecoveryBillabilityError("BILLABILITY_FORBIDDEN");
   const p = r.command.claimedEligiblePrincipalPence;
   const principal = s.facts ? parseExactPence(createEligibilityFacts(s.facts).principalNet) : { numerator: 0n, denominator: 1n };
   if (evaluateBillabilityPolicy(s).classification !== "eligible_for_review" || p === 0

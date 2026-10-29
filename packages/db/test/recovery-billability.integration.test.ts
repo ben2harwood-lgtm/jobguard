@@ -68,6 +68,32 @@ it("approver = requester refused in database, including a different session for 
   const { x, command } = await ready(); await send(x, command); const same = await ownerSession(x, true);
   await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]))).rejects.toThrow("BILLABILITY_FORBIDDEN");
 });
+it("the same person with two owner memberships cannot approve their own review in the database", async () => {
+  const { x, command } = await ready(); await send(x, command);
+  const same = await ownerSession(x, true), secondMembership = randomUUID();
+  await finalCheckTenant(f.admin, x.context.tenantId, async db => {
+    const account = (await db.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, x.actor.membershipId])).rows[0].account_id;
+    await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [secondMembership, x.context.tenantId, account, x.actor.identityUserId]);
+  });
+  // The session person matches two active owners: never choose either arbitrarily.
+  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]))).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  // With only the second membership active, resolution is unambiguous but the
+  // stored requester person must still forbid approval. The transaction rolls back.
+  await expect(finalCheckTenant(f.admin, x.context.tenantId, async db => {
+    await db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, x.actor.membershipId]);
+    await db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]);
+  })).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  // Even bypassing the command routine cannot persist same-person approval
+  // under another membership: the identity-bound foreign keys and CHECK apply.
+  await expect(finalCheckTenant(f.admin, x.context.tenantId, db => db.query(`
+    INSERT INTO app.recovery_billability_command(tenant_id,command_id,job_id,case_id,
+      actor_membership_id,requester_membership_id,actor_identity_user_id,requester_identity_user_id,
+      action,review_command_id,payload,result)
+    SELECT tenant_id,$3,job_id,case_id,$4,requester_membership_id,
+      requester_identity_user_id,requester_identity_user_id,'approve',command_id,payload,result
+    FROM app.recovery_billability_command WHERE tenant_id=$1 AND command_id=$2`,
+    [x.context.tenantId, command.commandId, randomUUID(), secondMembership]))).rejects.toThrow("check constraint");
+});
 it("audit failure rolls back eligibility and command; successful retry records one audit", async () => {
   const { x, command } = await ready();
   await f.admin.query(`CREATE FUNCTION app.m42_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='recovery.billability.review' THEN RAISE EXCEPTION 'M42_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;

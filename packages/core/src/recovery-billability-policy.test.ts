@@ -53,6 +53,11 @@ function cannotApprove(current: unknown, command = reviewCommand()) {
   expect(() => approveBillability(approvalCommand(), r, current, approver)).toThrow("BILLABILITY_NOT_APPROVABLE");
 }
 describe("M4-2 DARK D03 v3 billability review", () => {
+  it("the same person with two owner memberships cannot approve their own review", () => {
+    const s = snapshot(), r = reviewBillability(reviewCommand(), s, authority);
+    const secondMembership = { ...authority, membershipId: id(61) };
+    expect(() => approveBillability(approvalCommand(), r, s, secondMembership)).toThrow("BILLABILITY_FORBIDDEN");
+  });
   it("approver = requester refused", () => {
     const s = snapshot(), r = reviewBillability(reviewCommand(), s, authority);
     expect(() => approveBillability(approvalCommand(), r, s, authority)).toThrow("BILLABILITY_FORBIDDEN");
