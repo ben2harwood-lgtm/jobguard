@@ -313,3 +313,42 @@ PostgreSQL cannot start here. The full installed-function SB-02 check and both b
 must rerun in CI; no locally executed PostgreSQL/browser pass is claimed. The independent Claude
 RED review remains against the exact resulting head. No assertion was weakened or skipped and
 no exception added. No commit, push, merge, release, provider action or real-data use occurred.
+
+
+## PR #408 current-main catch-up — 29 October 2026, 15:36 run
+
+RED CH-8 part 3 catch-up only. The router had already started merging origin/main
+72226d28 into reviewed branch head 3b9226ca. Resolved the sole workspace-shell conflict
+by retaining main's first-job trial link and this branch's RecoveryCases panel in the
+non-capture workspace. No new behavior, test assertion or expectation was introduced.
+
+The LP-0 effective privilege inventory, SERIOUS-B5 upgrade expectations, contractor
+entitlement upgrade expectations and tenancy expectations match main byte for byte.
+All main lane files and all main migrations match main byte for byte; inherited
+migration copies consequently drop out of the PR diff. The downstream LP contract is
+untouched and matches main. The latest main definitions of all four routines replaced
+by 0375 remain in 0306; no newer routine body is overwritten. Migration 0375 remains
+byte-identical to HEAD, SHA-256:
+8a821a400e115f8ee1ff9ca4127d6671544e75f00b4000afbfe94c2ade105036.
+
+Validation executed using installed local executables, at most two concurrent workers:
+
+- API Vitest --maxWorkers=1: evidence-pack-v3 application, controller and worker;
+  3 named files, 25 tests passed.
+- Web Vitest --maxWorkers=1: workspace-shell-ch8, recovery-case-requests and
+  workspace-lifecycle; 3 named files, 94 tests passed. Total: 119 tests passed.
+- TypeScript builds: core, db, API and AI passed; web --noEmit typecheck passed.
+- OpenAPI --check using node --import tsx in apps/api passed.
+- Core purity, money arithmetic and commercial boundary checks passed. Core purity
+  retains its existing computed-import advisories.
+- Final filesystem lane policy exactly covers all 20 PR paths; migration ordering
+  passes against origin/main. git diff --check and git diff --check origin/main pass.
+- An initial pnpm invocation stalled and was interrupted; installed .bin executables
+  were used instead. Initial guessed guard filenames were absent; the repository's
+  actual *-lint.mjs guard entrypoints above were then run successfully.
+
+Ready for the router to stage the resolved workspace and receipt, complete the pending
+merge and push. The index still reports workspace-shell unmerged because .git is
+read-only; no Git-writing command was run. PostgreSQL and browser suites remain for
+GitHub CI, along with all required checks and the loop owner's exact-head RED handling.
+No commit, push, PR creation, merge, release, provider action or real-data use occurred.
