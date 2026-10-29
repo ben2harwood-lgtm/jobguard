@@ -7,6 +7,7 @@
       ],
       "note": "LP-3 RED dark activation/acceptance slice on LP-2. Exact changed paths below; this lane file is implicitly permitted. Router owns commit, push, NOPR handoff and RED review.",
       "allow": [
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/lp-0-effective-privileges-v1.md",
         "docs/contracts/lp-downstream-effects-v1.md",
