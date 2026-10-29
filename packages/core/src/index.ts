@@ -125,3 +125,4 @@ export * from "./evidence-pack-v3.js";
 export * from "./evidence-pack-v3-assembly.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./value-source-receipt.js";

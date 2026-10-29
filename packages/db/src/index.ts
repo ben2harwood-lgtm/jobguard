@@ -146,3 +146,4 @@ export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
 export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./value-business-reader.js";

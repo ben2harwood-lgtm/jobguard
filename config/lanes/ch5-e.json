@@ -6,7 +6,7 @@
         "codex/sandbox/ch5-e"
       ],
       "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
-      "note": "CH-5 combined payload; PR #386 RED CI round 4 authorized 29 Oct. Preserve merged main behavior and exact catalogue unions; register import route/command phases, forward original provenance scope, scope browser alert to main, and move migrations 0323/0324 to reserved 0349/0350 with unchanged SQL bytes. Catch-up for PR #386: derive the 0349 upgrade predecessor from existing migration filenames; preserve both merged-main catalogue entries and 0349/0350 SQL bytes.",
+      "note": "CH-5 combined payload; PR #386 RED CI round 4 authorized 29 Oct. Preserve merged main behavior and exact catalogue unions; register import route/command phases, forward original provenance scope, scope browser alert to main, and move migrations 0323/0324 to reserved 0349/0350 with unchanged SQL bytes. Catch-up for PR #386: derive the 0349 upgrade predecessor from existing migration filenames; preserve both merged-main catalogue entries and 0349/0350 SQL bytes. Catch-up 2: merge main through 0358; renumber CH-5 to reserved 0361/0362 with identical SQL bytes and union shared expectations.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
@@ -36,10 +36,10 @@
         "packages/core/src/imported-baseline-sources.test.ts",
         "packages/core/src/imported-baseline-sources.ts",
         "packages/core/src/index.ts",
-        "packages/db/migration-notes/0349_job_import_v3.md",
-        "packages/db/migration-notes/0350_job_import_v3_invoiced.md",
-        "packages/db/migrations/0349_job_import_v3.sql",
-        "packages/db/migrations/0350_job_import_v3_invoiced.sql",
+        "packages/db/migration-notes/0361_job_import_v3.md",
+        "packages/db/migration-notes/0362_job_import_v3_invoiced.md",
+        "packages/db/migrations/0361_job_import_v3.sql",
+        "packages/db/migrations/0362_job_import_v3_invoiced.sql",
         "packages/db/src/imported-baseline-sources.ts",
         "packages/db/src/imported-evidence-provenance-repository.ts",
         "packages/db/src/imported-observation-reader.ts",

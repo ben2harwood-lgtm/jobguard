@@ -7,8 +7,8 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
 const signature = "app.adopt_in_flight_job_v3(uuid,uuid,text,uuid,uuid,jsonb)";
-it("orders 0349 immediately after the highest existing predecessor migration", async () => {
-  const own = "0349_job_import_v3.sql";
+it("orders 0361 immediately after the highest existing predecessor migration", async () => {
+  const own = "0361_job_import_v3.sql";
   const predecessors = (await readdir(new URL("../migrations/", import.meta.url)))
     .filter(name => /^\d{4}_[a-z0-9_]+\.sql$/u.test(name) && name.slice(0, 4) < own.slice(0, 4))
     .sort();
@@ -17,12 +17,12 @@ it("orders 0349 immediately after the highest existing predecessor migration", a
   expect(predecessors.length).toBeGreaterThan(0);
   expect(MIGRATION_URLS[index - 1]?.pathname.split("/").at(-1)).toBe(predecessors.at(-1));
 });
-describe("CH5-P own 0349 upgrade, no adoption persistence claimed — CI only", () => {
+describe("CH5-P own 0361 upgrade, no adoption persistence claimed — CI only", () => {
   let f: WorkFixture;
   beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
   afterAll(async () => { await closeWorkFixture(f); });
   it("applies alone after actual predecessor, preserves rows/types/security and permits successors twice", async () => {
-    const own = "0349_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
+    const own = "0361_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
     expect(index).toBeGreaterThan(0);
     await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for (const url of MIGRATION_URLS.slice(0, index)) {

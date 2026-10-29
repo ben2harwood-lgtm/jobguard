@@ -402,8 +402,8 @@ verification or independent RED review.
 
 ## Renumber-only catch-up for PR #386 — 28 October 2026
 
-Renamed 0224_job_import_v3 to 0349_job_import_v3 and
-0312_job_import_v3_invoiced to 0350_job_import_v3_invoiced, preserving the
+Renamed 0224_job_import_v3 to 0361_job_import_v3 and
+0312_job_import_v3_invoiced to 0362_job_import_v3_invoiced, preserving the
 private-refusal-before-invoiced-writer order and both SQL files byte for byte.
 Used the exported `planRenumber` from `tools/migration-renumber.mjs` with the
 reserved 0323/0324 range; applied filesystem moves because its CLI write mode
@@ -806,3 +806,58 @@ PostgreSQL/browser suites and full required checks remain GitHub CI duties under
 the issued sandbox constraint. No database/listener started; no git write,
 commit, push, provider call or release performed. This is builder validation,
 not a new independent review. Router owns commit/push and CI/review disposition.
+
+## PR #386 catch-up 2 — 29 October 2026
+
+CH-5 / ch5-e, RED. Resolved the router-started merge of current main
+`7eef37d694d98e95eb76baae95169e089e3b98e5` (through migration 0358)
+into entry HEAD `db63aa538dbabfc965a894ae871937d05e72a2e6`.
+The local `main` ref is older; `origin/main` and MERGE_HEAD identify the incoming
+main used here. Git metadata remains untouched; the router must stage the resolved
+files and finalize the merge commit.
+
+Resolved LP-0 with main's exact newer legacy-adoption definitions, including the
+job-insert permit dependency and withdrawn legacy execution, plus the CH-5
+entries. Preserved every main catalogue field/list member; group sources/tests
+retain the union. Entitlement retains both job_import_v3 and lp_job_insert_permit.
+SERIOUS-B5, privilege and tenancy expectations keep main plus the existing CH-5
+additions. No routine was re-created or behavior changed.
+
+Used the exported planRenumber from tools/migration-renumber.mjs with reserved
+ceiling 0360 to move 0349 -> 0361 and 0350 -> 0362. Its --write CLI requires a
+clean worktree and writes git metadata, so the filesystem-only adapter used its
+planner and move/stem-rewrite approach, leaving staging to the router. SQL bytes
+are unchanged: 0361 SHA-256
+f2e6cc28139d25adfcd7279ffb8aad965d05ad615823ab96beed5e5495a4f932;
+0362 SHA-256 ec760547c2e313dbbe4ed65a7f5fe834cf55f69ed8240af06ef8be7fb8295798.
+All 147 migrations already on origin/main match its bytes exactly. Active
+upgrade-test labels, migration-note headings, catalogue sources and lane paths
+follow 0361/0362; historical receipt prose retains its original numbers.
+
+Actual local checks (installed dependencies; no downloads; at most two workers):
+
+- node --check tools/migration-renumber.mjs: passed.
+- DB Vitest --maxWorkers=1 test/lp-0-catalog.test.ts
+  test/audit-export-privilege-comparator.test.ts: 45 passed.
+- DB Vitest --maxWorkers=1 test/job-import-v3-upgrade.integration.test.ts
+  -t 'orders 0361 immediately': 1 passed, PostgreSQL case deselected.
+- DB tsc -p tsconfig.json --noEmit: passed.
+- git diff --check: passed.
+- Read-only structured comparison: all main LP-0 values retained, with only
+  additive CH-5 list entries; no duplicate catalogue identities.
+- Exported lanePathAllowed and migrationOrderViolations against origin/main and
+  the actual working-tree paths: passed. Ordinary node tools/lint.mjs passes
+  core purity but its lane step fails on the still-pending merge/index: it sees
+  incoming main paths and removed old migration names against pre-merge HEAD.
+  The lane register was not widened to absorb main's files. Router must finalize
+  the merge and rerun the normal lane check.
+- node --test --test-concurrency=1 tools/lp-downstream-inventory.test.mjs:
+  2 passed, 3 failed for LP-0-generated document drift. A temporary comparison
+  using origin/main's generator/catalogue/document confirms main already drifts;
+  CH-5 adds only its three LP-0-derived object rows. Left generator/document/tests
+  unchanged as explicitly instructed; the main fix is expected separately.
+
+Database/browser suites, final normal lane lint and all required CI remain with
+the router/GitHub CI after staging and pushing. No PostgreSQL/listener, git write,
+commit, push, provider call or release. This is builder verification, not an
+independent RED review.
