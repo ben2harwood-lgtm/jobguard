@@ -156,7 +156,7 @@ and source preparation do not activate runtime creation. v1 behaviour is preserv
 
 ## CH-8 part 3 activation candidate
 
-After 0327, authenticated synthetic owners can queue v3 generation and exact-hash approval from the
+After 0343, authenticated synthetic owners can queue v3 generation and exact-hash approval from the
 existing lock/reveal pack panel. The existing worker discovers identifier-only requests and builds
 from current private material. The synthetic database/session/track/terms checks still apply.
 The older preparation-only APIs above retain their held compatibility behavior.

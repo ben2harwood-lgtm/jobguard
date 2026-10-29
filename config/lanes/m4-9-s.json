@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-s": {
+      "branches": [
+        "codex/sandbox/m4-9-s"
+      ],
+      "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+      "note": "RED M4-9-S / PR #380 catch-up only after #376 MON-1 day ledger 0300 and #384 ENT-9 dashboards. Preserve both sides of shared expectation lists and exports. Migration 0302 SQL bytes unchanged; no new behaviour. Prior RED pass reported by router; database/browser checks remain GitHub CI work.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/success-fee.application.test.ts",
+        "apps/api/src/success-fee.application.ts",
+        "apps/api/src/success-fee.contracts.ts",
+        "apps/api/src/success-fee.controller.ts",
+        "apps/api/src/success-fee.http.test.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/success-fees/route.test.ts",
+        "apps/web/app/api/jobs/[id]/success-fees/route.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/success-fee-posting-v3.md",
+        "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/success-fee-posting-fixtures.test.ts",
+        "packages/core/src/success-fee-posting.test.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0302_success_fee_v3.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/success-fee-repository.test.ts",
+        "packages/db/src/success-fee-repository.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/success-fee-access.integration.test.ts",
+        "packages/db/test/success-fee-fixtures.ts",
+        "packages/db/test/success-fee-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

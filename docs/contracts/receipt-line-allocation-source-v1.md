@@ -1,6 +1,6 @@
 # Receipt-line allocation contracts v1 — M48-C0
 
-Current synthetic status: 0304 enables the neutral no-amount producer described
+Current synthetic status: 0335 enables the neutral no-amount producer described
 in the final section. Earlier held-status statements below describe 0258 and its
 superseded build-ahead command protocol, which remains refused.
 
@@ -48,9 +48,9 @@ The 23 October safest-choice rule is applied by refusing malformed/unknown field
 
 H-M48-SOURCE-DESIGN/Q2, Q6, deposit-source rebind, SV5, predecessor acceptance and persisted B1/F5/F7 proofs remain with their owners. Shared lock order, actor permissions, exact review expiry/revocation and cross-representation deduplication require an accepted server handoff. Independent Claude A/B exact-head verdicts, separate acceptance and Ben's merge remain outstanding. These pure tests cannot close parent PostgreSQL or browser gates.
 
-## 0304 repair — enabled neutral synthetic producer
+## 0335 repair — enabled neutral synthetic producer
 
-The earlier held deployment status above is historical for 0258. Migration 0304
+The earlier held deployment status above is historical for 0258. Migration 0335
 now enables a no-amount protocol, `receipt-line-facts-command.v1`, behind the
 existing read/write SQL signatures and `RecoveryLineAllocationRepository`:
 
@@ -74,7 +74,7 @@ JSON source/approval brand or a quarantined storage row does not qualify.
 
 This activates only the synthetic/practice neutral producer and its case
 consumer. It does not approve a fee policy, clear fee holds, enable production,
-compose an HTTP route or claim an independently verified DB run. See the 0304
+compose an HTTP route or claim an independently verified DB run. See the 0335
 migration note for writer-driven F5/F7 and adversarial CI proofs.
 
 The case consumer additionally binds every catch to its own server-originated

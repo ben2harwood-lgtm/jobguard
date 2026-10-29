@@ -141,6 +141,13 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor re
  c uuid; prior app.recovery_attribution_command; document jsonb; result jsonb; previous uuid;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'RECOVERY_ATTRIBUTION_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Malformed session digests and unversioned/authority-bearing payloads stay closed.
+ -- This gate reads no job/hidden data and never substitutes caller facts for stored sources.
+ IF p_session IS NULL OR p_session !~ '^[0-9a-f]{64}$'
+ OR jsonb_typeof(p_command) IS DISTINCT FROM 'object'
+ OR p_command->>'version' IS DISTINCT FROM 'recovery-attribution-command.v1'
+ OR p_command-ARRAY['version','action','commandId','caseId','workId','lineId','lockId','expectedCaseRevision','expectedAttributionRevision']<>'{}'::jsonb
+ THEN RAISE EXCEPTION 'RECOVERY_ATTRIBUTION_DEPENDENCY_BOUND' USING ERRCODE='0A000'; END IF;
  -- Scope/owner/lock before any hidden source, subject lookup or replay.
  SELECT * INTO actor FROM app.final_check_builder(t,p_job,p_session);
  IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=p_job AND practice_session_digest=p_session)

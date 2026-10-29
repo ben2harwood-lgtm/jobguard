@@ -7,6 +7,7 @@ import {issuePracticeSession,authenticatePracticeSession,practiceMaterialPool} f
 import {PracticeActivationRepository} from "../src/activation-repository.js";
 import {FinalAccountCommandService} from "../src/final-account-repository.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
+import {FinalCheckCompletionRepository} from "../src/shadow-detection-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
 import {VariationRepository,insertPricedVariation,approvePricedVariation} from "../src/variation-repository.js";
 import {PracticeFeedRepository} from "../src/practice-feed-repository.js";
@@ -16,6 +17,7 @@ import {RecoveryLineAllocationRepository} from "../src/receipt-line-allocation-r
 import {withTenant} from "../src/tenant-context.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7", baselineNetPence=3360000, mixedFinalCheck=false){
  process.env.JOBGUARD_ENV="synthetic_demo";
@@ -30,21 +32,29 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation",baselineNetPence,scoped,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
+ // Synthetic certificate image using the existing valid PNG fixture helper.
  // Genuine finalized source recipe before lock. No accounting or allocation rows
  // are seeded. Completion remains a normal evidence-link/stage input to assembly.
- const evidence=randomUUID(),upload=randomUUID(),link=randomUUID(),bytes=Buffer.from("%PDF-1.4\nFictional completion certificate\n%%EOF"),sha=createHash("sha256").update(bytes).digest("hex"),objectKey=`synthetic/allocator/${upload}`;
+ const evidence=randomUUID(),upload=randomUUID(),link=randomUUID(),bytes=Buffer.from(pngBytes(23)),sha=createHash("sha256").update(bytes).digest("hex"),objectKey=`synthetic/allocator/${upload}`;
  await finalCheckTenant(f.admin,DEMO_TENANT_ID,async db=>{
   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,$6,'application/pdf',1000,'standard_evidence',clock_timestamp()+interval '1 day','verified','allocator-v1',clock_timestamp())`,[upload,DEMO_TENANT_ID,jobId,scope,objectKey,sha]);
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',1000,'standard_evidence',clock_timestamp()+interval '1 day','verified','allocator-v1',clock_timestamp())`,[upload,DEMO_TENANT_ID,jobId,scope,objectKey,sha]);
   await db.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
-   VALUES($1,$2,$3,$4,$5,'allocator-v1','synthetic_demo','application/pdf',$6)`,[DEMO_TENANT_ID,upload,jobId,scope,objectKey,bytes]);
+   VALUES($1,$2,$3,$4,$5,'allocator-v1','synthetic_demo','image/png',$6)`,[DEMO_TENANT_ID,upload,jobId,scope,objectKey,bytes]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,'original','electrical_certificate',$6,'allocator-v1',$7,$8,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,DEMO_TENANT_ID,upload,jobId,scope,objectKey,sha,bytes.length]);
+   VALUES($1,$2,$3,$4,$5,'original','electrical_certificate',$6,'allocator-v1',$7,$8,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,DEMO_TENANT_ID,upload,jobId,scope,objectKey,sha,bytes.length]);
   await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'electrical_certificate')",[link,DEMO_TENANT_ID,evidence,jobId,scope]);
   await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'electrical_complete',$5,$6)",[randomUUID(),DEMO_TENANT_ID,jobId,scope,link,randomUUID()]);
  });
- const feed=new PracticeFeedRepository(f.runtime,"synthetic_demo");let feedView=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"connect",commandId:randomUUID(),expectedRevision:0});
- const advance=async(movement:"receipt-12000"|"receipt-14640"|"receipt-960")=>{feedView=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"advance",commandId:randomUUID(),expectedRevision:feedView.revision,movement,step:"settled"});};
+ const feed=new PracticeFeedRepository(f.runtime,"synthetic_demo");
+ let feedRevision=(await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"connect",commandId:randomUUID(),expectedRevision:0})).revision;
+ // The additive facts catalogue owns F5's deposit and later receipt.
+ const feedCommand=async(action:"advance"|"match_receipt",movement:"receipt-12000"|"receipt-14640"|"receipt-960",paymentId?:string)=>{
+  const raw={version:movement==="receipt-960"?"practice-feed-command.v1":"practice-facts-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement,...(action==="advance"?{step:"settled"}:{paymentId})};
+  const view=movement==="receipt-960"?await feed.command(context,actor,auth.digest,jobId,raw):await feed.factsCommand(context,actor,auth.digest,jobId,raw);
+  feedRevision=view.revision;
+ };
+ const advance=(movement:"receipt-12000"|"receipt-14640"|"receipt-960")=>feedCommand("advance",movement);
  if(kind==="F5")await advance("receipt-12000");
  const assembly=new FinalAccountCommandService(scoped),locks=new FinalAccountLockRepository(scoped),variations=new VariationRepository(scoped);
  let variationId:string=randomUUID();const variationScope=randomUUID(),workId=randomUUID();
@@ -75,6 +85,8 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
  const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
  const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ // Reconciliation makes the result available; publication authorizes invoicing.
+ await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  const main=await issue("final");let invoiceId=main.invoiceId;
  if(kind==="F7"){
@@ -91,7 +103,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960",alreadySettled=false)=>{
   const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:"Fictional matched receipt"});
   if(!alreadySettled)await advance(movement);
-  feedView=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"match_receipt",commandId:randomUUID(),expectedRevision:feedView.revision,movement,paymentId:payment.paymentId});return payment.paymentId;
+  await feedCommand("match_receipt",movement,payment.paymentId);return payment.paymentId;
  };
  const producer=new RecoveryLineAllocationRepository(f.runtime,"synthetic_demo");
  const produce=async(paymentId:string)=>{

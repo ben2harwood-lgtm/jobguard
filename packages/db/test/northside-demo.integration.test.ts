@@ -7,7 +7,7 @@ import { cluster, type Cluster } from "./extra-fixtures.js";
 import { siteExtraContentSha256V1 } from "@jobguard/core";
 import { startSession } from "./contractor-practice-session-fixtures.js";
 import { photo } from "./site-extra-evidence-fixtures.js";
-import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideApprovalArtifact, northsideExtras, northsideRun, northsideLocalLinks, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
+import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideApprovalArtifact, northsideExtras, northsideRun, northsideLocalLinks, northsideSwitchTargets, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
 
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
@@ -30,6 +30,8 @@ it("ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40
   expect(facts).toMatchObject({ companyName: northsideName, clients: northsideTargets.clients, operatives: northsideTargets.operatives, ordersThisMonth: northsideTargets.ordersPerMonth, extras: 0 });
   expect(facts.orderValuePence).toBeGreaterThan(0);
   expect(seed.clientIds).toHaveLength(3);
+  expect(await northsideSwitchTargets(c.runtime, owner, session.context)).toContainEqual({ role: "finance", membershipId: seed.financeMembershipId });
+  expect((await c.admin.query("SELECT role FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 ORDER BY role", [owner.tenantId, seed.financeMembershipId])).rows.map(r => r.role)).toEqual(["finance", "read_only"]);
   // Practice data only: every stored address ends in .invalid, and nothing is queued to go out.
   const emails = (await c.admin.query("SELECT email FROM app.contractor_member WHERE tenant_id=$1", [owner.tenantId])).rows.map(r => r.email as string);
   expect(emails.length).toBeGreaterThan(40); expect(emails.every(e => e.endsWith(".invalid"))).toBe(true);
