@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { closeWorkFixture, createWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
-import { command, count, issue, meterCompany, meterInput, readSubscription, storeMeter, terms } from "./subscription-persistence-fixtures.js";
+import { command, count, issue, meterCompany, meterInput, readSubscription, rows, storeMeter, terms } from "./subscription-persistence-fixtures.js";
+import { firstTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
 
 // An admin-only clock substitution in this isolated test cluster exercises the real
 // command without introducing a caller-controlled clock or production helper.
@@ -68,5 +69,28 @@ describe.sequential("MON-2A first-period safety", () => {
    [a.tenantId, b.digest, randomUUID(), JSON.stringify(terms(a, "Solo", 0, 15))]))).rejects.toThrow();
   expect(await count(f, a, "subscription_period")).toBe(0);
   expect(await count(f, b, "subscription_agreement_revision")).toBe(0);
+ });
+ it("refuses a pre-acceptance period even when the trial already started, without writing any effects", async () => {
+  const a = await firstTrialFixture(f, "2026-08-01T12:00:00Z");
+  await acceptAt("2026-09-01T12:00:00Z");
+  expect((await command(f, a, terms(a, "Solo", 0, 1))).effectiveDate).toBe("2026-09-01");
+  // Supply a complete, anchor-aligned period covered by the earlier trial.
+  // A missing source or invalid anchor must not explain the refusal.
+  const input = meterInput(a.tenantId, 6, "2026-08", 31);
+  input.endDateExclusive = "2026-09-01";
+  await storeMeter(f, a, input);
+  const tables = [
+   "subscription_agreement_revision", "meter_input_event", "trial_start", "trial_subscription_source",
+   "subscription_period", "subscription_period_line", "platform_statement", "platform_statement_line",
+   "subscription_place", "subscription_place_binding", "subscription_review", "subscription_alert",
+   "subscription_operations_card", "subscription_correction_disposition", "decision",
+   "action_authorization", "command_receipt", "audit_event",
+  ];
+  const before = await Promise.all(tables.map(table => rows(f, a, table)));
+  const auditHead = async () => (await f.admin.query("SELECT to_jsonb(h) value FROM audit_control.audit_head h WHERE tenant_id=$1", [a.tenantId])).rows;
+  const headBefore = await auditHead();
+  await expect(issue(f, a, "2026-08-01")).rejects.toThrow("SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE");
+  expect(await Promise.all(tables.map(table => rows(f, a, table)))).toEqual(before);
+  expect(await auditHead()).toEqual(headBefore);
  });
 });
