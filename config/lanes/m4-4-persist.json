@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-4-persist": {
+      "branches": ["codex/sandbox/m4-4-persist"],
+      "note": "M4-4 RED dark durable commands on m4-4-worm; migration 0455. Parent adapter branch must land first.",
+      "allow": [
+        "packages/db/migrations/0455_worm_durable_commands.sql",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/test/worm-command.integration.test.ts"
+      ]
+    }
+  }
+}
