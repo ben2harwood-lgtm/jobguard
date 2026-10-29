@@ -14,13 +14,14 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-// The upgrade seed models the previous evaluator's F19 encoding while using
+// The upgrade seed models the previous evaluator's F19/F21 encoding while using
 // the real repository and previous PostgreSQL guard. No production path uses it.
 const previousSchema = vi.hoisted(() => ({ active: true }));
 vi.mock("@jobguard/core", async original => {
  const actual = await original<typeof import("@jobguard/core")>();
  return { ...actual, evaluateRecoveryEligibilityV3: (raw: unknown) => {
   const result = actual.evaluateRecoveryEligibilityV3(previousSchema.active ? {...raw as object,payer:"not_insurer"} : raw);
+  if (previousSchema.active && result.fixture === "F21") return { ...result, reason: null, reasonHeld: true, lines: result.lines.map(line => ({ ...line, reason: null, reasonHeld: true })) };
   if (!previousSchema.active || result.fixture !== "F19") return result;
   return { ...result, reasonHeld: true, lines: result.lines.map(line => line.kind === "statutory_interest" ? { ...line, reason: null, reasonHeld: true } : line) };
  } };
@@ -457,10 +458,10 @@ it("[A6 DB10] binding changes insurer to person to insurer affect only new revie
  await partyTypes(f,"person","insurer");expect((await reviewPayer(f,"F18",2)).result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
  expect(await storedReview(original.id)).toBe(bytes);
 });
-it("[Round2 DB16] F21 stays null and held on an insurer-paid job, independently of insurer facts",async()=>{
+it("[Ruling 108 DB16] F21 uses approved words on an insurer-paid job, independently of insurer facts",async()=>{
  const f=await fixture("merchant_overcharge");
  const r=await reviewPayer(f,"F21");
- expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0},reason:null,reasonHeld:true,lines:[{reason:null,reasonHeld:true}]});
+ expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false,lines:[{reason:"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false}]});
 });
 
 // Ruling 66: the same separate-component setup path used by ruling 55(a).

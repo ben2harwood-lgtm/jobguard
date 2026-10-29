@@ -3,10 +3,11 @@
   "lanes": {
     "ent-10-oidc-a": {
       "branches": [
-        "codex/sandbox/ent-10-oidc-a"
+        "codex/sandbox/ent-10-oidc-a",
+        "codex/sandbox/ent-10-oidc-a2"
       ],
       "receipt": "docs/verdicts/ENT-10-OIDC-A/BUILDER_RECEIPT.md",
-      "note": "RED. Checked synthetic OIDC adapter only; no routes, sessions, grants, database changes or external transport.",
+      "note": "RED. Synthetic OIDC adapter only; no routes, sessions, grants, database changes or external transport. Current-main repair: resolve API manifest and OIDC schema conflicts, preserve both registered branches, and test replay, company binding and authority-claim boundaries. Historical exact path union retained.",
       "allow": [
         "apps/api/package.json",
         "pnpm-lock.yaml",

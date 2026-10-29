@@ -10,11 +10,11 @@ const positiveAmount = amount.refine(value => value > 0);
 const revision = z.number().int().safe().positive().max(1_000_000);
 const approvalHash = z.string().regex(/^[a-f0-9]{64}$/u);
 const commandBase = {
-  version: z.literal("recovery-allocation-command.v1"), commandId: z.string().uuid(),
+  version: z.literal("recovery-allocation-command.v1"), commandId: z.guid({ error: "Invalid uuid" }),
   expectedCaseRevision: revision, grossPence: positiveAmount,
 };
-const allocationTarget = { caseId: z.string().uuid(), paymentId: z.string().uuid(), evidenceId: z.string().uuid(), remittanceEvidenceId: z.string().uuid().optional() };
-const reversalTarget = { allocationId: z.string().uuid(), creditNoteId: z.string().uuid().optional(), remittanceEvidenceId: z.string().uuid().optional() };
+const allocationTarget = { caseId: z.guid({ error: "Invalid uuid" }), paymentId: z.guid({ error: "Invalid uuid" }), evidenceId: z.guid({ error: "Invalid uuid" }), remittanceEvidenceId: z.guid({ error: "Invalid uuid" }).optional() };
+const reversalTarget = { allocationId: z.guid({ error: "Invalid uuid" }), creditNoteId: z.guid({ error: "Invalid uuid" }).optional(), remittanceEvidenceId: z.guid({ error: "Invalid uuid" }).optional() };
 
 /** The human chooses an amount to review, never its split, rule, reviewer or settlement facts. */
 export const recoveryAllocationCommandV1 = z.discriminatedUnion("action", [

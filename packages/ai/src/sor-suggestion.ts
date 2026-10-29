@@ -5,7 +5,7 @@ import { FixtureAiProvider, createLiveAiProvider, type RecordedFixture } from ".
 import { AiGateway } from "./gateway.js";
 import type { AiGatewayRequest } from "./types.js";
 
-const uuid = z.string().uuid().transform(value => value.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(value => value.toLowerCase());
 const text = (max: number) => z.string().min(1).max(max).refine(value => /\S/u.test(value));
 const code = text(80);
 export const SOR_SUGGESTION_PROMPT_VERSION = "sor-suggestion.fixture.v1";

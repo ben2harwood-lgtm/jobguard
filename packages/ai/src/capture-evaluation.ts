@@ -73,14 +73,30 @@ export function evaluateCapture(
     source.text.slice(titleProvenance.span.start, titleProvenance.span.end) !== output.title.value) errors.push("Title does not match its cited text");
 
   const consumed = new Set<number>();
+  const consumedOccurrences = new Set<string>();
+  const supportedOccurrence = (line: JobRecordProposal["lines"][number]): string | null => {
+    const provenance = line.description.provenance;
+    if (provenance.kind !== "extracted") return null;
+    const span = provenance.span;
+    if (span.sourceId !== sourceId || span.sourceVersion !== 1 ||
+      !Number.isInteger(span.start) || !Number.isInteger(span.end) ||
+      span.start < 0 || span.start >= span.end || span.end > source.text.length ||
+      source.text.slice(span.start, span.end) !== line.description.value) return null;
+    return `${span.start}:${span.end}`;
+  };
   const expectedIntentIds = label.lines.flatMap(line => line.intents);
   if (!expectedIntentIds.length || new Set(expectedIntentIds).size !== expectedIntentIds.length) errors.push("Invalid or duplicated intent labels");
   let matchedIntents = 0, ambiguityPassed = 0, ambiguityTotal = 0;
   for (const expected of label.lines) {
-    const index = output.lines.findIndex((line, i) => !consumed.has(i) && normal(line.description.value) === normal(expected.description));
+    const index = output.lines.findIndex((line, i) => {
+      const occurrence = supportedOccurrence(line);
+      return !consumed.has(i) && occurrence !== null && !consumedOccurrences.has(occurrence) &&
+        normal(line.description.value) === normal(expected.description);
+    });
     if (index < 0) { errors.push(`Missing scope: ${expected.description}`); continue; }
     consumed.add(index); matchedIntents += expected.intents.length;
     const line = output.lines[index]!;
+    consumedOccurrences.add(supportedOccurrence(line)!);
     for (const [name, value] of [["unitPricePence", expected.pricePence], ["quantity", expected.quantity], ["unit", expected.unit]] as const) {
       if (value === null) { ambiguityTotal++; if (line[name].value === null) ambiguityPassed++; }
       if (line[name].value !== value) errors.push(`${expected.description}: ${name} differs from label`);
