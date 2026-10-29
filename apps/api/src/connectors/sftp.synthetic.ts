@@ -27,6 +27,12 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
 function requireOperation(scope: Scope, op: z.infer<typeof operation>) {
   if (!scope.operations.includes(op)) throw new SyntheticSftpError("SFTP_FORBIDDEN");
 }
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value !== null && typeof value === "object") return `{${Object.keys(value).sort()
+    .map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
 function validatePayload(file: z.infer<typeof fileV1>) {
   if (file.operation === "work_orders") {
     const row = parse(workOrderRowV1, file.payload);
@@ -45,7 +51,9 @@ function validatePayload(file: z.infer<typeof fileV1>) {
  * Scope is selected by the test harness, NOT authenticated machine authority. Nothing registers
  * this seam in HTTP, workers or an executor. Domain writes and durable receipts remain elsewhere.
  */
-export function createInMemorySftpServer() {
+export function createInMemorySftpServer(contractTenants: ReadonlyMap<string, string> = new Map()) {
+  // Harness-owned ownership lookup, separate from client scope; export v1 has no tenant field.
+  const owners = new Map(contractTenants);
   const files = new Map<string, string>();
   const deliveries = new Map<string, { binding: string; accepted: boolean; absenceKnown: boolean; result: FakeDeliveryResult }>();
   const observations = new Map<string, string>();
@@ -63,13 +71,16 @@ export function createInMemorySftpServer() {
         name: "fake_sftp", supportsProviderDeduplication: true,
         async deliver(rawAction: Readonly<OutboundAction>) {
           requireOperation(scope, "export_delivery");
+          if (typeof rawAction.immutableContent !== "string" || Buffer.byteLength(rawAction.immutableContent) > scope.maxBytes) {
+            throw new SyntheticSftpError("SFTP_INVALID");
+          }
           const { action } = validateSyntheticBillingAction(rawAction);
           // The shared verifier has already validated the exact canonical JSON and its hash.
           const artifact = JSON.parse(action.immutableContent) as { clientContractId: string };
-          if (action.adapter !== "fake_sftp" || artifact.clientContractId !== scope.clientContractId) {
+          if (action.adapter !== "fake_sftp" || artifact.clientContractId !== scope.clientContractId ||
+              owners.get(artifact.clientContractId) !== scope.tenantId) {
             throw new SyntheticSftpError("SFTP_FORBIDDEN");
           }
-          if (Buffer.byteLength(action.immutableContent) > scope.maxBytes) throw new SyntheticSftpError("SFTP_INVALID");
           const key = JSON.stringify([partition, action.providerEffectKey]);
           const binding = JSON.stringify([action.recipient, action.contentHash, action.immutableContent,
             action.aggregateRevision, action.amountPence, action.currency, action.policyVersion]);
@@ -118,8 +129,8 @@ export function createInMemorySftpServer() {
           }
           const key = JSON.stringify([scope.tenantId, scope.clientContractId, op, file.source, file.eventId]);
           const binding = file.operation === "billing_status"
-            ? JSON.stringify((payload as ReturnType<typeof parseBillingImportEnvelope>).observations.map(o => o.canonical).sort())
-            : JSON.stringify(payload);
+            ? canonical((payload as ReturnType<typeof parseBillingImportEnvelope>).observations.map(o => o.canonical).sort())
+            : canonical(payload);
           const prior = observations.get(key);
           if (prior !== undefined && prior !== binding) throw new SyntheticSftpError("SFTP_CONFLICT");
           observations.set(key, binding);
