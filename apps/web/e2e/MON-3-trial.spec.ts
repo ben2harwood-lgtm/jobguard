@@ -15,7 +15,7 @@ test('first-only Skip, fictional card setup and clean capacity refusal survive r
  });
  await page.route(`**/api/jobs/${job}/quotes/activation`,route=>route.fulfill({status:409,json:{code:'CAPACITY_ADMISSION_UNAVAILABLE'}}));
  await page.goto(`/jobs/${job}/trial`);
- await expect(page.getByRole('note')).toContainText('no real charges');
+ await expect(page.getByRole('main').getByRole('note')).toContainText('no real charges');
  const skip=page.getByRole('button',{name:'Skip for now',exact:true});await expect(skip).toBeVisible();await skip.focus();await expect(skip).toBeFocused();
  const bounds=await skip.boundingBox();expect(bounds!.height).toBeGreaterThanOrEqual(44);
  await skip.click();await expect(page.getByRole('alert')).toContainText('has not gone live');

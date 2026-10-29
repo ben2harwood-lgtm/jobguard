@@ -9,7 +9,7 @@ export async function firstTrialFixture(f:WorkFixture,startedAt?:string){
  if(startedAt)await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job_activation SET activated_at=$2::timestamptz WHERE tenant_id=$1 AND id=$3",[a.tenantId,startedAt,parent.activationId]);});
  await store(f,s);
  await workTenant(f.admin,a.tenantId,async db=>{
-  const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture',$2::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);
+  const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2::uuid,'ch4.fixture',($2::uuid)::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);
   await db.query("SET LOCAL ROLE jobguard_migration");
   await db.query("INSERT INTO app.trial_admission(tenant_id,job_id,activation_id,snapshot_id,verification_id,command_id,admission_kind) VALUES($1,$2,$3,$4,$5,$6,'first')",[a.tenantId,parent.jobId,parent.activationId,s.id,verification,command]);
  });return {...a,jobId:parent.jobId,verification,trialId:s.id};

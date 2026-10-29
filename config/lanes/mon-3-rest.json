@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon-3-rest"
       ],
-      "note": "MON-3 rest RED catch-up against current main. Exact changed non-lane paths; imported lane files retain ownership and this lane is implicitly allowed. Reserved 0372/0373 preserve the reviewed SQL bytes from 0316/0317.",
+      "note": "MON-3 rest RED catch-up and CI repair. Exact changed non-lane paths. Obsolete imported mon-3-p-b/mon-3c-elig lane files are preserved in archive so the active lane register matches main plus this piece. Reserved 0372/0373 retain reviewed SQL bytes.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/package.json",
@@ -33,6 +33,8 @@
         "archive/2026-10-26/mon3-0235-forward-preservation/ACTIVITY.md",
         "archive/2026-10-26/mon3-0235-forward-preservation/MANIFEST.json",
         "archive/2026-10-26/mon3-0235-forward-preservation/original-0235.zip",
+        "archive/2026-10-29/mon3-imported-lanes/mon-3-p-b.json",
+        "archive/2026-10-29/mon3-imported-lanes/mon-3c-elig.json",
         "docs/contracts/free-first-job-lifecycle-v1.md",
         "docs/contracts/free-first-job-persistence-v1.md",
         "docs/contracts/free-first-job-v1.md",
