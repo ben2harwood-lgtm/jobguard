@@ -60,17 +60,21 @@ export function dunningSuppression(invoice: DunningInvoice, nowTick: number): st
   return nowTick < invoice.dueTick ? "not_due" : null;
 }
 
-/** Tenant/job-filtered allowlist projection: no raw source objects, messages, or hidden counts. */
+/** Tenant/job-filtered projection with data-free diagnostics for malformed source rows. */
 export function unpaidInvoiceWorkbench(rawScope: unknown, rawInvoices: readonly unknown[], rawTick: unknown) {
   const scope = parse(scopeV1, rawScope), nowTick = parse(tick, rawTick);
-  const invoices = rawInvoices.flatMap(raw => {
+  const skipped: Readonly<{ rowIndex: number; reasonCode: "INVALID_DUNNING_INPUT" }>[] = [];
+  const invoices = rawInvoices.flatMap((raw, rowIndex) => {
     const result = dunningInvoiceV1.safeParse(raw);
-    return result.success ? [result.data] : [];
+    if (result.success) return [result.data];
+    skipped.push(Object.freeze({ rowIndex, reasonCode: "INVALID_DUNNING_INPUT" }));
+    return [];
   });
-  return invoices.filter(row => row.tenantId === scope.tenantId && row.jobId === scope.jobId && row.outstandingPence > 0)
+  const rows = invoices.filter(row => row.tenantId === scope.tenantId && row.jobId === scope.jobId && row.outstandingPence > 0)
     .map(row => Object.freeze({ invoiceId: row.invoiceId, revision: row.revision,
       amount: Object.freeze({ pence: row.outstandingPence, currency: row.currency }), category: row.category,
       suppression: dunningSuppression(row, nowTick), action: "review_only" as const }));
+  return Object.freeze({ invoices: Object.freeze(rows), skippedCount: skipped.length, skipped: Object.freeze(skipped) });
 }
 
 /** Exact content binding is generated again from current facts at every approval check. */

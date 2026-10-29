@@ -13,8 +13,12 @@ require reconciliation. Provider-owned retries conflict with application ownersh
 All results are non-executable. `executeDunning` unconditionally refuses.
 
 The unpaid workbench projects only invoice identity, revision, outstanding GBP,
-category and suppression. Malformed invoice rows are skipped individually; invalid
-scope or tick still fails the request. Every balance must be nonnegative integer pence, at
+category and suppression in `invoices`. Malformed invoice rows are skipped individually;
+`skippedCount` and `skipped` report each rejected row's zero-based input `rowIndex`
+and fixed `INVALID_DUNNING_INPUT` reason code, without row data, field names or
+validation messages. Valid foreign-scope and paid rows are filtered without skip
+diagnostics. This seam accepts only server-loaded invoice projections, never hidden
+findings. Invalid scope or tick still fails the request. Every balance must be nonnegative integer pence, at
 most its original amount and the shared money limit. Paid, disputed, refunded
 (pending refund), reversed, cancelled and no-charge pilot facts suppress drafting
 and retry advice. Before-due, pending/unknown attempts and draft/superseded final

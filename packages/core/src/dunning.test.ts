@@ -79,7 +79,7 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
     expect(fake.command(scope, cancel, 3)).toBeNull();
     expect(fake.command(scope, cancel, 3)).toBeNull();
     fake.replace({ ...invoice, revision: 2, outstandingPence: 1 });
-    expect(fake.list(scope, 3)[0]?.suppression).toBe("cancelled");
+    expect(fake.list(scope, 3).invoices[0]?.suppression).toBe("cancelled");
     expect(() => fake.command(scope, { ...command, commandId: uuid(20), idempotencyKey: uuid(21), expectedRevision: 2 }, 3)).toThrow("DUNNING_UNAVAILABLE");
   });
   it("does not reuse command keys across invoice subjects, and permits independent tenant keys", () => {
@@ -107,18 +107,48 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
     const fake = new DunningFixtureWorkbench([invoice]);
     expect(() => fake.command({ ...scope, ...changed }, command, 3)).toThrow(/^DUNNING_UNAVAILABLE$/u);
     expect(() => buildDunningReminder({ ...scope, ...changed }, invoice, 3)).toThrow(/^DUNNING_UNAVAILABLE$/u);
-    expect(fake.list({ ...scope, ...changed }, 3)).toEqual([]);
-    expect(unpaidInvoiceWorkbench(scope, [{ ...invoice, ...changed }], 3)).toEqual([]);
+    expect(fake.list({ ...scope, ...changed }, 3)).toEqual({ invoices: [], skippedCount: 0, skipped: [] });
+    expect(unpaidInvoiceWorkbench(scope, [{ ...invoice, ...changed }], 3)).toEqual({ invoices: [], skippedCount: 0, skipped: [] });
   });
   it("skips only malformed rows and preserves valid scoped invoices on both sides", () => {
     const other = { ...invoice, invoiceId: uuid(31) };
     const malformed = [null, { ...invoice, outstandingPence: -1 }, { ...invoice, shadowSignal: "secret" },
       { ...invoice, recipient: "private@example.com" }, { ...invoice, tenantId: uuid(30), revision: 0 }];
-    expect(unpaidInvoiceWorkbench(scope, [invoice, ...malformed, other], 3))
-      .toEqual(unpaidInvoiceWorkbench(scope, [invoice, other], 3));
-    expect(unpaidInvoiceWorkbench(scope, malformed, 3)).toEqual([]);
+    const result = unpaidInvoiceWorkbench(scope, [invoice, ...malformed, other], 3);
+    expect(result.invoices).toEqual(unpaidInvoiceWorkbench(scope, [invoice, other], 3).invoices);
+    expect(result.skippedCount).toBe(malformed.length);
+    expect(result.skipped).toEqual(malformed.map((_, index) => ({
+      rowIndex: index + 1, reasonCode: "INVALID_DUNNING_INPUT",
+    })));
+    expect(unpaidInvoiceWorkbench(scope, malformed, 3)).toEqual({
+      invoices: [], skippedCount: malformed.length,
+      skipped: malformed.map((_, rowIndex) => ({ rowIndex, reasonCode: "INVALID_DUNNING_INPUT" })),
+    });
     expect(() => unpaidInvoiceWorkbench({ ...scope, permission: "read" }, malformed, 3)).toThrow("INVALID_DUNNING_INPUT");
     expect(() => unpaidInvoiceWorkbench(scope, malformed, -1)).toThrow("INVALID_DUNNING_INPUT");
+  });
+  it("returns empty diagnostics for empty, valid, paid and foreign rows", () => {
+    expect(unpaidInvoiceWorkbench(scope, [], 3)).toEqual({ invoices: [], skippedCount: 0, skipped: [] });
+    const result = unpaidInvoiceWorkbench(scope, [invoice, { ...invoice, outstandingPence: 0 },
+      { ...invoice, tenantId: uuid(30) }, { ...invoice, jobId: uuid(30) }], 3);
+    expect(result.invoices).toHaveLength(1);
+    expect(result.skippedCount).toBe(0);
+    expect(result.skipped).toEqual([]);
+  });
+  it("reports only row positions and fixed codes, never malformed data or schema issues", () => {
+    const result = unpaidInvoiceWorkbench(scope, [
+      { ...invoice, recipient: "private@example.com", shadowSignal: "hidden finding", apiKey: "secret" },
+      { ...invoice, outstandingPence: 10002 },
+      { ...invoice, sourceState: "locked_final_account", finalAccountLockId: null },
+    ], 3);
+    expect(result).toEqual({ invoices: [], skippedCount: 3, skipped: [
+      { rowIndex: 0, reasonCode: "INVALID_DUNNING_INPUT" },
+      { rowIndex: 1, reasonCode: "INVALID_DUNNING_INPUT" },
+      { rowIndex: 2, reasonCode: "INVALID_DUNNING_INPUT" },
+    ] });
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.skipped)).toBe(true);
+    expect(result.skipped.every(Object.isFrozen)).toBe(true);
   });
   it("requires an exact stored Decision and refuses unresolved or malformed records", () => {
     expect(dunningApprovalMatches(scope, invoice, approval(), 3)).toBe(false);
@@ -137,7 +167,7 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
   });
   it("has allowlisted outputs; rejects hidden facts and real recipients with redacted errors", () => {
     const result = unpaidInvoiceWorkbench(scope, [invoice], 3);
-    expect(Object.keys(result[0]!).sort()).toEqual(["action", "amount", "category", "invoiceId", "revision", "suppression"].sort());
+    expect(Object.keys(result.invoices[0]!).sort()).toEqual(["action", "amount", "category", "invoiceId", "revision", "suppression"].sort());
     for (const changed of [{ shadowSignal: "secret" }, { recipient: "private@example.com" }, { apiKey: "secret" }]) {
       expect(() => buildDunningReminder(scope, { ...invoice, ...changed }, 3)).toThrow(/^INVALID_DUNNING_INPUT$/u);
     }
