@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-9-signing": {
+      "branches": ["codex/sandbox/m5-9-signing"],
+      "note": "RED M5-9 synthetic offline evidence manifests, key rotation and verification; no migration or live activation.",
+      "allow": [
+        "docs/contracts/signed-evidence-export-v1.md",
+        "packages/db/src/signed-evidence-export.ts",
+        "packages/db/test/signed-evidence-export.test.ts",
+        "packages/db/tools/verify-signed-evidence-export.mjs"
+      ]
+    }
+  }
+}
