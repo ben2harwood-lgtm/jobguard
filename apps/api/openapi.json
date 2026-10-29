@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/stages": {
+      "post": {
+        "operationId": "CustomerStagesController_stages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the signed-in customer's recorded stage snapshots and review status",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/stage-acknowledge": {
+      "post": {
+        "operationId": "CustomerStagesController_acknowledge",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Acknowledge one exact verified stage snapshot; no payment, certification or waiver",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/customer-portal/issue": {
       "post": {
         "operationId": "CustomerSigninController_issue",

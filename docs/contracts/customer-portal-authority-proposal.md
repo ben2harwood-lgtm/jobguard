@@ -45,6 +45,32 @@ existing contracts; this foundation cannot turn a method label into an approval.
 No real customer data, delivery, payment or release is authorized. PostgreSQL CI,
 the browser suite and independent Claude RED review remain necessary evidence.
 
+## MON-5 M5-STAGE — synthetic acknowledgement, 29 October 2026
+
+The issued M5-STAGE slice supersedes M5-H-STAGES' runtime hold only for
+`POST /customer-portal/stages` and `POST /customer-portal/stage-acknowledge`,
+with identical Next `/api` routes. Both use the existing customer session
+boundary; the Nest envelope adapter delegates to the unchanged customer guard.
+No sign-in mechanism, grant lifetime, cookie, issuer or revoker rule changes.
+
+Migration 0390 reads existing `stage_completion` records and their exact scope,
+original evidence, finalized upload, type, hash and immutable version. The
+server hashes the entire displayed completion snapshot, including the fixed
+acknowledgement statement. A strict versioned command supplies only job,
+completion, snapshot hash and command identity. Tenant/customer/session are
+resolved from the existing credential and checked again in the SQL transaction.
+Completion/supersession and upload/invalidation locks precede the final source
+and authority check. No new stage or evidence can be created by this route.
+
+An acknowledgement is an immutable side fact, with a unique tenant command ID
+and customer/completion identity; identical authenticated replay returns the
+original result. A changed target/hash refuses. Invalidation or supersession
+preserves the original acknowledgement and displays fresh review required;
+new acknowledgement of that old completion refuses. A verified replacement is
+a separate exact snapshot requiring another explicit review. Audit holds only
+identifiers. No invoice, payment, certification or liability waiver is created.
+The same G1, D06 v2, D12 v3 and live-provider gates remain closed.
+
 ## Authority and safest synthetic choices
 
 The issued order supersedes the draft status and its suggested branch/registration

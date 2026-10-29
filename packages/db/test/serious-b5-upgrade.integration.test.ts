@@ -1078,6 +1078,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
+ Object.assign(expected, await customerStageAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
@@ -1130,4 +1131,17 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
  const additive = <T>(old: T[], added: T[], live: T[]): T[] => { const expected = [...old]; for(const r of added)expected.splice(live.indexOf(r),0,r);return expected; };
  return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
+}
+
+// MON-5 M5-STAGE adds private acknowledgements and SELECT-only source policies.
+async function customerStageAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => (r.nspname === "app" && r.proname === "customer_stage_snapshot") || (r.nspname === "identity" && r.proname === "customer_stages"));
+ expect(routines).toHaveLength(2);
+ const relations = after.relations.filter(r => r.nspname === "app" && r.relname.startsWith("customer_stage_acknowledgement"));
+ expect(relations).toHaveLength(4);
+ const policies = after.policies.filter(p => p.schemaname === "app" && (p.tablename === "customer_stage_acknowledgement" || p.policyname === "customer_stage_source"));
+ expect(policies).toHaveLength(5);
+ const additive = <T>(old: T[], added: T[], live: T[]): T[] => { const expected = [...old]; for(const r of added) expected.splice(live.indexOf(r),0,r); return expected; };
+ return {rows:{...before.rows,"app.customer_stage_acknowledgement":[]},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }

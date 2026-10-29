@@ -11,7 +11,8 @@ async function seedJob(admin: Pool, tenant: string) {
  const db = await admin.connect();
  try {
   await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
-  await db.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional customer job')", [tenant, job]);
+  await db.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional customer job','live')", [tenant, job]);
+  await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[tenant,job]);
   await db.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenant, customer]);
   await db.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4)", [tenant, cr, customer, { version: "customer.v1", name: "Fictional customer", type: "person", email: "portal@example.invalid" }]);
   await db.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [tenant, site]);
@@ -33,6 +34,20 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
+  // Synthetic owner fixture: an existing verified stage, never a portal-created completion.
+  const scope = randomUUID(), evidence = randomUUID(), evidenceLink = randomUUID(), completion = randomUUID(), objectVersion = randomUUID();
+  const stageDb = await admin.connect();
+  try {
+   await stageDb.query("BEGIN"); await stageDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await stageDb.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant,scope,fixture.job]);
+  await stageDb.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
+    VALUES($1,$2,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp())`, [tenant,evidence,fixture.job,scope,"a".repeat(64),objectVersion]);
+  await stageDb.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_verified_at)
+    VALUES($1,$2,$2,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp())`, [tenant,evidence,fixture.job,scope,objectVersion,"a".repeat(64)]);
+  await stageDb.query("INSERT INTO app.evidence_link(tenant_id,id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')", [tenant,evidenceLink,evidence,fixture.job,scope]);
+  await stageDb.query("INSERT INTO app.stage_completion(tenant_id,id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'Fictional pre-cover stage',$5,$6)", [tenant,completion,fixture.job,scope,evidenceLink,randomUUID()]);
+   await stageDb.query("COMMIT");
+  } catch(error) { await stageDb.query("ROLLBACK"); throw error; } finally { stageDb.release(); }
   const issued = await api(page, "issue", { version: "customer-link-issue.v1", tenantId: tenant, jobId: fixture.job, customerId: fixture.customer }, session.csrfToken);
   expect(issued.status).toBe(200);
   const outbox = (await admin.query("SELECT o.immutable_content,o.adapter,o.recipient FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, issued.body.grantId])).rows[0];
@@ -48,6 +63,23 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
   const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
   expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
+  await tab.getByRole("link", {name:"Review recorded stages"}).click();
+  await expect(tab.getByRole("heading", {name:"Fictional pre-cover stage"})).toBeVisible();
+  await expect(tab.getByText(objectVersion,{exact:true})).toBeVisible();
+  await tab.getByRole("button", {name:"Acknowledge this recorded completion"}).click();
+  await expect(tab.getByText("Historical acknowledgement recorded.")).toBeVisible();
+  const invalidationDb = await admin.connect();
+  try {
+   await invalidationDb.query("BEGIN"); await invalidationDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await invalidationDb.query("INSERT INTO app.evidence_invalidation(tenant_id,id,evidence_id,actor_membership_id,reason_code) SELECT $1,$2,$3,id,'verification_invalid' FROM app.membership WHERE tenant_id=$1 AND role='owner' LIMIT 1",[tenant,randomUUID(),evidence]);
+   await invalidationDb.query("COMMIT");
+  } catch(error) { await invalidationDb.query("ROLLBACK"); throw error; } finally { invalidationDb.release(); }
+  await tab.reload();
+  await expect(tab.getByText(/Fresh review required\./)).toBeVisible();
+  await expect(tab.getByText("Historical acknowledgement recorded.")).toBeVisible();
+  await expect(tab.getByRole("button", {name:"Acknowledge this recorded completion"})).toHaveCount(0);
+  expect((await admin.query("SELECT count(*)::int n FROM app.customer_stage_acknowledgement WHERE tenant_id=$1 AND completion_id=$2",[tenant,completion])).rows[0].n).toBe(1);
+  await tab.getByRole("link", {name:"Customer sign-in and sign-out"}).click();
   await tab.getByRole("button", { name: "Sign out", exact: true }).click(); await expect(tab.getByText("You are signed out.", { exact: true })).toBeVisible();
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   await customerContext.addCookies([cookie]);
