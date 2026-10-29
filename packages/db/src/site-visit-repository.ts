@@ -8,7 +8,7 @@ import { requireLiveJob, WatchdogError } from "./watchdog.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const startInput = z.object({ commandId: uuid, jobId: uuid }).strict();
 const completeInput = z.object({ commandId: uuid, jobId: uuid, visitId: uuid, closeoutAnswer: z.enum(["yes", "no"]) }).strict();
 type Kind = "start" | "complete";
@@ -28,6 +28,7 @@ const timestampText = (column: string) => `to_char(${column} AT TIME ZONE 'UTC',
 class FactsChanged extends Error {
  constructor(readonly authorizedCode: SiteVisitErrorCode = "SITE_VISIT_UNAVAILABLE", readonly refusal?: Refusal) { super(); }
 }
+class CompletionReplayRace extends Error {}
 const same = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 function routineFailure(error: unknown): SiteVisitErrorCode | FactsChanged {
  const message = (error as { message?: string } | null)?.message;
@@ -42,7 +43,11 @@ async function claim(db: TenantTransaction, tenant: string, commandId: string, t
  const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
   VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, hash, actor]);
  if (inserted.rowCount) return null;
+ return readReceipt(db, tenant, commandId, type, semantic, hash, false);
+}
+async function readReceipt(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, allowMissing: boolean): Promise<unknown | null> {
  const rows = (await db.$client.query<{ request_hash: string; status: string; result: unknown }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
+ if (allowMissing && rows.length === 0) return null;
  if (rows.length !== 1 || rows[0]!.request_hash !== hash || rows[0]!.status !== "succeeded" || rows[0]!.result === null) throw new SiteVisitError("IDEMPOTENCY_CONFLICT");
  return rows[0]!.result;
 }
@@ -102,16 +107,24 @@ export class SiteVisitRepository {
     await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
     const authority = await this.visitAuthority(db, actor, kind, input);
     if (authority) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", authority);
+    const type = kind === "start" ? startCommandType : completeCommandType;
+    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
+    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
+    const hash = sha256Hex(canonicalJson(content));
+    const cached = kind === "complete" ? await readReceipt(db, tenant, input.commandId, type, semantic, hash, true) : null;
+    // Completion shares the prompt/extra job serialization key before any job row lock.
+    // Otherwise a confirming prompt can wait for this SHARE lock while this hook waits for its key.
+    if (kind === "complete" && cached === null) await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, input.jobId]);
     // Authority first, then the live-job row share lock, then the receipt; audit head remains last.
     try { await requireLiveJob(db, input.jobId); } catch (error) {
      if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new FactsChanged("JOB_NOT_LIVE");
      if (error instanceof WatchdogError) throw new FactsChanged();
      throw error;
     }
-    const type = kind === "start" ? startCommandType : completeCommandType;
-    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
-    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
-    const replay = await claim(db, tenant, input.commandId, type, semantic, sha256Hex(canonicalJson(content)), actor.membershipId);
+    const replay = cached ?? await claim(db, tenant, input.commandId, type, semantic, hash, actor.membershipId);
+    // A concurrent first execution may commit while we wait for key 417. Release all
+    // first-execution locks by rolling back, then read its receipt on a fresh replay path.
+    if (kind === "complete" && cached === null && replay !== null) throw new CompletionReplayRace();
     if (replay !== null) {
      // Claim can wait on another command. Recheck immediately before returning its cached answer, still under the shared authority lock.
      const current = await this.visitAuthority(db, actor, kind, input);
@@ -138,12 +151,15 @@ export class SiteVisitRepository {
      const mapped = routineFailure(error);
      throw typeof mapped === "string" ? new SiteVisitError(mapped) : mapped;
     }
+    // Persist live prompt evaluations before the final audit-head lock. A visit is not job completion.
+    if (kind === "complete") await db.$client.query("SELECT app.lp_visit_evaluate($1,$2,$3)", [actor.membershipId, input.jobId, input.commandId]);
     // The audit append is the last write before the receipt is completed; no lock is taken after it.
     await appendAuditBatch(db, [audit]);
     await finish(db, tenant, input.commandId, result);
     return schema.parse(result);
    });
   } catch (error) {
+   if (error instanceof CompletionReplayRace) return this.command(context, actor, kind, input, schema);
    if (error instanceof SiteVisitError || error instanceof FactsChanged || error instanceof InvalidTenantContextError) throw error;
    // Anything raised by the deferred checks at commit, or by the database in general, is unavailable and carries none of its text.
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
@@ -192,14 +208,7 @@ export class SiteVisitRepository {
  async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
    const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null }>(
-    `SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
-     FROM app.work_order w
-     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
-     JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
-     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id)
-     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
-     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`, [actor.tenantId, actor.membershipId])).rows;
+    assignedJobsByScopeQuery, [actor.tenantId, actor.membershipId])).rows;
    return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })), truncated: rows.length > 200 };
   });
  }
@@ -238,3 +247,56 @@ export class SiteVisitRepository {
   }
  }
 }
+
+// Previous assigned-first query retained for the existing Northside performance comparison.
+// The request path uses assignedJobsByScopeQuery below.
+// Materialize current assignments before invoking the unchanged, per-job authority rule.
+// Keep the 201-row limit AFTER authority and ordering (the public list returns 200).
+export const assignedJobsQuery = `WITH assigned_orders AS MATERIALIZED (
+      SELECT w.tenant_id,w.job_id,w.id,w.reference,c.revision_id
+      FROM app.work_order w
+      JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+      WHERE w.tenant_id=$1 AND EXISTS (
+       SELECT 1 FROM app.job_assignment a
+       WHERE (a.tenant_id,a.revision_id)=(c.tenant_id,c.revision_id) AND a.membership_id=$2
+      )
+     )
+     SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM assigned_orders w
+     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
+     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;
+
+
+// All job-specific authority facts are filtered before selecting one representative
+// per team. Remaining authority (member, role, grants, team membership) depends only
+// on that team, so reuse the unchanged rule once per scope, in the same statement
+// snapshot. Materialization prevents PostgreSQL from moving it back into a job loop.
+export const assignedJobsByScopeQuery = `WITH assigned_orders AS MATERIALIZED (
+      SELECT w.tenant_id,w.job_id,w.id,w.reference,c.revision_id,team.team_id
+      FROM app.work_order w
+      JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,c.revision_id)
+      JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+      JOIN app.job_commercial_track track ON(track.tenant_id,track.job_id)=(w.tenant_id,w.job_id)
+      JOIN app.job_assignment team ON(team.tenant_id,team.revision_id)=(c.tenant_id,c.revision_id) AND team.membership_id IS NULL
+      WHERE w.tenant_id=$1 AND j.provenance='work_order'
+       AND track.job_track='contractor' AND track.environment='synthetic_demo' AND r.status<>'cancelled'
+       AND EXISTS (
+        SELECT 1 FROM app.job_assignment a
+        WHERE (a.tenant_id,a.revision_id)=(c.tenant_id,c.revision_id) AND a.membership_id=$2
+       )
+     ), scope_jobs AS MATERIALIZED (
+      SELECT DISTINCT ON (team_id) team_id,job_id FROM assigned_orders ORDER BY team_id,job_id
+     ), allowed_scopes AS MATERIALIZED (
+      SELECT team_id FROM scope_jobs s
+      WHERE (SELECT a.decision FROM app.ent3b_visit_authority($2,s.job_id) a)='allowed'
+     )
+     SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM assigned_orders w
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
+     WHERE EXISTS (SELECT 1 FROM allowed_scopes s WHERE s.team_id=w.team_id)
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;

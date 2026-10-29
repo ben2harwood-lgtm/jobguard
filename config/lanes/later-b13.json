@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b13": {
+      "branches": [
+        "codex/sandbox/later-b13"
+      ],
+      "receipt": "docs/verdicts/LATER-B13/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B13; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "apps/api/src/readiness.controller.ts",
+        "apps/api/src/readiness.later.test.ts",
+        "docs/ledger/LATER-B13.md",
+        "docs/verdicts/LATER-B13/BUILDER_RECEIPT.md",
+        "packages/db/src/readiness-repository.ts",
+        "packages/db/test/readiness-later.integration.test.ts"
+      ]
+    }
+  }
+}

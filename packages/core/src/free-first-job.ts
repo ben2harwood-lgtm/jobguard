@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 
 export class FreeFirstJobError extends Error {
@@ -5,15 +6,15 @@ export class FreeFirstJobError extends Error {
     super(code); this.name = "FreeFirstJobError";
   }
 }
-export function parseFreeFirstJob<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function parseFreeFirstJob<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new FreeFirstJobError("INVALID_FREE_FIRST_JOB_INPUT");
   return parsed.data;
 }
 const environment = z.literal("synthetic_demo");
-const id = z.string().uuid();
+const id = z.guid({ error: "Invalid uuid" });
 const opaque = z.string().min(1).max(200).regex(/^[\x21-\x7e]+$/u);
-const instant = z.string().datetime().refine(value => {
+const instant = utcDatetimeV1.refine(value => {
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value && value >= "2000" && value < "9999";
 }, "Canonical millisecond UTC instant required for the reference preview");
@@ -31,7 +32,17 @@ export const freeFirstJobIdentityV1 = z.object({
   companyNumber: opaque.nullable(), normalizedPhone: opaque.nullable(), cardFingerprint: opaque.startsWith("sim_fp_").nullable(),
 }).strict().readonly();
 
-/** Supplied already-normalised fictional identifiers only. This performs no identity verification. */
+/** All independently derivable keys, with stable v1 bytes. No verification is performed. */
+export function freeFirstJobKeys(raw: unknown): readonly string[] {
+  const identity = parseFreeFirstJob(freeFirstJobIdentityV1, raw);
+  const keys: string[] = [];
+  if (identity.companyNumber !== null) keys.push(JSON.stringify(["free-first-job.v1", "company", identity.companyNumber]));
+  if (identity.normalizedPhone !== null && identity.cardFingerprint !== null)
+    keys.push(JSON.stringify(["free-first-job.v1", "phone_card", identity.normalizedPhone, "simulated", identity.cardFingerprint]));
+  return Object.freeze(keys);
+}
+
+/** @deprecated Compatibility only; unsuitable for entitlement decisions. Use freeFirstJobKeys. */
 export function freeFirstJobKey(raw: unknown) {
   const identity = parseFreeFirstJob(freeFirstJobIdentityV1, raw);
   if (identity.companyNumber !== null) return { status: "identified" as const,
@@ -68,9 +79,9 @@ export function previewFreeFirstJob(raw: unknown) {
   const input = parseFreeFirstJob(freeFirstJobPreviewInputV1, raw);
   const existing = input.priorLiveJobIds.includes(input.jobId);
   const first = input.priorLiveJobIds.length === 0;
-  const identity = freeFirstJobKey(input.identity);
-  const trial = existing ? "existing_job" : !first ? "not_first_job" : identity.key === null ? "identity_required"
-    : input.consumedKeys.includes(identity.key) ? "already_consumed" : "candidate";
+  const keys = freeFirstJobKeys(input.identity);
+  const trial = existing ? "existing_job" : !first ? "not_first_job" : keys.length === 0 ? "identity_required"
+    : keys.some(key => input.consumedKeys.includes(key)) ? "already_consumed" : "candidate";
   const requiresCard = !existing && !first && input.card?.status !== "completed";
   return Object.freeze({
     ...previewFacts, version: "free-first-job-preview-result.v1" as const, activationAuthorized: false as const,

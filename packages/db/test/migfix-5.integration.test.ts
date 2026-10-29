@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, addFixtureCapture, asFixtureTenant, LOCK_OWNER, LOCK_HASH, type LockFixture } from "./final-account-lock.integration.test.js";
+import { publishFixtureCompletion } from "./sv5pre-fixtures.js";
 
 // MIGFIX-5 (0166): the lock refuses an account assembled before the latest approved variation, and partial
 // credit notes conserve the ORIGINAL invoice net and VAT. The legacy-issuer guard and real PDF bytes are held
@@ -12,6 +13,8 @@ type Account = Awaited<ReturnType<typeof seedAccount>>;
 const REV2_HASH = "b".repeat(64);
 
 async function appendCheck(f: LockFixture, a: Account, status: "pending" | "failed" | "completed") {
+  // Set-up only (per C135): a completed check now needs a verified run, so publish one through the checked fixture path.
+  if (status === "completed") { await publishFixtureCompletion(f.shadow, f.admin, a.tenantId, a.jobId); return; }
   const row = (await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0];
   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)", [a.tenantId, a.jobId, randomUUID(), row.id, row.cutoff, status]));
 }
@@ -41,7 +44,7 @@ async function reassemble(f: LockFixture, a: Account, variationId: string, extra
   await asFixtureTenant(f.admin, a.tenantId, async db => {
     await db.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings,created_at) SELECT $1,tenant_id,job_id,final_account_draft_id,2,id,$2,baseline_quote_version_id,currency,tax_policy_version,$5,$6,$7,false,findings,clock_timestamp() FROM app.final_account_revision WHERE tenant_id=$3 AND id=$4", [revision, REV2_HASH, a.tenantId, a.revisionId, net, tax, net + tax]);
     await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal FROM app.final_account_line WHERE tenant_id=$2 AND final_account_revision_id=$3", [revision, a.tenantId, a.revisionId]);
-    await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) VALUES(gen_random_uuid(),$1,$2,$3,'variation',$4,$5,$4,gen_random_uuid(),'Synthetic approved extra',$6,2)", [a.tenantId, a.jobId, revision, info.current_revision_id, info.scope_item_id, extraNet]);
+    await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) SELECT gen_random_uuid(),$1,$2,$3,'variation',$4,$5,$4,approval.id,approved_revision.description,$6,2 FROM app.variation_approval approval JOIN app.variation_revision approved_revision ON (approved_revision.tenant_id,approved_revision.job_id,approved_revision.id)=(approval.tenant_id,approval.job_id,approval.revision_id) WHERE approval.tenant_id=$1 AND approval.job_id=$2 AND approval.revision_id=$4", [a.tenantId, a.jobId, revision, info.current_revision_id, info.scope_item_id, extraNet]);
     await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3", [revision, a.tenantId, a.draftId]);
   });
   return revision;

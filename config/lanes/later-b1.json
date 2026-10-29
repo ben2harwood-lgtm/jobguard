@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b1": {
+      "branches": ["codex/sandbox/later-b1"],
+      "receipt": "docs/verdicts/LATER-B1/BUILDER_RECEIPT.md",
+      "note": "L134: socket-free health database-independence proof only. No web workflow, runtime changes or migration.",
+      "test": "apps/api/src/health-database-independence.test.ts",
+      "allow": [
+        "apps/api/src/health-database-independence.test.ts",
+        "docs/verdicts/LATER-B1/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B1.md"
+      ]
+    }
+  }
+}

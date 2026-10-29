@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { jobMutationRegistry, watchdogCommandGuards } from "@jobguard/core";
+import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 Done-when, applied to EVERY watchdog_live_only command: once a command succeeds, replaying its id returns the first
@@ -14,7 +14,7 @@ afterAll(() => h.stop());
 
 describe("every watchdog_live_only command is covered by this contract", () => {
   it("has a case for every guarded command (the registry's command list)", () => {
-    expect(caseKeys.slice().sort()).toEqual(watchdogCommandGuards.map(entry => `${entry.file}#${entry.method}`).sort());
+    expect(caseKeys.slice().sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
