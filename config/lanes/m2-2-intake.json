@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-2-intake": {
+      "branches": ["codex/sandbox/m2-2-intake"],
+      "allow": [
+        "docs/decisions/d04-providers-residency.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/merchant-intake-port.ts",
+        "packages/db/test/merchant-intake-port.test.ts"
+      ],
+      "note": "M2-2 DARK in-memory intake contract on M2-1; no live routes, business writes, providers or migration. M5-4 shared supplier-intake hardening left for merge."
+    }
+  }
+}
