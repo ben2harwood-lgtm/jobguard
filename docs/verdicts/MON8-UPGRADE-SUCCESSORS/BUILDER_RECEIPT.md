@@ -462,3 +462,38 @@ live money, providers, release, git mutation or independent acceptance occurred.
 No new reporting mechanism or speculative abstraction was introduced. Existing
 receipt, contract and exact lane file carry this handoff. Commit message:
 `/tmp/mon8-upgrade-successors-20261029T063054Z-commit-msg.txt`.
+
+
+## 29 October 2026 — 08:13 main catch-up conflict repair
+
+Resolved the sole supplied conflict in
+`packages/db/test/contractor-entitlement-upgrade.integration.test.ts`.
+Preserved the branch's complete predecessor partition, named-column/type and
+unkeyed-multiset comparisons, both migration passes and migration-ledger checks.
+Unioned main's OIDC identity tables and four evidence-pack-v3 tables into the
+explicit empty successor expectations. Schema-qualified names preserve the
+identity/app distinction through the existing identifier quoting helper. Both
+merge-stage successor lists compare as included in the resulting 63-table list;
+original own-step status rows remain in the populated baseline proof.
+
+Checks actually run with installed Node v24.17.0 tools:
+
+- DB Vitest `run --maxWorkers=2 test/mon8-combined-migration.test.ts
+  src/plan-entitlement-service.test.ts src/outbox.test.ts`: 3 files / 13 passed.
+- DB TypeScript `-p packages/db/tsconfig.json --noEmit`: passed.
+- Strict standalone TypeScript on the resolved upgrade integration file, with
+  `--noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes
+  --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext`:
+  passed.
+- DB Vitest `list --maxWorkers=2
+  test/contractor-entitlement-upgrade.integration.test.ts`: all 13 cases collected;
+  this did not execute PostgreSQL hooks or assertions.
+- Deterministic comparison against index stages 2 and 3: all explicit successor
+  expectations retained. `git diff --check`: passed.
+
+No git writes or PostgreSQL startup attempted. Source conflict markers are gone;
+the index necessarily remains UU until the router stages the resolution. Router
+owns merge completion, commit/push, current-main CI including DB/migration suites,
+and the required exact-head independent RED review. Incoming main changes were
+preserved. Commit message:
+`/tmp/mon8-upgrade-successors-20261029T081356Z-commit-msg.txt`.

@@ -1,6 +1,104 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/oidc/{connectionId}/start": {
+      "post": {
+        "operationId": "OidcController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-start.v1",
+                      "oidc-admin.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "signin",
+                      "connection.create"
+                    ]
+                  },
+                  "linkExisting": {
+                    "type": "boolean"
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "connection": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Local fictional callback plus Secure HttpOnly browser binding; no verifier or tokens"
+          }
+        },
+        "summary": "Persist a synthetic OIDC request or administer its immutable connection",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/auth/oidc/{connectionId}/callback": {
+      "post": {
+        "operationId": "OidcController_callback",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "callback"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-callback.v1"
+                    ]
+                  },
+                  "callback": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "oidc-signed-in.v1; persisted session token only in Secure HttpOnly cookie"
+          }
+        },
+        "summary": "Consume a persisted OIDC request once and issue a bounded persisted session",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
     "/jobs/{id}/success-fees": {
       "get": {
         "operationId": "SuccessFeeController_get",

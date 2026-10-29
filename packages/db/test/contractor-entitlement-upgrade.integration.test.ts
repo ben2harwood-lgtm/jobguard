@@ -151,8 +151,15 @@ it("actual catalogs retain least privilege",async()=>{
  const routines=(await c.admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='app' AND p.proname IN('mon8_contractor_agreement_context','mon8_agreement_status_guard') ORDER BY p.proname`)).rows;
  expect(routines).toEqual([{proname:"mon8_agreement_status_guard",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],runtime:false,infrastructure:false,public:false},{proname:"mon8_contractor_agreement_context",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
 });
-// Preserve main's explicit empty successor-table expectations as well as the general proof.
+// Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
+ "identity.oidc_assertion_use",
+ "identity.oidc_request",
+ ...[
+ "evidence_pack_v3",
+ "evidence_pack_v3_approval",
+ "evidence_pack_v3_check",
+ "evidence_pack_v3_request",
  "small_builder_demo_run",
  "small_builder_demo_receipt",
  "small_builder_demo_report",
@@ -201,13 +208,14 @@ const emptySuccessors=[
  "recovery_attribution_command",
  "recovery_attribution_reassessment",
  ...["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"],
+ ].map(table=>`app.${table}`),
 ];
 it("repeat migration and later successors succeed",async()=>{
  // Include status rows produced by the authorization tests as well as every original predecessor.
  const before = await capture(c.admin);
  for (let pass=0;pass<2;pass++) {
   await migrate(c.admin);
-  for(const table of emptySuccessors) expect((await c.admin.query(`SELECT * FROM ${tableIdent(`app.${table}`)}`)).rows,table).toEqual([]);
+  for(const table of emptySuccessors) expect((await c.admin.query(`SELECT * FROM ${tableIdent(table)}`)).rows,table).toEqual([]);
   expect(await proofDifferences(c.admin,original)).toEqual(preserved);
   expect(await proofDifferences(c.admin,before)).toEqual(preserved);
   expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!));
