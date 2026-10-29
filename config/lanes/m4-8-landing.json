@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-8-landing": {
+      "branches": [
+        "codex/sandbox/m4-8-landing"
+      ],
+      "receipt": "docs/contracts/recovery-allocation-v1.md",
+      "note": "M4-8 RED dark landing reconciliation gap over merged M4-8-S: conservative suggestions and immediate reversal holds. No migration; this lane file is implicitly owned.",
+      "allow": [
+        "apps/api/src/recovery-allocation.application.test.ts",
+        "apps/api/src/recovery-allocation.contracts.ts",
+        "apps/web/app/ui/recovery-allocations.tsx",
+        "apps/web/e2e/M4-8-S.spec.ts",
+        "apps/web/e2e/helpers/recovery-allocation-journey.ts",
+        "docs/contracts/recovery-allocation-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/landing-suggestions.test.ts",
+        "packages/core/src/landing-suggestions.ts",
+        "packages/core/src/receipt-allocation.ts",
+        "packages/db/src/landing-suggestions.test.ts",
+        "packages/db/src/recovery-allocation-repository.ts",
+        "packages/db/test/recovery-allocation.integration.test.ts"
+      ]
+    }
+  }
+}

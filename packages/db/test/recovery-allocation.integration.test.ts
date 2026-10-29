@@ -169,6 +169,45 @@ async function originals(f: Fixture) {
     (await admin.query(`SELECT row_to_json(t)::text AS bytes FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, [DEMO_TENANT_ID, f.jobId])).rows.map(row => row.bytes)])));
 }
 
+it("M4-8: matching suggestions read settled facts and approved cases without creating authority", async () => {
+  const f = await fixture(), before = await countRows(f), view = await read(f);
+  expect(view.suggestions).toHaveLength(4);
+  expect(view.suggestions).toContainEqual({ caseId: f.case1.id, paymentId: f.payment1, expectedCaseRevision: f.case1.revision,
+    grossPence: 38400, eligibleNetPence: 32000, taxPence: 6400, ambiguous: true, requiresHumanReview: true });
+  expect(view.suggestions).toContainEqual({ caseId: f.case2.id, paymentId: f.payment2, expectedCaseRevision: f.case2.revision,
+    grossPence: 300000, eligibleNetPence: 250000, taxPence: 50000, ambiguous: true, requiresHumanReview: true });
+  expect(await countRows(f)).toEqual(before);
+  expect((await read(await fixture({ settle: false }))).suggestions).toEqual([]);
+  const other = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, other);
+  await expect(repo().view(context, actor, auth.digest, f.jobId)).rejects.toMatchObject({ code: "ALLOCATION_NOT_FOUND" });
+  await run(f, await reviewed(f));
+  expect((await read(f)).suggestions?.every(row => row.caseId !== f.case1.id && row.paymentId !== f.payment1)).toBe(true);
+});
+
+it("M4-8: partial refund replays append once, retain the locked bill and reopen only the returned principal", async () => {
+  const f = await fixture(); await run(f, await reviewed(f));
+  const before = await originals(f), allocation = (await read(f)).allocations[0]!;
+  const creditInput = { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 5000, reason: "Fictional partial refund" };
+  const preview = await f.invoices.previewCredit(context, creditInput);
+  const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), previewHash: preview.previewHash });
+  expect((await read(f)).paused).toBe(true);
+  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
+  const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id,
+    creditNoteId: credit.creditNoteId, expectedCaseRevision: current.revision, grossPence: 6000 };
+  const review = await run(f, input);
+  const confirm = { ...input, action: "reverse", commandId: randomUUID(), approvalHash: review.review!.approvalHash };
+  await run(f, confirm); const counts = await countRows(f); await run(f, confirm);
+  expect(await countRows(f)).toEqual(counts);
+  const view = await read(f);
+  expect(view).toMatchObject({ eligibleNetPence: 27000, allocatedTaxPence: 5400, paused: true });
+  expect(view.cases.find(row => row.caseId === f.case1.id)).toMatchObject({ outstandingNetPence: 5000 });
+  const after = await originals(f);
+  for (const table of ["customer_invoice", "customer_payment", "practice_feed_event", "practice_feed_receipt_match", "recovery_case_allocation"]) expect(after[table]).toEqual(before[table]);
+  await expect(run(f, { ...input, commandId: randomUUID(), expectedCaseRevision: current.revision + 1 })).rejects.toBeTruthy();
+  expect(await countRows(f)).toEqual(counts);
+});
+
 it("paid-invoice credit remains readable and reversible", async () => {
   const f = await fixture();
   await run(f, await reviewed(f));
@@ -271,6 +310,7 @@ it("DW4: approved merged receipt reversal appends linked reversals, reopens case
   for (const which of [1, 2]) await run(f, await reviewed(f, allocationInput(f, which)));
   const before = await originals(f), allocation = (await read(f)).allocations.find(a => a.paymentId === f.payment2)!;
   await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment2, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic £3,000 reversed" });
+  expect((await read(f)).paused).toBe(true);
   const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case2.id)!;
   const reviewInput = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id, expectedCaseRevision: current.revision, grossPence: 300000 };
   const review = await run(f, reviewInput);

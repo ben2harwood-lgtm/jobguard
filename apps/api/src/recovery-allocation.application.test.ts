@@ -82,6 +82,19 @@ describe("receipt allocation application boundary (repository unit double)", () 
     expect(recoveryAllocationViewV1.safeParse({ ...response, realExternalActions: 1 }).success).toBe(false);
     expect(recoveryAllocationViewV1.safeParse({ ...response, feePence: 4651 }).success).toBe(false);
   });
+  it("validates matching proposals without letting a suggestion approve or land money", async () => {
+    const suggestion = { caseId: randomUUID(), paymentId: randomUUID(), expectedCaseRevision: 3,
+      grossPence: 38400, eligibleNetPence: 32000, taxPence: 6400, ambiguous: true, requiresHumanReview: true };
+    const { application, repository } = fixture();
+    repository.view.mockResolvedValue({ ...response, suggestions: [suggestion] } as never);
+    expect(await application.view(sessionId, jobId)).toMatchObject({ suggestions: [suggestion], allocations: [], review: null });
+    expect(repository.command).not.toHaveBeenCalled();
+    for (const extra of [{ requiresHumanReview: false }, { landed: true }, { feePence: 3200 }, { hiddenSignalCount: 1 }]) {
+      expect(recoveryAllocationViewV1.safeParse({ ...response, suggestions: [{ ...suggestion, ...extra }] }).success).toBe(false);
+    }
+    await expect(application.command(sessionId, jobId, { ...command(), ...suggestion })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+    expect(repository.command).not.toHaveBeenCalled();
+  });
   it("pairs known refusals with their HTTP status and keeps unknown outcomes paused", () => {
     const body = { version: "recovery-allocation-error.v1", code: "ALLOCATION_APPROVAL_CHANGED" };
     expect(recoveryAllocationRefusalV1.safeParse({ status: 409, body }).success).toBe(true);

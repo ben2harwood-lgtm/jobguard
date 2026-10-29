@@ -90,6 +90,18 @@ export function RecoveryAllocations({ jobId }: { jobId: string }) {
         <div><dt>Customer invoice balance</dt><dd data-testid="customer-invoice-balance">{pounds(view.invoiceBalancePence)}</dd></div>
       </dl>
       {view.paused && <p data-testid="fee-execution-state">Paused — recovery changed</p>}
+      {(view.suggestions?.length ?? 0) > 0 && <section aria-label="Suggested receipt matches">
+        <h3>Suggested receipt matches</h3>
+        <p>Suggestions need your review and evidence. Alternatives can share the same money.</p>
+        {view.suggestions!.map(item => <p key={`${item.caseId}:${item.paymentId}`}>
+          {pounds(item.grossPence)} = {pounds(item.eligibleNetPence)} net + {pounds(item.taxPence)} tax
+          {item.ambiguous && <span> · Multiple possible matches — choose after review</span>}{" "}
+          <button type="button" disabled={locked} onClick={() => {
+            setCaseId(item.caseId); setPaymentId(item.paymentId);
+            setAmount((item.grossPence / 100).toFixed(2)); setEvidenceId(""); setRemittanceEvidenceId(""); setReview(null);
+          }}>Choose suggested {pounds(item.grossPence)} match</button>
+        </p>)}
+      </section>}
       <fieldset disabled={locked} className={styles.form}><legend>Review allocation</legend>
         <label>Recovery case<select value={caseId} onChange={event => { setCaseId(event.target.value); setReview(null); }}><option value="">Choose a case</option>{view.cases.map(item => <option key={item.caseId} value={item.caseId}>{pounds(item.claimedNetPence)} claim · {item.caseType}</option>)}</select></label>
         <label>Matched receipt<select value={paymentId} onChange={event => { setPaymentId(event.target.value); setReview(null); }}><option value="">Choose a receipt</option>{view.receipts.filter(item => !item.reversed).map(item => <option key={item.paymentId} value={item.paymentId}>{pounds(item.grossPence)} receipt · {pounds(item.availablePence)} available</option>)}</select></label>

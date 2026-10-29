@@ -6,6 +6,7 @@ import {
   multiplyExactPence, parseExactPence, parseRecoveryAllocationCommand, RecoveryAllocationError,
   serializeExactPence, sumExactPence, type RecoveryAllocationCommand, type RecoveryAllocationErrorCode,
   type RecoveryDeemedLineAllocation, type RecoveryReceiptFacts,
+  suggestLandingAllocations, type LandingSuggestion,
 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { practiceMaterialPool } from "./practice-session.js";
@@ -32,6 +33,7 @@ export type RecoveryAllocationView = {
     movementId: string; movementHash: string; held: boolean; reversedPence: number }>;
   lines: Array<{ id: string; paymentId: string; invoiceId: string; lineId: string; rule: "explicit" | "separate_invoice" | "pro_rata"; sourceRef: string; gross: Fraction; net: Fraction; reversesId: string | null }>;
   review: RecoveryAllocationReview | null;
+  suggestions?: LandingSuggestion[];
 };
 const artifactId = z.guid({ error: "Invalid uuid" });
 const artifactAmount = z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
@@ -125,13 +127,21 @@ export class RecoveryAllocationRepository {
         EXISTS(SELECT 1 FROM app.customer_payment_reversal r WHERE r.tenant_id=pay.tenant_id AND r.payment_id=pay.id) reversed,
         EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
           AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held,
-        i.net_pence invoice_net_pence,i.total_pence invoice_gross_pence,i.final_account_revision_id
+        i.net_pence invoice_net_pence,i.total_pence invoice_gross_pence,i.final_account_revision_id,
+        to_char(i.issued_on,'YYYY-MM-DD') issued_date,to_char(pay.paid_on,'YYYY-MM-DD') paid_date,
+        to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') settled_at,
+        e.account_id::text||':'||e.movement_key movement_identity,
+        ARRAY(SELECT DISTINCT a.stated_customer_name FROM app.quote_acceptance a
+          JOIN app.final_account_revision f ON(f.tenant_id,f.job_id,f.baseline_quote_version_id)=(a.tenant_id,a.job_id,a.document_id)
+          WHERE f.tenant_id=i.tenant_id AND f.job_id=i.job_id AND f.id=i.final_account_revision_id) counterparties
         FROM app.customer_payment pay JOIN app.practice_feed_receipt_match m ON(m.tenant_id,m.job_id,m.payment_id)=(pay.tenant_id,pay.job_id,pay.id)
         JOIN app.practice_feed_event e ON(e.tenant_id,e.account_id,e.event_id)=(m.tenant_id,m.account_id,m.settled_event_id)
         JOIN app.customer_invoice i ON(i.tenant_id,i.job_id,i.id)=(pay.tenant_id,pay.job_id,pay.invoice_id)
         WHERE pay.tenant_id=$1 AND pay.job_id=$2 AND e.state='settled' AND e.identity='identified')p),'[]'::jsonb) receipts,
       coalesce((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.created_at,c.id) FROM (SELECT c.*,er.status eligibility_status,er.eligible_net_pence evidenced_net_pence,er.policy_version,
-        er.id eligibility_id FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision er
+        er.id eligibility_id,er.classification eligibility_classification,
+        to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') case_created_at
+        FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision er
         WHERE er.tenant_id=c.tenant_id AND er.case_id=c.id ORDER BY er.revision DESC LIMIT 1)er ON true
         WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.claim_revision IS NOT NULL)c),'[]'::jsonb) cases,
       coalesce((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.server_received_at,e.id) FROM (SELECT e.*,EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=e.tenant_id AND x.evidence_id=e.id) invalidated
@@ -152,7 +162,7 @@ export class RecoveryAllocationRepository {
     return result.rows[0]!;
   }
 
-  private project(snapshot: Snapshot, jobId: string): RecoveryAllocationView {
+  private project(snapshot: Snapshot, jobId: string, tenantId: string): RecoveryAllocationView {
     const allocations = snapshot.allocations.map(row => ({
       id: row.id, caseId: row.case_id, paymentId: row.payment_id, invoiceId: row.invoice_id,
       grossPence: Number(row.gross_pence), eligibleNetPence: Number(row.eligible_net_pence), taxPence: Number(row.tax_pence),
@@ -181,7 +191,9 @@ export class RecoveryAllocationRepository {
       grossMovementsPence: sum(snapshot.receipts.map(row => Number(row.amount_pence))), eligibleNetPence: activeNet,
       allocatedTaxPence: activeTax, invoiceBalancePence: subtract(subtract(sum(snapshot.invoices.map(row => Number(row.total_pence))), sum(snapshot.credits.map(row => Number(row.amount_pence)))), receiptTotal),
       reversalSources,
-      paused: snapshot.reversals.length > 0 || allocations.some(row => row.held),
+      paused: snapshot.reversals.length > 0 || allocations.some(row => row.held
+        || snapshot.receipts.some(receipt => receipt.id === row.paymentId && (receipt.reversed || receipt.duplicate_held)))
+        || reversalSources.length > 0,
       availableEvidence: snapshot.evidence.filter(row => !row.invalidated).map(row => ({ evidenceId: row.id, objectVersionId: row.object_version_id, evidenceHash: String(row.sha256).trim(), label: `${row.evidence_type} · ${row.id}` })),
       receipts: snapshot.receipts.map(row => ({ paymentId: row.id, invoiceId: row.invoice_id, grossPence: Number(row.amount_pence),
         availablePence: row.reversed || row.duplicate_held ? 0 : subtract(Number(row.amount_pence), sum(allocations.filter(allocation => allocation.paymentId === row.id).map(allocation => subtract(allocation.grossPence, allocation.reversedPence)))),
@@ -192,7 +204,35 @@ export class RecoveryAllocationRepository {
       lines: snapshot.lines.map(row => ({ id: row.id, paymentId: row.payment_id, invoiceId: row.invoice_id, lineId: row.line_id,
         rule: row.rule, sourceRef: row.source_ref, gross: serializeExactPence(rowFraction(row, "gross")), net: serializeExactPence(rowFraction(row, "net")), reversesId: row.reverses_id ?? null })),
       review: snapshot.review ? this.reviewProjection(snapshot.review.artifact, snapshot.review.approval_hash) : null,
+      suggestions: this.suggestions(snapshot, jobId, tenantId),
     };
+  }
+
+  private suggestions(snapshot: Snapshot, jobId: string, tenantId: string): LandingSuggestion[] {
+    // snapshot() reads only builder-visible rows under RLS. Hidden/shadow tables
+    // and counts are deliberately absent from matching and its response.
+    return suggestLandingAllocations({
+      version: "landing-suggestion-facts.v1", environment: "synthetic_demo", tenantId, jobId,
+      hasFinalizedProof: snapshot.evidence.some(row => !row.invalidated),
+      receipts: snapshot.receipts.map(row => ({ tenantId: row.tenant_id, jobId: row.job_id,
+        paymentId: row.id, invoiceId: row.invoice_id, movementId: row.movement_id, movementIdentity: row.movement_identity,
+        finalAccountRevisionId: row.final_account_revision_id, invoiceNetPence: Number(row.invoice_net_pence),
+        invoiceGrossPence: Number(row.invoice_gross_pence), settledAt: row.settled_at,
+        issuedOn: row.issued_date, paidOn: row.paid_date, counterparties: row.counterparties,
+        availablePence: Math.max(0, subtract(Number(row.amount_pence), sum(snapshot.allocations
+          .filter(allocation => allocation.payment_id === row.id).map(allocation => subtract(Number(allocation.gross_pence),
+            sum(snapshot.reversals.filter(reversal => reversal.allocation_id === allocation.id).map(reversal => Number(reversal.gross_pence)))))))),
+        held: row.duplicate_held, reversed: row.reversed,
+      })),
+      cases: snapshot.cases.map(row => ({ tenantId: row.tenant_id, jobId: row.job_id, caseId: row.id,
+        revision: Number(row.revision), state: row.state, sourceRefs: row.source_refs, counterparty: row.counterparty,
+        createdAt: row.case_created_at,
+        remainingNetPence: Math.max(0, subtract(Number(row.claim_pence), sum([Number(row.landed), Number(row.written_off)]))),
+        evidencedRemainingNetPence: Math.max(0, subtract(Number(row.evidenced_net_pence ?? 0), Number(row.landed))),
+        eligibilityApproved: row.synthetic === true && row.eligibility_status === "approved"
+          && row.eligibility_classification === "eligible_for_review",
+      })),
+    });
   }
 
   private reviewProjection(artifact: Row, approvalHash: string): RecoveryAllocationReview {
@@ -206,7 +246,7 @@ export class RecoveryAllocationRepository {
     this.guard(sessionDigest, jobId, actor);
     return withTenant(practiceMaterialPool(this.pool, sessionDigest), context, async db => {
       await this.authorize(db, context, actor, sessionDigest, jobId.toLowerCase());
-      return this.project(await this.snapshot(db, context, jobId.toLowerCase()), jobId.toLowerCase());
+      return this.project(await this.snapshot(db, context, jobId.toLowerCase()), jobId.toLowerCase(), context.tenantId);
     });
   }
 

@@ -63,6 +63,7 @@ export * from "./recovery-case-terms.js";
 export * from "./contractor-practice-session.js";
 export * from "./site-extra.js";
 export * from "./recovery-allocation.js";
+export * from "./landing-suggestions.js";
 export * from "./site-extra-pricing.js";
 export * from "./site-visit.js";
 export * from "./site-extra-evidence.js";
