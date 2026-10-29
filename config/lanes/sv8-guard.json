@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv8-guard": {
+      "branches": ["codex/sandbox/sv8-guard"],
+      "note": "RED SV-8 dark production settlement guards only. Own lane file is implicitly permitted. No migration, dependency, provider or live activation.",
+      "allow": [
+        "apps/api/src/production-settlement-guard.ts",
+        "apps/api/src/production-settlement-guard.test.ts",
+        "apps/api/src/effects/fee-posting.ts",
+        "apps/api/src/worker.ts"
+      ]
+    }
+  }
+}
