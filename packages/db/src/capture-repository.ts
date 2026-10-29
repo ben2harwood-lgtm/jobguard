@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { jobRecordProposalV1, type JobRecordProposal } from "@jobguard/core";
+import { deepgramTranscriptSourceV1, jobRecordProposalV1, type JobRecordProposal } from "@jobguard/core";
+import { SpeechAudioError } from "./speech-audio.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 export class CaptureConflictError extends Error { readonly code = "CAPTURE_ID_REUSED"; }
@@ -49,6 +50,38 @@ export class CaptureRepository {
         await db.$client.query(`INSERT INTO app.proposal_line(id,tenant_id,job_id,scope_item_id,source_hash,source_reference,proposal_id,ordinal,proposed_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[randomUUID(),context.tenantId,jobId,scopeId,hash,`${input.captureId}:v1`,proposalId,index+1,line]);
       }
       return { id:proposalId, capture_id:input.captureId, job_id:jobId, source_id:input.captureId, source_version:1, source_sha256:hash, proposal, content_text:input.text };
+    });
+  }
+
+  /** Dark fixture intake keeps the evidence's existing job. It stores a labelled
+   * source only, never a second job, canonical scope, approval or commercial fact. */
+  async persistSpeechFixtureSource(context: VerifiedTenantContext, captureId: string, raw: unknown) {
+    const source = deepgramTranscriptSourceV1.parse(raw);
+    const a = source.acquisition;
+    const bytes = Buffer.from(source.text, "utf8");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    return withTenant(this.pool, context, async db => {
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1::uuid::text),hashtext('capture:' || $2::uuid::text))", [context.tenantId,captureId]);
+      const evidence = (await db.$client.query(`SELECT e.id FROM app.evidence_object e
+        JOIN app.evidence_upload u ON (u.tenant_id,u.id)=(e.tenant_id,e.upload_id)
+        WHERE e.tenant_id=$1 AND e.id=$2 AND e.job_id=$3 AND e.kind='original'
+        AND e.evidence_type='synthetic_speech_audio' AND e.content_type='audio/wav'
+        AND e.object_version_id=$4 AND e.sha256=$5 AND e.byte_length=$6
+        AND u.state='verified' AND u.object_version_id=e.object_version_id`,
+        [context.tenantId,a.evidenceId,a.evidenceJobId,a.objectVersionId,a.sourceSha256,a.audioByteLength])).rows[0];
+      if (!evidence) throw new SpeechAudioError();
+      const existing = (await db.$client.query(`SELECT kind,sha256,audio_byte_length,
+        acquisition_metadata IS NOT DISTINCT FROM $3::jsonb AS acquisition_matches
+        FROM app.capture_source WHERE tenant_id=$1 AND id=$2`,[context.tenantId,captureId,a])).rows[0];
+      if (existing) {
+        if (existing.kind !== source.kind || existing.sha256 !== hash || existing.audio_byte_length !== a.audioByteLength || !existing.acquisition_matches)
+          throw new CaptureConflictError("A capture id cannot be reused for different source data");
+      } else {
+        await db.$client.query(`INSERT INTO app.capture_source
+          (id,tenant_id,kind,content_bytes,content_text,sha256,acquisition_metadata,audio_byte_length)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[captureId,context.tenantId,source.kind,bytes,source.text,hash,a,a.audioByteLength]);
+      }
+      return { sourceId:captureId, jobId:a.evidenceJobId, source };
     });
   }
 
