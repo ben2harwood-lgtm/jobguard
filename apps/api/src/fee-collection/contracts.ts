@@ -53,7 +53,8 @@ export type Attempt = {
   jobId: string; invoiceId: string; invoiceHash: string; sourceHash: string;
   statementHash: string; statementId: string; amountPence: number; rail: "stripe_card" | "direct_debit";
   decisionId: string; settlementCommandId: string | null; settlementObjectId: string | null; creditNoteId: string | null;
-  state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released";
+  state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released" | "reconciliation_required";
+  paymentState?: DirectDebitPaymentState;
   providerObjectId: string | null;
 };
 export type CollectionBook = {
@@ -76,3 +77,5 @@ export interface LockedCollectionSources {
   credit(intent: RefundIntent): Promise<unknown>;
 }
 export type VerifiedCollectionContext = Readonly<{ tenantId: string; environment: "synthetic_demo"; membershipVerified: true }>;
+
+export type DirectDebitPaymentState = "pending_submission" | "submitted" | "confirmed" | "paid_out" | "failed" | "cancelled" | "charged_back" | "late_failure";

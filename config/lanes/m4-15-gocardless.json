@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-15-gocardless": {
+      "branches": [
+        "codex/sandbox/m4-15-gocardless"
+      ],
+      "note": "M4-15 RED dark fake DD on unmerged M4-12. Shared executor edits serialize with M4-12; no migration or dependencies. Own lane file is implicitly permitted.",
+      "allow": [
+        "apps/api/src/fee-collection/contracts.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/executor.test.ts",
+        "apps/api/src/fee-collection/test-fixture.ts",
+        "apps/api/src/fee-collection/fake-gocardless.ts",
+        "apps/api/src/fee-collection/fake-gocardless.test.ts",
+        "docs/contracts/gocardless-dark-v1.md"
+      ]
+    }
+  }
+}

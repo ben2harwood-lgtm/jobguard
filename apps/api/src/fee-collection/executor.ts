@@ -2,15 +2,16 @@ import { createHash } from "node:crypto";
 import { checkSyntheticSubscriptionAgreement } from "@jobguard/core";
 import { collectionIntentV1, collectionSourcesV1, creditSourcesV1, FeeCollectionError, parse, refundIntentV1,
   type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
-  type VerifiedCollectionContext } from "./contracts.js";
+  type VerifiedCollectionContext, type DirectDebitPaymentState } from "./contracts.js";
 export interface CollectionRail {
   readonly name: "stripe_card" | "direct_debit";
   readonly environment: "synthetic_demo";
   verifyWebhook(body: string, signature: string): RailEvent;
+  verifyWebhookBatch?(body: string, signature: string): readonly (RailEvent | FeeCollectionError)[];
   submit(tenantId: string, attempt: Readonly<Attempt>): Promise<{ state: "provider_accepted"; objectId: string } | { state: "definite_failure" }>;
 }
 export type RailEvent = Readonly<{ eventId: string; tenantId: string; commandId: string;
-  objectId: string; amountPence: number; kind: "collection" | "refund"; state: "settled" | "definite_failure" }>;
+  objectId: string; amountPence: number; kind: "collection" | "refund"; state: "settled" | "definite_failure" | DirectDebitPaymentState }>;
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const refuse = (): never => { throw new FeeCollectionError("COLLECTION_REFUSED"); };
 function transition(book: CollectionBook, attempt: Attempt, state: Attempt["state"]) {
@@ -105,7 +106,23 @@ export class DarkFeeCollectionExecutor {
     context(ctx);
     const rail = this.rails.find(r => r.name === railName && r.environment === "synthetic_demo");
     if (!rail) throw new FeeCollectionError("COLLECTION_DARK");
-    const event = rail.verifyWebhook(body, signature);
+    if (!rail.verifyWebhookBatch) return this.applyEvent(ctx, railName, rail.verifyWebhook(body, signature));
+    // Authenticate the entire raw body first, then commit each event independently.
+    const events = rail.verifyWebhookBatch(body, signature);
+    const results: { code: string }[] = [];
+    for (const event of events) {
+      try {
+        if (event instanceof FeeCollectionError) throw event;
+        await this.applyEvent(ctx, railName, event);
+        results.push({ code: "processed" });
+      } catch (error) {
+        if (!(error instanceof FeeCollectionError)) throw error;
+        results.push({ code: error.code });
+      }
+    }
+    return results;
+  }
+  private async applyEvent(ctx: VerifiedCollectionContext, railName: CollectionRail["name"], event: RailEvent) {
     if (event.tenantId !== ctx.tenantId) return refuse();
     await this.store.transaction(ctx.tenantId, async book => {
       const hash = fingerprint(event);
@@ -118,15 +135,42 @@ export class DarkFeeCollectionExecutor {
       const attempt = book.attempts.find(a => a.commandId === event.commandId);
       if (!attempt || attempt.rail !== railName || attempt.kind !== event.kind || attempt.amountPence !== event.amountPence
         || (attempt.providerObjectId !== null && attempt.providerObjectId !== event.objectId)) return refuse();
+      if (railName === "direct_debit") {
+        this.directDebitEvent(book, attempt, event);
+        book.events[eventKey] = hash;
+        return;
+      }
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
         book.events[eventKey] = hash; return;
       }
-      if (attempt.state === "reserved" || attempt.state === "released") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
+      if (attempt.state === "reserved" || attempt.state === "released" || attempt.state === "reconciliation_required") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       if (event.state === "definite_failure" && attempt.state === "settled") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       attempt.providerObjectId = event.objectId;
       if (attempt.state !== "settled") transition(book, attempt, event.state === "settled" ? "settled" : "released");
       book.events[eventKey] = hash;
     });
+  }
+  private directDebitEvent(book: CollectionBook, attempt: Attempt, event: RailEvent) {
+    if (event.state === "settled" || event.state === "definite_failure" || attempt.state === "reserved") {
+      throw new FeeCollectionError("RECONCILIATION_REQUIRED");
+    }
+    attempt.providerObjectId = event.objectId;
+    const order = ["pending_submission", "submitted", "confirmed", "paid_out"];
+    const old = attempt.paymentState;
+    const reversal = event.state === "charged_back" || event.state === "late_failure";
+    const failure = event.state === "failed" || event.state === "cancelled";
+    if (attempt.state === "reconciliation_required") return;
+    if (reversal || (failure && (old === "confirmed" || old === "paid_out"))
+      || (attempt.state === "released" && !failure)) {
+      attempt.paymentState = event.state;
+      transition(book, attempt, "reconciliation_required");
+    } else if (failure) {
+      attempt.paymentState = event.state;
+      if (attempt.state !== "released") transition(book, attempt, "released");
+    } else if (!old || order.indexOf(event.state) > order.indexOf(old)) {
+      attempt.paymentState = event.state;
+      if (event.state === "paid_out" && attempt.state !== "settled") transition(book, attempt, "settled");
+    }
   }
   async execute(ctx: VerifiedCollectionContext, commandId: string): Promise<void> {
     context(ctx);
@@ -144,6 +188,8 @@ export class DarkFeeCollectionExecutor {
       } else {
         const credit = parse(creditSourcesV1, await sources.credit({ version: "fee-refund.v1", ...current,
           settlementCommandId: current.settlementCommandId!, creditNoteId: current.creditNoteId!, creditHash: current.sourceHash }));
+        const original = book.attempts.find(a => a.commandId === current.settlementCommandId);
+        if (!original || original.state !== "settled") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
         if (credit.decisionId !== current.decisionId || credit.tenantId !== ctx.tenantId || credit.jobId !== current.jobId || credit.invoiceId !== current.invoiceId
           || credit.invoiceHash !== current.invoiceHash || credit.creditNoteId !== current.creditNoteId || credit.creditHash !== current.sourceHash
           || credit.settlementCommandId !== current.settlementCommandId || credit.approvedAmountPence !== current.amountPence
@@ -160,7 +206,11 @@ export class DarkFeeCollectionExecutor {
       // A signed settlement may arrive before the submit response.
       if (current.state !== "outcome_unknown") return;
       if (result.state === "definite_failure") transition(book, current, "released");
-      else { current.providerObjectId = result.objectId; transition(book, current, "provider_accepted"); }
+      else {
+        current.providerObjectId = result.objectId;
+        if (current.rail === "direct_debit") current.paymentState ??= "pending_submission";
+        transition(book, current, "provider_accepted");
+      }
     });
   }
 }
