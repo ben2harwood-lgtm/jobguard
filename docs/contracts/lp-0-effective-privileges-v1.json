@@ -74,7 +74,6 @@
 {"key":"owner|routine|function:app.read_value_job(uuid,text)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.read_value_business(text)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.read_value_business(text)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.recovery_attribution_sources(uuid,uuid,jsonb,uuid)|jobguard_migration","group":"a-owner-routines"},
 
 {"key":"acl|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},

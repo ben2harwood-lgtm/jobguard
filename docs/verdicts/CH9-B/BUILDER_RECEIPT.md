@@ -1,3 +1,45 @@
+# CH-9 part 2 — CI repair try 1 (RED), 29 October 2026
+
+This repair supersedes earlier migration-number and 0335 syntax-change statements.
+Ready for router commit/push; GitHub CI and independent RED review remain required.
+
+- Lane failure: removed the explicit self-grant; the lane tool implicitly permits
+  its own file. Added the exact shared upgrade-test path changed by this repair.
+- LP0-02: removed the stale owner fact for the migration-owned private
+  `recovery_attribution_sources` helper. The comparator records owner facts only
+  for externally executable routines or differing schema/routine owners. Its
+  routine inventory and all access restrictions remain intact.
+- SERIOUS-B5: added the two exact CH-9 reader signatures to the additive upgrade
+  snapshot, asserting migration ownership, SECURITY DEFINER, exact runtime-only
+  EXECUTE ACL and exact search-path/timezone settings. All predecessor rows,
+  privileges, policies and replay assertions remain compared.
+- Renumbered this branch's migration/note and upgrade-test/lane references from
+  0342 to the router-reserved 0358 using `planRenumber` from the existing helper
+  and filesystem moves (CLI write mode stages Git, forbidden in this sandbox).
+  SQL SHA-256 remains
+  `42fd422e39b4fca39531142dd1a35234f5ea3b863ec1359cd735736e67cc68a3`.
+  No SQL bug or CASE expression inside an IF condition was found in this new
+  migration. All 144 migrations on origin/main retain their exact bytes.
+- No unresolved index entries or conflict markers in the affected shared files.
+
+Local validation actually run:
+
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/value-business-reader.test.ts test/lp-0-catalog.test.ts`: 31 tests PASS.
+- `git diff --check`: PASS.
+- Read-only prospective PR path check using existing `loadLanePolicy`,
+  `selectLane`, `lanePathAllowed` and `migrationOrderViolations`: PASS.
+- Default `node tools/agent-lane-boundary-lint.mjs`: fails pre-commit because
+  local mode unions HEAD's old 0342 paths with the uncommitted rename. No rule
+  was changed or exception added; rerun after router commit. The prospective
+  path check above is distinct from this default check and from CI.
+
+PostgreSQL upgrade/grant-freeze and browser suites were not run: PostgreSQL
+cannot start in this sandbox. CI must execute them after router push.
+No Git-writing commands, package downloads, real data or providers were used.
+
 # CH-9 part 2 — main catch-up (RED), 29 October 2026
 
 Ready for the router to stage the resolved merge and commit this catch-up on
