@@ -67,13 +67,13 @@ describe("DEMO-P2 pure preparation", () => {
     const r = withMetric(); r.sources[0]!.values[0]!.value.pence = pence;
     expect(demoProductReportV1.safeParse(r).success).toBe(false);
   });
-  it("rejects conflicting count/status evidence and duplicate source IDs", () => {
+  it("rejects non-money net claims and duplicate source IDs", () => {
     const r = JSON.parse(JSON.stringify(withMetric()));
     r.sources.push(r.sources[0]);
     expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("duplicate_identity");
     for (const value of [{ kind: "count", count: 1 }, { kind: "status", status: "pending" }]) {
       r.rows[0].metrics[0].value = value;
-      expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("source_value");
+      expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("invalid_schema");
     }
   });
   it("requires adapter and sentinel zero evidence; trust remains unverified", () => {
@@ -162,6 +162,65 @@ describe("DEMO-P2 pure preparation", () => {
     r.commands[1] = { ...command, resultSourceIds: ["missing"] };
     expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("command_conflict");
     expect(validateDemoProductReport(r).issues.map(i => i.code)).toContain("source_reference");
+  });
+  it.each(["not_run", "blocked"])("validates every metric on %s rows", state => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.rows[0].state = state;
+    expect(validateDemoProductReport(r).structurallyComplete).toBe(true);
+    r.rows[0].metrics[0].value.pence++;
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "source_value", path: "rows.0.metrics.0" });
+    r.rows[0].metrics[0].evidence[0].sourceId = "missing";
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "source_reference", path: "rows.0.metrics.0" });
+    r.rows[0].metrics = [{ id: "external-actions", value: { kind: "count", count: 0 },
+      evidence: [{ sourceId: "source-1", key: "net" }] }];
+    r.sources[0].values[0].value = r.rows[0].metrics[0].value;
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "external_actions_evidence", path: "rows.0.metrics.0" });
+    r.rows[0].metrics.push(r.rows[0].metrics[0]);
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "duplicate_identity", path: "rows.0.metrics.1" });
+  });
+  it.each([
+    { kind: "count", count: 110000 }, { kind: "status", status: "settled" },
+    ...[NaN, Infinity, -Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1, 1_000_000_000_001, -1_000_000_000_001]
+      .map(pence => ({ kind: "amount", pence, currency: "GBP" })),
+    { kind: "amount", pence: 110000, currency: "USD" },
+  ])("rejects invalid net even when its source agrees: %j", value => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.rows[0].metrics[0].value = value;
+    r.sources[0].values[0].value = value;
+    expect(validateDemoProductReport(r)).toMatchObject({ structurallyComplete: false,
+      issues: expect.arrayContaining([{ code: "invalid_schema", path: expect.stringContaining("value") }]) });
+  });
+  it.each([-1_000_000_000_000, -1, 0, 1, 1_000_000_000_000])("accepts bounded signed net pence %s", pence => {
+    const r = withMetric();
+    r.rows[0]!.metrics[0]!.value.pence = pence;
+    r.sources[0]!.values[0]!.value.pence = pence;
+    expect(validateDemoProductReport(r).structurallyComplete).toBe(true);
+  });
+  it("treats replay result identities as a sorted set without mutating caller input", () => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.sources.push({ ...r.sources[0], id: "source-2" });
+    const command = { id: "cmd", scope, inputSha256: digest, resultSourceIds: ["source-2", "source-1"] };
+    r.commands = [command, { ...command, resultSourceIds: ["source-1", "source-2", "source-1"] }, command];
+    const before = JSON.stringify(r);
+    expect(validateDemoProductReport(r).structurallyComplete).toBe(true);
+    expect(JSON.stringify(r)).toBe(before);
+    r.commands[1].resultSourceIds = ["source-1"];
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "command_conflict", path: "commands.1" });
+    r.commands[1] = { ...command, inputSha256: "b".repeat(64) };
+    expect(validateDemoProductReport(r).issues).toContainEqual({ code: "command_conflict", path: "commands.1" });
+  });
+  it.each(["not_run", "blocked"])("rejects cross-company source and command replays on %s rows", state => {
+    const r = JSON.parse(JSON.stringify(withMetric()));
+    r.rows[0].state = state;
+    r.sources[0].scope.tenantId = "other-company";
+    const command = { id: "cmd", scope, inputSha256: digest, resultSourceIds: ["source-1"] };
+    r.commands = [command, { ...command, scope: { ...scope, tenantId: "other-company" } }];
+    expect(validateDemoProductReport(r).issues).toEqual(expect.arrayContaining([
+      { code: "scope_mismatch", path: "sources.0" },
+      { code: "scope_mismatch", path: "commands.1" },
+      { code: "command_conflict", path: "commands.1" },
+    ]));
+    expect(validateDemoProductReport(r).structurallyComplete).toBe(false);
   });
   it("refuses prelock hidden zeroes even in unreferenced sources", () => {
     const r = JSON.parse(JSON.stringify(withMetric()));

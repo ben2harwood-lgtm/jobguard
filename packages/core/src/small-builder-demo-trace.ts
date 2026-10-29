@@ -26,7 +26,9 @@ const metricId = z.enum(["net", "external-actions", "real-external-actions", "Ex
 const metric = z.object({
   id: metricId, value: demoTraceValueV1,
   evidence: z.array(z.object({ sourceId: identity, key: identity }).strict()).min(1).max(1000),
-}).strict();
+}).strict().refine(m => m.id !== "net" || m.value.kind === "amount", {
+  message: "Net must be a GBP amount", path: ["value"],
+});
 const rowFields = { stepId: identity, metrics: z.array(metric).max(1000) };
 const row = z.discriminatedUnion("state", [
   z.object({ ...rowFields, metrics: z.array(metric).min(1).max(1000), state: z.literal("observed") }).strict(),
@@ -110,7 +112,7 @@ export function validateDemoProductReport(input: unknown): DemoTraceValidation {
     const previous = commands.get(command.id);
     if (previous && (previous.inputSha256 !== command.inputSha256 ||
       JSON.stringify(previous.scope) !== JSON.stringify(command.scope) ||
-      JSON.stringify(previous.resultSourceIds) !== JSON.stringify(command.resultSourceIds))) add("command_conflict", path);
+      JSON.stringify([...new Set(previous.resultSourceIds)].sort()) !== JSON.stringify([...new Set(command.resultSourceIds)].sort()))) add("command_conflict", path);
     commands.set(command.id, command);
     for (const id of command.resultSourceIds) if (!sources.has(id)) add("source_reference", path);
   }
