@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-shadow": {
+      "branches": [
+        "codex/sandbox/demo-j3-shadow"
+      ],
+      "note": "RED DEMO-S DEMO-J3 shadow-30000 guide and public-source report, built ahead on sv6-hookup. Full no-step-skipped journey remains incomplete; MON-5 customer approval and CH-8/CH-9 producer bindings held. No migration.",
+      "allow": [
+        "apps/api/src/shadow-demo.application.test.ts",
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/route.ts",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/page.tsx",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "docs/fixtures/small-builder-demo-inputs.json",
+        "packages/core/src/small-builder-demo-scenarios.test.ts"
+      ]
+    }
+  }
+}
