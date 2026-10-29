@@ -93,3 +93,6 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
     periods };
 }
 export type SubscriptionPlanView = ReturnType<typeof subscriptionPlanView>;
+
+/** Exact demonstration consent copy, rendered by the server and included in the approval hash. */
+export const subscriptionConsentText = "Made-up company demonstration only. No real payments are taken. Monthly principal excluding VAT: Solo £29.00, including 4 jobs, maximum £49.00; Builder £69.00, including 7 jobs, maximum £169.00. Annual plans are unavailable. The selected plan, billing anchor and monthly maximum apply. Upgrades apply today. Downgrades are requested for the next billing boundary and depend on available capacity. Issued periods cannot be changed.";
