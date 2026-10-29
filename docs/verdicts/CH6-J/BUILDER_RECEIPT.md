@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0333_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0338_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -897,3 +897,99 @@ No database or browser suite run: sandbox cannot start PostgreSQL or bind
 localhost. GitHub CI and independent RED review remain the router's gates.
 No Git writes performed. Router commits/pushes this ready change using
 `/tmp/ch6-j-20261029T025135Z-commit-msg.txt`.
+
+### PR #392 catch-up after #383 — 29 October 2026
+
+CH-6 (RED), starting HEAD `36d17cb4`, pending merge of main
+`d54c731f50ec3d29c7e3606f132ebb992e7bb946`. Resolved both working-file
+conflicts: LP-0 retains main's billing entries plus CH-6's source-reader entry;
+SERIOUS-B5 retains both additive catalogue helpers and invokes both. Main's
+stored-receipt implementation, migration 0335 and shared table lists remain.
+No new behaviour or SQL changes.
+
+Used the exported `planRenumber` from `tools/migration-renumber.mjs` with this
+order's reserved floor 0337, then filesystem-only moves/reference rewrites:
+0333 receipts → 0338 and 0334 sources → 0339. The CLI's clean-worktree and
+staging requirements cannot be used during this read-only-index merge.
+Migration notes and full-stem references were renamed together. Historical
+bare-number labels remain historical. Updated the existing ch6-j lane; its
+55 payload paths plus automatically allowed own lane exactly match all 56
+aggregate PR paths. No Git write commands were run; the router must stage the
+resolved files to clear the two unmerged index entries.
+
+Checks actually executed:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Before/after SQL SHA-256: receipts
+  `bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605`;
+  sources `817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077`.
+  Both unchanged.
+- Installed pnpm 10.28.1 (`/private/tmp/ch6-j-r1-bin/pnpm`), db Vitest with
+  `--maxWorkers=2`: `test/commercial-integrity-v3-input.test.ts`,
+  `src/stored-receipt-migration.test.ts`,
+  `src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+- Same installed pnpm, `--filter @jobguard/db typecheck`: PASS.
+- `node --test --test-concurrency=2 tools/agent-lane-boundary.test.mjs
+  tools/agent-lane-boundary-train.test.mjs`: 66/66 PASS.
+- Existing lane loader/path and migration-order APIs: PASS; exact aggregate
+  payload, 0338/0339 above main, all main inventory rows and stored-receipt
+  files retained byte for byte.
+- TypeScript parser check of SERIOUS-B5, entitlement-upgrade and tenancy test
+  files: PASS. This is syntax evidence, not PostgreSQL execution.
+- `git diff --check` and focused conflict-marker scan: PASS.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  FAIL. Integrated-source/CLI/baseline assertions report stale protected
+  fingerprint metadata for `packages/db/src/demo-seed.ts:94` after main's
+  practice-digest fixture change. Baseline has
+  `63a981c5b89ae57de99b9346ef9667b12931e9a85c55f8379cd20bec6c1f85be`;
+  source now has `aee71a57a2756c911266f42700e1c0afe84d2d6d107f003759caca7ebdd5146e`.
+  No guard/baseline change made: SIMPLICITY_RULE item 6 requires separate
+  authorization for protected fingerprints. Router needs a bounded repair
+  authorization before this branch is ready; do not commit this as ready.
+
+PostgreSQL and browser suites remain for GitHub CI; independent RED review
+remains required. No package downloads, provider calls, real customer data,
+commit, push or release. Handoff message:
+`/tmp/ch6-j-20261029T043303Z-commit-msg.txt`.
+
+### Authorized existing-exception fingerprint refresh — 29 October 2026
+
+Router explicitly authorized refreshing stale protected fingerprint metadata for
+existing exceptions only, preserving each file, line, code and reason. This
+supersedes the preceding local readiness blocker and its earlier commit message.
+HEAD/main merge identities remain `36d17cb4` / `d54c731f`; no new conflict
+markers were present. The two resolved index entries remain unmerged until the
+router stages the working files, because Git metadata is read-only here.
+
+Inspected the current guard diagnostics, the raw unbaselined sites and the
+`delivery.execute(context,jobId,preview.documentId,"success")` call at
+`packages/db/src/demo-seed.ts:94`. It is the same existing business executor
+exception; main added practice-session fixture context in its containing helper.
+Refreshed only its fingerprint in
+`tools/commercial-integrity-boundary.unresolved.json` from `63a981c5...` to
+`aee71a57...` (full hashes above). All 13 file/line/code/reason tuples and entry
+order are unchanged. Raw diagnostics contain exactly those same 13 unique
+sites, with no genuinely new exception. No guard logic, product code or test
+assertion was changed. Updated the existing lane note only; its path coverage
+already includes this metadata file.
+
+Checks actually run after the refresh:
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS, including exact integrated source, CLI, baseline and adversarial
+  boundary mutations. Log: `/tmp/ch6-j-20261029T045146Z-boundary-tests.log`.
+- Installed pnpm 10.28.1, db Vitest `--maxWorkers=2` with exactly
+  `test/commercial-integrity-v3-input.test.ts`,
+  `src/stored-receipt-migration.test.ts`,
+  `src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+- Installed pnpm `--filter @jobguard/db typecheck`: PASS.
+- Exact 56-path aggregate lane coverage and migration-order API checks: PASS.
+- SQL hashes still match the original pre-renumber bytes for 0338/0339: PASS.
+- All main LP-0 rows and stored-receipt files retained; CH-6 inventory and both
+  SERIOUS-B5 upgrade helpers retained: PASS.
+- Conflict-marker scan, TypeScript syntax checks of the three shared integration
+  tests, and `git diff --check`: PASS.
+
+Ready for router staging/commit/push, using
+`/tmp/ch6-j-20261029T045146Z-commit-msg.txt`. Database/browser execution remains
+for GitHub CI; independent RED review remains required before merge. This is
+local deterministic evidence, not independent review or release approval.
+No Git write commands, downloads, real data, live providers or releases.

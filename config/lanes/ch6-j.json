@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 renumber-only catch-up after main 0332. Own migrations 0330 → 0333 and 0331 → 0334 in the same order; SQL bytes unchanged. PostgreSQL execution remains for GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up after #383. Own migrations 0333 → 0338 and 0334 → 0339, in the same order; SQL bytes unchanged. Retain main 0335 and union shared inventory/upgrade assertions. Refresh one existing protected exception fingerprint under router authorization; no new exceptions. PostgreSQL execution remains for GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
@@ -41,10 +41,10 @@
         "packages/core/src/commercial-integrity-v3.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0333_commercial_integrity_v3_receipts.md",
-        "packages/db/migration-notes/0334_commercial_integrity_sources.md",
-        "packages/db/migrations/0333_commercial_integrity_v3_receipts.sql",
-        "packages/db/migrations/0334_commercial_integrity_sources.sql",
+        "packages/db/migration-notes/0338_commercial_integrity_v3_receipts.md",
+        "packages/db/migration-notes/0339_commercial_integrity_sources.md",
+        "packages/db/migrations/0338_commercial_integrity_v3_receipts.sql",
+        "packages/db/migrations/0339_commercial_integrity_sources.sql",
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/commercial-integrity-v3-sources.ts",
         "packages/db/src/index.ts",

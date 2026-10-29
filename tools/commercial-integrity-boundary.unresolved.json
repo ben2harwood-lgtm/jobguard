@@ -24,7 +24,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
     "line": 94,
-    "fingerprint": "63a981c5b89ae57de99b9346ef9667b12931e9a85c55f8379cd20bec6c1f85be",
+    "fingerprint": "aee71a57a2756c911266f42700e1c0afe84d2d6d107f003759caca7ebdd5146e",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
   },
   {
