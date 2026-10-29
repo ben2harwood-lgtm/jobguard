@@ -43,7 +43,7 @@ export class OidcParseExceptionFilter implements ExceptionFilter {
  constructor(@Inject(OIDC_APPLICATION) private readonly application:()=>OidcApplication,@Inject(HttpAdapterHost) private readonly adapter:HttpAdapterHost) {}
  async catch(error:BadRequestException,host:ArgumentsHost):Promise<void> {
   const http=host.switchToHttp(),request=http.getRequest<{path:string}>();
-  if(customerActions.some(action=>request.path===`/customer-portal/${action}`)) {
+  if(request.path==="/customer-portal/messages" || customerActions.some(action=>request.path===`/customer-portal/${action}`)) {
    const response=http.getResponse<{setHeader:(name:string,value:string)=>void;status:(status:number)=>{json:(body:unknown)=>void}}>();
    response.setHeader("Cache-Control","no-store");response.setHeader("Referrer-Policy","no-referrer");
    response.status(401).json({code:"CUSTOMER_REFUSED"});return;

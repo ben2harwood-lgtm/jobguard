@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-message": {
+      "branches": [
+        "codex/sandbox/m5-message"
+      ],
+      "receipt": "docs/verdicts/m5-message/BUILDER_RECEIPT.md",
+      "note": "MON-5 M5-MESSAGE; RED; checked synthetic customer-message intake stacked on m5-signin. Own lane file is implicitly allowed.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/auth/customer-auth.guard.ts",
+        "apps/api/src/auth/customer-message.controller.ts",
+        "apps/api/src/auth/customer-message.test.ts",
+        "apps/api/src/auth/customer-message.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/auth/sso/oidc.controller.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/web/app/api/customer-portal/messages/route.ts",
+        "apps/web/app/customer/sign-in/message.tsx",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/e2e/customer-signin.spec.ts",
+        "apps/web/middleware.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/verdicts/m5-message/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0391_customer_portal_message.sql",
+        "packages/db/src/customer-message-fixtures.test.ts",
+        "packages/db/src/customer-message-fixtures.ts",
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

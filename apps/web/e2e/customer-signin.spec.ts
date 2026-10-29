@@ -41,6 +41,16 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await expect(tab.getByRole("button", { name: "Sign in", exact: true })).toBeVisible(); expect(tab.url()).not.toContain("#");
   await tab.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab.getByText("You are signed in to this job.", { exact: true })).toBeVisible();
+  // Owner-connected synthetic lifecycle fixture only; message/evidence rows are created by SV-7A.
+  await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT DO NOTHING", [tenant, fixture.job]);
+  await admin.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, fixture.job]);
+  await tab.getByLabel("Message", { exact: true }).fill("I agree, perhaps £500? This is only a fictional message.");
+  await tab.getByRole("button", { name: "Save message", exact: true }).click();
+  await expect(tab.getByRole("status")).toHaveText("Message saved for your builder with its evidence.");
+  const saved = (await admin.query("SELECT s.id,e.evidence_type,e.object_version_id,e.sha256,convert_from(o.bytes,'UTF8') text FROM app.customer_message_source s JOIN app.job_source_original o ON(o.tenant_id,o.source_id)=(s.tenant_id,s.id) JOIN app.evidence_object e ON(e.tenant_id,e.id)=(s.tenant_id,s.evidence_id) WHERE s.tenant_id=$1 AND s.job_id=$2", [tenant, fixture.job])).rows;
+  expect(saved).toHaveLength(1); expect(saved[0]).toMatchObject({text: "I agree, perhaps £500? This is only a fictional message.", evidence_type: "customer_message_text"});
+  expect(saved[0].sha256).toMatch(/^[a-f0-9]{64}$/u); expect(saved[0].object_version_id).toBeTruthy();
+  expect((await api(tab, "messages", {version: "customer-portal-message.v1", jobId: randomUUID(), commandId: randomUUID(), text: "Foreign job"})).status).toBe(401);
   const cookie = (await customerContext.cookies()).find(c => c.name === "jobguard_customer")!;
   expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: "Strict", expires: -1 });
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);

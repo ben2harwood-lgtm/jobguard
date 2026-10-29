@@ -1112,7 +1112,9 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
   ["app", "customer_portal_audit", "t uuid, subject uuid, kind text"],
   ["app", "customer_portal_current", "g app.customer_portal_grant"],
   ["app", "customer_portal_issuer", "t uuid, digest text"],
+  ["app", "sv7a_require_source_owner", "t uuid, j uuid, digest text, source text"],
   ["identity", "customer_portal_issue", "t uuid, builder_digest text, j uuid, c uuid, link_digest text, content text"],
+  ["identity", "customer_portal_message", "t uuid, j uuid, c uuid, digest text, input jsonb"],
   ["identity", "customer_portal_revoke", "t uuid, builder_digest text, j uuid, gid uuid"],
   ["identity", "customer_portal_use", "t uuid, j uuid, c uuid, digest text, session_digest text, operation text"],
  ];

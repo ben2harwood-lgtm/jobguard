@@ -85,6 +85,6 @@ export function CustomerMessages({ jobId }: { jobId: string }) {
    <button type="button" disabled={busy || !!pending.current || text.trim() === "" || name.trim() === ""} onClick={() => void submit(false)}>Save message</button>
    {pending.current && !busy && <button type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
-  <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)}</small></li>)}</ol>
+  <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)} · Evidence {message.evidence.id} · SHA-256 {message.evidence.sha256} · Version {message.evidence.objectVersionId}</small></li>)}</ol>
  </section>;
 }

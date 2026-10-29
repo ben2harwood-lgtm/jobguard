@@ -385,11 +385,14 @@ describe("CH-2 command coverage and lock order", () => {
     const migrations = await readdir(new URL("packages/db/migrations/", root));
     const sources = await Promise.all(migrations.filter(name => name.endsWith(".sql")).map(name => readFile(new URL(`packages/db/migrations/${name}`, root), "utf8")));
     const defining = sources.filter(sql => sql.includes(`FUNCTION ${entry.routine}(`));
-    expect(defining).toHaveLength(1);
-    const sql = defining[0]!, body = sql.slice(sql.indexOf(`FUNCTION ${entry.routine}(`), sql.indexOf("END $$;", sql.indexOf(`FUNCTION ${entry.routine}(`)));
-    const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+    expect(defining).toHaveLength(entry.routine === "app.sv7a_intake_job_source" ? 2 : 1);
+    // Preserve the original guard proof and verify every replacement as well.
+    for (const sql of defining) {
+      const body = sql.slice(sql.indexOf(`FUNCTION ${entry.routine}(`), sql.indexOf("END $$;", sql.indexOf(`FUNCTION ${entry.routine}(`)));
+      const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
+      expect(guard).toBeGreaterThan(-1);
+      expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+    }
   });
   it("CH-4 finish/cancel retain SHARE locks and serialize facts before checking revision", async () => {
     const sql = await readFile(new URL("packages/db/migrations/0201_job_work_state_commands.sql", root), "utf8");

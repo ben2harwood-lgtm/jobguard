@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { CustomerMessage } from "./message";
 export default function CustomerSignin() {
+  const [job, setJob] = useState<string>();
   const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open the link from your email to sign in."), [busy, setBusy] = useState(false);
   useEffect(() => {
     const parts = window.location.hash.slice(1).split("/");
@@ -15,6 +17,7 @@ export default function CustomerSignin() {
       const [tenantId, jobId, customerId, token] = link;
       const response = await fetch("/api/customer-portal/signin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: "customer-signin.v1", tenantId, jobId, customerId, token }), cache: "no-store" });
       setLink(undefined);
+      if (response.ok) setJob(jobId);
       setMessage(response.ok ? "You are signed in to this job." : "This link is unavailable. Ask your builder for a new one.");
     } catch { setMessage("Sign-in could not be confirmed. Ask your builder for a new link."); setLink(undefined); }
     finally { setBusy(false); }
@@ -22,8 +25,9 @@ export default function CustomerSignin() {
   async function signout() {
     try {
     const response = await fetch("/api/customer-portal/signout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: "customer-signout.v1" }), cache: "no-store" });
+    if (response.ok) setJob(undefined);
     setMessage(response.ok ? "You are signed out." : "Sign-out could not be confirmed. Close this browser session.");
     } catch { setMessage("Sign-out could not be confirmed. Close this browser session."); }
   }
-  return <main><h1>Customer sign-in</h1><p>{message}</p>{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button></main>;
+  return <main><h1>Customer sign-in</h1><p>{message}</p>{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button>{job && <CustomerMessage jobId={job}/>}</main>;
 }

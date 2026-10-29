@@ -1,6 +1,49 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/messages": {
+      "post": {
+        "operationId": "CustomerMessageController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "job-source-intake-receipt.v1: saved message and exact verified evidence"
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE or a conflicting command replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+          }
+        },
+        "summary": "Save a fictional customer message and its verified original through SV-7A",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/customer-portal/issue": {
       "post": {
         "operationId": "CustomerSigninController_issue",

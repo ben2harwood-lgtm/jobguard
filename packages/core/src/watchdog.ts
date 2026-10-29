@@ -18,6 +18,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/customer-portal/revoke": "pre_live_allowed",
   "/api/customer-portal/signin": "pre_live_allowed",
   "/api/customer-portal/signout": "pre_live_allowed",
+  "/api/customer-portal/messages": "watchdog_live_only",
+  "nest:/customer-portal/messages": "watchdog_live_only",
   "/api/customer-portal/read": "pre_live_allowed",
   "nest:/customer-portal/issue": "pre_live_allowed",
   "nest:/customer-portal/revoke": "pre_live_allowed",
