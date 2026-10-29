@@ -145,3 +145,4 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./value-business-reader.js";
