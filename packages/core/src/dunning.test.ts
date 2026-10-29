@@ -27,6 +27,8 @@ function approval() {
     policyVersion: DUNNING_POLICY.version, expiresTick: 20 };
 }
 
+const resolveDecision = () => approval();
+
 describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
   it("creates only one pending Decision for duplicates and semantic replays", () => {
     const fake = new DunningFixtureWorkbench([invoice]);
@@ -63,8 +65,8 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
     const first = fake.command(scope, command, 3)!;
     const next = { ...invoice, revision: 2, outstandingPence: 1 };
     fake.replace(next);
-    expect(dunningApprovalMatches(scope, invoice, approval(), 3)).toBe(true);
-    expect(dunningApprovalMatches(scope, next, approval(), 3)).toBe(false);
+    expect(dunningApprovalMatches(scope, invoice, approval(), 3, resolveDecision)).toBe(true);
+    expect(dunningApprovalMatches(scope, next, approval(), 3, resolveDecision)).toBe(false);
     expect(() => fake.command(scope, command, 3)).toThrow("DUNNING_UNAVAILABLE");
     const second = fake.command(scope, { ...command, commandId: uuid(16), idempotencyKey: uuid(17), expectedRevision: 2 }, 3)!;
     expect(second.reminder.contentHash).not.toBe(first.reminder.contentHash);
@@ -90,7 +92,7 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
   });
   it("invalidates approvals when a reversal or refund arrives after drafting", () => {
     for (const changed of [{ reversed: true }, { refundPending: true }, { outstandingPence: 0 }]) {
-      expect(() => dunningApprovalMatches(scope, { ...invoice, ...changed, revision: 2 }, approval(), 3)).toThrow("DUNNING_UNAVAILABLE");
+      expect(() => dunningApprovalMatches(scope, { ...invoice, ...changed, revision: 2 }, approval(), 3, resolveDecision)).toThrow("DUNNING_UNAVAILABLE");
     }
   });
   it("refuses duplicate fixture identities, reordered facts and moving an invoice between jobs", () => {
@@ -107,6 +109,31 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
     expect(() => buildDunningReminder({ ...scope, ...changed }, invoice, 3)).toThrow(/^DUNNING_UNAVAILABLE$/u);
     expect(fake.list({ ...scope, ...changed }, 3)).toEqual([]);
     expect(unpaidInvoiceWorkbench(scope, [{ ...invoice, ...changed }], 3)).toEqual([]);
+  });
+  it("skips only malformed rows and preserves valid scoped invoices on both sides", () => {
+    const other = { ...invoice, invoiceId: uuid(31) };
+    const malformed = [null, { ...invoice, outstandingPence: -1 }, { ...invoice, shadowSignal: "secret" },
+      { ...invoice, recipient: "private@example.com" }, { ...invoice, tenantId: uuid(30), revision: 0 }];
+    expect(unpaidInvoiceWorkbench(scope, [invoice, ...malformed, other], 3))
+      .toEqual(unpaidInvoiceWorkbench(scope, [invoice, other], 3));
+    expect(unpaidInvoiceWorkbench(scope, malformed, 3)).toEqual([]);
+    expect(() => unpaidInvoiceWorkbench({ ...scope, permission: "read" }, malformed, 3)).toThrow("INVALID_DUNNING_INPUT");
+    expect(() => unpaidInvoiceWorkbench(scope, malformed, -1)).toThrow("INVALID_DUNNING_INPUT");
+  });
+  it("requires an exact stored Decision and refuses unresolved or malformed records", () => {
+    expect(dunningApprovalMatches(scope, invoice, approval(), 3)).toBe(false);
+    for (const stored of [undefined, null, {}, { ...approval(), status: "pending" },
+      { ...approval(), status: "revoked" }, { ...approval(), expiresTick: 3 },
+      { ...approval(), contentHash: "b".repeat(64) }, { ...approval(), decisionId: uuid(30) },
+      ...["tenantId", "jobId", "invoiceId"].map(key => ({ ...approval(), [key]: uuid(30) }))]) {
+      expect(dunningApprovalMatches(scope, invoice, approval(), 3, () => stored)).toBe(false);
+    }
+    const decisions = new Map([[approval().decisionId, approval()]]);
+    const lookup = (decisionId: string) => decisions.get(decisionId);
+    expect(dunningApprovalMatches(scope, invoice, approval(), 3, lookup)).toBe(true);
+    expect(dunningApprovalMatches(scope, invoice, { ...approval(), decisionId: uuid(30) }, 3, lookup)).toBe(false);
+    decisions.clear();
+    expect(dunningApprovalMatches(scope, invoice, approval(), 3, lookup)).toBe(false);
   });
   it("has allowlisted outputs; rejects hidden facts and real recipients with redacted errors", () => {
     const result = unpaidInvoiceWorkbench(scope, [invoice], 3);
@@ -134,24 +161,24 @@ describe("M4-16 dark unpaid workbench and reminder Decisions", () => {
     expect(buildDunningReminder(scope, locked, 3).finalAccountLockId).toBe(uuid(22));
     expect(JSON.stringify(locked)).toBe(before);
     expect(() => buildDunningReminder(scope, { ...locked, finalAccountLockId: null }, 3)).toThrow("INVALID_DUNNING_INPUT");
-    expect(dunningApprovalMatches(scope, { ...locked, sourceRevision: 3 }, approval(), 3)).toBe(false);
+    expect(dunningApprovalMatches(scope, { ...locked, sourceRevision: 3 }, approval(), 3, resolveDecision)).toBe(false);
   });
   it.each(["customer", "supplier", "platform_to_builder"])("binds category %s and exact recipient/content", category => {
     const reminder = buildDunningReminder(scope, { ...invoice, category }, 3);
     expect(reminder.category).toBe(category);
     expect(reminder.recipient).toBe(invoice.recipient);
     if (category !== invoice.category) expect(reminder.contentHash).not.toBe(approval().contentHash);
-    expect(dunningApprovalMatches(scope, { ...invoice, recipient: "another@example.invalid" }, approval(), 3)).toBe(false);
+    expect(dunningApprovalMatches(scope, { ...invoice, recipient: "another@example.invalid" }, approval(), 3, resolveDecision)).toBe(false);
   });
   it.each(["pending", "dismissed", "revoked", "expired", "superseded"])("requires approved Decision rather than %s", status => {
-    expect(dunningApprovalMatches(scope, invoice, { ...approval(), status }, 3)).toBe(false);
+    expect(dunningApprovalMatches(scope, invoice, { ...approval(), status }, 3, () => ({ ...approval(), status }))).toBe(false);
   });
   it("checks approval expiry and tenant/job/invoice/action bindings", () => {
-    expect(dunningApprovalMatches(scope, invoice, approval(), 20)).toBe(false);
+    expect(dunningApprovalMatches(scope, invoice, approval(), 20, resolveDecision)).toBe(false);
     for (const key of ["tenantId", "jobId", "invoiceId"]) {
-      expect(dunningApprovalMatches(scope, invoice, { ...approval(), [key]: uuid(30) }, 3)).toBe(false);
+      expect(dunningApprovalMatches(scope, invoice, { ...approval(), [key]: uuid(30) }, 3, resolveDecision)).toBe(false);
     }
-    expect(() => dunningApprovalMatches(scope, invoice, { ...approval(), action: "send" }, 3)).toThrow("INVALID_DUNNING_INPUT");
+    expect(() => dunningApprovalMatches(scope, invoice, { ...approval(), action: "send" }, 3, resolveDecision)).toThrow("INVALID_DUNNING_INPUT");
   });
 });
 

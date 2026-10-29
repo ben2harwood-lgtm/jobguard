@@ -63,7 +63,10 @@ export function dunningSuppression(invoice: DunningInvoice, nowTick: number): st
 /** Tenant/job-filtered allowlist projection: no raw source objects, messages, or hidden counts. */
 export function unpaidInvoiceWorkbench(rawScope: unknown, rawInvoices: readonly unknown[], rawTick: unknown) {
   const scope = parse(scopeV1, rawScope), nowTick = parse(tick, rawTick);
-  const invoices = rawInvoices.map(raw => parse(dunningInvoiceV1, raw));
+  const invoices = rawInvoices.flatMap(raw => {
+    const result = dunningInvoiceV1.safeParse(raw);
+    return result.success ? [result.data] : [];
+  });
   return invoices.filter(row => row.tenantId === scope.tenantId && row.jobId === scope.jobId && row.outstandingPence > 0)
     .map(row => Object.freeze({ invoiceId: row.invoiceId, revision: row.revision,
       amount: Object.freeze({ pence: row.outstandingPence, currency: row.currency }), category: row.category,
@@ -93,10 +96,15 @@ const approvalV1 = z.object({
   contentHash: hash, policyVersion: z.literal(DUNNING_POLICY.version), expiresTick: tick,
 }).strict();
 
-/** Fixture validation only. Returning true never grants real send or collection authority. */
-export function dunningApprovalMatches(rawScope: unknown, rawInvoice: unknown, rawApproval: unknown, rawTick: unknown): boolean {
+/** Fixture validation only. The resolver must load a stored Decision, never echo caller input.
+ * Returning true never grants real send or collection authority. */
+export function dunningApprovalMatches(rawScope: unknown, rawInvoice: unknown, rawApproval: unknown, rawTick: unknown,
+  resolveDecision?: (decisionId: string) => unknown): boolean {
   const approval = parse(approvalV1, rawApproval), nowTick = parse(tick, rawTick);
   const reminder = buildDunningReminder(rawScope, rawInvoice, nowTick);
+  const stored = approvalV1.safeParse(resolveDecision?.(approval.decisionId));
+  if (!stored.success || Object.keys(approvalV1.shape).some(key =>
+    approval[key as keyof typeof approval] !== stored.data[key as keyof typeof approval])) return false;
   return approval.status === "approved" && approval.expiresTick > nowTick && approval.contentHash === reminder.contentHash
     && approval.tenantId === reminder.tenantId && approval.jobId === reminder.jobId && approval.invoiceId === reminder.invoiceId;
 }

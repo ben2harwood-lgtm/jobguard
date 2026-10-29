@@ -13,7 +13,8 @@ require reconciliation. Provider-owned retries conflict with application ownersh
 All results are non-executable. `executeDunning` unconditionally refuses.
 
 The unpaid workbench projects only invoice identity, revision, outstanding GBP,
-category and suppression. Every balance must be nonnegative integer pence, at
+category and suppression. Malformed invoice rows are skipped individually; invalid
+scope or tick still fails the request. Every balance must be nonnegative integer pence, at
 most its original amount and the shared money limit. Paid, disputed, refunded
 (pending refund), reversed, cancelled and no-charge pilot facts suppress drafting
 and retry advice. Before-due, pending/unknown attempts and draft/superseded final
@@ -36,7 +37,10 @@ Different commands for the same current invoice share one pending Decision.
 Replacements require increasing invoice revision, invalidate the pending Decision,
 and regenerate content on the next request. Approval checks always rebuild from
 current facts, so changed amounts, source revisions, recipients or categories
-invalidate approval. Cancelled collection stays cancelled across later facts;
+invalidate approval. Approval validation also requires a server-supplied resolver
+for a stored Decision matching every approval field, including decision identity,
+status and expiry. Missing or malformed stored Decisions fail closed; the resolver
+must never echo the caller's approval as its lookup result. Cancelled collection stays cancelled across later facts;
 replaying an obsolete request cannot return an actionable stale draft. This fake
 is not a durable command store, approval store, audit chain or execution outbox.
 There is no HTTP endpoint and no registration into a production runtime.
