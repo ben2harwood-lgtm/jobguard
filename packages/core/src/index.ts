@@ -1,5 +1,6 @@
 /** Domain-only package. Network, database, vendor and platform imports are forbidden. */
 export const CORE_PACKAGE = "@jobguard/core" as const;
+export * from "./shadow-pilot-measurement.js";
 export * from "./allocation.js";
 export * from "./fee.js";
 export * from "./fee-statement.js";
