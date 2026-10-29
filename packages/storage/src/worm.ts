@@ -1,5 +1,5 @@
 import {
-  GetObjectLegalHoldCommand, GetObjectRetentionCommand, PutObjectLegalHoldCommand,
+  GetObjectLegalHoldCommand, GetObjectRetentionCommand, HeadObjectCommand, PutObjectLegalHoldCommand,
   PutObjectRetentionCommand, S3Client,
 } from "@aws-sdk/client-s3";
 import { z } from "zod";
@@ -48,17 +48,23 @@ export function assertSyntheticVersion(version: WormVersion): void {
   }
 }
 
+const wormEnvironmentSchema = storageEnvironmentSchema.extend({
+  S3_WORM_MAXIMUM_BYTES: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).prefault(10 * 1024 * 1024),
+});
+
 /** Local MinIO only. Disabled by default; never accepts a production endpoint. */
 export class LocalMinioWormStorage implements WormStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
-  constructor(config: z.input<typeof storageEnvironmentSchema>, enabled = false) {
-    const parsed = storageEnvironmentSchema.parse(config);
+  readonly #maximumBytes: number;
+  constructor(config: z.input<typeof wormEnvironmentSchema>, enabled = false) {
+    const parsed = wormEnvironmentSchema.parse(config);
     const endpoint = new URL(parsed.S3_ENDPOINT);
     if (!enabled || !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname) ||
         endpoint.protocol !== "http:" || endpoint.username || endpoint.password ||
         !parsed.S3_BUCKET.startsWith("synthetic-")) throw new WormBoundaryError("DARK_ONLY");
     this.#bucket = parsed.S3_BUCKET;
+    this.#maximumBytes = parsed.S3_WORM_MAXIMUM_BYTES;
     this.#client = new S3Client({ endpoint: parsed.S3_ENDPOINT, region: parsed.S3_REGION, forcePathStyle: true,
       credentials: { accessKeyId: parsed.S3_ACCESS_KEY_ID, secretAccessKey: parsed.S3_SECRET_ACCESS_KEY },
       maxAttempts: 1, followRegionRedirects: false });
@@ -66,6 +72,15 @@ export class LocalMinioWormStorage implements WormStorage {
   #target(version: WormVersion) {
     assertSyntheticVersion(version);
     return { Bucket: this.#bucket, Key: version.key, VersionId: version.versionId };
+  }
+  async #writeTarget(version: WormVersion) {
+    const target = this.#target(version);
+    const head = await this.#client.send(new HeadObjectCommand(target));
+    if (head.VersionId !== version.versionId || !Number.isSafeInteger(head.ContentLength) ||
+        head.ContentLength! < 0 || head.ContentLength! > this.#maximumBytes) {
+      throw new WormBoundaryError("INVALID_INPUT");
+    }
+    return target;
   }
   async read(version: WormVersion) {
     const target = this.#target(version);
@@ -79,12 +94,12 @@ export class LocalMinioWormStorage implements WormStorage {
   }
   async retain(version: WormVersion, until: string) {
     if (!z.iso.datetime().safeParse(until).success) throw new WormBoundaryError("INVALID_INPUT");
-    await this.#client.send(new PutObjectRetentionCommand({ ...this.#target(version),
+    await this.#client.send(new PutObjectRetentionCommand({ ...await this.#writeTarget(version),
       Retention: { Mode: "COMPLIANCE", RetainUntilDate: new Date(until) } }));
   }
   async hold(version: WormVersion, held: boolean) {
     if (typeof held !== "boolean") throw new WormBoundaryError("INVALID_INPUT");
-    await this.#client.send(new PutObjectLegalHoldCommand({ ...this.#target(version),
+    await this.#client.send(new PutObjectLegalHoldCommand({ ...await this.#writeTarget(version),
       LegalHold: { Status: held ? "ON" : "OFF" } }));
   }
 }

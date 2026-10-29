@@ -15,7 +15,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
 const context = testTenantContext(tenant);
-let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, repo: WormCommandRepository;
+let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository;
 let held = false;
 const storage = { retain: async () => undefined, hold: async (_v: unknown, value: boolean) => { held = value; },
   read: async () => ({ held, retainUntil: null }) };
@@ -50,9 +50,12 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE worm_test_login LOGIN PASSWORD 'synthetic-runtime' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_runtime TO worm_test_login");
   runtime = new Pool({ ...config, user: "worm_test_login", password: "synthetic-runtime" });
-  repo = new WormCommandRepository(runtime, true);
+  await admin.query("CREATE ROLE worm_executor_login LOGIN PASSWORD 'synthetic-executor' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
+  await admin.query("GRANT jobguard_worm_executor TO worm_executor_login");
+  executor = new Pool({ ...config, user: "worm_executor_login", password: "synthetic-executor" });
+  repo = new WormCommandRepository(runtime, true, executor);
 }, 60000);
-afterAll(async () => { await closeTestPools(runtime, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
+afterAll(async () => { await closeTestPools(runtime, executor, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 describe("durable synthetic WORM SQL", () => {
   it("rejects wrong-job/cross-tenant references and unadmitted evidence", async () => {
     await expect(repo.submit(context, command({ jobId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
@@ -88,7 +91,7 @@ describe("durable synthetic WORM SQL", () => {
   it("persists pending TSA attempts across repository instances and cancels revoked queued authority", async () => {
     const c = command({ action: "request_anchor", subject: "manifest", actorMembershipId: second });
     await repo.submit(context, c); await repo.execute(context, c.commandId, storage, tsa);
-    const fresh = new WormCommandRepository(runtime, true);
+    const fresh = new WormCommandRepository(runtime, true, executor);
     expect((await fresh.execute(context, c.commandId, storage, tsa)).status).toBe("pending");
     expect((await admin.query("SELECT * FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toHaveLength(2);
     const saved = await fresh.execute(context, c.commandId, storage, { anchor: async () => ({
@@ -103,6 +106,26 @@ describe("durable synthetic WORM SQL", () => {
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, second]);
     expect((await fresh.execute(context, pending.commandId, storage, tsa)).status).toBe("cancelled");
     await expect(fresh.submit(context, pending)).rejects.toThrow("WORM_REFUSED");
+  });
+  it("denies runtime claim/completion and executor role assumption, including forged applied holds", async () => {
+    for (const [sql, args] of [
+      ["SELECT * FROM app.worm_claim($1)", [randomUUID()]],
+      ["SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [randomUUID()]],
+      ["SET LOCAL ROLE jobguard_worm_executor", []],
+    ] as const) {
+      await expect(withTenant(runtime, context, db => db.$client.query(sql, [...args]))).rejects.toMatchObject({ code: "42501" });
+    }
+    const c = command();
+    await repo.submit(context, c);
+    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    await expect(withTenant(runtime, context, db => db.$client.query(
+      "SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
+    expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0]?.status).toBe("executing");
+    await expect(new WormCommandRepository(runtime, true, runtime).execute(context, c.commandId, storage, tsa)).rejects.toThrow("WORM_REFUSED");
+    for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {
+      expect((await withTenant(executor, testTenantContext(other), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
+      await expect(withTenant(executor, context, db => db.$client.query(`UPDATE app.${name} SET tenant_id=$1`, [other]))).rejects.toMatchObject({ code: "42501" });
+    }
   });
   it("enforces RLS and denies direct fixture/receipt/result writes and deletes", async () => {
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {

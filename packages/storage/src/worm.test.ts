@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { HeadObjectCommand, PutObjectLegalHoldCommand, PutObjectRetentionCommand, S3Client } from "@aws-sdk/client-s3";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocalMinioWormStorage, SyntheticRetentionWorkflow, type SyntheticWormCommand, type WormVersion } from "./worm.js";
 const tenantId = "10000000-0000-4000-8000-000000000001";
 const actorId = "20000000-0000-4000-8000-000000000001";
@@ -79,5 +80,59 @@ describe("local-only storage gate", () => {
     expect(() => new LocalMinioWormStorage(config)).toThrow("DARK_ONLY");
     expect(() => new LocalMinioWormStorage({ ...config, S3_ENDPOINT: "https://s3.eu-west-2.amazonaws.com" }, true)).toThrow("DARK_ONLY");
     expect(() => new LocalMinioWormStorage({ ...config, S3_BUCKET: "evidence-private" }, true)).toThrow("DARK_ONLY");
+  });
+});
+
+describe("WORM object size boundary", () => {
+  const config = { S3_ENDPOINT: "http://127.0.0.1:9000", S3_BUCKET: "synthetic-worm",
+    S3_ACCESS_KEY_ID: "fake", S3_SECRET_ACCESS_KEY: "fake", S3_WORM_MAXIMUM_BYTES: 10 };
+  const version = { tenantId, key: command().evidence.key, versionId: "version-one" };
+  afterEach(() => vi.restoreAllMocks());
+  const writes = [
+    { name: "retain", write: (s: LocalMinioWormStorage) => s.retain(version, command().retainUntil), type: PutObjectRetentionCommand },
+    { name: "hold", write: (s: LocalMinioWormStorage) => s.hold(version, true), type: PutObjectLegalHoldCommand },
+    { name: "release", write: (s: LocalMinioWormStorage) => s.hold(version, false), type: PutObjectLegalHoldCommand },
+  ];
+  it.each(writes)("allows $name at the cap after checking the exact version", async ({ write, type }) => {
+    const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => ({ ContentLength: 10, VersionId: version.versionId }));
+    await write(new LocalMinioWormStorage(config, true));
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0]![0]).toBeInstanceOf(HeadObjectCommand);
+    expect(send.mock.calls[1]![0]).toBeInstanceOf(type);
+    for (const call of send.mock.calls) expect(call[0].input).toMatchObject({
+      Bucket: config.S3_BUCKET, Key: version.key, VersionId: version.versionId,
+    });
+  });
+  it.each(writes)("refuses $name with oversize, absent/invalid size or a substituted version", async ({ write }) => {
+    for (const head of [
+      { ContentLength: 11, VersionId: version.versionId },
+      { VersionId: version.versionId },
+      { ContentLength: -1, VersionId: version.versionId },
+      { ContentLength: 1.5, VersionId: version.versionId },
+      { ContentLength: Number.MAX_SAFE_INTEGER + 1, VersionId: version.versionId },
+      { ContentLength: 1, VersionId: "replacement" },
+      { ContentLength: 1 },
+    ]) {
+      const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => head);
+      await expect(write(new LocalMinioWormStorage(config, true))).rejects.toMatchObject({ code: "INVALID_INPUT" });
+      expect(send).toHaveBeenCalledTimes(1);
+      send.mockRestore();
+    }
+  });
+  it("uses a finite default cap when no maximum is supplied", async () => {
+    const { S3_WORM_MAXIMUM_BYTES: _maximum, ...defaults } = config;
+    const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => ({
+      ContentLength: 10 * 1024 * 1024 + 1, VersionId: version.versionId,
+    }));
+    await expect(new LocalMinioWormStorage(defaults, true).hold(version, true)).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it("does not mutate when the size lookup fails", async () => {
+    const send = vi.spyOn(S3Client.prototype, "send").mockRejectedValue(new Error("missing version"));
+    await expect(new LocalMinioWormStorage(config, true).hold(version, true)).rejects.toThrow("missing version");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it.each([0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])("refuses invalid configured maximum %s", maximum => {
+    expect(() => new LocalMinioWormStorage({ ...config, S3_WORM_MAXIMUM_BYTES: maximum }, true)).toThrow();
   });
 });

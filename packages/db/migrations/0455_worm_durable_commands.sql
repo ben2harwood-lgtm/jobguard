@@ -1,4 +1,11 @@
 BEGIN;
+-- Separate storage executor credentials; runtime must never be a member of this role.
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_worm_executor') THEN
+ CREATE ROLE jobguard_worm_executor NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+ END IF;
+END $$;
+GRANT jobguard_runtime TO jobguard_worm_executor;
 -- DARK fixture admission is migration-owned; runtime cannot label real evidence synthetic.
 CREATE TABLE app.worm_synthetic_version (
  tenant_id uuid NOT NULL, evidence_id uuid NOT NULL, job_id uuid NOT NULL,
@@ -129,7 +136,8 @@ DO $$ DECLARE signature text; BEGIN
  FOREACH signature IN ARRAY ARRAY['app.worm_submit(jsonb)','app.worm_claim(uuid)','app.worm_finish(uuid,integer,text,jsonb)'] LOOP
  EXECUTE 'ALTER FUNCTION '||signature||' OWNER TO jobguard_migration';
  EXECUTE 'REVOKE ALL ON FUNCTION '||signature||' FROM PUBLIC';
- EXECUTE 'GRANT EXECUTE ON FUNCTION '||signature||' TO jobguard_runtime';
+ EXECUTE 'GRANT EXECUTE ON FUNCTION '||signature||' TO '||
+ (CASE WHEN signature='app.worm_submit(jsonb)' THEN 'jobguard_runtime' ELSE 'jobguard_worm_executor' END);
  END LOOP;
 END $$;
 -- No deletion/expiry API exists for admitted verified versions. Existing registered

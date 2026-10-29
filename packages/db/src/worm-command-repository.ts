@@ -43,7 +43,8 @@ async function audit(db: TenantTransaction, c: WormReceipt, phase: string) {
  * SQL's migration-owned fixture allowlist is additionally required; caller flags cannot admit evidence.
  */
 export class WormCommandRepository {
-  constructor(private readonly pool: Pool, private readonly enabled = false) {}
+  constructor(private readonly pool: Pool, private readonly enabled = false,
+    private readonly executorPool?: Pool) {}
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
 
   async submit(context: VerifiedTenantContext, input: unknown): Promise<WormReceipt> {
@@ -67,7 +68,9 @@ export class WormCommandRepository {
     tsa: { anchor(request: TimestampRequest): Promise<TimestampResult> }): Promise<WormReceipt> {
     this.requireDark();
     if (!uuid.safeParse(commandId).success) throw new WormCommandError("INVALID_INPUT");
-    const claim = await withTenant(this.pool, context, async db => {
+    // Supply separately provisioned executor credentials, never the request runtime pool.
+    if (!this.executorPool) throw new WormCommandError("WORM_REFUSED");
+    const claim = await withTenant(this.executorPool, context, async db => {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
       const prior = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_command WHERE tenant_id=$1 AND id=$2", [context.tenantId, commandId])).rows[0];
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_claim($1)", [commandId])).rows[0]!;
@@ -95,7 +98,7 @@ export class WormCommandRepository {
       status = c.action === "request_anchor" ? "pending" : "outcome_unknown";
       material = { status, reason: "service_unavailable" };
     }
-    return withTenant(this.pool, context, async db => {
+    return withTenant(this.executorPool, context, async db => {
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_finish($1,$2,$3,$4::jsonb)",
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
       await audit(db, finished, status);

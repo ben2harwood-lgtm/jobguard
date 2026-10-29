@@ -5,8 +5,9 @@ import type { WormStorage, TimestampResult } from "@jobguard/storage";
 import { WormCommandRepository, wormCommandV1, type WormReceipt } from "./worm-command-repository.js";
 import type { VerifiedTenantContext } from "./tenant-context.js";
 
-const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0 }));
+const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0, pools: [] as unknown[] }));
 vi.mock("./tenant-context.js", () => ({ withTenant: async (_p: unknown, _c: unknown, fn: (db: unknown) => unknown) => {
+  fake.pools.push(_p);
   fake.transactions++;
   try { return await fn({ $client: { query: fake.query } }); } finally { fake.transactions--; }
 } }));
@@ -16,11 +17,13 @@ const command = () => ({ version: "worm.command.v1" as const, policyVersion: "sy
   commandId: randomUUID(), idempotencyKey: randomUUID(), actorMembershipId: randomUUID(),
   jobId: randomUUID(), evidenceId: randomUUID(), action: "apply_hold" as const });
 const pool = {} as Pool;
-const repo = () => new WormCommandRepository(pool, true);
+const executorPool = {} as Pool;
+const repo = () => new WormCommandRepository(pool, true, executorPool);
 let row: WormReceipt;
 let attempts: number;
 let storage: WormStorage;
 beforeEach(() => {
+  fake.pools = [];
   fake.query.mockReset(); fake.audit.mockReset(); attempts = 0;
   const c = command();
   row = { id: c.commandId, tenant_id: context.tenantId, actor_id: c.actorMembershipId, evidence_id: c.evidenceId,
@@ -41,6 +44,11 @@ describe("dark durable WORM application", () => {
     await expect(new WormCommandRepository(pool).submit(context, command())).rejects.toMatchObject({ code: "DARK_ONLY" });
     expect(fake.query).not.toHaveBeenCalled(); expect(() => repo().deleteOrExpire()).toThrow("D07_REQUIRED");
   });
+  it("refuses execution without a separately configured executor pool", async () => {
+    await expect(new WormCommandRepository(pool, true).execute(context, row.id, storage, unavailable)).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).not.toHaveBeenCalled();
+    expect(storage.hold).not.toHaveBeenCalled();
+  });
   it("rejects financial, bill, hidden and provider fields rather than trusting client policy", () => {
     for (const extra of [{ amount: 0 }, { amount: -1 }, { amount: 999999999999 }, { lockedBillId: randomUUID() },
       { finalAccountRevision: randomUUID() }, { shadowSignalId: randomUUID() }, { tenantId: randomUUID() },
@@ -54,6 +62,12 @@ describe("dark durable WORM application", () => {
     await repo().execute(context, row.id, storage, unavailable);
     expect(storage.hold).toHaveBeenCalledExactlyOnceWith({ tenantId: context.tenantId, key: row.object_key, versionId: "immutable-v1" }, true);
     expect(fake.audit).toHaveBeenCalledTimes(2);
+    expect(fake.pools).toEqual([executorPool, executorPool, executorPool]);
+  });
+  it("does not mark a hold applied when storage readback disagrees", async () => {
+    vi.mocked(storage.read).mockResolvedValue({ held: false, retainUntil: null });
+    expect((await repo().execute(context, row.id, storage, unavailable)).status).toBe("outcome_unknown");
+    expect(storage.hold).toHaveBeenCalledTimes(1);
   });
   it("never retries an unknown mutation, including after the application restarts", async () => {
     vi.mocked(storage.hold).mockRejectedValue(new Error("secret/PII/provider-details"));
