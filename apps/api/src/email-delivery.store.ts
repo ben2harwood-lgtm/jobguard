@@ -6,6 +6,7 @@ import type { VerifiedTenantContext } from "@jobguard/db";
 import type { EmailForwardingPorts } from "./email-forwarding.connector.js";
 
 const id = z.guid();
+const maxOriginalBytes = 1_000_000;
 const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 const configV1 = z.object({ version: z.literal("email-forwarding-config.v1"), environment: z.literal("synthetic_demo"), transport: z.literal("fixture"), enabled: z.literal(true) }).strict();
 const intakeV1 = z.object({ version: z.literal("email-delivery.v1"), messageId: id, alias: z.string().regex(/^fixture-[a-z0-9-]{1,80}$/u), bytes: z.instanceof(Uint8Array) }).strict();
@@ -14,7 +15,7 @@ const parsedV1 = z.object({ version: z.literal("email-mime.v1"), text: z.literal
   parts: z.array(z.object({ bytes: z.instanceof(Uint8Array), contentType: z.string().max(200), filename: z.string().max(300), encrypted: z.boolean(), readable: z.boolean() }).strict()).max(100) }).strict();
 const reasons = ["unknown_alias", "oversized", "encrypted", "executable", "unreadable"] as const;
 const receiptV1 = z.object({ version: z.literal("email-receipt.v1"), deliveryId: id, aliasHash: z.string().regex(/^[a-f0-9]{64}$/u),
-  binding: bindingV1.nullable(), rawBase64: z.string(), rawSha256: z.string().regex(/^[a-f0-9]{64}$/u), byteLength: z.number().int().nonnegative(),
+  binding: bindingV1.nullable(), rawBase64: z.string().max(4 * Math.ceil(maxOriginalBytes / 3)), rawSha256: z.string().regex(/^[a-f0-9]{64}$/u), byteLength: z.number().int().nonnegative(),
   objectVersionId: z.string().min(1), serverReceivedAt: z.iso.datetime(),
   quarantine: z.array(z.enum(reasons)), text: z.literal("Please fit an outside tap.").nullable(),
 }).strict();
@@ -61,7 +62,10 @@ export class EmailDeliveryStore implements EmailForwardingPorts {
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
     const receipt = receiptV1.parse(JSON.parse(bytes));
     const raw = Buffer.from(receipt.rawBase64, "base64");
-    if (receipt.deliveryId !== deliveryId || raw.length !== receipt.byteLength || hash(raw) !== receipt.rawSha256 ||
+    const validOriginal = receipt.byteLength > maxOriginalBytes
+      ? receipt.rawBase64 === "" && receipt.quarantine.includes("oversized") && receipt.text === null
+      : raw.length === receipt.byteLength && hash(raw) === receipt.rawSha256;
+    if (receipt.deliveryId !== deliveryId || !validOriginal ||
       receipt.objectVersionId !== `sha256:${receipt.rawSha256}`) throw new Error("Invalid stored receipt");
     return receipt;
   }
@@ -87,7 +91,7 @@ export class EmailDeliveryStore implements EmailForwardingPorts {
       const quarantine: Receipt["quarantine"] = [];
       let text: Receipt["text"] = null;
       if (!binding.success) quarantine.push("unknown_alias");
-      if (bytes.length > 1_000_000) quarantine.push("oversized");
+      if (bytes.length > maxOriginalBytes) quarantine.push("oversized");
       if (!quarantine.length) {
         try {
           const mime = parsedV1.parse(await this.ports.parseMime(Buffer.from(bytes)));
@@ -104,7 +108,7 @@ export class EmailDeliveryStore implements EmailForwardingPorts {
         } catch { quarantine.push("unreadable"); }
       }
       const receipt = receiptV1.parse({ version: "email-receipt.v1", deliveryId: input.messageId, aliasHash,
-        binding: binding.success ? binding.data : null, rawBase64: bytes.toString("base64"), rawSha256, byteLength: bytes.length,
+        binding: binding.success ? binding.data : null, rawBase64: bytes.length > maxOriginalBytes ? "" : bytes.toString("base64"), rawSha256, byteLength: bytes.length,
         objectVersionId: `sha256:${rawSha256}`, serverReceivedAt: this.now(), quarantine: [...new Set(quarantine)], text });
       if (!await this.publish(`${input.messageId}.json`, receipt)) {
         const winner = await this.receipt(input.messageId); if (!winner) throw new Error();

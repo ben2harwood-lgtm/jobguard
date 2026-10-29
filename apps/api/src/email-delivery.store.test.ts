@@ -108,6 +108,35 @@ describe("SV-7B durable DARK email delivery", () => {
     const r = await store.receive({ ...input(), messageId: otherId });
     expect(r.quarantine).toEqual(["unreadable"]); expect(JSON.stringify(r)).not.toContain("secret");
   });
+  it("stores only metadata for oversized originals and preserves holds and replay conflicts across restarts", async () => {
+    const { store, directory, ports } = await setup();
+    const oversized = { ...input(), bytes: Buffer.alloc(1_000_001, "x") };
+    const receipt = await store.receive(oversized);
+    expect(receipt).toMatchObject({ rawBase64: "", rawSha256: digest(oversized.bytes),
+      byteLength: oversized.bytes.length, quarantine: ["oversized"], text: null });
+    const saved = await readFile(join(directory, `${messageId}.json`), "utf8");
+    expect(JSON.parse(saved)).toEqual(receipt);
+    expect(Buffer.byteLength(saved)).toBeLessThan(2_000);
+    const restarted = new EmailDeliveryStore(directory, ports, config);
+    expect(await restarted.receive(oversized)).toEqual(receipt);
+    expect(await restarted.readOriginal(context, jobId, messageId)).toBeNull();
+    for (const change of [{ bytes: Buffer.alloc(1_000_001, "y") }, { bytes }, { alias: "fixture-other" }]) {
+      await expect(restarted.receive({ ...oversized, ...change })).rejects.toThrow("EMAIL_DELIVERY_CONFLICT");
+    }
+    expect(await readFile(join(directory, `${messageId}.json`), "utf8")).toBe(saved);
+    expect(ports.parseMime).not.toHaveBeenCalled();
+  });
+  it("retains originals at the exact size limit and still validates and replays their bytes", async () => {
+    const { store, directory, ports } = await setup();
+    const atLimit = { ...input(), bytes: Buffer.alloc(1_000_000, "x") };
+    vi.mocked(ports.parseMime).mockResolvedValue({ version: "email-mime.v1", text, parts: [] });
+    const receipt = await store.receive(atLimit);
+    expect(Buffer.from(receipt.rawBase64, "base64")).toEqual(atLimit.bytes);
+    expect(receipt.quarantine).toEqual([]);
+    expect(await new EmailDeliveryStore(directory, ports, config).receive(atLimit)).toEqual(receipt);
+    expect(await store.readOriginal(context, jobId, messageId)).not.toBeNull();
+    expect(ports.parseMime).toHaveBeenCalledTimes(1);
+  });
   it("refuses live configurations and injected authority, money, reversal and locked-bill fields", async () => {
     const { directory, ports, store } = await setup();
     for (const configuration of [undefined, { ...config, environment: "production_billing" }, { ...config, transport: "smtp" }, { ...config, enabled: false }]) {

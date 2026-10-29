@@ -49,7 +49,9 @@ failures and unsupported output are held. Oversized raw messages skip parsing;
 oversized, encrypted/password-protected, executable and unreadable parts are held.
 All attachments are conservatively held until a reviewed validation adapter exists,
 including PDFs and archives (no decrypting, executing, remote URL fetching or OCR).
-Raw MIME remains immutable in the quarantined bundle; no automatic release path.
+Raw MIME up to 1,000,000 bytes remains immutable in the quarantined bundle; larger
+originals retain only hash, byte length and receipt metadata with empty rawBase64,
+remain held across restarts/replays and cannot reach the worker. No automatic release path.
 
 Intake has no observation/shadow sink. The worker-facing readOriginal port feeds
 the existing EmailForwardingConnector and ShadowDetectionWorker. The worker's

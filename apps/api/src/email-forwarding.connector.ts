@@ -48,6 +48,7 @@ export class EmailForwardingConnector {
       if (!original.success) throw new Error();
       const source = original.data;
       if (source.tenantId !== context.tenantId || source.jobId !== request.data.jobId || source.deliveryId !== request.data.deliveryId ||
+        source.evidence.id !== request.data.deliveryId ||
         createHash("sha256").update(source.text, "utf8").digest("hex") !== source.evidence.sha256) throw new Error();
       return [parseObservation({
         version: "observation.v1", tenantId: source.tenantId, jobId: source.jobId, kind: "customer_request",
