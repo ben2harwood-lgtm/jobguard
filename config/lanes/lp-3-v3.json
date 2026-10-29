@@ -7,6 +7,9 @@
       ],
       "note": "LP-3 RED dark activation/acceptance slice on LP-2. Exact changed paths below; this lane file is implicitly permitted. Router owns commit, push, NOPR handoff and RED review.",
       "allow": [
+        "packages/db/test/practice-supplier-credit-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
         "tools/commercial-integrity-current-source-guard.unresolved.json",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/lp-0-effective-privileges-v1.md",

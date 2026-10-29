@@ -6,7 +6,7 @@ import type { CommandMutation, ConsequentialCommand } from "./commands.js";
 import type { TenantTransaction } from "./tenant-context.js";
 import type { Pool } from "pg";
 import { DEMO_MEMBERSHIP_ID } from "./demo-seed.js";
-import { UserCommandDispatcher } from "./commands.js";
+import { CommandError, UserCommandDispatcher } from "./commands.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 /** Facts a command records only inside its mutation payload (not in the command envelope the dispatcher fingerprints). They are bound into the semantic key so a reused command id with a changed fact is a COMMAND_CONFLICT. */
@@ -21,7 +21,16 @@ export class RecordBuilderAcceptanceMutation implements CommandMutation<Record<s
   private eventId="";
   constructor(private readonly tenantId:string,private readonly raw:unknown){}
   inputHash(command:ConsequentialCommand){return lp3MutationHash(this.tenantId,command.actorMembershipId,this.raw as Record<string,unknown>);}
-  async mutate(db:TenantTransaction,command:ConsequentialCommand){const input=builderAttestedAcceptanceV1.parse(this.raw);this.eventId=randomUUID();if(command.action.actionType!=="quote.acceptance.attest"||command.action.contentHash!==input.documentHash||command.action.aggregateRevision!==input.documentVersion||command.action.amountPence!==input.acceptedTotalPence||command.action.currency!=="GBP"||command.action.policyVersion!=="builder-attestation.v1")throw new Error("EXACT_ACCEPTANCE_AUTHORIZATION_MISMATCH");const result=(await db.$client.query(`SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[this.tenantId,input.acceptanceId,this.eventId,input.jobId,input.documentId,input.documentVersion,input.documentHash,input.acceptedTotalPence,input.expectedJobRevision,command.actorMembershipId,input.statedCustomerName,input.statedMethod,input.acceptedAt,input.evidenceId,command.commandId,command.authorizationId])).rows[0] as Record<string,unknown>;return{acceptanceId:input.acceptanceId,eventId:this.eventId,jobId:input.jobId,documentId:input.documentId,documentVersion:input.documentVersion,documentHash:input.documentHash,acceptedTotalPence:input.acceptedTotalPence,acceptanceKind:result.acceptance_kind,state:"accepted"};}
+  async mutate(db:TenantTransaction,command:ConsequentialCommand){const input=builderAttestedAcceptanceV1.parse(this.raw);this.eventId=randomUUID();if(command.action.actionType!=="quote.acceptance.attest"||command.action.contentHash!==input.documentHash||command.action.aggregateRevision!==input.documentVersion||command.action.amountPence!==input.acceptedTotalPence||command.action.currency!=="GBP"||command.action.policyVersion!=="builder-attestation.v1")throw new Error("EXACT_ACCEPTANCE_AUTHORIZATION_MISMATCH");let result: Record<string, unknown>;
+    try { result=(await db.$client.query(`SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[this.tenantId,input.acceptanceId,this.eventId,input.jobId,input.documentId,input.documentVersion,input.documentHash,input.acceptedTotalPence,input.expectedJobRevision,command.actorMembershipId,input.statedCustomerName,input.statedMethod,input.acceptedAt,input.evidenceId,command.commandId,command.authorizationId])).rows[0] as Record<string,unknown>;
+    } catch (error) {
+      const conflict = error as {code?: string; constraint?: string};
+      if (conflict.code === "23505" && conflict.constraint === "activation_acceptance_operati_tenant_id_operation_semantic__key") {
+        throw new CommandError("COMMAND_CONFLICT");
+      }
+      throw error;
+    }
+    return{acceptanceId:input.acceptanceId,eventId:this.eventId,jobId:input.jobId,documentId:input.documentId,documentVersion:input.documentVersion,documentHash:input.documentHash,acceptedTotalPence:input.acceptedTotalPence,acceptanceKind:result.acceptance_kind,state:"accepted"};}
   auditEvents(_result:Record<string,unknown>,command:ConsequentialCommand){const input=builderAttestedAcceptanceV1.parse(this.raw);return[domainAudit(command,"quote.acceptance.attested",this.eventId,input.documentId,input.documentHash)];}
 }
 

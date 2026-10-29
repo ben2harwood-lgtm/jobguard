@@ -23,6 +23,7 @@ it("actual catalogs retain least privilege",async()=>{
 // C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
 const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
+ "app.job_import_v3":[],
  "app.payment_fee_command":[],
  "app.payment_fee_statement":[],
  "app.lp_job_insert_permit":[],
@@ -78,6 +79,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.recovery_attribution_revision":[],
  "app.recovery_attribution_command":[],
  "app.recovery_attribution_reassessment":[],
+ "app.activation_acceptance_operation_use":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
