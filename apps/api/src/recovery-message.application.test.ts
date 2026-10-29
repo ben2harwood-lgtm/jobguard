@@ -4,6 +4,7 @@ import { buildRecoveryMessage } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import { PracticeAccessError, RecoveryMessageError } from "@jobguard/db";
 import { RecoveryMessageApplication } from "./recovery-message.application.js";
+import { recoveryMessageFailure } from "./recovery-message.errors.js";
 
 const repository = vi.hoisted(() => ({ read: vi.fn(), preview: vi.fn(), command: vi.fn(), membership: vi.fn() }));
 vi.mock("@jobguard/db", async original => ({
@@ -80,6 +81,25 @@ describe("recovery message API boundaries", () => {
       provenance: { provider: "recorded-fixture", deployment: "local-only" } } });
     expect(repository.command).not.toHaveBeenCalled();
   });
+
+  it.each([{ amountPence: 0 }, { sourceRefs: [] }, { manifestHash: "obsolete-hash" }])(
+    "returns the normal content refusal when a saved preview fails today's draft schema: %j", async invalid => {
+      const message = buildRecoveryMessage({ caseId, jobId: id(7), caseType: "withheld_customer_payment", caseRevision: 1,
+        amountPence: 32000, sourceRefs: [id(8)], packId, packRevision: 1, manifestHash: hash, attachmentHash: "b".repeat(64) });
+      const saved = { ...state, latest: { message: { ...message, ...invalid } } };
+      repository.preview.mockResolvedValue(saved);
+      const app = new RecoveryMessageApplication(pool);
+      // Both the initial persisted preview and an exact command replay must refuse safely.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const failure = await app.preview(sessionId, caseId, preview).catch(error => error);
+        expect(failure).toEqual(new RecoveryMessageError("RECOVERY_MESSAGE_CONTENT_INVALID"));
+        expect(recoveryMessageFailure(failure)).toEqual({ status: 409, code: "RECOVERY_MESSAGE_CONTENT_INVALID" });
+      }
+      expect(repository.preview).toHaveBeenCalledTimes(2);
+      expect(repository.command).not.toHaveBeenCalled();
+      expect(saved.latest.message).toEqual({ ...message, ...invalid });
+    },
+  );
 
   it("rejects invented authority, a real recipient and a path that disagrees with the body", async () => {
     const app = new RecoveryMessageApplication(pool);

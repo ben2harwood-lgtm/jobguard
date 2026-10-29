@@ -38,8 +38,13 @@ export class RecoveryMessageApplication {
     const result = await this.respond(repo.preview(ctx, recoveryMessageIdV1.parse(caseId), recoveryMessagePreviewCommandV1.parse(raw), actor));
     // Repository access, source/evidence validation and replay remain authoritative.
     // The fixture draft is a proposal only, and cannot alter the stored preview.
-    const drafting = result.latest ? await draftPracticePursuit(recoveryMessageSourceOf(result.latest.message)) : null;
-    return { ...result, drafting };
+    try {
+      const drafting = result.latest ? await draftPracticePursuit(recoveryMessageSourceOf(result.latest.message)) : null;
+      return { ...result, drafting };
+    } catch (error) {
+      if (error instanceof z.ZodError) throw new RecoveryMessageError("RECOVERY_MESSAGE_CONTENT_INVALID");
+      throw error;
+    }
   }
 
   async command(sessionId: string | undefined, caseId: string, messageId: string, raw: unknown) {
