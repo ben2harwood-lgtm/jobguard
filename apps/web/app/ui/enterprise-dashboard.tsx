@@ -5,6 +5,7 @@ import type { z } from "zod";
 import type { EnterpriseDashboardApplication, EnterpriseBaselineApplication } from "@jobguard/api/workspace";
 import { exactPounds } from "./contractor-billing";
 import styles from "./work-orders.module.css";
+import northsideSample from "../../../../docs/fixtures/contractor-full-demo-package.v1.json";
 
 type Activity = Awaited<ReturnType<EnterpriseDashboardApplication["read"]>>;
 type Billing = Awaited<ReturnType<EnterpriseDashboardApplication["readBilling"]>>;
@@ -65,6 +66,7 @@ export function BaselineView({ baseline }: { baseline: Baseline }) {
   </section>;
 }
 export function EnterpriseDashboard() {
+  const [baselineContent, setBaselineContent] = useState("");
   const [activity, setActivity] = useState<Activity | null>(null), [billing, setBilling] = useState<Billing | null>(null), [baseline, setBaseline] = useState<Baseline | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [batchId, setBatchId] = useState("");
   async function run(work: () => Promise<void>) {
@@ -107,7 +109,9 @@ export function EnterpriseDashboard() {
     </form></fieldset>
     <fieldset disabled={busy}><legend>Import historical baseline (finance only)</legend><form onSubmit={importHistory}>
       <label>Format <select name="format"><option value="json">JSON</option><option value="csv">CSV</option></select></label>
-      <label>Synthetic baseline-history.v1 (6–12 months) <textarea name="content" rows={6} required maxLength={8000000}/></label>
+      <label>Synthetic baseline-history.v1 (6–12 months) <textarea name="content" rows={6} required maxLength={8000000} value={baselineContent} onChange={e => setBaselineContent(e.target.value)}/></label>
+      <button type="button" onClick={() => setBaselineContent(JSON.stringify(northsideSample.history, null, 2))}>Load fictional Northside baseline sample</button>
+      <p>Reference example only. Bind fictional-pilot and fictional-rest to two different company teams below.</p>
       <label>Historical team = current company team ID (one binding per line) <textarea name="bindings" rows={3} required/></label><button>Import history</button>
     </form></fieldset>
     <fieldset disabled={busy}><legend>Compare pilot teams with the rest</legend><form onSubmit={compare}>

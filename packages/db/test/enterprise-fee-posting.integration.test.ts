@@ -54,7 +54,10 @@ it("an unchanged next month subtracts prior posted net: zero delta and no new jo
   const second = await t.approvedStatement(nextMonth(t.p));
   expect(second.statement).toMatchObject({ totalDeltaPence: 0 });
   expect(second.statement.sections).toEqual([expect.objectContaining({ cumulativeFeePence: 806, priorNetPostedPence: 806, deltaPence: 0 })]);
-  expect(await t.post(second.statementId, second.authorizationId)).toMatchObject({ journals: 0 });
+  // ENT-11b self-attack: replay both months, with fresh command IDs and racing next-month requests.
+  expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ replayed: true });
+  const nextMonthPosts = await Promise.all([t.post(second.statementId, second.authorizationId), t.post(second.statementId, second.authorizationId)]);
+  expect(nextMonthPosts).toEqual([expect.objectContaining({ journals: 0 }), expect.objectContaining({ journals: 0 })]);
   expect(await t.repo.readPostings(t.w.ctx, t.w.session, second.statementId)).toEqual([]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.platform_enterprise_fee WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(1);
 });
@@ -110,4 +113,28 @@ it("direct runtime SQL can neither write the fee book nor call its private helpe
     `SELECT app.ef_posted_net('${t.w.w.p.tenantId}','${t.id}')`,
   ]) await expect(withTenant(c.runtime, t.w.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
   await expect(c.admin.query("DELETE FROM app.platform_enterprise_fee_line WHERE fee_id=$1", [fee!.id])).rejects.toMatchObject({ message: "ENTERPRISE_FEE_IMMUTABLE" });
+});
+
+it("ENT-11b self-attack: a credit after approval blocks posting without changing the approved statement", async () => {
+  const t = await setUp(), approved = await t.approvedStatement(t.p);
+  const before = await t.repo.readStatement(t.w.ctx, t.w.session, approved.statementId);
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("credited", {
+    originalEventId: t.invoice.sourceEventId, effectiveAt: "2026-10-05T12:00:00Z", amount: { netPence: 24000, vatPence: 4800, grossPence: 28800 },
+    lineAdjustments: [{ externalInvoiceLineId: "extra", netPence: 24000, vatPence: 4800, grossPence: 28800 }],
+  })]));
+  expect(await code(t.post(approved.statementId, approved.authorizationId))).toBe("STALE_FACTS");
+  expect(await t.repo.readStatement(t.w.ctx, t.w.session, approved.statementId)).toEqual(before);
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.statementId)).toEqual([]);
+});
+
+it("ENT-11b self-attack: another company cannot read a statement, derivation or journals, or post its approval", async () => {
+  const t = await setUp(), approved = await t.approvedStatement(t.p), other = await setUp();
+  const derivation = approved.statement.sections[0]!.derivationId;
+  for (const attempt of [
+    t.repo.readStatement(other.w.ctx, other.w.session, approved.statementId),
+    t.repo.read(other.w.ctx, other.w.session, derivation),
+    t.repo.readPostings(other.w.ctx, other.w.session, approved.statementId),
+    t.repo.postStatement(other.w.ctx, other.w.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(), statementId: approved.statementId, authorizationId: approved.authorizationId }),
+  ]) expect(await code(attempt)).toBe("FEE_NOT_FOUND");
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.statementId)).toEqual([]);
 });
