@@ -148,6 +148,7 @@ it("ENT-11b self-attack: a credit after approval blocks posting without changing
 it("ENT-11b self-attack: another company cannot read a statement, derivation or journals, or post its approval", async () => {
   const t = await setUp(), approved = await t.approvedStatement(t.p), other = await setUp();
   const derivation = approved.statement.sections[0]!.derivationId;
+  // Start each request only when its rejection handler can be attached immediately.
   for (const attempt of [
     () => t.repo.readStatement(other.w.ctx, other.w.session, approved.statementId),
     () => t.repo.read(other.w.ctx, other.w.session, derivation),
