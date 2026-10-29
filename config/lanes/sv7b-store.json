@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7b-store": {
+      "branches": [
+        "codex/sandbox/sv7b-store"
+      ],
+      "note": "RED DARK SV-7B synthetic durable delivery storage and quarantine; built on unmerged sv7b-email. No live ingress or production MIME parser. Own lane file is implicitly allowed by lane policy.",
+      "allow": [
+        "apps/api/src/email-delivery.store.ts",
+        "apps/api/src/email-delivery.store.test.ts",
+        "docs/operations/email-forwarding-data-flow.md"
+      ]
+    }
+  }
+}
