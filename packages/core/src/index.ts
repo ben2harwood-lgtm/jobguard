@@ -116,6 +116,9 @@ export * from "./meter-lifecycle.js";
 
 export * from "./enterprise-dashboard-stored-billing.js";
 export * from "./subscription-plan-view.js";
+export * from "./job-import-v3.js";
+
+export { ImportedBaselineSourceError, requireImportedBaselineSource } from "./imported-baseline-sources.js";
 
 export * from "./payment-fee-statements.js";
 export * from "./evidence-pack-v3.js";
