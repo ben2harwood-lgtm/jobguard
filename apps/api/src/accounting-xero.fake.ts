@@ -8,9 +8,10 @@ const connectionV1 = z.object({ version: z.literal(1), tenantId: z.string().rege
 export type FakeXeroConnection = z.infer<typeof connectionV1>;
 
 // These are fictional transport codes, NOT verified Xero API values or approved tax policies.
-export const fakeXeroTaxCodes = { unsupported: "DEMO_UNMAPPED", no_tax: "DEMO_NO_TAX",
+export const fakeXeroTaxCodes = { no_tax: "DEMO_NO_TAX",
   standard: "DEMO_STANDARD", zero_rated: "DEMO_ZERO" } as const;
 function mapDocument(target: AccountingTarget) {
+  if (target.tax === "unsupported") throw new AccountingExportError("unsupported_mapping");
   return { type: { invoice: "DEMO_INVOICE", credit_note: "DEMO_CREDIT_NOTE", payment: "DEMO_RECEIPT" }[target.objectType],
     company: target.companyId, contact: target.customerId, account: target.accountId,
     totalPence: target.amount.pence, currency: target.amount.currency, taxCode: fakeXeroTaxCodes[target.tax],

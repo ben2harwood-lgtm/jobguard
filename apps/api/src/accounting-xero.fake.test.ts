@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AccountingExportError } from "./accounting-export.contracts.js";
 import { AccountingExportSandbox, FakeCodatAdapter } from "./accounting-export.sandbox.js";
 import { FakeXeroAdapter, fakeXeroTaxCodes } from "./accounting-xero.fake.js";
 import { ctx, consent, source, scope, command, adjustment, scopeFor } from "./accounting-export.test-fixtures.js";
@@ -43,6 +44,32 @@ describe("M5-2 dark direct Xero", () => {
       expect(() => model.preview(ctx, { ...scope, mapping: { ...scope.mapping, tax } }, 100)).toThrow("unsupported_mapping");
     }
     expect(xero.pushes).toBe(0);
+  });
+  it.each(["customer_invoice", "credit", "receipt"] as const)("refuses unmapped tax on %s before preview or transport, including replays", kind => {
+    const xero = new FakeXeroAdapter([connection]);
+    const item = kind === "customer_invoice" ? source : adjustment(kind, 1);
+    const sources = kind === "customer_invoice" ? [item] : [source, item];
+    const model = new AccountingExportSandbox(xero, sources, [consent], true);
+    const s = scopeFor(item);
+    const target = model.preview(ctx, s, 100).artifact.target;
+    const approved = command(model, s);
+    model.setSyntheticSource({ ...item, tax: "unsupported" });
+    const unmapped = { ...s, mapping: { ...s.mapping, tax: "unsupported" } };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(() => model.preview(ctx, unmapped, 100)).toThrow(new AccountingExportError("unsupported_mapping"));
+      expect(() => model.push(ctx, { ...approved, scope: unmapped }, 100)).toThrow(new AccountingExportError("unsupported_mapping"));
+      expect(() => xero.push("demo-unmapped", "demo-hash", { ...target, tax: "unsupported" }, s))
+        .toThrow(new AccountingExportError("unsupported_mapping"));
+    }
+    expect(xero.pushes).toBe(0);
+    expect(xero.objects).toEqual([]);
+    expect(xero.documents.size).toBe(0);
+    expect(model.history(ctx)).toEqual([]);
+    model.setSyntheticSource(item);
+    expect(model.push(ctx, command(model, s), 100).status).toBe("pushed");
+    expect(xero.pushes).toBe(1);
+    expect(xero.objects).toHaveLength(1);
+    expect(xero.documents.size).toBe(1);
   });
   it.each(["token_expired", "revoked"])("refuses %s connections before preview, execution or reconciliation", state => {
     const xero = new FakeXeroAdapter([connection]);
