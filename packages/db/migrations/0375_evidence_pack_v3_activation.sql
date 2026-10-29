@@ -36,7 +36,7 @@ CREATE OR REPLACE FUNCTION app.evidence_pack_v3_ordinary(t uuid,c uuid) RETURNS 
 $$;
 CREATE OR REPLACE FUNCTION app.evidence_pack_v3_material(t uuid,c uuid,ordinary_only boolean DEFAULT false) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog,app SET timezone='UTC' AS $$
-DECLARE j uuid;l app.final_account_lock;b app.final_check_run_binding;rows jsonb;ordinary jsonb;
+DECLARE j uuid;l app.final_account_lock;b record;rows jsonb;ordinary jsonb;
 BEGIN
  SELECT job_id INTO j FROM app.recovery_case WHERE tenant_id=t AND id=c;
  ordinary:=app.evidence_pack_v3_ordinary(t,c);

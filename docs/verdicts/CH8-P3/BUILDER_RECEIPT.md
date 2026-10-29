@@ -251,3 +251,65 @@ remain for CI execution, then the loop owner's exact-head independent Claude RED
 last CI repair still fails, the router must follow the three-try cap and file the required card.
 No fourth attempt is authorized by this handoff. No Git-writing command, commit, push, merge,
 release or live provider action was performed. This remains synthetic-only.
+
+## PR #408 CI repair — Ben-authorized round 4, 29 October 2026 15:22 run
+
+Authority: this brief grants Ben's extra round ("Yes, one more each"); if this round still fails,
+the router parks it. Started at 437ac065, after the router's main merge, with a clean worktree
+and no unmerged index entries. Read ch8-p3-ci-traces-1522.txt in full.
+
+SB-02 root cause: the pre-lock source included `b app.final_check_run_binding` in DECLARE,
+although the actual query ran only after the pre-lock return. Changed that variable to RECORD;
+the existing SELECT still populates it only on the post-lock path. The test pattern is unchanged.
+This intentionally changes this branch's new SQL, rather than hiding the reference or relaxing
+its test. Verified the SQL differs from the starting 0360 bytes ONLY in that declaration.
+Inspected migration definitions: main's latest predecessor bodies for these routines remain in
+0306; no later main redefinition is overwritten or edited. Existing activation, case-scoped
+proof projection, writer validation, locking and grants remain as before. No CASE is inside an
+IF condition in this migration; its CASE expressions are in SELECT statements.
+
+Browser root causes: shadowPackCatch uses the real quote/activation writers but has no captured
+proposal. WorkspaceShell's non-capture branch never rendered RecoveryCases, so the pack button
+could not exist. That component's list validator also excluded the server-created
+missed_variation_final_account case. Connected the existing RecoveryCases component to the
+loaded non-capture workspace and added that precise literal to the response schema ONLY.
+The client open-command contract remains unchanged and rejects this type; the server's catch
+confirmation/creation controls are unchanged. The existing browser journey now explicitly checks
+the recovery heading and selects the confirmed catch before opening its pack. All original UI,
+worker, byte verification, approval and reload assertions remain intact.
+
+Regression coverage invokes the actual WorkspaceShell render branch, asserting it contains the
+real recovery component bound to the loaded job and exposes none on a forbidden workspace.
+Read-boundary coverage accepts the confirmed catch, refuses an unknown type and refuses a client
+catch-creation command. Existing adversarial recovery UI tests still pass.
+
+Main contains 0361/0362. Used tools/migration-renumber.mjs's exported planRenumber with the brief's
+explicit 0375 target (0363–0374 reserved), applying filesystem-only renames/reference updates.
+Updated upgrade lookup, tracking insert, predecessor bound, migration note, contract, operations
+and exact lane paths. Historical receipt sections retain their then-current numbering. The live
+finish list now contains a later 15:25 note reserving 0382 instead; this run follows the explicit
+0375 instruction in its issued brief. Router should reconcile its newer reservation before push.
+Added only the exact implementation/regression paths to this piece's lane, without directory globs
+or policy exceptions. docs/contracts/lp-downstream-effects-v1.md is untouched.
+
+Validation actually executed locally, at most two workers:
+
+- Web Vitest 4.1.12, maxWorkers=1: workspace-shell-ch8, recovery-case-requests,
+  workspace-lifecycle and recovery-cases.behaviour: 4 files, 217 tests passed.
+- API Vitest 4.1.12, maxWorkers=1: recovery-case.application and evidence-pack-v3
+  application/controller/worker: 4 files, 70 tests passed. Total: 287 tests passed.
+- Installed tsc package builds for core, db, API and AI passed; web --noEmit typecheck passed.
+  Initial web tests needed current API output built; the subsequent real-runner tests passed.
+- OpenAPI --check passed using node --import tsx from apps/api. Direct tsx CLI was blocked by
+  sandbox IPC permissions; the initial root-cwd loader attempt lacked decorator settings.
+  Retried with the API working directory/config and passed; no OpenAPI change was required.
+- Playwright --list CH-8.spec.ts discovers both tests on mobile-360 and desktop (4 cases).
+- The exact unchanged SB-02 forbidden-reference regex passes the migration's pre-lock source.
+  This is source inspection, not pg_get_functiondef execution.
+- Final filesystem lane policy covers all 20 PR paths; 0375 passes order against local origin/main.
+- git diff --check passed; git ls-files -u is empty. No Git-writing command was run.
+
+PostgreSQL cannot start here. The full installed-function SB-02 check and both browser journeys
+must rerun in CI; no locally executed PostgreSQL/browser pass is claimed. The independent Claude
+RED review remains against the exact resulting head. No assertion was weakened or skipped and
+no exception added. No commit, push, merge, release, provider action or real-data use occurred.

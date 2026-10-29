@@ -66,6 +66,8 @@ test("shadow-30000: build and approve a settled catch pack; UI, download and off
     expect(x.attribution.assessmentOutcome).toBe("eligible_for_review");
     await context.addCookies([{ name: "jg_session", value: x.session, url: baseURL! }]);
     await page.goto(`/jobs/${x.jobId}`);
+    await expect(page.getByRole("heading", { name: "Chase unpaid money", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /^missed variation final account ·/ }).click();
     await page.getByRole("button", { name: "Open lock and reveal packs", exact: true }).click();
     const build = page.getByRole("button", { name: "Build lock and reveal pack", exact: true });
     await expect(build).toBeEnabled(); await build.click();
