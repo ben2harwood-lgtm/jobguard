@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -31,7 +32,7 @@ const persistedVersions=async(contractId:string)=>(await admin.query<{n:number}>
 // Expected organisation revision = persisted count of contractor command receipts (the definition the view reports). Reading it directly
 // keeps the two hot conformance loops from building a full projection before every command; the view itself is still asserted elsewhere.
 const revisionOf=async(p:AuthenticatedMembership)=>(await admin.query<{n:number}>("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type LIKE 'contractor.%'",[p.tenantId])).rows[0]!.n;
-async function setup(){const session=randomUUID();const p=await repo.startPractice(session);const v=await query(p);return {session,p,v};}
+async function setup(){const session=randomUUID();const p=await repo.startPractice(session);await seedContractorAgreement(admin,p.tenantId);const v=await query(p);return {session,p,v};}
 async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){const v=await query(p);return repo.command(p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:v.revision,...fields});}
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
  const id=randomUUID();await command(p,{kind:'member.invite',id,role,email:`${id}@fictional.invalid`,scope:{kind,id:scopeId},clientId,contractId});
@@ -360,7 +361,7 @@ it('CH-3b client customer link requires organisation.manage on the exact client'
 
 // ENT-2: every command and query it adds, for every role, against every scope kind the role can hold, judged by the pure rules in core.
 it('ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules, per client in two branches',async()=>{
- const {p,v}=await setup(),demo=await prepareWorkOrderDemo(runtime,p),orders=new WorkOrderRepository(runtime),rates=new SorRepository(runtime),scheduling=new JobSchedulingRepository(runtime),links=new ContractorPartyRepository(runtime);
+ const {p,v}=await setup(); const demo=await prepareWorkOrderDemo(runtime,p),orders=new WorkOrderRepository(runtime),rates=new SorRepository(runtime),scheduling=new JobSchedulingRepository(runtime),links=new ContractorPartyRepository(runtime);
  const region=v.units.find(x=>x.kind==='region')!.id,branch=demo.branchId,own=demo.teamId;
  const otherTeam=(await command(p,{kind:'team.create',branchId:branch,name:'Fictional ENT-2 other team'})).id;
  const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:region,name:'Fictional ENT-2 other branch'})).id;

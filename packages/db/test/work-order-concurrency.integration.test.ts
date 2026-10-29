@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,7 +16,7 @@ let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contrac
 const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
 const TABLES = ["work_order", "work_order_revision", "work_order_line", "work_order_current", "import_batch", "import_row_receipt", "job_assignment", "scope_identity", "job", "contractor_party_binding", "command_receipt", "audit_event"];
 const counts = async (tenantId: string) => Object.fromEntries(await Promise.all(TABLES.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
-async function org() { const p = await contractors.startPractice(randomUUID()); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }
+async function org() { const p = await contractors.startPractice(randomUUID()); await seedContractorAgreement(admin, p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }
 const importOf = (p: AuthenticatedMembership, csv: string, commandId: string = randomUUID(), name = "concurrent.csv") => orders.importCsv(p, { commandId, name, kind: "csv", csv });
 async function auditChain(tenantId: string): Promise<AuditEvent[]> {
   const rows = (await admin.query(`SELECT id,tenant_id "tenantId",sequence::int,version,actor_ref "actorRef",event_type "eventType",subject_type "subjectType",subject_ref "subjectRef",occurred_at "occurredAt",payload,trim(payload_hash) "payloadHash",trim(previous_hash) "previousHash",trim(event_hash) "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenantId])).rows;

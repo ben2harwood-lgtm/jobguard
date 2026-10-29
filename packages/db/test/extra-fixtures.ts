@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -41,7 +42,7 @@ export async function cluster(beforeOwn = false) {
 }
 export type Cluster = Awaited<ReturnType<typeof cluster>>;
 export async function fixture(c: Cluster, n = 1) {
- const p = await new ContractorRepository(c.runtime).startPractice(randomUUID()), demo = await prepareWorkOrderDemo(c.runtime, p, { siteCount: 3 });
+ const p = await new ContractorRepository(c.runtime).startPractice(randomUUID()); await seedContractorAgreement(c.admin, p.tenantId); const demo = await prepareWorkOrderDemo(c.runtime, p, { siteCount: 3 });
  await new WorkOrderRepository(c.runtime).importCsv(p, { commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: demoFile([demoRow(demo, n)]) });
  const row = (await c.admin.query("SELECT w.id order_id,w.job_id,c.revision_id FROM app.work_order w JOIN app.work_order_current c ON (c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) WHERE w.tenant_id=$1", [p.tenantId])).rows[0];
  const grant = (await c.admin.query("SELECT id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND scope_kind='tenant'", [p.tenantId, p.membershipId])).rows[0];

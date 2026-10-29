@@ -119,6 +119,7 @@ export class WorkOrderRepository {
         // Every contractor command of a tenant serialises on the ENT-1 lock; a concurrent import of the same file then sees this one's batch.
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
         await assertContractorGate(db, principal, "import");
+        await c.query("SELECT app.mon8_require_capability('work_orders','NOT_FOUND')");
         // A stored batch answers this import only if (a) it is this very command, or (b) it holds the same file, was clean, was recorded by this member (or by a
         // member with tenant-wide import authority, whom the file is no different for), and every order it touched is still at the revision that batch left it at.
         // Once a later batch has revised one of those orders, the old batch no longer describes the orders, so the file is processed row by row instead (A, B, A).

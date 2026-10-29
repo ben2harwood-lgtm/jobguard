@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -34,7 +35,7 @@ const withCanary = { kind: "contact", contact: { version: "resident-contact.v1",
  * J2 for T2 with its own operative, J3 for T3, and J0 names no team at all.
  */
 async function fixture() {
-  const p = await contractors.startPractice(randomUUID()); const demo = await prepareWorkOrderDemo(runtime, p); const v = await view(p);
+  const p = await contractors.startPractice(randomUUID()); await seedContractorAgreement(admin, p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p); const v = await view(p);
   const region = v.units.find(u => u.kind === "region")!.id, b1 = demo.branchId;
   const t1 = demo.teamId, t2 = (await command(p, { kind: "team.create", branchId: b1, name: "Fictional team two" })).id;
   const b2 = (await command(p, { kind: "unit.create", unitKind: "branch", parentId: region, name: "Fictional branch two" })).id;

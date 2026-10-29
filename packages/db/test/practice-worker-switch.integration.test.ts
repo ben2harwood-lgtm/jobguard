@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
@@ -190,7 +191,7 @@ it("[PW32] a tenant-locked wider grant committed first prevents a waiting switch
 it("[PW9] home record ending during a current switch leaves both session and switch inert", async () => {
  const { prepareWorkOrderDemo } = await import("../src/index.js");
  for (const kind of ["expired", "revoked"] as const) {
-  const f = await startSessionWithHomeRecord(c), demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
+  const f = await startSessionWithHomeRecord(c); await seedContractorAgreement(c.admin, f.p.tenantId); const demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
   await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: demo.operativeMembershipId });
   const sessionBefore = await text(c, "control_plane.contractor_practice_session", f.p.tenantId), switchBefore = await text(c, "control_plane.practice_worker_switch", f.p.tenantId);
   await endHomeRecord(c, f.session, kind);

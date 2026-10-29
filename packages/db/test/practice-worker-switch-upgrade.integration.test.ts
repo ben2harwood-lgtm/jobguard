@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, ContractorRepository, ContractorPracticeSessionRepository } from "../src/index.js";
@@ -119,7 +120,7 @@ it.each(["never-issued", "cap-expired", "revoked", "home-expired", "home-revoked
  const { startSessionWithHomeRecord, makeSessionExpired, endHomeRecord, repo, on, off } = await import("./practice-worker-switch-fixtures.js");
  for (const stored of ["none", "current", "ended"] as const) {
   const f = kind.startsWith("home") ? await startSessionWithHomeRecord(c) : await startSession(c);
-  if (stored !== "none") { const demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 }); await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: demo.operativeMembershipId }); if (stored === "ended") await repo(c).switchOff(f.context, f.p, f.session, off()); }
+  if (stored !== "none") { await seedContractorAgreement(c.admin, f.p.tenantId); const demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 }); await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: demo.operativeMembershipId }); if (stored === "ended") await repo(c).switchOff(f.context, f.p, f.session, off()); }
   if (kind === "revoked") await new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session);
   if (kind === "cap-expired") await makeSessionExpired(c, f.session);
   if (kind.startsWith("home")) await endHomeRecord(c, f.session, kind === "home-expired" ? "expired" : "revoked");

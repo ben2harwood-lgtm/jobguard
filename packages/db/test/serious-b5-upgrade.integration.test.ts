@@ -877,6 +877,20 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// MON-8 slice 2: exactly three added routines. Predecessor privileges, rows,
+// relations and policies remain compared; body changes have separate tests.
+async function contractorCapabilityAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const names = ["mon8_effective_agreement", "mon8_require_capability", "mon8_approval_receipt_gate"];
+ const added = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
+ expect(added.map(r => r.proname).sort()).toEqual([...names].sort());
+ for (const row of added) {
+  expect(before.routines.some(r => r.nspname === row.nspname && r.proname === row.proname)).toBe(false);
+  expect(row).toMatchObject({prosecdef: true, proconfig: ["search_path=pg_catalog"]});
+ }
+ const position = (row: unknown) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {...before, routines: [...before.routines, ...added].sort((a,b) => position(a)-position(b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -901,6 +915,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await contractorCapabilityAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

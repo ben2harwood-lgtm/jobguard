@@ -90,3 +90,19 @@ API port are deliberately unchanged. A is not their full adapter or enforcement.
 Migration 0193 adds only A's objects, no backfill or commercial effects. B owns
 command integration and permission-preserving historical readers; C owns merged
 subscription lifecycle composition and preservation evidence. MON-8 stays open.
+
+## 29 October — MON-8-P-B contractor capability slice 2
+
+Migration 0403 installs the transaction-bound SQL capability service at the existing
+controlled writers, including work-order replay lookup, approval receipt replay,
+approval-rule configuration and export execution claims. It reuses A's current
+assignment/status source through one shared private projection. New contractor
+work requires active status on that assignment. No client facts or plan selection
+can grant it. See [migration contract](../../packages/db/migration-notes/0403_contractor_capabilities.md)
+for the entrypoint inventory, cleanup exceptions, privileges and forward fix.
+Retained reads and local export downloads keep their existing permissions, with no
+agreement-status filter. The original in-memory API port remains an unused
+foundation; it is not added as an independent guard. Solo/Builder feature mapping
+is unchanged. Operative/site-origin enforcement (slice 1), lifecycle composition
+and full track-transition preservation (slice 3), independent RED review, CI and
+release approval are separate work; this slice does not complete all of MON-8.

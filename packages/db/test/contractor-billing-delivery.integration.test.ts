@@ -33,3 +33,18 @@ it("E6-24 an interrupted claim is inspected as unknown and reconciliation never 
  const delivery=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));await delivery.execute(own.ctx,own.session,own.s.jobId,action.outboxActionId);await delivery.reconcile(own.ctx,own.session,own.s.jobId,action.outboxActionId);await delivery.execute(own.ctx,own.session,own.s.jobId,action.outboxActionId);
  expect(sends).toBe(0);expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries[0]).toMatchObject({status:"outcome_unknown"});
 });
+
+it("MON-8 agreement suspension between approval and execution prevents a provider call", async () => {
+ const { seedContractorAgreement } = await import("./contractor-agreement-test-fixtures.js");
+ const w = await world(c), batch = await w.exported(), view = await w.repo.read(w.ctx, w.session, w.s.jobId);
+ let calls = 0;
+ const adapter: OutboundAdapter = { name: "fake_sftp", supportsProviderDeduplication: true, async deliver() { calls++; return { kind: "succeeded", providerReference: "fictional" }; }, async reconcile() { return "unknown"; } };
+ const action = await w.repo.approveDelivery(w.ctx, w.session, w.s.jobId, {
+  version: "billing-approve-delivery.v1", commandId: randomUUID(), batchId: batch.batchId, channel: "fake_sftp", destination: "fictional.invalid",
+  contentHash: view.exports[0]!.jsonHash, expiresAt: new Date(Date.now() + 3600000).toISOString(),
+ });
+ await seedContractorAgreement(c.admin, w.w.p.tenantId, "suspended");
+ await expect(new ContractorBillingDelivery(c.runtime, new Map([[adapter.name, adapter]])).execute(w.ctx, w.session, w.s.jobId, action.outboxActionId)).rejects.toMatchObject({ code: "BILLING_FORBIDDEN" });
+ expect(calls).toBe(0);
+ expect((await w.repo.read(w.ctx, w.session, w.s.jobId)).exports).toEqual(view.exports);
+});

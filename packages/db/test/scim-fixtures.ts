@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 /** Synthetic SCIM PostgreSQL fixtures. NOT RUN (sandbox cannot start PostgreSQL / a browser). */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -50,6 +51,7 @@ export type ScimHarness=Awaited<ReturnType<typeof createScimHarness>>;
 export type Credentials={sessionToken:string;csrfToken:string;origin:string};
 export async function fixture(h:ScimHarness,configure=true,link=true) {
  const contractor=new ContractorRepository(h.runtime),principal=await contractor.startPractice(randomUUID());
+ await seedContractorAgreement(h.admin, principal.tenantId);
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`,sessionId=randomUUID();
  const sessionValue=randomBytes(32).toString("base64url"),csrfValue=randomBytes(24).toString("base64url");
  // The practice bootstrap creates the person; these rows mirror the merged SSO fixture's bootstrap.

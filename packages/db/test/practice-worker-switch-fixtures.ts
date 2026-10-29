@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { expect } from "vitest";
@@ -16,7 +17,7 @@ export const disableSwitchOn = "REVOKE EXECUTE ON FUNCTION app.practice_worker_s
 export const on = () => ({ version: "practice-worker-switch-on.v1", commandId: randomUUID() });
 export const off = () => ({ version: "practice-worker-switch-off.v1", commandId: randomUUID() });
 export async function company(c: Cluster) {
- const f = await startSession(c), demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
+ const f = await startSession(c); await seedContractorAgreement(c.admin, f.p.tenantId); const demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
  await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional.csv", kind: "csv", csv: demoFile([demoRow(demo, 1)]) });
  const members: Record<string, string> = { owner: f.p.membershipId, operative: demo.operativeMembershipId };
  for (const role of ["supervisor", "surveyor", "admin", "commercial_manager", "finance", "read_only", "client_approver"]) {

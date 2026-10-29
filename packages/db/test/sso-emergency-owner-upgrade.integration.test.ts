@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 /** ENT-10e PostgreSQL 16. NOT RUN (sandbox cannot start PostgreSQL / a browser). */
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -37,6 +38,7 @@ beforeAll(async()=>{
 afterAll(async()=>{try{await closeTestPools(identity,runtime,admin);}finally{try{await postgres?.stop();}finally{if(directory)await rm(directory,{recursive:true,force:true});}}});
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
+ await seedContractorAgreement(admin, principal.tenantId);
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
  const sessionToken=randomUUID(),csrfToken=randomUUID(),sessionId=randomUUID();
  await admin.query("INSERT INTO identity.user_email VALUES($1,$2)",[email,principal.identityUserId]);

@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 /** ENT-10a actual PostgreSQL acceptance. NOT RUN in the builder sandbox: it cannot start PostgreSQL. */
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -55,6 +56,7 @@ afterAll(async () => { await closeTestPools(identity, runtime, admin); await pos
 async function fixture(idp = generateTestIdentityProvider()) {
   const contractor = new ContractorRepository(runtime);
   const principal = await contractor.startPractice(randomUUID());
+  await seedContractorAgreement(admin, principal.tenantId);
   const sessionToken = randomUUID(), csrfToken = randomUUID(), sessionId = randomUUID();
   const auth = provider();
   const address = `${randomUUID()}@synthetic.invalid`;
@@ -466,4 +468,19 @@ describe("ENT-10a / explicitly linked multi-tenant identity regression", () => {
     expect((await identityApp.session(ordinary.sessionToken)).memberships).toHaveLength(2);
     await expect(invite(b.principal.tenantId,{...ordinary,tenantHeader:b.principal.tenantId})).resolves.toHaveProperty("id");
   });
+});
+
+it("MON-8 suspended agreements refuse new SSO requests and callback sessions while retaining admin history", async () => {
+ const f = await fixture(); await f.verify(); await f.mapping();
+ const pending = await f.response();
+ const sessions = await count("identity.sso_session_binding", f.principal.tenantId);
+ const requests = await count("identity.sso_request", f.principal.tenantId);
+ await seedContractorAgreement(admin, f.principal.tenantId, "suspended");
+ await expect(f.start()).rejects.toMatchObject({ code: "SAML_REFUSED" });
+ expect(await count("identity.sso_request", f.principal.tenantId)).toBe(requests);
+ await expect(f.app.callback(f.connectionId, pending.payload, pending.request.relayState)).rejects.toMatchObject({ code: "SSO_FORBIDDEN" });
+ expect(await count("identity.sso_session_binding", f.principal.tenantId)).toBe(sessions);
+ expect((await f.app.view(f.principal.tenantId, f.credentials)).connections).toHaveLength(1);
+ await seedContractorAgreement(admin, f.principal.tenantId);
+ await expect(f.start()).resolves.toHaveProperty("requestId");
 });

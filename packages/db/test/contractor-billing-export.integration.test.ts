@@ -33,3 +33,20 @@ it("E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate t
  const races=await Promise.allSettled([marking,own.exported(),own.exported()]);expect(races[0]!.status).toBe("fulfilled");
  await own.exported();expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).exports.flatMap(b=>b.artifact.lines)).toHaveLength(1);
 });
+
+it("MON-8 agreement loss refuses new exports and delivery approvals without hiding an existing export", async () => {
+ const { seedContractorAgreement } = await import("./contractor-agreement-test-fixtures.js");
+ const own = await world(c), input = own.exportInput();
+ const exported = await own.repo.finalise(own.ctx, own.session, own.s.jobId, input);
+ const before = await own.repo.read(own.ctx, own.session, own.s.jobId);
+ expect(exported.lineCount).toBe(1);
+ await seedContractorAgreement(c.admin, own.w.p.tenantId, "suspended");
+ for (const command of [input, own.exportInput()]) await expect(own.repo.finalise(own.ctx, own.session, own.s.jobId, command)).rejects.toMatchObject({ code: "BILLING_FORBIDDEN" });
+ const batch = before.exports.find(e => e.id === exported.batchId)!;
+ await expect(own.repo.approveDelivery(own.ctx, own.session, own.s.jobId, {
+  version: "billing-approve-delivery.v1", commandId: randomUUID(), batchId: batch.id,
+  channel: "fake_download", destination: "fictional.invalid", contentHash: batch.jsonHash,
+  expiresAt: new Date(Date.now() + 3600000).toISOString(),
+ })).rejects.toMatchObject({ code: "BILLING_FORBIDDEN" });
+ expect((await own.repo.read(own.ctx, own.session, own.s.jobId)).exports).toEqual(before.exports);
+});

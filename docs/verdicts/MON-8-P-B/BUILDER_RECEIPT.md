@@ -120,3 +120,85 @@ Installed dependencies reused, no downloads or install. Node `v24.17.0`, pnpm `1
 PostgreSQL suites (`pnpm test:db`, `pnpm test:migrations`, retained-reader integration/upgrade and serious-b5 upgrade), full `pnpm test`, and browser suites: NOT RUN locally by dispatcher instruction. Required GitHub CI `checks` after dispatcher push must prove real PostgreSQL behavior, including the failing ACL test, fresh/upgrade ordering and migration coexistence with reserved CH-7-REST-B 0199. No fixture/unit result substitutes for those checks. AI evaluation: NOT RUN, no AI change. No clean-install claim. Turbo shared-cache logs include other worktree paths and nonfatal sandbox cache I/O warnings; cached tasks are explicitly counted.
 
 Only assigned lane files and the explicitly permitted renumbering references changed. No backfill, external action, policy, production gate or operational alert changed. Existing transactional installation/forward-fix guidance applies. Commit message written to `/private/tmp/jg-msg-mon-8-p-b.txt`; dispatcher owns commit/push, exact-resulting-commit review and acceptance.
+
+## 29 October 2026 — MON-8-P-B slice 2: contractor capabilities (RED)
+
+Built ahead on `codex/sandbox/mon8-contractor`, from local `origin/main` and HEAD
+`fe80add539fc9f97028b90420918d16759f636ee` (equal at inspection). Main had A's
+agreement authority projection and B's retained organisation reads, but no guards
+in work-order/SoR writers, approval-chain configuration/execution, SSO or contractor
+billing export writers. This is the gap implemented; no git write, push or PR was
+performed. The router owns NOPR handling and the Command Center line.
+
+Migration **0403** factors assignment/status selection into one private helper and
+uses one SQL capability service at the controlled boundaries. Work-order imports
+check before historical receipt lookup; approval receipt insertion checks before
+ON CONFLICT, and controlled approval routines check again. SSO completion and
+billing delivery claims recheck at execution. Existing scope, amount, hash,
+revision, commercial approval, idempotency and audit checks remain in place.
+No dependency, money policy, table, backfill, production activation or provider is
+added. No change to Solo/Builder feature parity. Full track-transition preservation
+and subscription/lifecycle composition remain slice 3; operative/site-origin
+controls remain the separately owned slice 1.
+
+The SQL anchor patches avoid copying predecessor financial/identity routines or
+adding parallel API guards; migration drift aborts atomically. The shared projection
+removes duplicated assignment/status selection. Historical reads/downloads and
+cleanup remain on their existing permission checks. Test fixtures now explicitly
+seed fictional active status using owner credentials and the matching tenant lock;
+a reference or practice bootstrap never silently activates an agreement.
+
+Attacks added for CI: missing/inactive/suspended status, restoration, forged flags,
+unknown capabilities, active small-builder assignments, foreign actors/tenants,
+work-order and approval receipt replays after suspension, approval-rule configuration,
+SSO request/callback suspension, retained order/receipt/export access, export approval
+after suspension, and suspension between delivery approval and provider execution.
+Denial snapshots compare every business table; they do not seed populated locked-bill/allocation scenarios.
+No allocation, money formula, locked-bill reference or shadow reader is changed;
+existing adversarial suites continue to cover those controls. The new authority
+source reads no plans, shadow signals, billing amounts or final-account data.
+
+Local verification (installed packages only; at most two workers):
+
+- `pnpm --filter @jobguard/db typecheck`: PASS.
+- `pnpm turbo run build --filter=@jobguard/db... --concurrency=2`: PASS (core/db built;
+  storage cached). Turbo emitted sandbox cache IO warnings; exit 0.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/contractor-capability-migration.test.ts test/lp-0-catalog.test.ts src/migrate-discovery.test.ts`: PASS,
+  3 files / 33 tests. Initial attempt lacked built core exports; passed after build.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/work-order.application.test.ts src/plan-entitlements.application.test.ts src/plan-entitlements.boundary.test.ts`:
+  PASS, 3 files / 26 tests, including added forged agreement/entitlement flags.
+- Focused test-file TypeScript check using `/tmp/mon8-contractor-test-tsconfig.json`:
+  PASS for new capability integration tests and modified export/delivery regressions.
+  An earlier broad ad-hoc check also pulled legacy tests and lacked API decorator
+  settings; it reported existing optional-property errors and decorator errors.
+  No repository compiler setting or existing test assertion was weakened.
+
+The default pnpm launcher attempted unavailable version resolution and failed;
+all successful pnpm commands used the already-installed pinned 10.28.1 launcher
+through `PATH=/private/tmp/jg-r1-pnpm-bin:$PATH`. No packages were installed.
+PostgreSQL, migration execution and browser suites are NOT RUN in this sandbox;
+CI must run the actual suites and the independent Claude RED reviewer must inspect
+the exact pushed head before merge. This receipt is builder evidence, not review,
+acceptance, integration, merge or release evidence.
+
+Final local checks:
+
+- Core entitlement regressions: `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/plan-entitlements.test.ts src/contractor-entitlement-authority.test.ts`: PASS,
+  2 files / 13 tests. Together with the database and API unit runs above: 72 unique
+  tests across 8 named files; PostgreSQL tests are not included in that count.
+- Final migration-anchor/discovery rerun after the strict agreement-reference guard:
+  PASS, 2 files / 6 tests (repeat coverage, not additional unique tests).
+- `pnpm turbo run lint --concurrency=2`: PASS, all 7 packages (2 cached).
+- Core purity, money arithmetic and commercial boundary checks: PASS.
+- `LANE_BASE_REF=origin/main pnpm lint`: BLOCKED at the committed-range lane
+  check because HEAD equals origin/main and the router has not committed the diff.
+  The checker correctly refused a self-comparison. No check was changed or bypassed.
+- Working-diff lane validation using the existing exported `loadLanePolicy`,
+  `lanePathAllowed` and `migrationOrderViolations`: PASS for all 32 changed paths,
+  with no unused allow-list entries. This is not committed-range CI evidence.
+- Final focused integration-test TypeScript check: PASS. `git diff --check`: PASS.
+
+Router next: commit using the supplied message, push the build-ahead branch with
+NOPR=1, run committed-range lane/CI checks when admitted, and arrange the one
+independent Claude RED review. All database behavior and migration claims remain
+pending actual PostgreSQL CI execution; no integration or review pass is inferred.

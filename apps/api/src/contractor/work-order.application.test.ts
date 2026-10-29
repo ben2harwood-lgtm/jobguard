@@ -38,7 +38,7 @@ describe("ENT-2 application boundary (adapter tests, not PostgreSQL proof)", () 
     const resolve = vi.spyOn((await import("@jobguard/db")).WorkOrderRepository.prototype, "resolveSession");
     const app = new WorkOrderApplication(new Pool());
     await expect(app.importGenerated(principal, { ...generated, source: { kind: "csv", name: "mine.csv", csv: "version\r\n" } })).rejects.toMatchObject({ code: "UPLOAD_NOT_ALLOWED" });
-    for (const forged of [{ ...generated, tenantId: other }, { ...generated, source: { kind: "generated", sample: "../../etc/passwd" } }, { ...generated, source: { kind: "generated", sample: "starter_orders", csv: "x" } }, { ...generated, environment: "production_billing" }, { ...generated, commandId: "bad" }, null, "x"]) {
+    for (const forged of [{ ...generated, plan: "Builder" }, { ...generated, agreementActive: true }, { ...generated, entitlements: { work_orders: true, approval_chains: true, sso: true, accounting_export: true } }, { ...generated, tenantId: other }, { ...generated, source: { kind: "generated", sample: "../../etc/passwd" } }, { ...generated, source: { kind: "generated", sample: "starter_orders", csv: "x" } }, { ...generated, environment: "production_billing" }, { ...generated, commandId: "bad" }, null, "x"]) {
       await expect(app.importGenerated(principal, forged)).rejects.toMatchObject({ code: "INVALID_COMMAND" });
     }
     expect(resolve).not.toHaveBeenCalled();

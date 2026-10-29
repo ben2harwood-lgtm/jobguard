@@ -1,3 +1,4 @@
+import { seedContractorAgreement } from "./contractor-agreement-test-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -18,7 +19,7 @@ let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contrac
 const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
-async function org() { const p = await contractors.startPractice(randomUUID()); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }
+async function org() { const p = await contractors.startPractice(randomUUID()); await seedContractorAgreement(admin, p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }
 const importOf = (p: AuthenticatedMembership, csv: string, name = "pricing.csv") => orders.importCsv(p, { commandId: randomUUID(), name, kind: "csv", csv });
 const sorBody = (scheduleId: string, effectiveFrom: string, items: Array<[string, string, number]>, reference = `Fictional rates ${effectiveFrom}`) => ({ version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId, reference, effectiveFrom, items: items.map(([code, unit, pence]) => ({ code, description: `Item ${code}`, unit, rate: { pence, currency: "GBP" } })) });
 const contractDocument = (sorVersionIds: string[], numerator: string, denominator: string, reference = "FICTIONAL-PRICING") => ({ version: "client-contract.v1", reference, startsOn: "2026-01-01", endsOn: null, sorVersionIds, tenderedAdjustment: { numerator, denominator }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 });
