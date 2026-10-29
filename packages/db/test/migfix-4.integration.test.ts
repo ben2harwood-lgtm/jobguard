@@ -202,12 +202,12 @@ describe("MIGFIX-4 exact quote acceptance", () => {
       if (actor === f.member) await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenant, f.member]);
       for (const job of [randomUUID(), foreign.job, f.job, acceptedJob, liveJob]) {
         await expect(withTenant(c.runtime, f.context, db => db.$client.query(
-          "SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,1,$6,12000,0,$7,'Fictional customer','email',clock_timestamp(),NULL)",
-          [f.tenant, randomUUID(), randomUUID(), job, f.document, f.hash, actor],
+          "SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,1,$6,12000,0,$7,'Fictional customer','email',clock_timestamp(),NULL,$8,$9)",
+          [f.tenant, randomUUID(), randomUUID(), job, f.document, f.hash, actor, randomUUID(), randomUUID()],
         ))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
         await expect(withTenant(c.runtime, f.context, db => db.$client.query(
-          "SELECT * FROM app.record_quote_disposition($1,$2,$3,$4,1,$5,0,$6,'superseded',clock_timestamp())",
-          [f.tenant, randomUUID(), job, f.document, f.hash, actor],
+          "SELECT * FROM app.record_quote_disposition($1,$2,$3,$4,1,$5,0,$6,'superseded',clock_timestamp(),$7,$8)",
+          [f.tenant, randomUUID(), job, f.document, f.hash, actor, randomUUID(), randomUUID()],
         ))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
       }
     }

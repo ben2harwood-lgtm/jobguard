@@ -48,6 +48,7 @@ const hashRequest = (v: ConsequentialCommand) => {
 
 export interface CommandMutation<TResult extends Record<string, unknown>> {
   /** Must lock and mutate every business aggregate before returning. Audit append follows immediately. */
+  inputHash?(command: ConsequentialCommand): string;
   lock?(database: TenantTransaction, command: ConsequentialCommand): Promise<void>;
   mutate(database: TenantTransaction, command: ConsequentialCommand): Promise<TResult>;
   auditEvents?(result: TResult, command: ConsequentialCommand): readonly AuditEventInput[];
@@ -56,7 +57,12 @@ export interface CommandMutation<TResult extends Record<string, unknown>> {
 export class UserCommandDispatcher {
   constructor(private readonly pool: Pool) {}
   async dispatch<TResult extends Record<string, unknown>>(context: VerifiedTenantContext, raw: unknown, handler: CommandMutation<TResult>): Promise<TResult> {
-    const command=consequentialCommandV1Schema.parse(raw), requestHash=hashRequest(command);
+    const parsed=consequentialCommandV1Schema.parse(raw);
+    const binding=handler.inputHash?.(parsed);
+    if (binding && !/^[a-f0-9]{64}$/u.test(binding)) throw new CommandError("AUTHORIZATION_INVALID");
+    const command=binding ? { ...parsed, semanticKey: parsed.semanticKey.replace(/:lp3=[a-f0-9]{64}$/u, "") + `:lp3=${binding}` } : parsed;
+    if (command.semanticKey.length > 300) throw new CommandError("COMMAND_CONFLICT");
+    const requestHash=hashRequest(command);
     return withTenant(this.pool,context,async database=>{
       if (handler.lock) {
         const member=(await database.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2
@@ -73,7 +79,13 @@ export class UserCommandDispatcher {
           `SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND
            (command_id=$2 OR (command_type=$3 AND semantic_key=$4))`,[context.tenantId,command.commandId,command.commandType,command.semanticKey])).rows[0];
         if(!prior || prior.request_hash!==requestHash) throw new CommandError("COMMAND_CONFLICT");
-        if(prior.status==="succeeded") return prior.result;
+        if(prior.status==="succeeded") {
+          if(binding){
+            const active=(await database.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,command.actorMembershipId])).rows[0];
+            if(!active)throw new CommandError("FORBIDDEN");
+          }
+          return prior.result;
+        }
         throw new CommandError("COMMAND_CONFLICT");
       }
       // Do not upgrade the membership KEY SHARE lock already taken by the receipt's

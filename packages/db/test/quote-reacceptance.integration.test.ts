@@ -1,3 +1,4 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,10 +20,10 @@ beforeAll(async () => {
   const port = await freePort(57500, 200);
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+  admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1550000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1550000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "rq_login", password: "synthetic", max: 6 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "rq_login", password: "synthetic", max: 6 });
   acceptance = new QuoteAcceptanceRepository(runtime);
 }, 90_000);
 afterAll(async () => {

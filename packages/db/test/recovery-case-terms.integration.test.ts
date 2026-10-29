@@ -1,3 +1,4 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -64,10 +65,10 @@ async function supplierFixture(){
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-"));port=await freePort(58400,200);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});await migrate(admin);
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
- runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres",max:4});
+ runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
  job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(admin,job);
  supplierRefs=await supplierFixture();
@@ -85,7 +86,7 @@ it("[T1] stores exact owner approval, one dispatcher authorization and two audit
  expect(view).toMatchObject({caseId:id,jobId:job,actorMembershipId:M,commandId:input.commandId,termsHash:recoveryCaseTermsHash(id),policyStatus:"proposed",environment:"synthetic_demo",realExternalActions:0});
  const stored=(await admin.query("SELECT * FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2",[T,view.id])).rows[0];expect(stored.terms_hash.trim()).toBe(view.termsHash);expect(stored.authorization_id).toBe(view.authorizationId);
  expect((await admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[T,input.commandId])).rows[0].status).toBe("succeeded");
- const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
+ const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
 });
 // membership.role is unconstrained varchar(40): test each known product role plus an arbitrary schema-valid value.
 it.each(["admin","estimator","foreman","operative","finance","read_only","supervisor","surveyor","commercial_manager","client_approver","member","arbitrary_schema_role"])("[T2] dispatcher refuses non-owner %s with zero writes",async role=>{

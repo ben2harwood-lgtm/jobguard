@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-3-v3": {
+      "branches": [
+        "codex/sandbox/lp-3-v3"
+      ],
+      "note": "LP-3 RED dark activation/acceptance slice on LP-2. Exact changed paths below; this lane file is implicitly permitted. Router owns commit, push, NOPR handoff and RED review.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migration-notes/0411_lp3_activation_acceptance.md",
+        "packages/db/migrations/0411_lp3_activation_acceptance.sql",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/src/activation-repository.ts",
+        "packages/db/src/commands.ts",
+        "packages/db/src/demo-seed.ts",
+        "packages/db/src/lp3-mutations.test.ts",
+        "packages/db/src/lp3-operation.test.ts",
+        "packages/db/src/lp3-operation.ts",
+        "packages/db/test/activation.integration.test.ts",
+        "packages/db/test/audit-api-file-final-account.integration.test.ts",
+        "packages/db/test/commercial-integrity-api-audit.integration.test.ts",
+        "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/job-activation-terms.integration.test.ts",
+        "packages/db/test/lp3-access.integration.test.ts",
+        "packages/db/test/lp3-activation-acceptance.integration.test.ts",
+        "packages/db/test/lp3-catalog-fixtures.ts",
+        "packages/db/test/lp3-legacy-fixtures.ts",
+        "packages/db/test/lp3-upgrade.integration.test.ts",
+        "packages/db/test/migfix-4-upgrade.integration.test.ts",
+        "packages/db/test/migfix-4.integration.test.ts",
+        "packages/db/test/pool-test-utils.ts",
+        "packages/db/test/quote-reacceptance-upgrade.integration.test.ts",
+        "packages/db/test/quote-reacceptance.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/recovery-case-terms-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/serious-b3-quotes.integration.test.ts",
+        "packages/db/test/shared-money-origin.integration.test.ts"
+      ]
+    }
+  }
+}
