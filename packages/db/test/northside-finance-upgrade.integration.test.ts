@@ -4,7 +4,7 @@ import { startBeforeMigration, applyMigration, company, start, end, lookup, repo
 import { currentCommand } from "./contractor-practice-session-fixtures.js";
 import { ContractorRepository, registerNorthsideRun, migrate } from "../src/index.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
-const migration = "0314_northside_finance_switch.sql";
+const migration = "0332_northside_finance_switch.sql";
 let c: Awaited<ReturnType<typeof startBeforeMigration>>;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
