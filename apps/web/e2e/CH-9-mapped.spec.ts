@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mapValueReceipt } from "@jobguard/core";
+import { mapValueReceipt } from "../../../packages/core/src/value-source-receipt";
 const id=(n:number)=>`40000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 // Transport fixture for browser rendering only; PostgreSQL source truth is tested
 // independently in value-source.integration.test.ts. No provider or live money.
