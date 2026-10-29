@@ -54,10 +54,11 @@ it("an unknown source stays unsupported on retry, cannot certify a zero or unblo
 it("a job without a practice session does not auto-request work",async()=>{
  const a=await seedFinalCheckJob(f);
  await finalCheckTenant(f.admin,a.tenantId,async db=>{
-  // Privileged fixture removes the practice session; no production capability is activated.
+  // Privileged fixture removes the complete practice binding; its digest/scenario pair must stay valid.
   await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.job SET practice_session_digest=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId]);
+  await db.query("UPDATE app.job SET practice_session_digest=NULL,practice_scenario=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId]);
  });
+ expect((await f.admin.query("SELECT practice_session_digest,practice_scenario FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows).toEqual([{practice_session_digest:null,practice_scenario:null}]);
  await a.lock();expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
 });
 

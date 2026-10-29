@@ -1523,6 +1523,7 @@
 "recorded":{
 "note":"Routine, RLS policy and trigger protection facts recorded for review. They are NOT compared by any guard: comparison of reviewed routine and RLS definitions is held under the Q2 ruling (LP0-13). CH-4-C 0201: seven new routines and five changed definitions are source-inspected only; their null definitionSha256 values require exact PostgreSQL catalogue capture in CI. New public signatures are restricted to ch4_record_work_state(uuid,uuid,text,jsonb) and ch4_link_post_lock_job(uuid,uuid,text,jsonb); no other ACL is changed.",
 "routines":[
+{"identity":"function:app.request_practice_final_check_on_lock()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app, infrastructure","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["infrastructure.final_check_request"],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_source_approved(uuid,uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_invoice_line(uuid,uuid,uuid,uuid,uuid,uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_watermark(uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_lock_hash"]},
@@ -2552,6 +2553,7 @@
 "identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6"
 ],
 "triggers":[
+"app.final_account_lock|final_check_request_after_lock|app.request_practice_final_check_on_lock|AFTER INSERT|O",
 "app.northside_run|northside_no_truncate|app.northside_immutable|BEFORE TRUNCATE|O",
 "app.northside_run|northside_immutable|app.northside_immutable|BEFORE DELETE/UPDATE|O",
 "app.northside_action_attribution|northside_no_truncate|app.northside_immutable|BEFORE TRUNCATE|O",
