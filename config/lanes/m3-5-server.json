@@ -8,6 +8,8 @@
         "packages/db/src/evidence.ts",
         "packages/db/src/index.ts",
         "packages/db/src/resumable-evidence.ts",
+        "packages/db/src/tenant-context.ts",
+        "packages/db/src/tenant-context.test.ts",
         "packages/db/src/resumable-evidence.test.ts",
         "packages/db/test/evidence.integration.test.ts",
         "packages/db/migrations/0419_resumable_evidence.sql",

@@ -1,3 +1,4 @@
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
@@ -47,6 +48,8 @@ describe("verified evidence lifecycle",()=>{
 
 // M3-5 server slice: real runtime/RLS, deterministic in-database transfer only.
 describe("dark resumable evidence", () => {
+ const context = verifiedTenantContextFromMembership({ tenantId: TENANT, membershipId: MEMBER,
+  identityUserId: "75000000-0000-4000-8000-000000000001" } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
  async function transfer() {
   const { ResumableEvidenceService } = await import("../src/resumable-evidence.js");
   const resumable = new ResumableEvidenceService(runtime, true), bytes = validPng();
@@ -59,6 +62,19 @@ describe("dark resumable evidence", () => {
    maximumBytes: bytes.length, deviceCapturedAt: new Date("2000-01-01"), expiresAt: new Date(Date.now()+60_000) });
   return { ResumableEvidenceService, resumable, bytes, input, begun, scope };
  }
+ it("refuses another active member and rechecks the session member's revocation", async () => {
+  const f = await transfer(), otherMember = randomUUID(), otherUser = randomUUID();
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [otherUser]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,'76000000-0000-4000-8000-000000000001',$3,'owner')", [otherMember,TENANT,otherUser]);
+  await expect(f.resumable.status(context,{...f.input,actorMembershipId:otherMember})).rejects.toMatchObject({code:"NOT_FOUND"});
+  await expect(f.resumable.append(context,{...f.input,actorMembershipId:otherMember,offset:0,bytes:f.bytes})).rejects.toMatchObject({code:"NOT_FOUND"});
+  await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1",[MEMBER]);
+  try {
+   await expect(f.resumable.status(context,f.input)).rejects.toMatchObject({code:"NOT_FOUND"});
+  } finally {
+   await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE id=$1",[MEMBER]);
+  }
+ });
  it("persists interruption, rejects pending proof, resumes and finalizes one server-verified original", async () => {
   const f = await transfer();
   expect(f.begun.upload).not.toHaveProperty("uploadUrl");

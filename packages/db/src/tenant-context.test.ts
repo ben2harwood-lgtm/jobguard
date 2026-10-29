@@ -63,9 +63,22 @@ describe("stamped tenant context boundary", () => {
 
   it("exports only two stamped constructors and no arbitrary-object registrar", () => {
     expect(Object.keys(tenantContext).sort()).toEqual([
-      "InvalidTenantContextError", "verifiedTenantContextForQueuedJob",
+      "InvalidTenantContextError", "authenticatedMembershipForTenantContext", "verifiedTenantContextForQueuedJob",
       "verifiedTenantContextFromMembership", "withTenant",
     ]);
+  });
+
+  it("retains an immutable principal snapshot only for the original authenticated context", () => {
+    const member = { identityUserId: "30000000-0000-4000-8000-000000000003",
+      membershipId: "40000000-0000-4000-8000-000000000004", tenantId: TENANT };
+    const context = tenantContext.verifiedTenantContextFromMembership(member as tenantContext.AuthenticatedMembership);
+    const principal = tenantContext.authenticatedMembershipForTenantContext(context)!;
+    expect(principal).toEqual(member);
+    expect(Object.isFrozen(principal)).toBe(true);
+    member.membershipId = OTHER;
+    expect(principal.membershipId).toBe("40000000-0000-4000-8000-000000000004");
+    expect(tenantContext.authenticatedMembershipForTenantContext({ ...context })).toBeUndefined();
+    expect(tenantContext.authenticatedMembershipForTenantContext(tenantContext.verifiedTenantContextForQueuedJob(TENANT))).toBeUndefined();
   });
 
   // Namespace lookup lets this test execute red against main before the constructor exists.

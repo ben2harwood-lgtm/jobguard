@@ -2,11 +2,12 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { sha256, type PrivateVersionedStorage } from "@jobguard/storage";
 import { EvidenceError, EvidenceService, syntheticMediaUploadSchema } from "./evidence.js";
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { authenticatedMembershipForTenantContext, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { requireLiveJob } from "./watchdog.js";
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
 const uuid = z.guid();
+const maximumUploadLifetimeMs = 24 * 60 * 60 * 1000;
 const identity = { version: z.literal("resumable-evidence.v1"), uploadId: uuid, jobId: uuid, actorMembershipId: uuid };
 const access = z.object(identity).strict();
 const chunk = z.object({ ...identity, offset: z.number().int().min(0).max(25_000_000),
@@ -32,11 +33,14 @@ export class ResumableEvidenceService {
   constructor(private readonly pool: Pool, private readonly enabled = false) {}
 
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, input: Access) {
+    const member = authenticatedMembershipForTenantContext(context);
+    if (!member || member.membershipId !== input.actorMembershipId)
+      throw new ResumableEvidenceError("NOT_FOUND");
     const allowed = await db.$client.query(`SELECT 1 FROM app.job_commercial_track t
       JOIN app.membership m ON m.tenant_id=t.tenant_id
       WHERE t.tenant_id=$1 AND t.job_id=$2 AND t.environment='synthetic_demo'
-      AND m.id=$3 AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`,
-    [context.tenantId, input.jobId, input.actorMembershipId]);
+      AND m.id=$3 AND m.identity_user_id=$4 AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`,
+    [context.tenantId, input.jobId, member.membershipId, member.identityUserId]);
     if (!allowed.rows[0]) throw new ResumableEvidenceError("NOT_FOUND");
     await requireLiveJob(db, input.jobId);
   }
@@ -45,7 +49,10 @@ export class ResumableEvidenceService {
 
   async begin(context: VerifiedTenantContext, raw: unknown) {
     this.checkEnabled();
-    const input = begin.parse(raw);
+    const parsed = begin.parse(raw);
+    const now = Date.now();
+    if (parsed.expiresAt.getTime() <= now) throw new ResumableEvidenceError("LIMIT");
+    const input = { ...parsed, expiresAt: new Date(Math.min(parsed.expiresAt.getTime(), now + maximumUploadLifetimeMs)) };
     const target = { ...input, uploadId: input.id };
     await withTenant(this.pool, context, db => this.authorize(db, context, target));
     const evidence = new EvidenceService(this.pool, this.storage(context, target), true);
@@ -55,10 +62,10 @@ export class ResumableEvidenceService {
     return { version: "resumable-evidence.v1" as const, upload };
   }
 
-  private async lockedUpload(db: TenantTransaction, context: VerifiedTenantContext, input: Access) {
+  private async readUpload(db: TenantTransaction, context: VerifiedTenantContext, input: Access, lock = true) {
     await this.authorize(db, context, input);
     const row = (await db.$client.query<Upload>(`SELECT id,object_key,expected_content_type,maximum_bytes,state,expires_at
-      FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 AND job_id=$3 FOR UPDATE`,
+      FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 AND job_id=$3${lock ? " FOR UPDATE" : ""}`,
     [context.tenantId, input.uploadId, input.jobId])).rows[0];
     if (!row) throw new ResumableEvidenceError("NOT_FOUND");
     return row;
@@ -74,7 +81,7 @@ export class ResumableEvidenceService {
     this.checkEnabled();
     const input = access.parse(raw);
     return withTenant(this.pool, context, async db => {
-      const upload = await this.lockedUpload(db, context, input);
+      const upload = await this.readUpload(db, context, input, false);
       const parts = await this.parts(db, context, input.uploadId);
       return { version: "resumable-evidence.v1" as const, state: upload.state,
         nextOffset: parts.reduce((total, part) => total + part.bytes.length, 0) };
@@ -87,7 +94,7 @@ export class ResumableEvidenceService {
     // Copy before the first await so the caller cannot mutate an in-flight payload.
     const bytes = Buffer.from(input.bytes);
     return withTenant(this.pool, context, async db => {
-      const upload = await this.lockedUpload(db, context, input);
+      const upload = await this.readUpload(db, context, input);
       await refuseLockedNewSource(db, input.jobId);
       if (upload.state !== "pending" || upload.expires_at.getTime() <= Date.now()) throw new ResumableEvidenceError("CONFLICT");
       const parts = await this.parts(db, context, input.uploadId);
@@ -109,7 +116,7 @@ export class ResumableEvidenceService {
     this.checkEnabled();
     const input = finish.parse(raw);
     const object = await withTenant(this.pool, context, async db => {
-      const upload = await this.lockedUpload(db, context, input);
+      const upload = await this.readUpload(db, context, input);
       const parts = await this.parts(db, context, input.uploadId);
       const bytes = Buffer.concat(parts.map(part => part.bytes));
       if (bytes.length < Number(upload.maximum_bytes)) throw new ResumableEvidenceError("INCOMPLETE");
@@ -135,7 +142,7 @@ export class ResumableEvidenceService {
       createDownloadUrl: async () => { throw new ResumableEvidenceError("DISABLED"); },
       deleteExactVersion: async () => { throw new ResumableEvidenceError("DISABLED"); },
       readExactVersion: async (key, versionId) => withTenant(this.pool, context, async db => {
-        const upload = await this.lockedUpload(db, context, input);
+        const upload = await this.readUpload(db, context, input);
         const parts = await this.parts(db, context, input.uploadId);
         const bytes = Buffer.concat(parts.map(part => part.bytes));
         if (key !== upload.object_key || versionId !== `synthetic-${sha256(bytes)}`) throw new EvidenceError("OBJECT_INVALID");
