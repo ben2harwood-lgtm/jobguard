@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
+import { ActionExecutor, verifiedTenantContextForQueuedJob, type OutboundAdapter } from "@jobguard/db";
+import type { Pool } from "pg";
 import { postFeeObligation } from "./effects/fee-posting.js";
 import {
   executeSettlementGuardedWork, ProductionSettlementDeniedError,
   readG4SEvidenceChecklist, readProductionSettlementEligibility,
   requireProductionSettlementEligibility,
+  requireOutboxSettlementEligibility,
 } from "./production-settlement-guard.js";
 
 const tenantId = "10000000-0000-4000-8000-000000000001";
@@ -16,7 +19,56 @@ const cash = () => ({
     settledPence: 101, allocatedPence: 101, reversedPence: 0, refundedPence: 0 },
 });
 
+function outbox(actionType: string, mode?: string) {
+  const row = { id: otherId, adapter: "fake_capture", authorization_id: otherId,
+    provider_effect_key: "synthetic:outbox", action_type: actionType,
+    recipient: "fixture@example.invalid", content_hash: "a".repeat(64), immutable_content: "fixture",
+    aggregate_revision: 1, amount_pence: 101, currency: "GBP", policy_version: "fixture.v1",
+    authorization_expires_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z", status: "pending" };
+  const query = vi.fn(async (sql: string) => {
+    if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row], rowCount: 1 };
+    if (sql.startsWith("SELECT count(*)::int n")) return { rows: [{ n: 0 }], rowCount: 1 };
+    return { rows: [], rowCount: 0 };
+  });
+  const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
+  const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false,
+    deliver: vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:delivered" })),
+    reconcile: async () => "unknown" };
+  const executor = new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: vi.fn() });
+  return { query, adapter, run: () => executor.execute(verifiedTenantContextForQueuedJob(tenantId), otherId,
+    persistedActionType => requireOutboxSettlementEligibility(mode ?? "disabled", persistedActionType)) };
+}
+
 describe("SV-8 dark production settlement guard", () => {
+  it.each([undefined, "pilot_no_charge", "production_billing", "provider_sandbox"])(
+    "preserves non-money outbox delivery in mode %s", async mode => {
+      for (const actionType of ["billing_export", "quote.send", "notification.send", "fee.notification", "settlement.notification"]) {
+        const work = outbox(actionType, mode);
+        await work.run();
+        expect(work.adapter.deliver).toHaveBeenCalledOnce();
+        expect(work.adapter.deliver).toHaveBeenCalledWith(expect.objectContaining({ actionType, amountPence: 101 }));
+      }
+    },
+  );
+
+  it.each([undefined, "pilot_no_charge", "production_billing", "provider_sandbox"])(
+    "refuses money outbox actions before claims in mode %s", async mode => {
+      for (const actionType of ["fee.post", "post_fee_obligation", "fees.accrue", "settle", "settlement.record", "collect_payment_fee", "credit.consume"]) {
+        const work = outbox(actionType, mode);
+        await expect(work.run()).rejects.toThrow(ProductionSettlementDeniedError);
+        expect(work.adapter.deliver).not.toHaveBeenCalled();
+        expect(work.query.mock.calls.some(([sql]) => /^(?:UPDATE|INSERT)/u.test(sql))).toBe(false);
+        expect(work.query).toHaveBeenCalledWith("ROLLBACK");
+      }
+    },
+  );
+
+  it("preserves synthetic money outbox execution", async () => {
+    const work = outbox("fee.post", "synthetic_demo");
+    await work.run();
+    expect(work.adapter.deliver).toHaveBeenCalledOnce();
+  });
+
   it("reads the absent G4-S record honestly without pretending evidence or approval exists", () => {
     expect(readG4SEvidenceChecklist()).toEqual({
       version: "g4-s-evidence-checklist.v1", record: "missing", lock: "missing", isolation: "missing",

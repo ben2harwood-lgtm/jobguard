@@ -78,3 +78,14 @@ export async function executeSettlementGuardedWork<T>(mode: string, execute: () 
   requireProductionSettlementEligibility(mode);
   return execute();
 }
+
+/** Sends/notifications may describe money without moving it. Gate only money operations. */
+export function requireOutboxSettlementEligibility(mode: string, actionType: string): void {
+  const words = actionType.split(/[._-]/u);
+  const has = (word: string) => words.includes(word);
+  const moneyAction = has("settle") || has("collect") ||
+    ((has("fee") || has("fees")) && (has("post") || has("accrue"))) ||
+    (has("settlement") && (has("record") || has("post") || has("apply"))) ||
+    (has("credit") && has("consume"));
+  if (moneyAction) requireProductionSettlementEligibility(mode);
+}

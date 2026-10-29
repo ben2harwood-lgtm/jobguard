@@ -15,7 +15,7 @@ import { Pool } from "pg";
 import { z } from "zod";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask } from "./final-check-task-executor.js";
-import { executeSettlementGuardedWork } from "./production-settlement-guard.js";
+import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 
 const environmentSchema=z.object({GRAPHILE_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),RUNTIME_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),SHADOW_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url")}).strict();
 const environment=environmentSchema.parse({GRAPHILE_DATABASE_URL:process.env.GRAPHILE_DATABASE_URL,RUNTIME_DATABASE_URL:process.env.RUNTIME_DATABASE_URL,SHADOW_DATABASE_URL:process.env.SHADOW_DATABASE_URL});
@@ -39,9 +39,8 @@ const telemetry:SafeTelemetry={emit(name,fields){console.info(JSON.stringify({co
 const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
 const tasks:TaskList={
  async discover_outbox(_payload,helpers){const rows=await helpers.withPgClient(client=>client.query<{action_id:string;tenant_id:string}>(`SELECT action_id,tenant_id FROM infrastructure.outbox_signal ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED`));for(const row of rows.rows){await helpers.addJob("execute_outbox",{actionId:row.action_id,tenantId:row.tenant_id},{jobKey:`outbox:${row.action_id}`,jobKeyMode:"preserve_run_at"});}},
- // Only fake delivery exists today. Refuse the entire outbox in non-synthetic modes before any claim,
- // so a queued money action cannot bypass the dark settlement/accrual/collection gate.
- async execute_outbox(payload){await executeSettlementGuardedWork(process.env.JOBGUARD_ENV??"disabled",async()=>{const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId);});},
+ // Gate money operations from the persisted action type; ordinary delivery keeps its existing behavior.
+ async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));},
  async detect_shadow_evidence(payload){const parsed=z.object({version:z.literal("shadow-detection-task.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await detectionWorker.execute(queueContext({tenantId:parsed.tenantId}),parsed);},
 };
 registerFinalCheckTask(tasks,async parsed=>{await executeFinalCheckTask(queueContext({tenantId:parsed.tenantId}),parsed);});

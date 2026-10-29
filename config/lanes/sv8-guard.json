@@ -8,7 +8,8 @@
         "apps/api/src/production-settlement-guard.ts",
         "apps/api/src/production-settlement-guard.test.ts",
         "apps/api/src/effects/fee-posting.ts",
-        "apps/api/src/worker.ts"
+        "apps/api/src/worker.ts",
+        "packages/db/src/outbox.ts"
       ]
     }
   }
