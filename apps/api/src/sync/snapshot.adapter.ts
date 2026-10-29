@@ -41,6 +41,9 @@ export class SyntheticSyncSnapshotAdapter implements SyntheticSyncStore {
         const snapshot = parsed.data;
         if (snapshot.authority && (snapshot.authority.userId !== snapshot.userId
           || snapshot.authority.tenantId !== snapshot.activeTenantId)) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+        const context = await transaction.query<{ tenant_id: string | null }>(
+          "SELECT nullif(current_setting('app.tenant_id',true),'') AS tenant_id");
+        if (context.rows[0]?.tenant_id !== snapshot.activeTenantId) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
         const authority = snapshot.authority ? { ...snapshot.authority,
           assignedJobIds: [...new Set(snapshot.authority.assignedJobIds)].sort() } : null;
         // No source values, hidden data, token or session identifier enters the checkpoint hash.

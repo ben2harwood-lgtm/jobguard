@@ -10,14 +10,16 @@ const row = (jobId: string, tenantId = tenant) => ({ tenantId, jobId, workOrderI
   priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null,
   shadow: "HIDDEN", bank: "BANK", lockedBill: "LOCKED", secret: "SECRET", resident: "PERSON" });
 
-function fixture() {
+function fixture(transactionTenantId?: string | null) {
   const snapshot = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(7), userId: user,
     activeTenantId: tenant, authorityRevision: 1,
     authority: { userId: user, tenantId: tenant, membershipId: id(8), role: "operative", status: "active", assignedJobIds: [job] },
     source: [row(job), row(otherJob), row(job, otherTenant)] };
   // Explicit deterministic checkpoint fake; real SQL, concurrency and restart proofs live in the DB suite.
   const checkpoints = new Map<string, { revision: number; schema: number; hash: string; generation: number }>();
-  const query = vi.fn(async (_sql: string, values: unknown[]) => {
+  const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+    if (sql.includes("current_setting")) return { rows: [{ tenant_id: transactionTenantId === undefined
+      ? snapshot.activeTenantId : transactionTenantId }] };
     const [u, revision, schema, hash] = values as [string, number, number, string];
     const key = `${snapshot.activeTenantId}:${u}`, previous = checkpoints.get(key);
     if (previous && (revision < previous.revision || schema < previous.schema || (revision === previous.revision && hash !== previous.hash))) throw Error("private database details");
@@ -43,6 +45,15 @@ function purged(result: Awaited<ReturnType<ReturnType<typeof fixture>["download"
 }
 
 describe("M3-3 authenticated snapshot adapter (dark fake provider)", () => {
+  it.each([otherTenant, null, ""])("refuses mismatched or missing transaction tenant %j before checkpoint mutation", async tenantId => {
+    const f = fixture(tenantId);
+    const store = new SyntheticSyncSnapshotAdapter(f.provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
+    await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
+    expect(f.query).toHaveBeenCalledTimes(1);
+    expect(f.query.mock.calls[0]?.[0]).toContain("current_setting('app.tenant_id'");
+    expect(f.checkpoints.size).toBe(0);
+  });
+
   it.each([{}, { environment: "synthetic_demo" }, { environment: "production", enabled: true, schemaVersion: 1 },
     { environment: "pilot_no_charge", enabled: true, schemaVersion: 1 }])("refuses non-enabled/live use before the provider %j", async config => {
     const provider = { withCurrentSession: vi.fn() };

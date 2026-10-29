@@ -32,6 +32,10 @@ beforeAll(async () => {
   }
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [a, b]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1),($2)", [user, secondUser]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic A'),($3,$4,'Synthetic B')", [id(20), a, id(21), b]);
+  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+    VALUES($1,$2,$3,$4,'operative'),($5,$6,$7,$4,'operative'),($8,$2,$3,$9,'operative')`,
+  [id(22), a, id(20), user, id(23), b, id(21), id(24), secondUser]);
   await migrate(admin); // applies 0454 to a populated predecessor schema
   await migrate(admin); // deployment replay must preserve state
   await admin.query("CREATE ROLE sync_test_login LOGIN PASSWORD 'synthetic-runtime' INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO sync_test_login");
@@ -47,6 +51,52 @@ const scoped = (tenant: string, u = user, r = 1, s = 1, h = hash) =>
   withTenant(runtime, testTenantContext(tenant), db => advance(db.$client, u, r, s, h));
 
 describe("M3-3 durable checkpoint SQL", () => {
+  it.each(["absent", "foreign", "revoked", "expired"])("refuses a user with %s membership without inserting a checkpoint", async status => {
+    const u = id(100 + ["absent", "foreign", "revoked", "expired"].indexOf(status));
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    if (status !== "absent") {
+      await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at)
+        VALUES($1,$2,$3,$1,'operative',$4,$5)`, [u, status === "foreign" ? b : a, status === "foreign" ? id(21) : id(20),
+        status === "revoked" ? "2020-01-01T00:00:00Z" : null, status === "expired" ? "2020-01-01T00:00:00Z" : null]);
+    }
+    await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
+  });
+
+  it.each(["revoked_at", "expires_at"])("refuses checkpoint advancement after membership %s changes", async column => {
+    const u = id(column === "revoked_at" ? 110 : 111);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$1,'operative')`, [u, a, id(20)]);
+    expect(await scoped(a, u)).toBe(1);
+    await admin.query(`UPDATE app.membership SET ${column}='2020-01-01T00:00:00Z' WHERE tenant_id=$1 AND id=$2`, [a, u]);
+    await expect(scoped(a, u, 2)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    expect((await admin.query("SELECT authority_revision,generation FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [a, u])).rows)
+      .toEqual([{ authority_revision: "1", generation: "1" }]);
+  });
+
+  it("refuses a provider tenant mismatch without bumping either tenant's checkpoint", async () => {
+    expect(await scoped(a)).toBe(1); expect(await scoped(b)).toBe(1);
+    const before = (await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows;
+    const provider: SyntheticSnapshotProvider = { withCurrentSession: async (_session, read) =>
+      withTenant(runtime, testTenantContext(b), db => read({ version: "sync-provider-snapshot.v1", environment: "synthetic_demo",
+        sessionId: id(30), userId: user, activeTenantId: a, authorityRevision: 99, authority: null, source: [] }, db.$client)) };
+    const store = new SyntheticSyncSnapshotAdapter(provider, { environment: "synthetic_demo", enabled: true, schemaVersion: 1 });
+    await expect(store.readCurrentSession("synthetic-session")).rejects.toMatchObject({ code: "SYNC_AUTHORITY_REQUIRED" });
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint ORDER BY tenant_id,user_id")).rows).toEqual(before);
+  });
+
+  it("refuses a contractor membership revocation without writing a checkpoint", async () => {
+    const u = id(112);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [u]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$1,'operative')`, [u, a, id(20)]);
+    await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'revoked@example.invalid')", [a, u]);
+    await admin.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$2)", [a, u]);
+    await expect(scoped(a, u)).rejects.toThrow("SYNC_CHECKPOINT_INVALID");
+    expect((await admin.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE user_id=$1", [u])).rows).toEqual([]);
+  });
+
   it("serializes concurrent duplicate first use, then preserves generation across migration replay and reconnection", async () => {
     expect(await Promise.all([scoped(a), scoped(a)])).toEqual([1, 1]);
     await migrate(admin);
@@ -103,6 +153,8 @@ describe("M3-3 durable checkpoint SQL", () => {
   it("runs the fake authenticated provider through real persisted checkpoints and the scoped-token gate", async () => {
     const principal = id(9), job = id(10), otherJob = id(11);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal]);
+    await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'operative')`, [id(14), a, id(20), principal]);
     const row = (jobId: string, tenantId = a) => ({ tenantId, jobId, workOrderId: id(12), reference: "Synthetic",
       priority: "routine", issuedOn: "2026-10-29", dueOn: null, openVisitId: null, shadow: "HIDDEN", bank: "BANK" });
     const facts = { version: "sync-provider-snapshot.v1", environment: "synthetic_demo", sessionId: id(13), userId: principal,

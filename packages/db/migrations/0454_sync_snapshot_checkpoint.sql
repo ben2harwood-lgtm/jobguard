@@ -30,6 +30,12 @@ BEGIN
   OR h IS NULL OR h !~ '^[a-f0-9]{64}$' THEN
   RAISE EXCEPTION 'SYNC_CHECKPOINT_INVALID';
  END IF;
+ IF NOT EXISTS (SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.identity_user_id=u
+  AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+  AND NOT EXISTS (SELECT 1 FROM app.contractor_membership_revocation v
+   WHERE v.tenant_id=m.tenant_id AND v.membership_id=m.id)) THEN
+  RAISE EXCEPTION 'SYNC_CHECKPOINT_INVALID';
+ END IF;
  INSERT INTO app.sync_snapshot_checkpoint AS c(tenant_id,user_id,authority_revision,schema_version,scope_hash,generation)
  VALUES(t,u,r,s,h,1)
  ON CONFLICT(tenant_id,user_id) DO UPDATE SET
