@@ -18,6 +18,16 @@ test("dark provider construction must go directly through AiGateway", () => {
     'export { createDarkClaudeProvider as bypass } from "@jobguard/ai";',
   ]) assert.ok(checkAiProviderBoundarySource(file, source).length, source);
 });
+test("computed provider namespace access cannot bypass the gateway", () => {
+  for (const source of [
+    'ai[name](config, transport);',
+    'ai?.[name](config, transport);',
+    '(ai)[name](config, transport);',
+    'import * as providers from "@jobguard/ai"; providers[name](config, transport);',
+    'import * as providers from "./claude-provider.js"; providers[name](config, transport);',
+  ]) assert.ok(checkAiProviderBoundarySource(file, source).length, source);
+  assert.deepEqual(checkAiProviderBoundarySource(file, 'const value = ordinary[name];'), []);
+});
 test("the factory definition is allowed only in its adapter", () => {
   const source = 'export function createDarkClaudeProvider() {}';
   assert.deepEqual(checkAiProviderBoundarySource("packages/ai/src/claude-provider.ts", source), []);

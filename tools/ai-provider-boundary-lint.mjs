@@ -8,7 +8,24 @@ import ts from "typescript";
 export function checkAiProviderBoundarySource(file, text) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const failures = [];
+  const providerNamespaces = new Set(["ai"]);
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings) &&
+      (statement.moduleSpecifier.text === "@jobguard/ai" || /(?:^|\/)claude-provider\.[cm]?[jt]s$/.test(statement.moduleSpecifier.text))) {
+      providerNamespaces.add(bindings.name.text);
+    }
+  }
   const visit = node => {
+    if (ts.isElementAccessExpression(node)) {
+      let target = node.expression;
+      while (ts.isParenthesizedExpression(target) || ts.isAsExpression(target) || ts.isNonNullExpression(target)) target = target.expression;
+      if (ts.isIdentifier(target) && providerNamespaces.has(target.text)) {
+        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        failures.push(`${file}:${line + 1}: computed AI provider access must not bypass new AiGateway()`);
+      }
+    }
     if ((ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "createDarkClaudeProvider") {
       const parent = node.parent;
       const declaration = file === "packages/ai/src/claude-provider.ts" && ts.isFunctionDeclaration(parent) && parent.name === node;
