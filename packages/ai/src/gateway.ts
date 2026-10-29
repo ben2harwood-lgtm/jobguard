@@ -23,6 +23,14 @@ export class AiGateway {
     const parsedRequest = aiGatewayRequestSchema.safeParse(untrustedRequest);
     if (!parsedRequest.success) throw typedZodError("invalid_request", "Invalid AI request", parsedRequest.error);
     const request = parsedRequest.data;
+    // Unscoped sources remain supported only for the existing synthetic fixtures.
+    // Tenant context must come from the authenticated caller before any future route.
+    if (request.sources.some((source) =>
+      (source.visibility !== undefined && source.visibility !== "public") ||
+      source.tenantId !== request.tenantId
+    )) {
+      throw new AiGatewayError("invalid_request", "AI source is not permitted");
+    }
     if (options.signal?.aborted) throw new AiGatewayError("cancelled", "AI fixture request was cancelled");
 
     let untrustedResponse: unknown;

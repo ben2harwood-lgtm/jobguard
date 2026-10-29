@@ -6,7 +6,9 @@ export const aiSourceSchema = z.object({
   id: z.string().min(1),
   content: z.string(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
-});
+  tenantId: z.string().min(1).optional(),
+  visibility: z.enum(["public", "shadow", "hidden", "pre_lock", "pre-lock"]).optional(),
+}).strict();
 
 export const aiGatewayRequestSchema = z.object({
   contractVersion: z.literal(AI_GATEWAY_CONTRACT_VERSION),
@@ -14,6 +16,7 @@ export const aiGatewayRequestSchema = z.object({
   operation: z.string().min(1),
   promptVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
+  tenantId: z.string().min(1).optional(),
   sources: z.array(aiSourceSchema).min(1),
   timeoutMs: z.number().int().positive().max(30_000),
   maxOutputTokens: z.number().int().positive().max(8_192),

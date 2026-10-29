@@ -61,6 +61,28 @@ describe("dark Claude fetch adapter", () => {
     await expect(gateway.generate(input, schema)).rejects.toMatchObject({ code: "invalid_request" });
     expect(transport).not.toHaveBeenCalled();
   });
+  it.each([
+    { visibility: "shadow" }, { visibility: "hidden" },
+    { visibility: "pre_lock" }, { visibility: "pre-lock" },
+    { shadow: true }, { hidden: true }, { preLock: true },
+    { tenantId: "other-tenant" }, { tenant_id: "other-tenant" },
+  ])("blocks restricted source metadata before transport %#", async metadata => {
+    const { gateway, transport } = setup();
+    const repair = vi.fn();
+    await expect(gateway.generate({ ...request, tenantId: "tenant-a", sources: [
+      { ...request.sources[0], tenantId: "tenant-a", visibility: "public" },
+      { ...request.sources[0], id: "restricted", tenantId: "tenant-a", ...metadata },
+    ] }, schema, { repair })).rejects.toMatchObject({ code: "invalid_request" });
+    expect(transport).not.toHaveBeenCalled();
+    expect(repair).not.toHaveBeenCalled();
+  });
+  it("allows public sources belonging to the request tenant", async () => {
+    const { gateway, transport } = setup();
+    await expect(gateway.generate({ ...request, tenantId: "tenant-a", sources: [
+      { ...request.sources[0], tenantId: "tenant-a", visibility: "public" },
+    ] }, schema)).resolves.toMatchObject({ output: envelope.output });
+    expect(transport).toHaveBeenCalledOnce();
+  });
   it("bounds input bytes before transport", async () => {
     const transport = vi.fn();
     const gateway = new AiGateway(createDarkClaudeProvider({ ...config, maxInputBytes: 1 }, transport));
@@ -69,7 +91,7 @@ describe("dark Claude fetch adapter", () => {
   });
   it.each([ { endpoint: "https://global.invalid/messages" }, { region: "us-east-1" },
     { mode: "live" }, { d04Approved: true }, { maxCostPence: 1 } ])("refuses route override %#", override => {
-    expect(() => createDarkClaudeProvider({ ...config, ...override }, vi.fn())).toThrow();
+    expect(() => new AiGateway(createDarkClaudeProvider({ ...config, ...override }, vi.fn()))).toThrow();
   });
   it("always refuses live construction and fails the release preflight", () => {
     expect(() => createLiveAiProvider()).toThrow(/D04/);

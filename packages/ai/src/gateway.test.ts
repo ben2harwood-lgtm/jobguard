@@ -56,6 +56,23 @@ describe("fixture-only AI gateway", () => {
     expect(() => createLiveAiProvider()).toThrow(/D04/);
   });
 
+  it.each([
+    { tenantId: "tenant-a", sources: request.sources },
+    { sources: [{ ...request.sources[0], tenantId: "tenant-a" }] },
+    ...["shadow", "hidden", "pre_lock", "pre-lock"].map(visibility => ({
+      sources: [{ ...request.sources[0], visibility }],
+    })),
+    { tenantId: "tenant-a", sources: [{ ...request.sources[0], tenantId: "tenant-b" }] },
+  ])("rejects restricted or inconsistently scoped sources for any provider %#", async override => {
+    const execute = vi.fn();
+    const repair = vi.fn();
+    await expect(new AiGateway({ kind: "fixture", execute }).generate(
+      { ...request, ...override }, outputSchema, { repair },
+    )).rejects.toMatchObject({ code: "invalid_request", message: "AI source is not permitted" });
+    expect(execute).not.toHaveBeenCalled();
+    expect(repair).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed requests before provider execution", async () => {
     const execute = vi.fn();
     const gateway = new AiGateway({ kind: "fixture", execute });

@@ -14,7 +14,13 @@
         "packages/ai/src/claude-provider.ts",
         "packages/ai/src/claude-provider.test.ts",
         "packages/ai/src/live-evaluation-cli.ts",
-        "docs/operations/claude-data-flow.md"
+        "docs/operations/claude-data-flow.md",
+        "packages/ai/src/types.ts",
+        "packages/ai/src/gateway.ts",
+        "packages/ai/src/gateway.test.ts",
+        "tools/ai-provider-boundary-lint.mjs",
+        "tools/ai-provider-boundary.test.mjs",
+        "tools/lint.mjs"
       ]
     }
   }
