@@ -61,8 +61,6 @@ export type ContractorGateKind = "import" | "sor" | "member" | "retained_import"
  */
 export async function assertContractorGate(db: TenantTransaction, principal: AuthenticatedMembership, kind: ContractorGateKind, feature: "work_orders" | "site_origin_capture" = "work_orders"): Promise<void> {
   const retained = kind.startsWith("retained_");
-  const decision = await serverEntitlement(db, principal.membershipId, feature, retained ? "retained_read" : "new_work");
-  if (!decision.executable) throw new WorkOrderError("TRACK_FORBIDDEN");
   const row = (await db.$client.query<{ active: boolean; allowed: boolean }>(
     `SELECT coalesce(app.contractor_member_active(m.id),false) active,
      CASE $4::text WHEN 'import' THEN coalesce(app.work_order_import_permitted(m.id),false) WHEN 'sor' THEN coalesce(app.sor_import_permitted(m.id),false) ELSE true END allowed
@@ -70,6 +68,8 @@ export async function assertContractorGate(db: TenantTransaction, principal: Aut
     [principal.tenantId, principal.membershipId, principal.identityUserId, kind === "retained_import" ? "import" : kind])).rows[0];
   if (!row) throw new WorkOrderError("NOT_FOUND");
   if (!row.active || !row.allowed) throw new WorkOrderError("NOT_FOUND");
+  const decision = await serverEntitlement(db, principal.membershipId, feature, retained ? "retained_read" : "new_work");
+  if (!decision.executable) throw new WorkOrderError("TRACK_FORBIDDEN");
 }
 
 type ContractDocument = { sorVersionIds: string[]; tenderedAdjustment: { numerator: string; denominator: string } };

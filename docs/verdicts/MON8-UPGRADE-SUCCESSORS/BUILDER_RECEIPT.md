@@ -558,3 +558,199 @@ No git writes, PostgreSQL startup, live provider or release. Ready for router
 commit/push and current-main CI, including DB/migrations, then independent RED
 review at the resulting exact head. This is not an independent acceptance.
 Commit message: /tmp/mon8-upgrade-successors-20261029T083824Z-commit-msg.txt.
+
+
+## 29 October 2026 — 09:32 CI repair try 3, NOT READY / router Ben card
+
+Read the supplied mon8-upgrade-successors-ci-traces-0932.txt, including its malformed
+UTF-8 fragment using replacement decoding. No PostgreSQL or browser execution was
+attempted. Resolved the downstream appendix conflict by retaining main #411's
+MAX_MIGRATION=347 generator and its new regression test, then regenerating the
+appendix with the exact capability union below. The source has no merge markers;
+its index remains UU because git writes belong to the router.
+
+Failure groups and changes:
+
+- SERIOUS-B10 source/dist unit failures: the mock still matched the old outbox
+  SELECT prefix. Match the exact new authorization_actor projection. Existing
+  cancellation, audit, rollback, unavailable-authority and no-delivery assertions
+  remain enforced. CI must rebuild generated dist from source.
+- Site-jobs-scope source/dist unit failures: supply and assert the new retained_read
+  entitlement query in the SQL double; retain scope-query identity, projection,
+  row-limit and truncation assertions.
+- Offline-risk, site-extra and site-jobs-scope PG membership-revocation failures:
+  assertContractorGate performed entitlement SQL before checking membership. A
+  revoked member raised raw SQL 42501 and became service-unavailable. Check the
+  original identity/active/resource permission first, preserving NOT_FOUND and
+  public EXTRA_FORBIDDEN / VISIT_FORBIDDEN. Feature checks still precede work.
+  Added three unit regressions proving no feature query on invalid membership.
+- Practice-worker-switch owner/small-builder refusals: map only database
+  FORBIDDEN/42501 to existing SWITCH_FORBIDDEN, preserving the existing refusal
+  audit attempt and uniform target-independent answer. Its foreign sign-in locator
+  fixture now inserts the operative under an explicit tenant transaction.
+- Contractor hierarchy/FK, party raw-context and origin membership/schema failures:
+  0353's added guards preempted established errors. These are actual SQL ordering
+  bugs, so 0353 changed narrowly: foreign operative membership reports 23503 before
+  feature lookup; party binding rejects missing tenant/member as NOT_FOUND before
+  feature lookup; origin provenance validates its existing shape/member/grant
+  before requiring the feature on its successful command-origin path. The separate
+  early tenant-agreement trigger remains, including forged job-track refusal.
+- Audit-checkpoint, enterprise-fee-posting upgrade and legacy-origin R4/S8 failures:
+  positive fixtures lacked explicit current agreements after full migration or
+  contractor reassignment. Added owner-only seedActiveContractorAgreement calls
+  at the precise positive-fixture points, after preservation assertions where
+  applicable. Missing-status negative fixtures are unchanged.
+- CH-4 role matrix, recovery-terms operative and SH-1 raw-origin fixture failures:
+  these suites used database postgres, while the new synthetic operative/site
+  guards correctly require jobguard_synthetic_demo. Use that database in their
+  fixtures; provide explicit positive contractor authority for operative setup.
+  CH-4 retains every non-owner role command-refusal assertion. Recovery terms
+  creates a historically valid operative under explicit contractor authority,
+  then restores the tenant's builder track before testing role refusal. SH-1's
+  raw legacy contractor origins now have explicit fictional tenant authority.
+- Server-entitlements and server-entitlement-upgrade MODE_FORBIDDEN: set the
+  required synthetic_demo application environment before session-context setup.
+- SSO suspension test: authenticate returns undefined on revoked sessions; use
+  its exact established return contract rather than null. Revocation assertions
+  remain intact. Reviewed sso_complete/OIDC registration changes are untouched.
+- LP-0 freeze/path failures: union exactly six installed owner/EXECUTE facts for
+  mon8_company_feature, mon8_feature_decision and mon8_require_feature into the
+  existing approved-current helper/owner groups. No exception group was added or
+  widened; scanner/test logic is unchanged.
+- SERIOUS-B5 catalogue failure: its pre-schema compatibility routines were owned
+  by postgres and acquired migration ownership on upgrade. Assign those fixture
+  shims their actual migration owner up front. Add exactly five new 0352/0353
+  routines to the expected catalogue, verifying signature, owner, definer mode,
+  search_path and exact ACLs; preserve all existing rows/relations/policies and
+  prior expected routine values.
+- Retained-read/contractor old-track assertions: resource permission is deliberately
+  membership-only; executable new work also requires the current feature. Assert
+  that combined capability is false, raw mutation remains refused, historical
+  projection remains identical and new commands fail after track loss. The
+  operative replay test now requires refusal and identical stored facts after
+  agreement suspension, matching the existing reviewed before-replay guard.
+- ENT-1 desktop/mobile browser failures: generated practice has no implicit active
+  agreement. A test-only route lets the real start finish, explicitly seeds the
+  fictional agreement using the owner fixture, then returns the unmodified real
+  response. Browser revision, persistence, isolation, stale-state and policy tests
+  retain their actual mutation assertions; production/demo bootstrap is untouched.
+- CSG installed-source failure: capture replay no longer reads joined receipt
+  result JSON; it reconstructs the unchanged RaisedExtra result from the bound
+  origin identity with matching receipt hash/status and finite command families.
+  Rename the private visit business dispatcher to executeVisit so it is not an
+  ambiguous SQL execute call. Remove only the three now-resolved unresolved
+  exceptions. Scanner code remains byte-identical, with zero diagnostics and ten
+  existing unresolved cases instead of thirteen. No new exception/fingerprint.
+
+Known remaining blocker (NOT repaired by loosening a check): ENT-4b [S9] pins the
+pre-MON-8 bridge bytes, while this branch necessarily changed their entitlement
+and retained-read behavior. Deterministic SHA-256 comparison still fails for:
+
+- packages/db/src/work-order-repository.ts: expected 9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e;
+  observed 6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418.
+- packages/db/src/sor-repository.ts: expected 122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2;
+  observed b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f.
+- packages/db/src/job-scheduling-repository.ts: expected ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d;
+  observed 7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57.
+
+The [S9] hash table was NOT changed. Restoring those old bytes would reinstate the
+old track gate on historical reads and remove the current service guard; that is
+not a valid repair of the approved MON-8 contract. No fingerprint renewal authority
+was issued in this repair. This is try 3: router must file the Ben card with these
+three protected bridges and obtain the required review/authority or a separately
+scoped compatible implementation. This builder did not file a card or update the
+external work list from the restricted sandbox. Do not present this candidate as
+ready or CI-green; DB/browser effects of the authored fixes also remain unexecuted.
+
+Actual local checks:
+
+- DB Vitest run --maxWorkers=2 src/serious-b10.test.ts
+  src/site-jobs-scope.test.ts src/plan-entitlement-service.test.ts src/outbox.test.ts
+  src/later-outbox.test.ts test/mon8-combined-migration.test.ts
+  test/lp-0-catalog.test.ts: final 7 files / 64 passed. An initial new parameterized
+  case supplied an empty argument tuple; corrected its fixture to explicit rows
+  objects, then all three invalid-membership cases passed without weaker assertions.
+- node --test --test-concurrency=2 tools/lp-downstream-inventory.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: 174 passed, no skipped
+  tests. After the final private method rename, the installed scanner was rerun:
+  67 protected roots, zero diagnostics, ten existing unresolved cases.
+- DB tsc --noEmit and web tsc --noEmit: passed. Initial compilation caught an
+  incomplete private generic method rename; declaration/call sites now agree.
+- Strict standalone tsc with noUncheckedIndexedAccess, exactOptionalPropertyTypes,
+  skipLibCheck, target ES2023 and NodeNext on the sixteen affected PG suites:
+  passed. Added as-const tuple typing in the contractor matrix exposed by this
+  stricter check; behavior assertions are unchanged.
+- DB Vitest list --maxWorkers=2: 270 cases collected across those PG suites.
+  Playwright test --list e2e/ENT-1.spec.ts --project=desktop: ten cases collected.
+  Collection does not execute PostgreSQL hooks, requests or browser assertions.
+- Commercial boundary tool and source appendix --check: passed. Working-tree
+  lane validation with the existing loadLanePolicy/lanePathAllowed APIs passed;
+  this is not committed-head range CI. git diff --check passed.
+- Own migration IF-condition inspection found zero CASE expressions requiring
+  parentheses. 0352 bytes and all already-main migrations, including 0347, remain
+  unchanged. Only the three described SQL ordering fixes alter 0353 this round.
+
+No git mutation, PostgreSQL startup, live provider, real data or release occurred.
+New message file begins do not commit:
+/tmp/mon8-upgrade-successors-20261029T093229Z-commit-msg.txt.
+
+
+## 29 October 2026 — round 4 authorised bridge-pin renewal
+
+Ben's issued authority: one more round and exactly the three ENT-4b [S9] bridge
+fingerprint updates, answer "Yes, update them" in the 10:15 chat as quoted in this
+brief. This supersedes the preceding fingerprint-specific NOT READY disposition;
+it does not represent CI, PostgreSQL execution or independent RED acceptance.
+Every uncommitted try-3 fix is preserved. The fingerprint registry changes ONLY
+the values for work-order-repository.ts, sor-repository.ts and
+job-scheduling-repository.ts. Its remaining five entries, comments, keys and
+comparison assertions remain unchanged.
+
+packages/db/src/work-order-repository.ts
+  old: 9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e
+  new: 6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418
+packages/db/src/sor-repository.ts
+  old: 122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2
+  new: b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f
+packages/db/src/job-scheduling-repository.ts
+  old: ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d
+  new: 7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57
+
+Checked current origin/main 7eef37d694d98e95eb76baae95169e089e3b98e5, which
+contains 0356/0357 (LP-2) and 0358 (CH-9 p2). Among MON-8's replacement routines,
+only work_order_begin overlaps definitions introduced after merged 0347. Rebuilt
+its body directly from origin/main's 0356_unchecked_job_doors.sql plus only the
+existing MON-8 feature guard. This preserves the LP-2 job-insert permit row and
+shape binding. Deterministic full-body comparison against that main SQL passed.
+No already-main migration was edited; 0352 is unchanged. The reviewed OIDC bodies
+remain protected by the existing full-body source comparison tests.
+
+The worktree has NOT received a clean current-main merge: MERGE_HEAD is still
+baad7d56475e8ccce7ce6e39dccff33bfb77d3e1 and the previously resolved source appendix
+remains UU in the read-only index. Therefore the brief's renumber condition was
+not satisfied. Per its explicit fallback, left 0352/0353 numbers unchanged. Router
+must finish that pending merge, catch up main through 0358 and renumber this
+candidate to reserved 0365/0366 with tools/migration-renumber.mjs, preserving the
+candidate SQL bytes. That order is necessary so 0356 cannot subsequently replace
+the MON-8 work-order feature guard. No clean-merge claim or git write was made.
+
+Local checks actually run this round:
+
+- From packages/db, installed Vitest run --maxWorkers=2
+  src/plan-entitlement-service.test.ts test/mon8-combined-migration.test.ts:
+  2 files / 12 passed.
+- Installed DB tsc -p packages/db/tsconfig.json --noEmit: passed.
+- Extracted the actual [S9] registry and computed SHA-256 from all eight files:
+  all match. Compared registry entries against HEAD: exactly the three authorised
+  values differ; all other entries match. This deterministic check does not run
+  the PostgreSQL hooks of the enclosing integration suite.
+- work_order_begin source equals latest main 0356 plus only its MON-8 guard:
+  passed. New main migrations 0357/0358 replace none of this lane's routines.
+- git diff --check: passed. No PostgreSQL/browser startup or git mutation.
+
+Ready for router catch-up/commit/push and CI, then the required independent RED
+review against the resulting exact head. The instruction to ignore main-wide
+inventory/core-export failures is respected; no additional repair was attempted
+for those checks. Earlier tests remain recorded as earlier evidence, not rerun
+or represented as this round's execution. New commit message:
+/tmp/mon8-upgrade-successors-20261029T101233Z-commit-msg.txt.

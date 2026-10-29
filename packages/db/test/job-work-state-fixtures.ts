@@ -12,9 +12,11 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 export const CH4_HASH = "a".repeat(64);
 export async function createWorkFixture(install = true) {
  const directory = await mkdtemp(join(tmpdir(), "ch4-pg16-")), port = await freePort(59000, 400), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start();
+ const control = new Pool({ ...connection, database: "postgres" });
+ try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); } finally { await control.end(); }
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);

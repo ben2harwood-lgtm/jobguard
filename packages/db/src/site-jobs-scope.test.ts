@@ -13,6 +13,10 @@ it.each([0, 200, 201])("the request uses the scope query and preserves projectio
    expect(values).toEqual([actor.tenantId, actor.membershipId]);
    return { rows };
   }
+  if (sql === "SELECT app.mon8_feature_decision($1,$2,$3) decision") {
+   expect(values).toEqual([actor.membershipId, "site_origin_capture", "retained_read"]);
+   return { rows: [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "site_origin_capture", entitlement: "included", executable: true, reason: "available" } }] };
+  }
   if (sql.includes("FROM app.membership m")) return { rows: [{ track: "contractor", active: true, allowed: true }] };
   if (sql.includes("SELECT decision,reason_code")) {
    expect(values).toEqual([actor.membershipId, null]);

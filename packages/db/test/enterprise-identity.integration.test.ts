@@ -501,7 +501,7 @@ describe("MON-8 SSO after agreement suspension", () => {
     const f = await fixture();await f.verify();await f.mapping();const subject=randomUUID();
     const first=await f.signin({subject});await suspend(f.principal.tenantId);
     await expect(f.signin({subject,groups:[]})).rejects.toMatchObject({code:"NO_MAPPED_GRANTS"});
-    expect(await provider().authenticate(first.sessionToken)).toBeNull();
+    expect(await provider().authenticate(first.sessionToken)).toBeUndefined();
     expect((await admin.query(`SELECT count(*)::int n FROM app.role_grant g
       JOIN app.role_grant_revocation r ON(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)
       WHERE g.tenant_id=$1 AND g.role='read_only'`,[f.principal.tenantId])).rows[0].n).toBeGreaterThan(0);

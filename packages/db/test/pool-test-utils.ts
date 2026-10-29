@@ -52,7 +52,9 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
        IF NOT (app.mon8_feature_decision(actor,feature)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
       END $$;
       REVOKE ALL ON FUNCTION app.mon8_feature_decision(uuid,text,text), app.mon8_require_feature(uuid,text) FROM PUBLIC;
-      GRANT EXECUTE ON FUNCTION app.mon8_feature_decision(uuid,text,text), app.mon8_require_feature(uuid,text) TO jobguard_runtime;`);
+      GRANT EXECUTE ON FUNCTION app.mon8_feature_decision(uuid,text,text), app.mon8_require_feature(uuid,text) TO jobguard_runtime;
+      ALTER FUNCTION app.mon8_feature_decision(uuid,text,text) OWNER TO jobguard_migration;
+      ALTER FUNCTION app.mon8_require_feature(uuid,text) OWNER TO jobguard_migration;`);
   }
   await admin.query(`CREATE OR REPLACE FUNCTION app.test_fixture_job_parties() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
   DECLARE c uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();s uuid:=gen_random_uuid();sr uuid:=gen_random_uuid();b uuid:=gen_random_uuid();BEGIN

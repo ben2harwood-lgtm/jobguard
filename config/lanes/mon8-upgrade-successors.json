@@ -75,7 +75,23 @@
         "packages/db/test/sso-required-unlinked.integration.test.ts",
         "packages/db/test/sso-required.integration.test.ts",
         "packages/db/test/work-order-concurrency.integration.test.ts",
-        "packages/db/test/work-order-import.integration.test.ts"
+        "packages/db/test/work-order-import.integration.test.ts",
+        "apps/web/e2e/ENT-1.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/src/practice-worker-switch-repository.ts",
+        "packages/db/src/serious-b10.test.ts",
+        "packages/db/src/site-jobs-scope.test.ts",
+        "packages/db/test/audit-checkpoint-handoff.integration.test.ts",
+        "packages/db/test/contractor-retained-read-boundaries.integration.test.ts",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/extra-origin-upgrade.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/test/job-work-state-commands.integration.test.ts",
+        "packages/db/test/practice-worker-switch.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shared-money-origin.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }

@@ -7,7 +7,7 @@ import { currentCommand } from "./contractor-practice-session-fixtures.js";
 import { company } from "./practice-worker-switch-fixtures.js";
 import { ownerTx, memberSession, track } from "./contractor-retained-read-fixtures.js";
 let c: Cluster;
-beforeAll(async () => { c = await cluster(); }, 120000);
+beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
 afterAll(async () => { await c?.close(); });
 const features = ["operative_roles", "site_origin_capture", "approval_chains", "work_orders", "sso"] as const;
 async function decision(f: Awaited<ReturnType<typeof startSession>>, feature: typeof features[number]) {

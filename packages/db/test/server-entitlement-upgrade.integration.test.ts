@@ -7,6 +7,7 @@ import { migrate, withTenant } from "../src/index.js";
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
 it("MON-8 0352 and 0353 preserve every pre-existing row and refuse legacy new work without status", async () => {
+  process.env.JOBGUARD_ENV = "synthetic_demo";
   c = await startBeforeMigration("0352_server_plan_entitlements.sql");
   const f = await company(c), before = await snapshot(c.admin), retained = await read(c, f);
   expect((await c.admin.query("SELECT * FROM app.contractor_agreement_status_revision")).rows).toEqual([]);

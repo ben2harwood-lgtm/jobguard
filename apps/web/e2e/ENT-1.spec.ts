@@ -1,5 +1,20 @@
+import { Pool } from "pg";
+import { seedActiveContractorAgreement } from "../../../packages/db/test/contractor-agreement-test-fixture.js";
 import { expect, test, type Page } from '@playwright/test';
 test.setTimeout(180_000);
+// Owner-only test fixture: let the real start finish, then supply an explicit
+// fictional agreement before returning its unchanged response to the browser.
+test.beforeEach(async({page})=>{
+ await page.route('**/api/contractor?action=start',async route=>{
+  const response=await route.fetch();
+  if(response.ok()) {
+   const workspace=await response.json();
+   const admin=new Pool({host:'127.0.0.1',port:55432,user:'postgres',password:'sbox-e2e-owner',database:'jobguard_synthetic_demo',max:1});
+   try { await seedActiveContractorAgreement(admin,workspace.tenantId); } finally { await admin.end(); }
+  }
+  await route.fulfill({response});
+ });
+});
 const base='http://127.0.0.1:3000';
 const B=(page:Page,name:string)=>page.getByRole('button',{name,exact:true});
 async function view(page:Page){const response=await page.request.get('/api/contractor');expect(response.status()).toBe(200);return response.json();}

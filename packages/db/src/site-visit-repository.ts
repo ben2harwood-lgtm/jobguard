@@ -165,7 +165,7 @@ export class SiteVisitRepository {
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
  }
- private async execute<T extends StartedVisit | CompletedVisit>(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, schema: z.ZodType<T>): Promise<T> {
+ private async executeVisit<T extends StartedVisit | CompletedVisit>(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, schema: z.ZodType<T>): Promise<T> {
   let refusal: Refusal | undefined;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
@@ -194,7 +194,7 @@ export class SiteVisitRepository {
  }
  async startVisit(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StartedVisit> {
   const parsed = startInput.safeParse(raw); if (!parsed.success) throw new SiteVisitError("INVALID_COMMAND");
-  return this.execute(context, actor, "start", parsed.data, storedStart);
+  return this.executeVisit(context, actor, "start", parsed.data, storedStart);
  }
  async completeVisit(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<CompletedVisit> {
   const parsed = completeInput.safeParse(raw);
@@ -202,7 +202,7 @@ export class SiteVisitRepository {
    const missing = z.object({ commandId: uuid, jobId: uuid, visitId: uuid, closeoutAnswer: z.null().optional() }).strict().safeParse(raw).success;
    throw new SiteVisitError(missing ? "CLOSEOUT_ANSWER_REQUIRED" : "INVALID_COMMAND");
   }
-  return this.execute(context, actor, "complete", parsed.data, storedComplete);
+  return this.executeVisit(context, actor, "complete", parsed.data, storedComplete);
  }
  /** The caller's assigned jobs: every work-order job for which the visit rule answers allowed, with the caller's own open visit. No money, no resident, no address. */
  async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {

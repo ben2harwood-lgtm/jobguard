@@ -108,7 +108,10 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION app.guard_contractor_grant() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE bound_client uuid; BEGIN
- IF NEW.role='operative' THEN PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles'); END IF;
+ IF NEW.role='operative' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.membership_id) THEN RAISE EXCEPTION 'foreign membership' USING ERRCODE='23503'; END IF;
+  PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles');
+ END IF;
  IF (SELECT commercial_track FROM app.commercial_track_assignment WHERE tenant_id=NEW.tenant_id ORDER BY revision DESC LIMIT 1) IS DISTINCT FROM 'contractor' THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT client_id INTO bound_client FROM app.contractor_member WHERE tenant_id=NEW.tenant_id AND membership_id=NEW.membership_id;
  IF NEW.role='client_approver' THEN
@@ -127,6 +130,10 @@ BEGIN
  PERFORM app.mon8_require_feature(actor,'work_orders');
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t IS NULL OR NOT coalesce(app.work_order_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+ VALUES(t,p_job,pg_backend_pid(),pg_current_xact_id(),'work_order',
+  app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',t,'id',p_job,'title',left(p_title,200),
+   'status','draft','revision',0,'provenance','work_order'))),actor);
  INSERT INTO app.job(id,tenant_id,title,status,revision,provenance) VALUES(p_job,t,left(p_title,200),'draft',0,'work_order');
  INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES(t,p_job,'contractor','synthetic_demo','work_order_import');
  RETURN 0;
@@ -211,7 +218,6 @@ CREATE OR REPLACE FUNCTION app.ent4b_origin_provenance() RETURNS trigger LANGUAG
 DECLARE command app.command_receipt; grant_row app.role_grant; team_row app.team; branch_row app.org_unit;
  v app.variation; values_to_hash text[]; value_text text; encoded text:='extra-origin-hash.v1'||chr(10);
 BEGIN
- IF NEW.job_track='contractor' THEN PERFORM app.mon8_require_feature(NEW.raising_membership_id,'site_origin_capture'); END IF;
  IF NEW.job_track<>'contractor' THEN RETURN NEW; END IF;
  IF NOT EXISTS(SELECT 1 FROM app.job WHERE (tenant_id,id)=(NEW.tenant_id,NEW.job_id) AND provenance='work_order') THEN
   IF num_nonnulls(NEW.command_type,NEW.raising_grant_id,NEW.raiser_assigned,NEW.work_order_id,NEW.work_order_revision_id,NEW.site_visit_id,NEW.evidence_id,NEW.resident_confirmation_evidence_id,NEW.client_capture_id,NEW.origin_hash)<>0 THEN
@@ -258,6 +264,7 @@ BEGIN
   RAISE EXCEPTION 'INVALID_ORIGIN' USING ERRCODE='23503';
  END IF;
  -- Boolean spelling and microsecond timestamps are independent of session timezone/DateStyle.
+ PERFORM app.mon8_require_feature(NEW.raising_membership_id,'site_origin_capture');
  values_to_hash:=ARRAY[NEW.tenant_id::text,NEW.job_id::text,NEW.variation_id::text,NEW.job_track,NEW.kind,NEW.provenance,NEW.command_id::text,NEW.command_type,
   NEW.raising_membership_id::text,NEW.raising_role,NEW.raising_grant_id::text,CASE WHEN NEW.raiser_assigned THEN 'true' ELSE 'false' END,
   to_char(NEW.server_recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),NEW.device_id,
@@ -402,8 +409,8 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j app.jo
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR payload->>'environment' IS DISTINCT FROM 'synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
- PERFORM app.mon8_require_feature(actor,'work_orders');
  IF t IS NULL OR NOT coalesce(app.contractor_member_active(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM app.mon8_require_feature(actor,'work_orders');
  IF jsonb_typeof(payload) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='22023'; END IF;
  -- Order: active membership, then completeness, then role authority. Completeness is judged before authority because a missing client
  -- leaves no client scope to check; the refusal reveals only the shape of the caller's own payload.

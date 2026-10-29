@@ -14,6 +14,7 @@ const routineCodes: readonly PracticeWorkerSwitchErrorCode[] = ["MODE_FORBIDDEN"
 function translated(error: unknown) {
  if (error instanceof PracticeWorkerSwitchError) return error;
  const message = error instanceof Error ? error.message : "";
+ if (message === "FORBIDDEN" && (error as {code?:string}).code === "42501") return new PracticeWorkerSwitchError("SWITCH_FORBIDDEN");
  return new PracticeWorkerSwitchError(routineCodes.find(code => code === message) ?? "SWITCH_UNAVAILABLE");
 }
 export class PracticeWorkerSwitchRepository {

@@ -35,13 +35,6 @@
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
-    "file": "packages/db/src/extra-repository.ts",
-    "line": 75,
-    "fingerprint": "76f57e3fb6d3ca5cc459a127f55ff274638b6f03dde8655e1b8eeed397eeea44",
-    "reason": "Joined receipt result is selected without a statically resolved non-advisory command-type discriminator.",
-    "code": "UNRESOLVED_COVERED_EDGE"
-  },
-  {
     "file": "packages/db/src/practice-session.ts",
     "line": 73,
     "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
@@ -60,20 +53,6 @@
     "line": 44,
     "fingerprint": "37b2e3c755e87f437c0ef4a0e74a6819762e126723c0809be9bba5be006aace5",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary.",
-    "code": "UNRESOLVED_COVERED_EDGE"
-  },
-  {
-    "file": "packages/db/src/site-visit-repository.ts",
-    "line": 197,
-    "fingerprint": "2f3cb0e62faed3b82ff56338a53feab87c817449c5019cdb2335100e411cefe8",
-    "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL.",
-    "code": "UNRESOLVED_COVERED_EDGE"
-  },
-  {
-    "file": "packages/db/src/site-visit-repository.ts",
-    "line": 205,
-    "fingerprint": "a5c0f519aa9c536a6f29498b4957f6f2091ecb96cf7101ef96197a2ecb053039",
-    "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {

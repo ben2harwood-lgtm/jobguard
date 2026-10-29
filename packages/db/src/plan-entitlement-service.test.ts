@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { planEntitlementFeatures } from "@jobguard/core";
-import type { TenantTransaction } from "./tenant-context.js";
+import type { TenantTransaction, AuthenticatedMembership } from "./tenant-context.js";
+import { assertContractorGate } from "./work-order-repository.js";
 import { ssoRepositoryError } from "./enterprise-identity-repository.js";
 import { requireServerEntitlement, serverEntitlement } from "./plan-entitlement-service.js";
 const actor = "00000000-0000-4000-8000-000000000001";
@@ -52,3 +53,14 @@ it("MON-8 entitlement refusals retain the established SSO public error codes", (
   expect(ssoRepositoryError({code:"42501",message:"FORBIDDEN"}).code).toBe("SSO_FORBIDDEN");
   expect(ssoRepositoryError({code:"42501",message:"MODE_FORBIDDEN"}).code).toBe("SSO_ROUTE_BLOCKED");
 });
+
+it.each([{ rows: [] }, { rows: [{ active: false, allowed: true }] }, { rows: [{ active: true, allowed: false }] }])(
+  "membership refusal stays typed before the feature lookup (%j)", async ({ rows }) => {
+    const query = vi.fn(async () => ({ rows }));
+    const db = { $client: { query } } as unknown as TenantTransaction;
+    const principal = { tenantId: actor, membershipId: actor, identityUserId: actor } as AuthenticatedMembership;
+    await expect(assertContractorGate(db, principal, "member", "site_origin_capture")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0]).toBeDefined();
+  },
+);

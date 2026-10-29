@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { claimCommandIdentity,withTenant } from "../src/index.js";
 import { Pool } from "pg";
@@ -210,9 +211,16 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  });
  it("every non-owner membership role refused, including admin and finance",async()=>{
   const p=await seedWorkPractice(f),roles=(await f.admin.query("SELECT DISTINCT role FROM app.membership WHERE role<>'owner'")).rows.map(r=>r.role as string);
+  // Operative fixture setup needs an explicit contractor agreement; the CH-4
+  // command must still reject every non-owner role independently of entitlement.
+  await workTenant(f.admin,p.auth.context.tenantId,async db=>{
+   const revision=(await db.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[p.auth.context.tenantId])).rows[0].revision;
+   await db.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,$4,'operations:ch4-fixture')",[p.auth.context.tenantId,randomUUID(),`synthetic-agreement:${p.auth.context.tenantId}`,revision]);
+  });
+  await seedActiveContractorAgreement(f.admin,p.auth.context.tenantId);
   for(const role of new Set(["admin","finance","operative","supervisor","surveyor","commercial_manager","read_only","client_approver","worker",...roles])){
    const db=await f.admin.connect();try{
-    await db.query("BEGIN");await db.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,p.auth.context.tenantId,p.auth.membershipId]);
+    await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);await db.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,p.auth.context.tenantId,p.auth.membershipId]);
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");
     const {commandOn}=await import("./job-work-state-command-fixtures.js");await expect(commandOn(db,p,workCommand())).rejects.toThrow("WORK_STATE_FORBIDDEN");
    }finally{await db.query("ROLLBACK");db.release()}

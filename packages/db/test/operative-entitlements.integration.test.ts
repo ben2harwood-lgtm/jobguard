@@ -49,7 +49,7 @@ it.each(["Solo","Builder"])("small-builder %s cannot create membership, grant, i
  await track(f,"contractor");
  await unchanged(c,()=>expect(new ContractorApplication(c.runtime).command(p,invite(tenant))).rejects.toMatchObject({code:"FORBIDDEN"}));
 });
-it("site-origin guard refuses agreement loss, preserves historical rows, and leaves prior replay unchanged",async()=>{
+it("site-origin guard refuses agreement loss, preserves historical rows, and refuses prior command replay without changing stored facts",async()=>{
  const f=await fixture(c),repo=new ExtraRepository(c.runtime),raw=raise(f),first=await repo.raiseExtra(f.ctx,raw);
  expect(await repo.raiseExtra(f.ctx,raw)).toEqual(first);
  await ownerTx(c,f.p.tenantId,db=>db.$client.query("INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source) SELECT tenant_id,$2,assignment_id,revision+1,'inactive',schema_version,environment,$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[f.p.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]));
@@ -57,7 +57,7 @@ it("site-origin guard refuses agreement loss, preserves historical rows, and lea
  await expect(withTenant(c.runtime,f.ctx,db=>db.$client.query("INSERT INTO app.extra_origin(tenant_id,kind,job_track) VALUES($1,'site_user','contractor')",[f.p.tenantId]))).rejects.toMatchObject({code:"42501"});
  expect(await snapshot(c.admin)).toEqual(before);
  await unchanged(c,()=>expect(repo.raiseExtra(f.ctx,raise(f))).rejects.toThrow());
- await unchanged(c,()=>expect(repo.raiseExtra(f.ctx,raw)).resolves.toEqual(first));
+ await unchanged(c,()=>expect(repo.raiseExtra(f.ctx,raw)).rejects.toMatchObject({code:"NOT_FOUND"}));
  const retained=await withTenant(c.runtime,f.ctx,db=>db.$client.query("SELECT count(*)::int n FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2",[f.p.tenantId,first.variationId]));
  expect(retained.rows[0].n).toBe(1);
 });
