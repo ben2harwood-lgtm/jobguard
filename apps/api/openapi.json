@@ -29,6 +29,34 @@
         ]
       }
     },
+    "/jobs/{id}/payment-fees": {
+      "get": {
+        "operationId": "PaymentFeeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read verified synthetic receipt statements and current approval/dispute state",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentFeeController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare, approve the exact hash, or pause a synthetic receipt fee statement",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      }
+    },
     "/auth/oidc/{connectionId}/start": {
       "post": {
         "operationId": "OidcController_start",
