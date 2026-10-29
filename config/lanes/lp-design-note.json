@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-design-note": {
+      "branches": ["codex/sandbox/lp-design-note"],
+      "note": "Section 11.8 design/inventory slice only: proposed LP-4/5/6 contracts and downstream source index for review. No runtime, migration, grant or policy changes. Own lane file is implicitly allowed by the lane checker.",
+      "allow": [
+        "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/contracts/lp-downstream-effects-v1.md"
+      ]
+    }
+  }
+}
