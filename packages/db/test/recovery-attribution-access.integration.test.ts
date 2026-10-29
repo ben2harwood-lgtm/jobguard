@@ -1,4 +1,4 @@
-// Real PostgreSQL tests. Runtime assessment remains closed; no positive source claim.
+// Real PostgreSQL tests. Supplied authority stays closed; only checked stored-source assessment is allowed.
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,expect,it } from "vitest";
@@ -22,7 +22,7 @@ it("SV6-19 runtime history refuses unowned fixture jobs without disclosing store
  for(const job of [p.jobId,randomUUID()])await expect(repo.history(p.context,job,"a".repeat(64))).rejects.toThrow("NOT_FOUND");
 });
 it("SV6-18 direct runtime routine never accepts supplied authority",async()=>{
- for(const raw of [{},{tenantId:randomUUID(),actor:randomUUID(),mode:"production",rate:10,settlement:true,fee:8000}])await expect(f.runtime.query("SELECT app.assess_recovery_attribution($1,$2,$3)",[randomUUID(),"forged",raw])).rejects.toThrow("DEPENDENCY_BOUND");
+ for(const raw of [{},{tenantId:randomUUID(),actor:randomUUID(),mode:"production",rate:10,settlement:true,fee:8000},{version:"recovery-attribution-command.v1",action:"assess",tenantId:randomUUID(),actor:randomUUID(),settlement:true,fee:8000}])await expect(f.runtime.query("SELECT app.assess_recovery_attribution($1,$2,$3)",[randomUUID(),"forged",raw])).rejects.toThrow("DEPENDENCY_BOUND");
 });
 
 it("SV6-19 expired and revoked sessions cannot read even with an earlier verified context",async()=>{
