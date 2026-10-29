@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-12-collect": {
+      "branches": [
+        "codex/sandbox/m4-12-collect"
+      ],
+      "note": "M4-12 RED dark small-builder card collection/refund seam, built on M4-13. No live registration, dependencies or migration. Own lane path is implicitly permitted.",
+      "allow": [
+        "apps/api/src/fee-collection/contracts.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/executor.test.ts",
+        "apps/api/src/fee-collection/fake-stripe.ts"
+      ]
+    }
+  }
+}
