@@ -8,12 +8,12 @@ import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 
 // No local database execution: fresh installation is covered by the admission
 // suite; this test proves the predecessor and already-finalized reader upgrade.
-describe("MON-1 0307 upgrade (PostgreSQL CI)", () => {
+describe("MON-1 0348 upgrade (PostgreSQL CI)", () => {
  let f: WorkFixture;
  beforeAll(async () => { f=await createWorkFixture(false); },60000);
  afterAll(async () => closeWorkFixture(f));
  it("preserves business rows and predecessor grants; finalization retires the stale reader atomically", async () => {
-  const own="0307_meter_work_admission.sql", position=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(`/${own}`));
+  const own="0348_meter_work_admission.sql", position=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(`/${own}`));
   expect(position).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,position)) {

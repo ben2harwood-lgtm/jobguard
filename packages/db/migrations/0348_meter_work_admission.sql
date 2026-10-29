@@ -160,32 +160,24 @@ BEGIN
  -- Builder additions remain unblocked. This routine creates no obligation or charge.
 END $$;
 
--- Capacity belongs to site-source transactions, not every tenant read or financial
--- command. Join the serializer before the existing job SHARE lock, only for a
--- normal-company small-builder job. Reuse the existing
--- guarded entrypoints; preserve their signatures, owners, grants and authority.
-DO $$ DECLARE original text; changed text; marker text; gate text; BEGIN
- original:=pg_get_functiondef('app.require_watchdog_live(uuid)'::regprocedure);
- marker:='  SELECT status INTO lifecycle FROM app.job WHERE tenant_id=tenant AND id=p_job FOR SHARE;';
- gate:='  IF tenant<>''11111111-1111-4111-8111-111111111111''::uuid AND EXISTS(SELECT 1 FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=tenant AND j.id=p_job AND j.practice_session_digest IS NULL AND c.job_track=''small_builder'' AND c.environment=''synthetic_demo'') THEN'||chr(10)||
-  '   PERFORM pg_advisory_xact_lock(hashtextextended(tenant::text,184));'||chr(10)||'  END IF;'||chr(10);
- changed:=replace(original,marker,gate||marker);
- IF changed=original THEN RAISE EXCEPTION 'unexpected watchdog live guard definition'; END IF;
- EXECUTE changed;
- original:=pg_get_functiondef('app.ch4_source_job(uuid,uuid)'::regprocedure);
- marker:=' SELECT * INTO job FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;';
- gate:=' IF t<>''11111111-1111-4111-8111-111111111111''::uuid AND EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest IS NULL) THEN'||chr(10)||
-  '  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));'||chr(10)||' END IF;'||chr(10);
- changed:=replace(original,marker,gate||marker);
- IF changed=original THEN RAISE EXCEPTION 'unexpected site source guard definition'; END IF;
+-- Keep the generic live/source guards unchanged: their first business lock is
+-- the job SHARE, compatible with independent evidence writers and legacy replay.
+-- Only a classified site source joins capacity, before the per-job event lock.
+DO $$ DECLARE original text; changed text; marker text; BEGIN
+ original:=pg_get_functiondef('app.ch4_capture_site_source()'::regprocedure);
+ marker:=' PERFORM pg_advisory_xact_lock(hashtextextended(r.tenant_id::text||'':''||r.job_id::text,144));';
+ changed:=replace(original,marker,' PERFORM pg_advisory_xact_lock(hashtextextended(r.tenant_id::text,184));'||chr(10)||marker);
+ IF changed=original THEN RAISE EXCEPTION 'unexpected site source capture definition'; END IF;
  EXECUTE changed;
 END $$;
 
 -- Preserve the checked command, exact replay/actor/revision semantics and its ACL.
--- Put the tenant serializer before any command/job/audit locks.
-DO $$ DECLARE original text; changed text; BEGIN
+-- Keep job and command-id locks first; capacity precedes per-job events and audit.
+DO $$ DECLARE original text; changed text; marker text; BEGIN
  original:=pg_get_functiondef('app.ch4_work_state_command(uuid,uuid,text,jsonb)'::regprocedure);
- changed:=regexp_replace(original,'BEGIN'||chr(10),'BEGIN'||chr(10)||' PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));'||chr(10));
+ marker:=' PERFORM pg_advisory_xact_lock(hashtextextended(''watchdog-command-id:''||t::text||'':''||cid::text,0));';
+ changed:=replace(original,marker,marker||chr(10)||' PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));');
+ IF changed=original THEN RAISE EXCEPTION 'unexpected CH4 command lock definition'; END IF;
  changed:=replace(changed,'IF action=''resume'' THEN RAISE EXCEPTION ''CAPACITY_ADMISSION_UNAVAILABLE''; END IF;','');
  changed:=replace(changed,'''finish'',''cancel_finish'',''close'',''reopen'',''link''','''finish'',''cancel_finish'',''close'',''reopen'',''link'',''resume''');
  changed:=replace(changed,'IF action=''finish'' THEN'||chr(10)||'  IF marker.kind',
@@ -195,10 +187,10 @@ DO $$ DECLARE original text; changed text; BEGIN
 END $$;
 
 -- Direct SQL callers do not pass through withTenant. Serialize final-account
--- locks before their job/variation/audit locks, rather than from the AFTER hook.
+-- locks after job/variation locks, before the receipt, refresh and audit.
 DO $$ DECLARE original text; changed text; BEGIN
  original:=pg_get_functiondef('app.lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)'::regprocedure);
- changed:=regexp_replace(original,'BEGIN'||chr(10),'BEGIN'||chr(10)||' PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text,184));'||chr(10));
+ changed:=replace(original,' server_time:=clock_timestamp();',' PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text,184));'||chr(10)||' server_time:=clock_timestamp();');
  IF changed=original THEN RAISE EXCEPTION 'unexpected final account lock definition'; END IF;
  EXECUTE changed;
 END $$;

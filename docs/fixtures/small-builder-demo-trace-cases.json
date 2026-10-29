@@ -1,0 +1,15 @@
+{
+  "version": "small-builder-demo-trace-cases.v1",
+  "purpose": "schema-only synthetic adversaries; no observed journey or acceptance evidence",
+  "cases": [
+    {"id":"DP2-01","mutation":"missing-row","issue":"catalogue_coverage"},
+    {"id":"DP2-01","mutation":"held-observed","issue":"held_binding"},
+    {"id":"DP2-01","mutation":"missing-source","issue":"source_reference"},
+    {"id":"DP2-02","mutation":"command-conflict","issue":"command_conflict"},
+    {"id":"DP2-03","mutation":"source-scope","issue":"scope_mismatch"},
+    {"id":"DP2-03","mutation":"amount-mismatch","issue":"source_value"},
+    {"id":"DP2-04","mutation":"public-pass","issue":"invalid_schema"},
+    {"id":"DP2-05","mutation":"prelock-final-check","issue":"prelock_source"},
+    {"id":"DP2-06","mutation":"fixture-zero","issue":"external_actions_evidence"}
+  ]
+}

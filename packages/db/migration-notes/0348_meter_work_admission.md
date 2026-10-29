@@ -1,4 +1,4 @@
-# 0307 — MON-1 committed-place admission and transactional refresh (RED)
+# 0348 — MON-1 committed-place admission and transactional refresh (RED)
 
 Capacity admission uses committed places, which include live jobs that have not
 started counting today. Daily counted places remain the separate billing/screen
@@ -15,8 +15,9 @@ replays reuse a snapshot; source changes append rather than edit history.
 Work-event, lock, trip and accepted-plan triggers refresh synchronously. Activation
 terms reserve capacity in their transaction. A failed refresh rolls back the
 business event and receipt. The existing tenant transaction boundary and checked
-CH-4 command take capacity serialization before business/audit locks. This is a
-conservative serialization choice covering implicit source writers too.
+CH-4 command take the job and command-identity locks before capacity, then
+per-job event serialization, with audit last. Actual site capture also takes
+capacity before its per-job event lock; generic live/source guards stay unchanged.
 
 Solo additions beyond six committed places are refused with a plain message.
 Same customer/site grouping and small allowances come from stored server facts.
@@ -35,7 +36,7 @@ no runtime/meter/shadow table grants. Existing rows, grants and policies stay in
 
 ## Explicit remaining scope
 
-MON1-J adds `mon1_today_source` to this same unmerged migration (0307 is not
+MON1-J adds `mon1_today_source` to this same unmerged migration (0348 is not
 renumbered; its admission SQL is preserved). This checked entrypoint reuses
 lifecycle capture under lock 184. The application derives today's display from
 the captured immutable facts with the existing pure counter. There is no new
@@ -78,21 +79,22 @@ Site-activity admission is limited to actual activation-backed restarts.
 MON1-J drives the new authenticated synthetic normal-company work-command HTTP
 route from the browser, alongside real meter reads. Source snapshots are reused
 by deterministic tenant/date/input keys rather than appended on every GET.
-The public final-account SQL routine takes 184 before job/variation/audit locks,
-so direct SQL entry does not rely on the refresh trigger to acquire it late.
+The public final-account SQL routine takes its job/variation locks before 184,
+then its receipt and audit; direct SQL entry does not rely on a post-audit hook.
 Required real-PostgreSQL and browser runs remain CI work in this sandbox.
 
 ## Last CI repair: source-scoped locking and canonical fact order
 
-0307 SQL changes in this repair: existing live/source guards join capacity
-lock 184 before job SHARE for normal-company small-builder sources.
-General `withTenant` transactions no longer acquire it, preserving the financial
-preflight boundary, receipt identity waits and contractor authority gate 54.
-Builder capture takes 184 before receipt/source/audit; checked work mutations
-take it before the job guard. Direct final-account SQL keeps its early lock.
-The two amended existing guards retain their signatures, owner, ACL and search
-path. Their older LP-0 recorded definition hashes predate this amendment; actual
-PostgreSQL definition capture and runtime verification remain CI evidence.
+Round 4 SQL repair: remove the capacity injection from generic live/source guards.
+The live guard again takes only job SHARE, so SV5PRE writers and unrelated
+confirmation/evaluation can overlap. Work commands take job then command-ID
+before capacity 184 and per-job 144; actual site capture takes 184 before 144.
+Final-account SQL takes its job/variation locks before 184, receipt and audit.
+This fixes the CH-2 job-source cross-kind cycle and legacy audit/claim inversion
+without changing replay results, authority, admission limits or audit guarantees.
+The compiled source check reads ../src/tenant-context.ts from both src and dist.
+The changed SQL is limited to this unmerged migration; PostgreSQL race and
+catalogue execution remain CI evidence, not a local pass.
 
 The SQL commitment clock now uses the core's timestamp/UUID ordering, with
 sequence only breaking the cutoff sentinel tie. The existing reversed-UUID

@@ -2,10 +2,13 @@ import { createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 /** CI-only made-up company fixture. No application endpoint can backdate agreements or supply meter facts. */
 export async function seedSubscriptionPeriod(tenantId: string, sessionToken: string) {
- const admin=new Pool({host:"127.0.0.1",port:55432,user:"postgres",password:"sbox-e2e-owner",database:"jobguard_synthetic_demo"});
+ const connectionString = process.env.E2E_ADMIN_DATABASE_URL;
+ const secret = process.env.AUTH_CODE_SECRET;
+ if (!connectionString || !secret) throw new Error("Subscription fixture requires the e2e setup environment");
+ const admin=new Pool({connectionString});
  const db=await admin.connect();
  try {
-  const digest=createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${sessionToken}`).digest("hex");
+  const digest=createHmac("sha256", secret).update(`session:${sessionToken}`).digest("hex");
   const {start_date:startDate,end_date:endDate}=(await db.query<{start_date:string;end_date:string}>(
    "SELECT to_char(date_trunc('month',clock_timestamp() AT TIME ZONE 'Europe/London')-interval '1 month','YYYY-MM-DD') start_date,to_char(date_trunc('month',clock_timestamp() AT TIME ZONE 'Europe/London'),'YYYY-MM-DD') end_date"
   )).rows[0]!;

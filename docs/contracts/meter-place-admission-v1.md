@@ -46,8 +46,10 @@ No executor exports this routine; the DB module exposes only a strict held value
 
 Coordinator STOP: confirm complete lock order against LOCK-ORDER-1 and deliver
 checked source kinds/expected revisions/current authority and immutable binding
-before admission can replace refusal. Lock 184 must precede receipts, job/source
-locks and audit; no business lock after audit. Never acquire 184 late in a trigger.
+before admission can replace refusal. The implemented remainder below preserves
+LOCK-ORDER-1: job first, then command identity where applicable, then capacity
+and source serialization, with audit last. The old proposed capacity-before-job
+order is superseded; no business lock may be introduced after audit.
 Actual admission/mutation must be one transaction and recheck authority/plan after
 wait and on replay, with exact-payload conflict detection. Grace Decision and
 operations card deduplication remain unimplemented, not implied by oracle labels.
@@ -57,7 +59,7 @@ consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
 
 
-## MON-1 remainder, migration 0307
+## MON-1 remainder, migration 0348
 
 The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
 Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
@@ -113,8 +115,8 @@ not exposed as an API. Source keys bind the tenant, London date, agreement and
 builder lifecycle facts. Identical repeated reads reuse the checked capture;
 a changed event, lock, trip, observation, link, activation or agreement creates
 a new one. A new London date also refreshes midnight deadlines. The public
-final-account lock routine acquires tenant lock 184 before its business locks,
-including when called without withTenant. No fee or payment authority is added.
+final-account lock routine acquires tenant lock 184 after its job/variation
+locks and before its receipt, refresh and audit, including without withTenant. No fee or payment authority is added.
 
 Grace upgrade Decision delivery and immediate Builder track-review Decision
 creation remain unimplemented follow-up; this repair does not claim them.
@@ -123,12 +125,20 @@ creation remain unimplemented follow-up; this repair does not claim them.
 
 `withTenant` only installs verified tenant context; it does not acquire lock 184.
 Unrelated reads, financial preflight/execute transactions and contractor authority
-gates keep their existing locks and concurrency. The existing SQL live/source
-guards acquire 184 before job SHARE for normal-company small-builder
-source jobs; shared practice and contractor data do not feed that meter. Builder
-capture acquires 184 after membership verification and before its receipt. Checked
-work commands acquire it before their job guard, and SQL final-account lock keeps
-its early serializer. No business lock is introduced after an audit append.
+gates keep their existing locks and concurrency. The generic live and source
+job guards retain only their existing job SHARE and authority checks; they never
+acquire 184. This keeps concurrent evidence writers' live guards compatible and
+lets legacy confirmation/evaluation transactions overlap.
+
+Checked work commands take their existing job lock, then the tenant-wide command
+identity lock, then 184 before per-job event lock 144 and audit. This prevents a
+cross-kind command-ID loser from holding capacity while its winner waits for it.
+Actual classified site-source capture takes 184 before 144; the general source
+guard does not serialize unrelated invoice/confirmation traffic. Final-account
+locking takes its existing job UPDATE and variation locks before 184, receipt and
+audit. Builder capture keeps membership verification and its job guard before the
+receipt; actual site-source capture joins capacity before writing its work event.
+No business lock is introduced after an audit append.
 
 CH-4 fixtures explicitly insert their synthetic small-builder commercial track
 before entering live; status alone supplies no track or environment authority.

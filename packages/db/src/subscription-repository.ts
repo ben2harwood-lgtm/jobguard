@@ -1,3 +1,4 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -84,7 +85,7 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
 
 /** Canonical approval content for a reviewed synthetic terms selection; no acceptance is performed. */
 export function subscriptionTermsContentHash(tenantId:string,raw:unknown):string {
- const selected=z.object(terms).omit({contentHash:true}).strict().parse(raw);
+ const selected=z.object(terms).omit({contentHash:true}).extend({consentText:z.literal(subscriptionConsentText).default(subscriptionConsentText)}).strict().parse(raw);
  const bound={tenantId:z.guid({ error: "Invalid uuid" }).parse(tenantId).toLowerCase(),...selected};
  const canonical=JSON.stringify(Object.fromEntries(Object.entries(bound).sort(([a],[b])=>a<b?-1:a>b?1:0)));
  return createHash("sha256").update(canonical).digest("hex");

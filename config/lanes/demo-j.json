@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j": {
+      "branches": [
+        "codex/sandbox/demo-j"
+      ],
+      "note": "RED DEMO-S chooser, authenticated lifecycle transport and honest not-ready J1-J5/A1 boundaries; built ahead on DEMO-I. No product journey completion claimed.",
+      "allow": [
+        "apps/api/src/small-builder-demo.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/small-builder-demo/[operation]/route.test.ts",
+        "apps/web/app/api/small-builder-demo/[operation]/route.ts",
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/demo-s/chooser.module.css",
+        "apps/web/app/demo-s/chooser.test.tsx",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/page.tsx",
+        "apps/web/app/lib/small-builder-demo-server.ts",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/small-builder-demo-lifecycle.ts",
+        "packages/db/src/small-builder-demo-repository.ts"
+      ]
+    }
+  }
+}

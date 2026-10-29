@@ -28,7 +28,7 @@ test("stored baseline import/replay, scoped dashboard and baseline downloads use
   await page.getByRole("button", { name: "Load dashboard", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Billed and paid", exact: true })).toBeVisible();
   await expect(page.getByText("billed: 0 extras · net £0.00", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Unmatched-variation signal omitted: ENT-6 requires an export match/)).toBeVisible();
+  await expect(page.getByText(/They do not prove a variation or fee entitlement/)).toBeVisible();
   const history = { version: "baseline-history.v1", environment: "synthetic_demo", sourceNamespace: "fictional", sourceBatchId: "browser-history", sourceRevision: "v1",
     startMonth: "2026-01", endMonthExclusive: "2026-07", teamIds: ["pilot", "rest"], jobs: [
       { sourceJobId: "history-one", teamId: "pilot", month: "2026-01", extras: [{ sourceExtraId: "extra-one", sourceWorkId: "work-one", reportedNet: { pence: 12345, currency: "GBP" } }] },

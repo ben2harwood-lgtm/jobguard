@@ -12,15 +12,16 @@ function fixture(allowed = true) {
  const pool={connect:async()=>({query,release:vi.fn()})} as unknown as Pool;
  return {repo:new JobWorkStateRepository(pool),query,tenantId,jobId,actor,context:verifiedTenantContextForQueuedJob(tenantId)};
 }
-it("a work command verifies its owner then serializes capacity before its job lock",async()=>{
+it("a work command verifies its owner then takes only its live guard before checked SQL",async()=>{
  const f=fixture();
  await f.repo.command(f.context,f.jobId,f.actor,{version:"job-work-state-command.v1",commandId:randomUUID(),expectedRevision:0,action:"finish"});
  const calls=f.query.mock.calls,sql=calls.map(([text])=>text);
- const capacity=sql.indexOf("SELECT pg_advisory_xact_lock(hashtextextended($1,184))");
- expect(capacity).toBeGreaterThan(sql.findIndex(text=>text.includes("SELECT EXISTS")));
- expect(calls[capacity]).toEqual(["SELECT pg_advisory_xact_lock(hashtextextended($1,184))",[f.tenantId]]);
- expect(sql[capacity+1]).toBe("SELECT app.require_watchdog_live($1::uuid)");
- expect(sql[capacity+2]).toBe("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result");
+ const guard=sql.indexOf("SELECT app.require_watchdog_live($1::uuid)");
+ expect(guard).toBeGreaterThan(sql.findIndex(text=>text.includes("SELECT EXISTS")));
+ expect(calls[guard]).toEqual(["SELECT app.require_watchdog_live($1::uuid)",[f.jobId]]);
+ expect(sql.slice(0,guard).some(text=>/pg_advisory|FOR (?:UPDATE|SHARE)/u.test(text))).toBe(false);
+ expect(sql.some(text=>text.includes("pg_advisory"))).toBe(false);
+ expect(sql[guard+1]).toBe("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result");
  expect(sql.at(-1)).toBe("COMMIT");
 });
 it("a refused owner takes no capacity or job lock",async()=>{

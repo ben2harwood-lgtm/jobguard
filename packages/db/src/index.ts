@@ -133,8 +133,13 @@ export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
 export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
+export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
 export * from "./evidence-pack-v3-repository.js";
 
 export * from "./meter-today-repository.js";
 export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
+
+export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
+export * from "./small-builder-demo-repository.js";
