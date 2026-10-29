@@ -60,7 +60,7 @@ export async function authorizePracticeJob(pool: Pool, token: string | undefined
  * the original pool and non-practice repositories are unchanged.
  * This is an application trust boundary, not protection from stolen DB credentials.
  */
-export function practiceMaterialPool(pool: Pool, digest: string, isolation?: "serializable"): Pool {
+export function practiceMaterialPool(pool: Pool, digest: string): Pool {
  syntheticOnly();
  if(!/^[0-9a-f]{64}$/u.test(digest))throw new PracticeAccessError("UNAUTHENTICATED");
  return new Proxy(pool, {
@@ -70,7 +70,7 @@ export function practiceMaterialPool(pool: Pool, digest: string, isolation?: "se
     return new Proxy(client,{
      get(connection,property) {
       if(property==="query")return async(sql:string,values?:unknown[])=>{
-       const result=await connection.query(sql==="BEGIN" && isolation==="serializable" ? "BEGIN ISOLATION LEVEL SERIALIZABLE" : sql,values);
+       const result=await connection.query(sql,values);
        // Only withTenant's exact BEGIN installs the digest; other callers run unscoped and fail closed.
        if(sql==="BEGIN")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
        return result;

@@ -8,10 +8,10 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")
 const query = { version: "enterprise-dashboard-query.v1", from: "2026-01-01T00:00:00Z", until: "2027-01-01T00:00:00Z", dimension: "team", filters: {}, offset: 0, limit: 20 };
 const facts = { version: "enterprise-dashboard-facts.v1", cutoff: "2026-10-28T00:00:00Z", extras: [{ jobId: id(1), extraId: id(2), canonicalExtraId: id(2), capturedAt: "2026-10-01T00:00:00Z", capturedSourceId: id(3), capturedValueSourceId: null, capturedValue: null, approved: null, steps: [], dimensions: { region: null, team: id(4), operative: id(5), client: id(6), contract: id(7) } }], closeouts: [], billing: { status: "held", prerequisite: "ENT-6B" } };
 const row = { jobId: id(1), extraId: id(2), exportLineId: id(8), revisionId: id(9), runId: id(10), factId: id(11), inputHash: "a".repeat(64), lineId: "extra", billedNet: { numerator: "100", denominator: "1" }, creditedNet: { numerator: "0", denominator: "1" }, paidNet: { numerator: "1", denominator: "3" }, rejected: false, complete: false, allocations: [id(12)] };
-const signals = { ...enterpriseSignals({ version: "enterprise-signal-facts.v1", extras: [], orderLines: [], billedVariations: [], closeouts: [], outlierPolicy: null }), billing: { status: "held", prerequisite: "ENT-6B persisted billed-variation source" } };
+const signals = enterpriseSignals({ version: "enterprise-signal-facts.v1", extras: [], orderLines: [], billedVariations: [], closeouts: [], outlierPolicy: null });
 it("renders exact billing with source/revision/allocation drill-down, partial-run warning, unknown capture and advisory labels", () => {
   const html = renderToStaticMarkup(<DashboardView activity={{ report: projectEnterpriseDashboard(facts, query), signals }} billing={projectStoredDashboardBilling(facts, query, [row])}/>);
-  for (const text of ["1/3 pence", "Incomplete allocation runs", "unknown values 1", "Advisory only", "Unmatched-variation signal omitted: ENT-6 requires an export match for every billed extra.", id(1), id(2), id(8), id(9), id(10), id(11), id(12), "Methods and reproducibility"]) expect(html).toContain(text);
+  for (const text of ["1/3 pence", "Incomplete allocation runs", "unknown values 1", "Advisory only", "They do not prove a variation or fee entitlement.", id(1), id(2), id(8), id(9), id(10), id(11), id(12), "Methods and reproducibility"]) expect(html).toContain(text);
   expect(html).not.toMatch(/<button[^>]*>Approve/u); expect(html).not.toMatch(/<button[^>]*>Charge/u);
 });
 it("shows credited/reversed balances as zero from the stored read model, without reconstructing or adding stale figures", () => {
@@ -35,4 +35,14 @@ it("keeps the export format label separate from option text for exact accessible
   expect(html).toContain('<label for="baseline-output-format">Export format</label>');
   expect(html).toContain('<select id="baseline-output-format" name="outputFormat">');
   expect(html).not.toContain('<label>Export format <select');
+});
+
+it("displays the possible unmatched-variation advisory with fact/run citations and no commercial action", () => {
+  const advisory = enterpriseSignals({ version: "enterprise-signal-facts.v1", extras: [], orderLines: [], billedVariations: [{ jobId: id(1), sourceId: id(30), sourceIds: [id(31)], kind: "variation", extraId: null }], closeouts: [], outlierPolicy: null });
+  const report = projectEnterpriseDashboard(facts, query), billing = projectStoredDashboardBilling(facts, query, [row]);
+  const before = JSON.stringify([report, billing]);
+  const html = renderToStaticMarkup(<DashboardView activity={{ report, signals: advisory }} billing={billing}/>);
+  for (const text of ["Possible billed variation without a JobGuard extra", "Advisory only", id(30), id(31), "They do not prove a variation or fee entitlement."]) expect(html).toContain(text);
+  expect(html).not.toMatch(/<button[^>]*>(Approve|Charge|Price)/u);
+  expect(JSON.stringify([report, billing])).toBe(before);
 });

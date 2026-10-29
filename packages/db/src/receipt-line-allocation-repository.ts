@@ -31,6 +31,18 @@ const resultV1=z.object({version:z.literal("receipt-line-facts-result.v1"),envir
  input:recoveryReceiptFactsV1,lines:z.array(proposedLine).min(1).max(10000)}).strict();
 export type NeutralReceiptFactResult=z.infer<typeof resultV1>;
 type Selector=z.infer<typeof selectorV1>;
+/** Keep SSI local to this producer; the pinned practice-session bridge retains
+ * its existing BEGIN/digest contract. The adapter owns no session-wide state. */
+function serializableReceiptPool(pool:Pool):Pool{
+ return {connect:async()=>{
+  const client=await pool.connect();
+  return {
+   query:(sql:string,values?:unknown[])=>client.query(sql==="BEGIN"?"BEGIN ISOLATION LEVEL SERIALIZABLE":sql,values),
+   release:()=>client.release(),
+  };
+ }} as unknown as Pool;
+}
+
 function fail(code:ReceiptLineAllocationErrorCode):never{throw new ReceiptLineAllocationError(code);}
 /** Synthetic neutral receipt producer. SQL derives all money; SH-1 checks the
  * proposal again before the repository can return a review or saved result. */
@@ -77,7 +89,7 @@ export class RecoveryLineAllocationRepository {
   if(!command.success)fail("INVALID_RECEIPT_LINE_COMMAND");
   // SSI is selected at BEGIN, before the digest/tenant configuration queries.
   // Unknown transport/commit outcomes remain errors; retry the same command id.
-  return withTenant(practiceMaterialPool(this.pool,digest,"serializable"),context,async db=>{
+  return withTenant(practiceMaterialPool(serializableReceiptPool(this.pool),digest),context,async db=>{
    await this.scope(db,context,actor,digest,jobId);
    await db.$client.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
    const row=(await db.$client.query<{result:unknown}>("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,NULL::jsonb) result",[context.tenantId,jobId,digest,JSON.stringify(command.data)])).rows[0];

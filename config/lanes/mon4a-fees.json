@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon4a-fees"
       ],
-      "note": "RED MON-4A part 2: synthetic receipt statements over SV-6/0304; PostgreSQL and browser CI and independent Claude review required. Builds ahead on sv6-hookup; compare after dependency integration. Own lane file is implicitly permitted.",
+      "note": "RED MON-4A synthetic receipt fee statements; catch up with main (PR #383 allocator 0335) and SV-6 41a2de22 (0340), renumber own migration 0325 to 0341 with unchanged SQL. No new behaviour. PostgreSQL/browser CI and independent Claude review required. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
@@ -26,8 +26,8 @@
         "packages/core/src/payment-fee-statements.test.ts",
         "packages/core/src/payment-fee-statements.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0325_payment_fee_statements.md",
-        "packages/db/migrations/0325_payment_fee_statements.sql",
+        "packages/db/migration-notes/0341_payment_fee_statements.md",
+        "packages/db/migrations/0341_payment_fee_statements.sql",
         "packages/db/src/index.ts",
         "packages/db/src/payment-fee-repository.test.ts",
         "packages/db/src/payment-fee-repository.ts",

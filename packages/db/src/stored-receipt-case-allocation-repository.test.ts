@@ -46,8 +46,12 @@ describe("neutral no-amount producer boundary",()=>{
   try{
    await expect(new RecoveryLineAllocationRepository(pool as unknown as Pool,"synthetic_demo").command(verifiedTenantContextForQueuedJob(randomUUID()),{membershipId:randomUUID(),identityUserId:randomUUID()},"a".repeat(64),randomUUID(),raw)).rejects.toMatchObject({code:"INVALID_RECEIPT_LINE_RESULT"});
    expect(queries[0]?.sql).toBe("BEGIN ISOLATION LEVEL SERIALIZABLE");
+   expect(queries[1]?.sql).toBe("SELECT set_config('app.practice_material_digest', $1, true)");
+   expect(queries[1]?.values).toEqual(["a".repeat(64)]);
+   expect(queries[2]?.sql).toBe("SELECT set_config('app.tenant_id', $1, true)");
    expect(queries.find(q=>q.sql.includes("write_receipt_allocation_facts"))?.sql).toContain("NULL::jsonb");
    expect(queries.at(-1)?.sql).toBe("ROLLBACK");
+   expect(client.release).toHaveBeenCalledOnce();
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
  });
 });
