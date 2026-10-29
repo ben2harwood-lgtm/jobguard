@@ -17,7 +17,7 @@ let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
 beforeAll(async () => {
  dir = await mkdtemp(join(tmpdir(), "sbox-session-pg-")); const port=await freePort(57000,500);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await pg.initialise(); await pg.start(); admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+ await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo"); admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic", database: "jobguard_synthetic_demo"});
  // Upgrade from the immediately preceding supported schema with an unbound legacy job.
  for (const url of precedingMigrations) await admin.query(await (await import("node:fs/promises")).readFile(url,"utf8"));
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);
@@ -30,7 +30,7 @@ beforeAll(async () => {
  for(const url of precedingMigrations)await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);
  await migrate(admin);
  await admin.query("CREATE ROLE sbox_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO sbox_login");
- runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sbox_login",password:"synthetic"});
+ runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"sbox_login",password:"synthetic"});
  process.env.JOBGUARD_ENV="synthetic_demo";
 },60000);
 afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});

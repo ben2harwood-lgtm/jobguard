@@ -170,7 +170,7 @@ describe("ENT-3a governed path", () => {
 
 // Real PostgreSQL acceptance; NOT RUN in this socket-restricted sandbox.
 async function leaveLive(f: SiteFixture) {
- await withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.transition_job($1,$2,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2),'invoiced','issue_invoice',NULL,NULL,NULL,NULL)", [f.p.tenantId, f.jobId]));
+ await withTenant(c.admin, f.ctx, db => db.$client.query("SELECT app.transition_job($1,$2,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2),'invoiced','issue_invoice',NULL,NULL,NULL,NULL)", [f.p.tenantId, f.jobId]));
 }
 for (const when of ["before precheck", "between precheck and raiseExtra"] as const) it(when === "before precheck" ? "[R2] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written" : `[R2] not-live ${when} refuses and leaves no extra, audit or command row`, async () => {
  const f = await siteFixture(c), raw = input(f);

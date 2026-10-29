@@ -39,6 +39,19 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(replacement).not.toMatch(directWrite);
     expect(replacement).not.toContain("app.lock_audit_head()");
   });
+  it("LP-0 retains the sealed definition and call inventory for every rerouted writer", () => {
+    const catalogue = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
+    const identities = catalogue.recorded.routines.map((row: { identity: string }) => row.identity);
+    expect(new Set(identities).size).toBe(identities.length);
+    for (const name of Object.keys(lp4WriterSources)) {
+      const rows = catalogue.recorded.routines.filter((row: { identity: string }) => row.identity.startsWith(`function:${name}(`));
+      expect(rows, name).toHaveLength(1);
+      expect(rows[0].definitionSha256, name).toMatch(/^[a-f0-9]{64}$/);
+      expect(rows[0].staticCalls, name).toContain("app.lp4_seal_audit");
+      expect(rows[0].staticCalls, name).not.toContain("app.lock_audit_head");
+      expect(rows[0].staticWrites, name).not.toContain("app.audit_event");
+    }
+  });
   it("every audit-writing routine on main is replaced; only the private sealer writes directly", () => {
     const writers = [...main].filter(([, fn]) => directWrite.test(fn.sql)).map(([name]) => name);
     expect(writers).toHaveLength(19);
