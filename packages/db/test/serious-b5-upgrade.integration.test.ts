@@ -1004,6 +1004,22 @@ async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
   routines:union(routines,added,after.routines), relations:union(before.relations,relations,after.relations),
   policies:union(before.policies,policies,after.policies)};
 }
+// CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
+async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [["read_value_business", "digest text"], ["read_value_job", "j uuid, digest text"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r).toMatchObject({ prosecdef: true, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+   proconfig: r.proname === "read_value_job" ? ["search_path=pg_catalog, app", "TimeZone=UTC"] : ["search_path=pg_catalog, app"] });
+  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner", [r.proowner])).rows).toEqual([{ owner: "jobguard_migration" }]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
+
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -1031,6 +1047,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await jobDoorAdditions(expected));
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await lp3Additions(expected));
+ Object.assign(expected, await valueSourceAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
