@@ -11,7 +11,8 @@
         "packages/db/migration-notes/0415_connector_intake.md",
         "packages/db/test/connector-intake.integration.test.ts",
         "docs/operations/connector-data-flow.md",
-        "docs/contracts/connector-capabilities-v1.md"
+        "docs/contracts/connector-capabilities-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
       ]
     }
   }
