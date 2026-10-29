@@ -142,6 +142,7 @@ export function DemoChooser() {
         <input id="demo-resume" value={resumeId} onChange={event => setResumeId(event.target.value)} required />
         <button disabled={busy || !membership} type="submit">Resume</button></form>
       {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : "Not ready yet"}: {run.reason}</p>
+        {run.meterPreviewNote && <p role="status">{run.meterPreviewNote}</p>}
         {run.meterPreview && <MeterPreview preview={run.meterPreview} />}
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
         <p>Saved revision {run.revision}. No product journey completion is recorded.</p>

@@ -18,7 +18,7 @@ const storedDemoRunV1 = z.object({
  predecessorId:uuid.nullable(),successorId:uuid.nullable(),
 
 }).strict();
-export const smallBuilderDemoRunV1 = storedDemoRunV1.extend({meterPreview:demoMeterPreviewV1.optional()}).superRefine((run,ctx)=>{
+export const smallBuilderDemoRunV1 = storedDemoRunV1.extend({meterPreview:demoMeterPreviewV1.optional(),meterPreviewNote:z.literal("Preview unavailable.").optional()}).superRefine((run,ctx)=>{
  if(run.meterPreview && (run.scenario!=="meter" || run.meterPreview.runId!==run.runId))
   ctx.addIssue({code:"custom",message:"Meter preview must bind this meter run"});
 });

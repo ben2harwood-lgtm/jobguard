@@ -29,6 +29,12 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     expect(html).toContain("Not ready yet");expect(html).toContain("not issued statements or settled payments");
     expect(html).toContain("2026-04-02");
   });
+  it("accepts the saved meter run with a preview-unavailable note without changing lifecycle facts", () => {
+    const saved = { ...facts, scenario: "meter", meterPreviewNote: "Preview unavailable." };
+    expect(smallBuilderDemoRunV1.parse(saved)).toEqual(saved);
+    expect(smallBuilderDemoRunV1.safeParse({ ...saved, meterPreviewNote: "private error" }).success).toBe(false);
+    expect(smallBuilderDemoReportV1.safeParse({ version: "small-builder-demo-report.v1", snapshotId: id, facts: saved }).success).toBe(false);
+  });
   it("renders no saved company or hidden data before authentication", () => {
     const html = renderToStaticMarkup(<DemoChooser />);
     expect(html).toContain("Checking your signed-in business");

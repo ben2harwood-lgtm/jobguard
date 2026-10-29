@@ -51,6 +51,13 @@ and the upgrade preview changes plan on the eleventh day of the 30-day period.
 The 13–17 example detects the grace crossing on 2 April at 14 places, without
 waiting for the month-end calculation or changing the account track.
 
+If the reference producer fails after the owned run is committed, the response
+still returns that saved lifecycle run with `meterPreviewNote: "Preview unavailable."`
+and no preview. The chooser displays the note; the stored reason and immutable
+reports remain unchanged. A later authorized read can regenerate the preview.
+Producer error details are never returned. Database/authorization failures retain
+the existing typed error path.
+
 These figures can be inspected from `/demo-s` after saving/resuming a meter
 selection. Snapshot/report operations remain **strictly persisted lifecycle
 facts**, without this preview. Reset creates a new run namespace; replay of the

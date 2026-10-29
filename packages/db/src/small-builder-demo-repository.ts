@@ -28,7 +28,10 @@ export class SmallBuilderDemoRepository {
    // Derive fictional inputs only after the owned run is validated and committed,
    // so producer failures cannot roll back the saved lifecycle command.
    // Stored snapshots stay lifecycle-only: reference projections are never passed off as saved money facts.
-   if("scenario" in result && result.scenario==="meter") return {...result,meterPreview:previewDemoMeter({tenantId:context.tenantId,runId:result.runId})};
+   if("scenario" in result && result.scenario==="meter") {
+    try { return {...result,meterPreview:previewDemoMeter({tenantId:context.tenantId,runId:result.runId})}; }
+    catch { return {...result,meterPreviewNote:"Preview unavailable." as const}; }
+   }
    return result;
   } catch(error) {
    const message=error instanceof Error ? error.message : "";
