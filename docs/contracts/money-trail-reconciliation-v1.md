@@ -209,3 +209,97 @@ compensation execution remain unbuilt. Screens and exact plan V(...) IDs,
 labels and amounts remain parked, preserving the original plan unchanged.
 Real data/providers/charging/refunds/deployment/release remain outside scope.
 Exact-commit different-model verdict and separate acceptance are still owed.
+
+## M4-17 dark operational slice (29 October 2026)
+
+`financial-reconciliation.ts` adds a production-shaped **in-memory fake seam**,
+not a production money service. There is no HTTP route, provider SDK, credential,
+network endpoint, database write, durable schedule or deployment. Constructors
+and commands accept only `synthetic_demo`; the runner is disabled by default.
+Explicit fake enablement cannot enable a production environment. Every report
+remains `referenceOnly`, `authoritativeSourceVerification: false`,
+`productionEnabled: false`, `realExternalActions: 0`. No new dependency or
+migration is required (0458 is unused).
+
+The strict versioned snapshot binds every invoice, journal, provider observation
+and correction to one tenant/job. UUIDs and bounded integer pence are the only
+source fields; free text, PII, hidden/shadow data and provider credentials are
+rejected. A journal here is a supplied immutable posting observation, not a new
+balanced double-entry posting routine. Invoice net/VAT/gross are supplied facts
+whose arithmetic is checked; this code neither calculates nor approves tax.
+Customer invoice revisions are read as historical immutable records, including
+locked bills. This service cannot edit, supersede, issue or unlock those bills.
+Adjustment approval binds the exact current supplied invoice revision.
+
+Reports explain invoice net/VAT/gross and outstanding balance; gross charged;
+provider refunds/fees; net payout; bank observations; clearing and payout in
+transit; internal payment/refund/fee/payout observations; allocations and active
+reservations. Gross payment is never inferred from a net payout or bank credit.
+Payment children share the original source budget; bank observations share the
+payout budget. Refunds reduce the available allocation/reservation budget;
+release and allocation reversal facts restore it without editing originals.
+Signed discrepancies are retained. No fee entitlement, recovery principal or
+allocation is invented from these figures.
+
+The unexplained-balance queue identifies missing/duplicate journals, duplicate
+provider effects, late observations, missing/wrong/blocked predecessors, orphan
+payments, overpayments, source limits, reversal errors, allocation/reservation
+limits, outstanding clearing and payout awaiting bank. Invalid predecessor
+chains and ambiguous duplicate effects are excluded from provider totals.
+This fake models each payout as an explicit share of one payment/invoice; a
+real provider batch must be decomposed into source-bound shares by its future
+accepted adapter. A refund after a fully exhausted payout budget stays a
+reconciliation exception; the fake does not invent funding or cross-job netting.
+Late observations remain visible in the queue; no timing tolerance or automatic
+acknowledgement is inferred.
+
+`FakeFinancialReconciliationRunner` has one daily scheduling owner with a
+per-day receipt, plus on-demand runs over current observations. The router or a
+real scheduler is not installed. Command IDs bind exact canonical content;
+exact replays return the original result, changed-content replays refuse.
+Fake provider delivery accepts immutable observations, deduplicates exact
+same-ID replays and refuses changed content. Missing predecessors can arrive
+later, in either order; on-demand reconciliation recomputes the explanation.
+
+Adjustments append either a journal fact or an exact duplicate-resolution fact.
+The latter retains both original observations and names the duplicate and the
+one retained; it cannot waive different money or chain exclusions. Old facts
+remain in the source hash. A server authority interface must supply current
+membership, scope, permission and exact Decision verification (including expiry,
+revocation and actor/action/content binding); tests use deterministic fakes.
+There is no client `approved` flag or production implementation of that seam.
+An adjustment binds the whole source hash and invoice revision, refuses any
+new or expanded discrepancy, and appends one hash-linked audit receipt with
+only command/content hashes. Failed adjustments do not mutate state. Replay
+still checks current membership/permission. In-memory deduplication and audit
+are **not** durable idempotency or PostgreSQL proof.
+
+The existing reference comparison now selects its fee terms from the bound
+`policyVersion` registry, rather than embedding 1/10 in the reconciliation
+calculation. Only `reference_fee_policy_v3` is supported; unknown versions and
+caller-supplied rates refuse. Omission retains v1 reference compatibility by
+binding v3 explicitly during parsing. Normalized source/report hashes now include
+that policy binding; older reference hashes require recomputation, not reuse as
+new-policy receipts. No persisted run format is changed. The shared cumulative half-even kernel
+and its small-builder fixed-rate invariant remain authoritative for arithmetic.
+No contractor formula or historical v1 cap/credit policy is silently substituted.
+
+NOT built: authoritative invoice/journal/reservation/provider source adapters,
+durable scheduled runs/queue/adjustments, real membership/Decision verification,
+provider webhook authentication or live rails, cross-rail collection control,
+financial restore/replay certification, UI, external security review and the
+G4-S/G4-C evidence packs. The base source/authority holds above remain. This
+slice does not complete the whole M4-17 card or release either track.
+
+Local verification for this slice: 107 tests passed across
+`financial-reconciliation.test.ts`, `money-trail-reconciliation.test.ts` and
+`cumulative-fee.test.ts`, with at most two workers. Core TypeScript no-emit,
+core purity, money arithmetic and commercial boundary checks passed. The seven
+uncommitted paths pass the existing lane loader/path predicate. Full lane lint
+against origin/main fails because this build-ahead branch inherits unmerged
+M4-9-S/M4-10-S/M4-12-S/M4-17-S paths; the lane was not widened to claim those
+changes. The router must preserve dependency merge order and run current-main CI.
+Full workspace CI, PostgreSQL, browser suites and independent Claude RED review
+were not executed here. The pnpm launcher stalled before invoking checks and
+was interrupted; verification used the already-installed Vitest and TypeScript
+binaries from the repository's package scripts. No package was downloaded.

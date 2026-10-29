@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-recon": {
+      "branches": ["codex/sandbox/m4-17-recon"],
+      "note": "M4-17 RED production-shaped dark fake reconciliation on unmerged M4-17-S. No migration, live adapter, endpoint or deployment.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/financial-reconciliation.ts",
+        "packages/core/src/financial-reconciliation.test.ts",
+        "packages/core/src/money-trail-reconciliation.ts",
+        "packages/core/src/money-trail-reconciliation.test.ts",
+        "docs/contracts/money-trail-reconciliation-v1.md"
+      ]
+    }
+  }
+}

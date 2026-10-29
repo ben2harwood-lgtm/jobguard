@@ -7,6 +7,10 @@ import { feeCollectionStateV1 } from "./fee-collection.js";
 export class MoneyTrailError extends Error {
  constructor(readonly code: "INVALID_MONEY_TRAIL_REFERENCE" | "MONEY_TRAIL_FORBIDDEN" | "MONEY_TRAIL_SOURCE_UNAVAILABLE" = "INVALID_MONEY_TRAIL_REFERENCE") { super(code); this.name="MoneyTrailError"; }
 }
+// Reference policy registry: a version selects terms; callers cannot override its rate.
+const referenceFeePolicies = {
+ reference_fee_policy_v3: {version:"fee-rate.v1" as const,policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},
+};
 const key=z.string().min(1).max(200);
 const hash=z.string().regex(/^[a-f0-9]{64}$/u);
 export const moneyTrailFamilies=["customer","allocations","eligibility","fee_postings","fee_statements","fee_events","subscription"] as const;
@@ -22,7 +26,7 @@ const event=z.object({
 }).strict();
 /** Supplied reference data only. No network, authorization, source gathering or allocator. */
 export const moneyTrailReferenceV1=z.object({
- version:z.literal("money-trail-reference.v1"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),
+ version:z.literal("money-trail-reference.v1"),policyVersion:z.enum(["reference_fee_policy_v3"]).default("reference_fee_policy_v3"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),
  families:z.array(z.object({family:z.enum(moneyTrailFamilies),version:key,status:z.enum(["available","missing","read_failed","unsupported"])}).strict()).max(moneyTrailFamilies.length),
  facts:z.array(fact).max(10_000),events:z.array(event).max(10_000),
 }).strict();
@@ -87,7 +91,7 @@ function reconcile(input:ReturnType<typeof checked>){
  if(balance.numerator<0n)add("CUSTOMER_OVERPAYMENT","customer",refs(["invoice","credit","receipt","receipt_reversal"]),exactPence(0n),balance);
  const q=sum(["eligible_net"]),posted=sum(["fee_posting"]);
  // Reuse the accepted cumulative half-even kernel. J=0 computes the expected cumulative principal only.
- const expected=calculateCumulativeFee({version:"cumulative-fee.v1",rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},cumulativeQualifyingPrincipal:serializeExactPence(q),priorNetPostedPence:0,priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:null}).cumulativeFee;
+ const expected=calculateCumulativeFee({version:"cumulative-fee.v1",rate:referenceFeePolicies[input.policyVersion],cumulativeQualifyingPrincipal:serializeExactPence(q),priorNetPostedPence:0,priorPolicyVersion:input.policyVersion,compensatesDerivationId:null}).cumulativeFee;
  if(posted.numerator!==BigInt(expected.pence)*posted.denominator)add("FEE_POSTING_MISMATCH","success_fee",refs(["eligible_net","fee_posting"]),exactPence(BigInt(expected.pence)),posted);
  const byEffect=new Map<string,Event[]>();
  for(const e of input.events){const group=byEffect.get(e.effectKey)??[];group.push(e);byEffect.set(e.effectKey,group);}

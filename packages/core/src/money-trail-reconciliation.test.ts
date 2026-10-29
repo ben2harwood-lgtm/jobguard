@@ -114,3 +114,11 @@ it("schema money limits are enforced before arithmetic; duplicate families and n
 it("optional absent reference fields have one canonical encoding",()=>{
  const f=fixture();Object.assign(f.facts[0]!,{periodId:undefined});expect(reconcileMoneyTrailReference(f)).toEqual(reconcileMoneyTrailReference(fixture()));
 });
+
+
+it("M4-17 bound policy version selects the reference rate; unknown or caller-overridden policies refuse",()=>{
+ const f=fixture(); const legacy=reconcileMoneyTrailReference(f);
+ expect(reconcileMoneyTrailReference({...f,policyVersion:"reference_fee_policy_v3"})).toEqual(legacy);
+ expect(()=>reconcileMoneyTrailReference({...f,policyVersion:"unknown"})).toThrow("INVALID_MONEY_TRAIL_REFERENCE");
+ expect(()=>reconcileMoneyTrailReference({...f,policyVersion:"reference_fee_policy_v3",rate:{numerator:"1",denominator:"2"}})).toThrow("INVALID_MONEY_TRAIL_REFERENCE");
+});
