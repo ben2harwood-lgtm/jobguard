@@ -8,7 +8,7 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 // kind of watchdog command may claim it, before or after that command's own first replay. The previous schema is reproduced exactly:
 // run the real command, then remove the two bookkeeping tables migration 0096 added (identity, stored result), leaving only the
 // stores that existed before it. Where an id persisted is found by looking at every uuid column in the app schema, not by trusting
-// a list in the code under test. The commands are the registry's 17.
+// a list in the code under test. Includes the registry's actual CH-4 finish/cancel commands.
 const h = createWatchdogHarness("legacy-ids", 63000);
 const { cases, live, norm, CONFLICT } = h;
 beforeAll(() => h.boot(), 120000);
@@ -31,12 +31,16 @@ const previousSchema = async (id: string) => {
 };
 const identityRows = async (id: string) => Number((await h.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE command_id=$1", [id])).rows[0].n);
 
-// The commands whose id the previous schema persisted. The other four (order revision, document intake, goods receipt, finalisation)
+// Commands with persistent history when modern identity/result bookkeeping is absent, including CH-4 events/receipts.
+// The other four (order revision, document intake, goods receipt, finalisation)
 // had no command id before migration 0096, so there is nothing to protect.
 const PERSISTED_BEFORE = [
+  "job-work-state-repository.ts#finish", "job-work-state-repository.ts#cancelFinish",
   "discrepancy-repository.ts#evaluate", "discrepancy-repository.ts#review", "discrepancy-repository.ts#supersede", "evidence.ts#beginUpload",
   "inbox-relevance-repository.ts#dismiss", "inbox-relevance-repository.ts#seed", "proof-repository.ts#complete", "purchase-order-repository.ts#place",
   "readiness-repository.ts#advance", "readiness-repository.ts#record", "supplier-document-repository.ts#confirm", "supplier-match-repository.ts#correct", "supplier-match-repository.ts#create",
+  // SV-7A intake (routine-guarded): its command_receipt holds the id.
+  "job-source-repository.ts#intake",
 ];
 
 describe("previous-schema command ids cannot be claimed by another kind of command", () => {

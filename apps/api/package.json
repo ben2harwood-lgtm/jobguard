@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./identity": {"types":"./src/auth/index.ts","import":"./dist/auth/index.js"},
+    "./identity": {
+      "types": "./src/auth/index.ts",
+      "import": "./dist/auth/index.js"
+    },
     "./workspace": {
       "types": "./src/workspace/index.ts",
       "import": "./dist/workspace/index.js"
@@ -73,7 +76,9 @@
     "start:worker": "tsx src/worker.ts"
   },
   "dependencies": {
+    "@jobguard/ai": "workspace:*",
     "@jobguard/config": "workspace:*",
+    "@jobguard/core": "workspace:*",
     "@jobguard/db": "workspace:*",
     "@nestjs/common": "11.2.3",
     "@nestjs/core": "11.2.3",
@@ -81,12 +86,11 @@
     "@nestjs/swagger": "11.4.7",
     "@node-saml/node-saml": "5.1.0",
     "graphile-worker": "0.16.6",
+    "openid-client": "6.8.8",
     "pg": "8.16.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "zod": "3.25.67",
-    "@jobguard/ai": "workspace:*",
-    "@jobguard/core": "workspace:*"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@nestjs/cli": "11.0.24",
@@ -97,6 +101,6 @@
     "supertest": "7.1.1",
     "tsx": "4.20.3",
     "typescript": "5.8.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }

@@ -9,6 +9,7 @@
       "allow": [
         "docs/contracts/audit-v1.md",
         "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-downstream-effects-v1.md",
         "packages/db/migrations/0456_lp4_database_audit.sql",
         "packages/db/src/audit-checkpoint-handoff.test.ts",
         "packages/db/src/audit-checkpoint-handoff.ts",
@@ -35,6 +36,7 @@
         "packages/db/test/practice-worker-switch.integration.test.ts",
         "packages/db/test/purchase-order-audit.test.ts",
         "packages/db/test/recovery-case-join.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/site-extra-pricing.integration.test.ts",
         "packages/db/test/site-extra.integration.test.ts",

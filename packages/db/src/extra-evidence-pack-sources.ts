@@ -6,7 +6,7 @@ import type { TenantTransaction } from "./tenant-context.js";
 export class ExtraSourceError extends Error {
   constructor(readonly code: "EXTRA_SOURCE_NOT_FOUND" | "EXTRA_SOURCE_INVALID" | "EXTRA_PACK_MIGRATION_REQUIRED") { super(code); this.name = "ExtraSourceError"; }
 }
-export const extraSourceQueryV1 = z.object({ version: z.literal("extra-source-query.v1"), jobId: z.string().uuid(), extraId: z.string().uuid() }).strict();
+export const extraSourceQueryV1 = z.object({ version: z.literal("extra-source-query.v1"), jobId: z.guid({ error: "Invalid uuid" }), extraId: z.guid({ error: "Invalid uuid" }) }).strict();
 export function extraSourceQuery(raw: unknown) {
   const result = extraSourceQueryV1.safeParse(raw);
   if (!result.success) throw new ExtraSourceError("EXTRA_SOURCE_INVALID");

@@ -1,3 +1,5 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -39,7 +41,9 @@ async function seed(owner:Pool,run:Pool){
  const document=await delivery.preview(context,j,"practice-customer@example.invalid");await delivery.issue(context,j,{commandId:randomUUID(),documentId:document.documentId,contentHash:document.hash,recipient:"practice-customer@example.invalid"});await delivery.execute(context,j,document.documentId,"success");await withTenant(owner,context,async db=>{const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[T,j])).rows[0];await db.$client.query(`SELECT app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,2256000,$8,$9,'Fictional customer','email',clock_timestamp(),NULL)`,[T,randomUUID(),randomUUID(),j,document.documentId,document.document.documentVersion,document.hash,row.revision,M]);});
  await new PracticeActivationRepository(run).start(context,j,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(owner,j);
- const final=await new FinalAccountCommandService(run).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:j,actorMembershipId:M});const invoice=await new PracticeInvoiceRepository(run).issue(context,{jobId:j,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"});
+ // Setup: carry this fixture's already-issued session into the unchanged invoice call.
+ run=practiceMaterialPool(run,digest);
+ const final=await new FinalAccountCommandService(run).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:j,actorMembershipId:M});/* Before-0134 history retains old issue; prerequisites apply only at head. */await prepareInvoicePrerequisites(owner,run,T,j,M,final.id);const invoice=await new PracticeInvoiceRepository(run).issue(context,{jobId:j,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"});
  const c=await new RecoveryCaseRepository(run).command(context,j,{version:"recovery-case-command.v1",action:"open",expectedRevision:0,commandId:randomUUID(),caseType:"withheld_customer_payment",claimedNetPence:32000,counterparty:"Fictional customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoice.id]},actor);
  const packs=new EvidencePackRepository(run),pack=await packs.generate(context,c.id,{commandId:randomUUID()},messageActor.actorRef);await packs.approveAttachment(context,c.id,pack.id,{commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash},messageActor.actorRef);return {job:j,caseId:c.id,packId:pack.id,session:sessionId};
 }

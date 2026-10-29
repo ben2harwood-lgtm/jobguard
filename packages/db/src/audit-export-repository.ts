@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -6,9 +7,9 @@ import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.
 
 export const AUDIT_EXPORT_NOTICE = "The signature proves export integrity only";
 export const AUDIT_EXPORT_SANDBOX = "Practice sandbox — synthetic data; nothing is sent or charged";
-const uuid = z.string().uuid(), digest = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const sequence = z.number().int().positive().safe();
-const timestamp = z.string().datetime();
+const timestamp = utcDatetimeV1;
 export const auditExportRequestV1 = z.object({ version: z.literal("audit-export-request.v1"), commandId: uuid }).strict();
 const eventV1 = auditStoredInputSchema.extend({ tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest }).strict();
 const checkpointV1 = z.object({ tenantId: uuid, sequence, eventHash: digest, recordedAt: timestamp }).strict();
