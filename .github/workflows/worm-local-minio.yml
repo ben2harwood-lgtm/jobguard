@@ -4,6 +4,11 @@ on:
     paths:
       - 'packages/storage/**'
       - '.github/workflows/worm-local-minio.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/storage/**'
+      - '.github/workflows/worm-local-minio.yml'
   workflow_dispatch:
 permissions:
   contents: read
