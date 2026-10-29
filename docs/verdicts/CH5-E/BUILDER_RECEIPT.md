@@ -917,3 +917,49 @@ CI must execute both failing DB tests and both browser projects after router pus
 No tests weakened/skipped in source, no exceptions widened, no Git writes, provider
 calls or release. Router owns commit/push and CI; independent RED review remains
 separate from these builder checks.
+
+
+## Catch-up 3 — merge main after MON-4A / DEMO-J3, 29 October 2026
+
+CH-5 / ch5-e, PR #386, RED. Entry HEAD 2d385e05; router already started
+merging origin/main db2aff37b1207ba0c543c3e6bd32f2a26f8a9af8. Resolved the
+five working-file conflicts by keeping both registrations/catalogue entries:
+PaymentFeeController plus JobImportV3Controller; paymentFees plus imports in the
+workspace; both DB exports; all LP-0 privilege entries; all entitlement expected
+tables. SERIOUS-B5, tenancy and the incoming main lane files retain both sides.
+Kept main's existing meter-today export position. Updated only this lane's note.
+No routine re-created, no behavior or test assertions changed beyond the union.
+
+Read-only byte comparisons passed: all 148 SQL migrations on main are identical
+to origin/main; CH-5 0361/0362 are identical to entry HEAD; the pinned
+lp-downstream-effects-v1.md is identical to both entry HEAD and origin/main.
+Main's lane files are exact and every main LP-0 list entry is retained (the
+existing CH-5 adoption group extends its source/test arrays only).
+
+Actual local checks, installed binaries, at most two concurrent workers and no
+more than two named Vitest files per invocation:
+
+- API Vitest: src/job-import-v3.application.test.ts and
+  src/imported-shadow-source-adapter.test.ts --maxWorkers=1: 8 passed.
+- DB Vitest: test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts --maxWorkers=1: 45 passed.
+- DB Vitest: test/job-import-v3.integration.test.ts -t source-only
+  --maxWorkers=1: 12 passed, 3 database cases deselected locally.
+- DB Vitest: test/job-import-v3-upgrade.integration.test.ts
+  -t 'orders 0361 immediately' --maxWorkers=1: 1 passed, 1 database case deselected.
+- Core Vitest: src/imported-baseline-sources.test.ts and
+  src/job-import-v3.test.ts --maxWorkers=1: 20 passed.
+- API and DB: ./node_modules/.bin/tsc -p tsconfig.json --noEmit: passed.
+- node tools/lint.mjs: core purity passed; normal lane step reports incoming
+  main paths against pre-merge HEAD because the index is still unmerged.
+  Direct working-tree delta vs origin/main using the existing lanePathAllowed
+  and migrationOrderViolations helpers passed (54 paths before this receipt
+  append; all paths still within CH-5). Money-arithmetic and commercial-boundary
+  lint run separately: passed. Router must stage/finish the merge and rerun
+  normal lane lint; the lane allowlist was not widened to absorb main's files.
+- git diff --check: passed; no conflict markers remain in the working files.
+
+Ready for router staging/merge commit and push, not merge/release acceptance.
+The read-only Git index still has its five unmerged entries; no Git write was
+attempted. PostgreSQL, browser journeys, full required CI and exact-head RED
+review remain for router/CI. No real data, downloads, provider calls or release.
