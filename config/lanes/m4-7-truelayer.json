@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-7-truelayer": {
+      "branches": ["codex/sandbox/m4-7-truelayer"],
+      "note": "M4-7 RED DARK AIS seam, deterministic fake consent and ingestion only. Own lane file is implicitly permitted by the lane checker. No real bank access or financial authority.",
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/src/ais-adapter.ts",
+        "packages/db/src/ais-adapter.test.ts",
+        "packages/db/src/ais-repository.test.ts",
+        "packages/db/src/ais-repository.ts",
+        "packages/db/migrations/0427_dark_ais.sql",
+        "packages/db/test/ais.integration.test.ts"
+      ]
+    }
+  }
+}
