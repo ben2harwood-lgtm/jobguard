@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-10-invoices": {
+      "branches": [
+        "codex/sandbox/m4-10-invoices"
+      ],
+      "allow": [
+        "docs/contracts/platform-tax-invoice-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/platform-tax-invoice.ts",
+        "packages/core/src/platform-tax-invoice.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/platform-tax-invoice-fixture-repository.ts",
+        "packages/db/migrations/0430_platform_tax_invoice.sql",
+        "packages/db/migration-notes/0430_platform_tax_invoice.md",
+        "packages/db/test/platform-tax-invoice.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/platform-tax-invoice-upgrade.integration.test.ts"
+      ],
+      "note": "RED M4-10 dark platform invoice/profile/numbering and linked credit-note fixture slice. Production disabled; CI PostgreSQL and independent RED review required."
+    }
+  }
+}
