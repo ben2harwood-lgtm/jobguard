@@ -36,11 +36,33 @@ const gcd = (left: bigint, right: bigint): bigint => right === 0n ? left : gcd(r
 
 /** Suggestions have no authority. Reuse the existing review/approve writer for every confirmation. */
 export function suggestLandingAllocations(raw: unknown): LandingSuggestion[] {
-  const facts = landingSuggestionFactsV1.parse(raw);
+  const facts = landingSuggestionFactsV1.extend({
+    receipts: z.array(z.unknown()).max(10_000), cases: z.array(z.unknown()).max(10_000),
+  }).parse(raw);
+  const unavailablePayments = new Set<unknown>(), unavailableMovements = new Set<unknown>();
+  const unavailableCases = new Set<unknown>();
+  const receiptsParsed = facts.receipts.flatMap(row => {
+    const parsed = landingSuggestionFactsV1.shape.receipts.element.safeParse(row);
+    if (parsed.success) return [parsed.data];
+    // Keep rejected identities unavailable: a malformed duplicate must not make
+    // another representation of the same cash appear safe to allocate.
+    if (row && typeof row === "object") {
+      if ("paymentId" in row) unavailablePayments.add(row.paymentId);
+      if ("movementIdentity" in row) unavailableMovements.add(row.movementIdentity);
+    }
+    return [];
+  });
+  const casesParsed = facts.cases.flatMap(row => {
+    const parsed = landingSuggestionFactsV1.shape.cases.element.safeParse(row);
+    if (parsed.success) return [parsed.data];
+    if (row && typeof row === "object" && "caseId" in row) unavailableCases.add(row.caseId);
+    return [];
+  });
   if (!facts.hasFinalizedProof) return [];
   const sameScope = (row: { tenantId: string; jobId: string }) => row.tenantId === facts.tenantId && row.jobId === facts.jobId;
-  const receipts = facts.receipts.filter(sameScope);
-  const cases = facts.cases.filter(sameScope).filter((item, index, all) =>
+  const receipts = receiptsParsed.filter(sameScope).filter(row =>
+    !unavailablePayments.has(row.paymentId) && !unavailableMovements.has(row.movementIdentity));
+  const cases = casesParsed.filter(sameScope).filter(row => !unavailableCases.has(row.caseId)).filter((item, index, all) =>
     all.findIndex(other => other.caseId === item.caseId) === index
       && !all.some(other => other.caseId === item.caseId && JSON.stringify(other) !== JSON.stringify(item)));
   const proposals: LandingSuggestion[] = [];

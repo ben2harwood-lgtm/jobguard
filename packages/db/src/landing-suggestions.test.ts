@@ -31,6 +31,21 @@ describe("M4-8 stored-fact landing projection", () => {
       eligibleNetPence: 32000, taxPence: 6400, ambiguous: false, requiresHumanReview: true }]);
     expect(view.allocations).toEqual([]); expect(view.review).toBeNull(); expect(JSON.stringify(rows)).toBe(before);
   });
+  it.each([{ invoice_net_pence: "0" }, { counterparties: [""] }, { settled_at: "invalid" }])(
+    "keeps the workbench and valid suggestions when one receipt is unavailable: %j", change => {
+      const rows = snapshot(), expected = project(rows).suggestions;
+      rows.receipts.push({ ...rows.receipts[0]!, id: uuid(90), movement_identity: "unavailable", ...change });
+      const before = JSON.stringify(rows), view = project(rows);
+      expect(view.suggestions).toEqual(expected);
+      expect(view.receipts).toHaveLength(2);
+      expect(view.realExternalActions).toBe(0);
+      expect(JSON.stringify(rows)).toBe(before);
+    });
+  it("keeps the workbench when one case has malformed suggestion facts", () => {
+    const rows = snapshot(), expected = project(rows).suggestions;
+    rows.cases.push({ ...rows.cases[0]!, id: uuid(90), case_created_at: "invalid" });
+    expect(project(rows)).toMatchObject({ suggestions: expected, cases: [{ caseId }, { caseId: uuid(90) }] });
+  });
   it("does not import unmatched M1 mark-paid records as proof", () => {
     const rows = snapshot(); rows.receipts = [];
     expect(project(rows)).toMatchObject({ suggestions: [], grossMovementsPence: 0, eligibleNetPence: 0 });
@@ -41,7 +56,10 @@ describe("M4-8 stored-fact landing projection", () => {
       eligible_net_pence: "16000", tax_pence: "3200", evidence_id: evidence, evidence_hash: "b".repeat(64), movement_hash: "a".repeat(64) });
     rows.reversals.push({ allocation_id: uuid(9), gross_pence: "6000", eligible_net_pence: "5000", tax_pence: "1000" });
     rows.cases[0]!.landed = "11000";
-    expect(project(rows)).toMatchObject({ paused: true, suggestions: [{ grossPence: 25200, eligibleNetPence: 21000, taxPence: 4200 }] });
+    expect(project(rows)).toMatchObject({ paused: true, receipts: [{ availablePence: 25200 }],
+      suggestions: [{ grossPence: 25200, eligibleNetPence: 21000, taxPence: 4200 }] });
+    rows.receipts[0]!.duplicate_held = true;
+    expect(project(rows)).toMatchObject({ receipts: [{ availablePence: 0 }], suggestions: [] });
   });
   it("pauses immediately on chargeback, duplicate hold or credit before a human appends a reversal", () => {
     for (const kind of ["chargeback", "duplicate", "credit"]) {

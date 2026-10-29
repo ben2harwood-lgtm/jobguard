@@ -84,11 +84,26 @@ describe("M4-8 dark deterministic landing suggestions", () => {
     f.cases[0]!.evidencedRemainingNetPence = MAX_MONEY_PENCE;
     expect(suggestLandingAllocations(f)[0]).toMatchObject({ grossPence: MAX_MONEY_PENCE, eligibleNetPence: MAX_MONEY_PENCE, taxPence: 0 });
     for (const value of [-1, 0.5, MAX_MONEY_PENCE + 1, Infinity]) {
-      expect(() => suggestLandingAllocations({ ...f, receipts: [{ ...f.receipts[0], availablePence: value }] })).toThrow();
+      expect(suggestLandingAllocations({ ...f, receipts: [{ ...f.receipts[0], availablePence: value }] })).toEqual([]);
     }
     for (const extra of [{ environment: "production" }, { landed: true }, { hiddenSignalCount: 1 }]) {
       expect(() => suggestLandingAllocations({ ...f, ...extra })).toThrow();
     }
+  });
+  it.each([{ invoiceNetPence: 0 }, { counterparties: [""] }, { settledAt: "invalid" }])(
+    "skips malformed receipt facts %j while keeping unrelated proposals", change => {
+      const f = fixture(), expected = suggestLandingAllocations(f);
+      const bad = { ...f.receipts[0]!, paymentId: uuid(90), movementIdentity: "unavailable", ...change };
+      expect(suggestLandingAllocations({ ...f, receipts: [bad, ...f.receipts, null] })).toEqual(expected);
+      expect(suggestLandingAllocations({ ...f, receipts: [...f.receipts, { ...f.receipts[0]!, ...change }] })).toEqual([]);
+      expect(suggestLandingAllocations({ ...f, receipts: [...f.receipts,
+        { ...f.receipts[0]!, paymentId: uuid(91), ...change }] })).toEqual([]);
+    });
+  it("skips malformed case rows and keeps rejected case identities unavailable", () => {
+    const f = fixture(), expected = suggestLandingAllocations(f);
+    const bad = { ...f.cases[0]!, caseId: uuid(90), revision: 0 };
+    expect(suggestLandingAllocations({ ...f, cases: [bad, ...f.cases, null] })).toEqual(expected);
+    expect(suggestLandingAllocations({ ...f, cases: [...f.cases, { ...bad, caseId: f.cases[0]!.caseId }] })).toEqual([]);
   });
   it("retains sub-millisecond precision and handles timezone-equivalent dates", () => {
     const f = fixture(); f.cases[0]!.createdAt = "2026-10-29T11:00:00.000001+01:00";

@@ -69,6 +69,14 @@ const sum = (values: readonly number[]): number => integral(sumExactPence(values
 const subtract = (left: number, right: number): number => sum([left, -right]);
 const rowFraction = (row: Row, name: "gross" | "net") => parseExactPence({ numerator: String(row[`${name}_numerator`]), denominator: String(row[`${name}_denominator`]) });
 
+/** Remaining cash before projection-specific hold/reversal gates. */
+function remainingReceiptCash(snapshot: Snapshot, receipt: Row): number {
+  return subtract(Number(receipt.amount_pence), sum(snapshot.allocations
+    .filter(allocation => allocation.payment_id === receipt.id)
+    .map(allocation => subtract(Number(allocation.gross_pence), sum(snapshot.reversals
+      .filter(reversal => reversal.allocation_id === allocation.id).map(reversal => Number(reversal.gross_pence)))))));
+}
+
 /** Bounded synthetic PNG source envelope; the saved bytes remain the hash authority. */
 function pngRemittance(bytes: Buffer): string {
   if (bytes.length > 100_000 || !bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))) fail("ALLOCATION_SOURCE_REQUIRED");
@@ -196,7 +204,7 @@ export class RecoveryAllocationRepository {
         || reversalSources.length > 0,
       availableEvidence: snapshot.evidence.filter(row => !row.invalidated).map(row => ({ evidenceId: row.id, objectVersionId: row.object_version_id, evidenceHash: String(row.sha256).trim(), label: `${row.evidence_type} · ${row.id}` })),
       receipts: snapshot.receipts.map(row => ({ paymentId: row.id, invoiceId: row.invoice_id, grossPence: Number(row.amount_pence),
-        availablePence: row.reversed || row.duplicate_held ? 0 : subtract(Number(row.amount_pence), sum(allocations.filter(allocation => allocation.paymentId === row.id).map(allocation => subtract(allocation.grossPence, allocation.reversedPence)))),
+        availablePence: row.reversed || row.duplicate_held ? 0 : remainingReceiptCash(snapshot, row),
         movementId: row.movement_id, movementHash: String(row.movement_hash).trim(), reversed: row.reversed })),
       cases: snapshot.cases.map(row => ({ caseId: row.id, caseType: row.case_type, state: row.state, revision: Number(row.revision),
         claimedNetPence: Number(row.claim_pence), outstandingNetPence: subtract(Number(row.claim_pence), sum([Number(row.landed), Number(row.written_off)])) })),
@@ -219,9 +227,7 @@ export class RecoveryAllocationRepository {
         finalAccountRevisionId: row.final_account_revision_id, invoiceNetPence: Number(row.invoice_net_pence),
         invoiceGrossPence: Number(row.invoice_gross_pence), settledAt: row.settled_at,
         issuedOn: row.issued_date, paidOn: row.paid_date, counterparties: row.counterparties,
-        availablePence: Math.max(0, subtract(Number(row.amount_pence), sum(snapshot.allocations
-          .filter(allocation => allocation.payment_id === row.id).map(allocation => subtract(Number(allocation.gross_pence),
-            sum(snapshot.reversals.filter(reversal => reversal.allocation_id === allocation.id).map(reversal => Number(reversal.gross_pence)))))))),
+        availablePence: Math.max(0, remainingReceiptCash(snapshot, row)),
         held: row.duplicate_held, reversed: row.reversed,
       })),
       cases: snapshot.cases.map(row => ({ tenantId: row.tenant_id, jobId: row.job_id, caseId: row.id,
