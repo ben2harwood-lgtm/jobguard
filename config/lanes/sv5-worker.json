@@ -12,6 +12,7 @@
         "apps/api/src/sv5pre-worker-execution.integration.test.ts",
         "apps/api/src/sv5pre-worker-registration.test.ts",
         "apps/api/src/worker.ts",
+        "apps/web/e2e/SV-4.spec.ts",
         "apps/web/e2e/SV-5.spec.ts",
         "docs/contracts/final-check-v1.md",
         "docs/contracts/lp-0-effective-privileges-v1.json",
