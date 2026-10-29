@@ -1,3 +1,29 @@
+# CH-9 part 2 — CI repair try 2 (RED), 29 October 2026
+
+Fixed the branch-owned A8 upgrade failure from `ch9-p2-ci-traces-0855.txt`:
+the predecessor assertion still used 342 after the migration moved to 0358.
+Updated that bound to 358, the test label and the migration-note heading.
+All data/type/PK preservation, negative controls, grants and replay checks remain
+unchanged. No SQL, exceptions, comparator rules or known-main-failure files changed.
+No unmerged index entries were present.
+
+Actual local validation:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS.
+- Native Node import of the actual `MIGRATION_URLS` with assertions against
+  the test's filename, bound, insert and label: PASS (347 < 358).
+- All 145 tracked SQL migration files compared byte-for-byte with HEAD: PASS.
+- `git diff --check`: PASS.
+- The first registry-check invocation used `--import tsx`, unavailable at the
+  repository root; reran successfully with Node 24 native TypeScript support.
+
+The PostgreSQL integration suite cannot run in this sandbox and remains for CI.
+The two known main failures in downstream document generation/classification
+are explicitly outside this repair. Their generator and document are untouched.
+Ready for router commit/push, required CI and independent RED review.
+No Git-writing commands, downloads, live providers or real customer data used.
+
 # CH-9 part 2 — CI repair try 1 (RED), 29 October 2026
 
 This repair supersedes earlier migration-number and 0335 syntax-change statements.

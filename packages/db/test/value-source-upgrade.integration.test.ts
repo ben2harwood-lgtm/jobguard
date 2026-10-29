@@ -8,11 +8,11 @@ import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(false); }, 120_000);
 afterAll(async () => { await closeFinalCheckFixture(f); });
-it("A8: populated actual base -> only 0342 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
+it("A8: populated actual base -> only 0358 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0358_value_source_read.sql"));
  expect(own).toBeGreaterThan(0);
  const previous = MIGRATION_URLS[own - 1]!;
- expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(342);
+ expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(358);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, own)) {
   const name = url.pathname.split("/").at(-1)!;
