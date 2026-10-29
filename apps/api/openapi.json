@@ -288,11 +288,14 @@
         "operationId": "RecoveryAttributionController_post",
         "parameters": [],
         "responses": {
+          "409": {
+            "description": "Stored sources, expected revisions or command replay conflict"
+          },
           "503": {
-            "description": "Execution held pending accepted source, authorization and audit dependencies"
+            "description": "Review approval remains dependency-bound"
           }
         },
-        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
         "tags": [
           "synthetic recovery attribution"
         ]
