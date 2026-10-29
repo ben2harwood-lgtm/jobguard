@@ -754,3 +754,48 @@ inventory/core-export failures is respected; no additional repair was attempted
 for those checks. Earlier tests remain recorded as earlier evidence, not rerun
 or represented as this round's execution. New commit message:
 /tmp/mon8-upgrade-successors-20261029T101233Z-commit-msg.txt.
+
+## 29 October 2026 — PR #302 reviewer merge precondition
+
+MON-8 RED catch-up from reviewed c98b9fda. The router prepared a merge of
+origin/main f56a25201426b2b8afb60c2d904a94195d8ba1e9 (also MERGE_HEAD).
+Resolved the four remaining working-file conflicts, keeping both imports and
+both SERIOUS-B5 additive expectation helpers, main's parameterized job-work
+fixture, and the contractor successor expectation union including
+app.lp_job_insert_permit. LP-0 authority/grant-freeze and tenancy tests equal
+main; LP-0's privilege inventory retains main plus the existing six MON-8 keys.
+No new behavior, routine recreation or unrelated expectation repair.
+
+Used tools/migration-renumber.mjs's exported planRenumber with the reviewer’s
+reserved floor (numbers through 0364 unavailable) to move 0352 to 0365 and 0353
+to 0366, and rewrote full-stem references in branch-owned changed files. The
+CLI --write path cannot be used in this pending merge/read-only .git environment:
+it requires a clean tree and invokes git add. No git write was attempted.
+Both SQL files compare byte-for-byte with c98b9fda's originals. All 147 SQL
+migrations on current main compare byte-for-byte unchanged, and no older branch
+migration copies remain. The complete S9 fingerprint registry is unchanged from
+c98b9fda; all eight current source hashes match, including the three renewed
+ENT-4b pins. work_order_begin still equals latest main's 0356 definition plus
+only the existing MON-8 guard; 0366 now executes after it.
+
+Checks actually run:
+- Installed DB Vitest: --maxWorkers=2 src/plan-entitlement-service.test.ts
+  test/mon8-combined-migration.test.ts — 2 files, 12 tests passed.
+- Installed DB TypeScript: tsc -p tsconfig.json --noEmit — passed.
+- TypeScript transpile diagnostics on the four resolved conflict files — passed
+  (syntax check only, not database execution).
+- Deterministic SQL-byte, latest-main routine, S9 registry/hash, LP-0 and tenancy
+  comparisons described above — passed.
+- node --check tools/migration-renumber.mjs and git diff --check — passed.
+- Initial pnpm invocations stalled before runner output; interrupted both and
+  used installed packages/db/node_modules/.bin executables successfully without
+  downloading packages. An attempted tools/migration-renumber.test.mjs command
+  found no such test file; no helper-test pass is claimed.
+
+Ready for router staging of the four conflict resolutions and renames, completion
+of the pending main merge, commit/push, then GitHub CI. The read-only index still
+reports the four paths as unmerged; working files contain no conflict markers.
+PostgreSQL/browser suites were not run here, per sandbox constraints. No real
+customer data, providers, releases, git mutation or fresh RED review occurred.
+Prior RED evidence is c98b9fda; this receipt does not claim review of a new head.
+Commit message: /tmp/mon8-upgrade-successors-20261029T103153Z-commit-msg.txt.

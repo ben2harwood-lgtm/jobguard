@@ -38,7 +38,7 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
   // Earlier-schema upgrade fixtures execute current repository source. Supply the
   // pre-MON-8 gate only for that fixture baseline, before 0352 exists. 0352 replaces
   // these exact signatures; current-schema entitlement tests never use this shim.
-  const mon8FixtureSchema = (await admin.query("SELECT to_regprocedure('app.mon8_feature_decision(uuid,text,text)') present, NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0352_server_plan_entitlements.sql') legacy")).rows[0];
+  const mon8FixtureSchema = (await admin.query("SELECT to_regprocedure('app.mon8_feature_decision(uuid,text,text)') present, NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0365_server_plan_entitlements.sql') legacy")).rows[0];
   if (mon8FixtureSchema.legacy && !mon8FixtureSchema.present) {
     await admin.query(`CREATE FUNCTION app.mon8_feature_decision(actor uuid,feature text,purpose text DEFAULT 'new_work') RETURNS jsonb
       LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$

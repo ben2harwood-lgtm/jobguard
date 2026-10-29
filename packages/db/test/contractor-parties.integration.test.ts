@@ -159,7 +159,8 @@ it("DW6 contractor tenants keep CH-3a recognition and switch-live guarantees thr
   const second = (await jobs.create(context, ["job:update"], { title: "Fictional same site job" })).id;
   await f.jp.command(context, f.p.membershipId, second, { version: "job-parties-command.v1", commandId: randomUUID(), action: "bind", expectedJobRevision: 0, parties: { version: "job-parties.v1", customerRevisionId: f.customer.revisionId, siteRevisionId: f.site.revisionId } });
   expect((await f.jp.view(context, f.p.membershipId, f.job)).recognition.map(r => r.jobId).sort()).toEqual([f.job, second].sort());
-  await jobs.transition(context, ["job:update"], { jobId: f.job, expectedRevision: 1, to: "quoting", reason: "start_quote" });
+  // Ruling 103: owner-only quoting setup; the commands below still use runtime.
+  await new JobRepository(admin).transition(context, ["job:update"], { jobId: f.job, expectedRevision: 1, to: "quoting", reason: "start_quote" });
   const proposal = await jobs.reserveProposal(context, ["quote:edit"], { jobId: f.job, sourceHash: "a".repeat(64), sourceReference: "synthetic:ch3b" });
   const scope = await jobs.confirmProposal(context, ["quote:edit"], { jobId: f.job, proposalId: proposal.id, description: "Fictional repair", quantityDecimal: "1", unit: "item", unitPricePence: 10000, totalPence: 10000 });
   await new QuoteRepository(runtime).saveDraft(context, { jobId: f.job, draftId: randomUUID(), expectedRevision: 0, currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", effectiveAt: new Date(), actorRef: `membership:${f.p.membershipId}`, lines: [{ id: randomUUID(), scopeItemId: scope.scope_item_id, scopeRevisionId: scope.id, description: "Fictional repair", origin: "captured", included: true, exclusionReason: null, quantity: "1", unit: "item", unitRatePence: 10000, discountPercent: "0", taxTreatment: "standard_rate_20", rateProvenance: "entered", category: "repair", region: "London" }] });

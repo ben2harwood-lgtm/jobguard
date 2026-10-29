@@ -14,7 +14,7 @@ const effects = () => Promise.all([
 ].map(table => canonicalRows(h, table)));
 
 it("0353 retains OIDC replay records for successful and no-mapped-grant sign-ins", async () => {
-  expect((await h.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0353_contractor_feature_guards.sql'")).rowCount).toBe(1);
+  expect((await h.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0366_contractor_feature_guards.sql'")).rowCount).toBe(1);
   const f = await oidcFixture(h);
   for (const groups of [["admin"], []]) {
     f.issuer.claims.groups = groups;
