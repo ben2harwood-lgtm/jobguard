@@ -1112,9 +1112,11 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
   ["app", "customer_portal_audit", "t uuid, subject uuid, kind text"],
   ["app", "customer_portal_current", "g app.customer_portal_grant"],
   ["app", "customer_portal_issuer", "t uuid, digest text"],
+  ["app", "customer_variation_guard", ""],
   ["identity", "customer_portal_issue", "t uuid, builder_digest text, j uuid, c uuid, link_digest text, content text"],
   ["identity", "customer_portal_revoke", "t uuid, builder_digest text, j uuid, gid uuid"],
   ["identity", "customer_portal_use", "t uuid, j uuid, c uuid, digest text, session_digest text, operation text"],
+  ["identity", "customer_variation", "t uuid, j uuid, c uuid, digest text, command jsonb"],
  ];
  const routines = after.routines.filter(r => identities.some(([schema, name, args]) => r.nspname === schema && r.proname === name && r.args === args));
  expect(routines.map(r => [r.nspname,r.proname,r.args])).toEqual(identities);
@@ -1129,5 +1131,5 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  expect(policies.map(p => [p.tablename,p.policyname])).toEqual(tables.map(t => [t,"tenant_isolation"]));
  for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
  const additive = <T>(old: T[], added: T[], live: T[]): T[] => { const expected = [...old]; for(const r of added)expected.splice(live.indexOf(r),0,r);return expected; };
- return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
+ return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [], "app.variation_approval": (before.rows["app.variation_approval"] as Record<string, unknown>[]).map(row => ({...row, customer_session_id:null, customer_command_hash:null})) }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
 }

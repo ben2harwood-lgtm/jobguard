@@ -132,3 +132,4 @@ export * from "./small-builder-demo-lifecycle.js";
 export * from "./value-source-receipt.js";
 
 export * from "./customer-approval-method.js";
+export * from "./customer-variation-approval.js";
