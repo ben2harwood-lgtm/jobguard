@@ -28,7 +28,7 @@ export class FakeGoCardlessRail implements CollectionRail {
   private readonly accepted = new Map<string, { hash: string; objectId: string }>();
   private readonly mandateEvents = new Map<string, string>();
   crashAfterAcceptance = false;
-  constructor(private readonly testSigningSecret: string) {}
+  constructor(private readonly testSigningSecret: string, private readonly now: () => Date = () => new Date()) {}
   setup(raw: unknown) {
     const input = parse(setupV1, raw);
     const key = `${input.tenantId}:${input.commandId}`;
@@ -47,10 +47,20 @@ export class FakeGoCardlessRail implements CollectionRail {
     if (!mandate || mandate.tenantId !== tenantId) throw new FeeCollectionError("COLLECTION_REFUSED");
     return mandate.state;
   }
-  sign(body: string) { return createHmac("sha256", this.testSigningSecret).update(body).digest("hex"); }
+  // Fake protocol only: authenticate timestamp and exact raw body together.
+  sign(body: string, timestamp = Math.floor(this.now().getTime() / 1000)) {
+    return `t=${timestamp},v1=${this.signature(body, String(timestamp))}`;
+  }
+  private signature(body: string, timestamp: string) {
+    return createHmac("sha256", this.testSigningSecret).update(`${timestamp}.${body}`).digest("hex");
+  }
   private verifiedBatch(body: string, signature: string): unknown[] {
-    if (body.length > 65_536 || !/^[a-f0-9]{64}$/u.test(signature)
-      || !timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(this.sign(body), "hex"))) return invalid();
+    const signed = /^t=(0|[1-9][0-9]{0,11}),v1=([a-f0-9]{64})$/u.exec(signature);
+    if (body.length > 65_536 || !signed) return invalid();
+    const timestamp = signed[1]!, supplied = signed[2]!;
+    const age = this.now().getTime() / 1000 - Number(timestamp);
+    if (!Number.isFinite(age) || age > 300 || age < -60
+      || !timingSafeEqual(Buffer.from(supplied, "hex"), Buffer.from(this.signature(body, timestamp), "hex"))) return invalid();
     try { return z.object({ events: z.array(z.unknown()).min(1).max(100) }).strict().parse(JSON.parse(body)).events; }
     catch { return invalid(); }
   }

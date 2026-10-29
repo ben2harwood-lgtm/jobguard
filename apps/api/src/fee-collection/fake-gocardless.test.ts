@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeGoCardlessRail } from "./fake-gocardless.js";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import { fixture, ctx, id } from "./test-fixture.js";
-function ddFixture() {
+function ddFixture(now = () => new Date("2026-10-29T00:00:00Z")) {
   const f = fixture();
-  const rail = new FakeGoCardlessRail("made-up-test-secret");
+  const rail = new FakeGoCardlessRail("made-up-test-secret", now);
   const executor = new DarkFeeCollectionExecutor(f.store, [rail, f.rail], () => new Date("2026-10-29T00:00:00Z"));
   const setup = { version: "fake-dd-setup.v1", environment: "synthetic_demo", tenantId: ctx.tenantId,
     commandId: id(80), mandateId: id(81), approvedDecisionId: id(82), noticeApproved: true, providerDefaultsDisabled: true };
@@ -26,6 +26,54 @@ function ddFixture() {
   return { ...f, stripe: f.rail, rail, executor, setup, mandate, intent, event, batch, start };
 }
 describe("M4-15 dark Direct Debit", () => {
+  it.each([-300, 0, 60])("accepts a signed event at the replay-window boundary %s seconds", async offset => {
+    const f = ddFixture(); await f.start();
+    const body = JSON.stringify({ events: [f.event("confirmed")] });
+    const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000 + offset;
+    expect(await f.executor.webhook(ctx, "direct_debit", body, f.rail.sign(body, timestamp))).toEqual([{ code: "processed" }]);
+    expect(f.book().attempts[0]?.paymentState).toBe("confirmed");
+  });
+  it.each([-301, 61])("refuses an event outside the replay window (%s seconds) without mutation", async offset => {
+    const f = ddFixture(); await f.start(); const before = structuredClone(f.book());
+    const body = JSON.stringify({ events: [f.event("paid_out")] });
+    const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000 + offset;
+    await expect(f.executor.webhook(ctx, "direct_debit", body, f.rail.sign(body, timestamp))).rejects.toThrow("INVALID_WEBHOOK");
+    expect(f.book()).toEqual(before);
+  });
+  it("binds the timestamp to the signature and checks it before parsing", async () => {
+    const f = ddFixture(); await f.start(); const before = structuredClone(f.book());
+    const body = JSON.stringify({ events: [f.event("paid_out")] });
+    const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000;
+    const signed = f.rail.sign(body, timestamp);
+    await expect(f.executor.webhook(ctx, "direct_debit", body, signed.replace(`t=${timestamp}`, `t=${timestamp + 1}`))).rejects.toThrow("INVALID_WEBHOOK");
+    const parse = vi.spyOn(JSON, "parse");
+    try {
+      expect(() => f.rail.verifyWebhookBatch("not json", f.rail.sign("not json", timestamp - 301))).toThrow("INVALID_WEBHOOK");
+      expect(parse).not.toHaveBeenCalled();
+    } finally { parse.mockRestore(); }
+    expect(f.book()).toEqual(before);
+  });
+  it("dedupes a fresh replay and rejects the same signed event after the server clock advances", async () => {
+    let time = Date.parse("2026-10-29T00:00:00Z");
+    const f = ddFixture(() => new Date(time)); await f.start();
+    const body = JSON.stringify({ events: [f.event("paid_out")] }); const signed = f.rail.sign(body);
+    await f.executor.webhook(ctx, "direct_debit", body, signed);
+    const settled = structuredClone(f.book());
+    time += 300_000;
+    expect(await f.executor.webhook(ctx, "direct_debit", body, signed)).toEqual([{ code: "processed" }]);
+    expect(f.book()).toEqual(settled);
+    time += 1;
+    await expect(f.executor.webhook(ctx, "direct_debit", body, signed)).rejects.toThrow("INVALID_WEBHOOK");
+    expect(f.book()).toEqual(settled);
+  });
+  it("applies the same replay window to mandate events", () => {
+    let time = Date.parse("2026-10-29T00:00:00Z");
+    const f = ddFixture(() => new Date(time));
+    const body = JSON.stringify({ events: [{ version: "fake-dd-mandate-event.v1", environment: "synthetic_demo", account: "fake_jobguard_dd", tenantId: ctx.tenantId, mandateId: id(81), eventId: id(84), state: "cancelled" }] });
+    const signed = f.rail.sign(body); time += 300_001;
+    expect(() => f.rail.ingestMandates(body, signed)).toThrow("INVALID_WEBHOOK");
+    expect(f.rail.mandateStatus(ctx.tenantId, id(81))).toBe("active");
+  });
   it("keeps request, submission, confirmation and payout distinct; ignores stale progress and duplicate objects", async () => {
     const f = ddFixture(); await f.start();
     expect(f.book().attempts[0]?.state).toBe("provider_accepted");
