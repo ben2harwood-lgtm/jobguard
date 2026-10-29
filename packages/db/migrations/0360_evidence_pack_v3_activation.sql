@@ -168,7 +168,7 @@ BEGIN
     'Evidence integrity does not establish that work occurred or that a debt is valid.')
    OR envelope->>'mediaType' IS DISTINCT FROM 'text/plain'
    OR envelope->'manifest'->>'version' IS DISTINCT FROM 'evidence-pack-manifest.v3'
-   OR envelope->'manifest'-ARRAY['version','binding','tenantId','jobId','caseId','lifecycle','sections','entries','trustLimitations']<>'{}'::jsonb
+   OR (envelope->'manifest')-ARRAY['version','binding','tenantId','jobId','caseId','lifecycle','sections','entries','trustLimitations']<>'{}'::jsonb
    OR envelope-ARRAY['version','mediaType','banner','manifest','sources']<>'{}'::jsonb
    OR mh IS DISTINCT FROM encode(sha256(convert_to(app.canonical_evidence_pack_v3(envelope->'manifest'),'UTF8')),'hex')
    OR artifact IS DISTINCT FROM app.canonical_evidence_pack_v3(envelope)

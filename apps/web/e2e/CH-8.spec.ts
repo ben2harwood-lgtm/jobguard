@@ -29,7 +29,15 @@ test("shadow-30000: build and approve a settled catch pack; UI, download and off
   test.setTimeout(240_000);
   const { Pool } = await import("pg");
   const { withSyntheticShadow } = await import("./helpers/final-account-lock-journey.js");
-  const { shadowPackCatch } = await import("../../../packages/db/test/evidence-pack-v3-catch-fixture.js");
+  // Let the repository's existing TS loader own the complete ESM fixture graph;
+  // Playwright's mixed CJS/ESM transform otherwise misloads db/src/audit.ts.
+  const { createRequire } = await import("node:module");
+  const { pathToFileURL } = await import("node:url");
+  const { join } = await import("node:path");
+  const requireApi = createRequire(join(__dirname, "../../api/package.json"));
+  const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
+  const { tsImport } = await nativeImport(pathToFileURL(requireApi.resolve("tsx/esm/api")).href);
+  const { shadowPackCatch } = await tsImport(require.resolve("../../../packages/db/test/evidence-pack-v3-catch-fixture.ts"), pathToFileURL(__filename).href);
   const { verifyStandalonePackV3 } = await import("@jobguard/core");
   const { spawnSync } = await import("node:child_process");
   const { writeFile } = await import("node:fs/promises");

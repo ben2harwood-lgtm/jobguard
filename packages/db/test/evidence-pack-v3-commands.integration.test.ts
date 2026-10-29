@@ -44,6 +44,6 @@ it("another command family cannot reuse a queued pack command ID", async () => {
   const repo = new EvidencePackV3Repository(f.runtime), before = await repo.read(f.auth.context, f.caseId, f.auth.digest), commandId = randomUUID();
   await asFixtureTenant(f.admin, f.source.tenantId, db => db.query(`INSERT INTO app.command_receipt
     (tenant_id,command_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-    VALUES($1,$2,'other.family',$2,$3,'succeeded','{}',$4,clock_timestamp())`, [f.source.tenantId, commandId, "a".repeat(64), f.auth.membershipId]));
+    VALUES($1,$2::uuid,'other.family',$2::text,$3,'succeeded','{}',$4,clock_timestamp())`, [f.source.tenantId, commandId, "a".repeat(64), f.auth.membershipId]));
   await expect(repo.request(f.auth.context, f.caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision })).rejects.toThrow("EVIDENCE_PACK_COMMAND_CONFLICT");
 });

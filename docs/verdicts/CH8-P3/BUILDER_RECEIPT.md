@@ -163,3 +163,50 @@ PostgreSQL cannot start in this sandbox; DB suites, browser execution and full r
 pending, followed by an independent Claude RED review against the resulting exact head. No commit,
 push, PR, merge, provider action or release was performed here. No new simplification review was
 added during this catch-up; the initial LATER / SIMPLICITY entry remains above.
+
+## PR #408 CI repair — try 2 of 3, 29 October 2026 08:55 run
+
+Read the supplied ch8-p3-ci-traces-0855.txt. Started at 9c102a87 with a clean tree and no
+unmerged index entries. Left the two identified main LP inventory failures and their files
+untouched. Fixed each branch-owned cause without removing assertions or widening exceptions:
+
+- Post-lock source/settlement and same-run disclosure tests, plus the tampered-artifact command
+  test, hit PostgreSQL 22P02 (`Token "manifest" is invalid`). In 0360, subtraction bound before
+  JSON extraction in the allowed-manifest-key check. Parenthesized the extraction before array
+  subtraction. This intentionally changes this branch's new SQL bytes; all other SQL is unchanged.
+  Existing success, tamper, replay and disclosure assertions remain. No CASE occurs inside a
+  PL/pgSQL IF condition in this migration; the CASE expressions are in SELECT statements.
+- Cross-command-family replay test hit 42P08 because parameter $2 was inferred as both UUID and
+  varchar. Explicit UUID and text casts retain the exact same command ID in both columns.
+- SB-02 hit OBSERVATION_JOB_UNAVAILABLE because its ordinary fixture had already advanced to
+  invoiced and its runtime observation pool lacked the session digest. The test now creates a
+  fresh session-bound job through existing quote/activation writers, opens a supplier case using
+  the existing closed synthetic source catalogue, and uses practiceMaterialPool for the actual
+  reader. It still runs the real must-surface callback/worker and compares completed bytes,
+  revisions and runtime statement shapes with zero versus 100 hidden signals on that same job.
+  It does not alter job state directly or relax the production reader's live-job requirement.
+- Both browser projects failed before fixture setup on audit.ts's ESM named export. The test
+  now uses the API package's existing tsx scoped ESM loader for the entire source fixture graph,
+  avoiding Playwright's mixed module transformation. No dependency or application code is added.
+
+Local validation actually executed (at most two concurrent workers):
+
+- Installed Vitest 4.1.12, maxWorkers=1: API v3 application/controller/worker, 25 tests passed.
+- Web tsc -p apps/web/tsconfig.json --noEmit passed after the loader change.
+- TypeScript createProgram using the DB package options, noEmit and repository rootDir:
+  both changed integration tests and their imported graph passed full typechecking.
+- Core tsc -p packages/core/tsconfig.json passed to refresh stale local package exports.
+- Isolated /tmp Playwright test loaded the actual shadowPackCatch fixture graph via the same
+  scoped loader under a Playwright worker: 1 passed. It does not invoke the fixture or connect
+  to PostgreSQL. Initial smoke attempts exposed temporary harness path/extension issues and a
+  require-only resolution of an import-only package export; corrected the loader resolution to
+  the existing sibling API package.json pattern, then refreshed stale core output and passed.
+- git diff --check passed and git ls-files -u was empty. All edited paths remain in this lane.
+  A quick CASE regex overmatched END IF followed by SELECT CASE; source inspection confirms no
+  CASE in an IF condition. No claim of SQL execution is made from that source inspection.
+
+PostgreSQL and full browser execution remain CI-only in this sandbox. CI must rerun the failed
+commands, SB-02, post-lock/disclosure suites and both CH-8 browser projects, plus required checks;
+this RED piece still needs the loop owner's independent Claude review against the exact head.
+No tests were skipped/weakened, no exception/lane was widened, no Git-writing command was run,
+and no commit/push/merge/release/provider action was performed.

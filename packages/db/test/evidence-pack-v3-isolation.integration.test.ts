@@ -15,18 +15,36 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
   const { detectShadowObservations } = await import("@jobguard/core");
   await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  // Must-surface reads require a live, session-scoped small-builder job. The
+  // ordinary pack fixture above has already reached invoiced, so create a live
+  // job through the existing quote/activation writers rather than alter its state.
+  const { prepareActivationFixtureV3 } = await import("../src/demo-seed.js");
+  const { PracticeActivationRepository } = await import("../src/activation-repository.js");
+  const { practiceMaterialPool } = await import("../src/practice-session.js");
+  const { RecoveryCaseRepository } = await import("../src/recovery-case-repository.js");
+  const { recoverySourceCatalogueV1 } = await import("@jobguard/core");
+  const scoped = practiceMaterialPool(f.runtime, f.auth.digest);
+  const jobId = await prepareActivationFixtureV3(f.admin, f.auth.context, "CH8 pre-lock isolation", 100000, scoped, 100000, f.auth.digest);
+  await new PracticeActivationRepository(scoped).start(f.auth.context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
+  const opened = await new RecoveryCaseRepository(scoped).command(f.auth.context, jobId, {
+    version: "recovery-case-command.v1", action: "open", commandId: randomUUID(),
+    caseType: "merchant_overcharge", claimedNetPence: 32000, counterparty: "Fictional supplier",
+    book: "supplier_cost", sourceType: "supplier_documents",
+    sourceRefs: [recoverySourceCatalogueV1.supplier_documents[0]!.ref], expectedRevision: 0,
+  }, { membershipId: f.auth.membershipId, identityUserId: f.auth.identityUserId });
+  const caseId = opened.id;
   const statements: Array<{ sql: string; values: unknown[] | undefined }> = [];
   const runtime = new EvidencePackV3Repository(recordingPool(f.runtime, statements)), worker = new EvidencePackV3WorkerRepository(f.shadow);
-  const reader = new ShadowObservationReader(f.runtime, new FixtureObservationSources([])), detector = new ShadowDetectionRepository(f.shadow);
+  const reader = new ShadowObservationReader(scoped, new FixtureObservationSources([])), detector = new ShadowDetectionRepository(f.shadow);
   const run = async () => {
     statements.length = 0;
-    const before = await runtime.read(f.auth.context, f.caseId, f.auth.digest), commandId = randomUUID();
-    await runtime.request(f.auth.context, f.caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
+    const before = await runtime.read(f.auth.context, caseId, f.auth.digest), commandId = randomUUID();
+    await runtime.request(f.auth.context, caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
     await executeEvidencePackV3(f.auth.context, { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
       const { observations, captures } = await reader.read(f.auth.context, { version: "shadow-observation-read.v1", jobId });
       await detector.persist(f.auth.context, { version: "shadow-detection-batch.v1", jobId, observations, captures, proposals: detectShadowObservations(observations, captures, new Date().toISOString()) });
     }, "synthetic_demo");
-    const pack = (await runtime.read(f.auth.context, f.caseId, f.auth.digest)).packs.find(p => p.id === commandId)!;
+    const pack = (await runtime.read(f.auth.context, caseId, f.auth.digest)).packs.find(p => p.id === commandId)!;
     expect(pack.manifest.lifecycle).toEqual({ state: "pre_lock" });
     expect(pack.manifest.sections).toEqual([]);
     expect(pack.sources.every(s => s.kind === "ordinary")).toBe(true);
@@ -36,7 +54,7 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
     for (let n = 0; n < 100; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
       (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
-      VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, f.source.jobId, randomUUID()]);
+      VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
   });
   expect(await run()).toEqual(zero);
   // Structural timing check: the public read/request and ordinary material branch

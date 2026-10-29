@@ -15,3 +15,9 @@ source and attempt records contain IDs/hashes only; the run binding omits classi
 catch-origin records are limited to this case, preventing another catch's signal ID from leaking.
 To stop creation, disable the v3 entry points/worker and forward-fix these routines to refuse again;
 retain every historical request, artifact and approval. No destructive rollback.
+
+CI repair try 2: parenthesize `(envelope->'manifest')` before subtracting the allowed-key
+array. PostgreSQL gives subtraction higher precedence than JSON extraction; without the
+parentheses it tries to parse the text `manifest` as JSON. This changes this unmerged
+migration's SQL bytes to repair execution, preserving the exact allowed-key validation.
+No migration already on main is edited. No CASE is inside an IF condition in this migration.
