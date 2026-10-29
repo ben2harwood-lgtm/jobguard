@@ -83,7 +83,7 @@ Downstream effect of each exception (why none is called harmless):
 | Group | Capability | Entries | Target |
 |---|---|---:|---|
 | `a-party-and-simulation-writes` | Runtime INSERT on customer, site and practice or sandbox simulation tables | 13 | rebind_at_card (LP-11): working data inside the caller tenant, rebound with the tenant at LP-11 |
-| `a-exec-activation-v3` | Runtime EXECUTE on switch_job_live_v3 | 1 | rebind_at_card (LP-3, LP-6c): kept; actor and tenant compared with the binding at LP-6c |
+| `a-exec-activation-v3` | Runtime EXECUTE on switch_job_live_v3 | 5 | rebind_at_card (LP-3, LP-6c): kept; actor and tenant compared with the binding at LP-6c |
 | `a-exec-checked-billing-money` | Runtime EXECUTE on checked invoice, credit, receipt, reversal and journal routines | 8 | rebind_at_card (LP-6c, LP-8a): kept as checked routines; actor and tenant bound at LP-6c; legacy signatures withdrawn at LP-8a |
 | `a-exec-final-account` | Runtime EXECUTE on final-account lock, disposition, terms and advance routines | 8 | rebind_at_card (LP-6c, LP-8a): kept; LP-8a checks advance_final_account_draft; actor and tenant bound at LP-6c |
 | `a-exec-recovery-money` | Runtime EXECUTE on recovery terms, payer mark, fee, landing and allocation routines | 5 | rebind_at_card (LP-6c, LP-8a): kept as checked routines; actor and tenant bound at LP-6c; no fee rule changed |
