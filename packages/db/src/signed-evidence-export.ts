@@ -110,7 +110,7 @@ export function verifySignedEvidenceExport(raw: unknown, rawContext: unknown) {
     }
     if (!signerTrusted) gaps.push("Signer is untrusted, revoked, outside its validity window, or future-dated.");
     if (keyExpired) gaps.push("Key is expired at verification time; historical signature remains cryptographically valid, but signing time is unproven.");
-    return { version: "signed-evidence-verification.v1", integrityValid: true, signerTrusted,
+    return { version: "signed-evidence-verification.v1", integrityValid: signerTrusted, signerTrusted,
       complete: false, syntheticIntegrityComplete: signerTrusted && report.contentMatches,
       tenantId: p.tenantId, exportId: p.exportId, signerId: p.signerId, keyVersion: p.keyVersion,
       signerFingerprint: p.signerFingerprint, algorithm: k.algorithm, keyExpired,

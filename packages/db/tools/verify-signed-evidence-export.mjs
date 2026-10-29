@@ -5,7 +5,7 @@ import { verifySignedEvidenceExport } from "../dist/signed-evidence-export.js";
 const args = process.argv.slice(2);
 const usage = "Usage: node packages/db/tools/verify-signed-evidence-export.mjs <bundle.json> <independent-context.json>";
 if (args.length === 1 && args[0] === "--help") {
-  console.log(`${usage}\nContext supplies expected tenant/job/case/export, verification time and independently trusted public key versions. Exit 0: synthetic integrity verified; 1: verification failed; 2: unreadable input. Timestamp trust remains unverified; no commercial truth is established.`);
+  console.log(`${usage}\nContext supplies expected tenant/job/case/export, verification time and independently trusted public key versions. Exit 0: integrity checked against the independently trusted fixture key and expected scope; 1: verification failed; 2: unreadable input. Timestamp trust remains unverified; no commercial truth is established.`);
 } else if (args.length !== 2 || args.some(a => a.startsWith("--"))) {
   console.error(usage); process.exitCode = 2;
 } else {

@@ -56,11 +56,12 @@ describe("M5-9 synthetic signed evidence manifests", () => {
   it("does not trust bundled keys, a different tenant registry, replaced material, or revoked keys", () => {
     const { bundle, context } = fixture();
     for (const trustedKeys of [[], context.trustedKeys.map(k => ({ ...k, tenantId: randomUUID() })),
-      context.trustedKeys.map(k => ({ ...k, revoked: true }))]) {
-      expect(verifySignedEvidenceExport(bundle, { ...context, trustedKeys })).toMatchObject({ signerTrusted: false, syntheticIntegrityComplete: false });
+      context.trustedKeys.map(k => ({ ...k, revoked: true })),
+      context.trustedKeys.map(k => ({ ...k, notBefore: expiry, expiresAt: "2028-01-01T00:00:00.000Z" }))]) {
+      expect(verifySignedEvidenceExport(bundle, { ...context, trustedKeys })).toMatchObject({ integrityValid: false, signerTrusted: false, syntheticIntegrityComplete: false });
     }
     const other = fixture();
-    expect(verifySignedEvidenceExport(bundle, { ...context, trustedKeys: other.context.trustedKeys }).signerTrusted).toBe(false);
+    expect(verifySignedEvidenceExport(bundle, { ...context, trustedKeys: other.context.trustedKeys })).toMatchObject({ integrityValid: false, signerTrusted: false });
     expect(() => verifySignedEvidenceExport(bundle, { ...context, trustedKeys: [...context.trustedKeys, ...context.trustedKeys] })).toThrow();
   });
   it.each(["tenantId", "jobId", "caseId", "exportId"])("rejects replay under a different expected %s", field => {
@@ -92,7 +93,7 @@ describe("M5-9 synthetic signed evidence manifests", () => {
   it("reports historical expiry and rejects future or outside-window times", () => {
     const { signer, bundle, context, pack, audit } = fixture();
     expect(verifySignedEvidenceExport(bundle, { ...context, checkedAt: expiry })).toMatchObject({ keyExpired: true, signerTrusted: true, complete: false });
-    expect(verifySignedEvidenceExport(bundle, { ...context, checkedAt: before }).signerTrusted).toBe(false);
+    expect(verifySignedEvidenceExport(bundle, { ...context, checkedAt: before })).toMatchObject({ integrityValid: false, signerTrusted: false });
     for (const time of ["2025-01-01T00:00:00.000Z", expiry, "bad", "2026-10-29T08:00:00Z", "2026-10-29T08:00:00.0000Z"])
       expect(() => signer.sign(pack.artifactText, audit, time)).toThrow();
   });
@@ -123,7 +124,15 @@ describe("M5-9 synthetic signed evidence manifests", () => {
     const cli = fileURLToPath(new URL("../tools/verify-signed-evidence-export.mjs", import.meta.url));
     const result = spawnSync(process.execPath, [cli, join(dir, "bundle.json"), join(dir, "context.json")], { encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ complete: false, syntheticIntegrityComplete: true, keyVersion: "v1" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ integrityValid: true, signerTrusted: true, complete: false, syntheticIntegrityComplete: true, keyVersion: "v1" });
+    await writeFile(join(dir, "context.json"), JSON.stringify({ ...context, trustedKeys: [] }));
+    const untrusted = spawnSync(process.execPath, [cli, join(dir, "bundle.json"), join(dir, "context.json")], { encoding: "utf8" });
+    expect(untrusted.status, untrusted.stderr).toBe(1);
+    expect(JSON.parse(untrusted.stdout)).toMatchObject({ integrityValid: false, signerTrusted: false, complete: false, syntheticIntegrityComplete: false });
+    const help = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
+    expect(help.status, help.stderr).toBe(0);
+    expect(help.stdout).toContain("integrity checked against the independently trusted fixture key and expected scope");
+    expect(help.stdout).not.toContain("synthetic integrity verified");
     expect(spawnSync(process.execPath, [cli], { encoding: "utf8" }).status).toBe(2);
   });
 });
