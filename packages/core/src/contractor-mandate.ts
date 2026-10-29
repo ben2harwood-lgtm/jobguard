@@ -3,6 +3,8 @@ import { MAX_MONEY_PENCE } from "./money.js";
 import { instantV1 } from "./receipt-allocation.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 
+// Synthetic reference ceiling only; production retry policy still requires approval.
+const MAX_REFERENCE_ATTEMPTS = 3;
 const uuid = z.guid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const pence = z.number().int().positive().max(MAX_MONEY_PENCE);
@@ -84,7 +86,7 @@ export function applyContractorMandateReference(rawState: unknown, rawEvent: unk
     if (e.kind === "start") {
       if (c.role !== "worker" || g.binding.track === "pilot_no_charge" || a.artifact.pilotExempt || (a.artifact.action === "collect" && g.status !== "active") || !sameBinding(g.binding, a.artifact.binding) ||
         !sameArtifact(a.artifact, a.approval.artifact) || (a.outcome !== "queued" && a.outcome !== "failed") ||
-        compareServerInstants(input.now, a.artifact.expiresAt) >= 0) deny();
+        a.attempts >= MAX_REFERENCE_ATTEMPTS || compareServerInstants(input.now, a.artifact.expiresAt) >= 0) deny();
       a.outcome = "in_flight"; a.attempts += 1;
     } else {
       if (c.role !== "provider" || (e.kind === "outcome" ? a.outcome !== "in_flight" : a.outcome !== "outcome_unknown")) deny();
@@ -99,7 +101,7 @@ export function applyContractorMandateReference(rawState: unknown, rawEvent: unk
 function request(state: ContractorMandateReference, e: Extract<z.infer<typeof event>, { kind: "request" }>,
   c: z.infer<typeof contractorMandateEventV1>["context"], now: string): void {
   const g = state.agreement, a = e.artifact;
-  if (c.role !== "human" || c.actorId !== e.approval.actorId || !sameBinding(g.binding, a.binding) || !sameArtifact(a, e.approval.artifact) ||
+  if (c.role !== "human" || c.actorId === e.approval.actorId || !sameBinding(g.binding, a.binding) || !sameArtifact(a, e.approval.artifact) ||
     compareServerInstants(now, a.expiresAt) >= 0 || g.binding.track === "pilot_no_charge" || a.pilotExempt) deny();
   if (state.actions.some(v => v.id === e.actionId || v.approval.decisionId === e.approval.decisionId ||
     v.artifact.action === a.action && v.artifact.statementId === a.statementId && a.action === "collect")) deny();

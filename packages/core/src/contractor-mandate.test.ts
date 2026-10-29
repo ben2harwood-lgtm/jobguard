@@ -12,7 +12,7 @@ function fixture(): ContractorMandateReference {
 function request(amountPence = 1000, actionId = 10, action: "collect" | "refund" = "collect", originalActionId: string | null = null) {
   const artifact = { binding, statementId: id(7), statementHash: "d".repeat(64), amountPence, pilotExempt: false, action, originalActionId, expiresAt: "2026-10-30T00:00:00Z" };
   return { kind: "request" as const, actionId: id(actionId), artifact,
-    approval: { actorId: id(4), decisionId: id(actionId + 100), resolutionId: id(actionId + 200), status: "approved", revoked: false, artifact } };
+    approval: { actorId: id(90), decisionId: id(actionId + 100), resolutionId: id(actionId + 200), status: "approved", revoked: false, artifact } };
 }
 function envelope(event: unknown, eventId = 20, role = "human", tenantId = id(1)) {
   return { version: "contractor-mandate-event.v1", id: id(eventId), event, now, context: { tenantId, actorId: id(4), role } };
@@ -51,12 +51,25 @@ describe("ENT-14 dark contractor mandate reference", () => {
     denied(() => apply(queued(), envelope({ kind: "change_agreement", binding: revised }, 55, "worker")));
   });
   it("rejects revoked, rejected and mismatched action approvals and expired requests", () => {
-    for (const update of [{ status: "rejected" }, { revoked: true }, { actorId: id(90) }])
+    for (const update of [{ status: "rejected" }, { revoked: true }])
       denied(() => apply(fixture(), envelope({ ...request(), approval: { ...request().approval, ...update } })));
     const r = request(); r.artifact.expiresAt = now;
     denied(() => apply(fixture(), envelope(r)));
     const mismatch = structuredClone(request()); mismatch.approval.artifact = { ...mismatch.approval.artifact, amountPence: 999 };
     denied(() => apply(fixture(), envelope(mismatch)));
+  });
+  it.each(["collect", "refund"] as const)("requires a different human approver from the %s requester", action => {
+    const state = action === "collect" ? fixture() : settled();
+    const r = request(1000, 11, action, action === "refund" ? id(10) : null);
+    const before = structuredClone(state);
+    r.approval.actorId = id(4);
+    denied(() => apply(state, envelope(r, 31)));
+    expect(state).toEqual(before);
+    r.approval.actorId = id(90);
+    const approved = apply(state, envelope(r, 31));
+    expect(approved.actions.at(-1)?.approval.actorId).toBe(id(90));
+    expect(approved.events.at(-1)?.context.actorId).toBe(id(4));
+    expect(apply(approved, envelope(r, 31))).toEqual(approved);
   });
   it("makes identical command replays no-ops and rejects changed payloads, duplicate actions and statements", () => {
     const s = queued(); expect(apply(s, envelope(request()))).toEqual(s);
@@ -108,6 +121,29 @@ describe("ENT-14 dark contractor mandate reference", () => {
     expect(apply(failed, retry).actions[0]?.attempts).toBe(2);
     retry.now = "2026-10-30T00:00:00Z"; denied(() => apply(failed, retry));
     denied(() => apply(settled(), envelope({ kind: "start", actionId: id(10) }, 32, "worker")));
+  });
+  it.each(["collect", "refund"] as const)("bounds %s attempts across failures and reconciliation without replay increments", action => {
+    const actionId = action === "collect" ? id(10) : id(11);
+    let state = action === "collect" ? queued() : apply(settled(), envelope(request(1000, 11, "refund", id(10)), 31));
+    let eventId = 40;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const start = envelope({ kind: "start", actionId }, eventId++, "worker");
+      state = apply(state, start);
+      expect(state.actions.find(a => a.id === actionId)?.attempts).toBe(attempt);
+      expect(apply(state, start)).toEqual(state);
+      if (attempt === 2) {
+        state = apply(state, envelope({ kind: "outcome", actionId, outcome: "outcome_unknown" }, eventId++, "provider"));
+        denied(() => apply(state, envelope({ kind: "start", actionId }, eventId++, "worker")));
+        state = apply(state, envelope({ kind: "reconcile", actionId, outcome: "failed" }, eventId++, "provider"));
+      } else {
+        state = apply(state, envelope({ kind: "outcome", actionId, outcome: "failed" }, eventId++, "provider"));
+      }
+    }
+    const before = structuredClone(state);
+    denied(() => apply(state, envelope({ kind: "start", actionId }, eventId++, "worker")));
+    expect(state).toEqual(before);
+    expect(state.actions.find(a => a.id === actionId)?.outcome).toBe("failed");
+    if (action === "collect") denied(() => apply(state, envelope(request(1000, 12), eventId++)));
   });
   it("bounds collection reservations with exact integer sums", () => {
     for (const amount of [0, -1, 0.5, 1_000_000_000_001, Number.MAX_SAFE_INTEGER]) denied(() => apply(fixture(), envelope(request(amount))));
