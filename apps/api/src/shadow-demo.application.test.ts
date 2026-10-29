@@ -40,6 +40,12 @@ it.each(["pending", "failed"])("%s checks cannot read attribution or pack data",
  ports.account.mockResolvedValue({ jobId, lock: { id: lockId }, captures: [] }); ports.check.mockResolvedValue({ state, lockId, items: [] });
  expect(await app().read(jobId)).not.toHaveProperty("assessments"); expect(ports.history).not.toHaveBeenCalled(); expect(ports.packs).not.toHaveBeenCalled();
 });
+it.each(["completed", "pending", "failed"])("rejects %s checks for a different locked bill before returning or reading downstream sources", async state => {
+ ports.account.mockResolvedValue({ jobId, lock: { id: lockId }, captures: [] });
+ ports.check.mockResolvedValue({ state, lockId: randomUUID(), items: [] });
+ await expect(app().read(jobId)).rejects.toThrow("SHADOW_DEMO_SOURCE_REJECTED");
+ expect(ports.history).not.toHaveBeenCalled(); expect(ports.packs).not.toHaveBeenCalled();
+});
 async function assessment() {
  const { attributionDocumentFixture } = await import(new URL("../../../packages/db/test/recovery-attribution-fixture.ts", import.meta.url).href);
  const a = attributionDocumentFixture();

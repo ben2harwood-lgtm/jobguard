@@ -37,6 +37,7 @@ export class ShadowDemoApplication {
   };
   if (!account.lock) return visible;
   const finalCheck = await new FinalCheckApplication(this.pool, this.sessionId).get(jobId);
+  if (finalCheck.lockId !== account.lock.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
   if (finalCheck.state !== "completed") return { ...visible, finalCheck };
   const history = await new RecoveryAttributionApplication(this.pool, this.sessionId).get(jobId);
   const latest = new Map<string, z.infer<typeof recoveryAttributionRevisionV1>>();

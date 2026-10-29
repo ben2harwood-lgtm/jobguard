@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/demo-j3-shadow"
       ],
-      "note": "RED DEMO-S DEMO-J3 shadow-30000 guide and public-source report, built ahead on sv6-hookup. Full no-step-skipped journey remains incomplete; MON-5 customer approval and CH-8/CH-9 producer bindings held. No migration.",
+      "note": "RED DEMO-S DEMO-J3 part 1: shadow-30000 guide and public-source report, caught up with main including SV-6 #400; server rejects mismatched final-check locks. Full no-step-skipped journey remains incomplete; MON-5 customer approval and CH-8/CH-9 producer bindings held. No migration.",
       "allow": [
         "apps/api/src/shadow-demo.application.test.ts",
         "apps/api/src/shadow-demo.application.ts",
