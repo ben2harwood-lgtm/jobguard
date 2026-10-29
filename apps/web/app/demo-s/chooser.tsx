@@ -124,6 +124,7 @@ export function DemoChooser() {
   const disabled = busy || !!pending || !membership;
   return <main className={styles.main}><a href="/">JobGuard home</a><h1>Small-builder practice chooser</h1>
     <p>Made-up data only. Choose a journey to see whether it is ready and save your selection.</p>
+    <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This uses a separate practice session; saving a company selection below does not run or complete it.</p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}
