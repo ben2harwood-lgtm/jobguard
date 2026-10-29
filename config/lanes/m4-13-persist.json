@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-13-persist": {
+      "branches": [
+        "codex/sandbox/m4-13-persist"
+      ],
+      "note": "M4-13 RED dark persistence only; based on unmerged m4-13-terms. Migration 0452. No collection execution. Own lane path is implicitly allowed by the validator.",
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/src/subscription-mandate-repository.ts",
+        "packages/db/migrations/0452_subscription_mandate.sql",
+        "packages/db/migration-notes/0452_subscription_mandate.md",
+        "packages/db/test/subscription-mandate.test.ts",
+        "packages/db/test/subscription-mandate.integration.test.ts",
+        "packages/db/test/subscription-mandate-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
