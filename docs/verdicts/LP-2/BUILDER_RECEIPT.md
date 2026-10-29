@@ -393,7 +393,7 @@ Cited current sites were re-read against main. LP-1's account/membership seed co
 
 ### Delivered, source-inspected
 
-- Migration `0195_unchecked_job_doors.sql`: ordinary runtime draft-only insertion guard; null-safe permit-based imported/work-order/home/sandbox insertion; private exact tenant/job/backend/xid8/operation/shape permits, tenant-qualified identity references, FORCE RLS, one-use consumption and deferred unused-permit refusal. No caller-set import flag is read. Shared migration ownership alone cannot insert an imported/work-order/home/core-1000 job.
+- Migration `0356_unchecked_job_doors.sql`: ordinary runtime draft-only insertion guard; null-safe permit-based imported/work-order/home/sandbox insertion; private exact tenant/job/backend/xid8/operation/shape permits, tenant-qualified identity references, FORCE RLS, one-use consumption and deferred unused-permit refusal. No caller-set import flag is read. Shared migration ownership alone cannot insert an imported/work-order/home/core-1000 job.
 - Static replacements preserve the current eighteen-argument adoption checks/party binding/deferred record checks and v1 value/cap/lineage, ENT-2's checked work-order creation, and home state/revision/session recipe. The old thirteen-argument adoption runtime grant is withdrawn. No business table gains a column, no existing row is backfilled or rewritten, and no financial formula is changed.
 - The narrow review routine preserves the existing current-owner confirmation permission. It validates the processing actor/type/job/proposal receipt and exact approved action, hashes the unchanged raw review serialization, reconstructs the persisted review and checks accepted canonical scope. Only non-stored parent/question ordering is normalized for content comparison. It checks ordinary draft source/expected revision, confirms the review and changes only job status/revision/update time. It cannot express acceptance/live/settlement or set money/policy/pointers. `reviewContentHash` is unchanged. The review caller remains in its existing dispatcher transaction; broad transition runtime/PUBLIC/identity/infrastructure EXECUTE is withdrawn. Source search finds no SQL wrapper reaching it; generic JobRepository.transition remains unavailable with runtime credentials.
 - Sandbox creation uses its existing persisted session's authenticated membership and a fixed checked core-1000 creator, with state/revision and existing replay behavior preserved. Bootstrap's same owner connection creates its three existing quoting rows as the migration role; LP-1's account/membership work and row identities/replay SQL are preserved. No service receives owner credentials.
@@ -573,8 +573,8 @@ Untracked artifacts (git diff --stat omits them):
 - `config/lanes/lp-2.json`
 - `docs/operations/lp-2-rollout-evidence.md`
 - `docs/verdicts/LP-2/PROPOSED-COORDINATOR-CHANGES.md`
-- `packages/db/migration-notes/0195_unchecked_job_doors.md`
-- `packages/db/migrations/0195_unchecked_job_doors.sql`
+- `packages/db/migration-notes/0356_unchecked_job_doors.md`
+- `packages/db/migrations/0356_unchecked_job_doors.sql`
 - `packages/db/test/lp-practice-doors.integration.test.ts`
 - `packages/db/test/lp-start-quote.integration.test.ts`
 
@@ -652,3 +652,221 @@ pnpm --filter @jobguard/db exec tsc --noEmit --module NodeNext --moduleResolutio
 The original receipt prefix is retained exactly, SHA-256 `942e8d1d5601cb30cb929e2a462c6ef5f26a566f718243fa63cff82d53feeabf`. No migration, backwards-compatibility change to application code, new runtime permission or operational alert in this round. Existing LP-0/coordinator delta and rollout holds persist. Exact-commit independent Opus/Sol verdicts, their confirmation that only named setup changed, and separate actor acceptance remain absent; builder does not accept its own work. Park for Ben's button; no merge authority.
 
 Intended conventional commit message written to both requested paths: `/private/tmp/jg-msg-LP-2-r3.txt` and `/private/tmp/jg-msg-lp-2.txt`. Dispatcher owns any subsequent commit, push and checker handoff.
+
+
+## r4 (ruling 103)
+
+18 October 2026. **STOP — ruling scope incomplete; BUILD-DON'T-MERGE, decision 74 remains.** Round-start HEAD `2ee3f87c8694e8f8543d869eaf84f0a3ec4474b4`, branch `codex/sandbox/lp-2`; worktree was clean. Read AGENTS.md, BUILD_PLAN §11.8, the LP-2 contract, proposal items 5/6, and both independent REPAIR verdicts supplied inline by the dispatcher. The external verdict files were not accessed. CI run 39018190840 evidence is from those supplied verdicts, not a fresh CI query.
+
+### Required STOP: merged scripted-SQL fixture omitted from ruling 103
+
+`packages/db/test/audit-api-capture.test.ts:55` is unchanged from origin/main and is absent from LP-2's own-file list. Independent second-checker finding B2 requires this fixture to recognise the replacement routine called by `packages/db/src/review-repository.ts:79`. Ruling 103 authorises the inventory/capability delta and Q3 owner/Q4 trusted-database fixtures; this scripted unit mock is neither conversion and is not named. The dispatch explicitly forbids other merged-test changes and requires STOP with file:line and before/after. No grant restoration or product-code workaround was attempted.
+
+Before (actual line 55):
+
+```ts
+    if (sql.includes("app.transition_job")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+```
+
+Required after (PROPOSED ONLY, NOT APPLIED; needs coordinator scope amendment):
+
+```ts
+    if (sql.includes("app.start_quote_from_review")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+```
+
+Every assertion would remain byte-identical. The coordinator amendment would also need to allow this test path in `config/lanes/lp-2.json`. Do not restore `transition_job` access. This is the same missing authorisation identified explicitly in B2, not a newly invented approval requirement.
+
+### Execution evidence and disposition
+
+- `git rev-parse HEAD`, `git status --short`, and read-only source/diff inspection: expected head, clean initial tree; merged fixture matches origin/main.
+- Initial default-launcher `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-api-capture.test.ts`: emitted a pnpm configuration warning, did not reach Vitest, interrupted with exit 130. No install/download command issued.
+- `PATH="/private/tmp/jg-lp1-bin:$PATH" pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-api-capture.test.ts`: **FAIL**, exit 1, **8 failed / 6 passed**. All eight failures report `Unexpected SQL: SELECT revision FROM app.start_quote_from_review($1,$2,$3,$4,$5,$6,$7,$8)` at fixture line 61, called from repository line 79. This is a scripted unit reproduction, not PostgreSQL evidence.
+- DB/API typecheck, root lint with `LANE_BASE_REF=origin/main`, lint:lanes, remaining unit suites, build and OpenAPI check: **NOT RUN** after the explicit STOP/build-nothing-else condition. No prior-round result is claimed as this round's verification.
+- PostgreSQL, migrations, database-backed API isolation, browser/e2e/Playwright: **NOT RUN**, as ordered. No server or browser started.
+
+Only this receipt is changed in the repository. Its path is already allowed in `config/lanes/lp-2.json`, so no lane change is needed; the shared lane register is untouched. Ruling 103 implementation changes remain unapplied because the dispatch requires stopping before building anything else. No tests, assertions, pins, ACL inventory, migrations, grants or application code changed. No commit, push, merge, deployment, independent acceptance or green-CI claim. Intended receipt-only conventional commit message is at `/private/tmp/jg-msg-lp-2.txt` for the dispatcher.
+
+Pre-r4 receipt SHA-256: `e085e52dd36294bc6bfd142d751002092f36c5d3a0f8cc1ce7ca318d5122240b`. The preceding receipt bytes are preserved exactly.
+
+## r4b (rulings 103 + 106) — completed on catch-up head
+
+19 October 2026. **BUILD-DON'T-MERGE, decision 74 remains.** Round-start HEAD `4100dcd88f179115bc15fa29dd77d44cc9b5c3f9` (branch `codex/sandbox/lp-2`, a conflict-free catch-up to `origin/main` `3db19f1f168c13f7bd87947aa6ceb743248dd25c`; migration renumbered 0195 to 0198). Builder: Claude Sonnet 5.5 as a builder sub-agent. This is a builder receipt, not an independent verdict; nothing here is a review of my own work. PostgreSQL, browser, e2e and Playwright were **not started** and are **NOT RUN**. No grant was restored.
+
+The order was written against the old head `2ee3f87c`, so every line number in it was re-located on this head. The dispatcher's premise that the ruling-103(c) conversions were "done" was only partly true; what I found and did is below.
+
+### State found on the catch-up head
+
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAILED. 28 changed test paths (`apps/api/src/shadow-isolation.application.test.ts` plus 27 `packages/db/test` files) were not in `config/lanes/lp-2.json`.
+- Ruling 103(a) NOT done: `docs/contracts/lp-0-effective-privileges-v1.json` was unchanged from `origin/main`.
+- Ruling 103(b) NOT done: `lp-0-authority-paths.integration.test.ts` was unchanged from `origin/main` (still `rejects.not.toMatchObject({ code: "42501" })`).
+- Ruling 106 already done: `packages/db/test/audit-api-capture.test.ts:55` already named `app.start_quote_from_review`, assertions byte-identical.
+- Q3/Q4 conversions: the 28 files above carried database/owner-fixture conversions. Every one of the 28 was re-read; each diff is setup only and changes no `expect`/`toBe`/`toEqual`/`rejects`/`toThrow` line. One of them was INCOMPLETE: `recovery-timing-pin.integration.test.ts` created `jobguard_synthetic_demo` but both its pools still connected to `postgres` (`connectionOptions("postgres", ...)`), so it would still have failed `MODE_FORBIDDEN`. Fixed (two lines).
+- Further `postgres`-database practice/recovery/fee suites and Q3 sites had not been converted at all; converted in this round, listed below.
+
+### Ruling 103(a): LP-0 inventory delta (`docs/contracts/lp-0-effective-privileges-v1.json`)
+
+Hand-made by source inspection of migration 0198 and of `lp-0-catalog.ts`'s own comparator rules. Never produced by a PostgreSQL run.
+
+- Removed the three withdrawn ACL keys: runtime EXECUTE on the 13-argument `adopt_in_flight_job`; PUBLIC EXECUTE on `guard_imported_job()`; runtime EXECUTE on `transition_job(...)`.
+- Also removed the three matching `owner|routine|...|jobguard_migration` keys. This goes one step past the ruling text and is derived, not chosen: after 0198's `REVOKE ALL ... FROM PUBLIC,jobguard_runtime,...` each routine's ACL holds only its owner, so `deriveFacts` no longer emits an owner key (it emits one only if the routine is reachable or owned by a non-schema-owner). `[LP0-02]` fails on any stale inventory key, so the owner keys must go with the ACL keys.
+- Removed group `x-exec-transition-job`: its only entry was the withdrawn key, and `pathCompleteness` rejects a group with no entries. `ts-job-doors-closed` now lists the new group in its place.
+- Added group `a-exec-job-doors-checked` (kind commitment, approved_current, rebind_at_card, cards LP-2 and LP-6d with distinct responsibilities, path `ap-job-state`) holding the two new narrow runtime entry points, `create_practice_sandbox_job(uuid,uuid,uuid,text)` and `start_quote_from_review(uuid,uuid,integer,uuid,uuid,uuid,uuid,text)`: one runtime EXECUTE ACL key each plus one owner key each (owner keys in `a-owner-routines`).
+- `recorded.routines`: added the three private helpers `lp_job_insert_shape(app.job)`, `lp_job_permit_consumed()` and `lp_ordinary_job_initial_shape()`, and the two entry points; updated `guard_imported_job` (now SECURITY DEFINER, pinned search_path, owner-only), the two withdrawn routines (unreachable) and the routines 0198 replaced or restricted (18-argument `adopt_in_flight_job`, `work_order_begin`, `issue_practice_session`, `configure_recovery_demo`, `approve_synthetic_landing`, `reverse_synthetic_landing`, `create_fee_illustration_source`). The static-scan `staticWrites` and `staticCalls` for the new and changed bodies were computed with a copy of the catalogue's own `staticScan` regexes; that copy reproduced the existing recorded values for the unchanged routines before I relied on it.
+- `definitionSha256` is set to `null` for every routine whose body 0198 replaced or added, because `pg_get_functiondef` could not be read. Recording a stale digest would be false. This is stated in a new top-level `gaps` entry.
+- `recorded.policies`: added `app.lp_job_insert_permit|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6` (the digest is the shared tenant-isolation expression already recorded for `app.job_activation_terms`, whose SQL form is identical). `recorded.triggers`: added `app.job|aaa_lp_ordinary_job_initial_shape|...|BEFORE INSERT|O` and `app.lp_job_insert_permit|lp_job_permit_consumed|...|AFTER INSERT|O`. `recorded.rls` is unchanged: the recorder lists only tables with a non-owner ACL, and the permit table has none (RLS enabled and forced, one policy for `jobguard_migration` only, all privileges revoked from runtime, identity and infrastructure; this fact now lives in the policy record and in the authority-path text).
+- Text dispositions: `ap-job-state` description, sources, tests and gaps rewritten to the post-0198 truth; one gap line each added to `x-job-insert-and-terms` and `x-exec-practice-actorless`.
+- Verified offline (no PostgreSQL): a throwaway Vitest file (deleted, not committed) loaded the edited file through `parseInventory` and `pathCompleteness`: no problems; the three removed keys absent, the two new keys present; `packages/db/test/lp-0-catalog.test.ts` (26 tests) passed in the same run.
+- **Not verified, will be decided by CI:** that the live catalogue yields exactly this key set. In particular the composite-type identity `function:app.lp_job_insert_shape(app.job)` follows `format_type`'s schema qualification and has no precedent in the file.
+
+### Ruling 103(b): `packages/db/test/lp-0-authority-paths.integration.test.ts`
+
+In the `[reports existing exceptions truthfully ...]` demonstration (former :227, former :247):
+
+- the runtime `transition_job(NULL x9)` expectation is now `.rejects.toMatchObject({ code: "42501" })`;
+- runtime-refusal coverage added for the other two withdrawn doors: 13-argument `adopt_in_flight_job` and `guard_imported_job()`, each `.rejects.toMatchObject({ code: "42501" })` inside its own `BEGIN`/`ROLLBACK`;
+- the old backstop assertion (`.rejects.not.toMatchObject({ code: "42501" })`, "fails on its own checks") is kept verbatim but now runs on the explicit owner connection `db.admin`;
+- the LP-1 membership-forgery refusal and every other assertion are untouched.
+
+### Ruling 106
+
+`packages/db/test/audit-api-capture.test.ts:55` (already on the branch): before `if (sql.includes("app.transition_job")) { this.status = "quoting"; return rows([{ revision: 1 }]); }`, after `if (sql.includes("app.start_quote_from_review")) { ... }` (same body). The path is in the lane. `grep` of every `*.test.ts` that is not an integration suite found no other scripted-SQL mock naming `app.transition_job`; `packages/db/src/later-money-boundaries.test.ts` only parses `transitionJobV1` and mocks `connect`. No further 106 site exists. `audit-api-capture.test.ts`: 14 passed.
+
+### Ruling 103(c): conversions made in this round (setup only; assertions byte-identical; command and race mutations stay inside their observed transaction)
+
+I read the clause "any practice/recovery/fee suite that fails MODE_FORBIDDEN on `postgres`" as covering a suite as a whole, so each listed suite also got the Q3 fixture steps 0198 forces on it. The Q3 additions go beyond the literally named sites (practice-session:288 etc.). If the coordinator reads the clause more narrowly, revert exactly the hunks named under "Q3" below; the Q4 hunks stand on their own.
+
+Q4 (trusted database `jobguard_synthetic_demo` via `createDatabase`, every pool pointed at it):
+`ch7-f21-reason`, `ch7-f21-reason-upgrade` (post-upgrade `fixture()` calls `issuePracticeSession`), `decisions-later`, `later-variation-history`, `later-variation-isolation`, `later-variation-replay`, `recovery-legacy-later`, `practice-supplier-credit`, `practice-supplier-credit-money-regression`, `small-builder-origin` (named by the ruling for the permit steps; its database wiring had been missed and its `issuePracticeSession` calls at :85 and :178 would have failed `MODE_FORBIDDEN`), and `recovery-timing-pin` (completed). `job-work-state-fixtures.ts` gains an optional `database` parameter (default `"postgres"`, so its other ~20 suites are untouched); only the callers that issue a practice session pass the demo name: `fee-illustration-later`, `fee-illustration-later-upgrade`, `serious-b4-practice`, `job-sources-fixture.ts` (used by the job-sources suites), and the two `job-work-state.integration` blocks that call `seedWorkPractice`.
+The practice-supplier-credit-upgrade suite was deliberately NOT converted: every fixture runs at the pre-0188 schema and nothing guarded runs after its final `migrate`.
+
+Q3, owner transition: `recovery.integration.test.ts:21` runs its `transition_job(... 'invoiced' ...)` setup through `withTenant(admin, ...)`; the narrow routine it observes still runs as runtime.
+Q3, owner adoption: `job-parties.integration.test.ts:186` runs the thirteen-argument `adopt_in_flight_job` backstop (`.rejects.toThrow("JOB_PARTIES_REQUIRED")`) through `withTenant(admin, ...)`, since runtime EXECUTE on it is withdrawn.
+Q3, practice-home permit (migration 0198 admits a `home` job INSERT only with an exact one-use permit created in the same owner transaction; `guard_imported_job` has no superuser exemption): the original INSERT text is kept in place and preceded by the permit, in the same owner transaction, in `recovery-allocation`, `recovery-allocation-races`, `recovery-line-allocation`, `serious-b9`, `migfix-8`, `recovery-follow-up`, `shadow-isolation-query-log` (its autocommit INSERT is wrapped in one owner transaction with the tenant set) and `apps/api/src/shadow-isolation.application.test.ts` (inlined recipe, to keep test infrastructure out of the API build). The permit recipe is the coordinator's own `practice-session.integration:288` recipe, put in one new helper, `packages/db/test/lp-practice-home-job-fixture.ts` (`permitPracticeHomeJob`). Upgrade suites seed at a pre-0198 schema where the permit table does not exist, so they get no permit by design.
+
+### Lane (`config/lanes/lp-2.json`)
+
+46 paths added to `allow`. The lane file does not list itself, `config/agent-lane-assignments.json` was not touched and is not listed, and no path outside ruling 103 or 106 was added. The note field was updated. The two allow-list entries that were already present for 103(a) and 103(b) (`docs/contracts/lp-0-effective-privileges-v1.json`, `packages/db/test/lp-0-authority-paths.integration.test.ts`) now carry real changes.
+
+Previously converted on the branch, re-verified, only the database/pool wiring or the named owner step changed (28 paths): `apps/api/src/shadow-isolation.application.test.ts`; `packages/db/test/` `audit-api-capture`, `audit-api-value`, `audit-api-variation`, `audit-dbsrc-03`, `commercial-integrity-api-audit`, `decision-adoption`, `final-account-lock`, `job-activation-terms`, `job-parties`, `migfix-5-upgrade`, `migfix-8-upgrade`, `practice-facts`, `practice-feed`, `purchase-order-audit`, `recovery-allocation-races`, `recovery-allocation-upgrade`, `recovery-allocation`, `recovery-case-terms-upgrade`, `recovery-cases.workbench`, `recovery-eligibility-v3`, `recovery-insurer-money`, `recovery-line-allocation`, `recovery-messages`, `recovery-timing-pin`, `recovery`, `serious-b9`, `shadow-isolation-query-log` (all `.integration.test.ts`).
+Added because this round changed them (18 paths): `ch7-f21-reason`, `ch7-f21-reason-upgrade`, `decisions-later`, `fee-illustration-later`, `fee-illustration-later-upgrade`, `later-variation-history`, `later-variation-isolation`, `later-variation-replay`, `migfix-8`, `practice-supplier-credit`, `practice-supplier-credit-money-regression`, `recovery-follow-up`, `recovery-legacy-later`, `serious-b4-practice`, `job-work-state.integration`, `job-work-state-fixtures.ts`, `job-sources-fixture.ts`, `lp-practice-home-job-fixture.ts`.
+Already in the lane and changed by this round: `docs/contracts/lp-0-effective-privileges-v1.json`, `lp-0-authority-paths.integration.test.ts`, `small-builder-origin.integration.test.ts`, `commands`, `contractor-parties`, `job`, `watchdog`, `quote`, `practice-session`, `migfix-4`, `quote-reacceptance-upgrade` and the LP-2 own files.
+
+### STOPs (each outside rulings 103 and 106; nothing was changed for any of them; all are predicted-red from source reading, none observed)
+
+1. **`packages/db/test/lp-0-grant-freeze.integration.test.ts:370`** (`[LP0-15]`). Before: `expect(find(keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false))).toMatchObject({ disposition: "existing_exception", cards: ["LP-2"] });`. `find` searches the LIVE facts, and 103(a) removes that fact, so `find` returns `undefined` and the assertion throws. Proposed after (same shape as the LP-1 closed-key assertions at :349-356): `const withdrawn = keys.aclRoutine("function:app.transition_job(...)", APPLICATION_ROLE, "EXECUTE", false); expect(find(withdrawn)).toBeUndefined(); expect(inventory.entries.some(entry => entry.key === withdrawn)).toBe(false);`. Needs a ruling that adds this path to the lane.
+2. **`docs/contracts/lp-0-effective-privileges-v1.md:46, :74, :119, :157-159, :428`**: the human-readable mirror still lists group `x-exec-transition-job` and the old LP-2 text. Not in the lane and not named by 103. The freeze test only checks three headings in it, so nothing fails, but it is now stale.
+3. **`packages/db/test/job-parties.integration.test.ts:694-696`**: the runtime forged `home` INSERT is asserted to fail with `{ code: "22023", message: "JOB_PARTIES_REQUIRED" }`. `imported_job_command_only` (`guard_imported_job`) now fires before `job_parties_live_guard` and refuses the unpermitted `home` INSERT first with 42501 `JOB_INSERT_PERMIT_REQUIRED`. Cannot be fixed by an owner fixture (the test is about the runtime refusal) and the assertion cannot change without a ruling. Proposed after: `{ code: "42501", message: "JOB_INSERT_PERMIT_REQUIRED" }` for the insert branch.
+4. **`packages/db/test/recovery-case-terms.integration.test.ts:146` and `:211`**: `INSERT INTO app.job(... provenance ...) VALUES(..., 'imported', ...)` by an owner with no adoption permit. Needs the full owner adoption recipe of proposal item 3 (command receipt, decision, resolution, authorization, exact-shape permit, same transaction), here for tenant B and for a second fixture. The suite does not call a guarded routine, so it is outside the clause.
+5. **`packages/db/test/migfix-8-upgrade.integration.test.ts:130` and `packages/db/test/recovery-case-terms-upgrade.integration.test.ts:70`**: `new SandboxRepository(runtime).create(...)` runs on a schema older than 0198 (up to 0154 and 0134 respectively), where `app.create_practice_sandbox_job` does not exist. This is an application-newer-than-schema incompatibility that the expand-then-contract rollout note must own; a fixture redesign (seed the sandbox rows by owner SQL at the old schema, or create them after the final `migrate`) is needed.
+6. **`packages/db/test/later-command-contention.integration.test.ts:74`** runs `transition_job` as the runtime login and pins `expect(backend.role).toBe("ent4b_login")` inside the same mutation; an owner fixture would change that assertion. **`packages/db/test/site-extra.integration.test.ts:170`** (`withTenant(c.runtime, ...)`, `leaveLive`) could become `c.admin`. Neither suite calls a guarded practice routine.
+7. **`packages/db/test/serious-b3-quotes.integration.test.ts:37-38`**: `withTenant(runtime, ...)` inserts a `quoting` job; the new ordinary-shape trigger refuses a non-draft INSERT from the runtime login. Same fix as `quote.integration:4` (move the one INSERT to an owner transaction). Not named.
+8. `apps/web/e2e/M4-1-S.spec.ts:318, :391` call `transition_job` through the e2e owner pool (`postgres`), so no change is predicted. Browser/e2e NOT RUN.
+
+### Commands and results
+
+- `git diff --name-only origin/main HEAD` vs lane before/after: 46 uncovered paths before; none after.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **PASSED** (final run, after the small-builder-origin and lane edits).
+- `pnpm --filter @jobguard/db typecheck`, `@jobguard/api typecheck`, `@jobguard/web typecheck`: **PASSED**, exit 0, 0 `error TS`.
+- `LANE_BASE_REF=origin/main pnpm lint` (`tools/lint.mjs` plus turbo lint of 7 packages): **PASSED**, exit 0.
+- `node --test tools/*.test.mjs`: **PASSED**, 122 of 122.
+- `pnpm --filter @jobguard/db exec vitest run` on the 48 non-integration unit files (`src/*.test.ts`, `test/*.test.ts`): 423 of 424 passed; the one failure (`audit-checkpoint-handoff.test.ts` `[C-OPS-1]`) was a 5 s timeout under parallel load and PASSED alone with `--maxWorkers=1` (71 of 71). Includes `audit-api-capture.test.ts` 14 of 14 and `lp-0-catalog.test.ts` (all tests).
+- `apps/api` unit tests with the two PostgreSQL-dependent files excluded (`shadow-isolation.application.test.ts`, `final-account-lock.isolation.test.ts`): first run 175 failures because the gitignored `packages/*/dist` outputs were stale (missing newer exports from main); I rebuilt them with `pnpm turbo run build --filter=@jobguard/db...` (build outputs are ignored by git); then 125 of 126 files with one flaky timeout-style failure in one run and 126 of 126 files, 2200 of 2200 tests, in the next. Treat those two excluded files as NOT RUN.
+- NOT RUN: every `*.integration.test.ts`, every PostgreSQL test (including `[LP0-02]`, `[LP0-15]`, `[LP0-17]`, the lp-* own suites and every converted suite), `pnpm test:db`, `pnpm test:migrations`, e2e/Playwright, `pnpm build` of web, `openapi:check`. No result in this section is a claim about any of those.
+
+### Builder self-inspection and limits
+
+- Every converted test keeps its assertions: the diff of each file was checked for changed `expect`/`toBe`/`toEqual`/`toMatchObject`/`rejects`/`toThrow` lines; only `job-parties:186` (connection variable and an added comment), `recovery.integration:21` (connection variable and comment) and `job.integration` (a one-line `it` re-flowed over several lines, body compared equal) touch such lines, and `lp-0-authority-paths` per 103(b).
+- The permit recipe, the `createDatabase` calls and the owner-transition conversions are unrun. The `home`-job permit shape (status, revision 0, provenance `system_generated_quote`, other fields null) was derived from the column defaults in `0003_job_spine.sql`, `0020_job_import.sql` and `0094_practice_session_ownership.sql`.
+- The inventory delta is the riskiest unrun item; see the 103(a) section.
+- Nothing here is an independent verdict, a live-integration claim or a rollout approval. Decision 74 and the unreviewed rollout document stand.
+
+## 29 October 2026 — current-main round 3 repair (RED)
+
+This entry supersedes the historical outstanding-fixture list and local-check results above for this working tree only. Scope remains LP-2 database and existing server callers; UI stays parked. The supplied SIMPLE_LOOP is the current workflow. No independent review, PostgreSQL execution, merge, real-data approval or release is claimed.
+
+- Resolved the two content conflicts by preserving LP-2's issue-practice/work-order permit inventory and trusted-database fixture setup together with main's final-check entry, job-source guard calls and IPv4/free-port setup. The Git index still needs the router's `git add` to mark these content resolutions; `.git` is read-only here.
+- Used `planRenumber` from `tools/migration-renumber.mjs` for reserved 0356, applying its filesystem rename/reference changes without its clean-tree/staging write mode. Original `0198_unchecked_job_doors.sql` and final `0356_unchecked_job_doors.sql` are byte-identical, SHA-256 `f78976e3645f4e247b2b18141822ee8631c85a77e381902627d940a48cee377a`. There was one own migration to renumber. New reserved 0357 is an additive compatibility repair.
+- 0357 restores merged 0192's fixed demo principal, active owner, small-builder/environment checks, command/job locks, stable saved replay and changed-command/job conflicts after 0356's older definition, while keeping the trusted-database restriction. No new runtime privilege or financial write is introduced. The LP-2 practice regression now rejects an illustration for a different company even inside the trusted database. Existing fee-illustration L101 tests remain the replay/concurrency/conflict coverage.
+- Completed the previously listed owner-only quoting/site-extra setup and exact imported-permit fixtures, keeping original lifecycle/money/party assertions. The forged-home INSERT now expects the earlier LP-2 permit refusal; its status-update refusal and independent owner party guard remain.
+- Pre-LP-2 upgrade fixtures seed their historical sandbox rows/work/event/audit explicitly through an owner fixture, rather than calling a new application routine absent from their predecessor schema. Upgrade comparators and subsequent real sandbox advances remain in place. Practice-using fixture clusters run in the trusted database; the recovery-terms audit-failure test has its own trusted synthetic cluster.
+- L022 retains the runtime-login assertion, actual business-row blocking observer, pending-before-release check, receipt/audit atomicity and single-mutation replay. It now exercises the supported draft-to-quoting review command instead of the withdrawn broad accepted-to-live transition. Its SELECT-only negative control remains. The existing review fixture is reused; no test-only runtime grant is added.
+- The lane file lists exactly the final 85 changed paths against incoming main, excluding its own automatically allowed lane path. No shared migration registry, old migration SQL bytes, application policy, provider route or UI was changed.
+
+Local checks actually completed (installed executables, no package installation):
+
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `node_modules/.bin/tsc -p packages/core/tsconfig.json`: PASS; refresh of ignored stale build output needed for unit imports.
+- `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- From packages/db, `node_modules/.bin/vitest run --maxWorkers=1 test/audit-api-capture.test.ts test/lp-0-catalog.test.ts`: 41/41 PASS. The earlier run failed during import against stale core dist; no tests ran in that attempt.
+- `node --test tools/agent-lane-boundary.test.mjs`: 23/23 PASS (disposable test repositories).
+- Money arithmetic and commercial boundary lint scripts: PASS.
+- TypeScript transpilation diagnostics for all 76 changed source/test files: PASS (syntax only, not PostgreSQL test execution).
+- Final-delta lane validation using the existing `loadLanePolicy`, `selectLane`, `lanePathAllowed` and `migrationOrderViolations` exports: PASS, including both reserved migrations. Standard local lane lint cannot pass during this read-only-index merge: it also includes all incoming staged main files and the obsolete pre-rename index entry. Router must finish staging/committing the merge, then CI runs the standard gate; no lane permission was widened to admit incoming unrelated work.
+- SQL byte comparison and conflict inventory union checks: PASS. Neither new migration has a CASE expression inside a PL/pgSQL IF condition.
+
+The pnpm launcher stalled before executing its requested command and was interrupted; the checks above invoke the already installed equivalents of the repository scripts. No dependency changes were made. PostgreSQL fresh/upgrade/catalogue/adversarial/concurrency suites, browser suites and the full build remain NOT RUN locally by the dispatch's explicit sandbox restriction. CI must run those after the router commits/pushes. Required next steps: green current-head CI and one independent exact-head Claude RED review. Expand/contract rollout observations and the whole LP/G1 real-data gate remain outstanding; this synthetic repair grants no rollout authority.
+
+Final source pass also converted the current-schema DW3 imported job fixture to the same exact owner permit (including persisted practice ownership); its pre-0199 upgrade fixture remains at its original pre-LP-2 setup. Core purity lint and `git diff --check`: PASS. Vitest collection (no hooks/test bodies run) succeeded for two groups of at most three named integration files: 10 tests in LP practice doors/L022/recovery-terms upgrade; 21 tests in LP own-step upgrade/MIGFIX-8 upgrade/DW3 timing. Collection proves import/registration only, not database behavior. Final timing-fixture syntax diagnostics and exact lane-set equality also pass.
+
+
+## 29 October 2026 — PR #283 CI-fix try 1 (RED)
+
+Read the complete `lp-2-ci-traces-0711.txt` supplied by the router. This entry supersedes the preceding byte-identity/current-status statements where noted. Incoming main is already merged without content conflicts.
+
+Root causes and fixes:
+
+- Adoption refusal matrix: PostgreSQL inferred conflicting types for receipt status parameter $6 used in INSERT and CASE. Both uses now explicitly cast to varchar; every adversarial case/expected error remains.
+- Exact permit rollback/reuse proof: owner setup minted the permit but did not assume the migration role independently required by the unchanged work-order trigger. Set that role before the positive insertion; reuse/rollback assertions are unchanged.
+- Audit-export permission comparison: 0356 needlessly converted the imported-job trigger to SECURITY DEFINER. **Own migration SQL changed to fix this bug:** keep the trigger SECURITY INVOKER, while checked creators already run as migration owner. Runtime cannot access the private permits; no grant or exception was added. Inventory and an explicit invoker catalogue assertion follow the SQL. All migrations already on main and 0357 remain byte-unchanged. Neither own new migration has CASE inside a PL/pgSQL IF condition.
+- Forged-home refusal: the earlier party guard is the correct first refusal, so restore the exact original JOB_PARTIES_REQUIRED / 22023 assertion; retain the direct-update 42501 and owner backstop.
+- LP0-15: assert the broad transition capability is absent from inventory, exceptions and actual facts, plus actual runtime EXECUTE=false. Do not require a removed capability to remain an exception.
+- Work-order compatibility: exact job revision is 2, from party binding (0102) plus live commit (0110); preserve the exact live/provenance/track/replay checks.
+- LP own-step history: seed the historical illustration row through explicit owner fixture SQL. Do not ask the fixed-demo-only product routine to authorize a random company. Nonempty-row/type/identity preservation assertions remain.
+- Pursuit-terms predecessor upgrade: use the existing owner-connected historical sandbox fixture; the checked application creator does not exist at that schema yet.
+- Recovery timing-pin upgrade: a separate trusted synthetic cluster supports both the predecessor and post-migration session journeys. Do not allow arbitrary database names through the product guard.
+- Attribution/success-fee/API shared fixture: a home job with a session digest gets the existing exact one-use owner permit in the same transaction. Predecessor schemas without the permit table retain their historical owner setup. Current-schema guard/refusal behavior is unchanged.
+- SV5PRE session/legacy invoice: the distinct SV5PRE fixture factory now provisions and uses the trusted synthetic database for every pool. No guard exception or refusal assertion changes.
+- LP1 bootstrap trace: exact job role is migration owner (required for quoting setup), still through the same owner login, with four authority-row writes and repeatability/runtime-role refusal unchanged.
+- Tenancy and contractor upgrade: union the exact new private permit table into the forced-RLS/policy/owner and empty-table expectations.
+- SERIOUS-B5: explicitly validate the new private table, sole tenant policy, five exact routines/ACLs/search paths and the three exact EXECUTE withdrawals before adding their expected catalogue rows. Every other predecessor row/privilege still compares in full. No prefix exemption or permission exception was added.
+
+PR description update was attempted via the connected GitHub tool but rejected because tool approval is required and this session has approval policy `never`. The exact revised body (Ben approved merging on 29 Oct; RED, green CI and independent review still required) is saved at `/tmp/lp-2-20261029T071130Z-pr-body.txt` for the router. This is a prepared update, not a claim that GitHub changed.
+
+Local CI-fix verification: installed TypeScript executables pass DB and API source typechecks; the two focused Vitest unit files (`audit-api-capture.test.ts`, `lp-0-catalog.test.ts`) pass 41/41 with one worker; standard `node tools/agent-lane-boundary-lint.mjs` passes against current main; changed test/source syntax diagnostics pass. Two groups of three named database suites collect successfully (49 and 31 tests); no hooks or database test bodies were executed. Final exact lane set contains 94 paths including the lane file. `git diff --check` passes. PostgreSQL behavior and full CI remain pending the router's push, as required by the sandbox restriction. The SQL fix deliberately changes 0356; a byte comparison confirms 0357 unchanged, and no migration already on main is modified.
+
+
+### 29 October 2026 08:13 catch-up for PR #283 — RED, references/merge only
+
+Caught up the router-started merge of `origin/main` / `MERGE_HEAD` at `cc147d783a9d30ae53a44299cd31d8a0ba46f1bb` (ENT-10 OIDC included). Resolved the two content conflicts by retaining both LP-2 job-door and main OIDC expectations in contractor entitlement and SERIOUS-B5. Main's LP-0 inventory, privilege and tenancy additions remain alongside LP-2's existing changes. No new behavior or expectation weakening.
+
+Used the exported `planRenumber` from `tools/migration-renumber.mjs` with the supplied reservation floor 0355 to map own 0344 → 0356 and 0345 → 0357. Applied filesystem renames and number/stem references only; the tool's CLI write mode would require a clean tree and write the index, both incompatible with this sandbox. Compared each renamed SQL file byte-for-byte with its original at HEAD `47177b7b`: identical. Compared every migration already on origin/main with its Git blob: identical. The two LP-2 migration notes, exact lane paths and own references follow the renumber.
+
+Local checks actually run:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- DB installed Vitest: `run --maxWorkers=1 test/audit-api-capture.test.ts test/lp-0-catalog.test.ts`: PASS, 41 tests.
+- `node --test --test-concurrency=2 tools/merge-churn.test.mjs`: PASS, 15 tests (temporary fixture repositories only).
+- DB installed Vitest: `list --maxWorkers=1 test/contractor-entitlement-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts test/lp-job-doors-upgrade.integration.test.ts`: PASS collection, 9 tests; no PostgreSQL hooks or bodies executed.
+- Final filesystem paths compared directly with origin/main using exported lane-path and migration-order validators: PASS, 94 own paths and only added migrations 0356/0357, both above main's 0347.
+- `git diff --check`: PASS; no conflict markers remain in the resolved test files.
+
+Standard `node tools/agent-lane-boundary-lint.mjs` reports the old migration paths and incoming main paths because HEAD/index still describe an unfinished merge; this is not claimed as a CLI pass. Router must stage the resolved files/renames and finish the existing merge, then run the standard gate. Repository Git metadata was not written here. PostgreSQL/browser execution and full checks remain GitHub CI work after push. Prior RED pass was at 47177b7b; this catch-up is not a fresh independent review or release approval. No providers, real data, live money or deployment used.
+
+
+### 29 October 2026 09:15 CI-fix try 2 of 3 — RED, PR #283
+
+Read `/Users/benharwood/.local/share/full-steam/codex-runs/lp-2-ci-traces-0915.txt`. Its one LP-2 database failure is `lp-job-doors-compatibility.integration.test.ts`, `[LP2-A12] ENT-2 import still creates one live work-order job atomically through the product repository`, at the replay equality assertion (old line 39). The first import correctly returns `replayed: false`; the repeated command correctly returns `replayed: true`. The compatibility test incorrectly expected the second response to equal the first including the false flag. `WorkOrderRepository.importCsv`, `docs/contracts/work-order-import-v1.md` replay semantics and the existing ENT-2 import/concurrency tests confirm the replay is required, not a product defect.
+
+Fixed the test at that assertion: full response equality now requires `{ ...result, replayed: true }`, and an additional assertion requires the first result's replay flag to be false. All other fields still compare exactly; unchanged job/audit counts remain required. No skips, loose matchers, widened permissions or exceptions, production changes, or SQL edits. The two lp-downstream-inventory core-check failures remain explicitly outside this repair per the supplied #411 instruction; neither the tool nor its document was changed.
+
+Worktree started clean at `7372fe5f`; local origin/main `cc147d78` is already an ancestor, and there are no merge conflicts to resolve. No Git metadata was written. Both 0356 and 0357 match HEAD byte-for-byte, SHA-256 respectively `029e4c0bbd86218afa566eb957e61dc9a8696ff6b8a1d2c57a9bfff66a5122ee` and `025c202ec622657e57512057ad6826e841c01449379db0b5c254cf6ef87d2d1d`. Inspected the CASE occurrences in both own migrations: none is inside a PL/pgSQL IF condition, so no parenthesisation or SQL change is needed.
+
+Local checks actually run:
+- Changed-test TypeScript `transpileModule` syntax diagnostics: PASS.
+- Installed DB Vitest `list --maxWorkers=1 test/lp-job-doors-compatibility.integration.test.ts test/work-order-import.integration.test.ts test/work-order-concurrency.integration.test.ts`: PASS, 62 tests collected; no database hooks or bodies executed.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `git diff --check`: PASS.
+- Both own migration SQL byte comparisons with HEAD: PASS.
+
+PostgreSQL behavior must rerun in GitHub CI after the router commits/pushes. This is a source/test-assertion repair with collection/syntax verification, not a locally executed database pass, fresh independent RED review, merge or release. Synthetic fixtures only.

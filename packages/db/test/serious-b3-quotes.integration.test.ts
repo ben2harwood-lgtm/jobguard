@@ -35,8 +35,8 @@ afterAll(async () => {
 });
 async function fixture(count=1) {
   const jobId=randomUUID(), draftId=randomUUID(), lines:QuoteLine[]=[];
+  await withTenant(admin,context,db => db.$client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Synthetic quote','quoting')",[jobId,T]));
   await withTenant(runtime,context,async db => {
-    await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Synthetic quote','quoting')",[jobId,T]);
     for(let index=0;index<count;index++) {
       const scopeItemId=randomUUID(),scopeRevisionId=randomUUID();
       await db.$client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,T,jobId]);

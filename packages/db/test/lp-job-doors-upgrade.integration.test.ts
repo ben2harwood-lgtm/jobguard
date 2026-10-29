@@ -11,7 +11,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const ownName = "0195_unchecked_job_doors.sql";
+const ownName = "0356_unchecked_job_doors.sql";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(true, ownName); }, 300_000);
 afterAll(async () => { await db?.close(); });
@@ -91,7 +91,12 @@ describe("LP-2 canonical upgrade proof preparation", () => {
         expectedCaseRevision: 0, allocationId: allocation, derivationId: randomUUID(), journalId: randomUUID(), grossPence: 18000, eligibleNetPence: 15000 })]);
       await client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,1000,'Fictional reversal')",
         [commercial.tenantId, randomUUID(), randomUUID(), randomUUID(), allocation]);
-      await client.query("SELECT app.create_fee_illustration_source($1,$2)", [commercial.jobId, randomUUID()]);
+      // Historical owner fixture, not a product authorization for this non-demo tenant.
+      // 0192 correctly restricts the callable illustration recipe to its fixed demo principal.
+      await client.query(`INSERT INTO app.fee_illustration_source(tenant_id,job_id,command_id,source_version,
+        accepted_net_pence,eligible_net_pence,gross_landed_pence,base_obligation_pence,base_settled_pence,prior_posting_pence,source_ids)
+        VALUES($1,$2,$3,'recovery-18800.v1',1880000,282000,338400,7900,7900,20300,ARRAY[$4::uuid,$5::uuid])`,
+        [commercial.tenantId, commercial.jobId, randomUUID(), randomUUID(), randomUUID()]);
     });
     const tables = ["app.job", "app.scope_identity", "app.scope_revision", "app.capture_source", "app.job_record_proposal", "app.proposal_review",
       "app.imported_job_baseline", "app.command_receipt", "app.decision", "app.decision_resolution", "app.action_authorization", "app.audit_event", "audit_control.audit_head",

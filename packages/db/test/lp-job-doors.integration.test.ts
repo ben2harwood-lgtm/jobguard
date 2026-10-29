@@ -85,6 +85,7 @@ describe("LP-2 effective routine and trigger catalogue", () => {
     expect(routines).toHaveLength(names.length);
     for (const row of routines) {
       expect(row.owner).toBe("jobguard_migration"); expect(row.proconfig).toContain("search_path=pg_catalog");
+      if (row.proname === "guard_imported_job") expect(row.prosecdef).toBe(false);
       expect(row.infrastructure).toBe(false); expect(row.identity).toBe(false); expect(row.public).toBe(false);
       expect(row.runtime).toBe(["create_practice_sandbox_job", "start_quote_from_review"].includes(row.proname));
     }

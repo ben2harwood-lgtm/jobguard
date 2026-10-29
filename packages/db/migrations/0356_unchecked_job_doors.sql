@@ -74,7 +74,7 @@ CREATE TRIGGER aaa_lp_ordinary_job_initial_shape BEFORE INSERT ON app.job
  FOR EACH ROW EXECUTE FUNCTION app.lp_ordinary_job_initial_shape();
 
 CREATE OR REPLACE FUNCTION app.guard_imported_job() RETURNS trigger
- LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE expected_operation text;
 BEGIN
  expected_operation:=CASE NEW.provenance WHEN 'imported' THEN 'adoption' WHEN 'work_order' THEN 'work_order'
