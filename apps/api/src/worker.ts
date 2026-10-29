@@ -44,7 +44,7 @@ const tasks:TaskList={
 registerFinalCheckTask(tasks,async parsed=>{await executeFinalCheckTask(queueContext({tenantId:parsed.tenantId}),parsed);});
 // SV-5 Q6 practice run (Ben, 28 Oct). Requests come only from the owner's checked routine; this worker alone
 // freezes the manifest, examines each frozen source honestly, reconciles and publishes the completion record.
-const practiceRun=new FinalCheckWorker(practiceFinalCheckPorts(shadowPool,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex")),"synthetic_demo");
+const practiceRun=new FinalCheckWorker(practiceFinalCheckPorts(shadowPool,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex"),createHash("sha256").update(generatePracticePng("j3-drainage-photo")).digest("hex")),"synthetic_demo");
 const practiceTaskV1=z.object({version:z.literal("final-check-practice-run.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),lockId:z.guid({ error: "Invalid uuid" })}).strict();
 tasks.discover_final_check_requests=async(_payload,helpers)=>{const rows=await helpers.withPgClient(client=>client.query<{lock_id:string;tenant_id:string;job_id:string}>(`SELECT lock_id,tenant_id,job_id FROM infrastructure.final_check_request WHERE enqueued_at IS NULL ORDER BY requested_at LIMIT 100 FOR UPDATE SKIP LOCKED`));for(const row of rows.rows){await helpers.addJob("final_check_practice_run",{version:"final-check-practice-run.v1",tenantId:row.tenant_id,jobId:row.job_id,lockId:row.lock_id},{jobKey:`final-check-practice:${row.lock_id}`});await helpers.withPgClient(client=>client.query("UPDATE infrastructure.final_check_request SET enqueued_at=clock_timestamp() WHERE lock_id=$1",[row.lock_id]));}};
 tasks.final_check_practice_run=async payload=>{
