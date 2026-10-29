@@ -153,11 +153,11 @@ async function enterpriseReconciliationAdditions(before: Awaited<ReturnType<type
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
 
-// ENT-7c (0298): only the fee book's two tables, their indexes, policies and three routines.
+// ENT-7c (0298/0337): only the fee book's two tables, their current indexes, policies and three routines.
 async function enterprisePostingAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["platform_enterprise_fee", "platform_enterprise_fee_line"];
  const indexNames = ["platform_enterprise_fee_pkey", "platform_enterprise_fee_line_pkey",
-  "platform_enterprise_fee_tenant_id_statement_id_agreement_ve_key"];
+  "enterprise_fee_section_accrual", "enterprise_fee_section_compensation"];
  const routineIdentities = [
   ["ef_posted_net", "t uuid, p_agreement uuid"],
   ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid"],
@@ -482,6 +482,7 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
  const indexNames=["recovery_attribution_revision_pkey","ra_revision_subject_revision","ra_revision_subject_id","recovery_attribution_command_pkey","recovery_attribution_reassessment_pkey"];
  const routineIdentities=[
   ["recovery_attribution_immutable",""],
+  // SV-6 / 0340: exact private resolver identity, with no new access allowance.
   ["recovery_attribution_sources","t uuid, j uuid, p jsonb, actor uuid"],
   ["append_recovery_attribution","p_document jsonb, p_actor uuid, p_command jsonb, p_cause text, p_source text"],
   ["assess_recovery_attribution","p_job uuid, p_session text, p_command jsonb"],
@@ -491,6 +492,9 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
  ];
  const routines=after.routines.filter(r=>r.nspname==="app"&&routineIdentities.some(([name,args])=>r.proname===name&&r.args===args));
  expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...routineIdentities].sort());
+ const resolver=routines.find(r=>r.proname==="recovery_attribution_sources");
+ expect(resolver).toMatchObject({prosecdef:false,proacl:"{jobguard_migration=X/jobguard_migration}",proconfig:["search_path=pg_catalog, app","TimeZone=UTC"]});
+ expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner",[resolver!.proowner])).rows).toEqual([{owner:"jobguard_migration"}]);
  const indexes=(await f.admin.query("SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname",[tables])).rows.map(r=>r.relname);
  expect(indexes).toEqual([...indexNames].sort());
  const names=[...tables,...indexNames];

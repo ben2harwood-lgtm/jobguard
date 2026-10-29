@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/sv6-hookup"
       ],
-      "note": "RED SV-6 runtime attribution hookup catch-up after merged PR #383. Own migration renumbered 0311 to reserved 0340 with identical SQL bytes, after main's 0335 stored receipt allocator. Only this piece's paths are listed; its own lane file is implicitly permitted. PostgreSQL/browser CI and independent RED review remain required.",
+      "note": "RED SV-6 / PR #400 CI repair try 2: reject malformed session digests at the existing dependency-bound input gate. Original SV6-20 assertions unchanged; add malformed-digest and valid-shaped-unauthenticated attacks. 0340 SQL changes only the digest guard and comment. No grants, exceptions or access assertions widened; PostgreSQL CI and independent RED review remain required. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/recovery-attribution-value.ts",
@@ -14,6 +14,7 @@
         "apps/api/src/recovery-attribution.controller.test.ts",
         "apps/api/src/recovery-attribution.controller.ts",
         "apps/api/src/recovery-attribution.http.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/recovery-attribution-v1.md",
         "packages/core/src/recovery-attribution-illustration.test.ts",
         "packages/core/src/recovery-attribution-illustration.ts",
@@ -23,8 +24,12 @@
         "packages/db/migrations/0340_recovery_attribution_hookup.sql",
         "packages/db/src/recovery-attribution-repository.test.ts",
         "packages/db/src/recovery-attribution-repository.ts",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/recovery-attribution-access.integration.test.ts",
         "packages/db/test/recovery-attribution-hookup-upgrade.integration.test.ts",
-        "packages/db/test/recovery-attribution-hookup.integration.test.ts"
+        "packages/db/test/recovery-attribution-hookup.integration.test.ts",
+        "packages/db/test/recovery-attribution.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
