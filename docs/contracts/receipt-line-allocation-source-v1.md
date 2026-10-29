@@ -1,6 +1,6 @@
 # Receipt-line allocation contracts v1 — M48-C0
 
-Current synthetic status: 0377 enables both v1 command protocols through the
+Current synthetic status: 0384 enables both v1 command protocols through the
 0335 neutral producer described in the final sections. Earlier held-status statements below describe 0258 and its
 superseded build-ahead command protocol, which remains refused.
 
@@ -83,7 +83,7 @@ catch variation and exact commercial revision in the case's `variation:` and
 this lock and its completed check. A generic invoice reference cannot borrow
 another case's catch or turn an original-bill line into a catch.
 
-## 0377 — v1 command producer
+## 0384 — v1 command producer
 
 `receipt-line-allocation-command.v1` now uses the same synthetic producer, saved
 review, exact authorization, SH-1 validation and immutable fact tables as
@@ -102,7 +102,7 @@ evidence must match the existing persisted, verified source. The no-amount
 protocol is unchanged. Approvals must use the protocol of their saved review;
 command identity/payload conflicts across protocols remain errors.
 
-0377 replaces the latest writer and source-approval validator from 0335 only.
+0384 replaces the latest writer and source-approval validator from 0335 only.
 It adds no tables, routines, grants, policies, provider calls or fee eligibility.
 Existing no-amount commands retain their stored results and replay behavior.
 Forward fix by a later migration; do not rewrite immutable saved rows or reverse
