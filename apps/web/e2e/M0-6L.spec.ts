@@ -71,7 +71,7 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  await page.route("**/api/subscriptions/current",route=>route.fulfill({status:503,json:{code:"SUBSCRIPTION_UNAVAILABLE"}}),{times:1});
  await payment.click();
  await expect(page.getByRole("status")).toContainText("Approval saved. Simulated payment is pending.");
- await expect(page.getByRole("alert")).toContainText("Subscription details are unavailable");
+ await expect(page.getByRole("main").getByRole("alert")).toContainText("Subscription details are unavailable");
  await expect(payment).toHaveCount(0);
  await page.reload();
  await payment.click();await expect(page.getByRole("region",{name:"Subscription periods"})).toContainText("Simulated settlement — no real money paid");
@@ -157,7 +157,7 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   await expect(companySwitcher.locator("option")).toHaveCount(2);
   // The invited finance role cannot read the owner/admin subscription surface.
   await companySwitcher.selectOption(invited.tenant);
-  await expect(memberPage.getByRole("alert")).toContainText("Subscription details are unavailable");
+  await expect(memberPage.getByRole("main").getByRole("alert")).toContainText("Subscription details are unavailable");
   await expect(memberPage.getByRole("region",{name:"Your subscription",exact:true})).toHaveCount(0);
   await companySwitcher.selectOption(ownTenant);
   await expect(memberPage.getByRole("region",{name:"Your subscription",exact:true})).toBeVisible();
