@@ -25,6 +25,7 @@ const finalCheckTables=["final_check_manifest","final_check_manifest_source","sh
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
  "app.payment_fee_command":[],
  "app.payment_fee_statement":[],
+ "app.lp_job_insert_permit":[],
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
  "app.small_builder_demo_run":[],

@@ -147,3 +147,4 @@ export * from "./enterprise-baseline-repository.js";
 
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./value-business-reader.js";

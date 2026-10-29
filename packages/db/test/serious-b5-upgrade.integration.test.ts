@@ -886,6 +886,56 @@ async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>)
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 // 0306 adds only these objects; every predecessor catalogue row still compares in full.
+// LP-2 adds a private, tenant-checked permit table and five exact routines.
+// Keep predecessor facts intact except the three explicitly withdrawn EXECUTE ACLs.
+async function jobDoorAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const table = "lp_job_insert_permit", names = [table, `${table}_pkey`];
+ expect(before.rows).not.toHaveProperty(`app.${table}`);
+ expect(after.rows[`app.${table}`]).toEqual([]);
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual(names);
+ const relation = relations.find(r => r.relname === table)!;
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for (const r of relations) expect(r.relowner).toBe(owner);
+ expect(relation.relrowsecurity).toBe(true); expect(relation.relforcerowsecurity).toBe(true);
+ expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[relation.relacl])).rows[0].acl)
+  .toEqual(["jobguard_migration=arwdDxt/jobguard_migration"]);
+ const policies = after.policies.filter(p => p.schemaname === "app" && p.tablename === table);
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({policyname:"tenant_isolation",permissive:"PERMISSIVE",cmd:"ALL"});
+ expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policies[0].roles])).rows[0].roles).toEqual(["jobguard_migration"]);
+ const tenantCheck = "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
+ expect(policies[0].qual).toBe(tenantCheck); expect(policies[0].with_check).toBe(tenantCheck);
+ const signatures = ["app.lp_job_insert_shape(app.job)","app.lp_job_permit_consumed()","app.lp_ordinary_job_initial_shape()",
+  "app.create_practice_sandbox_job(uuid,uuid,uuid,text)","app.start_quote_from_review(uuid,uuid,integer,uuid,uuid,uuid,uuid,text)"];
+ const identities = (await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p WHERE p.oid=ANY($1::regprocedure[])`,[signatures])).rows;
+ expect(identities).toHaveLength(5);
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(i => i.proname === r.proname && i.args === r.args));
+ expect(routines).toHaveLength(5);
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r.proowner).toBe(relation.relowner); expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  expect(r.prosecdef).toBe(!["lp_job_insert_shape","lp_ordinary_job_initial_shape"].includes(r.proname));
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl as string[];
+  const executors = ["jobguard_migration=X/jobguard_migration"];
+  if (["create_practice_sandbox_job","start_quote_from_review"].includes(r.proname)) executors.push("jobguard_runtime=X/jobguard_migration");
+  expect(acl.sort()).toEqual(executors.sort());
+ }
+ const withdrawn = (await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p WHERE p.oid=ANY($1::regprocedure[])`,[["app.guard_imported_job()",
+   "app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)",
+   "app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz)"]])).rows;
+ expect(withdrawn).toHaveLength(3);
+ const ownerAcl = (await f.admin.query("SELECT $1::text[]::aclitem[] acl",[["jobguard_migration=X/jobguard_migration"]])).rows[0].acl;
+ const previous = before.routines.map(r => withdrawn.some(i => r.nspname === "app" && r.proname === i.proname && r.args === i.args)
+  ? {...r,proacl:ownerAcl,...(r.proname === "guard_imported_job" ? {prosecdef:false,proconfig:["search_path=pg_catalog"]} : {})} : r);
+ const additive = <T>(old:T[],added:T[],live:T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(a)) - live.findIndex(r => JSON.stringify(r) === JSON.stringify(b)));
+ return {rows:{...before.rows,[`app.${table}`]:[]},routines:additive(previous,routines,after.routines),
+  relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
+
 async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const tables = ["evidence_pack_v3", "evidence_pack_v3_approval", "evidence_pack_v3_check", "evidence_pack_v3_request"];
@@ -930,6 +980,22 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
+async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [["read_value_business", "digest text"], ["read_value_job", "j uuid, digest text"]];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r).toMatchObject({ prosecdef: true, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+   proconfig: r.proname === "read_value_job" ? ["search_path=pg_catalog, app", "TimeZone=UTC"] : ["search_path=pg_catalog, app"] });
+  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner", [r.proowner])).rows).toEqual([{ owner: "jobguard_migration" }]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
+
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -955,7 +1021,9 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await jobDoorAdditions(expected));
  Object.assign(expected, await withOidcAdditions(expected));
+ Object.assign(expected, await valueSourceAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
