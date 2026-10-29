@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon8-operative": {
+      "branches": [
+        "codex/sandbox/mon8-operative"
+      ],
+      "note": "RED. MON-8-P-B slice 1: synthetic operative grants and site-origin entitlement guards; remaining MON-8 slices are excluded.",
+      "allow": [
+        "apps/api/src/contractor/contractor-retained-read.application.test.ts",
+        "apps/api/src/contractor/contractor.application.ts",
+        "apps/api/src/contractor/offline-risk.application.test.ts",
+        "apps/api/src/contractor/operative-entitlements.application.test.ts",
+        "apps/api/src/contractor/site-extra-evidence.application.test.ts",
+        "apps/api/src/contractor/site-extra-pricing.application.test.ts",
+        "apps/api/src/contractor/site-extra.application.test.ts",
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/contractor/site-visit.application.test.ts",
+        "docs/contracts/contractor-entitlement-authority-v1.md",
+        "packages/db/migration-notes/0402_operative_entitlements.md",
+        "packages/db/migrations/0402_operative_entitlements.sql",
+        "packages/db/src/contractor-entitlement-authority-repository.ts",
+        "packages/db/test/contractor-entitlement-authority.integration.test.ts",
+        "packages/db/test/contractor-entitlement-session.integration.test.ts",
+        "packages/db/test/identity.integration.test.ts",
+        "packages/db/test/operative-entitlements-upgrade.integration.test.ts",
+        "packages/db/test/operative-entitlements.integration.test.ts",
+        "packages/db/test/practice-worker-switch-fixtures.ts",
+        "packages/db/test/practice-worker-switch.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/sso-emergency.integration.test.ts"
+      ]
+    }
+  }
+}

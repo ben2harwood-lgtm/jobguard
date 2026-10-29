@@ -1,6 +1,7 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool, type PoolClient } from "pg";
 import { ContractorRepository, ExtraRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
@@ -11,6 +12,7 @@ import { createWorkspaceApplication } from "../workspace/application.js";
 const body = () => ({ version: "log-site-extra.v1", commandId: crypto.randomUUID(), note: "Fictional note", description: "Fictional extra" });
 const authorityFields = ["commandType", "actorMembershipId", "membershipId", "grantId", "tenantId", "requested_tenant_id", "role", "raisingRole", "origin", "kind", "jobTrack", "track", "serverRecordedAt", "time", "state", "raiserAssigned", "workOrderId", "workOrderRevisionId", "originHash", "environment", "provenance"];
 const member = () => ({ tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() }) as AuthenticatedMembership;
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("ENT-3a service and Nest boundary", () => {
  it("[A8] passes the identical session membership object and exactly four input fields", async () => {

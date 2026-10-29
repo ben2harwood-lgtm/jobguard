@@ -26,7 +26,13 @@ async function newCase(type="withheld_customer_payment",target=job){
 }
 async function member(role:string,state="active"){
  const id=randomUUID(),identity=randomUUID();await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[identity]);
- await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]);return {membershipId:id,identityUserId:identity};
+ // Table-owner-only historical fixture: MON-8 now forbids NEW small-builder operatives.
+ // Retain the dispatcher test for an operative that predates the entitlement migration.
+ await withTenant(admin,context,async db=>{
+  if(role==="operative")await db.$client.query("ALTER TABLE app.membership DISABLE TRIGGER mon8_operative_membership");
+  await db.$client.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]);
+  if(role==="operative")await db.$client.query("ALTER TABLE app.membership ENABLE TRIGGER mon8_operative_membership");
+ });return {membershipId:id,identityUserId:identity};
 }
 async function handMade(db:PoolClient,caseId:string,memberId:string,over:Record<string,unknown>={}){
  const c=randomUUID(),d=randomUUID(),r=randomUUID(),a=randomUUID(),action=over.action??"recovery.terms.approve";

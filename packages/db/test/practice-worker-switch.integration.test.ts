@@ -1,3 +1,4 @@
+import { ownerTx } from "./extra-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
@@ -283,7 +284,7 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
 it("[PW5] a target linked to another company's sign-in locator is not eligible", async () => {
  const f = await company(c), b = await company(c);
  const user = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.members.operative])).rows[0]!.identity_user_id, linked = randomUUID();
- await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,$3,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$4", [b.p.tenantId, linked, user, b.p.membershipId]);
+ await ownerTx(c,b.p.tenantId,db=>db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,$3,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$4", [b.p.tenantId, linked, user, b.p.membershipId]));
  await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [user, b.p.tenantId, linked]);
  await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" }); expect(await lookup(c, f)).toEqual(f.p);
 });

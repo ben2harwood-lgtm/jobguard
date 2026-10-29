@@ -102,3 +102,25 @@ unit/check results. No query double is offered as database evidence. B's Q-03
 runtime-command denial matrix, legacy compatibility and retained-read integration
 remain outstanding; C waits for merged MON-2A-P and actual MON-3-P transitions.
 No independent acceptance or release gate is claimed by this document.
+
+## MON-8-P-B operative grants (slice 1)
+
+Operative member invitations and grants, and both site-extra capture routes, now
+require `operative_roles` / `site_origin_capture` through the existing server
+agreement evaluator. These two synthetic features are explicitly enabled by the
+server adapter. No client enablement or plan is accepted. The route precheck is
+not a credential: migration 0402 rechecks the latest bound active agreement at
+membership, grant, invitation and site-origin insertion, holding the tenant lock
+through persistence. Identity invitations/provisioning are guarded in SQL too.
+
+New fictional practice organisations explicitly generate their initial active
+fixture status. This is a narrow synthetic generator writer, not a live agreement
+activation API; existing organisations and previous assignments are not backfilled.
+Historical records and their existing read/export permissions are preserved.
+Suspension/inactivity or a superseding assignment without active status refuses
+new writes. Existing command replay may return its historical result without
+creating another record; routes still check current entitlement before a write
+request. Revocation/expiry of an existing operative remains allowed after loss.
+Approval chains, work-order and SSO entitlement wiring, and plan-transition work,
+remain outside this slice. No money, allocation, locked-bill or shadow-data read
+surface is added; their existing guards remain authoritative.

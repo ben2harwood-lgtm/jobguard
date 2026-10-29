@@ -103,7 +103,7 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
  });
  it("rejects expired invitations and revocation before new business commands",async()=>{
   const owner=await signup(),app=new IdentityApplication(owner.provider,origin),recipient=email();
-  const invitation=await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role:"operative"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin});
+  const invitation=await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role:"foreman"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin});
   const expiredId=randomUUID();
   await admin.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) SELECT $2,email,tenant_id,account_id,role,clock_timestamp()-interval '1 second',issuer_user_id FROM identity.invitation WHERE id=$1",[invitation.id,expiredId]);
   await fixture().requestCode({email:recipient,purpose:"invitation",invitationId:expiredId,ip:randomUUID()});

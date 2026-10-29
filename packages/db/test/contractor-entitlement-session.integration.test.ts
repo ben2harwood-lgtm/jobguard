@@ -27,7 +27,7 @@ it("status change during lock wait is observed",async()=>{
  const pending=new ContractorEntitlementAuthorityRepository(c.runtime).withAuthority(f.session,async(db,a)=>{expect((await db.$client.query("SELECT count(*)::int n FROM pg_locks WHERE pid=pg_backend_pid() AND locktype='advisory' AND mode='ShareLock' AND granted")).rows[0].n).toBeGreaterThan(0);return a;});
  // Wait for an actual lock waiter, never a fixed sleep as proof of concurrency.
  let waiting=false;for(let i=0;i<200;i++){waiting=(await c.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) ok")).rows[0].ok;if(waiting)break;await new Promise(r=>setTimeout(r,10));}expect(waiting).toBe(true);
- const inserted=await writer.query("INSERT INTO app.contractor_agreement_status_revision SELECT tenant_id,$2,assignment_id,2,'suspended',schema_version,environment,clock_timestamp(),$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 RETURNING to_jsonb(contractor_agreement_status_revision) AS inserted_row",[f.p.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
+ const inserted=await writer.query("INSERT INTO app.contractor_agreement_status_revision SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,clock_timestamp(),$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1 RETURNING to_jsonb(contractor_agreement_status_revision) AS inserted_row",[f.p.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
  await writer.query("COMMIT");expect((await pending).status?.status).toBe("suspended");
  const after=await snapshot(c.admin), table="app.contractor_agreement_status_revision";
  expect({...after,[table]:before[table]}).toEqual(before);
