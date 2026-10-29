@@ -21,6 +21,9 @@ test("DEMO-J3 creates and replays its real capture, builds £33,600 and locks th
  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
  await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+ await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+ const price = page.getByRole("button", { name: "Price the work", exact: true });
+ await expect(price).toBeVisible(); await expect(price).toBeEnabled(); await price.click();
  await startWatchdogJob(page);
  const post = (path: string, data: unknown) => jsonResult(page.request.post(`/api/jobs/${jobId}/${path}`, { data }), path);
  const read = (path: string) => jsonResult(page.request.get(`/api/jobs/${jobId}/${path}`), path);
