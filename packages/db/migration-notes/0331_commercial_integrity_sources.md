@@ -77,3 +77,12 @@ role override is used in the published suite. Its shared financial fixture also
 uses the actual receipt, credit and reversal writers; credit/line limits and
 reversal assertions retain their original boundaries. PostgreSQL execution is
 deferred to CI.
+
+CI-fix try 1 (29 October 2026): PostgreSQL resolves `text[] || 'literal'`
+as array concatenation and tries to parse the literal as an array. Availability
+branches now use `array_append` for each single reason, including the bounded
+pending/failed CASE result. This corrects 0331 SQL itself; grants, tables,
+source selection and advisory semantics are unchanged. Migration 0330 is
+unchanged. The published financial regression now explicitly publishes its
+verified run's completion certificate through the existing worker trigger before
+issuing invoices; reconciliation alone is not invoice authority.

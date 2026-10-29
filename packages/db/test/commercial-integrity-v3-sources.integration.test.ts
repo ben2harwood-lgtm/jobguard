@@ -61,7 +61,7 @@ it("CH-6 immutable server lifecycle pairs survive read/review replays without in
   for(let n=1;n<=4;n++){
    const id=randomUUID(),finish=n%2===1;
    await db.query(`INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,request_hash,audit_event_id)
-   VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 hour'+($4||' seconds')::interval,$6,$7,$8,repeat('a',64),$9)`,[tenant,job,id,n,finish?"finished_on_site":"finished_cancelled",member,randomUUID(),finish?null:predecessor,randomUUID()]);
+   VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 hour'+($4::integer * interval '1 second'),$6,$7,$8,repeat('a',64),$9)`,[tenant,job,id,n,finish?"finished_on_site":"finished_cancelled",member,randomUUID(),finish?null:predecessor,randomUUID()]);
    predecessor=id;
   }
   await db.query("SET LOCAL session_replication_role='origin'");

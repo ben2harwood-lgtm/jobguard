@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { CommercialIntegrityV3Application } from "./commercial-integrity-v3.application.js";
 import { CommercialIntegrityV3Controller } from "./commercial-integrity-v3.controller.js";
 import { IntegrityV3Error } from "./commercial-integrity-v3.contracts.js";
+import { createWorkspaceApplication } from "./workspace/application.js";
 import { AppModule } from "./app.module.js";
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 it("Nest forwards only job/cookie/input and emits no-store on success and bounded errors",async()=>{
@@ -37,4 +38,22 @@ it("builder boundary has no hidden reads, money/meter/command/provider consumer 
  }
  const source=await readFile(new URL("commercial-integrity-v3.application.ts",import.meta.url),"utf8");
  expect(source).toContain("r.read(");expect(source).toContain("r.review(");expect(source).toContain("r.readFamily(");
+});
+
+it("workspace composes all CH-6 methods with only its request session authority",async()=>{
+ const sessionId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",jobId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ const query={},body={version:"commercial-integrity-review.v3"};
+ const family=vi.spyOn(CommercialIntegrityV3Application.prototype,"family").mockResolvedValue({family:"v3"} as never);
+ const view=vi.spyOn(CommercialIntegrityV3Application.prototype,"view").mockResolvedValue({version:"saved-view"} as never);
+ const review=vi.spyOn(CommercialIntegrityV3Application.prototype,"review").mockResolvedValue({version:"saved-review"} as never);
+ const workspace=createWorkspaceApplication({pool:{} as Pool,sessionId});
+ expect(await workspace.commercialIntegrityV3.family(jobId)).toEqual({family:"v3"});
+ expect(await workspace.commercialIntegrityV3.view(jobId,query)).toEqual({version:"saved-view"});
+ expect(await workspace.commercialIntegrityV3.review(jobId,body)).toEqual({version:"saved-review"});
+ expect(family).toHaveBeenCalledWith(sessionId,jobId);
+ expect(view).toHaveBeenCalledWith(sessionId,jobId,query);
+ expect(review).toHaveBeenCalledWith(sessionId,jobId,body);
+ const anonymous=createWorkspaceApplication({pool:{} as Pool});
+ await anonymous.commercialIntegrityV3.family(jobId);
+ expect(family).toHaveBeenLastCalledWith(undefined,jobId);
 });

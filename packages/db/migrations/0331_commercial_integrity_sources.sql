@@ -82,10 +82,10 @@ BEGIN
  BEGIN
  reveal:=app.read_final_check_reveal(t,j,d);
  EXCEPTION WHEN insufficient_privilege THEN
- RETURN jsonb_build_object('published',NULL,'availability',missing||'published_final_check_unavailable');
+ RETURN jsonb_build_object('published',NULL,'availability',array_append(missing,'published_final_check_unavailable'));
  END;
  IF reveal->>'state'<>'completed' OR reveal->>'lockId'<>l.id::text THEN
-  RETURN jsonb_build_object('published',NULL,'availability',missing||CASE WHEN reveal->>'state'='failed' THEN 'published_final_check_failed' ELSE 'published_final_check_pending' END);
+  RETURN jsonb_build_object('published',NULL,'availability',array_append(missing,(CASE WHEN reveal->>'state'='failed' THEN 'published_final_check_failed' ELSE 'published_final_check_pending' END)));
  END IF;
  SELECT * INTO r FROM app.final_account_revision WHERE tenant_id=t AND job_id=j AND id=l.final_account_revision_id;
  IF NOT FOUND OR r.currency<>'GBP' THEN RAISE EXCEPTION 'INTEGRITY_SOURCE_UNAVAILABLE'; END IF;
@@ -106,7 +106,7 @@ BEGIN
   JOIN app.final_account_invoice_binding ib ON(ib.tenant_id,ib.job_id,ib.invoice_id)=(b.tenant_id,b.job_id,b.invoice_id)
   WHERE b.tenant_id=t AND b.job_id=j AND vr.variation_id=o.variation_id AND ib.lock_id=l.id AND b.gross_pence BETWEEN 0 AND 1000000000000
   AND (SELECT count(*) FROM app.final_account_invoiced_line all_lines JOIN app.variation_revision all_revisions ON(all_revisions.tenant_id,all_revisions.job_id,all_revisions.id)=(all_lines.tenant_id,all_lines.job_id,all_lines.source_id) WHERE all_lines.tenant_id=t AND all_lines.job_id=j AND all_revisions.variation_id=o.variation_id)=1) line ON true;
- IF EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='confirmed' AND c->>'invoiceLineId' IS NULL) THEN missing:=missing||'catch_line_source_unavailable'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='confirmed' AND c->>'invoiceLineId' IS NULL) THEN missing:=array_append(missing,'catch_line_source_unavailable'); END IF;
  -- Proof must be a published, verified original completion photograph from before this lock.
  SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.signal_id::text||':'||e.id::text,'completion_evidence',e.server_received_at,
  jsonb_build_object('id',e.id,'hash',e.sha256,'version',e.object_version_id,'bytes',e.byte_length,'lock',p.lock_id)),
@@ -118,7 +118,7 @@ BEGIN
  AND EXISTS(SELECT 1 FROM jsonb_array_elements(reveal->'items') v WHERE v->>'signalId'=p.signal_id::text)
  AND e.kind='original' AND e.evidence_type='completion_photo' AND e.byte_length>0 AND length(e.object_version_id)<=300 AND e.object_version_id~'^[ -~]+$' AND e.server_received_at<=l.locked_at
  AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation invalid WHERE invalid.tenant_id=t AND invalid.evidence_id=e.id);
- IF jsonb_array_length(completions)=0 AND EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='dismissed_not_completed') THEN missing:=missing||'completion_evidence_source_unavailable'; END IF;
+ IF jsonb_array_length(completions)=0 AND EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='dismissed_not_completed') THEN missing:=array_append(missing,'completion_evidence_source_unavailable'); END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.id::text,'customer_payment',p.created_at,
  jsonb_build_object('id',p.id,'invoice',p.invoice_id,'pence',p.amount_pence,'reversal',rv.id),'builder_attested'),
  'value',jsonb_build_object('pence',p.amount_pence,'currency','GBP','basis','gross'),'reversed',rv.id IS NOT NULL) ORDER BY p.id),'[]') INTO receipts
@@ -133,7 +133,7 @@ BEGIN
  'correctionKind',c.correction_kind,'invoiceLineId',c.line_id::text,'value',jsonb_build_object('pence',c.amount_pence,'currency','GBP','basis','gross'),'actual',true)
  FROM app.ch6_line_correction_source c WHERE c.tenant_id=t AND c.job_id=j AND c.lock_id=l.id AND c.session_digest=d
  AND (c.correction_kind='credit' OR NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=c.evidence_id))) sources;
- IF EXISTS(SELECT 1 FROM jsonb_array_elements(corrections) c WHERE c->>'invoiceLineId' IS NULL) THEN missing:=missing||'credit_line_source_unavailable'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(corrections) c WHERE c->>'invoiceLineId' IS NULL) THEN missing:=array_append(missing,'credit_line_source_unavailable'); END IF;
  IF EXISTS(SELECT 1 FROM app.ch6_line_correction_source c WHERE c.tenant_id=t AND c.job_id=j AND c.session_digest=d AND c.correction_kind='writeoff' AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=c.evidence_id)) THEN missing:=array_remove(missing,'writeoff_line_source_unavailable'); END IF;
  -- The installed neutral receipt source adapter explicitly refuses every save with
  -- RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED (0258 / receipt-line-allocation-repository.ts).

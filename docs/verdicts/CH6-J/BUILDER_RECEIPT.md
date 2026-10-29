@@ -716,3 +716,55 @@ execution remain for GitHub CI. The supplied RED pass at 18db2a9f is historical;
 this catch-up's deterministic checks are not an independent review of a new head.
 Router owns staging, commit, push, current-head CI and status updates.
 Ready message: /tmp/ch6-j-20261029T011209Z-commit-msg.txt.
+
+## PR #392 CI-fix try 1 — 29 October 2026, 01:31 run
+
+RED. Read all supplied CI failure traces in ch6-j-ci-traces-0131.txt. The
+worktree had no outstanding conflicts. Fixed each root cause without skipping
+or weakening tests and without changing exceptions:
+
+- Both browser projects: CH-6 saved-v1/fresh-v3 and M1-16-S draft/activated
+  journeys could not display their recorded checks because the web transport
+  found no commercialIntegrityV3 in createWorkspaceApplication. Compose the
+  existing application there, forwarding only the request's session to family,
+  view and review. Added a regression through the real workspace factory for
+  all three delegates and the absent-session case; no alternative authority.
+- CI-P03: 0331's text-array concatenation interpreted a reason as an array
+  literal (22P02). Use array_append on all five single-reason branches. This
+  is a SQL bug, so 0331 necessarily changes; no grants, table definitions or
+  sources change. Its pending/failed CASE is parenthesized. 0330 is unchanged.
+- Five published financial tests: reconciliation deliberately does not publish
+  an invoice-authorizing certificate. The fixture now explicitly inserts the
+  completion for its exact verified run and lock through the existing shadow
+  worker's normal completion trigger before the production invoice command.
+  It preserves all certificate checks, triggers, FK and invoice assertions.
+- Lifecycle source replay test: PostgreSQL inferred parameter $4 as both integer
+  sequence and text concatenation. Derive the interval from $4::integer instead.
+- SERIOUS-B5 upgrade: pg_policies.roles is name[] and pg returns its raw text.
+  Reuse the suite's established name[]::text[] conversion, retaining the exact
+  expected migration-only policy role.
+
+Local checks actually executed with installed tools, at most two Vitest workers:
+- API Vitest: commercial-integrity-v3.boundary, commercial-integrity-v3.application
+  and value/value-composition: 3 files, 26/26 PASS.
+- Web Vitest: family route, v3 route and commercial-integrity-v3 UI: 3 files,
+  67/67 PASS. These are unit/transport checks, not browser execution.
+- DB Vitest: commercial-integrity-v3-input and lp-0-catalog: 2 files, 32/32 PASS.
+- Node boundary and current-source-guard: 253/253 PASS, log
+  /tmp/ch6-j-20261029T013134Z-boundary.log.
+- API tsc --noEmit and API tsc build PASS; focused integration-fixture TypeScript
+  PASS with /tmp/ch6-j-20261029T013134Z-types.json.
+- OpenAPI check PASS via node --import tsx in apps/api. An initial invocation
+  from the repository root could not resolve that package-local loader; reran
+  from its proper package directory without changing source or dependencies.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions; existing migration order checker PASS;
+  tracked-file conflict-marker scan and git diff --check PASS.
+
+0330 remains byte-identical to HEAD. Corrected 0331 SHA-256:
+312ac5de619bdc47263ec098c86f5b00a26348e4f6bac3b49f8da7cc91870993.
+No PostgreSQL/browser suite could execute in this sandbox; CI must exercise the
+reported DB and end-to-end failures. No Git writes, exceptions, downloads,
+customer data or live actions. The router owns commit/push, CI and RED review
+binding for the repaired head. Ready message:
+/tmp/ch6-j-20261029T013134Z-commit-msg.txt.

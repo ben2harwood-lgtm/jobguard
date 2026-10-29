@@ -848,7 +848,7 @@ async function integritySourceAdditions(before: Awaited<ReturnType<typeof snapsh
  const keys=(await f.admin.query("SELECT conrelid::regclass::text relation,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE contype='u' AND conrelid IN('app.ch6_identifier_assertion'::regclass,'app.ch6_line_correction_source'::regclass) ORDER BY 1,2")).rows;
  expect(keys).toEqual([{relation:"app.ch6_identifier_assertion",definition:"UNIQUE (tenant_id, job_id, session_digest, identifier_kind, subject_ref, authority_ref)"},{relation:"app.ch6_line_correction_source",definition:"UNIQUE (tenant_id, job_id, correction_kind, authority_ref)"}]);
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));expect(policies).toHaveLength(2);
- for(const policy of policies){expect(policy.policyname).toBe("tenant_isolation");expect(policy.roles).toEqual(["jobguard_migration"]);}
+ for(const policy of policies){expect(policy.policyname).toBe("tenant_isolation");expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);}
  const order=(x:unknown,list:unknown[])=>list.findIndex(r=>JSON.stringify(r)===JSON.stringify(x));
  return {...before,rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:[...before.routines,...routines].sort((a,b)=>order(a,after.routines)-order(b,after.routines)),relations:[...before.relations,...uniqueRelations].sort((a,b)=>order(a,after.relations)-order(b,after.relations)),policies:[...before.policies,...policies].sort((a,b)=>order(a,after.policies)-order(b,after.policies))};
 }

@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up to main f7aa65c8. Resolve only application composition and privilege-inventory conflicts, retaining both sides and every main shared-list entry. Reserved migrations 0330/0331 remain byte-identical to RED-reviewed head 18db2a9f. Exact branch payload paths; own lane file is implicit. PostgreSQL/browser execution remains for GitHub CI.",
+      "note": "RED: CH-6 / PR #392 CI-fix try 1. Compose request-scoped workspace facade; repair 0331 text-array append bug; correct completion publication and PostgreSQL fixture typing. Existing tests and controls retained. PostgreSQL and browser execution remain for GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
@@ -17,6 +17,7 @@
         "apps/api/src/commercial-integrity-v3.contracts.ts",
         "apps/api/src/commercial-integrity-v3.controller.ts",
         "apps/api/src/commercial-integrity-v3.http.test.ts",
+        "apps/api/src/workspace/application.ts",
         "apps/web/app/api/jobs/[id]/commercial-integrity/family/route.test.ts",
         "apps/web/app/api/jobs/[id]/commercial-integrity/family/route.ts",
         "apps/web/app/api/jobs/[id]/commercial-integrity/v3/reviews/route.test.ts",
