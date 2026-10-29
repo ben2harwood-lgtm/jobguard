@@ -852,3 +852,21 @@ Local checks actually run:
 - `git diff --check`: PASS; no conflict markers remain in the resolved test files.
 
 Standard `node tools/agent-lane-boundary-lint.mjs` reports the old migration paths and incoming main paths because HEAD/index still describe an unfinished merge; this is not claimed as a CLI pass. Router must stage the resolved files/renames and finish the existing merge, then run the standard gate. Repository Git metadata was not written here. PostgreSQL/browser execution and full checks remain GitHub CI work after push. Prior RED pass was at 47177b7b; this catch-up is not a fresh independent review or release approval. No providers, real data, live money or deployment used.
+
+
+### 29 October 2026 09:15 CI-fix try 2 of 3 — RED, PR #283
+
+Read `/Users/benharwood/.local/share/full-steam/codex-runs/lp-2-ci-traces-0915.txt`. Its one LP-2 database failure is `lp-job-doors-compatibility.integration.test.ts`, `[LP2-A12] ENT-2 import still creates one live work-order job atomically through the product repository`, at the replay equality assertion (old line 39). The first import correctly returns `replayed: false`; the repeated command correctly returns `replayed: true`. The compatibility test incorrectly expected the second response to equal the first including the false flag. `WorkOrderRepository.importCsv`, `docs/contracts/work-order-import-v1.md` replay semantics and the existing ENT-2 import/concurrency tests confirm the replay is required, not a product defect.
+
+Fixed the test at that assertion: full response equality now requires `{ ...result, replayed: true }`, and an additional assertion requires the first result's replay flag to be false. All other fields still compare exactly; unchanged job/audit counts remain required. No skips, loose matchers, widened permissions or exceptions, production changes, or SQL edits. The two lp-downstream-inventory core-check failures remain explicitly outside this repair per the supplied #411 instruction; neither the tool nor its document was changed.
+
+Worktree started clean at `7372fe5f`; local origin/main `cc147d78` is already an ancestor, and there are no merge conflicts to resolve. No Git metadata was written. Both 0356 and 0357 match HEAD byte-for-byte, SHA-256 respectively `029e4c0bbd86218afa566eb957e61dc9a8696ff6b8a1d2c57a9bfff66a5122ee` and `025c202ec622657e57512057ad6826e841c01449379db0b5c254cf6ef87d2d1d`. Inspected the CASE occurrences in both own migrations: none is inside a PL/pgSQL IF condition, so no parenthesisation or SQL change is needed.
+
+Local checks actually run:
+- Changed-test TypeScript `transpileModule` syntax diagnostics: PASS.
+- Installed DB Vitest `list --maxWorkers=1 test/lp-job-doors-compatibility.integration.test.ts test/work-order-import.integration.test.ts test/work-order-concurrency.integration.test.ts`: PASS, 62 tests collected; no database hooks or bodies executed.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS.
+- `git diff --check`: PASS.
+- Both own migration SQL byte comparisons with HEAD: PASS.
+
+PostgreSQL behavior must rerun in GitHub CI after the router commits/pushes. This is a source/test-assertion repair with collection/syntax verification, not a locally executed database pass, fresh independent RED review, merge or release. Synthetic fixtures only.

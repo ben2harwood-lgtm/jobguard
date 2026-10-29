@@ -27,6 +27,7 @@ describe("LP-2 creation caller compatibility groundwork", () => {
     const demo = await prepareWorkOrderDemo(db.runtime, principal, { siteCount: 1 });
     const command = { commandId: randomUUID(), kind: "csv" as const, name: "fictional-lp2.csv", csv: demoFile([demoRow(demo, 1)]) };
     const repository = new WorkOrderRepository(db.runtime), result = await repository.importCsv(principal, command);
+    expect(result.replayed).toBe(false);
     expect(result.rows[0]?.outcome).toBe("created");
     const order = (await db.owner.query(`SELECT j.id,j.status,j.revision,j.provenance,t.job_track FROM app.work_order w
       JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
@@ -36,7 +37,7 @@ describe("LP-2 creation caller compatibility groundwork", () => {
     // Contractor party binding (0102) and the live commit (0110) each advance the job revision.
     expect(order[0]).toMatchObject({ status: "live", revision: 2, provenance: "work_order", job_track: "contractor" });
     const before = await jobDoorCounts(db.owner, principal.tenantId);
-    expect(await repository.importCsv(principal, command)).toEqual(result);
+    expect(await repository.importCsv(principal, command)).toEqual({ ...result, replayed: true });
     expect(await jobDoorCounts(db.owner, principal.tenantId)).toEqual(before);
   });
 
