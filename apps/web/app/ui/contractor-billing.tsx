@@ -121,7 +121,7 @@ export function BillingView({ jobId, view, send, busy = false }: { jobId: string
     <section aria-label="Invoices and payments">
       <h2>Invoices and payments</h2>
       {send && <fieldset data-testid="import-controls"><legend>Import invoice and payment status</legend>
-        <label>Format <select value={format} onChange={e => setFormat(e.target.value as "csv" | "json")}><option value="csv">CSV file</option><option value="json">JSON (billing-status.v1)</option></select></label>
+        <label htmlFor="billing-status-format">Format</label> <select id="billing-status-format" value={format} onChange={e => setFormat(e.target.value as "csv" | "json")}><option value="csv">CSV file</option><option value="json">JSON (billing-status.v1)</option></select>
         <label>Status data <textarea rows={6} value={text} onChange={e => setText(e.target.value)}/></label>
         <label>Or choose a file <input type="file" accept=".csv,.json,text/csv,application/json" onChange={e => void e.target.files?.[0]?.text().then(setText)}/></label>
         <button type="button" disabled={busy || !text.trim()} onClick={submitImport}>Import status</button>

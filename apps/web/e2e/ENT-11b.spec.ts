@@ -178,8 +178,8 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
     { externalInvoiceLineId: "order", kind: "original_order", existedAt: "2026-10-01T00:00:00Z", ...amount(100000), match: null },
     { externalInvoiceLineId: "extra", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...amount(rate * 6), match },
   ] } });
-  await page.getByLabel("Format", { exact: true }).selectOption("json");
   async function importStatus(value: unknown) {
+    await page.getByLabel("Format", { exact: true }).selectOption("json");
     await page.getByLabel("Status data", { exact: true }).fill(JSON.stringify(value));
     await page.getByRole("button", { name: "Import status", exact: true }).click();
     await expect(page.getByRole("status")).toHaveText("Status imported.");

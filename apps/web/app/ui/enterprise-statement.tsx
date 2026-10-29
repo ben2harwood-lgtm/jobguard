@@ -1,10 +1,10 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import type { EnterpriseFeeDerivationRead, EnterpriseFeePosting, EnterpriseFeeStatementRead } from "@jobguard/db";
+import type { StatementView } from "../lib/enterprise-statement-types";
 import { exactPounds } from "./contractor-billing";
 import styles from "./work-orders.module.css";
-export type StatementView = { statement: EnterpriseFeeStatementRead; derivations: EnterpriseFeeDerivationRead[]; postings: EnterpriseFeePosting[] };
+export type { StatementView } from "../lib/enterprise-statement-types";
 const pounds = (pence: number) => exactPounds({ numerator: String(pence), denominator: "1" });
 async function post<T>(action: string, body: unknown): Promise<T> {
   const response = await fetch(`/api/contractor/statements/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });

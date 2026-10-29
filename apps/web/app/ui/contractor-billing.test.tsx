@@ -27,6 +27,11 @@ const read = {
 };
 
 describe("ENT-6 billing and reconciliation screen", () => {
+  it("labels the status format separately from its option text", () => {
+    const html = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: contractorBillingReadV1.parse(read), send: () => undefined }));
+    expect(html).toContain('<label for="billing-status-format">Format</label>');
+    expect(html).toContain('<select id="billing-status-format">');
+  });
   it("shows whole pence as pounds and keeps fractional allocations exact", () => {
     expect(exactPounds(p("8064516", "100"))).toBe("8064516/100 pence");
     expect(exactPounds(p("250000", "2"))).toBe("£1,250.00");
