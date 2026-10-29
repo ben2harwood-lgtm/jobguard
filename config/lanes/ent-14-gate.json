@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-14-gate": {
+      "branches": [
+        "codex/sandbox/ent-14-gate"
+      ],
+      "note": "RED ENT-14 dark gate and synthetic agreement/mandate reference. No migration, provider or production activation.",
+      "allow": [
+        "packages/config/src/index.ts",
+        "packages/config/src/policy-gates.ts",
+        "packages/config/src/enterprise-real-data.ts",
+        "packages/config/src/enterprise-real-data.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/contractor-mandate.ts",
+        "packages/core/src/contractor-mandate.test.ts",
+        "config/lanes/ent-14-gate.json"
+      ]
+    }
+  }
+}
