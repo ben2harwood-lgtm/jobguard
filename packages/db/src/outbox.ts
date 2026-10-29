@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -62,6 +63,11 @@ export class ActionExecutor {
         return;
       }
       if (!["pending", "retryable"].includes(r.status)) return;
+      if (r.adapter === "fake_merchant_order" && !await darkOrderStillAuthorized(db, context.tenantId, r.immutable_content, r.content_hash)) {
+        await db.$client.query(`UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1`, [id]);
+        await auditOutcome(db, id, "cancelled", { reason: "order_authority_stale" });
+        return;
+      }
       this.telemetry.emit("outbox.queue_age", { actionId: id, seconds: Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / 1000) });
       if (new Date(r.authorization_expires_at) <= new Date()) {
         await db.$client.query(`UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1`, [id]);

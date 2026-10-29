@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-1-order": {
+      "branches": [
+        "codex/sandbox/m2-1-order"
+      ],
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/watchdog.ts",
+        "packages/db/src/purchase-order-action.ts",
+        "packages/db/src/purchase-order-action-repository.ts",
+        "packages/db/src/purchase-order-action-guard.ts",
+        "packages/db/migrations/0465_dark_merchant_order.sql",
+        "packages/db/test/purchase-order-action.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ],
+      "note": "M2-1 approved order action: DARK synthetic seam, RED commercial sends; migration 0465. No HTTP route, worker registration, providers or deployment."
+    }
+  }
+}
