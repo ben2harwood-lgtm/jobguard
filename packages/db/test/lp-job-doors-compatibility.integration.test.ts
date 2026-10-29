@@ -33,7 +33,8 @@ describe("LP-2 creation caller compatibility groundwork", () => {
       JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id)
       WHERE w.tenant_id=$1 AND w.id=$2`, [principal.tenantId, result.rows[0]!.workOrderId])).rows;
     expect(order).toHaveLength(1);
-    expect(order[0]).toMatchObject({ status: "live", revision: 1, provenance: "work_order", job_track: "contractor" });
+    // Contractor party binding (0102) and the live commit (0110) each advance the job revision.
+    expect(order[0]).toMatchObject({ status: "live", revision: 2, provenance: "work_order", job_track: "contractor" });
     const before = await jobDoorCounts(db.owner, principal.tenantId);
     expect(await repository.importCsv(principal, command)).toEqual(result);
     expect(await jobDoorCounts(db.owner, principal.tenantId)).toEqual(before);

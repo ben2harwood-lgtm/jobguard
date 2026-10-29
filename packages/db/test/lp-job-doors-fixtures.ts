@@ -131,7 +131,7 @@ export async function adoptionAuthority(db: JobDoorsDatabase, change: {
     if (change.member === "expired") await client.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
     if (change.receipt !== "missing") await client.query(`INSERT INTO app.command_receipt
       (tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $6='succeeded' THEN clock_timestamp() ELSE NULL END)`,
+      VALUES($1,$2,$3,$4,$5,$6::varchar,$7,$8,CASE WHEN $6::varchar='succeeded' THEN clock_timestamp() ELSE NULL END)`,
     [f.actor.tenant, f.command.commandId, change.receipt === "type" ? "quote.send" : f.command.commandType,
       change.receipt === "subject" ? `import:${randomUUID()}` : f.command.semanticKey, "c".repeat(64),
       change.receipt === "succeeded" ? "succeeded" : "processing", change.receipt === "actor" ? other.member : f.actor.member,

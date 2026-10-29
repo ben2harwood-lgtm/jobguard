@@ -146,6 +146,8 @@ describe("LP-2 private permit consumption", () => {
     const actor = await jobDoorsActor(db.owner), job = randomUUID(), before = await jobDoorCounts(db.owner, actor.tenant);
     await expect(transaction(db.owner, actor.tenant, async client => {
       await mint(client, actor.tenant, job, actor.member);
+      // The unchanged work-order guard independently requires the migration role.
+      await client.query("SET LOCAL ROLE jobguard_migration");
       await insertJob(client, actor.tenant, job, { provenance: "work_order" });
       expect((await client.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
       await client.query("SAVEPOINT reuse");

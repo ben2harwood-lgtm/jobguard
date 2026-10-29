@@ -693,7 +693,7 @@ describe("CH-3a round 13 generated practice entry", () => {
         await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
         if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
         else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
-      })).rejects.toMatchObject(insert ? { code: "42501", message: "JOB_INSERT_PERMIT_REQUIRED" } : { code: "42501" });
+      })).rejects.toMatchObject(insert ? { code: "22023", message: "JOB_PARTIES_REQUIRED" } : { code: "42501" });
     }
     // Runtime has no direct status UPDATE grant; the allowed migration-owner
     // path must independently reject the same attempted unbound promotion.
