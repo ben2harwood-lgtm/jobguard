@@ -69,6 +69,9 @@ export function NorthsideHub() {
         </ul></section>}
       <section className={styles.card}><h2>Walk the journey</h2>
         <ul>
+          <li><Link href="/contractor/work-orders">Finance: find the work order and open billing</Link></li>
+          <li><Link href="/contractor/statements">Finance: monthly statement</Link></li>
+          <li><Link href="/contractor/dashboard">Contractor dashboard and sample baseline import</Link></li>
           <li><Link href="/site/extra">Operative: log an extra (phone)</Link></li>
           <li><Link href="/approvals/extras">Surveyor, supervisor and owner: price, approve, prepare a local client request</Link></li>
         </ul></section>

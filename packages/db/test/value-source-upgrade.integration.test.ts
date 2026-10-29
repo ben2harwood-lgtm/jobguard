@@ -8,11 +8,11 @@ import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(false); }, 120_000);
 afterAll(async () => { await closeFinalCheckFixture(f); });
-it("A8: populated actual base -> only 0326 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
- const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0326_value_source_read.sql"));
+it("A8: populated actual base -> only 0342 -> named rows/types/PKs unchanged -> successors and rerun", async () => {
+ const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0342_value_source_read.sql"));
  expect(own).toBeGreaterThan(0);
  const previous = MIGRATION_URLS[own - 1]!;
- expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(326);
+ expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(342);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, own)) {
   const name = url.pathname.split("/").at(-1)!;
@@ -29,7 +29,7 @@ it("A8: populated actual base -> only 0326 -> named rows/types/PKs unchanged -> 
  const keys = async () => (await f.admin.query(`SELECT c.oid::regclass::text name,pg_get_constraintdef(k.oid) definition FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND k.contype='p' ORDER BY c.relname`)).rows;
  const originalKeys = await keys();
  await f.admin.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0326_value_source_read.sql')");
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0342_value_source_read.sql')");
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  expect(await keys()).toEqual(originalKeys);
  await rolledBack(f.admin, async db => {

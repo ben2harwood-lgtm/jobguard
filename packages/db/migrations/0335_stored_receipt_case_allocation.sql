@@ -87,7 +87,7 @@ CREATE FUNCTION app.receipt_fact_source_approved(t uuid,j uuid,f uuid) RETURNS b
   JOIN app.action_authorization a ON a.tenant_id=s.tenant_id AND a.id::text=s.source_manifest->>'approvalRef'
   JOIN app.decision_resolution dr ON(dr.tenant_id,dr.id,dr.decision_id)=(a.tenant_id,a.resolution_id,a.decision_id)
   WHERE s.tenant_id=t AND s.job_id=j AND s.id=f AND c.payload->>'version'='receipt-line-facts-command.v1'
-   AND c.payload->>'action'=CASE WHEN r.direction='receipt' THEN 'approve' ELSE 'reverse' END
+   AND c.payload->>'action'=(CASE WHEN r.direction='receipt' THEN 'approve' ELSE 'reverse' END)
    AND c.result->>'allocationRevisionId'=r.id::text AND trim(a.content_hash)=r.source_hash
    AND a.action_type='receipt_facts.'||r.direction AND a.actor_membership_id=c.actor_membership_id
    AND dr.resolution='approved' AND dr.actor_membership_id=c.actor_membership_id AND c.created_at<=a.expires_at)
@@ -396,7 +396,7 @@ BEGIN
  -- source for this exact payment. A free-text payment reference is not authority.
  IF (SELECT count(DISTINCT s.evidence_id) FROM app.recovery_allocation_line_source s JOIN app.recovery_allocation_review r
   ON r.tenant_id=s.tenant_id AND r.job_id=s.job_id AND r.payment_id=payment.id AND r.artifact->>'remittanceEvidenceId'=s.evidence_id::text
-   AND r.action=CASE WHEN direction='receipt' THEN 'allocate' ELSE 'reverse' END
+   AND r.action=(CASE WHEN direction='receipt' THEN 'allocate' ELSE 'reverse' END)
    AND (direction='receipt' OR r.artifact->>'sourceId'=p->'reversalSource'->>'sourceId')
   WHERE s.tenant_id=t AND s.job_id=j AND s.invoice_id=payment.invoice_id AND s.rule='explicit')>1
  THEN RAISE EXCEPTION 'RECEIPT_LINE_REMITTANCE_REQUIRED' USING ERRCODE='23514'; END IF;

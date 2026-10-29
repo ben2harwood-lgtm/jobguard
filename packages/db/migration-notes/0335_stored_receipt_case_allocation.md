@@ -153,3 +153,129 @@ passed (2 files, 5 tests); node_modules/.bin/tsc -p
 packages/db/tsconfig.json --noEmit passed; git diff --check passed. PostgreSQL
 migration and database suites remain for GitHub CI. RED review remains required
 against the repaired head. No git writes, packages downloaded or listeners started.
+
+## PR #383 repair round 3 — shared fixture and catalogue regressions
+
+Inspected CI run 40764722895 against 381a75a0da9e18f3f6e90a3e28b2d9388c16f049.
+The final-account, activation, re-acceptance and stored-receipt failures share
+PostgreSQL 42P08 in prepareActivationFixtureV3: the first use of $4 inferred
+char(64), while its CASE use required text. Both uses now explicitly take text;
+the stored digest column and immutable ownership rules are unchanged. Existing
+real-writer DB tests continue to exercise null and session-bound fixtures.
+
+Restored practice-session.ts byte-for-byte to the pinned bridge (SHA-256
+9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14).
+The receipt producer now uses a small local connection adapter for serializable
+BEGIN before digest/tenant setup; it changes no session-wide defaults or other
+callers. Its boundary test additionally checks digest/tenant ordering and client
+release after rollback. No pinned expectation was updated.
+
+The entitlement-upgrade snapshot and both tenancy catalogues omitted 0304's
+three installed tables: stored_receipt_case_allocation, stored_receipt_case_binding
+and stored_receipt_case_command. Added exactly those rows, retaining all existing
+rows and full equality checks. LP-0 and SERIOUS-B5's existing 0304 registrations
+remain; no migration, grant, routine identity or privilege changed this round.
+
+The A3 race test used the ordinary postgres database and still expected the old
+held-source reader refusal. It now uses the existing isolated synthetic fixture
+and tests both stale hash and stale revision through the caller-owned transaction:
+40001 must precede dependent work, and no allocation revision may be saved.
+Concurrent superseded approvals are still refused. Reads are not approval or a
+claim of source-lock atomicity.
+
+CSG's existing quote-delivery execute exception fingerprint became stale when
+the fixture declaration changed. Refreshed only that fingerprint; the same 13
+exceptions, file, line and reason remain. Restoring the practice bridge also
+restored its original fingerprint. The guard reports zero diagnostics, and all
+169 guard tests passed; no new exception or scope was added.
+
+Local verification: database package typecheck passed; the three named unit
+files (stored-receipt-case-allocation-repository, stored-receipt-migration,
+demo-seed) passed all 24 tests with at most two Vitest workers. After strengthening
+SSI assertions, the 19-test boundary file passed again. A3/entitlement/tenancy
+DB tests were discovered through Vitest only; PostgreSQL and browser suites
+remain for GitHub CI. Money arithmetic/commercial boundary lint and diff
+whitespace checks passed. Final net branch payload exactly matches the lane's
+20 allowed paths, excluding its implicit metadata file and the restored bridge.
+The stock local lane command includes uncommitted reverts in its union and thus
+still reports the restored bridge until the router commits; the bridge has zero
+net diff against merged origin/main, so it is intentionally absent from allow.
+No git writes, real data, provider calls, downloads or local listeners.
+
+
+## PR #383 CI repair try 3 — synthetic certificate format
+
+CI job 123132038367 reported 15 failures in the stored-receipt integration
+suite. Every failure stops in realReceiptFixture at the same source insert:
+synthetic_evidence_original_content_type_check rejects application/pdf. The
+0025 synthetic-original contract permits PNG, JPEG and WebP. The fixture now
+reuses pngBytes(23) from site-extra-evidence-fixtures and declares image/png
+consistently in evidence_upload, synthetic_evidence_original and evidence_object.
+SHA-256 and byte length remain derived from the actual bytes. The certificate
+evidence type, completion link, all constraints/triggers and all allocation,
+replay, reversal, tenant/job, approval and catch assertions remain unchanged.
+No test is weakened, skipped or excepted. No migration SQL changes.
+
+Resolved the main-merge conflict in SERIOUS-B5 by retaining both
+storedReceiptCaseAdditions and sourceIntakeAdditions; all main lines remain.
+The exact branch payload still matches the existing lane allow list.
+
+Local checks: three named Vitest files (stored-receipt-migration,
+stored-receipt-case-allocation-repository and lp-0-catalog) passed 47 tests
+with maxWorkers=2. Database package typecheck and separate strict fixture
+typecheck passed. Vitest list collected all 15 affected database tests plus
+SERIOUS-B5; this was discovery only, not PostgreSQL execution. All migration
+SQL bytes match their committed source (0303 from incoming main, all others
+from HEAD); 0304 SHA-256 remains
+ea32c619401eac70ac07ec2e16fc3729d4623a48ccf9c9bf3a4e59047409a73e.
+Conflict-marker scan, exact lane coverage and diff whitespace checks passed.
+PostgreSQL/migration execution remains in CI. Router stages the resolution,
+commits and pushes; no git-writing commands or local listeners were used here.
+
+
+## PR #383 CI repair round 4 — real facts writer and completion publication
+
+Ben authorized one additional round on 29 October. CI job 123142144375
+reported two setup errors shared by the 15 stored-receipt integration cases.
+F5 and the pending/unmatched-attestation case sent receipt-12000 and
+receipt-14640 through practice-feed-command.v1. Those keys belong to the
+existing additive practice-facts-command.v1 catalogue. The fixture now uses
+PracticeFeedRepository.factsCommand for both advancement and receipt matching
+of those two keys, preserving feed.command for receipt-960 and the shared
+persisted command revision. Deposit settlement still precedes creation of the
+later line, and all original monetary assertions remain exact.
+
+F7, #346, #368, #356, concurrency, refund/credit, forged money, replay/stale
+watermark, approval/session, audit rollback and both RED catch cases reached
+invoice issue with a reconciled run but no published completion certificate.
+The fixture now calls FinalCheckCompletionRepository.publish after reconcile
+and before either invoice is issued. The real publication trigger verifies
+source processing, result, run and lock binding. No certificate or financial
+row is inserted directly, no trigger is disabled, and no assertion is removed
+or relaxed. The existing five targeted attack tests remain unchanged.
+
+Merged main's exports and LP-0/SERIOUS-B5/entitlement expectation rows with the
+branch's own rows. LP-0's checked-billing sources/tests are unioned and main's
+expanded ENT-7 description is retained. Incoming reviewed routine metadata
+remains intact alongside the branch's changed receipt-reader/writer metadata.
+
+Renumbered 0304_stored_receipt_case_allocation to
+0335_stored_receipt_case_allocation, including its note, lane, LP-0 source
+reference, current contract and tests. Historical receipt entries above retain
+the original number. Used tools/migration-renumber.mjs's exported planner
+with the requested 0335 floor, then applied filesystem moves/reference updates.
+The CLI --write mode stages Git changes and requires a clean index, so it was
+not used in this read-only-index merge sandbox. Router stages the final rename.
+The upgrade assertion now checks predecessors against 335, preserving its
+original strict ordering invariant. SQL bytes are identical: SHA-256
+ ea32c619401eac70ac07ec2e16fc3729d4623a48ccf9c9bf3a4e59047409a73e.
+No SQL bug was found or edited; approval CASE expressions stay parenthesised.
+
+Local validation: 48 tests passed in three named DB unit/comparator files;
+22 existing practice-facts domain tests passed in one named core file. All
+Vitest runs used at most two workers. Database package and separate strict
+fixture typechecks passed. Vitest discovered the 15 receipt cases, upgrade and
+SERIOUS-B5 (17 cases); none was executed against PostgreSQL locally. Exact
+LP-0 identity union (1,394 entries, 479 routines), preservation of main's
+shared-list lines, conflict scan, exact lane payload and diff whitespace checks
+passed. PostgreSQL and migration execution remain required in GitHub CI.

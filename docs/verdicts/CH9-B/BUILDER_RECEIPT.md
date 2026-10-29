@@ -1,3 +1,65 @@
+# CH-9 part 2 — main catch-up (RED), 29 October 2026
+
+Ready for the router to stage the resolved merge and commit this catch-up on
+`codex/sandbox/ch9-p2`. Git's index remains unmerged because this sandbox cannot
+write `.git`. Required GitHub CI and independent RED review precede merge.
+This section supersedes the historical readiness statements below.
+
+- Retained main's SV-6/#400 migration 0340 and #383 migration 0335, notes,
+  repositories and tests; the duplicate old migration paths are absent.
+  Unioned all three export lists and both sides of this receipt. Kept main's
+  existing recovery-attribution routine entry once in the privilege inventory.
+- Renumbered this piece's migration 0326 to the explicitly issued **0342**,
+  including its note, lane and upgrade-test references/bound. Used the exported
+  `planRenumber` from `tools/migration-renumber.mjs`, respecting the issued 0342
+  reservation. The helper's CLI write mode requires a clean tree and stages
+  files, so filesystem changes were applied without Git writes.
+  SQL SHA-256 before/after:
+  `42fd422e39b4fca39531142dd1a35234f5ea3b863ec1359cd735736e67cc68a3`.
+- Parenthesised the two CASE expressions inside PL/pgSQL IF subqueries in 0335.
+  No predicate, action, allocation rule or other reviewed behavior changed.
+- The piece's lane lists exactly 34 changed paths against current main,
+  including the new migration/note and the syntax-only 0335 fix.
+
+Actual local checks, Node 24.17.0 / installed Vitest 4.1.12; no downloads:
+
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Installed TypeScript compiler: core and DB builds, API and web `--noEmit`: PASS.
+- Core: `src/value-source-receipt.test.ts src/cumulative-fee.test.ts`: **113 passed**.
+- DB: `src/value-business-reader.test.ts src/stored-receipt-migration.test.ts
+  test/lp-0-catalog.test.ts`: **33 passed** (no PostgreSQL execution).
+- API: `src/value/value-v3.application.test.ts
+  src/value/company-value.application.test.ts src/value/value-composition.test.ts`:
+  **41 passed**.
+- Web: `app/api/jobs/[id]/value/v3/route.test.ts app/api/value/route.test.ts
+  app/ui/mapped-value-receipt.test.tsx`: **28 passed**.
+- All four Vitest runs used `node node_modules/vitest/vitest.mjs run
+  --maxWorkers=2` in their package directories, at most three named files per run,
+  with no overlapping Vitest runs: **215 tests passed** in total.
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`: PASS.
+- API `node --import tsx src/generate-openapi.ts --check`: PASS. The initial
+  tsx CLI attempt could not bind its IPC pipe (sandbox EPERM); the Node loader
+  completed the same check without that CLI pipe.
+- `git diff --check origin/main`: PASS. No conflict markers remain in the four
+  resolved files. Direct current-main path/migration-order assertions using the
+  lane checker's exported predicates: PASS, 34 exact paths.
+- Official `node tools/agent-lane-boundary-lint.mjs`: FAIL while the merge is
+  uncommitted, because it unions pre-merge HEAD ancestry and the incoming staged
+  main files. No gate was weakened or inherited paths added to the lane. The
+  router must rerun it after staging and committing the merge.
+
+PostgreSQL installation, migration upgrade/replay, isolation and browser suites
+remain GitHub CI checks: this sandbox cannot start PostgreSQL or bind localhost.
+No database/browser execution, independent review, live provider, real customer
+data, live money or release is claimed. No Git write command was run.
+
+Commit message: `/tmp/ch9-p2-20261029T063615Z-commit-msg.txt`.
+
+---
+
+## Historical handoff before this catch-up
+
 # CH-9 part 2 — current builder handoff (RED)
 
 28 October 2026. Branch `codex/sandbox/ch9-p2`. Source implemented locally;
@@ -11,7 +73,7 @@ The historical part-1 record below is preserved as history.
 
 - Resolved both supplied conflicts by retaining both sides' exports. The Git index
   remains unmerged/read-only until the router stages these resolved files.
-- Added migration **0326**, two controlled read functions, source DTO/projection,
+- Added migration **0342**, two controlled read functions, source DTO/projection,
   mapped job and company receipt views, source-reproduced business totals and
   separate MON-1/MON-2A subscription periods/statements. Existing candidate
   illustrative DTOs, fixtures and v1 recorded-money views remain separate.
@@ -110,7 +172,7 @@ session/job/tenant refusal, real subscription statement reproduction and session
 revocation. Disposable corruption tests attack allocation caps and wrong locked
 revisions through the read boundary. Grants are checked as real catalogue facts.
 `value-source-upgrade.integration.test.ts` populates the actual predecessor,
-preserves existing rows/types/keys through 0326, applies successors and repeats
+preserves existing rows/types/keys through 0342, applies successors and repeats
 migration. These PostgreSQL tests were **not run locally**: this sandbox cannot
 start PostgreSQL or bind localhost.
 
@@ -471,7 +533,107 @@ Local checks (installed Node 24.17.0, cached pnpm 10.28.1; no downloads):
 
 Database/browser suites and full root checks were not run, per sandbox/task
 constraints. Existing database reversal assertion was updated to the exact share
-shape for CI. Migration 0326 is unchanged. This is ready for the router's repair
+shape for CI. Migration 0342 is unchanged. This is ready for the router's repair
 commit; it is not a CI pass, review of the changed head, merge or release claim.
 One independent RED review of the new head remains required. No git writes.
 Commit message: `/tmp/ch9-p2-20261028T215114Z-commit-msg.txt`.
+## Catch-up resolution — 28 October 2026, 21:28 UTC
+
+This section supersedes the earlier catch-up observations above. Scope remains
+CH-9 part 1, RED; no new product behaviour or migrations. Resolved the two
+working-file conflicts in `apps/api/src/workspace/index.ts` and
+`packages/db/src/index.ts` by retaining both the CH-9 value exports and main's
+enterprise exports. The ch9-b lane lists exactly the 35 changed paths relative
+to incoming main, with its own lane file implicitly allowed (36 paths total).
+The five shared LP-0/SERIOUS-B5/entitlement/tenancy/origin expectation files and
+all 178 migration/note files are byte-identical to incoming main. No SQL changed.
+
+Incoming main in the pending merge is `8e80dabd` (#381), including #376/#377.
+`origin/main` now points to `9a298d4d` (#385, MON-2A); that later change is not
+part of the merge already in progress. Router must stage the resolved files,
+finish this merge, then incorporate newer main before the current-main CI gate.
+No Git-writing command was run; the index still records two unmerged entries.
+
+Actual local checks (Node 24.17.0, installed Vitest 4.1.12):
+
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-composition.test.ts src/value/value-v3.application.test.ts src/value/value-v3-business.application.test.ts` — PASS, 52 tests.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2 src/value-v3-receipt.test.ts src/value-v3-copy.test.ts` — PASS, 28 tests.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-v3.controller.test.ts src/value/value-business.controller.test.ts` — PASS, 12 tests.
+- From apps/api: `node --import tsx src/generate-openapi.ts --check` — PASS.
+  The tsx CLI attempt failed on sandbox IPC binding; the Node import invocation
+  executes the same generator without the CLI IPC server.
+- Read-only deterministic main-relative lane inventory, shared-file/migration
+  byte comparisons and conflict-marker assertions — PASS. This is not the
+  Git-based lane gate or independent review.
+- `node tools/lint.mjs` — FAIL at the lane gate: it counts staged incoming-main
+  changes against pre-merge HEAD while the merge is unfinished. Core purity
+  passed; subsequent lint stages did not run. Router must rerun default lint
+  after committing the merge; no gate was weakened or alternate base supplied.
+- `git diff --check` — PASS for this catch-up. Main-relative checking additionally
+  reports pre-existing space-only context lines in the two archived integration
+  patch files; those patch bytes were preserved.
+
+The pnpm version probe stalled and was interrupted; no dependency install or
+package download was requested. Checks used installed repository binaries.
+PostgreSQL, browser, full CI and independent RED review were not run here and
+remain with CI/the loop owner. The working-file reconciliation is ready for the
+router's merge commit; green current-main CI is not claimed.
+
+
+## PR #393 catch-up — 29 October 2026
+
+Ready for the router to stage the resolved files and finish the pending merge
+from incoming main `bf1052a0`. Scope is unchanged CH-9 part 1 (RED, prior
+RED pass supplied by the router); no new behaviour or migration. This is a
+catch-up validation, not a new independent review or a claim of green CI.
+
+Resolved four working-file conflicts: `apps/api/src/app.module.ts`,
+`apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts` and
+`apps/api/openapi.json`. Retained the CH-9 job/business reads, provider factory
+and exports together with main's success-fee registration/service/export,
+job-source intake and evidence-pack-v3 composition. Regenerated OpenAPI from
+that composition: every incoming-main path and operation is unchanged; all
+HEAD paths remain, with only main's already-approved diary/customer-message
+changes superseding HEAD's older definitions.
+
+LP-0, SERIOUS-B5, contractor entitlement, effective privileges and tenancy shared
+expectation files already matched incoming main exactly; no edits were needed.
+All 185 incoming-main migration/note files match byte-for-byte. No SQL changed.
+The lane allow list exactly matches the 35 changed paths against incoming main,
+with its own lane file implicitly permitted (36 total); only its descriptive
+note was refreshed. No new simplification is recorded for this catch-up.
+
+Local checks actually run, installed Node 24.17.0/Vitest 4.1.12, no downloads:
+
+- `./node_modules/.bin/tsc -p packages/core/tsconfig.json` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json`: PASS (dependency builds).
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`: PASS.
+- In apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-composition.test.ts src/value/value-v3.application.test.ts src/value/value-v3-business.application.test.ts`: PASS, 52 tests.
+- In apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-v3.controller.test.ts src/value/value-business.controller.test.ts`: PASS, 12 tests.
+- In apps/web, `./node_modules/.bin/vitest run --maxWorkers=2 app/api/value/route.test.ts 'app/api/jobs/[id]/value/v3/route.test.ts'`: PASS, 20 tests.
+- In apps/api, `node --import tsx src/generate-openapi.ts` then the same command
+  with `--check`: PASS. Initial generation encountered stale core dist exports;
+  rebuilding installed dependencies resolved this without source changes.
+- `node tools/money-arithmetic-lint.mjs` and
+  `node tools/commercial-boundary-lint.mjs`: PASS.
+- `node tools/lint.mjs`: FAIL at lane boundary because the unfinished merge
+  counts staged incoming-main changes against pre-merge HEAD; core purity PASS.
+  Router must rerun default lint after committing the merge. No gate changes or
+  alternate-base lint pass are claimed.
+- Read-only incoming-main lane inventory, five shared expectation comparisons,
+  185 migration/note byte comparisons and OpenAPI path preservation: PASS.
+- `git diff --check`: PASS.
+
+The initial Turbo dependency build stalled in the local pnpm launcher and was
+interrupted; direct installed tsc binaries completed both dependency builds.
+No database or browser suite, full build/root tests, clean install, live provider,
+real customer data or release was run. Database/browser and required checks run
+in GitHub CI after the router pushes. At most two Vitest workers and three named
+files per run; no helper agents. No Git-writing command was issued; unmerged
+index entries remain for router staging. The historical part-1 source holds
+remain unchanged and do not widen this catch-up's scope.
+
+Commit message: `/tmp/ch9-b-20261029T002305Z-commit-msg.txt`.

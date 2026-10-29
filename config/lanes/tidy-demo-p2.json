@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "tidy-demo-p2": {
+      "branches": ["codex/sandbox/tidy-demo-p2"],
+      "note": "Stage-end DEMO-P2 follow-ups from PR #387: all-state metric validation coverage, bounded net money, order-independent result-source sets. Own lane file is implicitly permitted.",
+      "allow": [
+        "docs/contracts/small-builder-demo-trace-v1.md",
+        "packages/core/src/small-builder-demo-trace.ts",
+        "packages/core/src/small-builder-demo-trace.test.ts"
+      ]
+    }
+  }
+}
