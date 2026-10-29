@@ -49,11 +49,11 @@ export function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 export type Attempt = {
-  kind: "collection" | "refund"; commandId: string; fingerprint: string;
+  kind: "collection" | "refund"; commandId: string; fingerprint: string; actorMembershipId: string; principalPence: number;
   jobId: string; invoiceId: string; invoiceHash: string; sourceHash: string;
   statementHash: string; statementId: string; amountPence: number; rail: "stripe_card" | "direct_debit";
   decisionId: string; settlementCommandId: string | null; settlementObjectId: string | null; creditNoteId: string | null;
-  state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released";
+  state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released" | "reconciliation_required";
   providerObjectId: string | null;
 };
 export type CollectionBook = {
@@ -75,4 +75,5 @@ export interface LockedCollectionSources {
   collection(jobId: string, invoiceId: string): Promise<unknown>;
   credit(intent: RefundIntent): Promise<unknown>;
 }
-export type VerifiedCollectionContext = Readonly<{ tenantId: string; environment: "synthetic_demo"; membershipVerified: true }>;
+/** Credentials only: membership and actor are resolved through AuthProvider on every operation. */
+export type CollectionSessionContext = Readonly<{ tenantId: string; environment: "synthetic_demo"; sessionToken: string }>;
