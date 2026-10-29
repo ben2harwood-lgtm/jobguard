@@ -763,7 +763,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
 // SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
-// their table, triggers and constraint sit outside this snapshot. 0368 adds only the private lock-request trigger function.
+// their table, triggers and constraint sit outside this snapshot. 0381 adds only the private lock-request trigger function.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [["confirm_final_check_catch", "t uuid, j uuid, d text, p jsonb"], ["final_check_claim_catch_case", ""], ["final_check_open_catch_case", ""],

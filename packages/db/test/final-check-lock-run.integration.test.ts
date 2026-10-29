@@ -62,12 +62,12 @@ it("a job without a practice session does not auto-request work",async()=>{
  await a.lock();expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
 });
 
-it("0368 upgrades without changing existing locks or privileges and migrate replays safely",async()=>{
+it("0381 upgrades without changing existing locks or privileges and migrate replays safely",async()=>{
  const {readFile}=await import("node:fs/promises"),{MIGRATION_URLS,migrate}=await import("../src/migrate.js");
  const {installLegacySyntheticPartyFixtures}=await import("./pool-test-utils.js");
  const u=await createFinalCheckFixture(false);
  try{
-  const index=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0368_final_check_lock_request.sql"));expect(index).toBeGreaterThan(0);
+  const index=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0381_final_check_lock_request.sql"));expect(index).toBeGreaterThan(0);
   await u.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,index)){await u.admin.query(await readFile(url,"utf8"));await u.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
   await u.admin.query(`GRANT jobguard_runtime TO ${u.runtime.options.user}`);await u.admin.query(`GRANT jobguard_shadow TO ${u.shadow.options.user}`);
