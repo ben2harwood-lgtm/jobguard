@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon4a-fees"
       ],
-      "note": "RED MON-4A synthetic receipt fee statements; reconcile with merged SV-6 PR #400 (0340) and stored receipt allocator PR #383 (0335). Keep main-owned SV-6 files and union shared catalogues; preserve 0341 SQL bytes. No new behaviour. PostgreSQL/browser CI and independent Claude review required. Own lane file is implicitly permitted.",
+      "note": "RED MON-4A synthetic receipt fee statements; reconcile with merged SV-6 PR #400 (0340) and stored receipt allocator PR #383 (0335). Keep main-owned SV-6 files and union shared catalogues; preserve 0359 SQL bytes. No new behaviour. PostgreSQL/browser CI and independent Claude review required. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
@@ -26,8 +26,8 @@
         "packages/core/src/payment-fee-statements.test.ts",
         "packages/core/src/payment-fee-statements.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0341_payment_fee_statements.md",
-        "packages/db/migrations/0341_payment_fee_statements.sql",
+        "packages/db/migration-notes/0359_payment_fee_statements.md",
+        "packages/db/migrations/0359_payment_fee_statements.sql",
         "packages/db/src/index.ts",
         "packages/db/src/payment-fee-repository.test.ts",
         "packages/db/src/payment-fee-repository.ts",

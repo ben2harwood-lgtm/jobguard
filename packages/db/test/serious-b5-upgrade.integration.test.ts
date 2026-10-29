@@ -852,7 +852,7 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
  const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
-// MON-4A 0341: enumerate only the two new immutable tables and five routines.
+// MON-4A 0359: enumerate only the two new immutable tables and five routines.
 async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const tables=["payment_fee_statement","payment_fee_command"];
