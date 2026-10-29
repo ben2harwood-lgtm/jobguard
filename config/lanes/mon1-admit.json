@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED MON-1 PR #388, final Ben-allowed repair round 5. Reserved 0348 -> 0367; own SQL adds exact capture/final-lock command serialization, preserves latest main definitions and job/variation-before-capacity order. Capture no longer holds capacity before the job guard; owner rechecked after wait. Explicit fixture tenant string fixes web typecheck. PostgreSQL CI and fresh RED review remain required; park if this last round fails.",
+      "note": "RED MON-1 PR #388 renumber-only catch-up: reserved 0367 -> 0380, SQL bytes unchanged from 476b0336. Preserve current main through MON-3 0373 and union shared expectations. PostgreSQL/browser checks run in GitHub CI.",
       "allow": [
         "apps/api/src/job-parties.application.test.ts",
         "apps/api/src/job-work-state-capacity.test.ts",
@@ -26,8 +26,8 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/meter-place-admission-v1.md",
         "packages/core/src/job-work-state.ts",
-        "packages/db/migration-notes/0367_meter_work_admission.md",
-        "packages/db/migrations/0367_meter_work_admission.sql",
+        "packages/db/migration-notes/0380_meter_work_admission.md",
+        "packages/db/migrations/0380_meter_work_admission.sql",
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
         "packages/db/src/builder-capture-lock.test.ts",
         "packages/db/src/demo-bootstrap.ts",
