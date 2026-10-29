@@ -6,11 +6,23 @@
         "codex/sandbox/m4-17-s"
       ],
       "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
-      "note": "M4-17-S RED stage-end fix: reconcile using the fee-terms snapshot used by the statement, with non-10% reference coverage. No migration or source-adapter authority added.",
+      "note": "M4-17-S RED catch-up on M4-12-S; migration 0310. Synthetic reference comparison and read-only availability; run authority remains dependency-bound. No attribution or allocation writer. Stage-end fix: reconcile using the statement's fee-terms snapshot, with non-10% coverage.",
       "allow": [
+        "apps/api/src/workspace/index.ts",
+        "packages/core/src/index.ts",
         "packages/core/src/money-trail-reconciliation.ts",
         "packages/core/src/money-trail-reconciliation.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/money-trail-repository.ts",
+        "packages/db/src/money-trail-repository.test.ts",
+        "packages/db/migrations/0310_money_trail_reconciliation.sql",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/money-trail-security.integration.test.ts",
+        "packages/db/test/money-trail-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/money-trail-reconciliation-v1.md",
+        "docs/operations/money-trail-synthetic-restore.md",
         "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md"
       ]
     }
