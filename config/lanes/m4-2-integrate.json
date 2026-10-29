@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-2-integrate": {
+      "branches": [
+        "codex/sandbox/m4-2-integrate"
+      ],
+      "allow": [
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/recovery-billability-policy.test.ts",
+        "packages/core/src/recovery-billability-policy.ts",
+        "packages/db/migrations/0450_recovery_billability_integration.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/recovery-billability-repository.test.ts",
+        "packages/db/src/recovery-billability-repository.ts",
+        "packages/db/test/recovery-billability-upgrade.integration.test.ts",
+        "packages/db/test/recovery-billability.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ],
+      "note": "RED DARK M4-2 stored-fact billability review/approval integration on M4-1 plus M4-2 policy. Router must record the policy merge before committing this slice."
+    }
+  }
+}
