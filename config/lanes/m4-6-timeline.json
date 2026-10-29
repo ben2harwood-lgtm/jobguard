@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-6-timeline": {
+      "branches": ["codex/sandbox/m4-6-timeline"],
+      "note": "M4-6 dark recovery orchestration slice; RED; no Temporal, production host or migration.",
+      "allow": [
+        "apps/api/src/recovery-timeline.workflow.ts",
+        "apps/api/src/recovery-timeline.activities.ts",
+        "apps/api/src/recovery-timeline.workflow.test.ts",
+        "apps/api/src/recovery-timeline.activities.test.ts",
+        "docs/contracts/recovery-timeline-dark-v1.md"
+      ]
+    }
+  }
+}
