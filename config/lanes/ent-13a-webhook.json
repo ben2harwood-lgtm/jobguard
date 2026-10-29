@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-webhook": {
+      "branches": ["codex/sandbox/ent-13a-webhook"],
+      "note": "RED ENT-13a slice 1, dark synthetic inbound transport and restricted intake principal; no application route or production activation.",
+      "allow": [
+        "apps/api/src/connectors/inbound.ts",
+        "apps/api/src/connectors/inbound.test.ts",
+        "packages/db/migrations/0415_connector_intake.sql",
+        "packages/db/migration-notes/0415_connector_intake.md",
+        "packages/db/test/connector-intake.integration.test.ts",
+        "docs/operations/connector-data-flow.md",
+        "docs/contracts/connector-capabilities-v1.md"
+      ]
+    }
+  }
+}

@@ -29,3 +29,24 @@ Required future alert ownership includes refused configurations, invalid signatu
 Before releasing a route, replace every unknown with verified evidence, record the exact endpoint/version and approved settings, test its kill switch and reconcile uncertain attempts without resending. Do not use a London-facing host as evidence for all downstream destinations. See [reconciliation requirements](connector-reconciliation.md) and [holds](../contracts/connector-capabilities-v1.md).
 
 Merged ENT-6/ENT-7/ENT-8a foundations are not persisted connector functionality. Billing integration waits for accepted ENT-6B #240 interfaces on main; materials integration separately waits for accepted ENT-8a persistence. Ben 1.9 requires non-live billing refusal and explicit ordering of same-time conflicts. Human billing export/import is finance only; materials import is finance/owner only. Neither grants machine authority. No migration in A.
+
+## 29 October 2026 — ENT-13a slice 1 dark inbound register addition
+
+| Field | Synthetic implementation / remaining release evidence |
+|---|---|
+| Feature / direction | Signed inbound webhook and API-push envelopes; unregistered process-local entry point only |
+| Data | Fictional work-order document labels and external billing-status facts; no prices, amounts, allocations, contacts or real documents |
+| Processing / network | HMAC and schema validation in the API process; no sockets, network destinations, redirects, providers or live routes |
+| Storage | Migration 0415: immutable `connector.input_event` facts/receipts, control-plane `connector.binding`, existing per-tenant audit chain; no body or key logs |
+| Secrets | Injected secret-store interface supplies current active signing keys, binding and DB token per request; only token SHA-256 stored in binding. No production store, environment secrets or credentials provisioned |
+| Rotation / revocation | Active ring removal refuses old signatures; DB token rotation, expiry and binding revocation refuse even duplicate intake; no authority to self-provision |
+| Isolation / minimisation | Dedicated NOLOGIN role can only call intake, no app schema or tables. Binding determines tenant; payload never chooses tenant, bill or job. Receipt exposes its own source event only |
+| Outcome / retries | Durable source identity across channels and bindings; identical retries reconcile lost acknowledgements. Reordered and reversal facts remain staged; zero domain effects |
+| Region / subprocessors / retention | No new external processor. Event/database/log/backup locations and retention for real usage remain unapproved; no retention/deletion change |
+| Gate / owner | DARK, made-up data only. G5 and route-specific security/operational owner approvals remain outstanding; no production enablement path |
+| Evidence | `apps/api/src/connectors/inbound.test.ts` deterministic contract tests; `packages/db/test/connector-intake.integration.test.ts` real-PostgreSQL CI tests, not local execution or provider evidence |
+
+No external alert service is introduced. Callers receive only `CONNECTOR_INPUT_REFUSED`;
+future composition must count refusals without raw bodies, headers, signatures or driver
+errors, and assign alert ownership before G5. Inbound source staging neither authorises
+commercial work nor implements outbound delivery/reconciliation for remaining slices.

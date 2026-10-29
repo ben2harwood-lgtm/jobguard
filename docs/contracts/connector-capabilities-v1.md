@@ -56,3 +56,56 @@ Protected context bridges and source pins at apps/api/src/auth/context-boundary.
 No UI, named-system adapter, real data/IdP/domain/credential/endpoint, spending, sending, deployment, fee/subscription/shadow implementation, retention/deletion change or release activation. D01/D02/D03/D08/D09/D16 and G5 stay closed. Any later new money/access rule beyond Ben's answers needs BUILD-DON'T-MERGE (decision 74), which cannot answer a STOP.
 
 See [aggregate ledger](../ledger/ENT-13A-P.md) for E13-A01–A30 and item-specific STOPs. A24 is configuration-only; documentation and deterministic checks cannot close ENT-13a or replace an exact-commit independent verdict and separate acceptance.
+
+## ENT-13a slice 1 — DARK synthetic intake (29 October 2026)
+
+The later slice-1 order authorises a fictional inbound transport and restricted intake
+principal. `SyntheticConnectorInbound` is deliberately unregistered: no HTTP controller,
+application composition, listener, endpoint resolver, production credential store or
+activation flag is added. Production and real endpoints fail the existing configuration
+parser. The original STOPs above remain applicable to real capability/provisioning and
+full domain integration; this profile is not their production resolution.
+
+Both webhook and API push sign exactly the UTF-8 prefix
+`connector-signature.v1\n<channel>\n<keyId>\n<bindingId>\n<timestamp>\n` followed by the original
+body bytes, using HMAC-SHA256 and a lowercase hex digest. Header objects are strict and
+versioned. Fictional limits are 16,384 raw bytes and ±300 seconds (inclusive), ten decimal
+Unix timestamp digits, and keys of at least 32 bytes. These are synthetic test choices,
+not a production signing/rotation profile. A current secret-store ring is fetched for
+each request. Rotation can retain explicitly active keys; removal immediately refuses
+that key, including replays. There are no logged secrets or raw errors. No production
+store or credential provisioning authority is inferred from this interface.
+
+`connector-input.v1` contains `eventId`, `subject`, positive integer `revision`, and
+`kind`. Work orders carry a fictional `document` reference; billing status carries only
+`billed`, `paid` or `reversed`. All references use `fixture:` labels. Unknown fields,
+prices, amounts, allocations, tenant/job/bill/statement IDs, origin and approval data
+are refused at both TypeScript and SQL boundaries. No raw work order, resident/contact
+content or authoritative invoice composition enters this slice.
+
+Migration 0415 introduces a NOLOGIN, non-owner, non-inheriting, non-BYPASSRLS
+`jobguard_connector` role, with only schema usage and `connector.intake` execution.
+It has no human/business role membership, table access, app-schema usage, commercial
+commands or statement access. No login or binding is installed. Test-only administrative
+fixtures provision an expiring/revocable fake binding containing a tenant, stable source
+namespace and database-token SHA-256. A separately supplied secret-store token authenticates
+that binding; request fields and session tenant settings cannot select the tenant.
+Revocation/rotation serialize against intake by the binding row lock.
+
+Intake stages immutable source facts plus an immutable receipt and the existing tenant
+audit chain in one transaction, with FORCE RLS on both new tables. Binding lookup is a
+reviewed control-plane exception accessible only inside the migration-owned definer;
+connector event RLS uses the tenant derived from that authenticated binding. The caller
+cannot read either table. Identical `(tenant, namespace, eventId)` across transport,
+connection or key rotation returns the first receipt; a changed semantic payload or
+competing subject/revision fails. JSON key ordering is immaterial. Out-of-order events
+are retained as facts without selecting a current commercial status. A lost database
+acknowledgement is reconciled by retrying the same identity. No external action is sent.
+
+Every receipt says `state: staged`, `domainEffects: 0`. This slice grants **no domain
+promotion**: no work-order creation/pricing, billing allocation/settlement/reversal,
+invoice/locked-bill mutation, materials import, export delivery or statement/shadow read.
+Those require the owning accepted interfaces and remaining slices. Staged `paid` is not
+money received; staged `reversed` compensates no ledger. This work does not close the
+aggregate ENT-13a acceptance or G5. Database guarantees require the CI PostgreSQL suite
+and exact-head independent RED review; local transport fakes are contract evidence only.
