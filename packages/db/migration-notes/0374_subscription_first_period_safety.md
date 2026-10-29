@@ -1,7 +1,8 @@
 # 0374 — MON-2A first-period safety (RED: money)
 
 Forward-only replacement of `mon2_command(uuid,text,uuid,jsonb)` (0195 body plus
-0336's consent-hash amendment) and `mon2_issue(uuid,text,date,integer)` (0195).
+0336's consent-hash amendment) and `mon2_issue(uuid,text,date,integer)` (0373,
+including MON-3 source pinning and trial-day suppression of base and extras).
 No tables, signatures, grants, owners or shared expectation entries are added or
 removed. LP-0, SERIOUS-B5 and entitlement/privilege inventories retain the same
 union of installed routines. No existing migration or historical row is edited.
@@ -25,7 +26,21 @@ cover the 15th, 31st, leap day, full periods, replays, re-anchor refusal, backda
 and a foreign-company context. Database/browser suites require CI in this sandbox.
 Recovery is a forward-fix migration; never revert or mutate issued artifacts.
 
-PR #388's locally available MON-1 admission heads (local 79c0fb13, remote
-4cd0b673) were inspected: 0367 adds subscription refresh triggers/read dependencies
-but does not redefine either replaced routine. The router must recheck its actual
-PR head before integration; no network was used in this build.
+Catch-up to merged PR #418: `mon2_issue` is rebuilt verbatim from 0373, then
+only the pre-acceptance period refusal is reapplied. `mon2_command` is verified
+against 0195 plus 0336, retaining only the acceptance timestamp/anchor changes.
+The merged LP-0, SERIOUS-B5 and contractor entitlement expectation lists already
+contain the MON-3 routines and tables and remain unchanged.
+
+Catch-up local validation (installed package-local Vitest 4.1.12, one worker per
+run, at most three named files per run):
+
+- DB: `test/lp-0-catalog.test.ts test/free-first-job-source.test.ts` — 30 passed.
+- API: `src/subscription.application.test.ts src/subscription.access.test.ts` — 25 passed.
+- Web: `app/plans/plan-screen.test.tsx` — 17 passed.
+- Core: `src/subscription-plan-view.test.ts src/subscription-period.test.ts src/subscription-allocation.test.ts` — 48 passed.
+- Exact routine-body comparisons to the merged definitions, repository lane
+  parser, exact changed-path set, unchanged merged shared lists and
+  `git diff --check` passed. No test expectations or migrations already on main
+  changed. PostgreSQL migration/integration and browser suites were not run;
+  GitHub CI must execute them after the router pushes.
