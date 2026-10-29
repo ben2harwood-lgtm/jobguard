@@ -31,6 +31,7 @@
         "packages/db/src/index.ts",
         "packages/db/src/payment-fee-repository.test.ts",
         "packages/db/src/payment-fee-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/payment-fee-statements-upgrade.integration.test.ts",
         "packages/db/test/payment-fee-statements.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
