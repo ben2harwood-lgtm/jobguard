@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0363_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0376_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1231,3 +1231,44 @@ files. No Git-writing commands ran. Real PostgreSQL/migration execution,
 browser suites, required GitHub CI and the exact-head independent RED
 review remain external gates. Made-up data only; no live provider or release.
 Commit message: `/tmp/ch6-j-20261029T121241Z-commit-msg.txt`.
+
+### 29 October 2026 — PR #392 catch-up through c2de0bdd
+
+CH-6 / RED; no new behavior. Resolved the router-started merge with main in the
+working tree, retaining JobImportV3 and CommercialIntegrityV3 API wiring and the
+union of exact LP-0 and SERIOUS-B5 expectations. Main's entitlement, privileges,
+tenancy and lane additions remain present. Main has no CH-6 routine definitions
+to re-create. All main migration files and lane files were checked byte-for-byte;
+`docs/contracts/lp-downstream-effects-v1.md` remains unchanged.
+
+Used `tools/migration-renumber.mjs`'s pure `planRenumber` with the router's reserved
+0376/0377 range, then filesystem moves/reference rewrites because its `--write`
+mode requires a clean worktree and writes the read-only git index. Own 0363/0364
+became 0376/0377; SQL bytes match HEAD exactly. Migration notes, fixture paths and
+lane references follow the new names. Only these two migration files are added
+relative to main; older main copies are retained exactly.
+
+Local checks (installed dependencies; no downloads):
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs tools/migration-renumber.test.mjs`: PASS, 84 tests.
+- From apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts`: PASS, 25 tests.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts`: PASS, 6 tests.
+- Installed TypeScript `--noEmit` for apps/api and packages/db: PASS.
+- Installed TypeScript builds for packages/core and packages/db: PASS (refresh ignored runtime exports for OpenAPI).
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 153 migrations.
+- `node tools/commercial-integrity-boundary.mjs`: PASS, 69 roots, zero diagnostics.
+- `git diff --check`: PASS.
+
+The pnpm shim failed before startup while trying to verify its unavailable registry signature, so installed repository executables were
+used. The tsx CLI's IPC socket is blocked by this sandbox; OpenAPI verification
+uses `node --import tsx src/generate-openapi.ts --check` instead. Its first attempt
+found stale ignored db exports; the package builds above refreshed them.
+PostgreSQL, migrations and browser suites require GitHub CI. No git-write command
+was run: the router must stage the resolved contents/renames and finish the merge.
+
+OpenAPI verification after rebuilding ignored package exports: PASS.
+
+During final verification origin/main advanced to 72226d28 (#418 MON-3).
+Preservation and lane checks are pinned to this requested in-progress merge
+target c2de0bdd (MERGE_HEAD); the router must reconcile the newer main before
+claiming green CI against current main. The existing merge is ready to commit.
