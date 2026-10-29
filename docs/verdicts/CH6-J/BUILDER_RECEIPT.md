@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0354_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0363_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1088,3 +1088,54 @@ Git's read-only index until the router stages them. Ready for router staging,
 merge commit and push; PostgreSQL, migration and browser suites plus required
 CI and the RED exact-head review remain external gates. Commit message:
 `/tmp/ch6-j-20261029T081424Z-commit-msg.txt`.
+
+## 29 Oct 09:47 catch-up 2 — main through LP-2 and CH-9
+
+RED, CH-6 / PR #392. Completed the working-tree resolution of the
+router-started merge of origin/main `7eef37d694d98e95eb76baae95169e089e3b98e5`
+(#283 LP-2 and #409 CH-9). Unioned the LP-0 trigger conflict, retaining
+main's current privilege revocations and every CH-6 inventory addition.
+SERIOUS-B5, contractor-entitlement and tenancy shared expectations retain
+all lines from both parents. No routines needed re-creation, and no product
+behavior or test expectations changed beyond the required union/renumber.
+
+Used `planRenumber` from `tools/migration-renumber.mjs` with the router's
+reserved boundary 0362 to assign 0354 receipts → 0363 and 0355 sources → 0364.
+Applied filesystem moves and the tool's stem-reference replacement only:
+the CLI write mode requires a clean worktree and invokes git add, which this
+sandbox forbids. Updated the lane paths and migration-note filenames.
+Both SQL files and both notes are byte-identical to pre-merge HEAD; all 147
+migrations on incoming main are byte-identical to main. No Git writes ran.
+
+Checks actually run using installed repository binaries, at most two
+concurrent local processes and one Vitest worker per run:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS. These fixtures do not prove PostgreSQL semantics.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts src/auth/sso/oidc-paths.test.ts`:
+  27 tests passed; boundary suite initially failed import on stale generated
+  core exports introduced by incoming main. Rebuilt packages/core and
+  packages/db with their existing tsc commands, then reran the boundary suite:
+  4/4 PASS (31 API tests passed across the completed runs).
+- Root installed tsc: packages/db and apps/api `--noEmit`: PASS;
+  packages/core and packages/db normal builds: PASS.
+- `node --test --test-concurrency=1
+  tools/commercial-integrity-boundary.test.mjs
+  tools/lp-downstream-inventory.test.mjs`: 86/89 PASS. All 84 commercial
+  integrity boundary tests pass. Three downstream-inventory tests fail only
+  on LP-0 inventory/document drift. Incoming main independently fails the
+  generator's `--check`; this branch additionally contributes its CH-6 LP-0
+  rows. Left the generator, document and expectations unchanged as directed.
+- Recursive incoming-main LP-0 retention plus branch-addition retention,
+  all shared integration-test parent lines retained, TypeScript syntax,
+  unchanged SQL/note bytes, all 56 final lane paths and migration order: PASS.
+- `git diff --check` and resolved inventory conflict-marker scan: PASS.
+
+The read-only Git index still records the LP-0 file as unmerged until the
+router stages the resolved working tree. PostgreSQL, migration execution,
+browser suites, full required GitHub CI and the exact-head RED review remain
+external gates. No customer data, live money, providers or releases.
+Commit message: `/tmp/ch6-j-20261029T094730Z-commit-msg.txt`.

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const f = vi.hoisted(() => ({ cookie: vi.fn(), authenticate: vi.fn(), pool: vi.fn() }));
+vi.mock("../../lib/identity-server",()=>({identityApplication:()=>({allowedOrigin:"https://fictional.invalid",provider:{}}),identityCredentials:async()=>({sessionToken:"company-cookie"})}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: f.cookie }) }));
 vi.mock("@jobguard/db", async importOriginal => ({ ...await importOriginal<typeof import("@jobguard/db")>(), authenticatePracticeSession: f.authenticate }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: f.pool }));
@@ -15,7 +16,7 @@ beforeEach(() => {
  f.authenticate.mockReset().mockResolvedValue({ context: { tenantId: "not-company-authority" } });
  f.pool.mockReset().mockReturnValue({});
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {vi.unstubAllEnvs();vi.restoreAllMocks();});
 const read = (query = "") => route.GET(new Request(`https://fictional.invalid/api/value${query}`));
 it("CH9-B01/B02/B06/B07 Next cannot turn held company/source authority into an empty successful aggregate", async () => {
  for (let n = 0; n < 2; n++) {
@@ -56,4 +57,14 @@ it("database errors are redacted", async () => {
  f.pool.mockImplementation(() => { throw new Error("password=fictional-secret"); });
  const response = await read(); expect(response.status).toBe(503);
  expect((await response.json()).code).toBe("BUSINESS_VALUE_UNAVAILABLE");
+});
+
+it("a company cookie selects the persisted company bridge even alongside a practice cookie",async()=>{
+ const {CompanyValueApplication}=await import("@jobguard/api/workspace");
+ const mapped={version:"business-value-result.v1",state:"mapped",tenantId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",label:"mapped, inspectable",environment:"synthetic_demo",jobs:[],subscription:[]} as const;
+ const company=vi.spyOn(CompanyValueApplication.prototype,"readBusiness").mockResolvedValue({...mapped,jobs:[],subscription:[]});
+ const response=await route.GET(new Request("https://fictional.invalid/api/value",{headers:{cookie:"jobguard_session=company-cookie; jg_session=practice-cookie"}}));
+ expect(response.status).toBe(200);expect(await response.json()).toEqual(mapped);
+ expect(company).toHaveBeenCalledWith({sessionToken:"company-cookie",origin:"https://fictional.invalid"},{});
+ expect(f.authenticate).not.toHaveBeenCalled();expect(response.headers.get("cache-control")).toBe("private, no-store");
 });
