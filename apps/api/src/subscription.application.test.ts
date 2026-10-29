@@ -1,5 +1,5 @@
 import { subscriptionConsentText } from "@jobguard/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubscriptionApplication, subscriptionFailure } from "./subscription.application.js";
 const command = { consentText: subscriptionConsentText, version: "subscription-command.v1", kind: "accept", plan: "Solo", cadence: "monthly", anchorDay: 1, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", maximumPence: 4900, expectedRevision: 0 };
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -127,4 +127,11 @@ describe("MON-2A tidy approval failure boundaries", () => {
   expect(f.authority.provider.findMembership).toHaveBeenCalledWith(expect.anything(),foreign);
   expect(f.repository.read).not.toHaveBeenCalled();expect(f.repository.command).not.toHaveBeenCalled();
  });
+});
+
+// The displayed first anchor comes from the server clock, including London midnight.
+afterEach(() => vi.useRealTimers());
+it.each([["2026-06-14T23:30:00Z",15],["2026-01-31T12:00:00Z",31],["2024-02-29T12:00:00Z",29]] as const)("returns the server London billing day for %s",async (instant,day)=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date(instant));
+ expect(await fixture().app.read("session")).toMatchObject({billingDay:day});
 });
