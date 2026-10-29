@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m48-f5f7": {
+      "branches": ["codex/sandbox/m48-f5f7"],
+      "receipt": "packages/db/migration-notes/0335_stored_receipt_case_allocation.md",
+      "note": "RED M4-8-S F5/F7: job-qualified source movement FK and saved reversal proofs. This lane file is implicitly owned.",
+      "allow": [
+        "packages/db/migration-notes/0335_stored_receipt_case_allocation.md",
+        "packages/db/migrations/0401_receipt_source_job_binding.sql",
+        "packages/db/test/receipt-source-job-binding-upgrade.integration.test.ts",
+        "packages/db/test/stored-receipt-case-allocation.integration.test.ts"
+      ]
+    }
+  }
+}

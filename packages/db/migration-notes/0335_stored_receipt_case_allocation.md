@@ -279,3 +279,56 @@ SERIOUS-B5 (17 cases); none was executed against PostgreSQL locally. Exact
 LP-0 identity union (1,394 entries, 479 routines), preservation of main's
 shared-list lines, conflict scan, exact lane payload and diff whitespace checks
 passed. PostgreSQL and migration execution remain required in GitHub CI.
+
+## M4-8-S F5/F7 completion slice — 29 October 2026 (RED)
+
+Inspected origin/main fe80add5 before editing. The saved F5/F7 writer-chain
+proofs and F7 refund/credit cases already exist here; this slice extends them
+rather than rebuilding the allocator. Positive saved facts now also assert exact
+gross (£480/£960). Both fixtures exercise stored refunds and credits, persist
+−£400/−£800 net with the original allocation link, preserve the original row,
+and replay both producer and consumer approvals without consuming money twice.
+The F5 credit reverses the £14,640 receipt in full (£12,200 net credit); it uses
+the original paid shares, not a new denominator or an item-specific remittance.
+Cumulative arithmetic returns Q to zero with a −£40/−£80 reference fee delta.
+F5's builder capture remains fee-free: no entitlement or fee posting is created.
+Existing duplicate/conflicting replay, concurrency, amount/cap, locked-bill,
+cross-tenant/job and private-table access attacks remain in the same suite.
+
+Forward migration 0401 replaces 0258's tenant-only movement FK with
+(tenant_id, job_id, movement_id), referencing the unique job identity already
+provided by 0119. It validates existing rows immediately and changes no data,
+columns, grants, policies or routines. A historical mismatch fails atomically;
+do not repair it by silently changing a job. Rollback strategy is to stop new
+allocation work and retain history, then issue a reviewed forward fix. No
+production capability or provider is enabled. The #346 structural gap is fixed
+in source; closure still needs PostgreSQL CI and the independent RED review.
+
+The upgrade test installs actual predecessors, produces F5/F7 with the normal
+writers, migrates and reruns, and compares stored money/source/lock rows and
+types. It checks the validated FK and rejects an existing same-tenant movement
+from another job. A rolled-back admin-only control temporarily disables the
+source immutability trigger and removes this FK, proving that this exact FK
+rejects the attack; no other financial trigger/FK/check is disabled. Normal
+writer fixtures keep every guard enabled. Fresh-install coverage remains the
+normal stored-receipt suite, which installs all migrations.
+
+Local validation (installed binaries, no dependencies downloaded):
+- packages/db/node_modules/.bin/vitest run --maxWorkers=2
+  src/stored-receipt-migration.test.ts
+  src/stored-receipt-case-allocation-repository.test.ts
+  src/migrate-discovery.test.ts: 24 tests passed, three files.
+- packages/db/node_modules/.bin/tsc --noEmit -p packages/db/tsconfig.json:
+  passed (run from packages/db with its local tsconfig path).
+- Strict ES2023/NodeNext typecheck with noUncheckedIndexedAccess and
+  exactOptionalPropertyTypes of both affected integration files: passed.
+- Vitest list --maxWorkers=2 of those two integration files collected 18 tests;
+  discovery only, no PostgreSQL execution.
+- Existing core/storage packages compiled with the installed TypeScript compiler
+  to supply their local package outputs. The initial focused Vitest attempt had
+  failed on missing @jobguard/core output; the rerun above passed. The system
+  pnpm wrapper stalled, so checks used the installed repository binaries.
+
+PostgreSQL/migration/browser execution, required CI against current main, one
+independent RED review and router commit/push remain outstanding. This sandbox
+cannot start PostgreSQL or bind localhost. No git-writing command was run.
