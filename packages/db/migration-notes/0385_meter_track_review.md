@@ -1,7 +1,7 @@
 # 0385 — MON-1 grace and immediate track-review Decisions (RED)
 
 Stacked on mon1-admit / PR #388. The admission function is copied from its latest
-base definition in 0367; only unresolved Decision creation is added. The existing
+base definition in 0380; only unresolved Decision creation is added. The existing
 committed-place calculation, tenant serializer, synthetic-only source guards,
 locked-job refusal, Solo limit and unblocked Builder admission are retained.
 
@@ -10,7 +10,7 @@ An addition above Solo's five or Builder's twelve paid places raises
 (14 committed places), it immediately raises `subscription.track_review`, once
 per company. IDs bind tenant and purpose (plus agreement for grace). Closing,
 reopening, command replay and later additions cannot duplicate these effects.
-The latest mon2_issue/mon2_review bodies (0195) reuse an existing track Decision;
+The latest mon2_issue (0373) and mon2_review (0195) bodies reuse an existing track Decision;
 their existing review and operations-card records are still produced by billing
 review. This piece adds Decisions only, not a new operations workflow.
 
@@ -25,3 +25,8 @@ current facts. Fresh and upgrade PostgreSQL tests are included for CI. Roll
 forward on failure with a new migration using these definitions; do not remove
 already-created Decisions or change a historical bill. Source checks verify the
 three copied routines differ only in the intended Decision additions/reuse.
+
+Repair 1 preserves MON-3 source pinning and zero trial plan/extra numerators from
+0373. The trial regression combines immediate admission review with zero-price
+issue/replay and immutable source pinning. The lane file remains implicitly
+self-editable: the existing lane validator rejects listing config/lanes/ in allow.

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
+import { firstTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
 import { boundaryLock, closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
 import { calendarInput, command as subscriptionCommand, historicalAgreement, issue, meterCompany, storeMeter } from "./subscription-persistence-fixtures.js";
@@ -115,6 +116,29 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   await admitActivation(b);
   await admitActivation(await seedWorkJob(f, b.tenantId));
   expect((await decisions(b)).filter(d => d.action_type === "subscription.track_review")).toEqual([original]);
+ });
+ it("a trial still issues GBP 0, pins its source and reuses the immediate track Decision", async () => {
+  const a = await firstTrialFixture(f, "2026-09-01T12:00:00.123456Z");
+  await historicalAgreement(f, a, "Builder");
+  // Capacity parents are synthetic activation fixtures, not second trial
+  // admissions. The trial remains active while a mandatory review is open.
+  for (let n = 0; n < 13; n++) await activateMeterJob(f, await seedWorkJob(f, a.tenantId));
+  await admitActivation(await seedWorkJob(f, a.tenantId));
+  const immediate = await decisions(a);
+  expect(immediate.map(d => d.action_type)).toEqual(["subscription.track_review", "subscription.upgrade"]);
+  const source = await storeMeter(f, a, calendarInput(a.tenantId, 14, 9));
+  const issued = await issue(f, a);
+  expect(issued.amountPence).toBe(0);
+  expect(await issue(f, a)).toEqual(issued);
+  const pins = (await f.admin.query("SELECT input FROM app.trial_subscription_source WHERE tenant_id=$1 AND source_id=$2", [a.tenantId, source])).rows;
+  expect(pins).toHaveLength(1);
+  expect(pins[0].input.days.every((day: { trial: boolean }) => day.trial)).toBe(true);
+  const lines = (await f.admin.query("SELECT kind,numerator_pence,amount_pence FROM app.subscription_period_line WHERE tenant_id=$1 AND period_id=$2", [a.tenantId, issued.periodId])).rows;
+  expect(lines.some(line => line.kind === "plan")).toBe(true);
+  expect(lines.some(line => line.kind === "extra")).toBe(true);
+  expect(lines.every(line => Number(line.numerator_pence) === 0 && Number(line.amount_pence) === 0)).toBe(true);
+  expect(await decisions(a)).toEqual(immediate);
+  expect((await f.admin.query("SELECT decision_id FROM app.subscription_review WHERE tenant_id=$1", [a.tenantId])).rows[0].decision_id).toBe(immediate[0].id);
  });
  it("Solo grace raises an upgrade once; refused seventh has no effects", async () => {
   const a = await company(5, "Solo"); await admitActivation(a);

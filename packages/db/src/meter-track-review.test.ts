@@ -5,7 +5,7 @@ const read = (name: string) => readFileSync(new URL(`../migrations/${name}`, imp
 const migration = read("0385_meter_track_review.sql");
 describe("MON-1 track review migration source inspection", () => {
  it("preserves the latest parent admission body except the Decision-only addition", () => {
-  const parent = read("0367_meter_work_admission.sql");
+  const parent = read("0380_meter_work_admission.sql");
   const start = "CREATE OR REPLACE FUNCTION app.ch4_admit_place";
   const original = parent.slice(parent.indexOf(start), parent.indexOf("\n-- Keep the generic"));
   const updated = migration.slice(migration.indexOf(start), migration.indexOf("\n-- Billing detectors"));
@@ -22,11 +22,11 @@ describe("MON-1 track review migration source inspection", () => {
   expect(migration).not.toMatch(/CREATE (?:TABLE|POLICY)|GRANT /u);
  });
  it.each(["mon2_issue", "mon2_review"])("%s only reuses an existing immediate Decision", name => {
-  const parent = read("0195_subscription_persistence.sql");
-  const start = `CREATE FUNCTION app.${name}(`;
+  const parent = read(name === "mon2_issue" ? "0373_free_first_job_eligibility.sql" : "0195_subscription_persistence.sql");
+  const start = `CREATE ${name === "mon2_issue" ? "OR REPLACE " : ""}FUNCTION app.${name}(`;
   const original = parent.slice(parent.indexOf(start), parent.indexOf("\nEND $$;", parent.indexOf(start)) + 8);
   const updatedStart = `CREATE OR REPLACE FUNCTION app.${name}(`;
   const updated = migration.slice(migration.indexOf(updatedStart), migration.indexOf("\nEND $$;", migration.indexOf(updatedStart)) + 8);
-  expect(updated.replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION").replace(/  -- Reuse the immediate[\s\S]*?  -- End Decision reuse\n/u, "  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision_id,t,'subscription',t::text,'subscription.track_review');\n")).toBe(original);
+  expect(updated.replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION").replace(/  -- Reuse the immediate[\s\S]*?  -- End Decision reuse\n/u, "  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision_id,t,'subscription',t::text,'subscription.track_review');\n")).toBe(original.replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"));
  });
 });

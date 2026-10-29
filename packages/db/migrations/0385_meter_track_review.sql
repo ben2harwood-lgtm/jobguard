@@ -1,5 +1,5 @@
 BEGIN;
--- MON-1 (RED): extend the latest base admission routine (0367).
+-- MON-1 (RED): extend the latest base admission routine (0380).
 CREATE OR REPLACE FUNCTION app.ch4_admit_place(t uuid,j uuid,action text) RETURNS void
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE plan text; included integer; before_count integer; after_count integer; ledger app.meter_work_ledger;
@@ -82,13 +82,14 @@ BEGIN
  next_day:=app.mon2_boundary((date_trunc('month',start_day)+interval '1 month')::date,a.anchor_day);
  SELECT * INTO src FROM app.meter_input_event WHERE tenant_id=t AND period_start=start_day ORDER BY sequence DESC LIMIT 1;
  IF src.id IS NULL OR src.period_end<>next_day THEN RAISE EXCEPTION 'SUBSCRIPTION_SOURCE_UNAVAILABLE' USING ERRCODE='22023'; END IF;
+ PERFORM app.mon3_pin_source(t,digest,src.id);
  input:=app.mon2_source(t,digest,src.id); projected:=app.mon1_project(t,input);
  denominator:=next_day-start_day; base_amount:=(projected->'principal'->>'pence')::bigint;
  amount:=base_amount; maximum:=(projected->'maximum'->>'pence')::bigint;
  FOR day IN SELECT value FROM jsonb_array_elements(input->'days') ORDER BY value->>'date' LOOP
   included:=CASE WHEN day->>'plan'='Solo' THEN 4 ELSE 7 END; cap:=CASE WHEN included=4 THEN 1 ELSE 5 END;
   line_key:='plan:'||(day->>'plan');
-  numerator:=coalesce((lines->line_key->>'numerator')::bigint,0)+CASE WHEN included=4 THEN 2900 ELSE 6900 END;
+  numerator:=coalesce((lines->line_key->>'numerator')::bigint,0)+CASE WHEN (day->>'trial')::boolean THEN 0 WHEN included=4 THEN 2900 ELSE 6900 END;
   lines:=jsonb_set(lines,ARRAY[line_key],jsonb_build_object('kind','plan','numerator',numerator));
   small_n:=0; counted_n:=0;
   -- Small allowance is assigned first by canonical place identity. All remaining
@@ -106,7 +107,7 @@ BEGIN
     attribution:=CASE WHEN counted_n<=included THEN 'included' WHEN counted_n<=included+cap THEN 'paid_extra' ELSE 'grace' END;
    END IF;
    IF attribution='paid_extra' THEN
-    line_key:='extra:'||place_key; numerator:=coalesce((lines->line_key->>'numerator')::bigint,0)+2000;
+    line_key:='extra:'||place_key; numerator:=coalesce((lines->line_key->>'numerator')::bigint,0)+CASE WHEN (day->>'trial')::boolean THEN 0 ELSE 2000 END;
     lines:=jsonb_set(lines,ARRAY[line_key],jsonb_build_object('kind','extra','numerator',numerator));
    END IF;
    bindings:=bindings||jsonb_build_array(jsonb_build_object('date',day->>'date','placeKey',place_key,'customer',g.customer,'site',g.site,'representative',g.representative,'attribution',attribution));
