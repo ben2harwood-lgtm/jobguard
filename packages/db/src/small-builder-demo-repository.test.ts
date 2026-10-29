@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+import * as core from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { migrate } from "./migrate.js";
 import { SmallBuilderDemoRepository } from "./small-builder-demo-repository.js";
@@ -63,6 +64,19 @@ describe("DEMO-I repository boundary (no PostgreSQL proof)",()=>{
   const stored={version:"small-builder-demo-report.v1",snapshotId:id,facts:{...run,scenario:"meter"}};
   const f=fixture(stored);
   expect(await f.repo.execute(f.context,digest,"report",id,{})).toEqual(stored);
+ });
+ it.each(["create","reset"] as const)("keeps the committed %s when the preview producer fails",async operation=>{
+  const stored={...run,scenario:"meter"};const f=fixture(stored);
+  const preview=vi.spyOn(core,"previewDemoMeter").mockImplementationOnce(()=>{throw new Error("producer failed");});
+  try {
+   const input=operation==="create" ? {...command,scenario:"meter"} : {contractVersion:"small-builder-demo.reset.v1",commandId:id,expectedRunRevision:1};
+   await expect(f.repo.execute(f.context,digest,operation,operation==="create"?null:id,input)).rejects.toThrow("DEMO_UNAVAILABLE");
+   expect(preview).toHaveBeenCalledOnce();
+   expect(f.query).toHaveBeenLastCalledWith("COMMIT");
+   expect(f.query.mock.calls.some(call=>call[0]==="ROLLBACK")).toBe(false);
+   expect(f.release).toHaveBeenCalledOnce();
+   expect(await f.repo.execute(f.context,digest,"read",stored.runId,{})).toMatchObject({...stored,meterPreview:{runId:stored.runId,hypothetical:true}});
+  } finally { preview.mockRestore(); }
  });
  it("reads only an exact requested stored snapshot without accepting report facts",async()=>{
   const report={version:"small-builder-demo-report.v1",snapshotId:id,facts:run};const f=fixture(report);
