@@ -1,23 +1,6 @@
-import { jsonResult } from "./helpers/customer-invoice-journey";
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
-import { finishDispositionsAndTerms, prepareLockJob, seedManySignals, withSyntheticShadow } from "./helpers/final-account-lock-journey";
-
-// These guard journeys need an incomplete check even when the scheduled worker runs.
-// Leave a real pre-lock upload unfinished; never race automatic completion or seed a
-// second manifest with a different detector/policy for the same lock.
-async function preparePendingCheckJob(page: Page) {
-  const fixture = await prepareLockJob(page);
-  const proofPath = `/api/jobs/${fixture.jobId}/proof`;
-  const proof = await jsonResult(page.request.get(proofPath), "Read pending-check scope");
-  const commandId = randomUUID();
-  const selected = await jsonResult(page.request.post(proofPath, { data: {
-    version: "practice-proof-command.v1", action: "select_generated", commandId,
-    scopeItemId: proof.scopeItemId, fixture: "completion-photo",
-  } }), "Leave pre-lock upload pending");
-  expect(selected.upload).toMatchObject({ id: commandId, state: "pending" });
-  return fixture;
-}
+import { expect, test } from "@playwright/test";
+import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, seedManySignals, withSyntheticShadow } from "./helpers/final-account-lock-journey";
 
 test("DW2/DW4/DW9: persisted completion survives reload, Jobs and a second browser", async ({ page, browser }) => {
   const fixture = await preparePendingCheckJob(page);

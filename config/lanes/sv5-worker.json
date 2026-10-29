@@ -14,6 +14,8 @@
         "apps/api/src/worker.ts",
         "apps/web/e2e/SV-4.spec.ts",
         "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/helpers/customer-invoice-journey.ts",
+        "apps/web/e2e/helpers/final-account-lock-journey.ts",
         "docs/contracts/final-check-v1.md",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/sv5pre-completion-v1.md",

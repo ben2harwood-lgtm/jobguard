@@ -2,8 +2,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
-import { prepareLockJob, withSyntheticShadow } from "./helpers/final-account-lock-journey";
-import { jsonResult, prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
+import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, withSyntheticShadow } from "./helpers/final-account-lock-journey";
+import { jsonResult } from "./helpers/customer-invoice-journey";
 
 test("before lock nothing is revealed; after lock the check shows as running and survives reload", async ({ page }) => {
   await openLiveWatchdogJob(page);
@@ -17,8 +17,10 @@ test("before lock nothing is revealed; after lock the check shows as running and
 });
 
 test("after lock the check is running, shows no items and keeps that state after reload", async ({ page }) => {
-  const { jobId, account } = await prepareLockJob(page);
-  await prepareInvoiceFinalCheck(page, jobId, account);
+  const { jobId } = await preparePendingCheckJob(page);
+  await finishDispositionsAndTerms(page);
+  await page.getByRole("button", { name: "Complete final account", exact: true }).click();
+  await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   for (let pass = 0; pass < 2; pass++) {
     await page.goto(`/jobs/${jobId}#final-check`);
     const panel = page.getByTestId("final-check-reveal");
