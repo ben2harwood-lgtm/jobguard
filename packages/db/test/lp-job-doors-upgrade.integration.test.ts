@@ -11,7 +11,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const ownName = "0344_unchecked_job_doors.sql";
+const ownName = "0356_unchecked_job_doors.sql";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(true, ownName); }, 300_000);
 afterAll(async () => { await db?.close(); });

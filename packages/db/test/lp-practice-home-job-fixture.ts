@@ -1,5 +1,5 @@
 // LP-2 ruling 103 (Q3): explicit OWNER fixture for a practice-home job INSERT.
-// Migration 0344 admits a practice-home job only through an exact one-use permit created in the SAME transaction as the INSERT.
+// Migration 0356 admits a practice-home job only through an exact one-use permit created in the SAME transaction as the INSERT.
 // This helper writes only that permit. The original INSERT statement stays at each call site, unchanged, and runs right after it
 // on the same owner connection. It is never a runtime capability: the runtime login cannot read, write or execute the permit.
 import { randomUUID } from "node:crypto";
