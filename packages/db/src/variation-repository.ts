@@ -58,6 +58,11 @@ export async function approvePricedVariation(db:TenantTransaction,tenantId:strin
  if(row.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
  const exact=await db.$client.query(`SELECT 1 FROM app.variation_revision WHERE tenant_id=$1 AND id=$2 AND revision=$3 AND content_hash=$4 AND signed_delta_pence=$5`,[tenantId,a.revisionId,a.revision,a.contentHash,a.signedDeltaPence]);
  if(!exact.rowCount)throw new Error("EXACT_CURRENT_PRICED_REVISION_REQUIRED");
+ // Customer approval binds finalized original evidence for this exact tenant and job.
+ if(a.method==="customer_evidence"){
+  const evidence=await db.$client.query(`SELECT e.id FROM app.evidence_object e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.id=$3 AND e.kind='original' AND e.server_verified_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)`,[tenantId,row.job_id,a.evidenceId]);
+  if(!evidence.rowCount)throw new Error("CUSTOMER_EVIDENCE_REQUIRED");
+ }
  // One statement: the approval and, for newly approved scope only, its single operational progress identity.
  // Existing scope already has one; a pending or rejected proposal never reaches this statement.
  const inserted=await db.$client.query(`WITH ins AS (INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,evidence_id,approved_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(tenant_id,revision_id) DO NOTHING RETURNING id,variation_id), prog AS (INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) SELECT v.tenant_id,v.job_id,v.scope_item_id FROM app.variation v JOIN ins ON ins.variation_id=v.id WHERE v.tenant_id=$2 AND v.existing_scope_item_id IS NULL ON CONFLICT DO NOTHING) SELECT id FROM ins`,[a.id,tenantId,row.job_id,variationId,a.revisionId,a.revision,a.contentHash,a.signedDeltaPence,a.method,a.actorMembershipId,a.evidenceId,a.approvedAt]);
