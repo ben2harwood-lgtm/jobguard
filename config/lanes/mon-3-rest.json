@@ -23,6 +23,7 @@
         "apps/web/app/api/jobs/[id]/quotes/activation/route.ts",
         "apps/web/app/api/jobs/[id]/trial/route.ts",
         "apps/web/app/jobs/[id]/trial/page.tsx",
+        "apps/web/app/lib/route-error-code.test.ts",
         "apps/web/app/lib/trial-server.ts",
         "apps/web/app/ui/first-job-trial.tsx",
         "apps/web/app/ui/workspace-shell.tsx",

@@ -18,7 +18,7 @@ test('first-only Skip, fictional card setup and clean capacity refusal survive r
  await expect(page.getByRole('main').getByRole('note')).toContainText('no real charges');
  const skip=page.getByRole('button',{name:'Skip for now',exact:true});await expect(skip).toBeVisible();await skip.focus();await expect(skip).toBeFocused();
  const bounds=await skip.boundingBox();expect(bounds!.height).toBeGreaterThanOrEqual(44);
- await skip.click();await expect(page.getByRole('alert')).toContainText('has not gone live');
+ await skip.click();await expect(page.getByRole('main').getByRole('alert')).toContainText('has not gone live');
  await page.getByRole('button',{name:'Add a card',exact:true}).click();await page.getByRole('button',{name:'Complete fictional card setup'}).click();
  await expect(skip).toHaveCount(0);await expect(page.getByText('Simulated card on file.')).toBeVisible();
  await page.reload();await expect(page.getByText('Simulated card on file.')).toBeVisible();

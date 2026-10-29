@@ -78,7 +78,7 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
   const parents=await Promise.all([keyParent(f,a.tenantId),keyParent(f,a.tenantId)]),snaps=parents.map(p=>snapshot(p));
   for(const s of snaps)await store(f,s);
   const results=await Promise.allSettled(snaps.map(s=>workTenant(f.admin,a.tenantId,async db=>{
-   const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'ch4.fixture',$2::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);await db.query("SET LOCAL ROLE jobguard_migration");
+   const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2::uuid,'ch4.fixture',($2::uuid)::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("INSERT INTO app.trial_admission(tenant_id,job_id,activation_id,snapshot_id,verification_id,command_id,admission_kind) VALUES($1,$2,$3,$4,$5,$6,'first')",[a.tenantId,s.jobId,s.activationId,s.id,verification,command]);
   })));
   expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(Number((await f.admin.query("SELECT count(*) n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n)).toBe(1);

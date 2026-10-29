@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 const state = vi.hoisted(() => ({ error: undefined as unknown }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "session" }) }) }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => name === "jg_session" ? { value: "session" } : undefined }) }));
 vi.mock("./synthetic-server", () => ({ hasSyntheticSession: () => true, practiceFailure: () => null, syntheticPool: () => ({}) }));
 vi.mock("./workspace-server", () => {
   const service: unknown = new Proxy(() => { throw state.error; }, { get: (_target, key) => key === "then" ? undefined : service });
