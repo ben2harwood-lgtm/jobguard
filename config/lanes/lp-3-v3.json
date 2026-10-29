@@ -25,6 +25,7 @@
         "packages/db/test/commercial-integrity-api-audit.integration.test.ts",
         "packages/db/test/contractor-parties.integration.test.ts",
         "packages/db/test/job-activation-terms.integration.test.ts",
+        "packages/db/test/lp-0-catalog.test.ts",
         "packages/db/test/lp3-access.integration.test.ts",
         "packages/db/test/lp3-activation-acceptance.integration.test.ts",
         "packages/db/test/lp3-catalog-fixtures.ts",
