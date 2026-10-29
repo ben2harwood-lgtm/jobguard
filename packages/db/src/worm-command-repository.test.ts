@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Pool } from "pg";
-import type { WormStorage, TimestampResult } from "@jobguard/storage";
+import { WormBoundaryError, type WormStorage, type TimestampResult } from "@jobguard/storage";
 import { WormCommandRepository, wormCommandV1, type WormReceipt } from "./worm-command-repository.js";
 import type { VerifiedTenantContext } from "./tenant-context.js";
 
@@ -66,6 +66,22 @@ describe("dark durable WORM application", () => {
   });
   it("does not mark a hold applied when storage readback disagrees", async () => {
     vi.mocked(storage.read).mockResolvedValue({ held: false, retainUntil: null });
+    expect((await repo().execute(context, row.id, storage, unavailable)).status).toBe("outcome_unknown");
+    expect(storage.hold).toHaveBeenCalledTimes(1);
+  });
+  it.each(["apply_hold", "release_hold"] as const)("persists a clear %s refusal and never retries it", async action => {
+    row.action = action;
+    vi.mocked(storage.hold).mockRejectedValue(new WormBoundaryError("INVALID_INPUT"));
+    expect(await repo().execute(context, row.id, storage, unavailable)).toMatchObject({
+      status: "refused", result: { status: "refused", reason: "storage_refused" },
+    });
+    await repo().execute(context, row.id, storage, unavailable);
+    expect(storage.hold).toHaveBeenCalledTimes(1);
+    expect(storage.read).not.toHaveBeenCalled();
+    expect(fake.audit.mock.calls.at(-1)?.[1][0].eventType).toBe("worm.refused");
+  });
+  it("keeps a refusal during readback unknown because the write already completed", async () => {
+    vi.mocked(storage.read).mockRejectedValue(new WormBoundaryError("INVALID_INPUT"));
     expect((await repo().execute(context, row.id, storage, unavailable)).status).toBe("outcome_unknown");
     expect(storage.hold).toHaveBeenCalledTimes(1);
   });

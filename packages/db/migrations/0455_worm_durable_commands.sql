@@ -20,7 +20,7 @@ CREATE TABLE app.worm_command (
  action text NOT NULL CHECK(action IN ('apply_hold','release_hold','request_anchor')),
  payload jsonb NOT NULL, release_of uuid,
  object_key text NOT NULL, object_version_id text NOT NULL, imprint text NOT NULL,
- status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','executing','applied','pending','outcome_unknown','cancelled')),
+ status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','executing','applied','pending','outcome_unknown','refused','cancelled')),
  result jsonb, attempts integer NOT NULL DEFAULT 0 CHECK(attempts>=0),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,idempotency_key),
@@ -32,7 +32,7 @@ CREATE TABLE app.worm_command (
 );
 CREATE TABLE app.worm_attempt (
  tenant_id uuid NOT NULL, command_id uuid NOT NULL, attempt integer NOT NULL,
- outcome text NOT NULL CHECK(outcome IN ('executing','applied','pending','outcome_unknown')), result jsonb NOT NULL,
+ outcome text NOT NULL CHECK(outcome IN ('executing','applied','pending','outcome_unknown','refused')), result jsonb NOT NULL,
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(tenant_id,command_id,attempt),
  FOREIGN KEY(tenant_id,command_id) REFERENCES app.worm_command(tenant_id,id)
@@ -81,14 +81,14 @@ BEGIN
  THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
  IF c->>'action'='apply_hold' AND EXISTS(
  SELECT 1 FROM app.worm_command a WHERE a.tenant_id=t AND a.evidence_id=e.id AND a.action='apply_hold'
- AND a.status<>'cancelled' AND NOT EXISTS(SELECT 1 FROM app.worm_command r
+ AND a.status NOT IN ('cancelled','refused') AND NOT EXISTS(SELECT 1 FROM app.worm_command r
  WHERE r.tenant_id=t AND r.release_of=a.id AND r.status='applied'))
  THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
  IF c->>'action'='release_hold' THEN
  SELECT * INTO h FROM app.worm_command WHERE tenant_id=t AND id=(c->>'releaseOf')::uuid
  AND evidence_id=e.id AND job_id=e.job_id AND action='apply_hold' AND status='applied';
  IF NOT FOUND OR h.identity_user_id=m.identity_user_id OR EXISTS(SELECT 1 FROM app.worm_command
- WHERE tenant_id=t AND release_of=h.id AND status<>'cancelled') THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ WHERE tenant_id=t AND release_of=h.id AND status NOT IN ('cancelled','refused')) THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
  END IF;
  INSERT INTO app.worm_command(tenant_id,id,idempotency_key,actor_id,identity_user_id,evidence_id,job_id,action,payload,release_of,object_key,object_version_id,imprint)
  VALUES(t,(c->>'commandId')::uuid,(c->>'idempotencyKey')::uuid,m.id,m.identity_user_id,e.id,e.job_id,c->>'action',c,
@@ -122,7 +122,7 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||'/worm',0));
  SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid FOR UPDATE;
  IF NOT FOUND OR c.status<>'executing' OR c.attempts<>n THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
- IF outcome IS NULL OR material IS NULL OR outcome NOT IN ('applied','pending','outcome_unknown') OR
+ IF outcome IS NULL OR material IS NULL OR outcome NOT IN ('applied','pending','outcome_unknown','refused') OR
  (c.action<>'request_anchor' AND outcome='pending') OR
  (c.action='request_anchor' AND outcome='applied' AND
  (material->>'status' IS DISTINCT FROM 'anchored' OR material->>'token' IS NULL OR material->>'query' IS NULL

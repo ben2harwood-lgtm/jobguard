@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
+import { WormBoundaryError, type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -20,7 +20,7 @@ export type WormReceipt = {
   id: string; tenant_id: string; actor_id: string; evidence_id: string;
   action: WormCommand["action"]; payload: WormCommand; object_key: string;
   object_version_id: string; imprint: string; attempts: number;
-  status: "queued" | "executing" | "applied" | "pending" | "outcome_unknown" | "cancelled";
+  status: "queued" | "executing" | "applied" | "pending" | "outcome_unknown" | "refused" | "cancelled";
   result: Record<string, unknown> | null;
 };
 export class WormCommandError extends Error {
@@ -81,8 +81,9 @@ export class WormCommandRepository {
     if (!claim.claimed) return claim.c;
     const { c } = claim;
     const target = { tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id };
-    let status: "applied" | "pending" | "outcome_unknown" = "applied";
+    let status: "applied" | "pending" | "outcome_unknown" | "refused" = "applied";
     let material: Record<string, unknown> = { status: "applied" };
+    let holdCompleted = false;
     try {
       if (c.action === "request_anchor") {
         if (c.payload.action !== "request_anchor") throw new WormCommandError("WORM_REFUSED");
@@ -91,12 +92,15 @@ export class WormCommandRepository {
         else material = { ...result, token: Buffer.from(result.token).toString("base64"), query: Buffer.from(result.query).toString("base64") };
       } else {
         await storage.hold(target, c.action === "apply_hold");
+        holdCompleted = true;
         const observed = await storage.read(target);
         if (observed.held !== (c.action === "apply_hold")) throw new WormCommandError("WORM_REFUSED");
       }
-    } catch {
-      status = c.action === "request_anchor" ? "pending" : "outcome_unknown";
-      material = { status, reason: "service_unavailable" };
+    } catch (error) {
+      const refused = c.action !== "request_anchor" && !holdCompleted &&
+        error instanceof WormBoundaryError && error.code !== "OUTCOME_UNKNOWN";
+      status = refused ? "refused" : c.action === "request_anchor" ? "pending" : "outcome_unknown";
+      material = { status, reason: refused ? "storage_refused" : "service_unavailable" };
     }
     return withTenant(this.executorPool, context, async db => {
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_finish($1,$2,$3,$4::jsonb)",

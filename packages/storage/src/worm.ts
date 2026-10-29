@@ -48,23 +48,17 @@ export function assertSyntheticVersion(version: WormVersion): void {
   }
 }
 
-const wormEnvironmentSchema = storageEnvironmentSchema.extend({
-  S3_WORM_MAXIMUM_BYTES: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).prefault(10 * 1024 * 1024),
-});
-
 /** Local MinIO only. Disabled by default; never accepts a production endpoint. */
 export class LocalMinioWormStorage implements WormStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
-  readonly #maximumBytes: number;
-  constructor(config: z.input<typeof wormEnvironmentSchema>, enabled = false) {
-    const parsed = wormEnvironmentSchema.parse(config);
+  constructor(config: z.input<typeof storageEnvironmentSchema>, enabled = false) {
+    const parsed = storageEnvironmentSchema.parse(config);
     const endpoint = new URL(parsed.S3_ENDPOINT);
     if (!enabled || !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname) ||
         endpoint.protocol !== "http:" || endpoint.username || endpoint.password ||
         !parsed.S3_BUCKET.startsWith("synthetic-")) throw new WormBoundaryError("DARK_ONLY");
     this.#bucket = parsed.S3_BUCKET;
-    this.#maximumBytes = parsed.S3_WORM_MAXIMUM_BYTES;
     this.#client = new S3Client({ endpoint: parsed.S3_ENDPOINT, region: parsed.S3_REGION, forcePathStyle: true,
       credentials: { accessKeyId: parsed.S3_ACCESS_KEY_ID, secretAccessKey: parsed.S3_SECRET_ACCESS_KEY },
       maxAttempts: 1, followRegionRedirects: false });
@@ -75,9 +69,12 @@ export class LocalMinioWormStorage implements WormStorage {
   }
   async #writeTarget(version: WormVersion) {
     const target = this.#target(version);
-    const head = await this.#client.send(new HeadObjectCommand(target));
+    const head = await this.#client.send(new HeadObjectCommand(target)).catch(() => {
+      // No mutation has been sent: a failed preflight is a refusal, not an unknown write.
+      throw new WormBoundaryError("INVALID_INPUT");
+    });
     if (head.VersionId !== version.versionId || !Number.isSafeInteger(head.ContentLength) ||
-        head.ContentLength! < 0 || head.ContentLength! > this.#maximumBytes) {
+        head.ContentLength! < 0) {
       throw new WormBoundaryError("INVALID_INPUT");
     }
     return target;
@@ -106,7 +103,7 @@ export class LocalMinioWormStorage implements WormStorage {
 
 /** In-memory synthetic harness only: not a durable command store or an application authorization boundary. */
 export class SyntheticRetentionWorkflow {
-  readonly #attempts = new Map<string, { payload: string; outcome: "applied" | "outcome_unknown" }>();
+  readonly #attempts = new Map<string, { payload: string; outcome: "applied" | "outcome_unknown" | "refused"; refusalCode?: WormBoundaryError["code"] }>();
   readonly events: Readonly<{ commandId: string; action: string; outcome: string }>[] = [];
   #tail: Promise<unknown> = Promise.resolve();
   constructor(private readonly storage: WormStorage, private readonly enabled = false) {}
@@ -134,6 +131,7 @@ export class SyntheticRetentionWorkflow {
     if (prior) {
       if (prior.payload !== payload) throw new WormBoundaryError("REPLAY_CONFLICT");
       if (prior.outcome === "outcome_unknown") throw new WormBoundaryError("OUTCOME_UNKNOWN");
+      if (prior.outcome === "refused") throw new WormBoundaryError(prior.refusalCode!);
       return "applied" as const;
     }
     const target = { tenantId: c.evidence.tenantId, key: c.evidence.key, versionId: c.evidence.versionId };
@@ -148,7 +146,12 @@ export class SyntheticRetentionWorkflow {
     try {
       if (c.action === "retain") await this.storage.retain(target, c.retainUntil);
       else await this.storage.hold(target, c.action === "hold");
-    } catch {
+    } catch (error) {
+      if (error instanceof WormBoundaryError && error.code !== "OUTCOME_UNKNOWN") {
+        this.#attempts.set(id, { payload, outcome: "refused", refusalCode: error.code });
+        this.events.push({ commandId: c.commandId, action: c.action, outcome: "refused" });
+        throw error;
+      }
       this.events.push({ commandId: c.commandId, action: c.action, outcome: "outcome_unknown" });
       throw new WormBoundaryError("OUTCOME_UNKNOWN");
     }

@@ -1,6 +1,6 @@
 import { HeadObjectCommand, PutObjectLegalHoldCommand, PutObjectRetentionCommand, S3Client } from "@aws-sdk/client-s3";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LocalMinioWormStorage, SyntheticRetentionWorkflow, type SyntheticWormCommand, type WormVersion } from "./worm.js";
+import { LocalMinioWormStorage, SyntheticRetentionWorkflow, WormBoundaryError, type SyntheticWormCommand, type WormVersion } from "./worm.js";
 const tenantId = "10000000-0000-4000-8000-000000000001";
 const actorId = "20000000-0000-4000-8000-000000000001";
 const now = new Date("2026-10-29T10:00:00.000Z");
@@ -66,6 +66,16 @@ describe("dark D07 retention workflow", () => {
     await expect(workflow.execute(c, context, now)).rejects.toThrow();
     expect(storage.read).not.toHaveBeenCalled();
   });
+  it.each(["retain", "hold", "release"] as const)("records a known %s refusal without retrying it", async action => {
+    const { workflow, storage } = setup();
+    const write = action === "retain" ? storage.retain : storage.hold;
+    write.mockRejectedValue(new WormBoundaryError("INVALID_INPUT"));
+    for (let replay = 0; replay < 2; replay++) {
+      await expect(workflow.execute(command(action), context, now)).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    }
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(workflow.events).toEqual([{ commandId: command().commandId, action, outcome: "refused" }]);
+  });
   it("records an unknown outcome and refuses blind retry", async () => {
     const { workflow, storage } = setup(); storage.hold.mockRejectedValue(new Error("lost response"));
     await expect(workflow.execute(command("hold"), context, now)).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
@@ -83,9 +93,9 @@ describe("local-only storage gate", () => {
   });
 });
 
-describe("WORM object size boundary", () => {
+describe("WORM exact-version preflight", () => {
   const config = { S3_ENDPOINT: "http://127.0.0.1:9000", S3_BUCKET: "synthetic-worm",
-    S3_ACCESS_KEY_ID: "fake", S3_SECRET_ACCESS_KEY: "fake", S3_WORM_MAXIMUM_BYTES: 10 };
+    S3_ACCESS_KEY_ID: "fake", S3_SECRET_ACCESS_KEY: "fake" };
   const version = { tenantId, key: command().evidence.key, versionId: "version-one" };
   afterEach(() => vi.restoreAllMocks());
   const writes = [
@@ -93,19 +103,21 @@ describe("WORM object size boundary", () => {
     { name: "hold", write: (s: LocalMinioWormStorage) => s.hold(version, true), type: PutObjectLegalHoldCommand },
     { name: "release", write: (s: LocalMinioWormStorage) => s.hold(version, false), type: PutObjectLegalHoldCommand },
   ];
-  it.each(writes)("allows $name at the cap after checking the exact version", async ({ write, type }) => {
-    const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => ({ ContentLength: 10, VersionId: version.versionId }));
-    await write(new LocalMinioWormStorage(config, true));
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls[0]![0]).toBeInstanceOf(HeadObjectCommand);
-    expect(send.mock.calls[1]![0]).toBeInstanceOf(type);
-    for (const call of send.mock.calls) expect(call[0].input).toMatchObject({
-      Bucket: config.S3_BUCKET, Key: version.key, VersionId: version.versionId,
-    });
+  it.each(writes)("allows $name regardless of valid object size after checking the exact version", async ({ write, type }) => {
+    for (const ContentLength of [0, 10 * 1024 * 1024 + 1, Number.MAX_SAFE_INTEGER]) {
+      const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => ({ ContentLength, VersionId: version.versionId }));
+      await write(new LocalMinioWormStorage(config, true));
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[0]![0]).toBeInstanceOf(HeadObjectCommand);
+      expect(send.mock.calls[1]![0]).toBeInstanceOf(type);
+      for (const call of send.mock.calls) expect(call[0].input).toMatchObject({
+        Bucket: config.S3_BUCKET, Key: version.key, VersionId: version.versionId,
+      });
+      send.mockRestore();
+    }
   });
-  it.each(writes)("refuses $name with oversize, absent/invalid size or a substituted version", async ({ write }) => {
+  it.each(writes)("refuses $name with absent/invalid size or a substituted version", async ({ write }) => {
     for (const head of [
-      { ContentLength: 11, VersionId: version.versionId },
       { VersionId: version.versionId },
       { ContentLength: -1, VersionId: version.versionId },
       { ContentLength: 1.5, VersionId: version.versionId },
@@ -119,20 +131,9 @@ describe("WORM object size boundary", () => {
       send.mockRestore();
     }
   });
-  it("uses a finite default cap when no maximum is supplied", async () => {
-    const { S3_WORM_MAXIMUM_BYTES: _maximum, ...defaults } = config;
-    const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async () => ({
-      ContentLength: 10 * 1024 * 1024 + 1, VersionId: version.versionId,
-    }));
-    await expect(new LocalMinioWormStorage(defaults, true).hold(version, true)).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    expect(send).toHaveBeenCalledTimes(1);
-  });
   it("does not mutate when the size lookup fails", async () => {
     const send = vi.spyOn(S3Client.prototype, "send").mockRejectedValue(new Error("missing version"));
-    await expect(new LocalMinioWormStorage(config, true).hold(version, true)).rejects.toThrow("missing version");
+    await expect(new LocalMinioWormStorage(config, true).hold(version, true)).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(send).toHaveBeenCalledTimes(1);
-  });
-  it.each([0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])("refuses invalid configured maximum %s", maximum => {
-    expect(() => new LocalMinioWormStorage({ ...config, S3_WORM_MAXIMUM_BYTES: maximum }, true)).toThrow();
   });
 });

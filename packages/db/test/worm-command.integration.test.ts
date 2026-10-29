@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
+import { WormBoundaryError } from "@jobguard/storage";
 import { WormCommandRepository } from "../src/worm-command-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
@@ -79,6 +80,21 @@ describe("durable synthetic WORM SQL", () => {
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
     const audit = await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.authorized' AND payload->'references'->>'command'=$2", [tenant, c.commandId]);
     expect(audit.rows).toHaveLength(1); expect(JSON.stringify(audit.rows)).not.toContain("synthetic/tenants");
+  });
+  it("persists a refused attempt and audit, without retrying or blocking a fresh hold", async () => {
+    const c = command();
+    await repo.submit(context, c);
+    let calls = 0;
+    const refusing = { ...storage, hold: async () => { calls++; throw new WormBoundaryError("INVALID_INPUT"); } };
+    expect((await repo.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
+    const fresh = new WormCommandRepository(runtime, true, executor);
+    expect((await fresh.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
+    expect(calls).toBe(1);
+    expect((await admin.query("SELECT outcome FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "refused" }]);
+    expect((await admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.refused' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows).toHaveLength(1);
+    const retry = command();
+    await repo.submit(context, retry);
+    expect((await repo.execute(context, retry.commandId, refusing, tsa)).status).toBe("refused");
   });
   it("rolls back a submitted command with its enclosing transaction", async () => {
     const c = command({ action: "request_anchor", subject: "manifest" });
