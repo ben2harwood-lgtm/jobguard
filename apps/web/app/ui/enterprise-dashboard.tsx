@@ -14,7 +14,7 @@ type Query = z.infer<typeof dashboardQueryV1>;
 const pounds = (pence: number) => exactPounds({ numerator: String(pence), denominator: "1" });
 const fraction = (v: { numerator: string; denominator: string } | null) => v ? `${v.numerator}/${v.denominator}` : "Not computable";
 const stageLabels: Record<string, string> = { captured: "Captured", approved: "Approved", backlog: "Pending approval steps", overdue: "Overdue steps", onTime: "Approvals on time", late: "Late approvals", closeoutYes: "Yes close-outs", closeoutNo: "No close-outs", closeoutMissing: "Missing close-out answers" };
-const signalLabels = { billed_variation_without_extra: "Billed variation without a JobGuard extra", order_matches_unlinked_extra: "Order line matches an unlinked extra",
+const signalLabels = { billed_variation_without_extra: "Possible billed variation without a JobGuard extra", order_matches_unlinked_extra: "Order line matches an unlinked extra",
   withdrawn_then_quantity_increased: "Already-on-order withdrawal followed by a quantity increase", no_closeout_observation: '“No” close-out outlier' };
 function download(content: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type: filename.endsWith("csv") ? "text/csv" : "application/json" }));
@@ -48,7 +48,7 @@ export function DashboardView({ activity, billing }: { activity: Activity; billi
     {billing.groups.map(g => <details key={g.id ?? "unattributed"}><summary>{g.id ?? "Unattributed"} · billed {exactPounds(g.totals.billed.exactPence)} · paid {exactPounds(g.totals.paid.exactPence)}</summary>
       <ul>{billing.contributions.filter(c => c.group === g.id).map((c, i) => <li key={i}>{c.stage} · job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)}</li>)}</ul></details>)}
     <h2>Advisory signals</h2><p>Advisory only. These observations never change prices, counts, states, fees or statements.</p>
-    <p>Unmatched-variation signal omitted: ENT-6 requires an export match for every billed extra. “No” close-out outliers: {signals.outliers.status}. {signals.outliers.status === "supplied_synthetic_policy" ? signals.outliers.policy?.text : "No answered visits in the selected population."}</p>
+    <p>Unmatched “other” invoice lines may be variations; review the cited invoice fact and allocation run. They do not prove a variation or fee entitlement. Unattributed invoice lines are excluded from operative views and filters. “No” close-out outliers: {signals.outliers.status}. {signals.outliers.status === "supplied_synthetic_policy" ? signals.outliers.policy?.text : "No answered visits in the selected population."}</p>
     {signals.observations.length ? <ul>{signals.observations.map(s => <li key={s.id}>{signalLabels[s.kind]} · job {s.jobId} · extras {s.extraIds.join(", ") || "none"} · sources {s.sourceIds.join(", ")}</li>)}</ul> : <p>No observations from the available sources.</p>}
     <details><summary>Methods and reproducibility</summary>{[report, billing, signals].map(r => <section key={r.method.version}><p>{r.method.version}: {r.method.text}</p><p>Input {r.inputHash} · output {r.outputHash}</p></section>)}</details>
     <button type="button" onClick={() => download(JSON.stringify({ activity, billing }), "contractor-dashboard.json")}>Export reports and methods (JSON)</button>
