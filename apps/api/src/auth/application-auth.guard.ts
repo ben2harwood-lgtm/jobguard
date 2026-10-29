@@ -10,9 +10,9 @@ export class ApplicationAuthGuard implements CanActivate {
   async canActivate(context:ExecutionContext):Promise<boolean> {
     const request=context.switchToHttp().getRequest<IdentityHttpRequest & {path:string;method?:string}>();
     if(request.path==="/healthz" || request.path.startsWith("/auth/"))return true;
-    // MON-2A (Ben, 28 Oct): exact subscription paths take a real company session with Origin and CSRF, checked
-    // before the practice shortcut; a practice cookie never reaches them. Every other money path is unchanged.
-    if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`)){
+    // MON-2A subscription paths and CH-9 exact GET value paths use the company bridge
+    // before the practice shortcut. All other money paths retain their existing refusal.
+    if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`) || (request.method==="GET" && (request.path==="/value" || /^\/jobs\/[a-f0-9-]{36}\/value\/v3$/iu.test(request.path)) && cookieToken(request))){
       try {
         await this.application().context({sessionToken:cookieToken(request),requestedTenantId:request.body?.requested_tenant_id,tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin??(request.method==="GET"?this.application().allowedOrigin:undefined)});
       }catch(error){const {code}=identityStatus(error);if(code==="TENANT_FORBIDDEN"||code==="ORIGIN_FORBIDDEN")throw new ForbiddenException({code});throw new UnauthorizedException({code:"UNAUTHENTICATED"});}

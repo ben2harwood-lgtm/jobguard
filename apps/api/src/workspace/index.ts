@@ -91,6 +91,8 @@ export * from "../job-source.errors.js";
 export * from "../plan-entitlements.application.js";
 export * from "../contractor/practice-worker-switch.application.js";
 
+export { oidcCookieOptions, oidcBrowserCookie } from "../auth/sso/oidc-persistence.contracts.js";
+export { OidcApplication, type OidcIssuer } from "../auth/sso/oidc.application.js";
 export * from "../subscription.application.js";
 export * from "../subscription.authority.js";
 export * from "../contractor/billing.application.js";
@@ -99,5 +101,11 @@ export * from "../meter-today.application.js";
 export * from "../recovery-attribution.application.js";
 export * from "../recovery-attribution.contracts.js";
 
+export * from "../value/value-v3.application.js";
+export { BusinessValueApplication, businessValueResultV1, businessValueFailure, businessValueStatus } from "../value/value-business.application.js";
+export { successFeeFailure } from "../success-fee.application.js";
 export * from "../contractor/enterprise-dashboard.application.js";
 export * from "../contractor/enterprise-baseline.application.js";
+
+export * from "../small-builder-demo.application.js";
+export { CompanyValueApplication } from "../value/value-business.application.js";

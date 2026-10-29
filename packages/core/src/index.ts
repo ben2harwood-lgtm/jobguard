@@ -79,6 +79,7 @@ export * from "./enterprise-live-prompts.js";
 export * from "./mobile-auth.js";
 export * from "./mobile-device-lifecycle.js";
 export * from "./job-sources.js";
+export * from "./job-source-intake.js";
 export * from "./subscription.js";
 export * from "./subscription-period.js";
 export * from "./subscription-track-review.js";
@@ -109,6 +110,8 @@ export { utcDatetimeV1 } from "./datetime.js";
 export * from "./free-first-job-calendar.js";
 export * from "./free-first-job-conversion.js";
 export * from "./recovery-attribution-persistence.js";
+export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
 export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
 
@@ -117,4 +120,9 @@ export * from "./meter-lifecycle.js";
 export * from "./enterprise-dashboard-stored-billing.js";
 export * from "./subscription-plan-view.js";
 
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
+
+export * from "./small-builder-demo-lifecycle.js";
+export * from "./value-source-receipt.js";

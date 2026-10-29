@@ -1,4 +1,4 @@
-# 0316 — MON-3-P-B disabled fictional foundation
+# 0372 — MON-3-P-B disabled fictional foundation
 
 Four new forced-RLS, migration-owned immutable business side tables: `trial_business_verification`, `trial_card_attempt`, `trial_card_result`, `trial_admission`. Ten tenant-qualified PK/unique indexes, four tenant policies, eight mutation/truncate guards. Five new routines; no existing table gains a column and no routine is replaced. No backfill or existing commercial-history rewrite.
 

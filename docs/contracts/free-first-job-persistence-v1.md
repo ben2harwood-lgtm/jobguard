@@ -3,7 +3,7 @@
 Issued 20 October 2026. Disabled synthetic foundation only; MON-3 remains incomplete.
 No pricing-policy approval, release authority, customer data, network, collection or billing date is supplied.
 
-Migration `0316_free_first_job_admission.sql` adds four immutable side tables. It changes no existing table or function.
+Migration `0372_free_first_job_admission.sql` adds four immutable side tables. It changes no existing table or function.
 `trial_business_verification` is one migration-owned fictional verified fixture per tenant, with source/version, independent verification time and available normalized company/phone facts. A phone alone is not sufficient trial identity. There is no runtime verification endpoint, browser verification flag, support override, identity replacement or merge. Fixture insertion by migration ownership is **not real business verification**.
 
 `trial_card_attempt` stores a server-minted attempt bound by composite FK to that business verification, current owner and request command. `trial_card_result` stores one terminal simulated result per attempt, retaining the verification binding. Requested is represented by the attempt without a result. Redirect-only, failed, cancelled and outcome-unknown have no reference/fingerprint and cannot qualify. Only completed has both opaque `sim_ref_` and `sim_fp_` values. They are constructed by the migration-owned fixture writer from the stored attempt and one of two fictional instruments, never accepted from browser output. Instrument fingerprints remain stable across attempts and tenants; business identity still requires independent phone/company facts. No raw card data or hosted URL exists.
@@ -30,8 +30,8 @@ Acceptance: IDENTITY-01/LIVE-01/CARD-01/ATOMIC-01/AUTH-01/REPLAY-01/UPGRADE-01 h
 
 ## 28 October MON-3 END/CONV/WIRE composition
 
-Reserved migration `0317_free_first_job_eligibility.sql` adds immutable lifecycle
-sources and pinned subscription inputs after the unchanged 0316 foundation. New
+Reserved migration `0373_free_first_job_eligibility.sql` adds immutable lifecycle
+sources and pinned subscription inputs after the unchanged 0372 foundation. New
 checked `mon3_activate` uses current company-owner authority, exact accepted
 quote/parties, original dispatcher approval and global key claims. B's legacy
 `mon3_admit` remains closed. Main's capacity prerequisite currently refuses new

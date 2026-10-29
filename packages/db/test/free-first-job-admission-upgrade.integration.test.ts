@@ -6,7 +6,7 @@ import { createWorkFixture,closeWorkFixture,keyParent,snapshot,store,type WorkFi
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore,proofDifferences,rolledBack,scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { meterCompany,verifyBusiness,requestCard,recordCard,resultFixture } from "./free-first-job-admission-fixtures.js";
-const own='0316_free_first_job_admission.sql';
+const own='0372_free_first_job_admission.sql';
 describe("MON3 B UPGRADE-01 own migration only",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false);},60000);afterAll(async()=>closeWorkFixture(f));
  it("preserves populated named columns/types/PK identities and tolerates later additive work",async()=>{

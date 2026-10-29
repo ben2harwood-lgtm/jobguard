@@ -1,4 +1,4 @@
-# 0317 — advisory free-first-job eligibility
+# 0373 — advisory free-first-job eligibility
 
 Issued MON-3C-ELIG, built ahead on B `1f73a07c13591e3ae5e479f1c87b337b0f1356ce`.
 DEPENDENCY-BOUND until B is accepted and merged. Synthetic only.
@@ -35,7 +35,7 @@ then apply this migration alone and successors twice. Mutation/damage controls
 are in the owned tests; real PostgreSQL/catalog proof is CI-only and NOT RUN here.
 
 28 Oct MON-3 continuation: this reserved migration now also composes END/CONV/WIRE.
-0316's SQL is unchanged. No additional migration number is claimed.
+0372's SQL is unchanged. No additional migration number is claimed.
 
 Adds owner-only, FORCE-RLS `trial_start`, `trial_end_source` and
 `trial_subscription_source`, a unique first admission per company, and checked

@@ -10,11 +10,12 @@ import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from ".
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
-export async function createWorkFixture(install = true) {
+// Ruling 103 (Q4): suites that issue a practice session need the trusted practice database; every other caller keeps the default.
+export async function createWorkFixture(install = true, database = "jobguard_synthetic_demo") {
  const directory = await mkdtemp(join(tmpdir(), "ch4-pg16-")), port = await freePort(59000, 400), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database, user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start();
+ await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);

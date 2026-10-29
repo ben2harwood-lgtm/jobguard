@@ -6,7 +6,7 @@ import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, requ
 import { keyParent, snapshot, store } from "./free-first-job-keys-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
-const own = "0317_free_first_job_eligibility.sql";
+const own = "0373_free_first_job_eligibility.sql";
 // Include original ACL/owner/definition state; successors may add routines, but
 // an own-step read migration must not alter any predecessor grant or routine.
 const catalogue = async (f: WorkFixture) => (await f.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition

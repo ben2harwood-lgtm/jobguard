@@ -71,7 +71,7 @@ describe("source-only ELIG adapter and guard mutation checks", () => {
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
  });
  it("every marked SQL guard has a source mutation control (structural evidence only)", async () => {
-  const migration = await readFile(new URL("../migrations/0317_free_first_job_eligibility.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../migrations/0373_free_first_job_eligibility.sql", import.meta.url), "utf8");
   // This guard applies to the advisory reader, not the appended checked writers.
   const sql = migration.slice(0,migration.indexOf("-- MON-3C-END/CONV/WIRE"));
   const guards = [
