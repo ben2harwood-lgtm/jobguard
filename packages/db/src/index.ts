@@ -146,5 +146,6 @@ export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
 
 export * from "./plan-entitlement-service.js";
+export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./value-business-reader.js";

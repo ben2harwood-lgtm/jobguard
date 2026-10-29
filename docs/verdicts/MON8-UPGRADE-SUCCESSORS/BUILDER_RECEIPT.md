@@ -832,3 +832,41 @@ Ready for router commit/push and CI. No git writes, PostgreSQL startup, real dat
 provider calls, releases or new independent RED review. Database suites remain
 for GitHub CI. Commit message:
 /tmp/mon8-upgrade-successors-20261029T113200Z-commit-msg.txt.
+
+## 29 October 2026 — catch-up after MON-4A #407 and DEMO-J3 #410
+
+Resolved the two remaining working-tree conflicts in the router-started merge of
+origin/main db2aff37b1207ba0c543c3e6bd32f2a26f8a9af8 into starting HEAD
+fe34bdb1cc88bc46db947bc9a9460cc026d3a653. Kept both plan-entitlement and
+payment-fee repository exports. Added payment_fee_command and
+payment_fee_statement to MON-8's existing empty-successor list, retaining its
+two-pass preservation proof. No routine recreation or new behaviour.
+
+Deterministic comparisons confirmed all main migration and lane files unchanged
+(300 paths), all main LP-0 expectations retained exactly, both sides' SERIOUS-B5
+and tenancy expectation lines retained, and all 50 explicit main app-table empty
+successor expectations retained. 0365/0366 SQL, the ENT-4b fingerprint registry,
+all three re-pinned source files, and docs/contracts/lp-downstream-effects-v1.md
+are byte-identical to starting HEAD. No migration numbers or SQL bytes changed.
+
+Local validation:
+- packages/db installed Vitest: --maxWorkers=2 test/mon8-combined-migration.test.ts
+  src/plan-entitlement-service.test.ts — 2 files, 12 tests passed.
+- Installed tsc -p packages/db/tsconfig.json --noEmit — passed.
+- TypeScript syntax parsing of both conflict-resolved files — passed.
+- git diff --check — passed; no conflict markers remain in either resolved file.
+- Deterministic lanePathAllowed check of the working tree against origin/main:
+  all 85 changed paths allowed before this receipt update (receipt is already
+  in the lane). This is not the post-commit CI lane check.
+- node tools/lint.mjs: core purity passed; lane guard failed because its local
+  mode compares the old unmerged HEAD and includes staged incoming main files.
+  Did not widen the lane to cover main's unrelated MON-4A/DEMO-J3 files.
+- pnpm --version stalled in the machine's wrapper and was interrupted; used
+  existing installed executables directly. No packages downloaded.
+
+Ready for router staging and merge commit, push and GitHub CI. The index still
+reports the original two unmerged entries until the router stages these resolved
+files; .git is read-only here and the builder ran no git writes. PostgreSQL and
+browser suites remain for CI under the issued sandbox restrictions. RED:
+independent exact-head Claude review remains with the loop owner.
+Commit message: /tmp/mon8-upgrade-successors-20261029T121301Z-commit-msg.txt.
