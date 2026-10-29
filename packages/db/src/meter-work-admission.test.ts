@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // Source inspection only. Runtime SQL guarantees belong to PostgreSQL CI.
-const migration = readFileSync(new URL("../migrations/0348_meter_work_admission.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../migrations/0367_meter_work_admission.sql", import.meta.url), "utf8");
 const admission = migration.slice(0,migration.indexOf("-- The administrative finalizer"));
 describe("MON-1 admission source boundaries", () => {
  it("reads stored builder facts and excludes hidden inputs", () => {
@@ -59,6 +59,8 @@ it("capacity joins actual source writes after job/identity locks, leaving generi
  expect(migration).toContain("r.job_id::text,144)");
  // Command identity is acquired before capacity, not in the function prologue.
  expect(migration).toContain("changed:=replace(original,marker,marker||chr(10)||' PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));')");
- expect(migration).not.toContain("regexp_replace(original,'BEGIN'");
+ const workCommand=migration.slice(migration.indexOf("-- Preserve the checked command"),migration.indexOf("-- Direct SQL callers"));
+ expect(workCommand).not.toContain("regexp_replace(original,'BEGIN'");
+ expect(migration).toContain("''final-review-command:''||p_tenant::text||'':''||p_command::text,0)");
  expect(migration).toContain("changed:=replace(original,' server_time:=clock_timestamp();'");
 });

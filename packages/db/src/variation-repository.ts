@@ -124,10 +124,14 @@ export class VariationRepository{
   if(input.price && input.price.confirmedByMembershipId!==input.actorMembershipId)throw new BuilderCaptureError("FORBIDDEN");
   const requestHash=createHash("sha256").update(captureCanonical(input)).digest("hex");
   return withTenant(this.pool,context,async db=>{
-   const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,input.actorMembershipId])).rows[0];
+   const membershipSql=`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`;
+   let member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
    if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
-   // Builder capture may restart site work: serialize before receipt, source and audit locks.
-   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,184))",[context.tenantId]);
+   // Final locking uses this same command gate before its job lock. A shared ID
+   // cannot claim a receipt while its rival holds the job and waits for it.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`final-review-command:${context.tenantId.toLowerCase()}:${p.id.toLowerCase()}`]);
+   member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
+   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
    const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1,$2,'LogBuilderExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,input.actorMembershipId]);
    if(!claimed.rowCount){
@@ -135,9 +139,11 @@ export class VariationRepository{
     if(!prior || prior.request_hash!==requestHash || prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");
     return prior.result;
    }
-   // No row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
+   // No direct row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
    // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
    // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
+   // The existing source trigger takes the job SHARE lock before site capture
+   // joins capacity 184 and source 144. Never hold capacity while waiting for job.
    // The variation insert's foreign keys take KEY SHARE locks on this job's track and scope rows.
    // Every synthetic practice environment is accepted (the track column admits only these two);
    // any other value, such as a production one, is refused by default.

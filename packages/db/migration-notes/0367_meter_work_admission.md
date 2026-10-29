@@ -1,4 +1,4 @@
-# 0348 — MON-1 committed-place admission and transactional refresh (RED)
+# 0367 — MON-1 committed-place admission and transactional refresh (RED)
 
 Capacity admission uses committed places, which include live jobs that have not
 started counting today. Daily counted places remain the separate billing/screen
@@ -36,7 +36,7 @@ no runtime/meter/shadow table grants. Existing rows, grants and policies stay in
 
 ## Explicit remaining scope
 
-MON1-J adds `mon1_today_source` to this same unmerged migration (0348 is not
+MON1-J adds `mon1_today_source` to this same unmerged migration (0367 is not
 renumbered; its admission SQL is preserved). This checked entrypoint reuses
 lifecycle capture under lock 184. The application derives today's display from
 the captured immutable facts with the existing pure counter. There is no new
@@ -104,3 +104,28 @@ foreign keys and unsupported-import detection are exercised as intended.
 
 All other migration files remain unchanged. No timeout, concurrency assertion,
 permission expectation or negative control was relaxed.
+
+## Final CI repair, round 5 (29 October)
+
+Reserved renumber 0348 to 0367 uses the migration-renumber planner. The rename
+itself preserves bytes; this migration's SQL then changes to fix the remaining
+capture/final-lock race. Both commands acquire an exact tenant/command-ID gate
+(`final-review-command`, advisory seed 0) before either receipt claim or job lock.
+Capture checks owner authority on both sides of the wait and no longer takes
+capacity before reaching the source job guard. The source trigger retains job
+SHARE, then capacity 184, then per-job 144, before audit. Final locking keeps
+job UPDATE and variation locks before 184 and audit. Distinct command IDs do
+not share the new command gate. No runtime grant or new routine is added.
+
+The direct final-lock path now serializes the command before its first job lock,
+including in a company with a term-less imported job. Refresh still returns an
+unavailable snapshot rather than throwing; new admission still fails closed.
+The failing import suite's actions and lock-order assertion remain unchanged.
+
+The final-lock amendment reads pg_get_functiondef at execution time, preserving
+the latest main definition (currently 0237_final_check_prerequisites.sql) rather
+than recreating a stale function. Every already-main migration stays byte-identical.
+A fixture's optional tenant parameter is explicitly typed string rather than
+inferred as randomUUID's template literal, fixing the reported web typecheck.
+These local source/protocol checks do not prove PostgreSQL races; CI and a fresh
+RED review remain necessary. This is Ben's last allowed repair round.

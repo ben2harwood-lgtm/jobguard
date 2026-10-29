@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/mon1-admit"
       ],
-      "note": "RED MON-1 parts 4-5, PR #388 CI-fix round 4 authorized 29 October. Reserved renumber 0307 to 0348; SQL lock-placement repair restores generic job-first live/source guards and orders work job/identity, capacity, event serialization, audit. Fix compiled source-check path. Preserve both sides of main merge. PostgreSQL races and browser verification remain GitHub CI.",
+      "note": "RED MON-1 PR #388, final Ben-allowed repair round 5. Reserved 0348 -> 0367; own SQL adds exact capture/final-lock command serialization, preserves latest main definitions and job/variation-before-capacity order. Capture no longer holds capacity before the job guard; owner rechecked after wait. Explicit fixture tenant string fixes web typecheck. PostgreSQL CI and fresh RED review remain required; park if this last round fails.",
       "allow": [
         "apps/api/src/job-parties.application.test.ts",
         "apps/api/src/job-work-state-capacity.test.ts",
@@ -26,9 +26,10 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/meter-place-admission-v1.md",
         "packages/core/src/job-work-state.ts",
-        "packages/db/migration-notes/0348_meter_work_admission.md",
-        "packages/db/migrations/0348_meter_work_admission.sql",
+        "packages/db/migration-notes/0367_meter_work_admission.md",
+        "packages/db/migrations/0367_meter_work_admission.sql",
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
+        "packages/db/src/builder-capture-lock.test.ts",
         "packages/db/src/demo-bootstrap.ts",
         "packages/db/src/job-work-state-capacity-lock.test.ts",
         "packages/db/src/job-work-state-repository.ts",

@@ -186,10 +186,16 @@ DO $$ DECLARE original text; changed text; marker text; BEGIN
  EXECUTE changed;
 END $$;
 
--- Direct SQL callers do not pass through withTenant. Serialize final-account
--- locks after job/variation locks, before the receipt, refresh and audit.
+-- Direct SQL callers do not pass through withTenant. The capture/lock command
+-- gate precedes job locks and receipt claims, including for a term-less import.
+-- Capacity still follows job/variation locks and precedes refresh and audit.
 DO $$ DECLARE original text; changed text; BEGIN
  original:=pg_get_functiondef('app.lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)'::regprocedure);
+ changed:=regexp_replace(original,'BEGIN'||chr(10),'BEGIN'||chr(10)||
+  ' PERFORM app.final_lock_require_owner(p_tenant,p_actor);'||chr(10)||
+  ' PERFORM pg_advisory_xact_lock(hashtextextended(''final-review-command:''||p_tenant::text||'':''||p_command::text,0));'||chr(10));
+ IF changed=original THEN RAISE EXCEPTION 'unexpected final account command gate definition'; END IF;
+ original:=changed;
  changed:=replace(original,' server_time:=clock_timestamp();',' PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text,184));'||chr(10)||' server_time:=clock_timestamp();');
  IF changed=original THEN RAISE EXCEPTION 'unexpected final account lock definition'; END IF;
  EXECUTE changed;

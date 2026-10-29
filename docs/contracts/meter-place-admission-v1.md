@@ -59,7 +59,7 @@ consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
 
 
-## MON-1 remainder, migration 0348
+## MON-1 remainder, migration 0367
 
 The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
 Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
@@ -136,8 +136,17 @@ cross-kind command-ID loser from holding capacity while its winner waits for it.
 Actual classified site-source capture takes 184 before 144; the general source
 guard does not serialize unrelated invoice/confirmation traffic. Final-account
 locking takes its existing job UPDATE and variation locks before 184, receipt and
-audit. Builder capture keeps membership verification and its job guard before the
-receipt; actual site-source capture joins capacity before writing its work event.
+audit. Builder capture and final locking first share an exact tenant/command-ID
+advisory gate (`final-review-command`, seed 0) before claiming a receipt or job
+lock. Capture rechecks current owner authority after that wait, then claims its
+receipt. It takes no capacity lock while waiting for the source job guard;
+actual site-source capture joins 184 before 144 and its work event. Stored
+capture replays return the first result without requiring a currently live job.
+The checked final-lock routine acquires the same command gate for direct SQL
+callers, verifies owner authority again, then retains job/variation-before-capacity
+ordering. This prevents capture/lock receipt collisions without introducing a
+capacity-before-job cycle. A term-less import still returns an unavailable meter
+snapshot; only a new place admission refuses it, not unrelated company actions.
 No business lock is introduced after an audit append.
 
 CH-4 fixtures explicitly insert their synthetic small-builder commercial track
