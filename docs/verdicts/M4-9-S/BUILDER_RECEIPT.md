@@ -1,6 +1,6 @@
 # M4-9-S builder receipt
 
-Status: INCOMPLETE — exact reference arithmetic and a closed server/database dependency boundary built. The unheld source-backed slice and full card are NOT complete. Do not count this as a completed money-chain posting piece. No independent verdict or acceptance is recorded.
+Status: catch-only positive/zero source-backed posting is implemented in 0392–0393; PostgreSQL CI and exact-head RED review are pending. The full card, Q2/Q3 and UI remain incomplete. The 29 October section records the current slice; earlier boundary-only entries are historical. No independent verdict or acceptance is recorded.
 
 ## Session
 
@@ -449,3 +449,121 @@ push PR #380. Database, migration and browser execution remain GitHub CI work.
 No packages downloaded, PostgreSQL started, localhost listeners bound, real data,
 provider activity, live money or release. Commit message:
 `/tmp/m4-9-s-20261028T194935Z-commit-msg.txt`.
+
+## 29 October 2026 — catch-only source-backed posting (RED)
+
+Piece `m4-9-s-posting`, M4-9-S SF-04, SF-08–12 and SF-18–21.
+This section supersedes historical dependency-bound descriptions **only for
+synthetic catch positive/zero derivation, exact approval and posting**. The full
+M4-9-S card, UI, Q2 and Q3 are not claimed complete. No independent review or
+merge is claimed. Branch `codex/sandbox/m4-9-s-posting`, stacked on the issued
+M4-8-S producer and SV-6 review branches; their merge is not inferred.
+
+Implemented in reserved **0392–0393**:
+
+- Six owner-only, FORCE RLS, append-only tables: command, review, derivation,
+  source, journal and journal line. Exact assessment-subject and allocation FKs;
+  one journal per derivation and one derivation per job revision/review.
+- Current SV-6 `approve_review` Decision, approved resolution and exact
+  authorization are required, with matching artifact, subject, policy, revision,
+  actor, expiry and revocation checks. Reconstruct the latest assessment from
+  stored sources; require matching hash, all ten true conjuncts and eligibility.
+  M4-8-S v1 neutral receipt facts reach this path through its existing immutable
+  case consumer. No new allocator or supplied qualification/money exists.
+- Exact cumulative Q -> existing SQL half-even kernel -> F minus actual posted J.
+  Repository validation independently recomputes through the existing core kernel.
+  F13 Q £800 -> £80; no cap, subscription offset or fee VAT policy is introduced.
+- Saved statement/hash approval creates an exact fee authorization bound to
+  action, synthetic ledger recipient, GBP delta, revision, policy and expiry.
+  A zero delta retains its derivation/sources/approval and creates no journal.
+  Positive journals contain paired receivable/income lines. Deferred guards reject
+  incomplete source/authorization/derivation and unbalanced or spurious journals.
+- Durable command replay reauthenticates current session/owner/job and returns
+  the original result with `replayed: true`. Changed payloads conflict. Shared
+  case/receipt/job locks serialize posting and reject stale competing approvals.
+  Statement/source/authorization/journal/command/audit writes are atomic.
+- Availability reads remain independent of hidden facts before lock. Post-lock
+  availability is constant `catch_review_available`; review results provide exact
+  assessment hashes, source allocation IDs and review authorization references.
+  Both transports keep no-store and existing access controls; bounded new
+  source/review/stale/identity errors return 409. OpenAPI regenerated and checked.
+- LP-0 recorded routines/policies/triggers, SERIOUS-B5, entitlement upgrade and
+  tenancy expectations were extended with the exact installed objects. The two
+  existing public routine grants remain; no runtime table or helper grant added.
+
+Source-race trade-off: this synthetic writer first serializes authorization
+writes, then takes SHARE table locks over mutable/appendable qualification
+sources before business locks. This excludes phantom refund/credit, feed,
+evidence-invalidation, disclosure and source-review changes as well as updates.
+It is deliberately coarse, uses no new trigger-dispatch framework, and is not a
+production throughput design. A contending source writer can deadlock; the fee
+transaction rolls back and reports `SUCCESS_FEE_SOURCE_CHANGED`, requiring a new
+review. Audit is last, with no subsequent business lock acquisition.
+
+**Q2/Q3 boundary:** non-catch-only source sets still refuse with
+`SUCCESS_FEE_DEPENDENCY_BOUND`. Unsupported negative/reassessment commands retain
+`INVALID_SUCCESS_FEE_COMMAND`; a negative derived delta remains dependency-bound.
+Refunds/credits or invalidation after review refuse new posting; historical replay
+remains historical. Journals link their derivation and a negative journal's schema
+requires an original journal reference, but **linked compensation execution and
+its positive reversal acceptance test are not implemented**, because the issued
+brief explicitly keeps Q3 negative execution refusing. No old journal is edited.
+That held acceptance cannot be counted as passed by the immutable-history tests.
+
+Adversarial PostgreSQL tests authored for CI cover: required SV-6 approval,
+unallocated sources, unsettled feed facts, allocation overrun, locked-bill
+substitution, tampered statement, competing approvals, durable concurrent replay,
+zero derivation, refund/credit/invalidation staleness, a lock-observed concurrent
+invalidation, another tenant/session, audit rollback/retry, direct runtime access,
+immutable journals and a deferred malformed-journal refusal. Populated upgrade
+coverage preserves the real v1 receipt chain, replays predecessor commands and
+posts/replays after repeat migrate. **None of these PostgreSQL tests ran locally.**
+
+Local validation (Node v24.17.0; installed dependencies only):
+
+- Core: `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/success-fee-catch-posting.test.ts src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts`
+  in `packages/core`: PASS, 3 files / 79 tests.
+- DB units: same runner, `src/success-fee-repository.test.ts test/lp-0-catalog.test.ts src/migrate-discovery.test.ts`
+  in `packages/db`: PASS, 3 files / 39 tests. Scripted repository/catalogue tests
+  and filesystem discovery only; not database execution.
+- API: same runner, `src/success-fee.application.test.ts src/success-fee.http.test.ts`
+  in `apps/api`: PASS, 2 files / 16 tests. Handler/OpenAPI tests; no listening HTTP.
+- Web: same runner, `'app/api/jobs/[id]/success-fees/route.test.ts'` in
+  `apps/web`: PASS, 1 file / 6 tests. Mocked transport, not a browser journey.
+- Existing TypeScript compiler: `./node_modules/.bin/tsc -p <package>/tsconfig.json`
+  compiled core, storage, config, AI and DB, and transpiled API. API/core/DB
+  `--noEmit` checks passed. This does not claim the Nest production build or a
+  clean pinned install. No AI source or prompt changed.
+- Explicit strict NodeNext `tsc --noEmit` compilation passed for both new database
+  suites and affected success-fee access, SERIOUS-B5, entitlement and tenancy
+  integration suites. Compilation is not a PostgreSQL run.
+- `node --import tsx src/generate-openapi.ts` and `--check` in `apps/api`: PASS.
+- Core purity, money-arithmetic and commercial-boundary lint scripts: PASS.
+  Existing computed-import notices are reports only.
+
+The system pnpm launcher stalled before task output and was stopped. The old
+`/private/tmp/jg-sv6-bin/pnpm` helper does not exist in this environment. All
+completed checks above use the installed repository compiler/test executables;
+no package was downloaded and no lockfile/runtime pin changed. An initial DB
+unit invocation lacked the unbuilt storage package; after compiling existing
+workspace dependencies the complete named group passed.
+
+LATER / SIMPLICITY (initial source review):
+`packages/db/migrations/0393_success_fee_catch_posting.sql` and SV-6's approved
+review guard repeat some exact-review predicates. In a separately scoped follow-up,
+a private shared validator could retain one authoritative set of these checks;
+maintenance benefit is fewer opportunities for the two consumers to drift.
+This is advisory and does not weaken or block any current guard or review.
+
+Router handoff: commit/push/PR and GitHub PostgreSQL/migration/browser/required CI,
+then one fresh exact-head Claude RED review. The reserved migration numbers are
+above observed origin/main's 0375. The stacked producer branch already contains
+unmerged 0401; if that lands first, re-reserve/renumber this pair before merging
+so the migration-order gate remains true. Do not edit 0401 or any merged SQL.
+No git-writing command, database startup, localhost listener, provider call,
+real customer data, live money, deployment or release was attempted.
+
+Final deterministic handoff checks: exact 22-path lane (21 explicit non-lane paths),
+0392/0393 above observed origin/main 0375, no tracked migration changed, and
+`git diff --check`: PASS. These compare the working tree, not a committed PR head.
+Commit message: `/tmp/m4-9-s-posting-20261029T154217Z-commit-msg.txt`.

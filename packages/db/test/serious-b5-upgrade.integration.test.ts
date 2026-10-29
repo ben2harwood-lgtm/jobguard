@@ -903,6 +903,40 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
  const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
+// M4-9-S: exact private catch ledger additions, no predecessor catalogue relaxed.
+async function successFeeCatchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const tables=["success_fee_command","success_fee_review","success_fee_derivation","success_fee_source","success_fee_journal","success_fee_journal_line"];
+ const indexes=[
+  "success_fee_command_pkey","success_fee_command_tenant_id_job_id_command_id_key",
+  "success_fee_review_pkey","success_fee_review_tenant_id_job_id_id_key",
+  "success_fee_derivation_pkey","success_fee_derivation_tenant_id_job_id_id_key",
+  "success_fee_derivation_tenant_id_job_id_revision_key","success_fee_derivation_tenant_id_review_id_key",
+  "success_fee_source_pkey","success_fee_journal_pkey","success_fee_journal_tenant_id_job_id_id_key",
+  "success_fee_journal_tenant_id_derivation_id_key","success_fee_journal_line_pkey",
+ ];
+ const identities=["check_success_fee_journal","check_success_fee_derivation"];
+ const routines=after.routines.filter(r=>r.nspname==="app"&&identities.includes(r.proname));
+ expect(routines.map(r=>r.proname).sort()).toEqual([...identities].sort());
+ for(const r of routines){
+  expect(r.args).toBe("");expect(r.prosecdef).toBe(true);expect(r.proconfig).toEqual(["search_path=pg_catalog, app"]);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+  expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
+ }
+ const names=[...tables,...indexes],relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
+ for(const table of tables){
+  expect(before.rows).not.toHaveProperty(`app.${table}`);expect(after.rows[`app.${table}`]).toEqual([]);
+  const r=relations.find(r=>r.relname===table)!;expect(r.relrowsecurity).toBe(true);expect(r.relforcerowsecurity).toBe(true);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.relacl])).rows[0].acl).toEqual(["jobguard_migration=arwdDxt/jobguard_migration"]);
+ }
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
+ for(const p of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[p.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
+  routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
 // MON-4A 0359: enumerate only the two new immutable tables and five routines.
 async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -1071,6 +1105,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await invoicedImportAdditions(expected));
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
  Object.assign(expected, await paymentFeeAdditions(expected));
+ Object.assign(expected, await successFeeCatchAdditions(expected));
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
