@@ -50,6 +50,9 @@ function fixture() {
       state.placements.push({ id: values[0], revision_id: values[4], outbox_action_id: values[6] }); return result();
     }
     if (sql.startsWith("SELECT role FROM app.membership")) return result([{ role: "owner" }]);
+    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return result([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
+    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+      sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return result([]);
     if (sql.startsWith("SELECT 1 FROM app.command_receipt c") || sql.includes("UNION ALL")) return result();
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return result([{ command_id: values[1] }]);
     if (sql.startsWith("INSERT INTO app.watchdog_command_result")) return result();

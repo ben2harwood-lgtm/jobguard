@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EVIDENCE_PACK_SANDBOX_BANNER, sha256 } from "./evidence-pack.js";
 
-// Preparation contract only. No accepted producer payload or fee semantics are defined here.
+// Unbound specimens and synthetic worker record exports share the same integrity envelope.
 // Reject lone UTF-16 surrogates instead of allowing UTF-8 encoding to replace them silently.
 const wellFormedText = (value: string) => value === new TextDecoder("utf-8", { ignoreBOM: true }).decode(new TextEncoder().encode(value));
 const id = z.string().min(1).max(256).refine(wellFormedText, "Expected well-formed Unicode");
@@ -52,13 +52,13 @@ const limitations = [
   "Evidence integrity does not establish that work occurred or that a debt is valid.",
 ] as const;
 const baseShape = {
-  ...identity, binding: z.literal("unbound-specimen"), lifecycle,
+  ...identity, binding: z.enum(["unbound-specimen", "synthetic-records"]), lifecycle,
   sections: z.array(evidenceSectionV3),
 };
 const rawManifest = z.object({
   version: z.literal("evidence-pack-manifest.v3"), ...baseShape,
   entries: z.array(descriptor),
-  trustLimitations: z.tuple([z.literal(limitations[0]), z.literal(limitations[1]), z.literal(limitations[2]), z.literal(limitations[3])]),
+  trustLimitations: z.tuple([z.enum([limitations[0], "Synthetic database records only; no production entitlement or external verification is asserted."]), z.literal(limitations[1]), z.literal(limitations[2]), z.literal(limitations[3])]),
 }).strict();
 type ManifestShape = z.infer<typeof rawManifest>;
 type Link = z.infer<typeof evidenceSpecimenLinkV3>;
@@ -154,7 +154,7 @@ export function buildEvidenceManifestV3(input: unknown): EvidenceManifestV3 {
   return checked(() => {
     const { sources, ...base } = evidencePackSpecimenInputV3.parse(input);
     return sortedManifest(evidenceManifestV3.parse({
-      ...base, version: "evidence-pack-manifest.v3", entries: sources.map(describeSource), trustLimitations: limitations,
+      ...base, version: "evidence-pack-manifest.v3", entries: sources.map(describeSource), trustLimitations: [base.binding === "synthetic-records" ? "Synthetic database records only; no production entitlement or external verification is asserted." : limitations[0], ...limitations.slice(1)],
     }));
   });
 }
@@ -201,7 +201,8 @@ export function verifyStandalonePackV3(text: string, options: { trustedManifestD
   return {
     findings: [...new Set(findings)], contentMatches, checkpointTrusted,
     specimenIntegrityComplete: contentMatches && checkpointTrusted,
-    complete: false as const, producerBindings: "held" as const,
+    complete: pack.manifest.binding === "synthetic-records" && contentMatches && checkpointTrusted,
+    producerBindings: pack.manifest.binding === "synthetic-records" ? "synthetic-records" as const : "held" as const,
     manifestHash, artifactHash: sha256(text),
   };
 }
