@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j2-recovery": {
+      "branches": ["codex/sandbox/demo-j2-recovery"],
+      "note": "DEMO-S / DEMO-J2 RED: source-linked recovery guide on M4-17-S. Missing producer steps stay not ready yet; no financial writes or migrations.",
+      "allow": [
+        "apps/web/app/lib/recovery-journey.ts",
+        "apps/web/app/lib/recovery-journey.test.ts",
+        "apps/web/app/ui/recovery-journey.tsx",
+        "apps/web/app/ui/recovery-journey.test.ts",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/jobs/[id]/recovery-journey/page.tsx",
+        "apps/web/e2e/DEMO-J2.spec.ts"
+      ]
+    }
+  }
+}
