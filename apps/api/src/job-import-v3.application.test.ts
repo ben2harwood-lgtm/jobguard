@@ -32,13 +32,33 @@ describe("company imports retain the meter identity and CSRF boundary", () => {
   const tenant = "00000000-0000-4000-8000-000000000001", actor = "00000000-0000-4000-8000-000000000002";
   const credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant, origin: "https://company.invalid" };
   function fixture() {
-    const adopt = vi.fn(async () => ({ saved: true }));
+    const repository = { source: vi.fn(), read: vi.fn(), preview: vi.fn(), adopt: vi.fn(async () => ({ saved: true })), assessCatch: vi.fn() };
+    const adopt = repository.adopt;
     const authenticate = vi.fn(async (token: string) => token === credentials.sessionToken ? { identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken } : undefined);
-    const findMembership = vi.fn(async (_: unknown, id: string) => id === tenant ? { id: actor, identityUserId: tenant, tenantId: tenant, role: "owner" } : undefined);
-    const app = new CompanyJobImportV3Application({ allowedOrigin: credentials.origin, provider: { authenticate, findMembership, digest: () => "a".repeat(64) } } as never, { adopt } as never);
-    return { adopt, app };
+    const findMembership = vi.fn(async (_: unknown, id: string): Promise<{ id: string; identityUserId: string; tenantId: string; role: string } | undefined> => id === tenant ? { id: actor, identityUserId: tenant, tenantId: tenant, role: "owner" } : undefined);
+    const app = new CompanyJobImportV3Application({ allowedOrigin: credentials.origin, provider: { authenticate, findMembership, digest: () => "a".repeat(64) } } as never, repository as never);
+    return { adopt, app, repository, authenticate, findMembership };
   }
   afterEach(() => vi.unstubAllEnvs());
+  it.each(["source", "read", "preview", "adopt", "catch"] as const)("binds %s to the current verified company", async action => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const f = fixture();
+    await f.app.run(credentials, actor, action, { intent: true });
+    const method = action === "catch" ? "assessCatch" : action;
+    expect(f.repository[method]).toHaveBeenCalledWith(expect.objectContaining({ tenantId: tenant }), "a".repeat(64), actor,
+      ...(["source", "read"].includes(action) ? [] : [{ intent: true }]));
+  });
+  it.each(["source", "read", "preview", "adopt", "catch"] as const)("refuses %s outside the synthetic environment before identity or repository access", async action => {
+    vi.stubEnv("JOBGUARD_ENV", "production"); const f = fixture();
+    await expect(f.app.run(credentials, actor, action, {})).rejects.toMatchObject({ code: "SYNTHETIC_MODE_REQUIRED" });
+    expect(f.authenticate).not.toHaveBeenCalled();
+    for (const method of Object.values(f.repository)) expect(method).not.toHaveBeenCalled();
+  });
+  it.each(["source", "read", "preview", "adopt", "catch"] as const)("revoked membership blocks %s before repository access", async action => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const f = fixture();
+    f.findMembership.mockResolvedValueOnce(undefined);
+    await expect(f.app.run(credentials, actor, action, {})).rejects.toThrow();
+    for (const method of Object.values(f.repository)) expect(method).not.toHaveBeenCalled();
+  });
   it("passes the verified company and server digest to the import writer", async () => {
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const f = fixture();
     expect(await f.app.run(credentials, actor, "adopt", { intent: true })).toEqual({ saved: true });

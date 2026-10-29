@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { adoptJobV3, jobImportResultV3, jobImportSourceV1, type AdoptJobV3, type JobImportResultV3 } from "@jobguard/core";
 
+const capacityAdmission = z.object({ outcome: z.enum(["admitted", "grace_place", "track_review_due"]), sourceHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict();
 type Preview = { snapshot: AdoptJobV3; previewHash: string };
 const liveHold = "Company live imports reserve capacity through the ordinary start rule. Shared practice live imports are unavailable.";
 export function JobImport({ sourceJobId, company = false }: { sourceJobId: string; company?: boolean }) {
@@ -20,6 +22,7 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
   const [stage, setStage] = useState<"live" | "invoiced">(company ? "live" : "invoiced");
   const [preview, setPreview] = useState<Preview | null>(null), [attest, setAttest] = useState(false);
   const [result, setResult] = useState<JobImportResultV3 | null>(null), [error, setError] = useState("");
+  const [admission, setAdmission] = useState<z.infer<typeof capacityAdmission> | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false), [commandId, setCommandId] = useState("");
   useEffect(() => {
@@ -34,7 +37,7 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
       if (imported.ok) {
         const stored = await imported.json();
         const saved = jobImportResultV3.parse(stored.result);
-        if (active) setResult(saved);
+        if (active) { setResult(saved); setAdmission(stored.meter?.admission ? capacityAdmission.parse(stored.meter.admission) : null); }
       } else if (imported.status !== 404) throw new Error("Stored import could not load.");
     }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -48,9 +51,16 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
           : { version: "job-parties-import.v3", commandId, expectedBindingId: bindingId, fixtureId: "fictional-extension-v3", lifecyclePoint: stage, previewHash: preview?.previewHash, attest }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.code === "METER_PLACE_SOURCE_HANDOFF_HELD" ? liveHold : data.code === "PLAN_LIMIT_REACHED" ? "Your Solo plan and grace place are full. Move to Builder before importing another site." : data.reason ?? data.code ?? "Import unavailable");
+      if (!response.ok) throw new Error(data.code === "METER_PLACE_SOURCE_HANDOFF_HELD" ? `${liveHold} No job has been imported.` : data.code === "PLAN_LIMIT_REACHED" ? "Your Solo plan and grace place are full. Move to Builder before importing another site." : data.reason ?? data.code ?? "Import unavailable");
       if (action === "preview") { setPreview({ snapshot: adoptJobV3.parse(data.snapshot), previewHash: data.previewHash }); setCommandId(crypto.randomUUID()); }
-      else setResult(jobImportResultV3.parse(data));
+      else {
+        const saved = jobImportResultV3.parse(data);
+        setResult(saved);
+        const stored = await request(url(saved.jobId, "read"), { cache: "no-store" });
+        if (!stored.ok) throw new Error("Import saved; its capacity notice could not load. Open the saved import to retry.");
+        const view = await stored.json();
+        setAdmission(view.meter?.admission ? capacityAdmission.parse(view.meter.admission) : null);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "Import unavailable"); }
     finally { setBusy(false); }
   }
@@ -82,6 +92,9 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
         <button disabled={!attest || busy} onClick={() => void post("adopt")}>Confirm import</button></section>}</>}
     {result && <section aria-label="Imported job"><h2>Imported {result.lifecyclePoint} job</h2><p>Builder-attested imported baseline — weaker lineage than a customer-accepted quote</p>
       <p>{result.lifecyclePoint === "invoiced" ? "Counted places: 0 — imported at the invoiced stage." : "Capacity reserved through MON-1. Billing follows the ordinary start rule; no free import period."}</p><p>Linked overlapping jobs: {result.linkedJobIds.length}</p>
+      {admission?.outcome === "grace_place" && <p role="status">This import uses your free grace place. Further Solo places require a move to Builder.</p>}
+      {admission?.outcome === "track_review_due" && <p role="status">Track review due (track_review_due). Your import is admitted; your approved monthly maximum is unchanged.</p>}
+      {result.linkedJobIds.map(id => <a key={id} href={`/jobs/${id}`}>Linked overlapping job: {id}</a>)}
       <p>Baseline reference: {result.baselineId}</p><p>Historical uploads and final-account locking for this imported baseline are unavailable.</p>
       <p>Pre-adoption evidence: £0.00 recovery fee — evidence from before adoption is permanently excluded (pre_adoption_evidence). This import contains no historical evidence or catches.</p>
       <p>The imported catch cannot be assessed until SV-6 attribution is connected. No catch, allocation or fee has been created.</p>
