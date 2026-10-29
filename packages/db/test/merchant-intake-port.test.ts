@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FakeMerchantIntakePort } from "../src/merchant-intake-port.js";
+import { supplierFixtures } from "@jobguard/core";
+import { FakeMerchantIntakePort, MAX_MERCHANT_ATTACHMENT_BYTES } from "../src/merchant-intake-port.js";
 import type { MerchantOrder } from "../src/purchase-order-action.js";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -83,6 +84,25 @@ describe("M2-2 dark merchant intake port", () => {
     expect(f.port.document(f.scope, result.documentId!)).toMatchObject({ status: "quarantined", recognizedDebtPence: 0 });
     expect(() => f.port.captureReceipt(f.scope, f.receipt(result.documentId!))).toThrow("SOURCE_UNAVAILABLE");
   });
+  it("caps actual UTF-8 bytes before processing, independently of the fixture label", () => {
+    const delivery = supplierFixtures["materials-B-delivery"];
+    const originalBytes = delivery.bytes;
+    try {
+      // A character count would miss the extra byte in the second case.
+      for (const extra of [0, 1]) {
+        Object.assign(delivery, { bytes: "é".repeat(MAX_MERCHANT_ATTACHMENT_BYTES / 2) + "x".repeat(extra) });
+        const f = setup(), result = f.receive("delivery");
+        expect(result.status).toBe(extra ? "quarantined" : "verified");
+        expect(f.port.original(f.scope, result.documentId!).byteLength).toBe(MAX_MERCHANT_ATTACHMENT_BYTES + extra);
+        if (extra) expect(() => f.port.captureReceipt(f.scope, f.receipt(result.documentId!))).toThrow("SOURCE_UNAVAILABLE");
+      }
+    } finally {
+      Object.assign(delivery, { bytes: originalBytes });
+    }
+    const f = setup(), result = f.receive("oversized");
+    expect(f.port.original(f.scope, result.documentId!).byteLength).toBeGreaterThan(MAX_MERCHANT_ATTACHMENT_BYTES);
+    expect(result.status).toBe("quarantined");
+  });
   it("hashes immutable original bytes and retains the same version and page lineage in both split documents", () => {
     const f = setup(), result = f.receive("bundle");
     const document = f.port.document(f.scope, result.documentId!), original = f.port.original(f.scope, result.documentId!);
@@ -113,9 +133,36 @@ describe("M2-2 PO-bound partial GRN", () => {
     const first = f.port.captureReceipt(f.scope, input);
     expect(first).toMatchObject({ ordered: "10", delivered: "7", accepted: "6", rejected: "1", missing: "4", laterDelivered: "0", revision: 1 });
     expect(f.port.captureReceipt(f.scope, input)).toEqual(first);
-    const next = { ...input, commandId: randomUUID(), idempotencyKey: randomUUID(), expectedRevision: 1, accepted: "4", rejected: "0" };
+    const next = { ...input, commandId: randomUUID(), idempotencyKey: randomUUID(), expectedRevision: 1, accepted: "4", rejected: "0",
+      documentId: f.receive("later-delivery").documentId! };
     expect(f.port.captureReceipt(f.scope, next)).toMatchObject({ ordered: "10", delivered: "11", accepted: "10", rejected: "1", missing: "0", laterDelivered: "4", revision: 2 });
     expect(() => f.port.captureReceipt(f.scope, { ...next, commandId: randomUUID(), idempotencyKey: randomUUID() })).toThrow("SOURCE_UNAVAILABLE");
+  });
+  it("allows partial receipts only within the delivery document's remaining quantity", () => {
+    const f = setup(), input = f.receipt(f.receive("delivery").documentId!);
+    const first = f.port.captureReceipt(f.scope, input);
+    const next = { ...input, commandId: randomUUID(), idempotencyKey: randomUUID(), expectedRevision: 1,
+      accepted: "3.000001", rejected: "0" };
+    // The PO still has four unaccepted units, but the document has only three unreceipted units.
+    expect(() => f.port.captureReceipt(f.scope, next)).toThrow("QUANTITY_LIMIT");
+    expect(f.port.captureReceipt(f.scope, input)).toEqual(first);
+    const fitting = { ...next, accepted: "3" };
+    const second = f.port.captureReceipt(f.scope, fitting);
+    expect(second).toMatchObject({ delivered: "10", accepted: "9", rejected: "1", missing: "1", revision: 2 });
+    expect(f.port.captureReceipt(f.scope, fitting)).toEqual(second);
+    expect(() => f.port.captureReceipt(f.scope, { ...next, commandId: randomUUID(), idempotencyKey: randomUUID(),
+      expectedRevision: 2, accepted: "0.000001" })).toThrow("QUANTITY_LIMIT");
+  });
+  it("shares the delivery document budget across PO lines and revisions", () => {
+    const f = setup();
+    const otherOrder = { ...f.order, revisionId: randomUUID(), line: { ...f.order.line, requirementId: randomUUID() } };
+    const port = new FakeMerchantIntakePort([f.binding], [{ order: f.order, state: "open" }, { order: otherOrder, state: "open" }]);
+    const input = f.receipt(port.receive(f.scope, f.intake("delivery")).documentId!);
+    port.captureReceipt(f.scope, input);
+    const other = { ...input, commandId: randomUUID(), idempotencyKey: randomUUID(), revisionId: otherOrder.revisionId,
+      requirementId: otherOrder.line.requirementId, accepted: "4", rejected: "0" };
+    expect(() => port.captureReceipt(f.scope, other)).toThrow("QUANTITY_LIMIT");
+    expect(port.captureReceipt(f.scope, { ...other, accepted: "3" })).toMatchObject({ delivered: "3", revision: 1 });
   });
   it.each(["locked", "superseded", "cancelled"] as const)("rejects %s source orders", state => {
     const f = setup(state), delivery = f.receive("delivery");
