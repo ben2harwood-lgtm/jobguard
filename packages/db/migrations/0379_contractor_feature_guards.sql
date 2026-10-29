@@ -127,9 +127,9 @@ CREATE OR REPLACE FUNCTION app.work_order_begin(actor uuid, p_job uuid, p_title 
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
 BEGIN
- PERFORM app.mon8_require_feature(actor,'work_orders');
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t IS NULL OR NOT coalesce(app.work_order_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM app.mon8_require_feature(actor,'work_orders');
  INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
  VALUES(t,p_job,pg_backend_pid(),pg_current_xact_id(),'work_order',
   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',t,'id',p_job,'title',left(p_title,200),

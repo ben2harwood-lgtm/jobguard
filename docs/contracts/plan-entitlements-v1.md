@@ -147,18 +147,18 @@ The existing builder receipt records actual local checks and the new real-PG
 CI suites. PostgreSQL, browser execution and independent Claude review remain
 separate evidence; source inspection and unit query doubles do not supply them.
 
-## 29 October — combined MON-8 catch-up (0365/0366, RED)
+## 29 October — combined MON-8 catch-up (0378/0379, RED)
 
-The branch migrations are reserved as `0365_server_plan_entitlements.sql` and
-`0366_contractor_feature_guards.sql`. The practice-worker decision retains the
+The branch migrations are reserved as `0378_server_plan_entitlements.sql` and
+`0379_contractor_feature_guards.sql`. The practice-worker decision retains the
 complete 0332 Northside finance-worker predicate, with the current contractor
 track/agreement check before worker selection. Missing status and an active
 status on an older assignment never grant current work.
 
-0366 also contains the operative branch's structural insert guards for membership,
+0379 also contains the operative branch's structural insert guards for membership,
 role grants, invitations and contractor site-origin evidence, including forged
 job-track values. Existing operative membership expiry/revocation updates bypass
-new-work eligibility. One agreement-status trigger body in 0365 retains insert-only
+new-work eligibility. One agreement-status trigger body in 0378 retains insert-only
 immutability, the synthetic database boundary, an exclusive tenant lock (seed 54)
 and server timestamping; operative inserts take the matching shared lock before
 reading the latest assignment and status. Function owners and existing ACLs are

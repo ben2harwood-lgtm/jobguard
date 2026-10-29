@@ -1,5 +1,7 @@
+import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
 import { expect, test } from "@playwright/test";
 test.setTimeout(180_000);
+test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const origin = "http://127.0.0.1:3000";
 test("stored baseline import/replay, scoped dashboard and baseline downloads use real synthetic routes", async ({ page, browser }) => {
   await page.goto("/admin/contractor");

@@ -32,7 +32,10 @@ async function member(role:string,state="active"){
  const prior=role==="operative" ? (await admin.query("SELECT commercial_track FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[T])).rows[0]?.commercial_track ?? "small_builder" : null;
  const assign=async(track:string)=>withTenant(admin,context,async db=>{
   const revision=(await db.$client.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[T])).rows[0].revision;
-  await db.$client.query("SELECT app.assign_commercial_track($1,$2,$3,$4,$5,'operations:terms-fixture')",[T,randomUUID(),track,`synthetic-agreement:${T}`,revision]);
+  const assignment=randomUUID();
+  await db.$client.query("SELECT app.assign_commercial_track($1,$2,$3,$4,$5,'operations:terms-fixture')",[T,assignment,track,`synthetic-agreement:${T}`,revision]);
+  const { appendAuditBatch } = await import("../src/index.js");
+  await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:terms-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:T,payload:{references:{environment:"synthetic_demo"}}}]);
  });
  if(prior!==null) { await assign("contractor"); await seedActiveContractorAgreement(admin,T); }
  const id=randomUUID(),identity=randomUUID();await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[identity]);

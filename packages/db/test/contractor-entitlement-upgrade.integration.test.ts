@@ -153,6 +153,14 @@ it("actual catalogs retain least privilege",async()=>{
 });
 // Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
+ "app.trial_admission",
+ "app.trial_business_verification",
+ "app.trial_card_attempt",
+ "app.trial_card_result",
+ "app.trial_end_source",
+ "app.trial_start",
+ "app.trial_subscription_source",
+ "app.job_import_v3",
  "app.payment_fee_command",
  "app.payment_fee_statement",
  "app.lp_job_insert_permit",
@@ -234,6 +242,8 @@ it("repeat migration and later successors succeed",async()=>{
  {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
  {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
  ]);
+ // 0236 successor routine follows 0208; preserve both additive catalogue expectations.
+ expect((await c.admin.query("SELECT proname FROM pg_proc WHERE oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure")).rows).toEqual([{proname:"mon3_read_eligibility"}]);
 });
 it("negative controls detect changed prior rows grants and shapes",async()=>{
  const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin), proof=await capture(c.admin);

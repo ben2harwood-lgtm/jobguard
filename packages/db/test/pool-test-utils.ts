@@ -38,7 +38,7 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
   // Earlier-schema upgrade fixtures execute current repository source. Supply the
   // pre-MON-8 gate only for that fixture baseline, before 0352 exists. 0352 replaces
   // these exact signatures; current-schema entitlement tests never use this shim.
-  const mon8FixtureSchema = (await admin.query("SELECT to_regprocedure('app.mon8_feature_decision(uuid,text,text)') present, NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0365_server_plan_entitlements.sql') legacy")).rows[0];
+  const mon8FixtureSchema = (await admin.query("SELECT to_regprocedure('app.mon8_feature_decision(uuid,text,text)') present, NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0378_server_plan_entitlements.sql') legacy")).rows[0];
   if (mon8FixtureSchema.legacy && !mon8FixtureSchema.present) {
     await admin.query(`CREATE FUNCTION app.mon8_feature_decision(actor uuid,feature text,purpose text DEFAULT 'new_work') RETURNS jsonb
       LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -58,9 +58,10 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
   }
   await admin.query(`CREATE OR REPLACE FUNCTION app.test_fixture_job_parties() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
   DECLARE c uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();s uuid:=gen_random_uuid();sr uuid:=gen_random_uuid();b uuid:=gen_random_uuid();BEGIN
-   -- The controlled adoption routine binds its supplied parties after inserting its draft.
-   -- Pre-binding that draft would collide with its current-binding insert.
-   IF NEW.provenance='imported' AND NEW.status='draft' THEN RETURN NEW; END IF;
+   -- Controlled v1 (draft) and v3 (invoiced) adoption bind their own supplied parties.
+   -- The fixture hook must not create a second binding ahead of the real writer.
+   IF NEW.provenance='imported' AND (NEW.status='draft' OR
+    (NEW.status='invoiced' AND current_setting('app.import_command',true)='enabled')) THEN RETURN NEW; END IF;
    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true); END IF;
    INSERT INTO app.customer(tenant_id,id) VALUES(NEW.tenant_id,c);
    INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES(NEW.tenant_id,cr,c,1,'{"version":"customer.v1","name":"Practice Customer","type":"person","email":"practice-customer@example.invalid"}');

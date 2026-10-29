@@ -64,3 +64,25 @@ it.each([{ rows: [] }, { rows: [{ active: false, allowed: true }] }, { rows: [{ 
     expect(query.mock.calls[0]).toBeDefined();
   },
 );
+
+it("track loss blocks every new-work gate while preserving the read-only gate purposes", async () => {
+  const query = vi.fn(async (_sql: string, values: readonly unknown[]) => {
+    if (values.length === 4) return { rows: [{ active: true, allowed: true }] };
+    const retained = values[2] === "retained_read";
+    return { rows: [{ decision: {
+      version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: values[1],
+      entitlement: retained ? "included" : "excluded", executable: retained,
+      reason: retained ? "available" : "track_forbidden",
+    } }] };
+  });
+  const db = { $client: { query } } as unknown as TenantTransaction;
+  const principal = { tenantId: actor, membershipId: actor, identityUserId: actor } as AuthenticatedMembership;
+  for (const kind of ["import", "sor", "member"] as const) {
+    await expect(assertContractorGate(db, principal, kind)).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
+    expect(query).toHaveBeenLastCalledWith("SELECT app.mon8_feature_decision($1,$2,$3) decision", [actor, "work_orders", "new_work"]);
+  }
+  for (const kind of ["retained_import", "retained_member"] as const) {
+    await expect(assertContractorGate(db, principal, kind)).resolves.toBeUndefined();
+    expect(query).toHaveBeenLastCalledWith("SELECT app.mon8_feature_decision($1,$2,$3) decision", [actor, "work_orders", "retained_read"]);
+  }
+});

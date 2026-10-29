@@ -213,9 +213,12 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   const p=await seedWorkPractice(f),roles=(await f.admin.query("SELECT DISTINCT role FROM app.membership WHERE role<>'owner'")).rows.map(r=>r.role as string);
   // Operative fixture setup needs an explicit contractor agreement; the CH-4
   // command must still reject every non-owner role independently of entitlement.
-  await workTenant(f.admin,p.auth.context.tenantId,async db=>{
-   const revision=(await db.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[p.auth.context.tenantId])).rows[0].revision;
-   await db.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,$4,'operations:ch4-fixture')",[p.auth.context.tenantId,randomUUID(),`synthetic-agreement:${p.auth.context.tenantId}`,revision]);
+  await withTenant(f.admin,p.auth.context,async db=>{
+   const revision=(await db.$client.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[p.auth.context.tenantId])).rows[0].revision;
+   const assignment=randomUUID();
+   await db.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,$4,'operations:ch4-fixture')",[p.auth.context.tenantId,assignment,`synthetic-agreement:${p.auth.context.tenantId}`,revision]);
+   const { appendAuditBatch } = await import("../src/index.js");
+   await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:ch4-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:p.auth.context.tenantId,payload:{references:{environment:"synthetic_demo"}}}]);
   });
   await seedActiveContractorAgreement(f.admin,p.auth.context.tenantId);
   for(const role of new Set(["admin","finance","operative","supervisor","surveyor","commercial_manager","read_only","client_approver","worker",...roles])){

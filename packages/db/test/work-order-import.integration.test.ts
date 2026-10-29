@@ -352,8 +352,10 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     // The routine bound the order exactly once, with the order's own identity.
     expect((await admin.query("SELECT count(*)::int n FROM app.contractor_party_binding WHERE work_order_id=$1", [complete.rows[0]!.workOrderId])).rows[0].n).toBe(1);
   });
-  it("refuses an import for a small-builder-track tenant with the typed TRACK_FORBIDDEN, for both the order and the SoR import (Q5)", async () => {
+  it("refuses new order and SoR imports after track loss while retaining historical reads (Q5)", async () => {
     const { p, demo } = await org(); const csv = demoFile([row1(demo, 1)]);
+    const saved = await importOf(p, csv), workOrderId = saved.rows[0]!.workOrderId!;
+    const retained = { overview: await orders.overview(p), batch: await orders.batch(p, saved.batchId), revisions: await orders.revisions(p, workOrderId) };
     const before = await counts(p.tenantId);
     await withTenant(admin, testTenantContext(p.tenantId), async db => {
       const assignment = randomUUID();
@@ -363,7 +365,9 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     });
     await expect(importOf(p, csv)).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
     await expect(rates.importVersion(p, { version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId: randomUUID(), reference: "Fictional small builder", effectiveFrom: "2026-02-01", items: [{ code: "X", description: "x", unit: "each", rate: { pence: 1, currency: "GBP" } }] })).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
-    await expect(orders.overview(p)).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
+    expect(await orders.overview(p)).toEqual(retained.overview);
+    expect(await orders.batch(p, saved.batchId)).toEqual(retained.batch);
+    expect(await orders.revisions(p, workOrderId)).toEqual(retained.revisions);
     expect({ ...(await counts(p.tenantId)), audit_event: 0 }).toEqual({ ...before, audit_event: 0 });
   });
 });

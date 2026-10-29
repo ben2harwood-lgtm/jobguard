@@ -1,6 +1,6 @@
 # MON8-UPGRADE-SUCCESSORS builder receipt
 
-Status: current combined catch-up handoff is recorded in the 29 October section below; earlier entries are historical.
+Status: the final authorized 29 October handoff below supersedes historical holds; ready for router Git merge completion, commit, CI and RED review.
 
 Base: `dc5721230fd8aedbf2d9d0457789074b66b48765` (HEAD and frozen observed origin/main), branch `codex/sandbox/mon8-upgrade-successors`. No commit, push, PR, merge or rebase by builder. Only the three issued files are writable. No production, migration, fixture, shared helper, manifest, routing or inventory changes.
 
@@ -870,3 +870,162 @@ files; .git is read-only here and the builder ran no git writes. PostgreSQL and
 browser suites remain for CI under the issued sandbox restrictions. RED:
 independent exact-head Claude review remains with the loop owner.
 Commit message: /tmp/mon8-upgrade-successors-20261029T121301Z-commit-msg.txt.
+
+## 29 October 2026 — Round 5, Ben's final extra round (~14:25)
+
+Status: NOT READY / do not commit. Router must park if the unresolved checks
+cannot be resolved within the issued authority; no further repair round inferred.
+Starting HEAD dfb8a644bcec9de76aa139ae5ed7c358d0076576; pending merge target
+60552dcb50d888bd65d630531e9079680550c3ae. Read the full CI failure trace file
+mon8-upgrade-successors-ci-traces-1522.txt in bounded sections. No git writes.
+
+Changes and traced causes:
+- LP2-A12: its new direct startPractice fixture omitted the explicit positive
+  agreement needed before prepareWorkOrderDemo imports its SoR. Added the
+  existing owner-only agreement fixture; all LP-2 assertions remain.
+- PW15/PW16 invitation setup: direct owner inserts omitted transaction-local
+  tenant context required by the operative trigger. Use existing ownerTx for
+  the pre-marker invitation setup; post-marker refusal assertions remain.
+- PW33/RC2 handBuilt: explicit hand-built contractor had no active agreement
+  before inviting its operative. Seed explicitly before that command.
+- SSO emergency E1: operative membership and grant fixture inserts now run with
+  tenant context; the already explicit agreement and all role refusals remain.
+- Recovery T2, shared-money-origin setup, CH-4 non-owner roles: new contractor
+  track assignments omitted their deferred same-ID audit events. Append real
+  commercial_track.assigned events through appendAuditBatch in each assignment
+  transaction, including restoration of the recovery fixture's prior track.
+- ENT-3a/3c HTTP tests mocked database I/O but omitted the new entitlement
+  dependency. Add the same positive requireFeature spy used by the existing
+  application tests; preserve every HTTP response, no-write and tamper assertion.
+- SAML/OIDC/SSO-required browser fixtures lacked explicit agreement authority.
+  Seed it after their persisted owner transaction using the existing helper.
+- ENT-2/9/11a/11b browser journeys lacked agreement before their next command.
+  Reuse ENT-1's fixture pattern: await the real start response, seed explicit
+  fictional agreement owner-side, return the unchanged response. A small shared
+  browser fixture avoids copying this setup into four suites; no production
+  authority or automatic agreement activation was added.
+- LP0-17: the recorded inventory omitted seven existing MON-8 routines. Add
+  their identities and source-inspected protection/call facts to the existing
+  JSON inventory, retaining every prior/main expectation and the protected MD.
+- Work-order tenant-boundary refusal: MON-8's work_order_begin guard ran before
+  main's principal check, changing NOT_FOUND to FORBIDDEN. SQL BUG EXCEPTION:
+  0366 changes only the position of that one entitlement check, after principal
+  validation and before all writes. Started from the latest 0356 definition on
+  the pinned main and retained its whole body plus the entitlement check.
+  No migration already on main changed. 0365 is unchanged. CASE-in-IF lint passes
+  without exceptions or SQL CASE edits.
+- Merge conflicts: union job_import_v3 into the entitlement successor list;
+  retain main's explicit pre_cover_photo default in the work-state fixture.
+
+Unresolved, deliberately not bypassed:
+1. The real context-boundary suite still fails two assertions: its reviewed
+   source registry has older work-order/SoR/job-scheduling hashes than the
+   three preserved ENT-4b pins and source files. The scanner explicitly requires
+   renewed caller review. No scanner hash, exception or pinned source changed;
+   no review approval invented.
+2. Q5 in work-order-import still expects overview to reject after track loss,
+   while MON-8's pinned retained_import implementation deliberately preserves
+   those reads. Did not change that assertion, loosen entitlement, or rewrite
+   pinned code. This contract/test conflict remains for the loop owner.
+3. origin/main advanced during the run to 72226d28b8f095956e7ae9b728a0f024c2bc3590
+   while MERGE_HEAD remains 60552dcb. The newly arrived main migrations/lane
+   files are not part of the pending merge. No manual partial import was made;
+   a router catch-up is needed before current-main CI.
+
+Local evidence:
+- Installed database Vitest --maxWorkers=2 on mon8-combined-migration.test.ts
+  and plan-entitlement-service.test.ts: 12 passed across two files.
+- Installed API Vitest --maxWorkers=2 on auth/context-boundary.test.ts:
+  143 passed, 2 failed as described above. No retries or altered expectations.
+- Installed tsc --noEmit for packages/db, apps/api and apps/web: passed.
+- An additional ad hoc check initially included incoming main dashboard tests:
+  four type diagnostics in those untouched main tests. Narrowed to the nine
+  edited DB fixture/conflict files: zero TypeScript diagnostics.
+- node tools/plpgsql-case-in-if-lint.mjs: 152 migrations, zero exceptions, passed.
+- Byte checks: all 306 pinned main migration/lane files unchanged; 0365,
+  protected MD, ENT-4b registry, three source files and boundary scanner exactly
+  match starting HEAD. Both-side LP-0/SERIOUS-B5/tenancy expectations preserved;
+  entitlement successor expectations unioned. Only the documented 0366 guard
+  ordering differs among this branch's SQL.
+- Deterministic lane path check against pinned MERGE_HEAD: 97 paths allowed,
+  including the new browser helper. This is not a post-commit CI lane result.
+- git diff --check passed; no conflict markers remain in the two resolved files.
+
+PostgreSQL, browser and localhost HTTP suites were not executed in this sandbox;
+fixture/SQL repairs are source-inspected and typechecked, not DB-verified. Made-up
+fixtures only; no provider actions, releases, commits, pushes or independent
+RED acceptance. Router must stage resolved entries if subsequently proceeding.
+Handoff: /tmp/mon8-upgrade-successors-20261029T152220Z-commit-msg.txt.
+
+## 29 October 2026 — final go, Ben's explicit scanner-lock authority (~15:52)
+
+Status: READY for router staging, Git merge completion and commit/push, followed
+by CI and exact-head RED review. This section supersedes the Round 5 holds above.
+No further repair round is inferred if this final attempt fails.
+
+Kept every Round 5 repair. Updated ONLY the three authorized hash values in
+apps/api/src/auth/context-boundary.test.ts; no scanner rule, other entry or
+source changed. Existing ENT-4b pins and their three source files are untouched:
+- work-order-repository.ts:
+  9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e ->
+  6f769b3b5261219e8e277b3c8460b19b917fe93e66245d15285af5a04c098418
+- sor-repository.ts:
+  122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2 ->
+  b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f
+- job-scheduling-repository.ts:
+  ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d ->
+  7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57
+
+Resolved Q5 at the obsolete test contract: seed an actual saved order and compare
+its register, batch and revisions before/after track loss. BOTH new order and
+SoR import refusals and the no-write count assertion remain. A gate-level unit
+regression additionally exercises every import/sor/member new_work gate and both
+read-only retained gate purposes after track loss. No production gate changed;
+retained eligibility remains internal and read-only.
+
+The supplied pending MERGE_HEAD was still 60552dcb50d888bd65d630531e9079680550c3ae.
+Applied the current-main content delta through 72226d28, then through the observed
+new main cd8703fc90885ecada114adce4d7aa7d9b739065 (migrations through 0375), using
+read-only git show/diff/merge-file -p and working-tree writes. Unioned the MON-3
+recorded routine inventory and seven trial successor-table expectations; kept
+both sides' shared expectation rows and Round 5 fixtures. No conflict markers
+remain. The router must complete Git ancestry as well as stage files: .git is
+read-only here, so MERGE_HEAD/index cannot be updated by this builder.
+
+Renumbered 0365 -> 0378 and 0366 -> 0379 using the exported planRenumber planner
+in tools/migration-renumber.mjs with the issued reservation ceiling 0377, then
+filesystem moves and the tool's reference-replacement rules. The CLI dry run
+otherwise proposed 0374/0375 against main at 0373. Its write mode requires a
+clean tree and stages with git add, so it was not run in this dirty, read-only
+Git sandbox. The tool itself is unchanged. All executable filename references,
+contract references and the lane use the new stems. 0378 is byte-identical to
+starting HEAD's 0365; 0379 differs from its 0366 ONLY by the documented Round 5
+work_order_begin guard-order fix. No SQL already on main changed. The latest
+0373 mon2_issue remains byte-identical; neither own migration recreates it or
+any routine newly defined in 0369/0372/0373/0374/0375.
+
+Validation performed with installed executables, no downloads, <=2 workers:
+- API context-boundary.test.ts: 145 passed after the authorized lock update.
+- DB mon8-combined-migration.test.ts and plan-entitlement-service.test.ts:
+  13 passed across two files, including the new read/write gate regression.
+- Final tsc --noEmit for packages/db, apps/api and apps/web: passed.
+- Focused TypeScript program for 11 edited DB tests/fixtures: zero diagnostics.
+- CASE-in-IF lint: 157 migrations, zero exceptions, passed.
+- Byte comparisons: all 315 latest-main migration/lane files identical;
+  protected docs/contracts/lp-downstream-effects-v1.md and all three pinned
+  sources/ENT-4b registry match starting HEAD. Scanner diff is exactly three
+  authorized hash substitutions. Own SQL bytes match the stated exception.
+- Latest-main LP-0 inventory retained exactly; both-side SERIOUS-B5/tenancy
+  expectation string values retained; all 57 explicit main app-table successor
+  expectations retained. No newly merged main routine is overwritten by own SQL.
+- Exact filesystem delta against cd8703fc: 98 paths, all in the own lane;
+  pure lane schema/path and migration-order checks passed. The normal local CI
+  lane command cannot give a meaningful final-range result before the router
+  stages/completes the merge; post-commit CI remains required.
+- git diff --check passed. No Git writes, DB startups, localhost HTTP/browser
+  runs, provider activity, real data or releases.
+
+Database upgrade/integration tests, HTTP/browser journeys, full CI and the RED
+review still run through the router. This is a local repair handoff, not an
+independent review or merge/release claim.
+Commit message: /tmp/mon8-upgrade-successors-20261029T154727Z-commit-msg.txt.

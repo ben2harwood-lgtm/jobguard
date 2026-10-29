@@ -5,7 +5,7 @@ import type { Pool } from "pg";
  * Earlier-schema upgrade fixtures retain their pre-MON-8 authority behavior.
  */
 export async function seedActiveContractorAgreement(admin: Pool, tenant: string): Promise<void> {
-  const installed = (await admin.query("SELECT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0365_server_plan_entitlements.sql') installed")).rows[0].installed;
+  const installed = (await admin.query("SELECT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0378_server_plan_entitlements.sql') installed")).rows[0].installed;
   if (!installed) return;
   const db = await admin.connect();
   try {

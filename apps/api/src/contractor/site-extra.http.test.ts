@@ -1,3 +1,4 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 // ENT-3a round 1 (A15): drives the real Nest pipeline (AppModule with the merged global guard and the framework body parser) for the site-extras route and
 // pins what really happens. Refusals made before the controller keep the merged framework / guard shape; refusals made by the piece carry its own envelope.
 import "reflect-metadata";
@@ -22,6 +23,7 @@ const member = () => ({ tenantId: randomUUID(), membershipId: randomUUID(), iden
 let app: INestApplication;
 let context: ReturnType<typeof vi.spyOn>, service: ReturnType<typeof vi.spyOn>, lookup: ReturnType<typeof vi.spyOn>, logged: ReturnType<typeof vi.spyOn>, query: ReturnType<typeof vi.spyOn>, connect: ReturnType<typeof vi.spyOn>;
 async function start(mode: string | undefined) {
+ vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue();
  vi.stubEnv("JOBGUARD_ENV", mode as never); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", allowed); vi.stubEnv("DATABASE_URL", undefined as never);
  // The real identity application the merged guard builds when the request is not a synthetic session; its storage address never receives a statement here.
  const material = randomBytes(32).toString("hex"), codeVariable = ["AUTH", "CODE", "SECRET"].join("_");

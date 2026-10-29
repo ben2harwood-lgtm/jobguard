@@ -1,8 +1,10 @@
+import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { Pool } from "pg";
 test.setTimeout(420_000);
+test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const baseURL = "http://127.0.0.1:3000";
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 const admin = () => new Pool({ host: "127.0.0.1", port: 55432, user: "postgres", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo" });
