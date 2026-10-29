@@ -1,7 +1,9 @@
 """Regenerate the proposed source index; never modifies the LP-0 capability freeze."""
 import re,json,collections,sys
 from pathlib import Path
-p=json.loads(Path('docs/contracts/lp-0-effective-privileges-v1.json').read_text())
+# Recorded inventory input; the live LP-0 capability freeze evolves independently.
+LP0_INPUT=Path('docs/contracts/lp-downstream-lp-0-recorded-input-v1.json')
+p=json.loads(LP0_INPUT.read_text())
 groups={g['id']:g for g in p['groups']}; obj=collections.defaultdict(lambda:{'groups':set(),'sources':set(),'writes':set(),'calls':set(),'signatures':set(),'reach':set(),'definitions':set()})
 for e in p['entries']:
  k=e['key'].split('|'); name=None; kind=None
@@ -90,7 +92,7 @@ def classify(kind, name):
  return effects
 
 lines=['# LP downstream-effect source inventory, version 1','', '**Status: PROPOSED — needs review.** Companion to [the design note](lp-command-binding-design-v1.md). No grants, scanner pins, LP-0 baseline or migrations are changed. This appendix is design input, not accepted catalogue evidence.','',
- 'Base: `cc147d78` (LP-DESIGN-NOTE-FIX checkout) (inspected 29 October 2026). Sources: the '+str(len(files))+' migration SQL files through migration '+f'`{MAX_MIGRATION:04d}`'+', and the existing LP-0 JSON entries, recorded routines, RLS and trigger records. The migration boundary is recorded as `MAX_MIGRATION` in `tools/lp-downstream-inventory.py`; newer migrations are excluded. To refresh this design snapshot, advance that boundary and regenerate this document together. All source references below are repository-relative.','',
+ 'Base: `cc147d78` (LP-DESIGN-NOTE-FIX checkout) (inspected 29 October 2026). Sources: the '+str(len(files))+' migration SQL files through migration '+f'`{MAX_MIGRATION:04d}`'+', and the LP-0 JSON entries, recorded routines, RLS and trigger records from the inventory’s recorded input [`lp-downstream-lp-0-recorded-input-v1.json`](lp-downstream-lp-0-recorded-input-v1.json) (copied from `lp-0-effective-privileges-v1.json` on main `baad7d56`, 29 October 2026). The live LP-0 JSON is excluded. The migration boundary is recorded as `MAX_MIGRATION` in `tools/lp-downstream-inventory.py`; newer migrations are excluded. To refresh this design snapshot, update the recorded LP-0 input and migration boundary as needed, and regenerate this document together. All source references below are repository-relative.','',
  'This is a conservative **superset** of reachable objects: source declarations include historical/replaced/dropped objects; LP-0 reachability is its recorded observation, not a fresh measurement. Routine rows group names and retain every LP-0 overload in the final column. Source-only names require an overload/catalogue check. No row means “safe working data”. Regenerate with `python3 tools/lp-downstream-inventory.py`; use `--check` to detect drift. Family assignments prefer LP-0 group domain kinds and schema declarations (money columns, hidden result fields and the ENT-6B billing schema), then combine name hints and direct-write target effects. Classes overlap: queue work can also be hidden. These remain navigation hints; each is a downstream-effect **hypothesis**, not a policy or proof. Transitive consequences are explained in the companion path table and must be followed through the listed call/trigger edges. Each later card must resolve the applicable subset, trace actual callers, trigger edges, views, dynamic SQL and all overloads as the real role, then pair refusal with an allowed case and committed-state checks. The full LP-0 guard remains authoritative for its frozen capabilities. Do not regenerate its expected facts from this appendix.','',
  '## Effect classes and assigned work','', '| Class | Downstream consequence to test | Responsible existing LP cards |','|---|---|---|']
 for key,(effect,cards) in families.items():lines.append(f'| `{key}` | {effect} | {cards} |')
