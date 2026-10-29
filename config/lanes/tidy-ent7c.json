@@ -7,7 +7,8 @@
       "allow": [
         "packages/db/migrations/0337_enterprise_fee_posting_tidy.sql",
         "packages/db/migration-notes/0337_enterprise_fee_posting_tidy.md",
-        "packages/db/test/enterprise-fee-posting.integration.test.ts"
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
