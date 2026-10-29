@@ -117,6 +117,8 @@ export * from "./meter-persistence.js";
 export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
+export { OidcRepository, type StoredOidcRequest } from "./oidc-repository.js";
+
 export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
@@ -143,3 +145,4 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./value-business-reader.js";
