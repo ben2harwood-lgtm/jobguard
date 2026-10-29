@@ -48,6 +48,7 @@
         "packages/core/src/free-first-job-persistence.test.ts",
         "packages/core/src/free-first-job-persistence.ts",
         "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/0372_free_first_job_admission.md",
         "packages/db/migration-notes/0373_free_first_job_eligibility.md",
         "packages/db/migrations/0372_free_first_job_admission.sql",

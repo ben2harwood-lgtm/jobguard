@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 const state = vi.hoisted(() => ({ error: undefined as unknown }));
+// This fixture supplies only the legacy practice cookie; company-session calls are unexpected.
+vi.mock("./trial-server", () => ({ trialReply: () => { throw new Error("Unexpected company-session trial call in legacy fixture"); } }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => name === "jg_session" ? { value: "session" } : undefined }) }));
 vi.mock("./synthetic-server", () => ({ hasSyntheticSession: () => true, practiceFailure: () => null, syntheticPool: () => ({}) }));
 vi.mock("./workspace-server", () => {
