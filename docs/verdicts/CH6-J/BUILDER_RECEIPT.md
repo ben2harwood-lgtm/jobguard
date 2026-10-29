@@ -1045,3 +1045,46 @@ Ready for router staging/commit/push. PostgreSQL, migration execution, browser
 suites and full required CI remain for GitHub CI in this sandbox. No customer
 data, live money, providers, releases or Git metadata writes. Commit message:
 `/tmp/ch6-j-20261029T064155Z-commit-msg.txt`.
+
+
+## 29 Oct 08:14 catch-up — current main through ENT-10 OIDC
+
+RED, CH-6 / PR #392. Resolved the router-started merge of origin/main
+`cc147d783a9d30ae53a44299cd31d8a0ba46f1bb` (including #296 migration 0347).
+Kept both CH-6 and OIDC controllers, providers, workspace applications and
+OpenAPI paths. Shared LP-0, SERIOUS-B5, contractor-entitlement and tenancy
+expectations retain every line from both parents; only additive unions.
+No product behavior, migration SQL or protected exception changes.
+
+Verified all 144 SQL migrations on the incoming main are byte-identical.
+Only 0354/0355 are additional, byte-identical to this branch's pre-merge HEAD:
+- 0354 SHA-256: bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605
+- 0355 SHA-256: 817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077
+
+Checks actually run with installed repository binaries (no downloads):
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts
+  src/auth/sso/oidc-paths.test.ts`: 31/31 PASS, including socket-free real Nest
+  module registration and CH-6 workspace composition.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS. Comparator fixtures do not prove PostgreSQL semantics.
+- From repo root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`
+  and `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS, including unchanged protected baseline checks.
+- From apps/api: `node --import tsx src/generate-openapi.ts --check`: PASS
+  after rebuilding local packages/db and packages/core with their existing tsc
+  build commands. Initial tsx CLI invocation was blocked by sandbox IPC;
+  loader invocation initially found stale local dependency exports.
+- Existing lanePathAllowed/migrationOrderViolations APIs: all 56 aggregate
+  paths versus MERGE_HEAD allowed; migration order PASS.
+- Working-tree conflict-marker scan, parent-line retention, migration-byte
+  comparisons and `git diff --check`: PASS.
+
+No Git writes ran. The three formerly conflicting files remain unmerged in
+Git's read-only index until the router stages them. Ready for router staging,
+merge commit and push; PostgreSQL, migration and browser suites plus required
+CI and the RED exact-head review remain external gates. Commit message:
+`/tmp/ch6-j-20261029T081424Z-commit-msg.txt`.
