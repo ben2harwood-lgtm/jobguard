@@ -15,6 +15,11 @@ export const enterpriseFeeApproveStatementV1 = z.object({ version: z.literal("en
   contentHash: z.string().regex(/^[0-9a-f]{64}$/u), totalDeltaPence: z.number().int().refine(Number.isSafeInteger), expiresAt: z.iso.datetime({ offset: true }) }).strict();
 /** ENT-7c: finance posts an approved revision by presenting the exact authorisation its approval created. */
 export const enterpriseFeePostStatementV1 = z.object({ version: z.literal("enterprise-fee-post-statement.v1"), commandId: z.guid(), statementId: z.guid(), authorizationId: z.guid() }).strict();
+/** M4-9 dark production boundary. No request field can approve policy or enable a release gate. */
+export const enterpriseFeeProductionCommandV1 = z.discriminatedUnion("action", [
+  enterpriseFeeDeriveCommandV1.extend({ version: z.literal("enterprise-fee-production.v1"), action: z.literal("derive") }),
+  enterpriseFeePostStatementV1.extend({ version: z.literal("enterprise-fee-production.v1"), action: z.literal("accrue") }),
+]);
 /** ReconcileExportedDuplicate: explicit finance approval; amounts come only from stored billing facts. */
 export const enterpriseReconcileExportedDuplicateV1 = z.object({ version: z.literal("enterprise-reconcile-exported-duplicate.v1"),
   commandId: z.guid(), jobId: z.guid(), duplicateId: z.guid(), canonicalId: z.guid() }).strict()
@@ -49,6 +54,16 @@ export function enterpriseFeeDatabaseFailure(error: unknown): never {
 
 export class EnterpriseFeeRepository {
   constructor(private readonly pool: Pool) {}
+  /** Always refused in this dark slice, including direct SQL; synthetic statements cannot create production liability. */
+  async productionCommand(context: VerifiedTenantContext, session: string, raw: unknown): Promise<never> {
+    const input = this.parse(enterpriseFeeProductionCommandV1, raw, session);
+    try {
+      await withTenant(this.pool, context, async db =>
+        db.$client.query("SELECT app.ef_production_command($1,$2::jsonb)", [session, JSON.stringify(input)]));
+      // A deployment with an unexpectedly permissive database must not report a successful production action.
+      throw new EnterpriseFeeError("FEE_GATE_CLOSED");
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
   async derive(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ derivationId: string; replayed: boolean }> {
     const input = enterpriseFeeDeriveCommandV1.safeParse(raw);
     if (!input.success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");

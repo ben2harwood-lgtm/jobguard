@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-prod": {
+      "branches": [
+        "codex/sandbox/m4-9-prod"
+      ],
+      "note": "M4-9 RED dark contractor safety preparation; production gate remains closed. Full production policy/source binding outstanding.",
+      "allow": [
+        "packages/db/migrations/0429_enterprise_fee_production_safety.sql",
+        "packages/db/migration-notes/0429_enterprise_fee_production_safety.md",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/src/enterprise-fee-repository.test.ts",
+        "packages/db/test/enterprise-fee-production.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}

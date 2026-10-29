@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EnterpriseFeeError } from "@jobguard/core";
-import { EnterpriseFeeRepository, enterpriseReconcileExportedDuplicateV1, enterpriseFeeApproveStatementV1, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1, enterpriseFeeDisputeStatementV1 } from "./enterprise-fee-repository.js";
+import { EnterpriseFeeRepository, enterpriseFeeProductionCommandV1, enterpriseReconcileExportedDuplicateV1, enterpriseFeeApproveStatementV1, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1, enterpriseFeeDisputeStatementV1 } from "./enterprise-fee-repository.js";
 
 describe("ENT-7a enterprise fee repository boundary", () => {
   const id = "11111111-1111-4111-8111-111111111111";
@@ -37,5 +37,21 @@ describe("ENT-7a enterprise fee repository boundary", () => {
     const dispute = { version: "enterprise-fee-dispute-statement.v1", commandId: id, statementId: id, reasonCode: "line_disputed" };
     expect(enterpriseFeeDisputeStatementV1.safeParse(dispute).success).toBe(true);
     for (const reasonCode of ["Line", "1x", "a".repeat(41), "free text"]) expect(enterpriseFeeDisputeStatementV1.safeParse({ ...dispute, reasonCode }).success).toBe(false);
+  });
+});
+
+describe("M4-9 dark production command", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const derive = { version: "enterprise-fee-production.v1", action: "derive", commandId: id, agreementVersionId: id, period: "2026-10" };
+  it("accepts identities only; policy approval, environment and amounts cannot be request authority", () => {
+    expect(enterpriseFeeProductionCommandV1.safeParse(derive).success).toBe(true);
+    expect(enterpriseFeeProductionCommandV1.safeParse({ version: derive.version, action: "accrue", commandId: id, statementId: id, authorizationId: id }).success).toBe(true);
+    for (const fields of [{ environment: "production_billing" }, { policyApproved: true }, { gate: "G4-C" }, { amountPence: 1 }, { contributions: [] }])
+      expect(enterpriseFeeProductionCommandV1.safeParse({ ...derive, ...fields }).success).toBe(false);
+  });
+  it("rejects malformed production commands before connecting", async () => {
+    const repo = new EnterpriseFeeRepository({ connect: () => { throw new Error("must not connect"); } } as never);
+    for (const raw of [{ ...derive, enabled: true }, { ...derive, period: "2026-13" }, { ...derive, action: "accrue" }])
+      await expect(repo.productionCommand({} as never, id, raw)).rejects.toMatchObject({ code: "INVALID_FEE_INPUT" });
   });
 });
