@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch8-rest": {
+      "branches": [
+        "codex/sandbox/ch8-rest"
+      ],
+      "receipt": "docs/verdicts/CH8-REST/BUILDER_RECEIPT.md",
+      "note": "RED \u2014 CH-8 part 2, BUILD_PLAN.md \u00a710.4, finish-list row 11. Router-scoped preparatory implementation. Part 3 owns the shadow-30000 source-to-settlement/UI/verifier journey and SV-6 runtime activation. Application and SQL creation/approval refuse until that activation. Own changed path config/lanes/ch8-rest.json is implicitly permitted. PR #389 catch-up preserves both export barrels, current-main shared expectations and unchanged migration 0306; no new behaviour. Catch-up after PR #380 retains successFees and listV3 bindings and unions both LP-0 routine inventories. Catch-up after PR #354 retains SV-7A intake alongside listV3 and unions source-intake and evidence-pack catalogue expectations; migration 0306 SQL is unchanged. CI-fix try 2 completes exact CH-8 RLS/ownership, truncated index-name, recorded-routine and shadow-worker catalogue expectations; no SQL or grant change.",
+      "allow": [
+        "apps/api/src/evidence-pack-v3.application.test.ts",
+        "apps/api/src/evidence-pack-v3.controller.test.ts",
+        "apps/api/src/evidence-pack-v3.worker.test.ts",
+        "apps/api/src/evidence-pack-v3.worker.ts",
+        "apps/api/src/evidence-pack.application.ts",
+        "apps/api/src/evidence-pack.controller.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/recovery-cases/[id]/evidence-packs/route.ts",
+        "apps/web/app/ui/evidence-packs-v3.tsx",
+        "apps/web/app/ui/evidence-packs.tsx",
+        "docs/contracts/evidence-pack-v3.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/evidence-pack-v3.md",
+        "docs/verdicts/CH8-REST/BUILDER_RECEIPT.md",
+        "packages/core/src/evidence-pack-v3-assembly.test.ts",
+        "packages/core/src/evidence-pack-v3-assembly.ts",
+        "packages/core/src/evidence-pack-v3.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migration-notes/0306_evidence_pack_v3.md",
+        "packages/db/migrations/0306_evidence_pack_v3.sql",
+        "packages/db/src/evidence-pack-v3-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-post-lock.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/verify-evidence-pack-cli.test.ts",
+        "packages/db/tools/verify-evidence-pack.mjs"
+      ]
+    }
+  }
+}

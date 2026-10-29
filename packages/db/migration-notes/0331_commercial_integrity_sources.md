@@ -1,4 +1,4 @@
-# 0309 — CH-6 synthetic advisory source projections (RED)
+# 0331 — CH-6 synthetic advisory source projections (RED)
 
 Adds two owner-only immutable synthetic source tables, four private/source
 routines (only `ch6_integrity_sources(uuid,uuid,text)` is executable by runtime),
@@ -49,7 +49,7 @@ insert guard takes its job lock before the fresh aggregate capacity check. The
 feedback writer keeps its existing membership row locks rather than adding a
 membership table lock that could invert revocation lock order.
 
-Review locking follow-up (0309 is still unpublished): the feedback writer now
+Review locking follow-up (0331 is still unpublished): the feedback writer now
 uses tenant/job-qualified `FOR SHARE` row locks, with deterministic key order,
 instead of table-wide SHARE locks. Order is session, membership, command advisory,
 owned session jobs by UUID, then the source tables in the explicit SQL order,

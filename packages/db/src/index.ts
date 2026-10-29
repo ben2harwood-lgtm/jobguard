@@ -130,11 +130,14 @@ export * from "./enterprise-live-prompt-repository.js";
 export * from "./contractor-entitlement-authority-repository.js";
 
 export * from "./recovery-attribution-repository.js";
+export * from "./success-fee-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
 export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export * from "./evidence-pack-v3-repository.js";
 
 export * from "./meter-today-repository.js";
 export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 export * from "./enterprise-baseline-repository.js";
+export * from "./small-builder-demo-repository.js";

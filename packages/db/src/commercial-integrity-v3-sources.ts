@@ -46,7 +46,7 @@ export async function readIntegrityFamily(db: TenantTransaction, s: CommercialIn
  if (!row) throw new PracticeAccessError("NOT_FOUND");
  return selectIntegrityFamily(row);
 }
-// Historical 0227 upgrade projection; current runtime reads use 0309 below. The 0227 writer re-resolves exactly this activity. No attestation is settlement proof.
+// Historical 0330 upgrade projection; current runtime reads use 0331 below. The 0330 writer re-resolves exactly this activity. No attestation is settlement proof.
 export const integrityActivitySql = `SELECT jsonb_build_object('source',jsonb_build_object(
  'tenantId',x.tenant_id,'jobId',x.job_id,'scopeId',$3::text,'sourceId',x.id::text,'sourceType',x.kind,
  'revision','1','hash',encode(sha256(convert_to(x.identity,'UTF8')),'hex'),
@@ -65,7 +65,7 @@ export async function readCommercialIntegrityV3OrdinaryFacts(db: TenantTransacti
  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/u.test(evaluatedAt)) throw new CommercialIntegrityPersistenceError("INTEGRITY_SOURCE_UNAVAILABLE");
  return { lockState: lock.rowCount ? "present" : "absent", activity, quotes: [], activations: [], workEvents: [], assertions: [] };
 }
-/** 0309 returns only authorised ordinary facts, or an exact completed publication after lock. */
+/** 0331 returns only authorised ordinary facts, or an exact completed publication after lock. */
 export async function readCommercialIntegrityV3Input(db: TenantTransaction, scope: CommercialIntegrityScope) {
  await authorizeIntegrityScope(db,scope);
  const row=await db.$client.query<{result:unknown}>("SELECT app.ch6_integrity_sources($1,$2,$3) result",[scope.tenantId,scope.jobId,scope.digest]).then(r=>r.rows[0]).catch((error:unknown)=>{

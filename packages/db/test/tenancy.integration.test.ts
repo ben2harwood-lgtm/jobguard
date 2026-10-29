@@ -282,6 +282,10 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_pack_attachment_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_pack_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "evidence_pack_v3", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "evidence_pack_v3_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "evidence_pack_v3_check", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "evidence_pack_v3_request", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_approval_outcome", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_approval_request", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -478,6 +482,9 @@ describe("migration and privilege catalog", () => {
       { relname: "site", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "site_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "site_visit", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "small_builder_demo_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "small_builder_demo_report", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "small_builder_demo_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "sor_item", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "sor_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "stage_completion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -627,6 +634,10 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack", owner: "jobguard_migration" },
       { relname: "evidence_pack_attachment_approval", owner: "jobguard_migration" },
       { relname: "evidence_pack_revision", owner: "jobguard_migration" },
+      { relname: "evidence_pack_v3", owner: "jobguard_migration" },
+      { relname: "evidence_pack_v3_approval", owner: "jobguard_migration" },
+      { relname: "evidence_pack_v3_check", owner: "jobguard_migration" },
+      { relname: "evidence_pack_v3_request", owner: "jobguard_migration" },
       { relname: "evidence_upload", owner: "jobguard_migration" },
       { relname: "extra_approval_outcome", owner: "jobguard_migration" },
       { relname: "extra_approval_request", owner: "jobguard_migration" },
@@ -823,6 +834,9 @@ describe("migration and privilege catalog", () => {
       { relname: "site", owner: "jobguard_migration" },
       { relname: "site_revision", owner: "jobguard_migration" },
       { relname: "site_visit", owner: "jobguard_migration" },
+      { relname: "small_builder_demo_receipt", owner: "jobguard_migration" },
+      { relname: "small_builder_demo_report", owner: "jobguard_migration" },
+      { relname: "small_builder_demo_run", owner: "jobguard_migration" },
       { relname: "sor_item", owner: "jobguard_migration" },
       { relname: "sor_version", owner: "jobguard_migration" },
       { relname: "stage_completion", owner: "jobguard_migration" },
@@ -875,8 +889,8 @@ describe("migration and privilege catalog", () => {
   });
 });
 
-// CH-6: retained 0227 and additive 0309 routine execution boundaries.
-it("0227 and 0309 routines retain exact ownership and execution boundaries",async()=>{
+// CH-6: retained 0330 and additive 0331 routine execution boundaries.
+it("0330 and 0331 routines retain exact ownership and execution boundaries",async()=>{
  const rows=(await admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,r.rolname owner,p.prosecdef,p.proconfig,
  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
  has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,

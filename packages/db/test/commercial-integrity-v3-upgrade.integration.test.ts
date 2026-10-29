@@ -30,7 +30,7 @@ it("CI-P09 own-step upgrade preserves populated old receipt/history/column types
   const end=[times.start,...ordinaryFacts.activity.map(a=>a.source.recordedAt)].sort().at(-1)!;
   return evaluateCommercialIntegrityV3({version:"commercial-integrity-input.v3",environment:"synthetic_demo",tenantId:tenant,jobId:x.job,scopeId:f.auth.digest,evaluatedAt:times.now,profile:{version:"synthetic_fixture.persisted-activity.v3",ruleVersion:"persisted-activity.1",window:{start:times.start,end}},phase:"pre_lock",ordinaryFacts}).findings[0]!;
  });
- const review={version:"commercial-integrity-review.v3",commandId:randomUUID(),findingKey:snapshot.key,findingSnapshotHash:createHash('sha256').update(canonicalCommercialIntegritySnapshot(snapshot.sourceSnapshot)).digest('hex'),outcome:"dismissed_false_positive",explanation:"Historical 0227 source review."};
+ const review={version:"commercial-integrity-review.v3",commandId:randomUUID(),findingKey:snapshot.key,findingSnapshotHash:createHash('sha256').update(canonicalCommercialIntegritySnapshot(snapshot.sourceSnapshot)).digest('hex'),outcome:"dismissed_false_positive",explanation:"Historical 0330 source review."};
  const result=(await transaction(f.runtime,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb) result",[tenant,x.job,f.auth.digest,JSON.stringify(review),JSON.stringify(snapshot.sourceSnapshot)]))).rows[0].result;
  await f.admin.query("CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.filter(url=>url.pathname<=migrationUrl.pathname))await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING",[url.pathname.split('/').at(-1)]);
@@ -43,8 +43,8 @@ it("CI-P09 own-step upgrade preserves populated old receipt/history/column types
  expect(createHash('sha256').update(JSON.stringify((await f.admin.query("SELECT id,sequence,event_hash,payload_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence",[tenant])).rows)).digest('hex')).toBe(auditHash);
 });
 
-it("0227 applies with check_function_bodies enabled on SQL_ASCII",async()=>{
- // Installation only: practice-session issuance uses UTF8 normalization and is unrelated to 0227.
+it("0330 applies with check_function_bodies enabled on SQL_ASCII",async()=>{
+ // Installation only: practice-session issuance uses UTF8 normalization and is unrelated to 0330.
  const dir=await mkdtemp(join(tmpdir(),"ch6-p-ascii-")),port=await freePort(59200,300),password=randomUUID();
  const pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=SQL_ASCII"]});
  const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"postgres",max:1});
@@ -65,7 +65,7 @@ it("0227 applies with check_function_bodies enabled on SQL_ASCII",async()=>{
  }finally{await closeTestPools(admin);await pg.stop();await rm(dir,{recursive:true,force:true});}
 },120000);
 
-it("0227 retains exactly the ECMAScript trim characters on UTF8",async()=>{
+it("0330 retains exactly the ECMAScript trim characters on UTF8",async()=>{
  const sql=await readFile(migrationUrl,"utf8");
  const encoded=sql.match(/btrim\(review->>'explanation',convert_from\(decode\('([0-9a-f]+)','hex'\),'UTF8'\)\)/)?.[1];
  expect(encoded).toBeDefined();

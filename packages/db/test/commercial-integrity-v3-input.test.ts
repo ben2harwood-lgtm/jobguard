@@ -20,7 +20,7 @@ it("CH-6 source decoder refuses hidden pre-lock fields, foreign scope, malformed
  const {db,query}=database(raw,false);await expect(readCommercialIntegrityV3Input(db,scope)).rejects.toThrow("NOT_FOUND");expect(query).toHaveBeenCalledTimes(1);
 });
 it("CH-6 source migration confines publication calls to the locked branch and adds no runtime table grants",async()=>{
- const sql=await readFile(new URL("../migrations/0309_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0331_commercial_integrity_sources.sql",import.meta.url),"utf8");
  const body=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_integrity_sources"),sql.indexOf("-- Re-resolve all source facts"));
  const pre=body.slice(0,body.indexOf("IF has_lock THEN"));
  expect(pre).not.toMatch(/app\.(?:shadow_|final_check_|ch6_integrity_published)/u);
