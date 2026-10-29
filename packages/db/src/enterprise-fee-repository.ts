@@ -99,11 +99,18 @@ export class EnterpriseFeeRepository {
         (await db.$client.query("SELECT app.ef_read_statement($1,$2) result", [session, statementId])).rows[0].result as EnterpriseFeeStatementRead);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
-  async postStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ statementId: string; replayed: boolean; journals?: number }> {
+  async postStatement(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ statementId: string; replayed: boolean; journals: number }> {
     const input = this.parse(enterpriseFeePostStatementV1, raw, session);
     try {
-      return await withTenant(this.pool, context, async db =>
-        (await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId])).rows[0].result);
+      return await withTenant(this.pool, context, async db => {
+        const result = (await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId])).rows[0].result;
+        // A fresh-key replay can omit the count; read authoritative journals under the same tenant transaction.
+        if (result.journals === undefined) {
+          const postings = (await db.$client.query("SELECT app.ef_read_postings($1,$2) result", [session, input.statementId])).rows[0].result as EnterpriseFeePosting[];
+          return { ...result, journals: postings.length };
+        }
+        return result;
+      });
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
   async reconcileExportedDuplicate(context: VerifiedTenantContext, session: string, raw: unknown): Promise<EnterpriseDuplicateCorrection> {
