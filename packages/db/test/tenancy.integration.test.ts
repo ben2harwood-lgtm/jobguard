@@ -527,8 +527,15 @@ describe("migration and privilege catalog", () => {
       { relname: "synthetic_recovery_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "team", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "team_membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_admission", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_business_verification", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_card_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_card_result", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_end_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "trial_identity_key_claim", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "trial_identity_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_start", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "trial_subscription_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_rate_observation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -887,8 +894,15 @@ describe("migration and privilege catalog", () => {
       { relname: "synthetic_recovery_receipt", owner: "jobguard_migration" },
       { relname: "team", owner: "jobguard_migration" },
       { relname: "team_membership", owner: "jobguard_migration" },
+      { relname: "trial_admission", owner: "jobguard_migration" },
+      { relname: "trial_business_verification", owner: "jobguard_migration" },
+      { relname: "trial_card_attempt", owner: "jobguard_migration" },
+      { relname: "trial_card_result", owner: "jobguard_migration" },
+      { relname: "trial_end_source", owner: "jobguard_migration" },
       { relname: "trial_identity_key_claim", owner: "jobguard_migration" },
       { relname: "trial_identity_snapshot", owner: "jobguard_migration" },
+      { relname: "trial_start", owner: "jobguard_migration" },
+      { relname: "trial_subscription_source", owner: "jobguard_migration" },
       { relname: "variation", owner: "jobguard_migration" },
       { relname: "variation_approval", owner: "jobguard_migration" },
       { relname: "variation_rate_observation", owner: "jobguard_migration" },
@@ -929,6 +943,16 @@ it("0330 and 0331 routines retain exact ownership and execution boundaries",asyn
  ] as const;
  expect(rows).toEqual(identities.map(([proname,args])=>({proname,args,owner:"jobguard_migration",prosecdef:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),proconfig:["search_path=pg_catalog"],runtime:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),shadow:false,infrastructure:false,public:false})));
 });
+// MON-3C-ELIG adds no relation/policy. Only this exact checked routine is new.
+it("MON-3C-ELIG exact routine owner and execution grants", async () => {
+ const rows = (await admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,
+ has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+ has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+ EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0) public
+ FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure`)).rows;
+ expect(rows).toEqual([{proname:"mon3_read_eligibility",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,infrastructure:false,public:false}]);
+});
+
 // C248: exact additive guard identity, private execution and fixed lookup context.
 it("SV5-GUARD catalogue retains a private migration-owned tenant-safe upload guard", async () => {
  const routines=(await admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,

@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up through main c2de0bdd (#416, migration 0369). Preserve both parents in API wiring, OpenAPI, LP-0, SERIOUS-B5, entitlement, privileges, tenancy and lane files. Renumber own migrations to reserved 0376/0377 with unchanged SQL bytes; all main migrations and the LP downstream contract remain unchanged. No new behavior; PostgreSQL and browser suites run in GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up 3 through main 72226d28 (#418 MON-3, migrations 0372/0373). Preserve both parents in API wiring, OpenAPI, LP-0, SERIOUS-B5, entitlement, privileges, tenancy and lane files. Renumber own migrations to reserved 0376/0377 with unchanged SQL bytes; all main migrations and the LP downstream contract remain unchanged. No new behavior; PostgreSQL and browser suites run in GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
@@ -31,7 +31,6 @@
         "apps/web/e2e/ch6-integrity-v3.spec.ts",
         "archive/2026-10-29/ch6-j-inherited-lanes/ch6-a.json",
         "archive/2026-10-29/ch6-j-inherited-lanes/ch6-p.json",
-        "config/lanes/ch6-j.json",
         "docs/contracts/commercial-integrity-v3-persistence.md",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/verdicts/CH6-A/BUILDER_RECEIPT.md",

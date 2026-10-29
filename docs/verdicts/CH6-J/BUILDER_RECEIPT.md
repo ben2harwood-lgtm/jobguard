@@ -1272,3 +1272,44 @@ During final verification origin/main advanced to 72226d28 (#418 MON-3).
 Preservation and lane checks are pinned to this requested in-progress merge
 target c2de0bdd (MERGE_HEAD); the router must reconcile the newer main before
 claiming green CI against current main. The existing merge is ready to commit.
+
+## Catch-up 3 — main 72226d28 / #418 MON-3 (29 October 2026)
+
+RED, CH-6 / PR #392. Completed the router-started merge from e0876b20 to
+MERGE_HEAD 72226d28. Retained both API controllers, both OpenAPI route sets and
+both tenancy checks. LP-0 is the exact union by identity with current main's
+MON-2 definitions taking precedence; every main line in SERIOUS-B5, entitlement
+and tenancy expectations survives. No routine was re-created: mon2_issue remains
+the latest body from immutable main migration 0373. No new product behavior.
+
+Preservation checks: all 311 main migration/lane files match MERGE_HEAD bytes;
+own 0376/0377 match e0876b20 bytes; lp-downstream-effects-v1.md matches both parents.
+The lane note records this target. Removed the own-lane path from the allow list:
+the existing lane validator rejects explicit grants to config/lanes, and already
+permits editing the lane's own file. All 56 changed paths against the pinned
+merge target are covered by the existing lane policy.
+
+Local checks with installed tools (no downloads):
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs: PASS, 84 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts: PASS, 25 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts: PASS, 6 tests.
+- Installed TypeScript builds for packages/core and packages/db, then apps/api --noEmit: PASS.
+- apps/api: node --import tsx src/generate-openapi.ts --check: PASS.
+- node tools/plpgsql-case-in-if-lint.mjs: PASS, 155 migrations.
+- node tools/commercial-integrity-boundary.mjs: PASS, 77 protected roots, zero diagnostics.
+- Existing loadLanePolicy/lanePathAllowed against the worktree diff: PASS, 56 paths.
+- git diff --check and changed-file conflict-marker scan: PASS.
+
+The initial LP-0 comparison incorrectly treated superseded predecessor MON-2
+rows as distinct objects; the corrected identity-based comparison confirms the
+union using latest main rows. The initial lane check exposed the self-grant
+corrected above. An OpenAPI command issued from repository root could not resolve
+the API-local tsx package; rerunning from apps/api passed.
+
+No git-writing command was run. The read-only index still reports its three
+unmerged entries until the router stages the resolved files and finishes this
+merge. PostgreSQL/migration/browser suites run in GitHub CI; RED review remains
+required. During final checks origin/main advanced to cd8703fc (#408 CH-8,
+migrations 0374/0375). This completed catch-up is pinned to the requested #418
+MERGE_HEAD, not that newer main. The router must merge the newer main after
+committing this resolution before claiming CI against current main.

@@ -46,6 +46,34 @@
         ]
       }
     },
+    "/jobs/{id}/trial": {
+      "get": {
+        "operationId": "FreeFirstJobLifecycleController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current company's synthetic first-job trial",
+        "tags": [
+          "trial"
+        ]
+      },
+      "post": {
+        "operationId": "FreeFirstJobLifecycleController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Request or explicitly simulate the company's card setup",
+        "tags": [
+          "trial"
+        ]
+      }
+    },
     "/jobs/{id}/payment-fees": {
       "get": {
         "operationId": "PaymentFeeController_get",
