@@ -1183,3 +1183,51 @@ PostgreSQL execution, including all seven formerly failing suites, remains
 for GitHub CI because this sandbox cannot start PostgreSQL. The exact-head
 RED review remains required. Ready for router commit/push and CI verification;
 commit message: `/tmp/ch6-j-20261029T112955Z-commit-msg.txt`.
+
+
+## 29 Oct 12:12 continuing catch-up — main #407 and #410
+
+RED, CH-6 / PR #392. Incoming main is
+`db2aff37b1207ba0c543c3e6bd32f2a26f8a9af8` (MON-4A #407 and DEMO-J3 #410).
+The router had already started the merge. Resolved the three working-tree
+conflicts in API module registration, workspace composition and OpenAPI by
+retaining both CH-6 and main's payment-fee handlers. API files start from
+current main; CH-6 wiring is additive. No routine re-created, new behavior,
+SQL edit, pinned-snapshot edit or test-assertion change.
+
+Verified all 148 main migration files byte-for-byte against incoming main,
+and both own 0363/0364 migration files against HEAD. No older migration copy
+was reintroduced. `docs/contracts/lp-downstream-effects-v1.md` is unchanged.
+All incoming-main LP-0 fields and all branch-only LP-0 rows are retained
+exactly; the entitlement, SERIOUS-B5 and tenancy tests retain every line
+from both parents. All main lane files are unchanged. Updated this lane's
+note, retaining its existing exact paths; all 56 main-relative changed
+paths are covered, and every listed path exists. Every OpenAPI path from
+both parents is retained exactly.
+
+Checks actually run using installed dependencies, at most two workers:
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- `./node_modules/.bin/tsc -p packages/core/tsconfig.json` then
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json`: PASS.
+- From apps/api, `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts
+  src/payment-fee.application.test.ts`: 28/28 PASS after rebuilding the
+  existing core/db outputs. Initial run failed 4 tests because stale dist
+  lacked main's new payment-fee exports; no source/assertion change was
+  required to resolve it.
+- From apps/api, `node --import tsx src/generate-openapi.ts --check`: PASS.
+- Migration and parent-retention checks above, lane coverage, resolved
+  conflict-marker scan and `git diff --check`: PASS.
+
+Ready for router staging, merge commit and push. The read-only Git index
+still lists three unmerged paths until the router stages these resolved
+files. No Git-writing commands ran. Real PostgreSQL/migration execution,
+browser suites, required GitHub CI and the exact-head independent RED
+review remain external gates. Made-up data only; no live provider or release.
+Commit message: `/tmp/ch6-j-20261029T121241Z-commit-msg.txt`.

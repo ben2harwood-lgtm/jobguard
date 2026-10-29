@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up 2 through main #409 and #283. Own migrations 0354 \u2192 0363 and 0355 \u2192 0364, same order and unchanged SQL bytes. Shared LP-0, SERIOUS-B5, entitlement, privileges and tenancy expectations retain both parents. No new behavior; PostgreSQL and browser suites remain for GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up through main db2aff37 (#407 MON-4A and #410 DEMO-J3). Retain both parents in API wiring, OpenAPI, shared LP-0, SERIOUS-B5, entitlement, privileges, tenancy and lane files. Own migrations 0363/0364 and all main SQL bytes unchanged; pinned LP snapshot untouched. No new behavior; PostgreSQL and browser suites remain for GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
