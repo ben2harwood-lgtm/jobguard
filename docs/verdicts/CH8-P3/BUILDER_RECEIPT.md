@@ -210,3 +210,44 @@ commands, SB-02, post-lock/disclosure suites and both CH-8 browser projects, plu
 this RED piece still needs the loop owner's independent Claude review against the exact head.
 No tests were skipped/weakened, no exception/lane was widened, no Git-writing command was run,
 and no commit/push/merge/release/provider action was performed.
+
+## PR #408 CI repair — try 3 of 3 (last), 29 October 2026 11:09 run
+
+Read ch8-p3-ci-traces-1109.txt, which reports the remaining mobile CH-8 fixture import failure
+at tsImport: audit.js does not provide appendAuditBatch. Started at ee387867 after the main merge,
+with a clean worktree and no unmerged index entries. Inspected current origin/main's audit.ts:
+appendAuditBatch is still its intended exported API, and the worktree copy equals main. This is
+not an obsolete caller/API migration; the previous in-worker loader workaround did not fix CI.
+No audit export, caller API, shared module, or migration is changed in this repair.
+
+CH-8 now executes the same shadowPackCatch fixture with the API package's existing tsx loader in
+a fresh Node subprocess, so Playwright's loader/cache cannot transform or reuse its audit module.
+The subprocess runs the existing real quote, lock, catch, invoice, receipt, allocation and attribution
+writers; only session/job/payment IDs and the attribution result return to the test. No end state or
+successful response is fabricated. The browser journey's assertions remain intact on both projects.
+The parent retains shadow-login lifecycle ownership. The child uses the same admin, restricted shadow
+and runtime connection configurations and closes all its pools. Connection configurations pass over
+stdin, not command arguments. pg-pool hides its password option from enumeration, so that field is
+explicitly preserved for JSON serialization. Process errors and nonzero exits are asserted before
+parsing fixture output. The bounded subprocess timeout fails setup rather than silently proceeding.
+
+Local validation actually executed:
+
+- Installed tsc -p apps/web/tsconfig.json --noEmit passed after the final test change.
+- Installed tsc -p packages/core/tsconfig.json passed to refresh merged main's local output.
+- /tmp isolated Playwright smoke test ran the actual fixture import graph in the same fresh-node
+  --import tsx mode: 1 passed with one worker. Initial smoke found stale local core output missing
+  mapValueReceipt; rebuilding current core resolved it. This smoke imports the real fixture and
+  its audit graph but does not invoke database setup or start a browser.
+- Checked the actual embedded child program with node --check: passed.
+- Verified pg Pool connection configuration (including its non-enumerable password and startup
+  tenant option) survives the exact JSON serialization shape, without opening a DB connection.
+- Playwright --list CH-8.spec.ts still discovers both tests on mobile-360 and desktop: 4 cases.
+- git diff --check passed. git ls-files -u is empty. Migration 0360 is byte-identical to HEAD;
+  no migration on main, audit API, test assertion, exception or lane scope was changed.
+
+PostgreSQL cannot start in this sandbox. The full shadow-30000 fixture and browser/worker journey
+remain for CI execution, then the loop owner's exact-head independent Claude RED review. If this
+last CI repair still fails, the router must follow the three-try cap and file the required card.
+No fourth attempt is authorized by this handoff. No Git-writing command, commit, push, merge,
+release or live provider action was performed. This remains synthetic-only.
