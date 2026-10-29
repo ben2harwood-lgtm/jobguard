@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-13-terms": {
+      "branches": ["codex/sandbox/m4-13-terms"],
+      "note": "M4-13 RED dark terms/mandate record contract only; no migration or collection execution. Own lane path is implicitly permitted by the lane validator.",
+      "allow": [
+        "packages/core/src/subscription-agreement.ts",
+        "packages/core/src/subscription-agreement.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/subscription-success-agreement-v1.md"
+      ]
+    }
+  }
+}
