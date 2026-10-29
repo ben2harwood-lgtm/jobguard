@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "tidy-ent7c": {
+      "branches": ["codex/sandbox/tidy-ent7c"],
+      "note": "RED ENT-7c stage-end tidy-up: bounded compensation links and audit-free zero-statement replays. Migration 0337. Northside reseed requires router/CI PostgreSQL environment.",
+      "allow": [
+        "packages/db/migrations/0337_enterprise_fee_posting_tidy.sql",
+        "packages/db/migration-notes/0337_enterprise_fee_posting_tidy.md",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts"
+      ]
+    }
+  }
+}
