@@ -6,10 +6,10 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, EvidencePackRepository, RecoveryFollowUpRepository, RecoveryMessageRepository, SandboxRepository,
+  DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, EvidencePackRepository, RecoveryFollowUpRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, SandboxRepository,
   bootstrapSyntheticDemo, issuePracticeSession, verifyAuditChain,
 } from "../src/index.js";
-import { createSyntheticInvoicePdf, money } from "@jobguard/core";
+import { createSyntheticInvoicePdf, money, recoveryCaseTermsHash } from "@jobguard/core";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -39,6 +39,18 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin, server); await postgres?.stop(); });
 
+/** Fixture-only exact activation inputs; the existing v3 routine checks the
+ * owner, accepted document, authorization and lifecycle before binding v3. */
+async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
+  const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
+  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
+  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
+  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
+  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+}
+
 async function seedDemoFixture(db: Pool, sessionDigest: string) {
   const tenantId = DEMO_TENANT_ID, memberId = DEMO_MEMBERSHIP_ID, jobId = randomUUID();
   const scopeId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID(), acceptanceId = randomUUID();
@@ -59,11 +71,12 @@ async function seedDemoFixture(db: Pool, sessionDigest: string) {
       client.query("SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)", [tenantId, jobId, expected, to, reason, quote, net, policy, cap]);
     await transition(0, "quoting", "start_quote"); await transition(1, "accepted", "accept_quote", quoteId);
     await client.query("INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at) VALUES($1,$2,$3,$4,1,$5,2256000,'GBP','builder_attestation',$6,'Fictional Customer','verbal','2026-09-20T12:00:00Z')", [acceptanceId, tenantId, jobId, quoteId, hash("quote immutable fixture"), memberId]);
-    await transition(2, "live", "switch_live", quoteId, 1880000, "reference_fee_policy_v1", 28200);
+    await activatePursuitFixture(client, tenantId, jobId, 2);
     await client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,'fixture/proof-${jobId}',$5,'image/png',$6,'standard_evidence','verified','proof-object-${jobId}',now(),now()+interval '1 hour')`, [uploadId, tenantId, jobId, scopeId, proofHash, proofBytes.length]);
     await client.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'fixture/proof-${jobId}','proof-object-${jobId}','synthetic_demo','image/png',$5)`, [tenantId, uploadId, jobId, scopeId, proofBytes]);
     await client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','site_photo','fixture/proof-${jobId}','proof-object-${jobId}',$6,$7,'image/png','standard_evidence',now(),now())`, [proofId, tenantId, uploadId, jobId, scopeId, proofHash, proofBytes.length]);
-    await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [tenantId, jobId]);
+    // Checked v3 activation already bound the track; verify it rather than insert a duplicate.
+    expect((await client.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', [tenantId, jobId])).rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);
     await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,$4,'text','Fictional additional work','Synthetic fixture extra','approved')", [variationId, tenantId, jobId, scopeId]);
     await client.query("INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Synthetic fixture extra','1','each',12500,12500,$6,$7,'human_entered','fixture',$6,'fixture.v1')", [variationRevisionId, tenantId, jobId, variationId, scopeId, hash("approved variation fixture"), memberId]);
     await client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,approved_at) VALUES($1,$2,$3,$4,$5,1,$6,12500,'builder_attestation',$7,now())", [randomUUID(), tenantId, jobId, variationId, variationRevisionId, hash("approved variation fixture"), memberId]);
@@ -91,6 +104,12 @@ async function fixture(deliver = true) {
   await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)", [randomUUID(), f.tenantId, f.jobId, caseId, hash(caseId)]);
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
     [randomUUID(), f.tenantId, f.jobId, caseId, randomUUID(), hash(caseId)]);
+  const owner = (await admin.query('SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2', [f.tenantId, f.memberId])).rows[0];
+  await new RecoveryCaseTermsRepository(runtime).approve(ctx, f.jobId, {
+    version: 'recovery-case-terms-command.v1', action: 'approve', commandId: randomUUID(), caseId,
+    termsVersion: 'synthetic_recovery_fee_terms.v1', feePolicyVersion: 'reference_fee_policy_v3',
+    eligibilityPolicyVersion: 'reference_recovery_eligibility_policy_v3', termsHash: recoveryCaseTermsHash(caseId),
+  }, { membershipId: f.memberId, identityUserId: owner.identity_user_id });
   const packs = new EvidencePackRepository(runtime), messages = new RecoveryMessageRepository(runtime);
   const pack = await packs.generate(ctx, caseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(ctx, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);

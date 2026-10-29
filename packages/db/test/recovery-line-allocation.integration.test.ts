@@ -1,3 +1,4 @@
+import { issueHistoricalInvoice, prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written before persistence; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -68,7 +69,7 @@ afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean } = {}) {
+async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, combined = false, lateCatch = false, historical = false }: { claim1?: number; claim2?: number; settle?: boolean; combined?: boolean; lateCatch?: boolean; historical?: boolean } = {}) {
   const session = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, session), digest = auth.digest;
   const jobId = randomUUID(), quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID();
   const draftId = randomUUID(), revisionId = randomUUID(), scopeId = randomUUID(), lineId = randomUUID(), catchLineId = randomUUID();
@@ -109,8 +110,6 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
     await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId, lateCatch]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
-  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
-    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const evidenceIds: string[] = [];
   for (let index = 0; index < 2; index++) {
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
@@ -124,6 +123,11 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
+  // Per C204: `historical` is an invoice issued before any lock existed (never locked, no track), so evidence can still be added afterwards.
+  if (!historical) await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
+  if (historical) await issueHistoricalInvoice(admin, DEMO_TENANT_ID, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId });
+  const invoice = historical ? (await invoices.list(context, jobId)).at(-1)! : await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const cases = new RecoveryCaseRepository(scoped), packs = new EvidencePackRepository(scoped), views = [];
   for (const claim of [claim1, claim2]) {
     let view = await cases.command(context, jobId, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), expectedRevision: 0,
@@ -255,8 +259,16 @@ async function remittance(f: Fixture, paymentId: string, lineId: string, grossPe
   return evidenceId;
 }
 
-it("DW2/DW6: saved F6 uses explicit verified source even when pro-rata would give the catches value", async () => {
-  const f = await fixture(), source = await remittance(f, f.payment1, f.lineId, 2400000);
+// Per C135: after the final-account lock, new site evidence on a small-builder job is refused by the job-work-state rule
+// (POST_LOCK_WORK_REQUIRES_LINKED_JOB). A remittance PNG names the invoice and payment, which only exist after the lock,
+// so it cannot be created earlier. These tests therefore assert that honest refusal and that nothing was stored.
+async function expectRemittanceRefused(f: Fixture, paymentId: string, lineId: string, grossPence: number) {
+  await expect(remittance(f, paymentId, lineId, grossPence)).rejects.toMatchObject({ message: "POST_LOCK_WORK_REQUIRES_LINKED_JOB" });
+  expect((await admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2 AND object_key LIKE 'allocation-remittance/%'", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
+}
+
+it("DW2/DW6 (historical, unlocked): saved F6 uses explicit verified source even when pro-rata would give the catches value", async () => {
+  const f = await fixture({ historical: true }), source = await remittance(f, f.payment1, f.lineId, 2400000);
   const view = await allocate(f, f.payment1, 2400000, source);
   const rows = view.lines.filter(line => line.paymentId === f.payment1);
   expect(rows.length).toBeGreaterThan(0);
@@ -271,9 +283,20 @@ it("DW2/DW6: saved F6 uses explicit verified source even when pro-rata would giv
   }
 });
 
-it("DW7: reliable explicit remittance naming a later line is refused before any saved allocation", async () => {
-  const f = await fixture({ lateCatch: true }), source = await remittance(f, f.payment1, f.catchLineId, 38400);
+it("DW7 (historical, unlocked): reliable explicit remittance naming a later line is refused before any saved allocation", async () => {
+  const f = await fixture({ lateCatch: true, historical: true }), source = await remittance(f, f.payment1, f.catchLineId, 38400);
   await expect(allocate(f, f.payment1, 38400, source)).rejects.toMatchObject({ code: "INVALID_ALLOCATION_FACTS" });
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
+});
+
+it("DW2/DW6: post-lock remittance for an explicit verified source is refused (per C135)", async () => {
+  const f = await fixture();
+  await expectRemittanceRefused(f, f.payment1, f.lineId, 2400000);
+});
+
+it("DW7: post-lock remittance naming a later line is refused at upload, before any saved allocation (per C135)", async () => {
+  const f = await fixture({ lateCatch: true });
+  await expectRemittanceRefused(f, f.payment1, f.catchLineId, 38400);
   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
 });
 
@@ -298,8 +321,16 @@ it("DW8: an unallocated partial refund reverses exact pro-rata amounts across th
   expect((await admin.query("SELECT source_kind,gross_pence,eligible_net_pence FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, original.id])).rows).toEqual([{ source_kind: "payment_reversal", gross_pence: "96000", eligible_net_pence: "80000" }]);
 });
 
-it.each(["refund", "credit"] as const)("DW8: an item-specific %s reverses the named catch first with selected explicit source identity", async kind => {
+it.each(["refund", "credit"] as const)("DW8: an item-specific %s with a post-lock remittance source is refused at upload (per C135)", async kind => {
   const f = await fixture(), view = await allocate(f, f.payment1, 2400000);
+  expect(view.allocations[0]).toBeDefined();
+  // The refusal is the same for a refund and for a credit: neither can attach a post-lock remittance, and nothing reverses.
+  expect(kind === "refund" || kind === "credit").toBe(true);
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, view.allocations[0]!.id])).rows).toEqual([{ n: 0 }]);
+  await expectRemittanceRefused(f, f.payment1, f.catchLineId, 51600);
+});
+it.each(["refund", "credit"] as const)("DW8 (historical, unlocked): an item-specific %s reverses the named catch first with selected explicit source identity", async kind => {
+  const f = await fixture({ historical: true }), view = await allocate(f, f.payment1, 2400000);
   const original = view.allocations[0]!, source = await remittance(f, f.payment1, f.catchLineId, 51600);
   let creditNoteId: string | undefined;
   if (kind === "refund") {

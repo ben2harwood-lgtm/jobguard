@@ -7,7 +7,7 @@ const specimenPolicyVersion = z.literal("fictional_mobile_auth_policy_v1");
 
 /** A selector only. Source credentials, membership and transport are outside this pure boundary. */
 export const mobileExchangeV1 = z.object({
- version: z.literal("mobile-exchange.v1"), requestedTenantId: z.string().uuid(),
+ version: z.literal("mobile-exchange.v1"), requestedTenantId: z.guid({ error: "Invalid uuid" }),
 }).strict();
 
 const credentialSpecimen = z.string().regex(/^[A-Za-z0-9_-]{43}$/u);
@@ -16,7 +16,7 @@ export const mobileAccessV1 = z.object({ version: z.literal("mobile-access.v1"),
 export const mobileRefreshV1 = z.object({ version: z.literal("mobile-refresh.v1"), credential: credentialSpecimen }).strict();
 
 export const mobilePartitionV1 = z.object({
- userId: z.string().uuid(), tenantId: z.string().uuid(), membershipId: z.string().uuid(), mobileSessionId: z.string().uuid(),
+ userId: z.guid({ error: "Invalid uuid" }), tenantId: z.guid({ error: "Invalid uuid" }), membershipId: z.guid({ error: "Invalid uuid" }), mobileSessionId: z.guid({ error: "Invalid uuid" }),
  // Reuse the merged opaque correlation shape; this does not freeze the native identifier protocol.
  deviceInstanceId: offlineClientMetadataV1.shape.hlc.shape.nodeId,
 }).strict();
@@ -34,7 +34,7 @@ export const mobileAuthPolicySpecimenV1 = z.object({
 
 /** Validating metadata neither issues a lease nor authenticates its assertions. */
 export const mobileReadLeaseV1 = z.object({
- version: z.literal("mobile-read-lease.v1"), environment: z.literal("synthetic_demo"), leaseId: z.string().uuid(),
+ version: z.literal("mobile-read-lease.v1"), environment: z.literal("synthetic_demo"), leaseId: z.guid({ error: "Invalid uuid" }),
  partition: mobilePartitionV1, policyVersion: specimenPolicyVersion, issuedAtMs: milliseconds, expiresAtMs: milliseconds,
 }).strict().refine(lease => lease.expiresAtMs > lease.issuedAtMs, { message: "expiry must follow issue time", path: ["expiresAtMs"] });
 

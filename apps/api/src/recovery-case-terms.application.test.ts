@@ -41,6 +41,10 @@ it("[T3] strict parsing precedes the repository after authorized JSON loading",a
  for(const raw of [{...body(),tenantId:randomUUID()},()=>Promise.reject(new SyntaxError("bad JSON"))]){const failure=await new RecoveryCaseApplication(pool(),randomUUID()).terms(randomUUID(),raw).catch(e=>e);expect(recoveryCommandFailure(failure)).toMatchObject({status:400,body:{code:"INVALID_COMMAND"}});}expect(save).not.toHaveBeenCalled();
 });
 it("[T12] new contract and appended migration record state the lock and Q1 limit",async()=>{
- const {readFile}=await import("node:fs/promises");const notes=await Promise.all(["../../../docs/contracts/recovery-case-terms-v1.md","../../../packages/db/MIGRATIONS.md"].map(path=>readFile(new URL(path,import.meta.url),"utf8")));
- for(const note of notes)for(const sentence of ["A builder's agreement to the proposed fee terms for a case is not approval of the fee policy and authorises no charge.","Chasing a withheld payment on a job that is not bound to the v3 fee policy is NOT guarded by this order."])expect(note).toContain(sentence);
+ const {readFile}=await import("node:fs/promises");const [contract,log]=await Promise.all(["../../../docs/contracts/recovery-case-terms-v1.md","../../../packages/db/MIGRATIONS.md"].map(path=>readFile(new URL(path,import.meta.url),"utf8")));
+ const policy="A builder's agreement to the proposed fee terms for a case is not approval of the fee policy and authorises no charge.",limit="Chasing a withheld payment on a job that is not bound to the v3 fee policy is NOT guarded by this order.";
+ for(const note of [contract,log])expect(note).toContain(policy);
+ // The appended migration log keeps CH-7-TERMS' historical limit; CH-7-REST-C's contract now guards every new pursuit.
+ expect(log).toContain(limit);expect(contract).not.toContain(limit);
+ expect(contract).toContain("CH-7-REST-C supersedes the former non-v3 policy exemption for **new** pursuit.");
 });

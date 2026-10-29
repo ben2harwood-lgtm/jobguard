@@ -60,14 +60,17 @@ describe("LP-2 trusted practice compatibility", () => {
         expect((await client.query("SELECT app.approve_synthetic_landing($1::jsonb) id", [JSON.stringify(payload)])).rows).toEqual([{ id: derivation }]);
         await client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,1000,'Fictional reversal')",
           [f.tenantId, randomUUID(), randomUUID(), randomUUID(), allocation]);
-        await client.query("SELECT app.create_fee_illustration_source($1,$2)", [f.jobId, randomUUID()]);
       });
+      // The trusted database does not authorize another company's fee illustration (0192).
+      await expect(transaction(practice.runtime, f.tenantId, client =>
+        client.query("SELECT app.create_fee_illustration_source($1,$2)", [f.jobId, randomUUID()])
+      )).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
       expect((await practice.owner.query("SELECT eligible_net_pence FROM app.landing_allocation WHERE tenant_id=$1 AND id=$2", [f.tenantId, allocation])).rows)
         .toEqual([{ eligible_net_pence: "15000" }]);
       expect((await practice.owner.query("SELECT eligible_net_pence FROM app.landing_reversal WHERE tenant_id=$1 AND allocation_id=$2", [f.tenantId, allocation])).rows)
         .toEqual([{ eligible_net_pence: "1000" }]);
       expect((await practice.owner.query("SELECT count(*)::int n FROM app.fee_illustration_source WHERE tenant_id=$1 AND job_id=$2", [f.tenantId, f.jobId])).rows)
-        .toEqual([{ n: 1 }]);
+        .toEqual([{ n: 0 }]);
     } finally { await practice.close(); }
   }, 300_000);
 });

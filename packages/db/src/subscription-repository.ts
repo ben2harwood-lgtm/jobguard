@@ -1,9 +1,10 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { projectMeterFixture, meterLondonDateV1 } from "./meter-persistence.js";
-const uuid=z.string().uuid(), revision=z.number().int().safe().nonnegative();
+const uuid=z.guid({ error: "Invalid uuid" }), revision=z.number().int().safe().nonnegative();
 const hash=z.string().regex(/^[a-f0-9]{64}$/u);
 const common={version:z.literal("subscription-command.v1")};
 const terms={plan:z.enum(["Solo","Builder"]),cadence:z.literal("monthly"),anchorDay:z.number().int().min(1).max(31),termsVersion:z.literal("subscription_terms_v1"),catalogueVersion:z.literal("subscription_pricing_policy_v4"),maximumPence:z.union([z.literal(4900),z.literal(16900)]),contentHash:hash,expectedRevision:revision};
@@ -44,7 +45,7 @@ export function parseSubscriptionCommand(raw:unknown):SubscriptionCommand {
  if(!parsed.success)throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
  return parsed.data;
 }
-const rows=z.array(z.record(z.unknown()));
+const rows=z.array(z.record(z.string(), z.unknown()));
 export const subscriptionPersistedReadV1=z.object({version:z.literal("subscription-persisted-read.v1"),hypothetical:z.literal(true),environment:z.literal("synthetic_demo"),agreements:rows,changes:rows,changeOutcomes:rows,periods:rows,statements:rows,reviews:rows,work:rows,attempts:rows,results:rows,corrections:rows,alerts:rows,onboarding:rows,periodLines:rows,placeBindings:rows,places:rows,statementLines:rows,operationsCards:rows}).strict();
 export type SubscriptionPersistedRead=z.infer<typeof subscriptionPersistedReadV1>;
 export interface SubscriptionRepositoryPort {
@@ -84,8 +85,8 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
 
 /** Canonical approval content for a reviewed synthetic terms selection; no acceptance is performed. */
 export function subscriptionTermsContentHash(tenantId:string,raw:unknown):string {
- const selected=z.object(terms).omit({contentHash:true}).strict().parse(raw);
- const bound={tenantId:z.string().uuid().parse(tenantId).toLowerCase(),...selected};
+ const selected=z.object(terms).omit({contentHash:true}).extend({consentText:z.literal(subscriptionConsentText).default(subscriptionConsentText)}).strict().parse(raw);
+ const bound={tenantId:z.guid({ error: "Invalid uuid" }).parse(tenantId).toLowerCase(),...selected};
  const canonical=JSON.stringify(Object.fromEntries(Object.entries(bound).sort(([a],[b])=>a<b?-1:a>b?1:0)));
  return createHash("sha256").update(canonical).digest("hex");
 }

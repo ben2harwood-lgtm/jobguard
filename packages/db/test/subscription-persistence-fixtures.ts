@@ -1,11 +1,13 @@
-import { createHash, randomUUID } from "node:crypto";
+import { subscriptionTermsContentHash } from "../src/subscription-repository.js";
+import { randomUUID } from "node:crypto";
 import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany, meterInput, storeMeter } from "./meter-persistence-fixtures.js";
 export { meterCompany, meterInput, storeMeter };
 export type SubscriptionCompany = Awaited<ReturnType<typeof meterCompany>>;
 export const terms = (a: SubscriptionCompany, plan: "Solo" | "Builder" = "Builder", expectedRevision = 0) => {
  const bound = { tenantId: a.tenantId, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", plan, cadence: "monthly", anchorDay: 1, maximumPence: plan === "Solo" ? 4900 : 16900, expectedRevision };
- const contentHash = createHash("sha256").update(JSON.stringify(Object.fromEntries(Object.entries(bound).sort(([x], [y]) => x.localeCompare(y))))).digest("hex");
+ const {tenantId,...selection}=bound;
+ const contentHash = subscriptionTermsContentHash(tenantId,selection);
  return ({
  version: "subscription-command.v1", kind: "accept", plan, cadence: "monthly", anchorDay: 1,
  termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4",

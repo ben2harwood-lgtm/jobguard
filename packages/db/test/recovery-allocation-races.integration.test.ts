@@ -1,3 +1,4 @@
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written before persistence; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -97,8 +98,6 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     await db.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
-  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
-    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const evidenceIds: string[] = [];
   for (let index = 0; index < 2; index++) {
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
@@ -112,6 +111,19 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
+  // Set-up order only (per C135): legacy landing evidence is created before the lock; after it new site evidence is refused.
+  const legacyUploadId = randomUUID(), legacyEvidenceId = randomUUID();
+  {
+  const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
+  const sha = hash(bytes), objectKey = `allocation-legacy/${legacyUploadId}`, legacyScope = randomUUID();
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [legacyScope, DEMO_TENANT_ID, jobId]);
+  await tq("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',$7,'standard_evidence','verified','v1',clock_timestamp(),clock_timestamp()+interval '1 hour')", [legacyUploadId, DEMO_TENANT_ID, jobId, legacyScope, objectKey, sha, bytes.length]);
+  await tq("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,$5,'v1','synthetic_demo','image/png',$6)", [DEMO_TENANT_ID, legacyUploadId, jobId, legacyScope, objectKey, bytes]);
+  await tq("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','synthetic_bank_receipt',$6,'v1',$7,$8,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())", [legacyEvidenceId, DEMO_TENANT_ID, legacyUploadId, jobId, legacyScope, objectKey, sha, bytes.length]);
+  }
+  await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
+  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const cases = new RecoveryCaseRepository(scoped), packs = new EvidencePackRepository(scoped), views = [];
   for (const claim of [claim1, claim2]) {
     let view = await cases.command(context, jobId, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), expectedRevision: 0,
@@ -139,7 +151,7 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feedView.revision, movement, step: "settled" });
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "match_receipt", commandId: randomUUID(), expectedRevision: feedView.revision, movement, paymentId });
   }
-  return { jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
+  return { legacyEvidenceId, jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
     case1: views[0]!, case2: views[1]!, payment1: payments[0]!, payment2: payments[1]!, evidence1: evidenceIds[0]!, evidence2: evidenceIds[1]! };
 }
 
@@ -292,10 +304,7 @@ it("DW3: different cases competing for one fully allocated receipt conserve Post
 });
 
 async function legacyLanding(f: Fixture) {
-  const receiptId = randomUUID(), eligibilityId = randomUUID(), landingId = randomUUID(), evidenceId = randomUUID(), uploadId = randomUUID();
-  const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64"), sha = hash(bytes), objectKey = `allocation-legacy/${uploadId}`;
-  await tq("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',$6,'standard_evidence','verified','v1',clock_timestamp(),clock_timestamp()+interval '1 hour')", [uploadId, DEMO_TENANT_ID, f.jobId, objectKey, sha, bytes.length]);
-  await tq("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'v1',$6,$7,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())", [evidenceId, DEMO_TENANT_ID, uploadId, f.jobId, objectKey, sha, bytes.length]);
+  const receiptId = randomUUID(), eligibilityId = randomUUID(), landingId = randomUUID(), evidenceId = f.legacyEvidenceId;
   await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at) VALUES($1::uuid,$2,$3,($1::uuid)::text,($1::uuid)::text,'settled',120,'GBP',true,clock_timestamp())", [receiptId, DEMO_TENANT_ID, f.jobId]);
   for (const [id, kind] of [[eligibilityId, "eligibility"], [landingId, "landing"]]) await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id) VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',clock_timestamp()+interval '1 hour',$7)", [id, DEMO_TENANT_ID, f.jobId, f.case1.id, kind, f.case1.revision, randomUUID()]);
   return { version: "recovery.landing.approve.v1", allocationId: randomUUID(), derivationId: randomUUID(), journalId: randomUUID(), jobId: f.jobId,

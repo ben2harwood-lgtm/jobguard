@@ -1,3 +1,4 @@
+import { prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
@@ -22,7 +23,7 @@ async function recordedProof(page: Page, jobId: string, complete = false) {
   if (complete) await post(page, path, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "complete", scopeItemId: verified.scopeItemId, evidenceId: verified.upload.evidenceId });
   return verified.upload.evidenceId as string;
 }
-async function persistedSources(page: Page) {
+async function persistedSources<T = undefined>(page: Page, beforeLock?: (context: { jobId: string; scopeItemId: string }) => Promise<T>) {
   await openReview(page);
   for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await click(page, `Accept ${name}`);
   await click(page, "Dismiss Replace shelves");
@@ -54,8 +55,11 @@ async function persistedSources(page: Page) {
   const proofId = await recordedProof(page, jobId, true);
   const final = await post(page, `/api/jobs/${jobId}/final-account`, { version: "final-account.assemble.v1", commandId: randomUUID() });
   expect(final.account.issueBlocked).toBe(false);
+  // Set-up order only (per C135): material orders and supplier documents are new site work, refused once the account is locked.
+  const before = beforeLock ? await beforeLock({ jobId, scopeItemId: variationBefore.parentScopeItemId as string }) : (undefined as T);
+  await prepareInvoiceFinalCheck(page,jobId,final.account);
   const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });
-  return { jobId, quoteId: quote.documentId as string, proofId, variationId: variation.currentRevisionId as string, invoiceId: invoices.invoices.at(-1).id as string, scopeItemId: variationBefore.parentScopeItemId as string };
+  return { jobId, quoteId: quote.documentId as string, proofId, variationId: variation.currentRevisionId as string, invoiceId: invoices.invoices.at(-1).id as string, scopeItemId: variationBefore.parentScopeItemId as string, before };
 }
 async function currentPack(page: Page, caseId: string) { return (await get(page, `/api/recovery-cases/${caseId}/evidence-packs`)).packs.at(-1); }
 async function assertLayout(page: Page) {
@@ -125,11 +129,14 @@ test("maps immutable customer sources, verifies exports server-side and invalida
   await expect(page.getByTestId("pack-current-attachment-status")).toHaveText("Attachment approval recorded for these exact hashes");
   expect((await currentPack(page, caseId)).attachmentApprovalRecorded).toBe(true);
   await page.reload(); await expect(page.getByTestId("pack-current-attachment-status")).toHaveText("Attachment approval recorded for these exact hashes");
-  const newProofId = await recordedProof(page, source.jobId);
-  expect(newProofId).not.toBe(source.proofId);
+  // Per C135: new proof after the final-account lock is refused (POST_LOCK_WORK_REQUIRES_LINKED_JOB). Was: a new proof version arrived and changed the pack.
+  // The recorded proof is instead withdrawn, which is allowed after the lock and still changes the sources behind the approved pack.
+  const refusedProof = await page.request.post(`/api/jobs/${source.jobId}/proof`, { data: { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", fixture: "completion-photo", scopeItemId: source.scopeItemId } });
+  expect(refusedProof.ok()).toBe(false); expect(await refusedProof.text()).toContain("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  await post(page, `/api/jobs/${source.jobId}/proof`, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "invalidate", evidenceId: source.proofId, reasonCode: "object_revoked" });
   await click(page, "Build evidence pack"); await expect(page.getByTestId("pack-revision")).toHaveText("3");
   const changed = await currentPack(page, caseId); expect(changed.manifestHash).not.toBe(first.manifestHash);
-  expect(changed.sources.some((item: { sourceId: string }) => item.sourceId === `evidence_object:${newProofId}`)).toBe(true);
+  expect(changed.sources.some((item: { sourceId: string }) => item.sourceId === `evidence_object:${source.proofId}`)).toBe(false);
   await expect(page.getByTestId("pack-attachment-status")).toHaveText("Previous attachment approval invalidated by the new evidence version");
   const stale = await page.request.post(`/api/recovery-cases/${caseId}/evidence-packs/${rebuilt.id}/attachment-approval`, { data: { version: "evidence-pack-attachment-approval.v1", commandId: randomUUID(), expectedManifestHash: rebuilt.manifestHash, expectedContentHash: rebuilt.contentHash } });
   expect(stale.status()).toBe(409);
@@ -149,17 +156,22 @@ test("maps immutable customer sources, verifies exports server-side and invalida
 });
 
 test("includes only the merchant case's recorded supplier versions", async ({ page }) => {
-  const source = await persistedSources(page);
+  // Set-up order only (per C135): the order and the supplier documents are new site work, so they are created before the final-account lock.
+  const source = await persistedSources(page, async context => {
   const rate = await post(page, "/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional Builders Merchant", sku: `PACK-${randomUUID()}`, description: "Fictional building material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Entered synthetic agreement", expectedVersion: 0 });
-  await post(page, `/api/jobs/${source.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: source.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
+  await post(page, `/api/jobs/${context.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: context.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
   // A delivery note can only be receipted against an existing purchase-order draft (supplier-document intake rule).
-  const requirement = (await get(page, `/api/jobs/${source.jobId}/materials`)).materials.at(-1);
-  await post(page, `/api/jobs/${source.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
-  const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
+  const requirement = (await get(page, `/api/jobs/${context.jobId}/materials`)).materials.at(-1);
+  await post(page, `/api/jobs/${context.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
+  const documentsPath = `/api/jobs/${context.jobId}/supplier-documents`;
   for (const fixtureId of ["materials-B-delivery", "materials-320-invoice", "materials-B-credit"]) {
     const before = await get(page, documentsPath);
     await post(page, `${documentsPath}/intake`, { version: "supplier-document-intake.v1", fixtureId, channel: "picker", expectedRevision: before.state.intakeRevision });
   }
+    return rate;
+  });
+  const rate = source.before!;
+  const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
   const documents = (await get(page, documentsPath)).state.documents;
   const excludedDelivery = documents.find((document: { document_type: string }) => document.document_type === "delivery");
   const excludedCredit = documents.find((document: { document_type: string }) => document.document_type === "credit");

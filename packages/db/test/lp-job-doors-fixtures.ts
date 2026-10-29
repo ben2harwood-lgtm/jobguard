@@ -171,7 +171,7 @@ export async function callAdoption(client: PoolClient, f: Awaited<ReturnType<typ
     change.payer ?? null, f.command.commandId, f.authorization]);
 }
 
-export async function reviewFixture(db: JobDoorsDatabase) {
+export async function reviewFixture(db: Pick<JobDoorsDatabase, "owner" | "runtime">) {
   const { CaptureRepository } = await import("../src/capture-repository.js");
   const { ProposalReviewRepository, reviewContentHash } = await import("../src/review-repository.js");
   const { testTenantContext } = await import("./tenant-context-test-utils.js");
