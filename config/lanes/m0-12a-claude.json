@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m0-12a-claude": {
+      "branches": [
+        "codex/sandbox/m0-12a-claude"
+      ],
+      "note": "M0-12a dark Claude contract adapter; fake fetch only, no live route or migrations. Shared AI exports and CI workflow serialize with changes to the same paths. Own lane file is implicitly permitted by the lane checker.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "packages/ai/package.json",
+        "packages/ai/src/index.ts",
+        "packages/ai/src/errors.ts",
+        "packages/ai/src/claude-provider.ts",
+        "packages/ai/src/claude-provider.test.ts",
+        "packages/ai/src/live-evaluation-cli.ts",
+        "docs/operations/claude-data-flow.md"
+      ]
+    }
+  }
+}
