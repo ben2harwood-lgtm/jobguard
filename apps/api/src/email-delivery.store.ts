@@ -7,6 +7,8 @@ import type { EmailForwardingPorts } from "./email-forwarding.connector.js";
 
 const id = z.guid();
 const maxOriginalBytes = 1_000_000;
+// Bound intake work even when an oversized original would only retain metadata.
+const maxIncomingBytes = 2_000_000;
 const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 const configV1 = z.object({ version: z.literal("email-forwarding-config.v1"), environment: z.literal("synthetic_demo"), transport: z.literal("fixture"), enabled: z.literal(true) }).strict();
 const intakeV1 = z.object({ version: z.literal("email-delivery.v1"), messageId: id, alias: z.string().regex(/^fixture-[a-z0-9-]{1,80}$/u), bytes: z.instanceof(Uint8Array) }).strict();
@@ -21,7 +23,7 @@ const receiptV1 = z.object({ version: z.literal("email-receipt.v1"), deliveryId:
 }).strict();
 type Receipt = z.infer<typeof receiptV1>;
 export class EmailDeliveryError extends Error {
-  constructor(readonly code: "EMAIL_DELIVERY_DISABLED" | "INVALID_EMAIL_DELIVERY" | "EMAIL_DELIVERY_UNAVAILABLE" | "EMAIL_DELIVERY_CONFLICT") { super(code); }
+  constructor(readonly code: "EMAIL_DELIVERY_DISABLED" | "INVALID_EMAIL_DELIVERY" | "EMAIL_DELIVERY_TOO_LARGE" | "EMAIL_DELIVERY_UNAVAILABLE" | "EMAIL_DELIVERY_CONFLICT") { super(code); }
 }
 export interface EmailDeliveryPorts {
   /** Trusted server alias registry. Unknown, retired or ambiguous aliases return null. */
@@ -81,6 +83,7 @@ export class EmailDeliveryStore implements EmailForwardingPorts {
     this.assertEnabled();
     const parsed = intakeV1.safeParse(raw);
     if (!parsed.success) throw new EmailDeliveryError("INVALID_EMAIL_DELIVERY");
+    if (parsed.data.bytes.byteLength > maxIncomingBytes) throw new EmailDeliveryError("EMAIL_DELIVERY_TOO_LARGE");
     // Snapshot before awaiting: mutable caller buffers must not change the stored original.
     const bytes = Buffer.from(parsed.data.bytes), input = parsed.data;
     const rawSha256 = hash(bytes), aliasHash = hash(input.alias);

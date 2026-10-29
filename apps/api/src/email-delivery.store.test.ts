@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { EmailDeliveryStore, type EmailDeliveryPorts } from "./email-delivery.store.js";
 import { EmailForwardingConnector } from "./email-forwarding.connector.js";
 import { ShadowDetectionWorker, type ShadowWorkerPorts } from "./shadow-detection.worker.js";
+vi.mock("node:crypto", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:crypto")>();
+  return { ...actual, createHash: vi.fn(actual.createHash) };
+});
 const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
 const tenantId = "10000000-0000-4000-8000-000000000001", jobId = "10000000-0000-4000-8000-000000000002";
 const messageId = "10000000-0000-4000-8000-000000000003", otherId = "10000000-0000-4000-8000-000000000004";
@@ -136,6 +140,41 @@ describe("SV-7B durable DARK email delivery", () => {
     expect(await new EmailDeliveryStore(directory, ports, config).receive(atLimit)).toEqual(receipt);
     expect(await store.readOriginal(context, jobId, messageId)).not.toBeNull();
     expect(ports.parseMime).toHaveBeenCalledTimes(1);
+  });
+  it("accepts the exact incoming byte cap as quarantined metadata and replays it across restarts", async () => {
+    const { store, directory, ports } = await setup();
+    const atCap = { ...input(), bytes: Buffer.alloc(2_000_000, "x") };
+    const receipt = await store.receive(atCap);
+    expect(receipt).toMatchObject({ rawBase64: "", rawSha256: digest(atCap.bytes),
+      byteLength: 2_000_000, quarantine: ["oversized"], text: null });
+    expect(await new EmailDeliveryStore(directory, ports, config).receive(atCap)).toEqual(receipt);
+    expect(await readdir(directory)).toEqual([`${messageId}.json`]);
+    expect(await store.readOriginal(context, jobId, messageId)).toBeNull();
+    expect(ports.parseMime).not.toHaveBeenCalled();
+  });
+  it.each(["buffer", "uint8array"])("refuses a %s one byte over the incoming cap before hashing, parsing or recording anything", async kind => {
+    const { store, directory, ports } = await setup();
+    const oversized = kind === "buffer" ? Buffer.alloc(2_000_001) : new Uint8Array(2_000_001);
+    vi.mocked(createHash).mockClear();
+    await expect(store.receive({ ...input(), bytes: oversized })).rejects.toMatchObject({ code: "EMAIL_DELIVERY_TOO_LARGE" });
+    expect(createHash).not.toHaveBeenCalled();
+    expect(ports.resolveAlias).not.toHaveBeenCalled();
+    expect(ports.parseMime).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toEqual([]);
+  });
+  it("refuses an over-cap replay without hashing, writing a conflict flag or changing the original", async () => {
+    const { store, directory, ports } = await setup();
+    await store.receive(input());
+    const saved = await readFile(join(directory, `${messageId}.json`), "utf8");
+    vi.mocked(createHash).mockClear();
+    vi.mocked(ports.resolveAlias).mockClear();
+    vi.mocked(ports.parseMime).mockClear();
+    await expect(store.receive({ ...input(), bytes: Buffer.alloc(2_000_001) })).rejects.toMatchObject({ code: "EMAIL_DELIVERY_TOO_LARGE" });
+    expect(createHash).not.toHaveBeenCalled();
+    expect(ports.resolveAlias).not.toHaveBeenCalled();
+    expect(ports.parseMime).not.toHaveBeenCalled();
+    expect(await readFile(join(directory, `${messageId}.json`), "utf8")).toBe(saved);
+    expect(await readdir(directory)).toEqual([`${messageId}.json`]);
   });
   it("refuses live configurations and injected authority, money, reversal and locked-bill fields", async () => {
     const { directory, ports, store } = await setup();

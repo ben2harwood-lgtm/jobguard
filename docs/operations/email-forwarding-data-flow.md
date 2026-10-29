@@ -50,8 +50,10 @@ oversized, encrypted/password-protected, executable and unreadable parts are hel
 All attachments are conservatively held until a reviewed validation adapter exists,
 including PDFs and archives (no decrypting, executing, remote URL fetching or OCR).
 Raw MIME up to 1,000,000 bytes remains immutable in the quarantined bundle; larger
-originals retain only hash, byte length and receipt metadata with empty rawBase64,
+originals up to the hard incoming cap of 2,000,000 bytes retain only hash, byte length and receipt metadata with empty rawBase64,
 remain held across restarts/replays and cannot reach the worker. No automatic release path.
+Above 2,000,000 bytes, intake refuses with EMAIL_DELIVERY_TOO_LARGE before copying,
+hashing, alias resolution or MIME parsing, with no receipt or replay-conflict flag recorded.
 
 Intake has no observation/shadow sink. The worker-facing readOriginal port feeds
 the existing EmailForwardingConnector and ShadowDetectionWorker. The worker's
