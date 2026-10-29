@@ -4,6 +4,7 @@ const id="10000000-0000-4000-8000-000000000001";
 const value=(n:string,d="1")=>({numerator:n,denominator:d});
 const fact=(key:string,kind:string,n:string,extra={})=>({id:key,revision:"1",hash:"a".repeat(64),kind,amount:value(n),...extra});
 const fixture=()=>({version:"money-trail-reference.v1",environment:"synthetic_demo",tenantId:id,jobId:id,
+ feeTerms:{id:"statement-fee-terms",revision:"1",hash:"c".repeat(64),rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"}},
  families:moneyTrailFamilies.map(family=>({family,version:"reference.v1",status:"available"})),
  facts:[fact("invoice","invoice","3360000"),fact("receipt","receipt","1394400"),fact("reversed","receipt_reversal","252000"),
  fact("q","eligible_net","32000"),fact("j","fee_posting","3200"),
@@ -113,4 +114,34 @@ it("schema money limits are enforced before arithmetic; duplicate families and n
 
 it("optional absent reference fields have one canonical encoding",()=>{
  const f=fixture();Object.assign(f.facts[0]!,{periodId:undefined});expect(reconcileMoneyTrailReference(f)).toEqual(reconcileMoneyTrailReference(fixture()));
+});
+
+it("reconciles the statement fee-terms snapshot at a non-10% rate and detects stale postings",()=>{
+ const f=fixture();f.feeTerms.rate={version:"fee-rate.v1",policyVersion:"synthetic_agreement_v2",numerator:"3",denominator:"40"};
+ f.facts.find(x=>x.id==="j")!.amount=value("2400");f.events=[];
+ const r=reconcileMoneyTrailReference(f);
+ expect(r.successFee.expectedPrincipal).toEqual({pence:2400,currency:"GBP"});
+ expect(r.unresolvedDifferenceCount).toBe(0);
+ const defaultRate=reconcileMoneyTrailReference(fixture());
+ expect(r.sourceHash).not.toBe(defaultRate.sourceHash);
+ f.facts.find(x=>x.id==="j")!.amount=value("3200");
+ expect(reconcileMoneyTrailReference(f).differences).toContainEqual(expect.objectContaining({code:"FEE_POSTING_MISMATCH",expected:value("2400"),observed:value("3200"),difference:value("800")}));
+ for(const [principal,expected] of [["20",2],["60",4]] as const){f.facts.find(x=>x.id==="q")!.amount=value(principal);expect(reconcileMoneyTrailReference(f).successFee.expectedPrincipal.pence).toBe(expected);}
+});
+it("requires valid statement fee terms without a default rate or a small-builder policy override",()=>{
+ for(const feeTerms of [undefined,null,{}, {...fixture().feeTerms,extra:true}, {...fixture().feeTerms,id:""}, {...fixture().feeTerms,revision:""}, {...fixture().feeTerms,hash:"invalid"}]){
+  expect(()=>reconcileMoneyTrailReference({...fixture(),feeTerms})).toThrow("INVALID_MONEY_TRAIL_REFERENCE");
+ }
+ for(const patch of [{denominator:"0"},{numerator:"-1"},{numerator:"11"},{version:"v999"},{policyVersion:""},{extra:true},{numerator:"3",denominator:"40"}]){
+  const f=fixture();Object.assign(f.feeTerms.rate,patch);
+  expect(()=>reconcileMoneyTrailReference(f)).toThrow("INVALID_MONEY_TRAIL_REFERENCE");
+ }
+});
+it("binds the exact fee-terms source and rate to deterministic reconciliation hashes",()=>{
+ const original=reconcileMoneyTrailReference(fixture());
+ for(const patch of [{id:"other-terms"},{revision:"2"},{hash:"d".repeat(64)},{rate:{...fixture().feeTerms.rate,policyVersion:"synthetic_agreement_v2",numerator:"3",denominator:"40"}}]){
+  const f=fixture();Object.assign(f.feeTerms,patch);const r=reconcileMoneyTrailReference(f);
+  expect(r.sourceHash).not.toBe(original.sourceHash);expect(r.reportHash).not.toBe(original.reportHash);
+  expect(reconcileMoneyTrailReference(JSON.parse(JSON.stringify(f)))).toEqual(r);
+ }
 });

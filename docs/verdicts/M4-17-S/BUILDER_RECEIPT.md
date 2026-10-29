@@ -642,3 +642,43 @@ No git writes: the router must stage the resolved files to clear the read-only
 index's unmerged entries, commit, push and open the PR. PostgreSQL, migration
 execution, browser and full CI checks remain for GitHub CI after push. One
 independent RED review against the resulting exact head remains required.
+
+
+## 29 October 2026 stage-end rate fix (RED, NOPR)
+
+Replaced the hard-coded 1/10 rate and policy in the pure reference comparison
+with a required fee-terms snapshot: source id, revision, hash and the existing
+`fee-rate.v1` schema. The caller supplies the same immutable terms used by the
+statement being compared. Missing/invalid terms refuse; there is no default.
+The existing cumulative kernel still enforces the small-builder v3 fixed 10%
+policy. Synthetic alternative agreement terms can carry a different rate.
+Terms identity/rate are bound into the existing source and report hashes.
+
+Only the reference helper and its test fixture call sites exist; no stored
+statement adapter is available to wire here. This does not claim source-backed
+statement reconciliation or complete the held full task. Compatibility: supplied
+reference callers must now provide `feeTerms`; the internal v1 shape is updated
+in the existing contract. No migration, routine, grants, expectation lists,
+financial writers, providers or operational alerts change.
+
+Checks actually run with installed Node v24.17.0 and cached pnpm 10.28.1:
+
+- `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/core exec vitest run --maxWorkers=2 src/money-trail-reconciliation.test.ts src/cumulative-fee.test.ts src/enterprise-fee-statement.test.ts`: 3 files, 100 tests passed.
+- `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json --noEmit`: passed (the core package typecheck/lint implementation).
+- `node tools/money-arithmetic-lint.mjs`, `node tools/core-purity-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`: passed; purity reports existing
+  computed-module-name notices.
+- `git diff --check`: passed.
+
+New tests cover a 7.5% synthetic agreement, stale 10% postings, half-even ties,
+missing/malformed terms, forbidden small-builder rate override, source identity
+and rate hash binding, and deterministic rebuild. Existing replay/refund,
+allocation, signed-balance and failure tests remain intact.
+
+The assigned branch/worktree was clean at start, with main already an ancestor.
+No git writes were performed; refreshing to the router's latest main remains
+router-owned. This lane file now describes exactly this small stage-end job's
+paths (its own lane file is implicitly editable by branch policy). Earlier
+built-ahead changes remain in branch history. No PostgreSQL/browser/full-suite
+execution in this sandbox; required GitHub CI and independent RED review against
+the router's resulting head remain outstanding. NOPR handoff only.

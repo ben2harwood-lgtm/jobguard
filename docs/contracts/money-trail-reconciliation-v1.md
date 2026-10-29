@@ -58,8 +58,15 @@ bounded by the existing Money limit. Invalid input/overflow raises the redacted
 
 Customer balance is invoices − credits − receipts + receipt reversals.
 Negative balances remain signed and generate a specific overpayment difference.
-Expected fee principal uses the existing cumulative half-even kernel at 1/10
-of supplied cumulative Q, with J=0 to calculate expected cumulative F only.
+Expected fee principal uses the existing cumulative half-even kernel with the
+required `feeTerms` snapshot (source id, revision, hash and `fee-rate.v1` rate)
+from the same immutable terms used by the statement being compared. Its rate
+and policy version are used together; no 10% fallback is supplied. Missing or
+invalid terms refuse the reference input. The kernel preserves the small-builder
+v3 fixed-rate constraint. The terms snapshot is included in the source/report
+hashes. With J=0 this calculates expected cumulative F from supplied Q only.
+This is still supplied reference data, not a stored-source adapter or proof of
+statement/terms authenticity. Existing callers must now supply the snapshot.
 It compares F with the signed supplied posted total. It does not derive Q,
 post F−J, select a compensation or allocate any receipt. No VAT calculation,
 minimum, cap, base, credit, subscription offset or tolerance is added.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { calculateCumulativeFee, exactPence, exactPenceInputV1, parseExactPence, serializeExactPence, sumExactPence, type ExactPence } from "./cumulative-fee.js";
+import { calculateCumulativeFee, exactPence, exactPenceInputV1, feeRateV1, parseExactPence, serializeExactPence, sumExactPence, type ExactPence } from "./cumulative-fee.js";
 import { sha256 } from "./evidence-pack.js";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
 import { feeCollectionStateV1 } from "./fee-collection.js";
@@ -24,6 +24,8 @@ const event=z.object({
 export const moneyTrailReferenceV1=z.object({
  version:z.literal("money-trail-reference.v1"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),
  families:z.array(z.object({family:z.enum(moneyTrailFamilies),version:key,status:z.enum(["available","missing","read_failed","unsupported"])}).strict()).max(moneyTrailFamilies.length),
+ // Snapshot of the same immutable fee terms used by the statement being compared.
+ feeTerms:z.object({id:key,revision:key,hash,rate:feeRateV1}).strict(),
  facts:z.array(fact).max(10_000),events:z.array(event).max(10_000),
 }).strict();
 type Fact=z.infer<typeof fact>;
@@ -87,7 +89,7 @@ function reconcile(input:ReturnType<typeof checked>){
  if(balance.numerator<0n)add("CUSTOMER_OVERPAYMENT","customer",refs(["invoice","credit","receipt","receipt_reversal"]),exactPence(0n),balance);
  const q=sum(["eligible_net"]),posted=sum(["fee_posting"]);
  // Reuse the accepted cumulative half-even kernel. J=0 computes the expected cumulative principal only.
- const expected=calculateCumulativeFee({version:"cumulative-fee.v1",rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},cumulativeQualifyingPrincipal:serializeExactPence(q),priorNetPostedPence:0,priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:null}).cumulativeFee;
+ const expected=calculateCumulativeFee({version:"cumulative-fee.v1",rate:input.feeTerms.rate,cumulativeQualifyingPrincipal:serializeExactPence(q),priorNetPostedPence:0,priorPolicyVersion:input.feeTerms.rate.policyVersion,compensatesDerivationId:null}).cumulativeFee;
  if(posted.numerator!==BigInt(expected.pence)*posted.denominator)add("FEE_POSTING_MISMATCH","success_fee",refs(["eligible_net","fee_posting"]),exactPence(BigInt(expected.pence)),posted);
  const byEffect=new Map<string,Event[]>();
  for(const e of input.events){const group=byEffect.get(e.effectKey)??[];group.push(e);byEffect.set(e.effectKey,group);}
