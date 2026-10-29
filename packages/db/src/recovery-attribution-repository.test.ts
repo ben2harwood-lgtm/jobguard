@@ -41,3 +41,14 @@ it("SV6-30 historical output refuses a document crossing the requested job ident
  const pool={connect:async()=>({query,release:vi.fn()})} as unknown as Pool;
  await expect(new RecoveryAttributionRepository(pool).history(context,randomUUID(),"a".repeat(64))).rejects.toThrow("NOT_FOUND");
 });
+it("runtime assessment forwards only parsed intent and refuses a foreign returned subject",async()=>{
+ const {attributionDocumentFixture}=await import(new URL("../test/recovery-attribution-fixture.ts",import.meta.url).href);
+ const document=attributionDocumentFixture(),context=verifiedTenantContextForQueuedJob(document.tenantId);
+ const command={version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:document.caseId,workId:document.workId,lineId:document.lineId,lockId:document.lockId,expectedCaseRevision:1,expectedAttributionRevision:0};
+ const query=vi.fn(async(sql:string)=>({rows:sql.includes("assess_recovery_attribution")?[{result:document}]:[]}));
+ const pool={connect:async()=>({query,release:vi.fn()})} as unknown as Pool,repo=new RecoveryAttributionRepository(pool);
+ expect(await repo.assess(context,document.jobId,"a".repeat(64),command)).toEqual(document);
+ expect(query).toHaveBeenCalledWith("SELECT app.assess_recovery_attribution($1,$2,$3::jsonb) result",[document.jobId,"a".repeat(64),command]);
+ await expect(repo.assess(context,randomUUID(),"a".repeat(64),command)).rejects.toThrow("NOT_FOUND");
+ await expect(repo.assess(context,document.jobId,"a".repeat(64),{...command,remainingPrincipal:80000})).rejects.toThrow("Invalid recovery attribution command");
+});
