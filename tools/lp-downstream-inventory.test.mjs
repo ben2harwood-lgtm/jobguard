@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+const recordedInput = "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json";
 const generated = execFileSync("python3", ["tools/lp-downstream-inventory.py", "--stdout"], { encoding: "utf8" });
 const rows = new Map(generated.split("\n").filter((line) => /^\| `(?:app|identity)\./.test(line)).map((line) => {
   const [, object, assignment] = line.split("|");
@@ -22,9 +23,9 @@ test("downstream document is reproducible from checked-in generator", () => {
   assert.equal(generated, readFileSync("docs/contracts/lp-downstream-effects-v1.md", "utf8"));
 });
 
-test("newer migrations leave --check exact against the recorded input", () => {
+test("newer migrations and live LP-0 edits leave --check exact against the recorded input", () => {
   const cwd = mkdtempSync(join(tmpdir(), "lp-downstream-inventory-"));
-  for (const path of ["tools/lp-downstream-inventory.py", "docs/contracts/lp-0-effective-privileges-v1.json",
+  for (const path of ["tools/lp-downstream-inventory.py", recordedInput, "docs/contracts/lp-0-effective-privileges-v1.json",
     "docs/contracts/lp-downstream-effects-v1.md", "packages/db/migrations"]) {
     cpSync(path, join(cwd, path), { recursive: true });
   }
@@ -32,9 +33,14 @@ test("newer migrations leave --check exact against the recorded input", () => {
   const before = run("--check");
   writeFileSync(join(cwd, "packages/db/migrations/9999_newer_inventory_fixture.sql"),
     "CREATE TABLE app.newer_inventory_fixture (amount_pence bigint);\n");
+  const liveInput = join(cwd, "docs/contracts/lp-0-effective-privileges-v1.json");
+  const live = JSON.parse(readFileSync(liveInput, "utf8"));
+  live.entries = [];
+  live.recorded.routines = [];
+  writeFileSync(liveInput, JSON.stringify(live));
   assert.equal(run("--check"), before);
   assert.equal(run("--stdout"), generated);
-  // New migrations are excluded, but the comparison must still reject document drift.
+  // New migrations and live LP-0 edits are excluded, but the comparison must still reject document drift.
   writeFileSync(join(cwd, "docs/contracts/lp-downstream-effects-v1.md"), `${generated}\nDrift\n`);
   assert.throws(() => run("--check"), /Downstream inventory differs/);
 });
@@ -46,7 +52,7 @@ test("financial declarations and every checked billing routine retain money assi
   for (const name of tables) includes(`app.${name}`, "money", ["LP-6c", "LP-8a", "LP-8b"]);
   assert.ok(!rows.get("app.ledger_account").effects.includes("identity"));
   assert.deepEqual(rows.get("app.account").effects, ["identity"]);
-  const lp0 = JSON.parse(readFileSync("docs/contracts/lp-0-effective-privileges-v1.json", "utf8"));
+  const lp0 = JSON.parse(readFileSync(recordedInput, "utf8"));
   const entries = lp0.entries.filter((entry) => entry.group === "a-exec-checked-billing-money");
   assert.ok(entries.length > 0);
   for (const entry of entries) {
