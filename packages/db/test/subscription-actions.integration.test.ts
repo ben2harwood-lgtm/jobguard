@@ -1,3 +1,4 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { SubscriptionApplication } from "../../../apps/api/src/subscription.application.js";
@@ -29,7 +30,7 @@ describe("MON-2A C2/C3 billing action races", () => {
   const other=new SubscriptionApplication({provider,allowedOrigin:origin,environment:()=>"synthetic_demo",
    resolve:async()=>({credentials:{sessionToken:tokenB,csrfToken,origin,tenantHeader:b.tenantId},digest:digestB})},new SubscriptionRepository(f.runtime));
   const {contentHash:_hash,...selection}=terms(b,"Solo");
-  await other.command({},randomUUID(),selection);
+  await other.command({},randomUUID(),{...selection,consentText:subscriptionConsentText});
   expect((await readSubscription(f,{...b,digest:digestB})).agreements[0].maximum_pence).toBe(4900);
   await expect(other.command({},randomUUID(),action)).rejects.toThrow("SUBSCRIPTION_FORBIDDEN");
  });
