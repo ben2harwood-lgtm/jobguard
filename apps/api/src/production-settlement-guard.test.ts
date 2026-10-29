@@ -42,7 +42,11 @@ function outbox(actionType: string, mode?: string) {
 describe("SV-8 dark production settlement guard", () => {
   it.each([undefined, "pilot_no_charge", "production_billing", "provider_sandbox"])(
     "preserves non-money outbox delivery in mode %s", async mode => {
-      for (const actionType of ["billing_export", "quote.send", "notification.send", "fee.notification", "settlement.notification"]) {
+      for (const actionType of [
+        "billing_export", "quote.send", "purchase_order.simulate", "final_account.issue",
+        "recovery.message.simulate", "confirm_scope", "customer_payment.reverse",
+        "notification.send", "fee.notification", "settlement.notification", "extra.client_approval_request.send",
+      ]) {
         const work = outbox(actionType, mode);
         await work.run();
         expect(work.adapter.deliver).toHaveBeenCalledOnce();
@@ -62,6 +66,31 @@ describe("SV-8 dark production settlement guard", () => {
       }
     },
   );
+
+  it.each([undefined, "pilot_no_charge", "production_billing", "provider_sandbox", "production", ""])(
+    "refuses unknown outbox action types before claims in mode %s", async mode => {
+      for (const actionType of ["future.action", "refund.issue", "charge", "invoice.collect_fee", "quote.send.future"]) {
+        const work = outbox(actionType, mode);
+        await expect(work.run()).rejects.toThrow(ProductionSettlementDeniedError);
+        expect(work.adapter.deliver).not.toHaveBeenCalled();
+        expect(work.query.mock.calls.some(([sql]) => /^(?:UPDATE|INSERT)/u.test(sql))).toBe(false);
+        expect(work.query).toHaveBeenCalledWith("ROLLBACK");
+      }
+    },
+  );
+
+  it("preserves ENT-6 finance billing export delivery outside synthetic_demo", async () => {
+    const work = outbox("billing_export", "production_billing");
+    await work.run();
+    expect(work.adapter.deliver).toHaveBeenCalledOnce();
+    expect(work.adapter.deliver).toHaveBeenCalledWith(expect.objectContaining({ actionType: "billing_export", amountPence: 101 }));
+  });
+
+  it("preserves unknown outbox execution in synthetic_demo", async () => {
+    const work = outbox("future.action", "synthetic_demo");
+    await work.run();
+    expect(work.adapter.deliver).toHaveBeenCalledOnce();
+  });
 
   it("preserves synthetic money outbox execution", async () => {
     const work = outbox("fee.post", "synthetic_demo");

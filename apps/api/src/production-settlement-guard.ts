@@ -79,13 +79,22 @@ export async function executeSettlementGuardedWork<T>(mode: string, execute: () 
   return execute();
 }
 
-/** Sends/notifications may describe money without moving it. Gate only money operations. */
+/** Known delivery actions describe money without moving it. New types require explicit review. */
+const nonMoneyOutboxActionTypes = new Set([
+  "quote.send",
+  "purchase_order.simulate",
+  "final_account.issue",
+  "recovery.message.simulate",
+  "confirm_scope",
+  "customer_payment.reverse",
+  "billing_export",
+  "notification.send",
+  "fee.notification",
+  "settlement.notification",
+  "extra.client_approval_request.send",
+]);
+
+/** Unknown actions fail closed before claims, just like known money operations. */
 export function requireOutboxSettlementEligibility(mode: string, actionType: string): void {
-  const words = actionType.split(/[._-]/u);
-  const has = (word: string) => words.includes(word);
-  const moneyAction = has("settle") || has("collect") ||
-    ((has("fee") || has("fees")) && (has("post") || has("accrue"))) ||
-    (has("settlement") && (has("record") || has("post") || has("apply"))) ||
-    (has("credit") && has("consume"));
-  if (moneyAction) requireProductionSettlementEligibility(mode);
+  if (!nonMoneyOutboxActionTypes.has(actionType)) requireProductionSettlementEligibility(mode);
 }
