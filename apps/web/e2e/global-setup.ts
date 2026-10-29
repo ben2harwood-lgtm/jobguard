@@ -8,6 +8,8 @@ import { Pool } from "pg";
 const SYNTHETIC_DATABASE_NAME = "jobguard_synthetic_demo";
 const port = 55432, password = "sbox-e2e-owner";
 const shutdownToken = "sbox-e2e-local-pool-drain";
+export const E2E_AUTH_CODE_SECRET = process.env.AUTH_CODE_SECRET ?? "sbox-only-identity-hmac-secret-32-bytes";
+export const E2E_ADMIN_DATABASE_URL = `postgresql://postgres:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
 export const E2E_RUNTIME_URL = `postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
 export default async function setup() {
   const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>;
@@ -18,6 +20,8 @@ export default async function setup() {
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
   await control.query(`CREATE ROLE neondb_owner LOGIN PASSWORD '${password}' CREATEROLE NOSUPERUSER NOCREATEDB NOINHERIT NOBYPASSRLS`);
   await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME} OWNER neondb_owner`); await control.end();
+  process.env.AUTH_CODE_SECRET = E2E_AUTH_CODE_SECRET;
+  process.env.E2E_ADMIN_DATABASE_URL = E2E_ADMIN_DATABASE_URL;
   process.env.JOBGUARD_ENV = "synthetic_demo";
   await bootstrapSyntheticDemo({ ownerUrl: `postgresql://neondb_owner:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: E2E_RUNTIME_URL });
   const identityAdmin = new Pool({ host:"127.0.0.1", port, user:"postgres", password, database:SYNTHETIC_DATABASE_NAME });

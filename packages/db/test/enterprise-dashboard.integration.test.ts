@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, ExtraRepository, SiteExtraRepository, SiteVisitRepository, contractorSessionContext, withTenant } from "../src/index.js";
 import { EnterpriseDashboardRepository } from "../src/enterprise-dashboard-repository.js";
 import { chainWorld, submitted, approveInput, cluster, command, type Cluster } from "./extra-approval-chain-fixtures.js";
+import { world as billingWorld } from "./contractor-billing-fixtures.js";
 import { direct } from "./site-extra-fixtures.js";
 vi.setConfig({ testTimeout: 120000, hookTimeout: 240000 });
 let c: Cluster;
@@ -131,4 +132,42 @@ describe("ENT-9B scoped persisted reads", () => {
     const role = (await c.runtime.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows[0];
     expect(role).toEqual({ rolsuper: false, rolbypassrls: false });
   });
+});
+
+// ENT-9E: real command-created stored facts, not owner-inserted billing rows. Runs in CI.
+it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and removed by current credits/rejections", async () => {
+  const a = await billingWorld(c), b = await billingWorld(c);
+  const sa = await session(a.w), sb = await session(b.w);
+  const imported: { own: typeof a; invoice: Record<string, unknown> }[] = [];
+  for (const own of [a, b]) {
+    const raw = await own.invoice();
+    const composition = raw.composition as { declared: { netPence: number; vatPence: number; grossPence: number }; lines: unknown[] };
+    const amount = { netPence: 124100, vatPence: 24820, grossPence: 148920 };
+    const invoice = { ...raw, amount, composition: { declared: amount, lines: [...composition.lines,
+      { externalInvoiceLineId: "unmatched-other", kind: "other", existedAt: "2026-10-01T00:00:00Z", netPence: 100, vatPence: 20, grossPence: 120, match: null }] } };
+    await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([invoice]));
+    imported.push({ own, invoice });
+  }
+  const first = (await read(sa)).signals;
+  const observation = first.observations.find(o => o.kind === "billed_variation_without_extra")!;
+  expect(observation).toMatchObject({ jobId: a.s.jobId, extraIds: [] });
+  expect(observation.sourceIds).toHaveLength(2);
+  expect(JSON.stringify(first)).not.toContain(b.s.jobId);
+  expect(JSON.stringify((await read(sb)).signals)).not.toContain(a.s.jobId);
+  await a.repo.import(a.ctx, a.session, a.s.jobId, a.importInput([imported[0]!.invoice]));
+  expect((await read(sa)).signals.observations).toEqual(first.observations);
+  // The advisory never changes the authoritative matched-extra billing, fee base or job state.
+  const authoritative = await a.repo.read(a.ctx, a.session, a.s.jobId);
+  await read(sa);
+  expect(await a.repo.read(a.ctx, a.session, a.s.jobId)).toEqual(authoritative);
+  for (const [i, type] of ["credited", "rejected"].entries()) {
+    const { own, invoice } = imported[i]!;
+    const adjustment = own.event(type, { effectiveAt: "2026-10-03T12:00:00Z", originalEventId: invoice.sourceEventId,
+      amount: { netPence: 100, vatPence: 20, grossPence: 120 },
+      lineAdjustments: [{ externalInvoiceLineId: "unmatched-other", netPence: 100, vatPence: 20, grossPence: 120 }] });
+    await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([adjustment]));
+    expect((await read(i === 0 ? sa : sb)).signals.observations.some(o => o.kind === "billed_variation_without_extra")).toBe(false);
+  }
+  await command(c, a.w, { kind: "grant.revoke", grantId: a.w.members.supervisor.grant });
+  await expect(read(sa)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });

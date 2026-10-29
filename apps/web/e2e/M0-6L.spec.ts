@@ -44,7 +44,10 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  // MON-2A C2/C3: the same entered-code company session explicitly accepts terms and changes plans.
  const consent=page.getByRole("checkbox",{name:/I accept these monthly terms/});
  await expect(page.getByRole("button",{name:"Accept monthly terms"})).toBeDisabled();
+ const shownConsent=await page.getByTestId("subscription-consent").textContent();
+ const consentRequest=page.waitForRequest(request=>request.url().endsWith("/api/subscriptions/commands") && request.method()==="POST");
  await consent.check();await page.getByRole("button",{name:"Accept monthly terms"}).click();
+ expect((await consentRequest).postDataJSON().command.consentText).toBe(shownConsent);
  const subscription=page.getByRole("region",{name:"Your subscription",exact:true});
  await expect(subscription).toContainText("Solo · monthly");
  await page.getByLabel("Plan",{exact:true}).selectOption("Builder");await consent.check();
@@ -63,6 +66,14 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  expect((await api(page,"/api/subscriptions/commands",{method:"POST",headers,data:envelope})).status).toBe(400);
  expect((await api(page,"/api/subscriptions/commands",{method:"POST",headers:{"x-tenant-id":tenant!},data:envelope})).status).not.toBe(201);
  expect((await api(page,"/api/subscriptions/current",{headers:{...headers,"x-tenant-id":crypto.randomUUID()}})).status).not.toBe(200);
+ // Mock only this failure response to exercise saved approval followed by a failed refresh.
+ await page.route("**/api/subscriptions/commands",route=>route.fulfill({status:201,json:{paymentStatus:"pending"}}),{times:1});
+ await page.route("**/api/subscriptions/current",route=>route.fulfill({status:503,json:{code:"SUBSCRIPTION_UNAVAILABLE"}}),{times:1});
+ await payment.click();
+ await expect(page.getByRole("status")).toContainText("Approval saved. Simulated payment is pending.");
+ await expect(page.getByRole("main").getByRole("alert")).toContainText("Subscription details are unavailable");
+ await expect(payment).toHaveCount(0);
+ await page.reload();
  await payment.click();await expect(page.getByRole("region",{name:"Subscription periods"})).toContainText("Simulated settlement — no real money paid");
  await expect(payment).toHaveCount(0);await page.reload();
  await expect(page.getByRole("region",{name:"Subscription periods"})).toContainText("Simulated settlement — no real money paid");
@@ -139,6 +150,18 @@ test("invitation joins only its stored tenant and role, and the page says plainl
   await expect(memberPage.getByRole("button",{name:"Verify code"})).toHaveCount(0);
   await memberPage.goto("/sign-in");await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
   expect(await memberPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+
+  // A multi-company account can select either company without changing its identity.
+  await memberPage.goto("/plans");
+  const companySwitcher=memberPage.getByRole("combobox",{name:"Company",exact:true});
+  await expect(companySwitcher.locator("option")).toHaveCount(2);
+  // The invited finance role cannot read the owner/admin subscription surface.
+  await companySwitcher.selectOption(invited.tenant);
+  await expect(memberPage.getByRole("main").getByRole("alert")).toContainText("Subscription details are unavailable");
+  await expect(memberPage.getByRole("region",{name:"Your subscription",exact:true})).toHaveCount(0);
+  await companySwitcher.selectOption(ownTenant);
+  await expect(memberPage.getByRole("region",{name:"Your subscription",exact:true})).toBeVisible();
+  await expect(companySwitcher).toHaveValue(ownTenant);
 
   // DIFFERENT address: the same signed-in browser follows an invitation sent to someone else (a brand-new user). Verification
   // signs the browser in as that invited address, so the identity changes, only the stored tenant and role appear, and the

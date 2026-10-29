@@ -1,4 +1,4 @@
-# 0323 — private held v3 import boundary (partial CH5-P)
+# 0349 — private held v3 import boundary (partial CH5-P)
 
 The supplied MON1-A source has no executable admission/source/session/plan result
 handoff. Its `meterPlaceAdmissionHold` is the only DB API. This migration installs
@@ -17,7 +17,7 @@ process. Preferred forward fix: another issued migration replaces the refusal
 only after accepted MON1 source/clock/session/lock order, trial/plan and baseline
 source acknowledgements; adds immutable baselines/lines/terms/provenance/history
 completion validation, complete canonical snapshot binding and atomic writes;
-then grants only the checked runtime entrypoint. Never edit 0323 after integration.
+then grants only the checked runtime entrypoint. Never edit 0349 after integration.
 The current stub must remain unconditionally unavailable if upstream admission
 later changes. No automatic promotion from parent acceptance is safe.
 

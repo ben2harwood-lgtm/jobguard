@@ -1,3 +1,95 @@
+## Ben-authorized CI round 4 and reserved renumber — 29 October 2026
+
+CH-5 / CH5-E, PR #386, RED. Round 4 is explicitly authorized in the supplied
+29 October brief. Failure trace: `~/.local/share/full-steam/codex-runs/ch5-e-ci-traces-0604.txt`.
+Starting HEAD 3fbede8f96d886402b1fbf121706d63d5c338293, incoming main
+fe80add539fc9f97028b90420918d16759f636ee. This is builder verification,
+not a new independent RED review.
+
+Failures repaired:
+
+- Desktop and mobile CH-5 reached the final live-import refusal assertion, where
+  the global alert locator also selected Next.js's route announcer. Scope the
+  locator to the existing main landmark. Keep the exact expected refusal text,
+  all preceding import/reload/isolation/forged-lock assertions and all timeouts.
+  No UI behavior or browser assertion is relaxed.
+- CH-2 discovered two unclassified Next mutations, the corresponding Nest routes
+  and the new dispatcher command. Add all five exact keys to jobMutationRegistry
+  as pre_live_allowed, matching ordinary adoption's existing classification.
+  No scanner, guard, exception or allowlist in the tests is changed.
+- M0-6L correctly refused context wrappers in the internal provenance repository.
+  Its two methods now accept the existing ImportedBaselineReadScope whole and
+  forward that exact scope to the held observation reader. The context stamp,
+  session digest, authority checks and dependency refusals are preserved. Caller
+  tests use the same internal scope and additionally verify scope object identity.
+  Public import application methods already use PracticeAccess.job, the existing
+  reviewed persisted-session bridge; they continue to do so. No context minting,
+  principal bridge, source fingerprint or constructor allowance was changed.
+
+Resolved eight working-file merge conflicts, retaining incoming business-value
+composition/providers, small-builder demo and evidence-pack exports, CH-5 import
+composition, and both sides' catalogue additions. Generated OpenAPI preserves
+every main path and both import paths exactly. LP-0 entries are the exact parent
+union; routine identities are unioned with current main's newer definitions and
+group metadata preserved. Group source/test lists retain both sides. SERIOUS-B5
+keeps the complete invoiced-import and stored-receipt additions, and both calls;
+entitlement/tenancy retain main's rows plus only the existing job_import_v3 rows.
+
+Renumbered 0323 -> 0349 and 0324 -> 0350 in the same order. Used the actual
+exported planRenumber from tools/migration-renumber.mjs with the brief's reserved
+ceiling 0348, then its filesystem move/stem-rewrite behavior through
+/tmp/ch5-e-round4-renumber.mjs. The tool's ordinary --write requires a clean tree
+and runs git add, incompatible with this pending merge and read-only .git; the
+adapter runs only read-only Git and leaves staging to the router. It passed a
+syntax check before execution. SQL files were moved, not edited. Both new SQL
+files equal the original HEAD bytes exactly; every migration in the before
+inventory has the identical SHA-256 afterward. Migration notes, full-stem
+references, active test labels, LP-0 sources and lane paths follow the new numbers.
+The 0349 upgrade test asserts exact predecessor 0337_enterprise_fee_posting_tidy.sql.
+Actual MIGRATION_URLS confirms 0337 -> 0349 -> 0350. No PL/pgSQL IF/CASE edits
+were needed; no SQL logic, privilege or stored format changed.
+
+Actual relevant local checks (Node v24.17.0; installed pnpm 10.28.1 via cached
+pnpm.cjs; at most two workers):
+
+- API Vitest src/auth/context-boundary.test.ts and src/watchdog-registry.test.ts,
+  --maxWorkers=1: 270 passed, including all three previously failing assertions.
+- DB Vitest test/imported-observation-reader.integration.test.ts,
+  test/imported-evidence-provenance.integration.test.ts and
+  test/job-import-v3.integration.test.ts, --maxWorkers=1 -t source-only:
+  25 passed; 5 PostgreSQL cases deselected locally, unchanged and mandatory in CI.
+  The initial run caught two old-signature read calls in the test; both were
+  updated to forward the existing scope and the same assertions pass on rerun.
+- DB Vitest test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts, --maxWorkers=1: 45 passed.
+- API Vitest src/job-import-v3.application.test.ts and
+  src/value/value-composition.test.ts, --maxWorkers=1: 3 passed.
+  Total final scoped Vitest results: 343 passed.
+- Core build and DB build: passed. API tsc --noEmit: passed.
+- tsc with /tmp/ch5-e-round4-tests-tsconfig.json: passed; compiles both renumbered
+  upgrade suites, merged SERIOUS-B5/entitlement suites and modified provenance
+  caller suites. Compilation log: /tmp/ch5-e-round4-test-compilation.log.
+- OpenAPI generation and generated-contract check: passed.
+- Playwright --list e2e/CH-5.spec.ts: both desktop and mobile-360 collected;
+  collection only, not browser execution.
+- Node test MC-6 migration order: passed (1 test); only this pure test selected,
+  no Git-writing fixture tests run.
+- Actual migrationOrderViolations against incoming main: no violations;
+  composed lane-policy load passed. Direct worktree/main inventory is exactly
+  53 allowed payload paths plus the own lane file, including untracked renames.
+- Exact parent/main catalogue union, SQL hashes, generated OpenAPI union,
+  conflict-marker scan and git diff --check: passed.
+
+The prior temporary pnpm wrapper had expired; no package install/download was
+attempted. No Git writes, local database startup, listener, real data, live money,
+provider or release actions. No tests skipped in source, weakened or loosened.
+Router must stage the eight resolved index entries, new migration/note names and
+other changes, complete this pending merge, and rerun the normal lane check and
+GitHub CI. Stock ancestry-based lane comparison cannot establish the final merge
+until the router records it; exact filesystem payload/lane inventory is verified.
+PostgreSQL/migrations and actual desktop/mobile browser execution remain CI gates.
+Ready commit message: /tmp/ch5-e-20261029T060451Z-commit-msg.txt.
+
 ## CI repair try 3 (last) — 28 October 2026, 23:30 UTC run
 
 CH-5 / CH5-E, PR #386, RED. Trace source:
@@ -310,8 +402,8 @@ verification or independent RED review.
 
 ## Renumber-only catch-up for PR #386 — 28 October 2026
 
-Renamed 0224_job_import_v3 to 0323_job_import_v3 and
-0312_job_import_v3_invoiced to 0324_job_import_v3_invoiced, preserving the
+Renamed 0224_job_import_v3 to 0349_job_import_v3 and
+0312_job_import_v3_invoiced to 0350_job_import_v3_invoiced, preserving the
 private-refusal-before-invoiced-writer order and both SQL files byte for byte.
 Used the exported `planRenumber` from `tools/migration-renumber.mjs` with the
 reserved 0323/0324 range; applied filesystem moves because its CLI write mode

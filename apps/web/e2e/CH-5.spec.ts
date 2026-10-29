@@ -40,5 +40,5 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   await page.getByRole("button", { name: "Preview import", exact: true }).click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Confirm import", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("No job has been imported");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("No job has been imported");
 });

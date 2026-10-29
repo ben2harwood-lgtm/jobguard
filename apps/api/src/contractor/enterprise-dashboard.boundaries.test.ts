@@ -22,7 +22,7 @@ it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/
           // This adapter must remain pure even though its caller may read the database.
           const pureImports: Record<string, string[]> = {
             zod: ["z"],
-            "@jobguard/core": ["dashboardExtraV1", "dashboardParse", "dashboardQueryV1", "dashboardFactsV1", "dashboardPeriodContains", "enterpriseSignalFactsV1", "enterpriseSignals", "projectEnterpriseDashboard"],
+            "@jobguard/core": ["instantV1", "billingInvoiceLineV1", "exactPenceV1", "parseExactPence", "EnterpriseDashboardError", "dashboardExtraV1", "dashboardParse", "dashboardQueryV1", "dashboardFactsV1", "dashboardPeriodContains", "enterpriseSignalFactsV1", "enterpriseSignals", "projectEnterpriseDashboard"],
           };
           expect(Object.keys(pureImports)).toContain(node.moduleSpecifier.text);
           expect(bindings && ts.isNamedImports(bindings)).toBe(true);
@@ -35,7 +35,7 @@ it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/
           expect(bindings.elements.map(e => e.name.text).sort()).toEqual(["VerifiedTenantContext", "withTenant"].sort());
       }
       if (path === "packages/db/src/enterprise-dashboard-signals.ts") {
-        if (ts.isNewExpression(node)) expect(node.expression.getText(ast)).toBe("Set");
+        if (ts.isNewExpression(node)) expect(["Set", "Map", "EnterpriseDashboardError"]).toContain(node.expression.getText(ast));
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression))
           expect(node.expression.name.text).not.toBe("query");
       }

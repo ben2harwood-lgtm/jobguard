@@ -106,6 +106,7 @@ export * from "./contractor-entitlement-authority.js";
 
 export * from "./recovery-attribution-persistence.js";
 export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
 export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
 
@@ -119,3 +120,8 @@ export * from "./job-import-v3.js";
 export * from "./meter-today.js";
 
 export { ImportedBaselineSourceError, requireImportedBaselineSource } from "./imported-baseline-sources.js";
+
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
+
+export * from "./small-builder-demo-lifecycle.js";

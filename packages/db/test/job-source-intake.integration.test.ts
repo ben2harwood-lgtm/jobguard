@@ -6,12 +6,13 @@ import {JobSourceRepository} from "../src/job-source-repository.js";
 import {WatchdogError,claimCommandIdentity,requireLiveJob} from "../src/watchdog.js";
 import {withTenant} from "../src/tenant-context.js";
 import {sourcesFixture,closeWorkFixture,workTenant,type SourceFixture} from "./job-sources-fixture.js";
+import {seedWorkJob} from "./job-work-state-fixtures.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,type FinalCheckFixture} from "./final-check-fixture.js";
 
 const diary=(text="Fitted outside tap.",onSite=false,commandId=randomUUID())=>({version:"job-diary-input.v1",commandId,entryMode:"typed",onSite,text});
 const message=(text="Please fit an outside tap.",commandId=randomUUID())=>({version:"customer-message-input.v1",commandId,fictionalCustomer:{kind:"named_fictional_customer",name:"Fictional Alex"},text});
-const counts=async(f:SourceFixture)=>Object.fromEntries(await Promise.all(["job_source_original","job_diary_entry","customer_message_source","evidence_object","command_receipt","audit_event"].map(async table=>[table,
- Number((await f.admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`,[f.practice.auth.context.tenantId])).rows[0].n)])));
+const counts=async(f:SourceFixture,tenantId=f.practice.auth.context.tenantId)=>Object.fromEntries(await Promise.all(["job_source_original","job_diary_entry","customer_message_source","evidence_upload","evidence_object","command_receipt","audit_event","action_outbox","watchdog_command_identity"].map(async table=>[table,
+ Number((await f.admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`,[tenantId])).rows[0].n)])));
 
 describe("SV-7A checked intake writer",()=>{
  let f:SourceFixture,repo:JobSourceRepository;
@@ -73,15 +74,38 @@ describe("SV-7A checked intake writer",()=>{
   await expect(repo.intake(auth.context,randomUUID(),auth.digest,"diary",diary())).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
   expect(await counts(f)).toEqual(before);
  });
- it("a job that is not live refuses new sources; a replay of an earlier note still returns its receipt",async()=>{
-  const {auth,jobId}=f.practice,input=diary("Before pause.");const saved=await repo.intake(auth.context,jobId,auth.digest,"diary",input);
-  await workTenant(f.admin,auth.context.tenantId,db=>db.query("UPDATE app.job SET status='invoiced' WHERE id=$1",[jobId]));
-  try{
-   const before=await counts(f);
-   await expect(repo.intake(auth.context,jobId,auth.digest,"diary",diary("After pause."))).rejects.toEqual(new WatchdogError("JOB_NOT_LIVE"));
-   expect(await repo.intake(auth.context,jobId,auth.digest,"diary",input)).toEqual(saved);
-   expect(await counts(f)).toEqual(before);
-  }finally{await workTenant(f.admin,auth.context.tenantId,db=>db.query("UPDATE app.job SET status='live' WHERE id=$1",[jobId]))}
+ it.each(["draft","quoting","accepted","invoiced","paid","lost"] as const)("owner-practice %s job refuses both intake kinds without effects and preserves replay",async status=>{
+  const {auth,jobId}=f.practice;
+  for(const kind of ["diary","customer_message"] as const){
+   const input=kind==="diary"?diary("Before leaving live."):message("Before leaving live.");
+   const pending=kind==="diary"?diary("Refused until live."):message("Refused until live.");
+   const saved=await repo.intake(auth.context,jobId,auth.digest,kind,input);
+   // Migration-role lifecycle fixture only; runtime writes still use the checked intake routine.
+   await workTenant(f.admin,auth.context.tenantId,db=>db.query("UPDATE app.job SET status=$2 WHERE id=$1",[jobId,status]));
+   try{
+    const before=await counts(f);
+    for(let attempt=0;attempt<2;attempt++)
+     await expect(repo.intake(auth.context,jobId,auth.digest,kind,pending)).rejects.toEqual(new WatchdogError("JOB_NOT_LIVE"));
+    expect(await repo.intake(auth.context,jobId,auth.digest,kind,input)).toEqual(saved);
+    expect(await counts(f)).toEqual(before);
+   }finally{await workTenant(f.admin,auth.context.tenantId,db=>db.query("UPDATE app.job SET status='live' WHERE id=$1",[jobId]))}
+   // Refusal must not consume the command ID: it succeeds once when live, then replays without writes.
+   const accepted=await repo.intake(auth.context,jobId,auth.digest,kind,pending),after=await counts(f);
+   expect(await repo.intake(auth.context,jobId,auth.digest,kind,pending)).toEqual(accepted);
+   await expect(repo.intake(auth.context,jobId,auth.digest,kind,{...pending,text:"Changed payload."})).rejects.toEqual(new WatchdogError("IDEMPOTENCY_CONFLICT"));
+   expect(await counts(f)).toEqual(after);
+  }
+ });
+ it.each(["diary","customer_message"] as const)("%s cross-company access cannot write or replay an owner's receipt",async kind=>{
+  const other=await seedWorkJob(f),{auth,jobId}=f.practice;
+  const input=kind==="diary"?diary("Company-bound diary."):message("Company-bound message.");
+  const saved=await repo.intake(auth.context,jobId,auth.digest,kind,input);
+  const before=await counts(f),otherBefore=await counts(f,other.tenantId);
+  await expect(repo.intake(auth.context,other.jobId,auth.digest,kind,input)).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
+  await expect(repo.intake(other.context,jobId,other.actorId,kind,input)).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
+  expect(await repo.intake(auth.context,jobId,auth.digest,kind,input)).toEqual(saved);
+  expect(await counts(f)).toEqual(before);
+  expect(await counts(f,other.tenantId)).toEqual(otherBefore);
  });
 });
 

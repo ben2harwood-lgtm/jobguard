@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
+import { EnterpriseFeeRepository, withTenant, migrate } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
 
+import { startBeforeMigration, applyMigration } from "./contractor-practice-session-fixtures.js";
+import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+
+const migration = "0337_enterprise_fee_posting_tidy.sql";
 // CI ONLY. ENT-7c: posting into platform_enterprise_fee from an approved statement (migration 0298).
 let c: Awaited<ReturnType<typeof cluster>>;
-beforeAll(async () => { c = await cluster(); }, 240000);
+beforeAll(async () => { c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); });
 
 async function agreement(w: World) {
@@ -37,6 +41,19 @@ async function setUp() {
   return { w, repo, id, p, invoice, paid, approvedStatement, post };
 }
 
+it("upgrades populated fee books without changing journals, receipts, audit or function security", async () => {
+  const t = await setUp(), first = await t.approvedStatement(t.p);
+  await t.post(first.statementId, first.authorizationId);
+  const before = await proofBefore(c.admin, ["app.platform_enterprise_fee", "app.platform_enterprise_fee_line",
+    "app.command_receipt", "app.audit_event", "app.enterprise_fee_statement", "app.enterprise_fee_statement_section"]);
+  const metadata = async () => (await c.admin.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid='app.ef_post_statement(uuid,uuid,uuid,uuid)'::regprocedure")).rows;
+  const security = await metadata();
+  await applyMigration(c, migration); await migrate(c.admin); await migrate(c.admin);
+  expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
+  expect(await metadata()).toEqual(security);
+  expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ replayed: true, journals: 1 });
+});
+
 it("posts an approved statement once: one balanced accrual of the exact delta; replays and races add nothing", async () => {
   const t = await setUp(), { statementId, authorizationId } = await t.approvedStatement(t.p);
   const results = await Promise.all([t.post(statementId, authorizationId), t.post(statementId, authorizationId)]);
@@ -54,7 +71,11 @@ it("an unchanged next month subtracts prior posted net: zero delta and no new jo
   const second = await t.approvedStatement(nextMonth(t.p));
   expect(second.statement).toMatchObject({ totalDeltaPence: 0 });
   expect(second.statement.sections).toEqual([expect.objectContaining({ cumulativeFeePence: 806, priorNetPostedPence: 806, deltaPence: 0 })]);
-  expect(await t.post(second.statementId, second.authorizationId)).toMatchObject({ journals: 0 });
+  // ENT-11b self-attack: replay both months, with fresh command IDs and racing next-month requests.
+  expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ replayed: true });
+  const nextMonthPosts = await Promise.all([t.post(second.statementId, second.authorizationId), t.post(second.statementId, second.authorizationId)]);
+  expect(nextMonthPosts).toEqual([expect.objectContaining({ journals: 0 }), expect.objectContaining({ journals: 0 })]);
+  expect(nextMonthPosts.filter(result => !result.replayed)).toHaveLength(1);
   expect(await t.repo.readPostings(t.w.ctx, t.w.session, second.statementId)).toEqual([]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.platform_enterprise_fee WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(1);
 });
@@ -110,4 +131,96 @@ it("direct runtime SQL can neither write the fee book nor call its private helpe
     `SELECT app.ef_posted_net('${t.w.w.p.tenantId}','${t.id}')`,
   ]) await expect(withTenant(c.runtime, t.w.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
   await expect(c.admin.query("DELETE FROM app.platform_enterprise_fee_line WHERE fee_id=$1", [fee!.id])).rejects.toMatchObject({ message: "ENTERPRISE_FEE_IMMUTABLE" });
+});
+
+it("ENT-11b self-attack: a credit after approval blocks posting without changing the approved statement", async () => {
+  const t = await setUp(), approved = await t.approvedStatement(t.p);
+  const before = await t.repo.readStatement(t.w.ctx, t.w.session, approved.statementId);
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("credited", {
+    originalEventId: t.invoice.sourceEventId, effectiveAt: "2026-10-05T12:00:00Z", amount: { netPence: 24000, vatPence: 4800, grossPence: 28800 },
+    lineAdjustments: [{ externalInvoiceLineId: "extra", netPence: 24000, vatPence: 4800, grossPence: 28800 }],
+  })]));
+  expect(await code(t.post(approved.statementId, approved.authorizationId))).toBe("STALE_FACTS");
+  expect(await t.repo.readStatement(t.w.ctx, t.w.session, approved.statementId)).toEqual(before);
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.statementId)).toEqual([]);
+});
+
+it("ENT-11b self-attack: another company cannot read a statement, derivation or journals, or post its approval", async () => {
+  const t = await setUp(), approved = await t.approvedStatement(t.p), other = await setUp();
+  const derivation = approved.statement.sections[0]!.derivationId;
+  // Start each request only when its rejection handler can be attached immediately.
+  for (const attempt of [
+    () => t.repo.readStatement(other.w.ctx, other.w.session, approved.statementId),
+    () => t.repo.read(other.w.ctx, other.w.session, derivation),
+    () => t.repo.readPostings(other.w.ctx, other.w.session, approved.statementId),
+    () => t.repo.postStatement(other.w.ctx, other.w.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(), statementId: approved.statementId, authorizationId: approved.authorizationId }),
+  ]) expect(await code(attempt())).toBe("FEE_NOT_FOUND");
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.statementId)).toEqual([]);
+});
+
+it("splits a compensation across outstanding accruals and never offsets the same pence twice", async () => {
+  const t = await setUp(), first = await t.approvedStatement(t.p);
+  await t.post(first.statementId, first.authorizationId);
+  const [original] = await t.repo.readPostings(t.w.ctx, t.w.session, first.statementId);
+  const payment = t.w.event("paid", { sourceEventId: `pay-${randomUUID()}`, effectiveAt: "2026-10-04T12:00:00Z",
+    reconciliationId: `r-${randomUUID()}`, amount: { netPence: 16667, vatPence: 3333, grossPence: 20000 } });
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([payment]));
+  const second = await t.approvedStatement(nextMonth(t.p));
+  await t.post(second.statementId, second.authorizationId);
+  const [additional] = await t.repo.readPostings(t.w.ctx, t.w.session, second.statementId);
+  expect(additional!.amountPence).toBeLessThan(original!.amountPence);
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("payment_reversed", {
+    composition: t.invoice.composition, originalEventId: t.paid.sourceEventId, effectiveAt: "2026-10-05T12:00:00Z",
+    reconciliationId: `r-${randomUUID()}`, amount: t.paid.amount,
+  })]));
+  const third = await t.approvedStatement(nextMonth(nextMonth(t.p))), command = randomUUID();
+  expect(third.statement.totalDeltaPence).toBe(-806);
+  const results = await Promise.all([t.post(third.statementId, third.authorizationId, command), t.post(third.statementId, third.authorizationId, command)]);
+  expect(results.filter(r => !r.replayed)).toHaveLength(1);
+  const offsets = await t.repo.readPostings(t.w.ctx, t.w.session, third.statementId);
+  expect(offsets).toHaveLength(2);
+  expect(offsets).toEqual(expect.arrayContaining([
+    expect.objectContaining({ kind: "compensation", compensatesFeeId: additional!.id, amountPence: additional!.amountPence }),
+    expect.objectContaining({ kind: "compensation", compensatesFeeId: original!.id, amountPence: 806 - additional!.amountPence }),
+  ]));
+  for (const f of offsets) expect(f.lines).toEqual([
+    { account: "platform_fee_revenue", debitPence: f.amountPence, creditPence: 0 },
+    { account: "contractor_fee_receivable", debitPence: 0, creditPence: f.amountPence },
+  ]);
+  await t.w.repo.import(t.w.ctx, t.w.session, t.w.s.jobId, t.w.importInput([t.w.event("payment_reversed", {
+    composition: t.invoice.composition, originalEventId: payment.sourceEventId, effectiveAt: "2026-10-06T12:00:00Z",
+    reconciliationId: `r-${randomUUID()}`, amount: payment.amount,
+  })]));
+  const fourth = await t.approvedStatement(nextMonth(nextMonth(nextMonth(t.p))));
+  await t.post(fourth.statementId, fourth.authorizationId);
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, fourth.statementId)).toEqual([
+    expect.objectContaining({ compensatesFeeId: original!.id, amountPence: additional!.amountPence }),
+  ]);
+  const balances = await c.admin.query(`SELECT a.id,a.amount_pence::int accrued,coalesce(sum(c.amount_pence),0)::int compensated
+    FROM app.platform_enterprise_fee a LEFT JOIN app.platform_enterprise_fee c ON c.tenant_id=a.tenant_id AND c.compensates_fee_id=a.id
+    WHERE a.tenant_id=$1 AND a.kind='accrual' GROUP BY a.tenant_id,a.id`, [t.w.w.p.tenantId]);
+  expect(balances.rows).toHaveLength(2);
+  for (const balance of balances.rows) expect(balance.compensated).toBe(balance.accrued);
+  const other = await setUp();
+  expect(await code(t.repo.readPostings(other.w.ctx, other.w.session, third.statementId))).toBe("FEE_NOT_FOUND");
+});
+
+it("zero-statement replays preserve receipts and append no audit, including fresh-key races and cross-company attacks", async () => {
+  const t = await setUp(), first = await t.approvedStatement(t.p);
+  await t.post(first.statementId, first.authorizationId);
+  const zero = await t.approvedStatement(nextMonth(t.p)), command = randomUUID();
+  expect(zero.statement.totalDeltaPence).toBe(0);
+  expect(await t.post(zero.statementId, zero.authorizationId, command)).toMatchObject({ replayed: false, journals: 0 });
+  const snapshot = async () => (await c.admin.query("SELECT row_to_json(r) receipt FROM app.command_receipt r WHERE tenant_id=$1 AND command_id=$2", [t.w.w.p.tenantId, command])).rows;
+  const audit = async () => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n;
+  const receipt = await snapshot(), count = await audit();
+  const results = await Promise.all([t.post(zero.statementId, zero.authorizationId, command), t.post(zero.statementId, zero.authorizationId), t.post(zero.statementId, zero.authorizationId)]);
+  for (const result of results) expect(result).toMatchObject({ replayed: true, journals: 0 });
+  expect(await snapshot()).toEqual(receipt);
+  expect(await audit()).toBe(count);
+  expect(await code(t.post(zero.statementId, randomUUID(), command))).toBe("COMMAND_CONFLICT");
+  const other = await setUp();
+  expect(await code(t.repo.postStatement(other.w.ctx, other.w.session, { version: "enterprise-fee-post-statement.v1", commandId: command,
+    statementId: zero.statementId, authorizationId: zero.authorizationId }))).toBe("FEE_NOT_FOUND");
+  expect(await audit()).toBe(count);
 });

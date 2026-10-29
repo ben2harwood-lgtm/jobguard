@@ -7,15 +7,15 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
 const signature = "app.adopt_in_flight_job_v3(uuid,uuid,text,uuid,uuid,jsonb)";
-describe("CH5-P own 0323 upgrade, no adoption persistence claimed — CI only", () => {
+describe("CH5-P own 0349 upgrade, no adoption persistence claimed — CI only", () => {
   let f: WorkFixture;
   beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
   afterAll(async () => { await closeWorkFixture(f); });
   it("applies alone after actual predecessor, preserves rows/types/security and permits successors twice", async () => {
-    const own = "0323_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
+    const own = "0349_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
     expect(index).toBeGreaterThan(0);
     // Assert the actual predecessor under current main rather than the obsolete build-ahead base.
-    expect(MIGRATION_URLS[index - 1]?.pathname.split("/").at(-1)).toBe("0303_job_source_intake.sql");
+    expect(MIGRATION_URLS[index - 1]?.pathname.split("/").at(-1)).toBe("0337_enterprise_fee_posting_tidy.sql");
     await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for (const url of MIGRATION_URLS.slice(0, index)) {
       await f.admin.query(await readFile(url, "utf8"));

@@ -1,4 +1,4 @@
-# CH-5: invoiced v3 imports (0324)
+# CH-5: invoiced v3 imports (0350)
 
 Synthetic only; RED review and CI required. No real data or providers.
 
@@ -30,7 +30,7 @@ and the persisted pre-adoption catch journey remain refused. The screen explains
 the £0 pre-adoption exclusion; it does not claim a catch was detected. Production,
 real fees, providers, releases and migration of historical v1 imports remain off.
 
-Forward fix: keep 0324 and add a reviewed successor. To withdraw the capability,
+Forward fix: keep 0350 and add a reviewed successor. To withdraw the capability,
 revoke runtime EXECUTE on `adopt_invoiced_job_v3`; retain the immutable rows and
 reads for audit. Do not drop records or rewrite v1 imports. PostgreSQL tests cover
 fresh install, upgrade, replay, duplicate races, grants/RLS, tenant/session denial,

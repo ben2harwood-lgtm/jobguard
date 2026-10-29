@@ -1,3 +1,6 @@
+import { executeEvidencePackV3 } from "./evidence-pack-v3.worker.js";
+import { EvidencePackV3WorkerRepository } from "@jobguard/db";
+import { detectShadowObservations } from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, practiceFinalCheckPorts } from "@jobguard/db";
@@ -52,10 +55,29 @@ tasks.final_check_practice_run=async payload=>{
  // The invoice gate reads its own completion certificate; publish it once for this run.
  await new FinalCheckCompletionRepository(shadowPool).publish(context,{version:"final-check-publication.v1",jobId:task.jobId,runId:result.runId,checkId:randomUUID()}).catch((error:unknown)=>{if(!String((error as {code?:string})?.code??error).includes("IDEMPOTENCY"))throw error;});
 };
+// CH-8: queued identifiers only; hidden exports and must-surface persistence stay on this worker.
+const packRepository = new EvidencePackV3WorkerRepository(shadowPool);
+tasks.discover_evidence_pack_requests = async (_payload, helpers) => {
+ const rows = await helpers.withPgClient(client => client.query<{tenant_id:string;command_id:string}>(
+  "SELECT tenant_id,command_id FROM infrastructure.evidence_pack_v3_request WHERE completed_at IS NULL ORDER BY requested_at LIMIT 100"));
+ for (const row of rows.rows) await helpers.addJob("build_evidence_pack_v3",
+  {version:"evidence-pack-task.v3",tenantId:row.tenant_id,commandId:row.command_id},
+  {jobKey:`evidence-pack-v3:${row.tenant_id}:${row.command_id}`,jobKeyMode:"preserve_run_at"});
+};
+tasks.build_evidence_pack_v3 = async payload => {
+ const task = z.object({version:z.literal("evidence-pack-task.v3"),tenantId:z.string().uuid(),commandId:z.string().uuid()}).strict().parse(payload);
+ const context = queueContext({tenantId:task.tenantId});
+ await executeEvidencePackV3(context, task, packRepository, async jobId => {
+  if (!await observationReader.hasAcceptedTerms(context)) throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
+  const {observations,captures} = await observationReader.read(context,{version:"shadow-observation-read.v1",jobId});
+  await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId,observations,captures,
+   proposals:detectShadowObservations(observations,captures,new Date().toISOString())});
+ },process.env.JOBGUARD_ENV??"disabled");
+};
 // Browser-test isolation: the e2e worker runs only the practice final-check tasks, so queued outbox actions
 // that existing journeys advance by hand are never delivered behind their backs.
 const practiceOnly=process.env.JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY==="1";
 const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
- taskList:practiceOnly?{discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!}:tasks,
- crontab:practiceOnly?"*/1 * * * * discover_final_check_requests":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests"});
+ taskList:practiceOnly?{discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!}:tasks,
+ crontab:practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests"});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,async()=>{await runner.stop();await runtimePool.end();await shadowPool.end();});
