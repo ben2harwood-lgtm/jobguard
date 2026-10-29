@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "tidy-sv7a-states": {
+      "branches": ["codex/sandbox/tidy-sv7a-states"],
+      "note": "SV-7A intake / CH-2 stage-end test-only follow-up: all six non-live states, replay and cross-company refusal.",
+      "allow": [
+        "config/lanes/tidy-sv7a-states.json",
+        "packages/db/test/job-source-intake.integration.test.ts"
+      ]
+    }
+  }
+}
