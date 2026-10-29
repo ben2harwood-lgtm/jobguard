@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-9-core": {
+      "branches": ["codex/sandbox/mon-9-core"],
+      "note": "RED MON-9 dark synthetic core only. Own lane file implicitly permitted. No migration, endpoint, live offering or real issuance. Persistence, UI and release gates remain later work.",
+      "allow": [
+        "packages/core/src/managed-recovery.ts",
+        "packages/core/src/managed-recovery.test.ts"
+      ]
+    }
+  }
+}
