@@ -58,6 +58,16 @@ it("CH-6 whole-invoice credits refuse attribution; exact synthetic line sources 
 });
 it("CH-6 receipts compare to the exact locked gross bill, deduplicate reads and remove reversed receipts",async()=>{
  const x=await published(),ids=await financialParents(x,false);
+ // Exercise the real SQL projection through the unchanged strict decoder:
+ // the same payment has separate activity and published-receipt fact identities.
+ const {withTenant}=await import("../src/tenant-context.js");
+ const {readCommercialIntegrityV3Input}=await import("../src/commercial-integrity-v3-sources.js");
+ const projected=await withTenant(f.runtime,x.a.context,db=>readCommercialIntegrityV3Input(db,{tenantId:x.a.tenantId,jobId:x.a.jobId,digest:x.a.digest,actor}));
+ expect(projected.input.phase).toBe("post_lock");
+ if(projected.input.phase!=="post_lock")throw new Error("Expected published receipt projection");
+ const receipt=projected.input.published.receipts.find(r=>r.source.sourceId===ids.payment)!;
+ const activity=projected.input.ordinaryFacts.activity.find(a=>a.source.sourceId===ids.payment)!;
+ expect(receipt.source.sourceType).toBe("published_customer_payment");expect(activity.source.sourceType).toBe("customer_payment");
  const {finding}=await save(x.a,"receipts_exceed_locked_account_and_confirmed_catches");
  expect(finding.sourceSnapshot.compared).toMatchObject({receiptPence:"132001",accountPence:"132000",lockId:x.lockId,basis:"gross"});
  await ids.repo.reverseReceipt(x.a.context,{jobId:x.a.jobId,invoiceId:ids.invoice,paymentId:ids.payment,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),reason:"Fictional reversal"});

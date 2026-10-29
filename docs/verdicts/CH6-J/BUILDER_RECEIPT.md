@@ -816,3 +816,54 @@ and browser reruns remain for GitHub CI. Local scripted/unit evidence is not
 independent RED review or proof that those CI suites pass. Router owns commit,
 push, current-head CI, RED review binding and status updates.
 Ready message: /tmp/ch6-j-20261029T021132Z-commit-msg.txt.
+
+## PR #392 CI-fix try 3 (last) — 29 October 2026, 02:31 run
+
+RED. Read all supplied ch6-j-ci-traces-0231.txt. No outstanding merge conflicts.
+The five failures reduce to two actual bugs in migration 0331:
+
+- Whole-invoice credit and receipt-overage tests failed strict decoding with
+  INTEGRITY_SOURCE_UNAVAILABLE. Ordinary payment activity and published receipts
+  used the same tenant/job/scope/sourceType/sourceId despite different fact
+  envelopes (and different reversal-sensitive content). Keep ordinary activity
+  as customer_payment; use published_customer_payment for the published receipt
+  projection. The source schema, conflicting-identity rejection, exact values,
+  reversal handling, review re-resolution and money controls are unchanged.
+- Both writeoff tests failed because SQL alias `old` collided with PL/pgSQL OLD
+  in the trigger's duplicate lookup. This also caused both competing credit
+  mappings to reject, failing the race's one-success assertion. Rename only the
+  lookup alias to prior_source. Duplicate refusal, job-row serialization,
+  line/credit conservation and evidence checks remain unchanged.
+
+Added a decoder regression using the namespace actually emitted by installed
+SQL: ordinary and published facts with the same payment ID decode only with
+separate projection identities, while conflicting same-identity facts still
+refuse. Restoring the original SQL namespace temporarily reproduced the exact
+INTEGRITY_SOURCE_UNAVAILABLE failure; fixed SQL was restored in a finally block.
+Log: /tmp/ch6-j-20261029T023130Z-regression-before.log. Added real SQL projection
+assertions to the existing receipt integration test; all prior assertions remain.
+
+Checks actually executed (installed tools, at most two Vitest workers):
+- DB Vitest, maxWorkers=1, commercial-integrity-v3-input and lp-0-catalog:
+  33/33 PASS, including the new decoder/projection regression.
+- Core Vitest, maxWorkers=2, commercial-integrity-v3 and its boundaries:
+  22/22 PASS, preserving duplicate/reversal, attribution and snapshot controls.
+- Boundary/current-source-guard Node tests: 253/253 PASS,
+  /tmp/ch6-j-20261029T023130Z-boundary.log.
+- Focused integration and input-fixture TypeScript --noEmit PASS via
+  /tmp/ch6-j-20261029T023130Z-types.json.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions. Existing migration order checker PASS.
+- Tracked-file conflict-marker scan and git diff --check PASS.
+- 0330 byte-identical to HEAD. Corrected 0331 SHA-256:
+  817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077.
+
+0331 changes because both bugs are in SQL; no other migration changes. No tests
+weakened/skipped, exceptions changed, grants widened, customer data, live actions
+or Git writes. PostgreSQL execution is unavailable here: CI still must prove
+all five reported failures and existing race/replay limits on the repaired head.
+This is the last authorized CI repair try; any remaining CI failure goes to the
+router's one Ben card under SIMPLE_LOOP, not another automatic repair round.
+Router owns commit/push, current-head CI, independent RED review binding and
+work-list updates. Ready message:
+/tmp/ch6-j-20261029T023130Z-commit-msg.txt.

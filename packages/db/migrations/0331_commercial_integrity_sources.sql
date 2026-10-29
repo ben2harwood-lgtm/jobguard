@@ -33,7 +33,7 @@ DECLARE cap bigint;used numeric;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'INTEGRITY_RETRY_REQUIRED' USING ERRCODE='40001'; END IF;
  -- Exact duplicates still reach the primary-key refusal without re-counting their own amount.
- IF EXISTS(SELECT 1 FROM app.ch6_line_correction_source old WHERE old.tenant_id=NEW.tenant_id AND old.id=NEW.id) THEN RETURN NEW; END IF;
+ IF EXISTS(SELECT 1 FROM app.ch6_line_correction_source prior_source WHERE prior_source.tenant_id=NEW.tenant_id AND prior_source.id=NEW.id) THEN RETURN NEW; END IF;
  -- Serialize competing mappings of a source/line before checking aggregate conservation.
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_invoice_binding b WHERE b.tenant_id=NEW.tenant_id AND b.job_id=NEW.job_id AND b.invoice_id=NEW.invoice_id AND b.lock_id=NEW.lock_id) THEN RAISE EXCEPTION 'INTEGRITY_SOURCE_CHANGED'; END IF;
@@ -119,7 +119,7 @@ BEGIN
  AND e.kind='original' AND e.evidence_type='completion_photo' AND e.byte_length>0 AND length(e.object_version_id)<=300 AND e.object_version_id~'^[ -~]+$' AND e.server_received_at<=l.locked_at
  AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation invalid WHERE invalid.tenant_id=t AND invalid.evidence_id=e.id);
  IF jsonb_array_length(completions)=0 AND EXISTS(SELECT 1 FROM jsonb_array_elements(catches) c WHERE c->>'status'='dismissed_not_completed') THEN missing:=array_append(missing,'completion_evidence_source_unavailable'); END IF;
- SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.id::text,'customer_payment',p.created_at,
+ SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,j,d,p.id::text,'published_customer_payment',p.created_at,
  jsonb_build_object('id',p.id,'invoice',p.invoice_id,'pence',p.amount_pence,'reversal',rv.id),'builder_attested'),
  'value',jsonb_build_object('pence',p.amount_pence,'currency','GBP','basis','gross'),'reversed',rv.id IS NOT NULL) ORDER BY p.id),'[]') INTO receipts
  FROM app.customer_payment p LEFT JOIN app.customer_payment_reversal rv ON(rv.tenant_id,rv.job_id,rv.payment_id)=(p.tenant_id,p.job_id,p.id)

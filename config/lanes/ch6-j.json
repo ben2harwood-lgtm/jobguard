@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 CI-fix try 2. Forward browser fetch without a class receiver; respect shadow-worker lock-read boundary in the certificate fixture; bind lifecycle sequence parameter as bigint consistently. Migrations unchanged this try. PostgreSQL/browser execution remains for GitHub CI.",
+      "note": "RED: CH-6 / PR #392 CI-fix try 3. Repair 0331 trigger OLD alias collision and distinguish published receipt source identity from ordinary payment activity; strict decoding and allocation limits retained. PostgreSQL execution remains for GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",

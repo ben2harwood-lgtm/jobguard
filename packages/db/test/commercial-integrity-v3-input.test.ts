@@ -43,3 +43,21 @@ it("CH-6 revocation between the ordinary authority read and controlled source qu
  const query=vi.fn().mockResolvedValueOnce({rowCount:1,rows:[{}]}).mockRejectedValueOnce(new Error("NOT_FOUND"));
  await expect(readCommercialIntegrityV3Input({$client:{query}} as never,scope)).rejects.toMatchObject({code:"NOT_FOUND"});
 });
+
+it("CH-6 SQL receipt projection has a distinct identity while conflicting facts still fail closed",async()=>{
+ const sql=await readFile(new URL("../migrations/0331_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ // Use the namespace actually emitted by the installed SQL receipt projection.
+ const receiptType=sql.match(/app\.ch6_source\(t,j,d,p\.id::text,'([^']+)',p\.created_at/u)?.[1];
+ expect(receiptType).toBeDefined();
+ const source={tenantId:scope.tenantId,jobId:scope.jobId,scopeId:scope.digest,sourceId:"payment-1",sourceType:"customer_payment",revision:"1",hash:"a".repeat(64),recordedAt:time,provenance:"builder_attested"};
+ const lockId="55555555-5555-4555-8555-555555555555";
+ const raw=fixture();
+ const payload={...raw,input:{...raw.input,phase:"post_lock",ordinaryFacts:{...raw.input.ordinaryFacts,lockState:"present",activity:[{source,activityKind:"payment"}]},published:{
+  lockId,contractVersion:"persisted-published-integrity.v1",cutoff:time,
+  lockSource:{...source,sourceId:lockId,sourceType:"final_account_lock",provenance:"server_recorded"},lockedAccount:{pence:100,currency:"GBP",basis:"gross"},
+  catches:[],completions:[],receipts:[{source:{...source,sourceType:receiptType},value:{pence:101,currency:"GBP",basis:"gross"},reversed:false}],corrections:[],allocations:[],
+ }}};
+ const {db}=database(payload);expect(await readCommercialIntegrityV3Input(db,scope)).toEqual(payload);
+ const conflicting={...payload,input:{...payload.input,published:{...payload.input.published,receipts:[{...payload.input.published.receipts[0],source}]}}};
+ await expect(readCommercialIntegrityV3Input(database(conflicting).db,scope)).rejects.toThrow("INTEGRITY_SOURCE_UNAVAILABLE");
+});

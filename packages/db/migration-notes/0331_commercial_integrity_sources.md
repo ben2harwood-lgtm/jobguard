@@ -86,3 +86,14 @@ source selection and advisory semantics are unchanged. Migration 0330 is
 unchanged. The published financial regression now explicitly publishes its
 verified run's completion certificate through the existing worker trigger before
 issuing invoices; reconciliation alone is not invoice authority.
+
+CI-fix try 3 (29 October 2026): rename the line-correction lookup alias `old`
+to `prior_source`, avoiding collision with the trigger's PL/pgSQL OLD record.
+The checked duplicate, line/credit limits and job-row serialization stay intact.
+Published receipts now use sourceType `published_customer_payment`; ordinary
+payment activity retains `customer_payment`. These are different projections of
+the same payment, with different fact fields and reversal-sensitive content.
+Their former shared source identity was rejected by the unchanged strict source
+conflict check. No schema is loosened, no privilege or table changes, and 0330
+remains unchanged. Existing published integration tests retain all assertions;
+additional projection/decoder regressions exercise this distinction.
