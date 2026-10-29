@@ -462,9 +462,10 @@ BEGIN
  UPDATE app.job SET revision=revision+1,updated_at=transaction_timestamp() WHERE tenant_id=t AND id=j.id;
  RETURN result;
 END $$;
+-- Preserve 0347 OIDC replay namespaces; only commercial-loss grant handling differs.
 CREATE OR REPLACE FUNCTION identity.sso_complete(c uuid,claims jsonb,state char(64),new_session uuid,token char(64),csrf text,expires timestamptz) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; allow_new_grants boolean:=false; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; BEGIN
- PERFORM identity.sso_load_connection(c); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; allow_new_grants boolean:=false; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; binding jsonb; BEGIN
+ binding:=identity.sso_load_connection(c); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
  -- Match email-code serialization order and lock globally shared email before identity creation/linking.
  PERFORM pg_advisory_xact_lock(hashtextextended('identity-email:'||address,0));
@@ -473,7 +474,11 @@ DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member
  IF address IS NULL OR address<>lower(address) OR address NOT LIKE '%.invalid' OR length(address)>320 THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
  email_domain:=split_part(address,'@',2);
  IF NOT EXISTS(SELECT 1 FROM identity.verified_domain WHERE tenant_id=t AND connection_id=c AND verified_domain.domain=email_domain) THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+ IF binding->>'protocol'='oidc' THEN
+  IF EXISTS(SELECT 1 FROM identity.oidc_assertion_use WHERE tenant_id=t AND connection_id=c AND (assertion_id=claims->>'assertionId' OR request_id=r.request_id)) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ ELSE
  IF EXISTS(SELECT 1 FROM identity.sso_assertion_use WHERE assertion_id=(claims->>'assertionId')) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ END IF;
  SELECT * INTO sub FROM identity.sso_subject WHERE tenant_id=t AND connection_id=c AND subject_hash=sh;
  IF sub.user_id IS NOT NULL THEN
   IF sub.email_hash<>eh THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -508,12 +513,20 @@ DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member
     AND mapping.idp_group IN(SELECT jsonb_array_elements_text(claims->'groups'))));
  END IF;
  IF grants_count=0 THEN
-  INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
   RETURN jsonb_build_object('code','NO_MAPPED_GRANTS');
  END IF;
  IF expires<=clock_timestamp() OR expires>clock_timestamp()+interval '15 minutes' THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
  -- DB uniqueness is inside the same transaction as identity, membership, grants and session.
- INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+ IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
  IF member IS NULL THEN
   u:=gen_random_uuid(); member:=gen_random_uuid();
   SELECT id INTO account FROM app.account WHERE tenant_id=t ORDER BY created_at,id LIMIT 1;
@@ -537,6 +550,18 @@ DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member
  INSERT INTO identity.sso_session_binding(tenant_id,connection_id,subject_hash,session_id) VALUES(t,c,sh,new_session);
  INSERT INTO identity.security_event(id,event_type,subject_id) VALUES(gen_random_uuid(),'session.issued',new_session);
  RETURN jsonb_build_object('userId',u,'membershipId',member,'tenantId',t);
+END $$;
+-- Preserve 0347 OIDC registration, adding the same server-side SSO entitlement as SAML.
+CREATE OR REPLACE FUNCTION identity.oidc_create(s char(64),p jsonb) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c uuid:=(p->'config'->>'connectionId')::uuid; current_session identity.session; BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ PERFORM app.mon8_require_feature(identity.sso_require_admin(s,t),'sso');
+ SELECT * INTO current_session FROM identity.session WHERE token_digest=s AND revoked_at IS NULL AND expires_at>clock_timestamp();
+ IF current_session.id IS NULL THEN RAISE EXCEPTION 'SSO_FORBIDDEN'; END IF;
+ PERFORM identity.oidc_link(t,current_session.id,current_session.user_id,s,current_session.csrf_token);
+ IF p->>'version' IS DISTINCT FROM 'oidc-connection.v1' OR p->>'protocol' IS DISTINCT FROM 'oidc'
+ OR p->'config'->>'tenantId' IS DISTINCT FROM t::text THEN RAISE EXCEPTION 'SSO_FORBIDDEN'; END IF;
+ INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES(t,c,p);RETURN c;
 END $$;
 CREATE OR REPLACE FUNCTION app.ent3b_start_visit(p_actor uuid, p_command uuid, p_job uuid) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$

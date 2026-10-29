@@ -497,3 +497,64 @@ owns merge completion, commit/push, current-main CI including DB/migration suite
 and the required exact-head independent RED review. Incoming main changes were
 preserved. Commit message:
 `/tmp/mon8-upgrade-successors-20261029T081356Z-commit-msg.txt`.
+
+
+## 29 October 2026 — PR #302 CI-fix try 2: preserve merged OIDC (RED)
+
+Repair of the independent RED failure at 282f104a. No conflicts remained in the
+supplied worktree. Rebuilt 0353's identity.sso_complete from 0347's exact body,
+applying only the existing MON-8 commercial-loss changes: current feature lookup,
+retained mapped grants without new grants after entitlement loss, revocation of
+removed mappings, and the JIT/link feature guard. Preserved 0347's connection-bound
+OIDC replay lookup and both replay insertion branches (success and no mapped
+grants), alongside its unchanged SAML namespace and sign-in checks.
+
+Added a CREATE OR REPLACE identity.oidc_create inside 0353 from 0347's exact body,
+with only its admin check extended to require the server-derived membership's
+sso feature. Existing routine identity, owner, signature, search path and grants
+are preserved by replacement. Never edited merged 0347 or renumbered 0352/0353.
+
+New real-PG test mon8-oidc.integration.test.ts requires 0353 installed, verifies
+OIDC replay rows on successful and no-group outcomes, and directly calls the
+installed sso_complete routine to require ASSERTION_REPLAY/23505 for both a reused
+assertion and a fresh assertion with the same consumed request. Refusals preserve
+sessions, bindings, subjects, replay tables, security events, memberships, grants
+and revocations. This deliberately bypasses the application callback's earlier
+one-use request check. A positive OIDC admin registration is followed by agreement
+suspension: sso_require_admin still returns that owner, but oidc_create must refuse
+with FORBIDDEN/42501 and leave connections unchanged. Added oidc_create to the
+existing installed entitlement-guard expectation list. PostgreSQL tests are
+AUTHORED AND COLLECTED, not executed under this sandbox.
+
+Added deterministic full-body comparisons to 0347 plus only the listed MON-8
+changes, matching the existing 0332 preservation test. Regenerated the existing
+lp-downstream-effects-v1.md with its checked-in generator after its reproducibility
+check detected drift from the merged migrations and this replacement. This is a
+source appendix refresh, not a change to frozen LP-0 capabilities or acceptance.
+The lane includes the new test and regenerated appendix. LP-0 JSON, SERIOUS-B5 and
+contractor-upgrade expectation unions remain unchanged; these replacements add no
+new routine identities, tables, policies or grants.
+
+Actual local checks (installed tools, at most two Vitest workers):
+
+- DB Vitest run --maxWorkers=2 test/mon8-combined-migration.test.ts
+  src/plan-entitlement-service.test.ts src/outbox.test.ts: 3 files / 15 passed.
+- Strict standalone tsc --noEmit --strict --noUncheckedIndexedAccess
+  --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext
+  --moduleResolution NodeNext on mon8-oidc.integration.test.ts,
+  mon8-combined-migration.test.ts and server-entitlements.integration.test.ts:
+  passed.
+- DB Vitest list --maxWorkers=2 test/mon8-oidc.integration.test.ts
+  test/oidc-signin.integration.test.ts test/server-entitlements.integration.test.ts:
+  all 18 cases collected. Listing executes neither PG hooks nor assertions.
+- node --test --test-concurrency=2 tools/lp-downstream-inventory.test.mjs:
+  all 4 passed; generator --check passed after regeneration.
+- Existing loadLanePolicy/lanePathAllowed APIs: all six then-changed/untracked
+  paths covered. This receipt is already in the lane. git diff --check: passed.
+- git diff --exit-code on 0347, 0352, LP-0 JSON, SERIOUS-B5 and contractor
+  entitlement upgrade test: passed, confirming no changes to those files.
+
+No git writes, PostgreSQL startup, live provider or release. Ready for router
+commit/push and current-main CI, including DB/migrations, then independent RED
+review at the resulting exact head. This is not an independent acceptance.
+Commit message: /tmp/mon8-upgrade-successors-20261029T083824Z-commit-msg.txt.

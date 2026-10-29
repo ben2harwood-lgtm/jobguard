@@ -78,7 +78,7 @@ it("MON-8 a blocked check observes a committed suspension, rather than stale eli
   } finally { await writer.query("ROLLBACK"); writer.release(); await pending; }
 });
 it("MON-8 real installed guards reference the one service; no public or infrastructure execution grant", async () => {
-  const names = ["app.ef_actor", "app.enterprise_baseline_actor", "app.ent3a_extra_authority", "app.practice_worker_switch_decision", "app.practice_worker_switch_on", "app.link_contractor_customer", "app.lp_authority", "app.lp_visit_evaluate", "app.cb_authority", "app.contractor_admin_command", "app.guard_contractor_grant", "app.work_order_begin", "app.work_order_commit", "app.ent4b_origin_provenance", "app.xa_begin", "identity.sso_admin_command", "identity.sso_required_command", "identity.sso_complete"];
+  const names = ["app.ef_actor", "app.enterprise_baseline_actor", "app.ent3a_extra_authority", "app.practice_worker_switch_decision", "app.practice_worker_switch_on", "app.link_contractor_customer", "app.lp_authority", "app.lp_visit_evaluate", "app.cb_authority", "app.contractor_admin_command", "app.guard_contractor_grant", "app.work_order_begin", "app.work_order_commit", "app.ent4b_origin_provenance", "app.xa_begin", "identity.sso_admin_command", "identity.sso_required_command", "identity.sso_complete", "identity.oidc_create"];
   for (const name of names) {
     const [schema, routine] = name.split(".");
     const rows = (await c.admin.query("SELECT pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=$2", [schema, routine])).rows;
