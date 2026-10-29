@@ -1033,3 +1033,32 @@ it.each(["RECOVERY_STALE_REVISION", "ELIGIBILITY_STALE_REVISION"])("a held %s re
  writes()[2]!.json(answerBody([caseView()],CASE_A)); await w.settle();
  expect(w.screen().hasButton("Reload page")).toBe(false); expect(w.screen().alert()).toBe("");
 });
+
+
+describe("M4-1 full disputed amount",()=>{
+ it("sends the owner's entered disputed amount rather than deriving it from the claim or cash",async()=>{
+  const w=start();await w.settle();reads()[0]!.json(answerBody([caseView({state:"partially_landed",landedNetPence:10000,outstandingNetPence:22000})]));await w.settle();
+  const label=[...walk(w.inst.tree)].find(el=>el.type==="label"&&textOf(el).startsWith("Disputed (£"))!;
+  const input=[...walk(label)].find(el=>el.type==="input")!;
+  (input.props.onChange as (e:{target:{value:string}})=>void)({target:{value:"25.00"}});await w.settle();
+  w.click("Record dispute");await w.settle();
+  expect(writes()[0]!.body).toMatchObject({action:"transition",eventType:"dispute",amountPence:2500});
+ });
+});
+
+it("M4-1 offers pursuit, negotiation and resumed pursuit as explicit version-bound commands",async()=>{
+ const w=start();await w.settle();reads()[0]!.json(answerBody([caseView({state:"evidence_assembled",revision:3})]));await w.settle();
+ w.click("Start pursuit");await w.settle();expect(writes()[0]!.body).toMatchObject({eventType:"start_pursuit",expectedRevision:3});
+ writes()[0]!.json(answerBody([caseView({state:"pursuing",revision:4})],CASE_A));await w.settle();
+ w.click("Start negotiation");await w.settle();expect(writes()[1]!.body).toMatchObject({eventType:"start_negotiation",expectedRevision:4});
+ writes()[1]!.json(answerBody([caseView({state:"negotiating",revision:5})],CASE_A));await w.settle();
+ w.click("Resume pursuit");await w.settle();expect(writes()[2]!.body).toMatchObject({eventType:"resume_pursuit",expectedRevision:5});
+});
+it("M4-1 prevention on the existing identity leaves no landing or further prevention action",async()=>{
+ const w=start();await w.settle();reads()[0]!.json(answerBody([caseView({state:"identified",revision:2})]));await w.settle();
+ w.click("Prevent before payment");await w.settle();expect(writes()[0]!.body).toMatchObject({caseId:CASE_A,eventType:"prevent",expectedRevision:2});
+ writes()[0]!.json(answerBody([caseView({state:"prevented",revision:3})],CASE_A));await w.settle();
+ expect(w.screen().button("Prevent before payment").props.disabled).toBe(true);
+ expect(w.screen().button("Record a landed recovery").props.disabled).toBe(true);
+ expect(w.screen().testId("case-landed-net")).toBe("£0.00");
+});

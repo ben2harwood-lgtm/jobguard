@@ -22,6 +22,7 @@ export const recoveryCommandRefusalRulesV1 = {
  PAYER_MARK_NOT_CUSTOMER_PAYMENT: { status: 400, stage: "after_replay", settlesUnknown: false },
  PAYER_MARK_NOT_INSURER_JOB: { status: 400, stage: "after_replay", settlesUnknown: false },
  PAYER_MARK_EVIDENCE_REQUIRED: { status: 400, stage: "after_replay", settlesUnknown: false },
+ FINAL_CHECK_CONFIRMATION_HELD: { status: 409, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_FORBIDDEN: { status: 403, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_CASE_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_COMMAND_CONFLICT: { status: 409, stage: "recorded_conflict", settlesUnknown: true },
@@ -68,7 +69,13 @@ const signedPence = z.number().refine(value => { try { money(value); return true
 const nonnegativePence = signedPence.refine(value => value >= 0, "Principal/posting magnitude must be non-negative");
 const eligibilityViewV1=z.object({revision:z.number().int(),caseRevision:z.number().int(),evidenceRevision:z.number().int(),policyVersion:z.literal("reference-d03.v1"),policyRevision:z.number().int(),classification:z.string(),eligibleNetPence:nonnegativePence.nullable(),reason:z.string(),citations:z.array(z.string()),status:z.enum(["reviewed","approved","superseded"]),reviewerRef:z.string()});
 const eligibilityRecordV3=z.object({id:z.guid({ error: "Invalid uuid" }),revision:z.number().int().positive(),caseRevision:z.number().int().positive(),sourceEventId:z.guid({ error: "Invalid uuid" }).nullable(),result:recoveryEligibilityViewV3}).strict();
-export const recoveryCaseViewV1=z.object({id:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),caseType:recoveryCaseTypeV1,state:recoveryCaseStateFullV1,claimedNetPence:nonnegativePence,landedNetPence:nonnegativePence,outstandingNetPence:nonnegativePence,writtenOffPence:nonnegativePence,currency:z.literal("GBP"),counterparty:z.string(),book:z.string(),sourceType:z.string(),sourceRefs:z.array(z.string()),sources:z.array(z.object({ref:z.string(),kind:z.string(),label:z.string(),recorded:z.boolean()})),feeJobLiabilityPence:signedPence,feeObligationsPostedPence:nonnegativePence,feeCompensationsPostedPence:nonnegativePence,approvedLandedNetPence:nonnegativePence,revision:z.number().int(),reviewerRef:z.string(),createdDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),eligibility:eligibilityViewV1.nullable(),eligibilityV3:eligibilityRecordV3.nullable().optional()});
+const recoveryWorkbenchDetails = {
+ canCommand:z.boolean().optional(),claimRevision:z.number().int().nonnegative().optional(),
+ lastDisputedNetPence:nonnegativePence.nullable().optional(),manualReversedNetPence:nonnegativePence.optional(),approvedReversedNetPence:nonnegativePence.optional(),
+ evidenceStatus:z.enum(["sources_unresolved","not_assembled","assembled"]).optional(),ambiguity:z.array(z.string()).optional(),
+ history:z.array(z.object({id:z.guid(),kind:z.string(),revision:z.number().int().nullable(),amountPence:nonnegativePence.nullable(),fromState:z.string().nullable(),toState:z.string().nullable(),reviewerRef:z.string().nullable(),recordedAt:z.string().datetime(),hash:z.string().nullable(),previousHash:z.string().nullable()})).optional(),
+};
+export const recoveryCaseViewV1=z.object({...recoveryWorkbenchDetails,id:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),caseType:recoveryCaseTypeV1,state:recoveryCaseStateFullV1,claimedNetPence:nonnegativePence,landedNetPence:nonnegativePence,outstandingNetPence:nonnegativePence,writtenOffPence:nonnegativePence,currency:z.literal("GBP"),counterparty:z.string(),book:z.string(),sourceType:z.string(),sourceRefs:z.array(z.string()),sources:z.array(z.object({ref:z.string(),kind:z.string(),label:z.string(),recorded:z.boolean()})),feeJobLiabilityPence:signedPence,feeObligationsPostedPence:nonnegativePence,feeCompensationsPostedPence:nonnegativePence,approvedLandedNetPence:nonnegativePence,revision:z.number().int(),reviewerRef:z.string(),createdDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),eligibility:eligibilityViewV1.nullable(),eligibilityV3:eligibilityRecordV3.nullable().optional()});
 const workbenchEnvelope={version:z.literal("recovery-case-workbench.v1"),environment:z.literal("synthetic_demo"),realExternalActions:z.literal(0),cases:z.array(recoveryCaseViewV1)};
 /** A plain read of the workbench: the job's cases. It names no affected case because no command produced it. */
 export const recoveryCaseListResponseV1=z.object(workbenchEnvelope);

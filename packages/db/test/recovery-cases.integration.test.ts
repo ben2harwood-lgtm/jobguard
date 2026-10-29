@@ -84,3 +84,32 @@ it("serializes eligibility commands whose case ID differs only in letter case an
  expect(["ELIGIBILITY_REVIEW_REQUIRED","ELIGIBILITY_STALE_REVISION"]).toContain((refused[0]!.reason as Error).message);
  expect((await admin.query("SELECT subject_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='recovery.eligibility.approve' AND lower(subject_ref)=$2",[tenant,x.id])).rows).toEqual([{subject_ref:x.id}]);
 });
+
+it("M4-1 dark history preserves replay identity, bounded disputes and closed-case reversals",async()=>{
+ const repo=reviewedRepository();
+ let x=await repo.command(ctx,job,command({action:"open",caseType:"merchant_overcharge",claimedNetPence:100,counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0}));
+ x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}));
+ x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:100,expectedRevision:x.revision}));
+ x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"close_recovered",expectedRevision:x.revision}));
+ const reverse=command({action:"transition",caseId:x.id,eventType:"reverse_landing",amountPence:40,expectedRevision:x.revision});
+ x=await repo.command(ctx,job,reverse);
+ const replay=await repo.command(ctx,job,reverse);
+ expect(replay.history).toEqual(x.history);
+ expect(x).toMatchObject({state:"partially_landed",landedNetPence:60,outstandingNetPence:40,manualReversedNetPence:40,approvedReversedNetPence:0,claimRevision:1});
+ expect(x.history?.filter(e=>e.kind==="reverse_landing")).toHaveLength(1);
+ await expect(repo.command(ctx,job,{...reverse,amountPence:41})).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+ await expect(repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"dispute",amountPence:101,expectedRevision:x.revision}))).rejects.toThrow();
+ x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"dispute",amountPence:40,expectedRevision:x.revision}));
+ expect(x).toMatchObject({state:"negotiating",lastDisputedNetPence:40,landedNetPence:60,outstandingNetPence:40});
+ expect((await repo.list(testTenantContext(other),job))).toEqual([]);
+ expect((await repo.list(ctx,wrongJob))).toEqual([]);
+});
+it("M4-1 dark preserves terminal prevention on amendment and refuses generic creation of locked Final Check identities",async()=>{
+ const repo=reviewedRepository(),open={action:"open",caseType:"prevention",claimedNetPence:100,counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0};
+ const x=await repo.command(ctx,job,command(open));
+ const amended=await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:101,expectedRevision:x.revision}));
+ expect(amended.state).toBe("prevented");
+ await expect(repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:101,expectedRevision:amended.revision}))).rejects.toThrow();
+ await expect(repo.command(ctx,job,command({...open,caseType:"missed_variation_final_account"}))).rejects.toThrow("FINAL_CHECK_CONFIRMATION_HELD");
+ expect((await repo.list(ctx,job)).find(c=>c.id===x.id)?.history).toEqual(amended.history);
+});

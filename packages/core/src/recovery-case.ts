@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { money } from "./money.js";
 
-export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention", "duplicate_supplier_payment"]);
+export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention", "duplicate_supplier_payment", "missed_variation_final_account"]);
 export const recoveryCaseStateFullV1 = z.enum([
   "identified", "evidence_assembled", "pursuing", "negotiating", "partially_landed", "landed",
   "closed_recovered", "closed_no_recovery", "prevented",
@@ -106,6 +106,7 @@ export function transitionRecoveryCase(input: Readonly<{
 }>): { state: RecoveryCaseState; landedPence: number; writtenOffPence: number } {
   if (!recoveryEventAllowedFrom(input.state, input.event)) throw new RecoveryTransitionError(input.state, input.event);
   const claimed: number = money(input.claimedPence).pence;
+  if (input.event === "dispute" && input.amountPence !== undefined && (money(input.amountPence).pence <= 0 || input.amountPence > claimed)) throw new RecoveryTransitionError(input.state, input.event);
   let landed: number = money(input.landedPence).pence;
   const priorWrittenOff: number = money(input.writtenOffPence ?? 0).pence;
   if (landed + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
