@@ -150,6 +150,43 @@ describe("M5-1 dark accounting export", () => {
     model.setSyntheticSource({ ...b, amount: { pence: 41, currency: "GBP" } });
     expect(model.push(ctx, command(model, scopeFor(b), "two"), 100).status).toBe("pushed");
   });
+  it.each([
+    ["credit", "receipt", "demo-company"],
+    ["receipt", "credit", "demo-company"],
+    ["credit", "credit", "demo-company-two"],
+    ["receipt", "receipt", "demo-company-two"],
+    ["credit", "receipt", "demo-company-two"],
+  ] as const)("combines %s and %s reservations across target %s", (firstKind, secondKind, companyId) => {
+    const a = adjustment(firstKind, 60, "demo-adjustment-one");
+    const b = adjustment(secondKind, 42, "demo-adjustment-two");
+    const { model, adapter } = setup([source, a, b]);
+    model.setSyntheticConsent({ ...consent, companyId });
+    const secondScope = { ...scopeFor(b), companyId, mapping: { ...scope.mapping, companyId } };
+    const secondCommand = command(model, secondScope, "two");
+    const firstCommand = command(model, scopeFor(a));
+    model.push(ctx, firstCommand, 100);
+    expect(() => model.preview(ctx, secondScope, 100)).toThrow("reference_conflict");
+    expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
+    expect(adapter.pushes).toBe(1);
+    model.setSyntheticSource({ ...b, amount: { pence: 41, currency: "GBP" } });
+    expect(model.push(ctx, command(model, secondScope, "exact"), 100).status).toBe("pushed");
+    expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
+    expect(adapter.objects.reduce((sum, object) => sum + object.payload.amount.pence, 0)).toBe(source.amount.pence);
+    expect(adapter.pushes).toBe(2);
+  });
+  it.each(["credit", "receipt"] as const)("counts the same %s source reserved in another company", kind => {
+    const a = adjustment(kind, 60);
+    const { model, adapter } = setup([source, a]);
+    const companyId = "demo-company-two";
+    model.setSyntheticConsent({ ...consent, companyId });
+    const secondScope = { ...scopeFor(a), companyId, mapping: { ...scope.mapping, companyId } };
+    const secondCommand = command(model, secondScope, "two");
+    const firstCommand = command(model, scopeFor(a));
+    model.push(ctx, firstCommand, 100);
+    expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
+    expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
+    expect(adapter.pushes).toBe(1);
+  });
   it("rejects adjustments before their invoice, wrong-job references and amounts above invoice", () => {
     const a = adjustment("credit", 102);
     expect(() => setup([a]).model.preview(ctx, scopeFor(a), 100)).toThrow("reference_conflict");

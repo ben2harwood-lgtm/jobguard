@@ -23,7 +23,7 @@ The contract and executable fake live in `apps/api/src/accounting-export.contrac
 | Regional data path | Process memory only | No external destination, logs, credentials, telemetry or live/sandbox-provider evidence |
 | Real Codat sandbox/live | Not built | Codat SDK is not installed; no dependencies added |
 
-The bounded document contract carries source totals, IDs and revisions. It does not fabricate tax calculations, item lines, settlement evidence or missing provider capabilities. There is no rounding: validated integer pennies are preserved. Credits and receipts each have a conservative per-invoice allocation ceiling, computed with bigint from immutable export reservations (including failed/unknown attempts). Reservations cannot be silently released by source edits or cancellation. This is not an accounting balance or fee calculation.
+The bounded document contract carries source totals, IDs and revisions. It does not fabricate tax calculations, item lines, settlement evidence or missing provider capabilities. There is no rounding: validated integer pennies are preserved. Credits and receipts share one conservative per-invoice allocation ceiling across all target companies, computed with bigint from immutable export reservations (including failed/unknown attempts). Only the exact company/source entry being retried is excluded from the sum before adding its amount. Reservations cannot be silently released by source edits or cancellation. This is not an accounting balance or fee calculation.
 
 ## Authorization and reconciliation
 

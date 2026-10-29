@@ -78,8 +78,8 @@ export class AccountingExportSandbox {
       const invoice = this.sources.get(key(scope.tenantId, source.invoiceId));
       if (!invoice || invoice.revision !== source.invoiceRevision || (invoice.finalAccount && invoice.finalAccount.revision !== invoice.finalAccount.lockedRevision) || invoice.jobId !== scope.jobId || invoice.kind !== "customer_invoice" || invoice.state !== "issued" ||
         source.amount.pence > invoice.amount.pence) fail("reference_conflict");
-      const allocated = [...this.entries.values()].filter(e => e.tenantId === scope.tenantId && e.companyId === scope.companyId && e.sourceId !== source.sourceId)
-        .filter(e => e.invoiceId === source.invoiceId && e.kind === source.kind)
+      const allocated = [...this.entries.values()].filter(e => e.tenantId === scope.tenantId && e.invoiceId === source.invoiceId)
+        .filter(e => !(e.companyId === scope.companyId && e.sourceId === source.sourceId))
         .reduce((sum, e) => sum + BigInt(e.pence), 0n);
       if (allocated + BigInt(source.amount.pence) > BigInt(invoice.amount.pence)) fail("reference_conflict");
     }
