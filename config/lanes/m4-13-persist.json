@@ -7,6 +7,8 @@
       ],
       "note": "M4-13 RED dark persistence only; based on unmerged m4-13-terms. Migration 0452. No collection execution. Own lane path is implicitly allowed by the validator.",
       "allow": [
+        "packages/core/src/subscription-agreement.ts",
+        "packages/core/src/subscription-agreement.test.ts",
         "packages/db/src/index.ts",
         "packages/db/src/subscription-mandate-repository.ts",
         "packages/db/migrations/0452_subscription_mandate.sql",
