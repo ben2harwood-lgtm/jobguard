@@ -240,6 +240,36 @@
         ]
       }
     },
+    "/value": {
+      "get": {
+        "operationId": "BusinessValueController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read business value availability; producer and billing-period bindings held",
+        "tags": [
+          "value"
+        ]
+      }
+    },
+    "/jobs/{id}/value/v3": {
+      "get": {
+        "operationId": "ValueV3Controller_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read job value v3 availability; producer bindings held",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
     "/jobs/{id}/success-fee-attribution": {
       "get": {
         "operationId": "RecoveryAttributionController_get",

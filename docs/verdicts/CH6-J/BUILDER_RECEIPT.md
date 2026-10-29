@@ -676,3 +676,43 @@ these deterministic checks are not an independent review. Router owns staging,
 commit/push, required CI and work-list updates.
 
 Ready message: /tmp/ch6-j-20261029T003142Z-commit-msg.txt.
+
+## PR #392 catch-up to main f7aa65c8 — 29 October 2026, 01:12 run
+
+RED, catch-up only. Resolved the two merge conflicts on disk: AppModule now
+retains CommercialIntegrityV3Controller alongside main's BusinessValueController,
+ValueV3Controller and reader factory; the LP-0 inventory retains main's exact
+billing group (including migration 0322) and CH-6's separate authority group.
+No new behaviour or SQL changes. Updated this receipt and the existing ch6-j
+lane note; its allow list exactly matches all 54 branch payload paths relative
+to MERGE_HEAD, excluding the implicitly allowed lane file itself.
+
+Verification actually run with installed dependencies:
+- API Vitest, maxWorkers=2: commercial-integrity-v3.boundary,
+  commercial-integrity-v3.application and value/value-composition: 25/25 PASS.
+  Initial composition run failed because installed DB dist lacked main's new
+  ValueV3Reader export; rebuilt core and DB via their existing tsc build commands,
+  then reran the same three files successfully. No source workaround added.
+- DB Vitest, maxWorkers=1: commercial-integrity-v3-input and lp-0-catalog:
+  32/32 PASS. These are local unit/catalogue checks, not PostgreSQL execution.
+- Node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: 253/253 PASS;
+  /tmp/ch6-j-20261029T011209Z-boundary.log.
+- Installed tsc: API --noEmit PASS; core and DB builds PASS.
+- OpenAPI check PASS via `node --import tsx src/generate-openapi.ts --check`
+  in apps/api. The tsx CLI first hit its sandbox-blocked IPC socket; direct
+  Node import runs the same checker without that CLI socket.
+- Every main inventory array entry remains present exactly. Existing lane
+  loader/selector/path checker: exact payload equality PASS; existing migration
+  ordering checker PASS; tracked working-file conflict-marker scan PASS.
+- All 273 SQL migration and lane files from MERGE_HEAD remain byte-identical.
+- 0330 SHA-256 bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605;
+  0331 SHA-256 e127deaa30be03e0036265de63b559365b0f22881bd759eae5418421a3584ac3.
+  Both match RED-reviewed head 18db2a9f byte-for-byte.
+
+The read-only Git index still lists conflicts until the router stages these
+resolved files. No Git write was attempted. PostgreSQL, migrations and browser
+execution remain for GitHub CI. The supplied RED pass at 18db2a9f is historical;
+this catch-up's deterministic checks are not an independent review of a new head.
+Router owns staging, commit, push, current-head CI and status updates.
+Ready message: /tmp/ch6-j-20261029T011209Z-commit-msg.txt.

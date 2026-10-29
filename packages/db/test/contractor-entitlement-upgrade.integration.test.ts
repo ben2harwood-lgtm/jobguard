@@ -57,6 +57,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.receipt_allocation_fact_review":[],
  "app.receipt_allocation_fact_revision":[],
  "app.receipt_allocation_fact_source":[],
+ "app.enterprise_duplicate_correction":[],
  "app.enterprise_agreement_version":[],
  "app.enterprise_fee_contribution":[],
  "app.enterprise_fee_derivation":[],

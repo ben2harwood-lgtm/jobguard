@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up to main bf1052a0. Consolidates branch-only CH6-A/P lane files in archive unchanged; all main lane files retained. Reserved migrations 0330/0331 preserve original SQL bytes and order. Refreshes only the existing subscription-executor exception fingerprint. Exact branch payload paths; own lane file is implicit. PostgreSQL/browser execution remains for GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up to main f7aa65c8. Resolve only application composition and privilege-inventory conflicts, retaining both sides and every main shared-list entry. Reserved migrations 0330/0331 remain byte-identical to RED-reviewed head 18db2a9f. Exact branch payload paths; own lane file is implicit. PostgreSQL/browser execution remains for GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
