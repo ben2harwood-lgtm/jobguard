@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 const generated = execFileSync("python3", ["tools/lp-downstream-inventory.py", "--stdout"], { encoding: "utf8" });
@@ -18,6 +20,23 @@ function includes(name, family, cards) {
 
 test("downstream document is reproducible from checked-in generator", () => {
   assert.equal(generated, readFileSync("docs/contracts/lp-downstream-effects-v1.md", "utf8"));
+});
+
+test("newer migrations leave --check exact against the recorded input", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "lp-downstream-inventory-"));
+  for (const path of ["tools/lp-downstream-inventory.py", "docs/contracts/lp-0-effective-privileges-v1.json",
+    "docs/contracts/lp-downstream-effects-v1.md", "packages/db/migrations"]) {
+    cpSync(path, join(cwd, path), { recursive: true });
+  }
+  const run = (flag) => execFileSync("python3", ["tools/lp-downstream-inventory.py", flag], { cwd, encoding: "utf8", stdio: "pipe" });
+  const before = run("--check");
+  writeFileSync(join(cwd, "packages/db/migrations/9999_newer_inventory_fixture.sql"),
+    "CREATE TABLE app.newer_inventory_fixture (amount_pence bigint);\n");
+  assert.equal(run("--check"), before);
+  assert.equal(run("--stdout"), generated);
+  // New migrations are excluded, but the comparison must still reject document drift.
+  writeFileSync(join(cwd, "docs/contracts/lp-downstream-effects-v1.md"), `${generated}\nDrift\n`);
+  assert.throws(() => run("--check"), /Downstream inventory differs/);
 });
 
 test("financial declarations and every checked billing routine retain money assignments", () => {
