@@ -367,7 +367,11 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(find(key), key).toMatchObject({ disposition: "existing_exception", target: "revoke" });
       expect(find(key)!.cards, key).toContain("LP-1");
     }
-    expect(find(keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false))).toMatchObject({ disposition: "existing_exception", cards: ["LP-2"] });
+    const closedTransition = keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false);
+    expect(find(closedTransition)).toBeUndefined();
+    expect(exceptions.has(closedTransition)).toBe(false);
+    expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
+    expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
     // Reads are approved current capability, rebound at LP-11; they are not an exception.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
     // Target state is a separate section and names no live key.

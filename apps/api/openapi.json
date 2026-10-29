@@ -302,7 +302,7 @@
             "description": ""
           }
         },
-        "summary": "Read business value availability; producer and billing-period bindings held",
+        "summary": "Read mapped, inspectable company value and subscription periods",
         "tags": [
           "value"
         ]
@@ -317,7 +317,7 @@
             "description": ""
           }
         },
-        "summary": "Read job value v3 availability; producer bindings held",
+        "summary": "Read mapped, inspectable job value from locked bill and attribution sources",
         "tags": [
           "jobs"
         ]
