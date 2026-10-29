@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-4-server": {
+      "branches": [
+        "codex/sandbox/m3-4-server"
+      ],
+      "note": "RED M3-4 DARK server upload slice; synthetic only, no outbound execution. Native queue and G3/D08 remain held.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/offline-upload.application.test.ts",
+        "apps/api/src/offline-upload.application.ts",
+        "apps/api/src/offline-upload.contracts.ts",
+        "apps/api/src/offline-upload.controller.ts",
+        "config/lanes/m3-4-server.json",
+        "docs/contracts/offline-contract-v1.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/offline-upload.test.ts",
+        "packages/db/src/offline-upload.ts",
+        "packages/db/test/offline-upload.integration.test.ts"
+      ]
+    }
+  }
+}

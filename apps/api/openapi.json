@@ -1,6 +1,81 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/offline/uploads": {
+      "post": {
+        "operationId": "OfflineUploadController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "jobId",
+                  "payloadHash",
+                  "expectedRevision",
+                  "body"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "offline-upload.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "jobId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "payloadHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "body": {
+                    "type": "object",
+                    "description": "Strict log-site-extra.v1, job-work-state-command.v1 or offline-commercial-intent.v1; commandId and expectedRevision must match envelope"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledged committed fact; never sent or paid"
+          },
+          "400": {
+            "description": "Malformed or rejected intent"
+          },
+          "403": {
+            "description": "Live mode, Origin or current membership refused"
+          },
+          "409": {
+            "description": "Explicit conflict requiring reconciliation or online re-review"
+          },
+          "503": {
+            "description": "Unknown outcome; retry the same command identity"
+          }
+        },
+        "summary": "DARK M3-4 synthetic queued intent upload; outbound actions require online re-review",
+        "tags": [
+          "OfflineUpload"
+        ]
+      }
+    },
     "/jobs/{id}/success-fees": {
       "get": {
         "operationId": "SuccessFeeController_get",
