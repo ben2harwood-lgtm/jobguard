@@ -21,7 +21,10 @@ connection to align acceptance time, effective date and anchor; the nine fixture
 amount assertions are unchanged.
 
 Upgrade coverage checks populated legacy agreement/approval/receipt preservation
-and unchanged ownership, ACLs, security mode and search path. Fresh-install tests
+and unchanged ownership, ACLs, security mode and search path. It also installs
+MON-3 trial facts before 0374 and issues a six-place Solo period afterwards:
+base and extra fees remain zero, all 30 trial days are pinned in exactly one
+source row, and replay returns the same issued document. Fresh-install tests
 cover the 15th, 31st, leap day, full periods, replays, re-anchor refusal, backdating
 and a foreign-company context. Database/browser suites require CI in this sandbox.
 Recovery is a forward-fix migration; never revert or mutate issued artifacts.
@@ -39,6 +42,9 @@ run, at most three named files per run):
 - API: `src/subscription.application.test.ts src/subscription.access.test.ts` — 25 passed.
 - Web: `app/plans/plan-screen.test.tsx` — 17 passed.
 - Core: `src/subscription-plan-view.test.ts src/subscription-period.test.ts src/subscription-allocation.test.ts` — 48 passed.
+- DB: `vitest list --maxWorkers=1 test/subscription-first-period-upgrade.integration.test.ts`
+  collected the expanded upgrade regression successfully; this did not execute
+  its PostgreSQL hooks or assertions.
 - Exact routine-body comparisons to the merged definitions, repository lane
   parser, exact changed-path set, unchanged merged shared lists and
   `git diff --check` passed. No test expectations or migrations already on main
