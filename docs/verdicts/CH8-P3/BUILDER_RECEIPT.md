@@ -127,3 +127,39 @@ reports both exports as unmerged because .git is read-only and no Git-writing co
 PostgreSQL migration/adversarial suites, browser execution and required full CI remain for GitHub CI.
 This RED piece still requires the loop's independent Claude review on the exact resulting head.
 No commit, push, PR, merge, release or real-provider action was performed in this sandbox.
+
+## Current-main catch-up — 29 October 2026, 08:13 run
+
+Started at c28b8877 with a clean tree and no unmerged index entries. No conflict repair was
+needed. Current origin/main contains 0347, so 0343 no longer satisfies migration ordering.
+The finish list's 08:15 reservation assigns this piece 0360 (0348–0359 belong to other pieces).
+Used the existing planRenumber export with those reservations, then applied filesystem renames
+and reference updates without Git mutation: 0343 -> 0360. Updated the upgrade test's lookup,
+tracking insert and predecessor bound, lane, migration note, contract and operations references.
+SQL bytes are unchanged; SHA-256 remains
+ce9c722bea6b53a26998cccdd780535c9e1eae3cca14e103313228d88bbc0834.
+Earlier receipt sections retain their historical numbering and merge state; this section records
+the current state and supersedes their instructions to stage unresolved exports.
+
+Checks actually run using installed package executables:
+
+- API evidence-pack v3 application/controller/worker plus v1 application/controller/errors:
+  6 files, 55 tests passed, Vitest 4.1.12, maxWorkers=1.
+- Core evidence-pack v3, assembly and v1: 3 files, 99 tests passed, maxWorkers=1.
+- DB standalone verifier CLI: 1 file, 5 tests passed, maxWorkers=1. Total: 159 tests passed.
+- tsc -p packages/db/tsconfig.json --noEmit, apps/api/tsconfig.json --noEmit and
+  apps/web/tsconfig.json --noEmit all passed (also the package TypeScript lint checks).
+- Core purity, money arithmetic and commercial boundary checks passed. Core purity reports
+  computed-import advisories; it does not refuse them.
+- Playwright --list CH-8.spec.ts discovers both tests on mobile-360 and desktop (4 cases).
+  This is discovery only, not browser execution.
+- Changed TypeScript transpiles without syntax diagnostics after renumbering. Final filesystem
+  lane policy covers exactly the 16 PR paths; migrationOrderViolations passes against origin/main.
+  This validates the final filesystem, not a staged commit or CI result.
+- git diff --check passed; no unmerged entries were present. No Git-writing command was run.
+
+Ready for the router to stage the 0343 -> 0360 renames and reference/receipt updates and commit.
+PostgreSQL cannot start in this sandbox; DB suites, browser execution and full required CI remain
+pending, followed by an independent Claude RED review against the resulting exact head. No commit,
+push, PR, merge, provider action or release was performed here. No new simplification review was
+added during this catch-up; the initial LATER / SIMPLICITY entry remains above.

@@ -161,7 +161,7 @@ and source preparation do not activate runtime creation. v1 behaviour is preserv
 
 ## CH-8 part 3 synthetic activation (28 October 2026)
 
-Migration 0343 activates the queued application/request/writer path after the installed 0340 SV-6
+Migration 0360 activates the queued application/request/writer path after the installed 0340 SV-6
 source resolver. This supersedes the part 2 runtime refusal above. Compatibility preparation ports
 remain held and are not a fallback writer. Production and external delivery remain disabled.
 
@@ -187,7 +187,7 @@ claim wall-clock constancy or production side-channel certification.
 
 ## RED repair round 1: export disclosure boundary
 
-0343 projects processing sources and attempts to IDs and input/result hashes only. Neither frozen
+0360 projects processing sources and attempts to IDs and input/result hashes only. Neither frozen
 processing input nor signal lists are exported. The reconciliation run projection retains only run,
 manifest and lock IDs plus manifest/result hashes; its classifications and zero-result flag stay private.
 Reveal and disposition records require a `reveal` classification and this case's own catch origin,
@@ -195,4 +195,4 @@ traced through its referenced variation revision and a matching final-account li
 `commercial_revision_id`. A variation ID alone does not bind a real line. Non-catch cases receive no
 reveal/disposition rows. Ordinary catch-origin records also exclude other catches' signal IDs.
 The original pre-lock branch still returns before any hidden query. 0306 remains exactly PR #389;
-these changes are confined to the not-yet-merged 0343 activation.
+these changes are confined to the not-yet-merged 0360 activation.
