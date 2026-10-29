@@ -34,7 +34,6 @@
         "packages/core/src/value-source-receipt.test.ts",
         "packages/core/src/value-source-receipt.ts",
         "packages/db/migration-notes/0342_value_source_read.md",
-        "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
         "packages/db/migrations/0342_value_source_read.sql",
         "packages/db/src/index.ts",
         "packages/db/src/value-business-reader.test.ts",
