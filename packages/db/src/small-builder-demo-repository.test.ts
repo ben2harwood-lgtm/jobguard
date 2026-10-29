@@ -48,6 +48,22 @@ describe("DEMO-I repository boundary (no PostgreSQL proof)",()=>{
   const f=fixture({...run,status:"completed",pence:100});await expect(f.repo.execute(f.context,digest,"create",null,command)).rejects.toThrow("DEMO_UNAVAILABLE");
   const g=fixture(undefined,new Error("foreign company secret"));await expect(g.repo.execute(g.context,digest,"read",id,{})).rejects.toThrow("DEMO_UNAVAILABLE");
  });
+ it("derives meter references only after the owned SQL result and reproduces exact replay",async()=>{
+  const stored={...run,scenario:"meter"};const f=fixture(stored);
+  const result=await f.repo.execute(f.context,digest,"create",null,{...command,scenario:"meter"});
+  expect(result).toMatchObject({status:"blocked",meterPreview:{tenantId:id,runId:id,hypothetical:true}});
+  if(!("meterPreview" in result)||!result.meterPreview)throw new Error("Expected preview");
+  expect(result.meterPreview.profiles.map(p=>p.principalPence)).toEqual([34800,82800,8900,7900,16900,4900,4900,6233,6965,16900]);
+  expect(await f.repo.execute(f.context,digest,"read",id,{})).toEqual(result);
+  expect(f.query.mock.calls.filter(call=>call[0].startsWith("SELECT app.small_builder_demo"))).toHaveLength(2);
+  const denied=fixture(stored,new Error("DEMO_NOT_FOUND"));
+  await expect(denied.repo.execute(denied.context,digest,"read",id,{})).rejects.toThrow("DEMO_NOT_FOUND");
+ });
+ it("never enriches immutable lifecycle reports with unsaved money projections",async()=>{
+  const stored={version:"small-builder-demo-report.v1",snapshotId:id,facts:{...run,scenario:"meter"}};
+  const f=fixture(stored);
+  expect(await f.repo.execute(f.context,digest,"report",id,{})).toEqual(stored);
+ });
  it("reads only an exact requested stored snapshot without accepting report facts",async()=>{
   const report={version:"small-builder-demo-report.v1",snapshotId:id,facts:run};const f=fixture(report);
   expect(await f.repo.execute(f.context,digest,"report",id,{snapshotId:id})).toEqual(report);

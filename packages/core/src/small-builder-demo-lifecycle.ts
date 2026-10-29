@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { demoMeterPreviewV1 } from "./small-builder-demo-meter.js";
 
 const uuid = z.string().uuid();
 const revision = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -10,13 +11,18 @@ export const smallBuilderDemoResetV1 = z.object({contractVersion:z.literal("smal
 export const smallBuilderDemoReportSnapshotV1 = z.object({contractVersion:z.literal("small-builder-demo.report-snapshot.v1"),commandId:uuid,expectedRunRevision:revision}).strict();
 export const smallBuilderDemoReadRunV1 = z.object({runId:uuid}).strict();
 export const smallBuilderDemoReadReportV1 = z.object({runId:uuid,snapshotId:uuid.optional()}).strict();
-export const smallBuilderDemoRunV1 = z.object({
+const storedDemoRunV1 = z.object({
  version:z.literal("small-builder-demo-run.v1"),environment:z.literal("synthetic_demo"),runId:uuid,
  scenario:smallBuilderDemoCreateV1.shape.scenario,revision:z.number().int().min(1).max(2),
  status:z.enum(["blocked","archived"]),reason:z.string().min(1),createdAt:z.string(),archivedAt:z.string().nullable(),
  predecessorId:uuid.nullable(),successorId:uuid.nullable(),
+
 }).strict();
-export const smallBuilderDemoReportV1 = z.object({version:z.literal("small-builder-demo-report.v1"),snapshotId:uuid,facts:smallBuilderDemoRunV1}).strict();
+export const smallBuilderDemoRunV1 = storedDemoRunV1.extend({meterPreview:demoMeterPreviewV1.optional()}).superRefine((run,ctx)=>{
+ if(run.meterPreview && (run.scenario!=="meter" || run.meterPreview.runId!==run.runId))
+  ctx.addIssue({code:"custom",message:"Meter preview must bind this meter run"});
+});
+export const smallBuilderDemoReportV1 = z.object({version:z.literal("small-builder-demo-report.v1"),snapshotId:uuid,facts:storedDemoRunV1}).strict();
 
 export const smallBuilderDemoHttpCommandV1 = z.discriminatedUnion("operation", [
  z.object({operation:z.literal("create"),runId:z.null(),input:smallBuilderDemoCreateV1}).strict(),

@@ -4,7 +4,7 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 import {
  smallBuilderDemoCreateV1, smallBuilderDemoResetV1, smallBuilderDemoReportSnapshotV1,
- smallBuilderDemoRunV1, smallBuilderDemoReportV1,
+ smallBuilderDemoRunV1, smallBuilderDemoReportV1, previewDemoMeter,
 } from "@jobguard/core";
 export {
  smallBuilderDemoCreateV1, smallBuilderDemoResetV1, smallBuilderDemoReportSnapshotV1,
@@ -23,6 +23,13 @@ export class SmallBuilderDemoRepository {
   try {
    return await withTenant(this.pool,context,async db=>{
     const result=(await db.$client.query("SELECT app.small_builder_demo($1,$2,$3,$4,$5::jsonb) result",[context.tenantId,digest,operation,runId,JSON.stringify(parsed.data)])).rows[0]?.result;
+    // Authenticate and load the owned persisted run before deriving fictional inputs.
+    // Stored snapshots stay lifecycle-only: reference projections are never passed off as saved money facts.
+    if(operation!=="snapshot" && operation!=="report") {
+     const run=smallBuilderDemoRunV1.parse(result);
+     if(run.scenario==="meter") return {...run,meterPreview:previewDemoMeter({tenantId:context.tenantId,runId:run.runId})};
+     return run;
+    }
     return (operation==="snapshot"||operation==="report" ? smallBuilderDemoReportV1 : smallBuilderDemoRunV1).parse(result);
    });
   } catch(error) {

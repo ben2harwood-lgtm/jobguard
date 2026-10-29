@@ -35,3 +35,35 @@ Lifecycle schemas now live in the pure core package and are re-exported through 
 The browser saves an unconfirmed metadata intent in session storage scoped to company and membership before sending. Retrying, including after reload in the same tab, preserves the original command ID and payload. A missing response blocks new mutations until the original request is reconciled by exact replay; current authority is required again. Definitive refusal clears only the pending browser intent. Reset archives the old selection and opens its successor, retaining links to history. No job, trial key, subscription, receipt allocation or financial journal is reset.
 
 The saved selection report links to the persisted run and immutable snapshot. It contains lifecycle facts and the stored refusal, with no product source totals or completion verdict. A1 awaits all five completed journeys and persisted product-source reports; independent review and two genuine builder observations remain missing. Existing P2 structural validation is not relabelled as acceptance. The CI browser suite `DEMO-S-chooser.spec.ts` covers chooser/lifecycle behaviour in mobile-360 and desktop, not full J1–J5 acceptance. No new migration is needed; reserved 0329 is unused.
+
+## DEMO-J4 reference producer preview (incomplete journey)
+
+Owned meter run reads and lifecycle command responses now include an optional
+`meterPreview` (`demo-meter-preview.v1`). It is derived only after the existing
+PostgreSQL routine authorizes and returns the owned run. It is a deterministic,
+run-bound reference projection, **not persisted domain execution**. The ten
+DM-01–DM-10 examples call MON-1 `countMeterDays`, MON-2A
+`computeSubscriptionPeriod` and `detectSubscriptionTrackReview` directly.
+Fictional activation, first-evidence, activity and lock inputs have reproducible
+run-scoped identities. The approved `london-midnight-stops.v1` recipe supplies
+London local days; calendar-month bounds are explicit, annual prepayment is off,
+and the upgrade preview changes plan on the eleventh day of the 30-day period.
+The 13–17 example detects the grace crossing on 2 April at 14 places, without
+waiting for the month-end calculation or changing the account track.
+
+These figures can be inspected from `/demo-s` after saving/resuming a meter
+selection. Snapshot/report operations remain **strictly persisted lifecycle
+facts**, without this preview. Reset creates a new run namespace; replay of the
+original command produces the original reference projection. No business table,
+subscription agreement, Decision, statement, trial key, allocation, journal or
+provider action is created by the preview. Every read still rechecks current
+membership/ownership, including archived runs and replay.
+
+Full DEMO-J4 remains incomplete. Actual source-linked admissions, accepted
+reference-period subscription commands, issued statements and simulated
+settlements are not implemented by this change. The current MON-2 persisted
+acceptance path uses the server date; its historical integration fixtures use
+administrator-only backdating. This preview does not expose that fixture bypass
+or assert historical authorization. MON-3 and DM-11–DM-13 are plainly not ready
+yet in this journey. No new migration is needed for these reference projections;
+reserved migration 0406 is unused. Database and browser execution await CI.
