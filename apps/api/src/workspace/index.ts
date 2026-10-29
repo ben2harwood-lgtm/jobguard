@@ -91,6 +91,8 @@ export * from "../job-source.errors.js";
 export * from "../plan-entitlements.application.js";
 export * from "../contractor/practice-worker-switch.application.js";
 
+export { oidcCookieOptions, oidcBrowserCookie } from "../auth/sso/oidc-persistence.contracts.js";
+export { OidcApplication, type OidcIssuer } from "../auth/sso/oidc.application.js";
 export * from "../subscription.application.js";
 export * from "../subscription.authority.js";
 export * from "../contractor/billing.application.js";
