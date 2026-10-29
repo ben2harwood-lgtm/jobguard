@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { PurchaseOrderApplication } from "./purchase-order.application.js";
 import { ReadinessApplication } from "./readiness.application.js";
-import { jobMutationRegistry, watchdogCommandGuards } from "@jobguard/core";
+import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { EvidenceError, ProofCommandError, WatchdogError } from "@jobguard/db";
 import { ProofApplication, ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
@@ -379,6 +379,18 @@ describe("CH-2 command coverage and lock order", () => {
     const afterAudit = body.split("appendAuditBatch(").slice(1).join("");
     expect(afterAudit).not.toMatch(/FOR (?:UPDATE|SHARE)|pg_advisory_xact_lock/u);
   });
+  it.each(watchdogRoutineGuards)("$file $method: its checked routine $routine takes the live guard before its first write", async entry => {
+    const repository = await readFile(new URL(`packages/db/src/${entry.file}`, root), "utf8");
+    expect(repository).toContain(`SELECT ${entry.routine}(`);
+    const migrations = await readdir(new URL("packages/db/migrations/", root));
+    const sources = await Promise.all(migrations.filter(name => name.endsWith(".sql")).map(name => readFile(new URL(`packages/db/migrations/${name}`, root), "utf8")));
+    const defining = sources.filter(sql => sql.includes(`FUNCTION ${entry.routine}(`));
+    expect(defining).toHaveLength(1);
+    const sql = defining[0]!, body = sql.slice(sql.indexOf(`FUNCTION ${entry.routine}(`), sql.indexOf("END $$;", sql.indexOf(`FUNCTION ${entry.routine}(`)));
+    const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+  });
   it("CH-4 finish/cancel retain SHARE locks and serialize facts before checking revision", async () => {
     const sql = await readFile(new URL("packages/db/migrations/0201_job_work_state_commands.sql", root), "utf8");
     const body = sql.slice(sql.indexOf("CREATE FUNCTION app.ch4_work_state_command("), sql.indexOf("CREATE FUNCTION app.ch4_record_work_state("));
@@ -598,6 +610,11 @@ function replayPool(select: (sql: string) => object[] | undefined) {
     const rows = select(sql);
     if (rows) return { rows, rowCount: rows.length };
     if (/^(?:BEGIN|COMMIT|ROLLBACK|SELECT set_config|SELECT pg_advisory_xact_lock|SELECT app.require_watchdog_live)/u.test(sql)) return { rows: [], rowCount: 0 };
+    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") {
+      return { rows: [{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }], rowCount: 2 };
+    }
+    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+      sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return { rows: [], rowCount: 0 };
     if (sql.includes("UNION ALL")) return { rows: [], rowCount: 0 };
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return { rows: [{ command_id: replayCommand }], rowCount: 1 };
     throw new Error(`Unexpected replay query: ${sql}`);

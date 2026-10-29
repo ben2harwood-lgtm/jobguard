@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { subscriptionPlanView } from "@jobguard/core";
-import { loadSubscriptionPlan, PlanDetails, PlanScreen } from "./plan-screen";
+import { loadSubscriptionPlan, PlanDetails, PlanScreen, submitSubscriptionAction } from "./plan-screen";
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
 const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
@@ -63,5 +63,23 @@ it("does not request company data without a valid current session and membership
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response);
     await expect(loadSubscriptionPlan(fetcher)).rejects.toThrow("SIGN_IN_REQUIRED");
     expect(fetcher).toHaveBeenCalledTimes(1);
+  }
+});
+
+it("posts explicit reviewed terms with refreshed CSRF while retaining the displayed company", async () => {
+  const command={version:"subscription-command.v1",kind:"accept",plan:"Solo",maximumPence:4900};
+  const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({revision:1}));
+  await submitSubscriptionAction(session.memberships[0]!.tenantId,"command-id",command,fetcher);
+  expect(fetcher).toHaveBeenNthCalledWith(2,"/api/subscriptions/commands",expect.objectContaining({method:"POST",cache:"no-store",credentials:"same-origin",
+    headers:expect.objectContaining({"x-csrf-token":session.csrfToken,"x-tenant-id":session.memberships[0]!.tenantId}),
+    body:JSON.stringify({version:"subscription-http-command.v1",commandId:"command-id",command})}));
+});
+it("lost company access and rejected commands never become a success",async()=>{
+  const lost=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({...session,memberships:[]}));
+  await expect(submitSubscriptionAction(session.memberships[0]!.tenantId,"id",{},lost)).rejects.toThrow("Company access changed");
+  expect(lost).toHaveBeenCalledTimes(1);
+  for(const status of [400,403,409,503]) {
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({},{status}));
+    await expect(submitSubscriptionAction(session.memberships[0]!.tenantId,"same-retry-id",{},fetcher)).rejects.toThrow("check the saved result");
   }
 });

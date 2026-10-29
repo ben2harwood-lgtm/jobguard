@@ -1,6 +1,6 @@
 # ENT-9D — contractor dashboard routes and screens (RED)
 
-This synthetic-only change exposes ENT-9B/ENT-9C through the existing company-session boundary. By router decision, the unmatched-variation advisory signal is intentionally omitted because ENT-6 requires an export match for every billed extra. All other signals, routes and screens remain in scope. No migration, fee projection, provider, external action or production capability is added.
+This synthetic-only change exposes ENT-9 through the existing company-session boundary. ENT-9E adds the deferred possible billed-variation advisory over stored ENT-6 facts. No migration, fee projection, provider, external action or production capability is added.
 
 - `POST /api/contractor/dashboard`: strict `enterprise-dashboard-request.v1` envelope with resource `activity` or `billing` and unchanged `enterprise-dashboard-query.v1`. Returns the existing scoped report/signals or stored billed/paid report. These are separate snapshots; the screen says so and never joins their totals or recomputes allocations.
 - `POST /api/contractor/baseline`: unchanged `baseline-store.v1`; persists synthetic history under existing finance `data.import` authority. Source identity/content/team bindings remain the durable replay key. No browser-generated command identity replaces it.
@@ -12,9 +12,13 @@ All responses, including errors, are `no-store`. All three endpoints require con
 
 Available signals remain pure observations over already authorized facts. Existing same-job SoR matches and withdrawal/quantity-increase detectors are reused. A scoped adapter supplies completed operative close-outs and an explicit **synthetic reference** rule: minimum five answered visits, strictly more than 75% `no`, in the selected UTC window. The policy text and comparison-source IDs are returned and hashed with the report. This is not personnel assessment or an approved production policy. Filters and current operative coverage apply before constructing the comparison population; missing answers do not enlarge it. No new database privilege or write is introduced.
 
-## Intentionally omitted signal
+## ENT-9E possible unmatched billed variations
 
-The billed-variation-without-extra signal is omitted by router decision, not reported as a successful zero. The screen states the omission; existing internal held-source metadata is retained for compatibility. `billingInvoiceLineV1` requires an export match for **every** `kind: extra` invoice line. A valid stored ENT-6 invoice therefore cannot supply an unmatched extra; `other` lines do not assert a variation. Quarantined/foreign references cannot be reclassified as missing extras without risking a scope leak. No replacement source is invented and the existing financial import contract is preserved. This omission is the accepted scope for ENT-9D, not an outstanding acceptance blocker.
+The same authorized SELECT snapshot reads valid, non-quarantined ENT-6 invoice facts and their latest immutable allocation runs, joined by tenant, job, source and invoice identity. Only unmatched `other` lines with positive remaining net, a complete current projection and no rejection qualify. A newer stored fact without a successor projection suppresses stale balances. Fully credited/rejected lines disappear on the next read. Payment reversals do not erase the fact that work was billed and never establish fee entitlement.
+
+`other` does not assert a variation: the screen labels these **possible** billed variations requiring human review. One observation per invoice cites the fact ID (full composition) and latest run ID, without exposing raw invoice identifiers or free text. Original-order and matched-extra lines cannot produce it. The pure adapter accepts a strict internal `enterprise-billed-signal-rows.v1` envelope, rejects duplicate line sources and conflicting job/run references, and ignores supplied generic billed-variation assertions. No caller-facing authority contract changes.
+
+Selection uses the invoice effective date in the half-open UTC query window, bounded by the database cutoff and server receipt time, plus current authorized job dimensions. It can report a job with no captured extras; it does not change the capture cohort used by billed/paid totals. Invoice lines have no operative attribution, so operative grouping or filtering excludes this signal. Tenant/job grants apply before selection; every request rechecks current authority. The signal has no value, approval, pricing, fee or meter output. Existing totals receive no signal input. Signal method v2 binds the new interpretation and source citations in reproducibility hashes.
 
 ## Verification
 
