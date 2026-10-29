@@ -30,6 +30,7 @@
         "packages/db/migrations/0347_oidc_signin.sql",
         "packages/db/src/index.ts",
         "packages/db/src/oidc-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/oidc-concurrency.integration.test.ts",
         "packages/db/test/oidc-fixtures.ts",
         "packages/db/test/oidc-signin.integration.test.ts",

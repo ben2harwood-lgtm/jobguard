@@ -55,39 +55,51 @@ for(const transport of ['Next','Nest'] as const) test(transport==='Nest'?'Nest p
   // The fictional issuer approves anyone, so only a test may supply it: the test process injects it here and no deployed route can.
   const issuer=new TestOidcIssuer();issuer.claims={sub:`fictional-${id}`,email:`person@${id}.oidc.invalid`,groups:['site']};
   class FixtureModule {}
-  Module({controllers:[OidcController],providers:[{provide:APP_FILTER,useClass:OidcParseExceptionFilter},{provide:OIDC_APPLICATION,useValue:()=>new OidcApplication(identity.provider,new OidcRepository(identity.provider.repository.pool),origin,'synthetic_demo',issuer)}]})(FixtureModule);
+  Module({controllers:[OidcController],providers:[{provide:APP_FILTER,useClass:OidcParseExceptionFilter},{provide:OIDC_APPLICATION,useValue:()=>new OidcApplication(identity.provider,new OidcRepository(identity.provider.repository.pool),root,'synthetic_demo',issuer)}]})(FixtureModule);
   const app=await NestFactory.create(FixtureModule,{logger:false});await app.listen(0,'127.0.0.1');
   root=await app.getUrl();path='/auth/oidc';nest={close:async()=>{await app.close();await identity.provider.repository.pool.end();}};
  }
- const post=(url:string,data:unknown)=>page.request.post(url,{headers:{origin,'x-csrf-token':account.csrfToken},data});
+ // Use Chromium's cookie handling on loopback. Playwright's APIRequestContext filters Secure cookies on HTTP
+ // 127.0.0.1; the browser sends them on this trustworthy loopback origin. Each fetch is genuinely same-origin,
+ // including the injected Nest server, whose allowed origin is its own bound URL. No cookie headers are forged.
+ const request=async(url:string,data?:unknown,raw=false)=>{
+  await page.goto(`${new URL(url).origin}/oidc-test-browser`);
+  return page.evaluate(async({url,data,raw,csrf})=>{
+   const response=await fetch(url,{method:data===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',
+    headers:{...(data===undefined?{}:{'content-type':'application/json'}),'x-csrf-token':csrf},
+    ...(data===undefined?{}:{body:raw?String(data):JSON.stringify(data)})});
+   return {status:response.status,headers:Object.fromEntries(response.headers),body:await response.json()};
+  },{url,data,raw,csrf:account.csrfToken});
+ };
+ const post=(url:string,data:unknown)=>request(url,data);
  try {
   const config={version:'oidc-connection.v1',protocol:'oidc',revision:1,sessionLimitSeconds:900,config:{version:'oidc-config.v1',mode:'synthetic_demo',provider:'in-process-test-idp',tenantId:account.tenantId,connectionId:id,issuer:'https://issuer.invalid',clientId:'jobguard-practice',redirectUri:'https://app.invalid/oidc/callback'}};
-  expect((await post(`${root}${path}/${id}/start`,{version:'oidc-admin.v1',action:'connection.create',requested_tenant_id:account.tenantId,connection:config})).ok()).toBe(true);
+  expect((await post(`${root}${path}/${id}/start`,{version:'oidc-admin.v1',action:'connection.create',requested_tenant_id:account.tenantId,connection:config})).status).toBe(transport==='Nest'?201:200);
   const domain=`${id}.oidc.invalid`;
   for(const command of [{action:'domain.verify',domain,proof:`synthetic-domain:${id}:${domain}`},{action:'mapping.set',group:'site',role:'read_only',scope:{kind:'tenant',id:account.tenantId},expectedRevision:0,enabled:true}]) {
-   expect((await post(`${origin}/api/auth/sso/${id}/start`,{version:'sso-admin.v1',requested_tenant_id:account.tenantId,connectionId:id,...command})).ok()).toBe(true);
+   expect((await post(`${origin}/api/auth/sso/${id}/start`,{version:'sso-admin.v1',requested_tenant_id:account.tenantId,connectionId:id,...command})).status).toBe(200);
   }
   await page.context().clearCookies();
-  const malformed=await page.request.post(`${root}${path}/${id}/callback`,{headers:{origin,'content-type':'application/json'},data:'{raw-secret'});expect(malformed.status()).toBe(403);expect(malformed.headers()['cache-control']).toBe('no-store');expect(await malformed.json()).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
+  const malformed=await request(`${root}${path}/${id}/callback`,'{raw-secret',true);expect(malformed.status).toBe(403);expect(malformed.headers['cache-control']).toBe('no-store');expect(malformed.body).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
   if(transport==='Next') {
    const refused=await post(`${root}${path}/${id}/start`,{version:'oidc-start.v1',action:'signin'});
-   expect(refused.status()).toBe(403);expect(refused.headers()['cache-control']).toBe('no-store');expect(await refused.json()).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
+   expect(refused.status).toBe(403);expect(refused.headers['cache-control']).toBe('no-store');expect(refused.body).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
    expect((await page.context().cookies()).filter(c=>c.name==='jobguard_oidc_state'||c.name==='jobguard_session')).toEqual([]);
-   expect((await page.request.get(`${origin}/api/auth/session`)).status()).toBeGreaterThanOrEqual(400);
+   expect((await request(`${origin}/api/auth/session`)).status).toBeGreaterThanOrEqual(400);
    return;
   }
-  const started=await post(`${root}${path}/${id}/start`,{version:'oidc-start.v1',action:'signin'});expect(started.ok()).toBe(true);expect(started.headers()['cache-control']).toBe('no-store');
-  const payload=await started.json();expect(payload.verifier).toBeUndefined();expect(payload.browser).toBeUndefined();
+  const started=await post(`${root}${path}/${id}/start`,{version:'oidc-start.v1',action:'signin'});expect(started.status).toBe(201);expect(started.headers['cache-control']).toBe('no-store');
+  const payload=started.body;expect(payload.verifier).toBeUndefined();expect(payload.browser).toBeUndefined();
   const state=(await page.context().cookies()).find(c=>c.name==='jobguard_oidc_state')!;
   expect(state).toMatchObject({httpOnly:true,secure:true,sameSite:'Strict',path});
-  const raw={version:'oidc-callback.v1',callback:payload.callback},callback=await post(`${root}${path}/${id}/callback`,raw);expect(callback.ok()).toBe(true);
-  expect((await callback.json()).sessionToken).toBeUndefined();
-  const session=await page.request.get(`${origin}/api/auth/session`);expect(session.ok()).toBe(true);
-  expect((await session.json()).memberships.map((m:{tenantId:string})=>m.tenantId)).toEqual([account.tenantId]);
-  expect((await post(`${root}${path}/${id}/callback`,raw)).status()).toBe(403);
+  const raw={version:'oidc-callback.v1',callback:payload.callback},callback=await post(`${root}${path}/${id}/callback`,raw);expect(callback.status).toBe(201);
+  expect(callback.body.sessionToken).toBeUndefined();
+  const session=await request(`${origin}/api/auth/session`);expect(session.status).toBe(200);
+  expect(session.body.memberships.map((m:{tenantId:string})=>m.tenantId)).toEqual([account.tenantId]);
+  expect((await post(`${root}${path}/${id}/callback`,raw)).status).toBe(403);
   const pool=new Pool({host:'127.0.0.1',port:55432,user:'postgres',password:'sbox-e2e-owner',database:'jobguard_synthetic_demo'});
   try {await pool.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND role='read_only'",[account.tenantId]);}finally{await pool.end();}
-  const after=await page.request.get(`${origin}/api/auth/session`);
-  expect(after.status()).toBeGreaterThanOrEqual(400);
+  const after=await request(`${origin}/api/auth/session`);
+  expect(after.status).toBeGreaterThanOrEqual(400);
  } finally {await nest?.close();}
 });

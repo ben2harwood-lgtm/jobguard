@@ -128,3 +128,25 @@ Commands below ran in this worktree on Node v24.17.0, using the existing cached 
 | `git diff --check`; final conflict-marker, lane equality and SQL hash checks | PASS. |
 
 Not run: clean install, full `pnpm test`/`pnpm build`, PostgreSQL/migration execution or browser suites (sandbox restrictions). No AI/native change. Historical executed-DB evidence above is not current-main evidence. Router owns staging the five resolved merge entries and migration rename, committing/pushing, final CI and one independent exact-head Claude RED review. No new library/configuration/production issuer/permission policy. Real IdP/domain, contractor-pilot/release gates and wider ENT-10 work remain outstanding. Commit message written to `/tmp/ent-10-oidc-b-20261029T055609Z-commit-msg.txt`.
+
+## CI-fix try 1 — 29 October 2026, 07:11 order
+
+RED builder repair, not independent review or current-head CI acceptance. Supplied main is already merged at `0759bd3f2ed37a961d91bdcbcc0959e22ba5a891` (main parent `32411c4e45a094cbe65ae90ee1d5debd1f266e2a`); no unmerged entries or conflict markers were present. No Git-writing commands ran.
+
+Read all supplied failures from `ent-10-oidc-b-ci-traces-0711.txt`. Two root causes, fixed without dropping assertions or widening test/security exceptions:
+
+1. **DB job 123291558162, `contractor-entitlement-upgrade.integration.test.ts`, “repeat migration and later successors succeed”.** The complete-row snapshot expected every successor table except this slice's two OIDC tables. Added exactly `identity.oidc_assertion_use: []` and `identity.oidc_request: []`. The exact snapshot equality, migration replay, predecessor checks and negative controls remain. Added this exact test path to B's lane.
+2. **Desktop job 123291558145 and mobile job 123291558170, Nest persisted OIDC journey, callback success assertion.** Inspected CI run 40826790958's desktop browser trace (artifact 12877737948). The start response set a Secure/HttpOnly/Strict state cookie on `/auth/oidc`; the subsequent API-client callback request contained no Cookie header. The installed Playwright 1.55.1 `Cookie.matches`/`filterCookies` logic filters Secure cookies over HTTP at `127.0.0.1` (its localhost exception is hostname-specific). The browser journey now sends requests using Chromium's same-origin `fetch`, navigating to each actual server origin first. The test-injected Nest application accepts exactly its own bound origin; Next retains its existing configured origin. No manual Cookie/Origin headers, CORS bypass, TLS/cookie relaxation or production changes. All original success, secrecy, cookie-property/path, malformed-input, no-issuer, persisted-membership, replay and revocation assertions remain, with precise success statuses. Actual Chromium exercises loopback cookie delivery rather than the API client's differing cookie filter.
+
+Only the browser test, exact DB expectations, lane and this existing receipt changed. Migration 0347 SQL is unchanged: SHA-256 `83701833ab1e451b338340878bd1d17a431eb16a3b286a0fdc98c004b4066753`; no CASE occurs inside a PL/pgSQL IF condition. No migration on main was edited.
+
+Checks actually run (existing cached pnpm 10.28.1, Node v24.17.0, at most two Vitest workers):
+
+- `node node_modules/typescript/bin/tsc -p apps/web/tsconfig.json --noEmit`: PASS.
+- `node node_modules/typescript/bin/tsc -p /tmp/ent-10-ci-db-tests-tsconfig.json`: PASS for the changed upgrade-test source/imports; not PostgreSQL execution.
+- API `vitest run --maxWorkers=2 src/auth/sso/oidc-paths.test.ts src/auth/sso/oidc.application.test.ts src/auth/sso/oidc-persistence.contracts.test.ts`: PASS, 3 files / 22 tests.
+- Web `playwright test --list e2e/ENT-10-oidc.spec.ts`: PASS, all 4 Next/Nest desktop/mobile tests discovered. Discovery does not execute browser journeys.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS against current supplied main, including this repair's exact new path.
+- `git diff --check`, SQL SHA-256 and unmerged-entry inspection: PASS.
+
+PostgreSQL and full Playwright journeys NOT RUN here: sandbox cannot start PostgreSQL or bind localhost. The router must commit/push and rerun CI, including the exact failed upgrade test and both browser projects. One exact-head independent Claude RED review remains under SIMPLE_LOOP; Ben's merge authorization is supplied in the repair order, not inferred from local tests. No provider, release, customer-data or production sign-in activation. Ready commit message: `/tmp/ent-10-oidc-b-20261029T071149Z-commit-msg.txt`.
