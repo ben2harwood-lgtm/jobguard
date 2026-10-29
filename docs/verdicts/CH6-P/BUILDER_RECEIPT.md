@@ -246,7 +246,7 @@ catalogue inspection. Do not waive their checks or regenerate expectations blind
 
 Migration strategy: expand-only; disable new composition for application rollback,
 keep succeeded receipts/audit and the guard, use a reviewed forward migration for
-fixes. Full details in `packages/db/migration-notes/0338_commercial_integrity_v3_receipts.md`.
+fixes. Full details in `packages/db/migration-notes/0354_commercial_integrity_v3_receipts.md`.
 No new alert subsystem; surfaced typed source/retry/conflict failures require normal
 operational error handling. Privileged credential compromise and arbitrary dynamic
 module use are not claimed covered by local tests. Independent exact-commit verdicts,

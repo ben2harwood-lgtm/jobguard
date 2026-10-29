@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0338_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0354_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -993,3 +993,55 @@ Ready for router staging/commit/push, using
 for GitHub CI; independent RED review remains required before merge. This is
 local deterministic evidence, not independent review or release approval.
 No Git write commands, downloads, real data, live providers or releases.
+
+### Renumber-only catch-up after main #400 — 29 October 2026 06:41 brief
+
+Plan piece CH-6 / PR #392, RED. Starting HEAD `3ab721e7` already contains
+main `32411c4e` (#400); the worktree and index were clean, with no unresolved
+merge conflicts. The router reports RED passed at `72a13e49`; this catch-up
+is deterministic local verification, not a new independent review.
+
+Renumbered own migrations 0338 receipts → 0354 and 0339 sources → 0355 in
+that order, plus their migration notes and exact-stem references. Used a
+`/tmp/ch6-j-reserved-renumber.mjs` copy of `tools/migration-renumber.mjs`:
+only its import location, in-memory reserved ceiling (0353), and staging call
+were adapted. The repo helper itself is unchanged. Imported its `renumber`
+function with `write:true`; filesystem moves/reference rewriting are the
+existing helper implementation. No Git write command ran. The normal helper
+would select 0341/0342 against current main, so the reserved ceiling is needed
+for the router's explicit 0354/0355 assignment. Both SQL files and both notes
+compare byte-for-byte equal to their pre-renumber HEAD contents.
+
+No product behavior or guard/baseline changed. All 13 existing protected
+exceptions remain current; no fingerprint refresh was needed. All main LP-0
+inventory entries are retained, as are all main assertions in tenancy,
+SERIOUS-B5 and contractor-entitlement upgrade tests. Updated the existing lane
+note and migration paths; its 56-path allow list exactly covers the final
+aggregate PR diff (the lane file itself is authorized by the lane API).
+
+Checks actually run:
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS; log `/tmp/ch6-j-20261029T064155Z-boundary.log`.
+- `node tools/commercial-integrity-boundary.mjs`: 65 protected roots,
+  zero diagnostics, 13 baselined unresolved sites.
+- From `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/commercial-integrity-v3-input.test.ts src/stored-receipt-migration.test.ts
+  src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+  The installed global pnpm shim stalled before runner startup and was stopped;
+  used the already-installed repository runner directly, without downloads.
+- From `packages/db`, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- Existing lanePathAllowed and migrationOrderViolations APIs over the final
+  aggregate paths versus origin/main: PASS, exact 56 paths, 0354/0355 ordered.
+  The unstaged local lane CLI sees obsolete HEAD migration paths as well as
+  their replacements and reports those four obsolete paths; final-path API
+  verification accounts for the router's pending staging. CI runs the real
+  staged/committed lane check.
+- Exact SQL/note byte comparisons, recursive main inventory retention and
+  no removed main assertions in all three shared integration tests: PASS.
+- `git diff --check`, conflict-marker scan and syntax transpilation of the
+  three shared integration tests: PASS.
+
+Ready for router staging/commit/push. PostgreSQL, migration execution, browser
+suites and full required CI remain for GitHub CI in this sandbox. No customer
+data, live money, providers, releases or Git metadata writes. Commit message:
+`/tmp/ch6-j-20261029T064155Z-commit-msg.txt`.
