@@ -357,3 +357,60 @@ package download was requested. Checks used installed repository binaries.
 PostgreSQL, browser, full CI and independent RED review were not run here and
 remain with CI/the loop owner. The working-file reconciliation is ready for the
 router's merge commit; green current-main CI is not claimed.
+
+
+## PR #393 catch-up — 29 October 2026
+
+Ready for the router to stage the resolved files and finish the pending merge
+from incoming main `bf1052a0`. Scope is unchanged CH-9 part 1 (RED, prior
+RED pass supplied by the router); no new behaviour or migration. This is a
+catch-up validation, not a new independent review or a claim of green CI.
+
+Resolved four working-file conflicts: `apps/api/src/app.module.ts`,
+`apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts` and
+`apps/api/openapi.json`. Retained the CH-9 job/business reads, provider factory
+and exports together with main's success-fee registration/service/export,
+job-source intake and evidence-pack-v3 composition. Regenerated OpenAPI from
+that composition: every incoming-main path and operation is unchanged; all
+HEAD paths remain, with only main's already-approved diary/customer-message
+changes superseding HEAD's older definitions.
+
+LP-0, SERIOUS-B5, contractor entitlement, effective privileges and tenancy shared
+expectation files already matched incoming main exactly; no edits were needed.
+All 185 incoming-main migration/note files match byte-for-byte. No SQL changed.
+The lane allow list exactly matches the 35 changed paths against incoming main,
+with its own lane file implicitly permitted (36 total); only its descriptive
+note was refreshed. No new simplification is recorded for this catch-up.
+
+Local checks actually run, installed Node 24.17.0/Vitest 4.1.12, no downloads:
+
+- `./node_modules/.bin/tsc -p packages/core/tsconfig.json` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json`: PASS (dependency builds).
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`: PASS.
+- In apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-composition.test.ts src/value/value-v3.application.test.ts src/value/value-v3-business.application.test.ts`: PASS, 52 tests.
+- In apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/value/value-v3.controller.test.ts src/value/value-business.controller.test.ts`: PASS, 12 tests.
+- In apps/web, `./node_modules/.bin/vitest run --maxWorkers=2 app/api/value/route.test.ts 'app/api/jobs/[id]/value/v3/route.test.ts'`: PASS, 20 tests.
+- In apps/api, `node --import tsx src/generate-openapi.ts` then the same command
+  with `--check`: PASS. Initial generation encountered stale core dist exports;
+  rebuilding installed dependencies resolved this without source changes.
+- `node tools/money-arithmetic-lint.mjs` and
+  `node tools/commercial-boundary-lint.mjs`: PASS.
+- `node tools/lint.mjs`: FAIL at lane boundary because the unfinished merge
+  counts staged incoming-main changes against pre-merge HEAD; core purity PASS.
+  Router must rerun default lint after committing the merge. No gate changes or
+  alternate-base lint pass are claimed.
+- Read-only incoming-main lane inventory, five shared expectation comparisons,
+  185 migration/note byte comparisons and OpenAPI path preservation: PASS.
+- `git diff --check`: PASS.
+
+The initial Turbo dependency build stalled in the local pnpm launcher and was
+interrupted; direct installed tsc binaries completed both dependency builds.
+No database or browser suite, full build/root tests, clean install, live provider,
+real customer data or release was run. Database/browser and required checks run
+in GitHub CI after the router pushes. At most two Vitest workers and three named
+files per run; no helper agents. No Git-writing command was issued; unmerged
+index entries remain for router staging. The historical part-1 source holds
+remain unchanged and do not widen this catch-up's scope.
+
+Commit message: `/tmp/ch9-b-20261029T002305Z-commit-msg.txt`.

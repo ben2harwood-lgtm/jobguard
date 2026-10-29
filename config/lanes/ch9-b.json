@@ -6,7 +6,7 @@
         "codex/sandbox/ch9-b"
       ],
       "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
-      "note": "RED: CH-9 part 1 value-read composition. Catch-up retains both main enterprise exports and CH-9 value exports. Shared expectations and all migration SQL match incoming main; no new behaviour. Own lane file is implicitly permitted.",
+      "note": "RED: CH-9 part 1 value-read composition. Catch-up preserves CH-9 reads alongside main success-fee registration, job-source intake, evidence-pack v3 and enterprise exports. Shared expectations and all migration SQL match incoming main; no new behaviour. Own lane file is implicitly permitted.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
