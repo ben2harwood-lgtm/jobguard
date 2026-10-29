@@ -19,7 +19,7 @@ export function evaluateReadiness(input:ReadinessInput):ReadinessResult {
   if(!finiteNonNegative(input.material.requiredUnits)||!finiteNonNegative(input.material.landedUnits))throw new Error("INVALID_MATERIAL_QUANTITY");
   const reasons:string[]=[];
   if(input.predecessors.some(x=>x.complete===false))reasons.push("A predecessor is not complete");
-  if(input.predecessors.some(x=>x.complete==="unknown"))reasons.push("Predecessor completion unknown");
+  if(input.predecessors.some(x=>x.complete!==true&&x.complete!==false))reasons.push("Predecessor completion unknown");
   const shortage=Math.max(0,input.material.requiredUnits-input.material.landedUnits);
   if(shortage>0)reasons.push(`${shortage} units still needed`);
   if(input.access!==true)reasons.push(input.access==="unknown"?"Access availability unknown":"Access is not available");
