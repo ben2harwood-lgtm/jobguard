@@ -57,6 +57,7 @@
         "packages/db/test/site-extra.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts",
         "packages/db/test/small-builder-demo.integration.test.ts",
+        "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
         "packages/db/test/subscription-actions.integration.test.ts",
         "packages/db/test/watchdog-legacy-identities.integration.test.ts"
       ]

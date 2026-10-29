@@ -53,21 +53,14 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
     expect(rows[0].source).toContain("app.lp4_seal_audit(");
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
   });
-  it("preserves checked manifest exclusions while refusing the same generic input", async () => {
-    const input = statement({ actorRef: "system:final_check", eventType: "final_check.sources_excluded", subjectType: "job" });
-    const payload = { references: { manifestId: randomUUID(), lockId: randomUUID(),
-      exclusions: [{ uploadId: randomUUID(), state: "rejected", reason: "verification_invalid" }] } };
-    const event = { ...input, payload };
-    await expect(transaction(db.runtime, tenant, client => client.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]))).rejects.toMatchObject({ code: "22023" });
-    await transaction(db.owner, tenant, client => client.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')", [JSON.stringify([event])]));
-    const stored = (await chain(tenant)).find(e => e.id === input.id)!;
-    expect(stored.payload).toEqual({ references: { ...payload.references, auditTrust: "checked_operation" } });
-    expect(auditEventTrust(stored)).toBe("checked_operation");
-    verifyAuditChain(await chain(tenant));
-    for (const exclusions of [[{ ...payload.references.exclusions[0], reason: "fictional@example.invalid" }],
-      [{ ...payload.references.exclusions[0], state: "verified" }], [{ ...payload.references.exclusions[0], extra: "private" }]]) {
-      await expect(transaction(db.owner, tenant, client => client.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')",
-        [JSON.stringify([{ ...event, id: randomUUID(), payload: { references: { ...payload.references, exclusions } } }])]))).rejects.toMatchObject({ code: "22023" });
+  it("refuses structured and null references even from checked operations", async () => {
+    for (const exclusions of [null, [], [{ uploadId: randomUUID(), state: "rejected", reason: "verification_invalid" }], {}]) {
+      const event = statement({ actorRef: "system:final_check", eventType: "final_check.sources_excluded",
+        payload: { references: { manifestId: randomUUID(), lockId: randomUUID(), exclusions } } as unknown as AuditEventInput["payload"] });
+      for (const trust of ["lower_trust", "checked_operation"]) {
+        await expect(transaction(db.owner, tenant, client => client.query("SELECT * FROM app.lp4_seal_audit($1,$2)",
+          [JSON.stringify([event]), trust]))).rejects.toMatchObject({ code: "22023", message: "AUDIT_INPUT_INVALID" });
+      }
     }
   });
 

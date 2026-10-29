@@ -22,6 +22,11 @@ function expectedSealedDefinition(sql: string) {
   expect(values).toHaveLength(13);
   const fields = [["id", 0], ["version", 3], ["actorRef", 4], ["eventType", 5], ["subjectType", 6], ["subjectRef", 7], ["payload", 9]] as const;
   const seal = `PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(${fields.map(([k, i]) => `'${k}',${values[i]}`).join(",")})),'checked_operation');`;
+  // Only these two payload adaptations are authorized by LP-4 repair try 2.
+  sql = sql.replace("jsonb_build_object('manifestId',NEW.id,'lockId',NEW.lock_id,'exclusions',excluded)",
+    "jsonb_build_object('manifestId',NEW.id,'lockId',NEW.lock_id),'hashes',jsonb_build_object('exclusions',app.final_lock_hash(excluded))")
+    .replace("jsonb_build_object('references',refs,'hashes','{}'::jsonb)",
+      "jsonb_build_object('references',jsonb_strip_nulls(refs),'hashes','{}'::jsonb)");
   return sql.replace(insert[0], seal)
     .replace(/SELECT sequence,event_hash INTO \w+,\w+ FROM app.lock_audit_head\(\);/g, "")
     .replace(/\b(?:seq|ts|ph|eh):=.*?;/gs, "")

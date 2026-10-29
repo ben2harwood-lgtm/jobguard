@@ -78,9 +78,11 @@ transaction or fix forward; never restore runtime INSERT or rewrite audit histor
 PostgreSQL upgrade/concurrency/permission tests and the existing owner-operation suites
 remain CI gates, and an independent Claude RED review remains required.
 
-LP-4 catch-up preserves the existing `final_check.sources_excluded` receipt,
-including its structured `references.exclusions` array (upload UUID, rejected or
-expired state, identifier-only reason). Only the private checked-operation path
-accepts that shape for `system:final_check` job events. Generic append still
-refuses it. Stored-event verification and signed exports validate this same
-shape; the manifest retains the exact exclusions and its original inventory hash.
+LP-4 seals `final_check.sources_excluded` with manifest/lock references and
+`hashes.exclusions = app.final_lock_hash(excluded)`. The exact ordered exclusion
+receipt remains in the frozen manifest rows; its inventory hash is unchanged.
+The private sealer and generic append both refuse arrays, objects and null
+references. `append_final_check_audit` strips null references, including the
+unassigned allocation/revision IDs on stored-receipt and receipt-facts reviews.
+The existing stored-event reader remains compatible with the prior candidate's
+structured exclusion receipt; no writer can emit that shape through the sealer.

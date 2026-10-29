@@ -1,4 +1,5 @@
 // CI ONLY: real PostgreSQL and real writer chains. No replica-mode fixtures.
+import {assertLp4SealedEvents} from "./lp4-writer-catchup-fixture.js";
 import {randomUUID} from "node:crypto";
 import {beforeAll,afterAll,expect,it} from "vitest";
 import {calculateCumulativeFee} from "@jobguard/core";
@@ -20,6 +21,19 @@ async function save(x:Fixture,factLineId=x.fact.lineAllocationId,workId=x.workId
  const p=await command(x,factLineId,workId),review=await execute(x,p),approval={...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash};
  return {result:await execute(x,approval),approval};
 }
+it("LP-4 seals a stored-receipt review without a null allocation reference and replays once",async()=>{
+ const x=await realReceiptFixture(f),p=await command(x),review=await execute(x,p);
+ expect(review.reviewId).toBe(p.commandId);
+ expect(await execute(x,p)).toEqual({...review,replayed:true});
+ const events=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.stored_receipt_reviewed'",[x.context.tenantId,x.jobId])).rows;
+ expect(events).toEqual([{payload:{references:{commandId:p.commandId,caseId:x.caseId,factLineId:x.fact.lineAllocationId,auditTrust:"checked_operation"},hashes:{}}}]);
+ await assertLp4SealedEvents(f.admin,x.context.tenantId,"recovery.stored_receipt_reviewed");
+ // The real fixture's producer also reviews before allocating: its revision is
+ // null at review time and must be omitted only from the audit references.
+ await assertLp4SealedEvents(f.admin,x.context.tenantId,"receipt_facts.review");
+ const producerReviews=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='receipt_facts.review'",[x.context.tenantId,x.jobId])).rows;
+ for(const event of producerReviews)expect(event.payload.references).not.toHaveProperty("allocationRevisionId");
+});
 it.each(["F5","F7"] as const)("saves %s from real invoice/feed/receipt/producer writers and preserves exact SH-1 money",async kind=>{
  const x=await realReceiptFixture(f,kind),{result,approval}=await save(x);
  expect(result.facts.net).toEqual({numerator:kind==="F5"?"40000":"80000",denominator:"1"});
@@ -87,6 +101,10 @@ it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutab
  }
  const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
  const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-facts-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:kind==="refund"?"payment_reversal":"credit_note",sourceId},expectedSourceRevision:snapshot.revision});
+ await assertLp4SealedEvents(f.admin,x.context.tenantId,"receipt_facts.review_reverse");
+ const reviewAudit=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='receipt_facts.review_reverse'",[x.context.tenantId,x.jobId])).rows;
+ expect(reviewAudit).toHaveLength(1);
+ expect(reviewAudit[0].payload.references).not.toHaveProperty("allocationRevisionId");
  const approval={version:"receipt-line-facts-command.v1",action:"reverse",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision};
  if(kind==="refund"){
   await f.admin.query(`CREATE FUNCTION app.receipt_r1_source_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='receipt_facts.reverse' THEN RAISE EXCEPTION 'RECEIPT_R1_SOURCE_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;

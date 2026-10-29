@@ -20,7 +20,7 @@ CREATE FUNCTION app.lp4_seal_audit(p_events jsonb, p_trust text) RETURNS SETOF a
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  e jsonb; payload jsonb; section text; entry record; seq bigint; prev text; ts timestamptz;
- ph text; eh text; stored app.audit_event; exclusion jsonb;
+ ph text; eh text; stored app.audit_event;
 BEGIN
  IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN
   RAISE EXCEPTION 'LP4_SYNTHETIC_DATABASE_REQUIRED' USING ERRCODE='42501';
@@ -56,28 +56,6 @@ BEGIN
     IF jsonb_typeof(payload->section) IS DISTINCT FROM 'object' THEN
      RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
     FOR entry IN SELECT key,value FROM jsonb_each(payload->section) LOOP
-     -- Preserve the manifest's existing structured exclusion receipt. Only the
-     -- checked final-check writer may seal it; generic append cannot supply it.
-     IF p_trust='checked_operation' AND e->>'eventType'='final_check.sources_excluded'
-      AND e->>'subjectType'='job' AND e->>'actorRef'='system:final_check'
-      AND section='references' AND entry.key='exclusions' THEN
-      IF jsonb_typeof(entry.value) IS DISTINCT FROM 'array' THEN
-       RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-      FOR exclusion IN SELECT value FROM jsonb_array_elements(entry.value) LOOP
-       IF jsonb_typeof(exclusion) IS DISTINCT FROM 'object'
-        OR NOT (exclusion ?& ARRAY['uploadId','state','reason'])
-        OR exclusion - ARRAY['uploadId','state','reason'] <> '{}'::jsonb
-        OR jsonb_typeof(exclusion->'uploadId') IS DISTINCT FROM 'string'
-        OR (exclusion->>'uploadId') !~ '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$'
-        OR jsonb_typeof(exclusion->'state') IS DISTINCT FROM 'string'
-        OR exclusion->>'state' NOT IN ('rejected','expired')
-        OR jsonb_typeof(exclusion->'reason') IS DISTINCT FROM 'string'
-        OR length(exclusion->>'reason') NOT BETWEEN 1 AND 200
-        OR (exclusion->>'reason') !~ '^[A-Za-z0-9_:/-]+$' THEN
-        RAISE EXCEPTION 'AUDIT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-      END LOOP;
-      CONTINUE;
-     END IF;
      IF length(entry.key) NOT BETWEEN 1 AND 200 OR entry.key !~ '^[A-Za-z0-9_.:@/-]+$'
       OR entry.key IN ('auditTrust','tenantId','id','version','actorRef','eventType','subjectType','subjectRef','sequence','occurredAt','previousHash','eventHash')
       OR jsonb_typeof(entry.value) IS DISTINCT FROM 'string'
@@ -528,7 +506,7 @@ BEGIN
  IF jsonb_array_length(excluded)>0 THEN
   -- Audited once per manifest, with the exact exclusions; the audit head is allocated last, after every business lock above.
 
-  payload:=jsonb_build_object('references',jsonb_build_object('manifestId',NEW.id,'lockId',NEW.lock_id,'exclusions',excluded));
+  payload:=jsonb_build_object('references',jsonb_build_object('manifestId',NEW.id,'lockId',NEW.lock_id),'hashes',jsonb_build_object('exclusions',app.final_lock_hash(excluded)));
 
   PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','system:final_check','eventType','final_check.sources_excluded','subjectType','job','subjectRef',NEW.job_id::text,'payload',payload)),'checked_operation');
 
@@ -569,7 +547,7 @@ CREATE OR REPLACE FUNCTION app.append_final_check_audit(e uuid,actor text,j uuid
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;seq bigint;prev text;ts timestamptz;payload jsonb;ph text;eh text;
 BEGIN
 
- payload:=jsonb_build_object('references',refs,'hashes','{}'::jsonb);
+ payload:=jsonb_build_object('references',jsonb_strip_nulls(refs),'hashes','{}'::jsonb);
 
  PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',e,'version','audit.v1','actorRef',actor,'eventType',k,'subjectType','job','subjectRef',j::text,'payload',payload)),'checked_operation');
 END $$;

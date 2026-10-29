@@ -64,10 +64,13 @@ it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, ex
  await new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
  expect((await builder.read(a.context,a.jobId,a.digest)).state).toBe('completed');
  expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]))).rows[0].complete).toBe(true);
- const events=(await f.admin.query("SELECT payload->'references'->'exclusions' exclusions FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
+ const events=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.sources_excluded");
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.completed");
- expect(events).toEqual([{exclusions:[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}]}]);
+ const exclusions=[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}];
+ const digest=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[JSON.stringify(exclusions)])).rows[0].hash;
+ expect(events).toEqual([{payload:{references:{manifestId:m.id,lockId:expect.any(String),auditTrust:'checked_operation'},hashes:{exclusions:digest}}}]);
+ expect((await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,m.id])).rows).toEqual([{id:m.id}]);
 });
 
 it("C239 exact processed evidence and classifications satisfy the unchanged prerequisite publication gate",async()=>{
