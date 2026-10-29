@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DarkFeeCollectionExecutor } from "./executor.js";
-import type { VerifiedCollectionContext } from "./contracts.js";
+import type { CollectionSessionContext } from "./contracts.js";
 import { fixture, ctx, id, hash } from "./test-fixture.js";
 describe("M4-12 dark card collection and shared balance reservation", () => {
   it("serializes double-clicks, changed-input replays and alternate rails against one balance", async () => {
@@ -14,7 +14,7 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
   it("keeps rails disabled by default and refuses production even with an injected fake", async () => {
     const f = fixture(); await f.executor.reserve(ctx, f.intent);
     await expect(new DarkFeeCollectionExecutor(f.store).execute(ctx, id(10))).rejects.toThrow("COLLECTION_DARK");
-    await expect(f.executor.reserve({ ...ctx, environment: "production" } as unknown as VerifiedCollectionContext, f.intent)).rejects.toThrow("COLLECTION_DARK");
+    await expect(f.executor.reserve({ ...ctx, environment: "production" } as unknown as CollectionSessionContext, f.intent)).rejects.toThrow("COLLECTION_DARK");
     expect(f.book().attempts[0]?.state).toBe("reserved");
   });
   it("settles only signed exact objects; replay and duplicate event objects allocate once to the immutable invoice", async () => {
@@ -31,7 +31,7 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
     const f = fixture(); await f.executor.reserve(ctx, f.intent); f.rail.crashAfterAcceptance = true;
     await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
     expect(f.book().attempts[0]?.state).toBe("outcome_unknown");
-    const restarted = new DarkFeeCollectionExecutor(f.store, [f.rail]);
+    const restarted = new DarkFeeCollectionExecutor(f.store, [f.rail], undefined, f.sessions);
     await expect(restarted.execute(ctx, id(10))).rejects.toThrow("RECONCILIATION_REQUIRED");
     await expect(restarted.reserve(ctx, { ...f.intent, commandId: id(11), rail: "direct_debit" })).rejects.toThrow();
     const e = f.event(); await restarted.webhook(ctx, "stripe_card", e.body, e.signature);
@@ -137,7 +137,14 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
     }
     expect(f.book().audit.filter(a => a.state === "released")).toHaveLength(1);
     const late = f.event();
-    await expect(f.executor.webhook(ctx, "stripe_card", late.body, late.signature)).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await f.executor.webhook(ctx, "stripe_card", late.body, late.signature);
+    await f.executor.webhook(ctx, "stripe_card", late.body, late.signature);
+    expect(f.book().attempts[0]?.state).toBe("reconciliation_required");
+    expect(f.book().audit.filter(a => a.state === "reconciliation_required")).toHaveLength(1);
+    expect(f.book().events[`stripe_card:${id(30)}`]).toBeDefined();
+    await expect(f.executor.reserve(ctx, { ...f.intent, commandId: id(11) })).rejects.toThrow("RECONCILIATION_REQUIRED");
+    const restarted = new DarkFeeCollectionExecutor(f.store, [f.rail], undefined, f.sessions);
+    await expect(restarted.execute(ctx, id(10))).rejects.toThrow("RECONCILIATION_REQUIRED");
   });
   it("records in-flight settlement after reversal honestly, without reopening collection", async () => {
     const f = fixture(); await f.executor.reserve(ctx, f.intent); await f.executor.execute(ctx, id(10));
@@ -195,7 +202,7 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
         const event = f.event(); await executor.webhook(ctx, "stripe_card", event.body, event.signature);
         return accepted;
       },
-    }], () => new Date("2026-10-29T00:00:00Z"));
+    }], () => new Date("2026-10-29T00:00:00Z"), f.sessions);
     await executor.reserve(ctx, f.intent); await executor.execute(ctx, id(10));
     expect(f.book().attempts[0]?.state).toBe("settled");
     expect(f.book().audit.filter(a => a.state === "settled")).toHaveLength(1);
@@ -204,6 +211,87 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
     const f = fixture(); const attempt = await f.executor.reserve(ctx, f.intent);
     await f.rail.submit(ctx.tenantId, attempt);
     await expect(f.rail.submit(ctx.tenantId, { ...attempt, invoiceId: id(99) })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  });
+
+  it.each(["expired", "missing-token", "tenant", "identity", "revoked", "permission"])("resolves current session authority and rejects %s before reserve or replay", async change => {
+    const f = fixture(); await f.executor.reserve(ctx, f.intent);
+    if (change === "expired") f.expireSession();
+    if (change === "tenant") Object.assign(f.membership, { tenantId: id(99) });
+    if (change === "identity") Object.assign(f.membership, { identityUserId: id(99) });
+    if (change === "revoked") Object.assign(f.membership, { revokedAt: 1 });
+    if (change === "permission") Object.assign(f.membership, { role: "read_only" });
+    const session = change === "missing-token" ? { ...ctx, sessionToken: "" } : ctx;
+    await expect(f.executor.reserve(session, f.intent)).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(f.executor.execute(session, id(10))).rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts[0]?.state).toBe("reserved");
+  });
+  it("rejects a caller boolean without session credentials", async () => {
+    const f = fixture();
+    await expect(f.executor.reserve({ tenantId: ctx.tenantId, environment: "synthetic_demo", membershipVerified: true } as unknown as CollectionSessionContext, f.intent)).rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts).toHaveLength(0);
+  });
+  it("binds collection and refund replays and execution to the session actor", async () => {
+    const f = fixture(); await f.settle(); await f.executor.reserveRefund(ctx, f.refund);
+    Object.assign(f.membership, { id: id(99) });
+    await expect(f.executor.reserve(ctx, f.intent)).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(f.executor.reserveRefund(ctx, f.refund)).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(f.executor.execute(ctx, id(20))).rejects.toThrow("COLLECTION_REFUSED");
+  });
+  it("rejects credit authority belonging to another actor at reservation and execution", async () => {
+    const f = fixture(); await f.settle(); f.credit.actorMembershipId = id(99);
+    await expect(f.executor.reserveRefund(ctx, f.refund)).rejects.toThrow("COLLECTION_REFUSED");
+    f.credit.actorMembershipId = id(2); await f.executor.reserveRefund(ctx, f.refund);
+    f.credit.actorMembershipId = id(99);
+    await expect(f.executor.execute(ctx, id(20))).rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts[1]?.state).toBe("reserved");
+  });
+  it("caps approved refunds at immutable settled principal, excluding tax", async () => {
+    const f = fixture(); await f.settle();
+    f.credit.amountPence = f.credit.approvedAmountPence = 501;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, amountPence: 501 })).rejects.toThrow("COLLECTION_REFUSED");
+    f.credit.amountPence = f.credit.approvedAmountPence = 500;
+    f.source.principalPence = 999; // Mutable source changes cannot increase the historical cap.
+    await f.executor.reserveRefund(ctx, f.refund);
+    f.credit.creditNoteId = id(22); f.credit.amountPence = f.credit.approvedAmountPence = 1;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, commandId: id(23), creditNoteId: id(22), amountPence: 1 })).rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts[0]?.principalPence).toBe(500);
+  });
+  it("persists settlement after submit failure and blocks an already reserved replacement", async () => {
+    const f = fixture(); await f.executor.reserve(ctx, f.intent);
+    // Simulate a contradictory provider response after accepting the immutable request.
+    const executor = new DarkFeeCollectionExecutor(f.store, [{
+      name: "stripe_card", environment: "synthetic_demo",
+      verifyWebhook: (body, signature) => f.rail.verifyWebhook(body, signature),
+      submit: async (tenant, attempt) => { await f.rail.submit(tenant, attempt); return { state: "definite_failure" }; },
+    }], undefined, f.sessions);
+    await executor.execute(ctx, id(10));
+    await executor.reserve(ctx, { ...f.intent, commandId: id(11) });
+    const late = f.event(); await executor.webhook(ctx, "stripe_card", late.body, late.signature);
+    expect(f.book().attempts[0]).toMatchObject({ state: "reconciliation_required", providerObjectId: f.rail.objectId(id(1), id(10)) });
+    await expect(executor.execute(ctx, id(11))).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await expect(executor.reserveRefund(ctx, f.refund)).rejects.toThrow("RECONCILIATION_REQUIRED");
+    const duplicate = f.event(id(10), "collection", id(88));
+    await executor.webhook(ctx, "stripe_card", duplicate.body, duplicate.signature);
+    expect(f.book().audit.filter(a => a.state === "reconciliation_required")).toHaveLength(1);
+  });
+
+  it("holds a late refund settlement and prevents a reserved replacement exceeding principal", async () => {
+    const f = fixture(); await f.settle(); await f.executor.reserveRefund(ctx, f.refund);
+    const executor = new DarkFeeCollectionExecutor(f.store, [{
+      name: "stripe_card", environment: "synthetic_demo",
+      verifyWebhook: (body, signature) => f.rail.verifyWebhook(body, signature),
+      submit: async (tenant, attempt) => { await f.rail.submit(tenant, attempt); return { state: "definite_failure" }; },
+    }], undefined, f.sessions);
+    await executor.execute(ctx, id(20));
+    f.credit.creditNoteId = id(22);
+    const replacement = { ...f.refund, commandId: id(23), creditNoteId: id(22) };
+    await executor.reserveRefund(ctx, replacement);
+    const late = f.event(id(20), "refund", id(89));
+    await executor.webhook(ctx, "stripe_card", late.body, late.signature);
+    expect(f.book().attempts[1]?.state).toBe("reconciliation_required");
+    await expect(executor.execute(ctx, id(23))).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await expect(executor.reserveRefund(ctx, { ...replacement, commandId: id(24) })).rejects.toThrow("RECONCILIATION_REQUIRED");
+    expect(f.book().attempts[2]?.state).toBe("reserved");
   });
 
 });

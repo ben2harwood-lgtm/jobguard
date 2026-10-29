@@ -1,10 +1,11 @@
+import type { ActiveMembership, AuthPrincipal } from "../auth/auth-provider.js";
 import { subscriptionAgreementHash } from "@jobguard/core";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import { FakeStripeCardRail } from "./fake-stripe.js";
-import type { CollectionBook, CollectionSources, CreditSources, ReservationStore, VerifiedCollectionContext } from "./contracts.js";
+import type { CollectionBook, CollectionSources, CreditSources, ReservationStore, CollectionSessionContext } from "./contracts.js";
 export const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 export const hash = "a".repeat(64);
-export const ctx: VerifiedCollectionContext = { tenantId: id(1), membershipVerified: true, environment: "synthetic_demo" };
+export const ctx: CollectionSessionContext = { tenantId: id(1), sessionToken: "synthetic-session", environment: "synthetic_demo" };
 export function fixture() {
   const selection = { version: "subscription-agreement-selection.v1" as const, termsVersion: "synthetic_subscription_success_terms.v1" as const,
     catalogueVersion: "subscription_pricing_policy_v4" as const, tenantId: id(1), agreementId: id(2), revision: 1,
@@ -32,10 +33,10 @@ export function fixture() {
   const intent = { version: "fee-collection.v1", commandId: id(10), jobId: id(5), invoiceId: id(6),
     statementHash: hash, amountPence: 600, rail: "stripe_card" };
   const refund = { version: "fee-refund.v1", commandId: id(20), jobId: id(5), invoiceId: id(6),
-    settlementCommandId: id(10), creditNoteId: id(21), creditHash: hash, amountPence: 600 };
+    settlementCommandId: id(10), creditNoteId: id(21), creditHash: hash, amountPence: 500 };
   const credit: CreditSources = { version: "fee-credit-sources.v1", invoiceHash: hash,
     decisionId: id(40), actorMembershipId: id(2), action: "payment_fee.refund", currency: "GBP", tenantId: id(1), jobId: id(5), invoiceId: id(6), creditNoteId: id(21), creditHash: hash,
-    settlementCommandId: id(10), amountPence: 600, approvedAmountPence: 600, approved: true,
+    settlementCommandId: id(10), amountPence: 500, approvedAmountPence: 500, approved: true,
     currentMembershipVerified: true, current: true, expiresAt: "2099-01-01T00:00:00Z" };
   // Test fake only. Cloned commit/rollback and one queue model the durable store contract.
   let book: CollectionBook = { attempts: [], events: {}, audit: [] };
@@ -53,12 +54,18 @@ export function fixture() {
   } };
   const rail = new FakeStripeCardRail("synthetic-test-signing-secret");
   let now = new Date("2026-10-29T00:00:00Z");
-  const executor = new DarkFeeCollectionExecutor(store, [rail], () => now);
+  let principal: AuthPrincipal | undefined = { identityUserId: id(80), sessionId: id(81), csrfToken: "synthetic-csrf" };
+  const membership: ActiveMembership = { id: id(2), identityUserId: id(80), tenantId: id(1), role: "owner", email: "synthetic@example.invalid" };
+  const sessions = {
+    authenticate: async (token: string) => token === ctx.sessionToken ? principal : undefined,
+    findMembership: async () => membership,
+  };
+  const executor = new DarkFeeCollectionExecutor(store, [rail], () => now, sessions);
   const event = (commandId = id(10), kind: "collection" | "refund" = "collection", eventId = id(30), state = "settled") => {
     const body = JSON.stringify({ version: "fake-stripe-event.v1", environment: "synthetic_demo", account: "fake_jobguard_card",
-      tenantId: id(1), eventId, commandId, objectId: rail.objectId(id(1), commandId), amountPence: 600, kind, state });
+      tenantId: id(1), eventId, commandId, objectId: rail.objectId(id(1), commandId), amountPence: kind === "refund" ? refund.amountPence : 600, kind, state });
     return { body, signature: rail.sign(body) };
   };
   async function settle() { await executor.reserve(ctx, intent); await executor.execute(ctx, id(10)); const e = event(); await executor.webhook(ctx, "stripe_card", e.body, e.signature); }
-  return { setNow: (value: string) => { now = new Date(value); }, source, credit, intent, refund, store, rail, executor, event, settle, book: () => structuredClone(book) };
+  return { membership, sessions, expireSession: () => { principal = undefined; }, setNow: (value: string) => { now = new Date(value); }, source, credit, intent, refund, store, rail, executor, event, settle, book: () => structuredClone(book) };
 }

@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { checkSyntheticSubscriptionAgreement } from "@jobguard/core";
+import { rolePermits, type AuthProvider } from "../auth/auth-provider.js";
 import { collectionIntentV1, collectionSourcesV1, creditSourcesV1, FeeCollectionError, parse, refundIntentV1,
   type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
-  type VerifiedCollectionContext, type DirectDebitPaymentState } from "./contracts.js";
+  type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
 export interface CollectionRail {
   readonly name: "stripe_card" | "direct_debit";
   readonly environment: "synthetic_demo";
@@ -18,15 +19,12 @@ function transition(book: CollectionBook, attempt: Attempt, state: Attempt["stat
   attempt.state = state;
   book.audit.push({ commandId: attempt.commandId, state });
 }
-function context(ctx: VerifiedCollectionContext) {
-  if (ctx.environment !== "synthetic_demo" || ctx.membershipVerified !== true) throw new FeeCollectionError("COLLECTION_DARK");
-}
 function match(book: CollectionBook, commandId: string, hash: string) {
   const prior = book.attempts.find(a => a.commandId === commandId);
   if (prior && prior.fingerprint !== hash) throw new FeeCollectionError("IDEMPOTENCY_CONFLICT");
   return prior;
 }
-function validate(raw: unknown, ctx: VerifiedCollectionContext, intent: CollectionIntent, now: string): CollectionSources {
+function validate(raw: unknown, ctx: CollectionSessionContext, intent: CollectionIntent, now: string): CollectionSources {
   const source = parse(collectionSourcesV1, raw);
   const agreement = source.agreement;
   const statement = agreement.currentStatement;
@@ -45,6 +43,10 @@ function validate(raw: unknown, ctx: VerifiedCollectionContext, intent: Collecti
   checkSyntheticSubscriptionAgreement({ ...agreement, now });
   return source;
 }
+function requireReconciled(book: CollectionBook, invoiceId: string, statementId?: string) {
+  if (book.attempts.some(a => a.state === "reconciliation_required"
+    && (a.invoiceId === invoiceId || a.statementId === statementId))) throw new FeeCollectionError("RECONCILIATION_REQUIRED");
+}
 function outstanding(book: CollectionBook, source: CollectionSources, excluding?: string) {
   const used = book.attempts.filter(a => a.kind === "collection" && (a.invoiceId === source.invoiceId || a.statementId === source.agreement.currentStatement!.statementId)
     && a.state !== "released" && a.commandId !== excluding).reduce((sum, a) => sum + BigInt(a.amountPence), 0n);
@@ -55,18 +57,34 @@ function outstanding(book: CollectionBook, source: CollectionSources, excluding?
 /** Server-only orchestration. No route, live adapter or default-on flag is registered. */
 export class DarkFeeCollectionExecutor {
   constructor(private readonly store: ReservationStore, private readonly rails: readonly CollectionRail[] = [],
-    private readonly now: () => Date = () => new Date()) {}
-  async reserve(ctx: VerifiedCollectionContext, raw: unknown): Promise<Readonly<Attempt>> {
-    context(ctx);
+    private readonly now: () => Date = () => new Date(),
+    private readonly sessions?: Pick<AuthProvider, "authenticate" | "findMembership">) {}
+  private async actor(ctx: CollectionSessionContext): Promise<string> {
+    if (ctx.environment !== "synthetic_demo" || !this.sessions) throw new FeeCollectionError("COLLECTION_DARK");
+    if (typeof ctx.sessionToken !== "string" || !ctx.sessionToken) return refuse();
+    const principal = await this.sessions.authenticate(ctx.sessionToken);
+    if (!principal) return refuse();
+    const membership = await this.sessions.findMembership(principal, ctx.tenantId);
+    if (!membership || membership.revokedAt !== undefined || membership.tenantId !== ctx.tenantId
+      || membership.identityUserId !== principal.identityUserId || !rolePermits(membership.role, "finance:approve")) return refuse();
+    return membership.id;
+  }
+  async reserve(ctx: CollectionSessionContext, raw: unknown): Promise<Readonly<Attempt>> {
+    const actorMembershipId = await this.actor(ctx);
     const intent = parse(collectionIntentV1, raw);
     return this.store.transaction(ctx.tenantId, async (book, sources) => {
       const prior = match(book, intent.commandId, fingerprint(intent));
-      if (prior) return structuredClone(prior);
+      if (prior) {
+        if (prior.actorMembershipId !== actorMembershipId) return refuse();
+        return structuredClone(prior);
+      }
       const source = validate(await sources.collection(intent.jobId, intent.invoiceId), ctx, intent, this.now().toISOString());
+      requireReconciled(book, intent.invoiceId, source.agreement.currentStatement!.statementId);
       if (BigInt(intent.amountPence) > outstanding(book, source)) return refuse();
       // Each decision approves the exact full statement, not a caller-selected partial debit.
       if (intent.amountPence !== source.agreement.amountPence) return refuse();
       const attempt: Attempt = { ...intent, kind: "collection", fingerprint: fingerprint(intent),
+        actorMembershipId, principalPence: source.principalPence,
         statementId: source.agreement.currentStatement!.statementId,
         invoiceHash: source.invoiceHash, sourceHash: source.sourceHash, decisionId: source.collectionDecision.decisionId,
         settlementCommandId: null, settlementObjectId: null,
@@ -75,24 +93,29 @@ export class DarkFeeCollectionExecutor {
       return structuredClone(attempt);
     });
   }
-  async reserveRefund(ctx: VerifiedCollectionContext, raw: unknown): Promise<Readonly<Attempt>> {
-    context(ctx);
+  async reserveRefund(ctx: CollectionSessionContext, raw: unknown): Promise<Readonly<Attempt>> {
+    const actorMembershipId = await this.actor(ctx);
     const intent = parse(refundIntentV1, raw);
     return this.store.transaction(ctx.tenantId, async (book, sources) => {
       const prior = match(book, intent.commandId, fingerprint(intent));
-      if (prior) return structuredClone(prior);
+      if (prior) {
+        if (prior.actorMembershipId !== actorMembershipId) return refuse();
+        return structuredClone(prior);
+      }
+      requireReconciled(book, intent.invoiceId);
       const credit = parse(creditSourcesV1, await sources.credit(intent));
       const original = book.attempts.find(a => a.commandId === intent.settlementCommandId && a.kind === "collection"
         && a.state === "settled" && a.invoiceId === intent.invoiceId && a.jobId === intent.jobId);
       const used = book.attempts.filter(a => a.kind === "refund" && a.settlementCommandId === intent.settlementCommandId
         && a.state !== "released").reduce((sum, a) => sum + BigInt(a.amountPence), 0n);
       if (!original || !original.providerObjectId || credit.tenantId !== ctx.tenantId || credit.jobId !== intent.jobId || credit.invoiceId !== intent.invoiceId
-        || credit.invoiceHash !== original.invoiceHash || credit.creditNoteId !== intent.creditNoteId || credit.creditHash !== intent.creditHash
+        || credit.actorMembershipId !== actorMembershipId || credit.invoiceHash !== original.invoiceHash || credit.creditNoteId !== intent.creditNoteId || credit.creditHash !== intent.creditHash
         || credit.settlementCommandId !== original.commandId || credit.approvedAmountPence !== intent.amountPence
         || credit.amountPence !== intent.amountPence || Date.parse(credit.expiresAt) <= this.now().getTime()
-        || BigInt(intent.amountPence) + used > BigInt(original.amountPence)
+        || BigInt(intent.amountPence) + used > BigInt(original.principalPence)
         || book.attempts.some(a => a.kind === "refund" && a.creditNoteId === intent.creditNoteId && a.state !== "released")) return refuse();
       const attempt: Attempt = { kind: "refund", commandId: intent.commandId, fingerprint: fingerprint(intent),
+        actorMembershipId, principalPence: intent.amountPence,
         jobId: intent.jobId, invoiceId: intent.invoiceId, invoiceHash: original.invoiceHash,
         sourceHash: intent.creditHash, statementHash: original.statementHash, statementId: original.statementId, amountPence: intent.amountPence,
         rail: original.rail, decisionId: credit.decisionId, settlementCommandId: original.commandId,
@@ -102,8 +125,15 @@ export class DarkFeeCollectionExecutor {
       return structuredClone(attempt);
     });
   }
-  async webhook(ctx: VerifiedCollectionContext, railName: CollectionRail["name"], body: string, signature: string) {
-    context(ctx);
+  async webhook(ctx: CollectionSessionContext, railName: CollectionRail["name"], body: string, signature: string) {
+    await this.actor(ctx);
+    return this.processWebhook(ctx, railName, body, signature);
+  }
+  async directDebitWebhook(ctx: DirectDebitWebhookContext, body: string, signature: string) {
+    if (ctx.environment !== "synthetic_demo") throw new FeeCollectionError("COLLECTION_DARK");
+    return this.processWebhook(ctx, "direct_debit", body, signature);
+  }
+  private async processWebhook(ctx: DirectDebitWebhookContext, railName: CollectionRail["name"], body: string, signature: string) {
     const rail = this.rails.find(r => r.name === railName && r.environment === "synthetic_demo");
     if (!rail) throw new FeeCollectionError("COLLECTION_DARK");
     if (!rail.verifyWebhookBatch) return this.applyEvent(ctx, railName, rail.verifyWebhook(body, signature));
@@ -122,7 +152,7 @@ export class DarkFeeCollectionExecutor {
     }
     return results;
   }
-  private async applyEvent(ctx: VerifiedCollectionContext, railName: CollectionRail["name"], event: RailEvent) {
+  private async applyEvent(ctx: DirectDebitWebhookContext, railName: CollectionRail["name"], event: RailEvent) {
     if (event.tenantId !== ctx.tenantId) return refuse();
     await this.store.transaction(ctx.tenantId, async book => {
       const hash = fingerprint(event);
@@ -143,7 +173,14 @@ export class DarkFeeCollectionExecutor {
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
         book.events[eventKey] = hash; return;
       }
-      if (attempt.state === "reserved" || attempt.state === "released" || attempt.state === "reconciliation_required") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
+      if ((attempt.state === "released" && event.state === "settled") || attempt.state === "reconciliation_required") {
+        // Persist the contradictory fact and reserve its balance until explicit reconciliation.
+        attempt.providerObjectId = event.objectId;
+        if (attempt.state !== "reconciliation_required") transition(book, attempt, "reconciliation_required");
+        book.events[eventKey] = hash;
+        return;
+      }
+      if (attempt.state === "reserved" || attempt.state === "released") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       if (event.state === "definite_failure" && attempt.state === "settled") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       attempt.providerObjectId = event.objectId;
       if (attempt.state !== "settled") transition(book, attempt, event.state === "settled" ? "settled" : "released");
@@ -172,17 +209,18 @@ export class DarkFeeCollectionExecutor {
       if (event.state === "paid_out" && attempt.state !== "settled") transition(book, attempt, "settled");
     }
   }
-  async execute(ctx: VerifiedCollectionContext, commandId: string): Promise<void> {
-    context(ctx);
+  async execute(ctx: CollectionSessionContext, commandId: string): Promise<void> {
+    const actorMembershipId = await this.actor(ctx);
     const attempt = await this.store.transaction(ctx.tenantId, async (book, sources) => {
       const current = book.attempts.find(a => a.commandId === commandId);
-      if (!current) return refuse();
+      if (!current || current.actorMembershipId !== actorMembershipId) return refuse();
+      requireReconciled(book, current.invoiceId, current.statementId);
       if (current.state !== "reserved") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
       if (!this.rails.some(r => r.name === current.rail && r.environment === "synthetic_demo")) throw new FeeCollectionError("COLLECTION_DARK");
       if (current.kind === "collection") {
         const source = validate(await sources.collection(current.jobId, current.invoiceId), ctx,
           { version: "fee-collection.v1", ...current }, this.now().toISOString());
-        if (source.collectionDecision.decisionId !== current.decisionId
+        if (source.principalPence !== current.principalPence || source.collectionDecision.decisionId !== current.decisionId
           || source.agreement.currentStatement!.statementId !== current.statementId || source.invoiceHash !== current.invoiceHash || source.sourceHash !== current.sourceHash
           || current.amountPence !== source.agreement.amountPence || BigInt(current.amountPence) > outstanding(book, source, current.commandId)) return refuse();
       } else {
@@ -190,7 +228,7 @@ export class DarkFeeCollectionExecutor {
           settlementCommandId: current.settlementCommandId!, creditNoteId: current.creditNoteId!, creditHash: current.sourceHash }));
         const original = book.attempts.find(a => a.commandId === current.settlementCommandId);
         if (!original || original.state !== "settled") throw new FeeCollectionError("RECONCILIATION_REQUIRED");
-        if (credit.decisionId !== current.decisionId || credit.tenantId !== ctx.tenantId || credit.jobId !== current.jobId || credit.invoiceId !== current.invoiceId
+        if (credit.actorMembershipId !== actorMembershipId || credit.decisionId !== current.decisionId || credit.tenantId !== ctx.tenantId || credit.jobId !== current.jobId || credit.invoiceId !== current.invoiceId
           || credit.invoiceHash !== current.invoiceHash || credit.creditNoteId !== current.creditNoteId || credit.creditHash !== current.sourceHash
           || credit.settlementCommandId !== current.settlementCommandId || credit.approvedAmountPence !== current.amountPence
           || credit.amountPence !== current.amountPence || Date.parse(credit.expiresAt) <= this.now().getTime()) return refuse();

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeGoCardlessRail } from "./fake-gocardless.js";
 import { DarkFeeCollectionExecutor } from "./executor.js";
+import type { CollectionSessionContext } from "./contracts.js";
 import { fixture, ctx, id } from "./test-fixture.js";
 function ddFixture(now = () => new Date("2026-10-29T00:00:00Z")) {
   const f = fixture();
   const rail = new FakeGoCardlessRail("made-up-test-secret", now);
-  const executor = new DarkFeeCollectionExecutor(f.store, [rail, f.rail], () => new Date("2026-10-29T00:00:00Z"));
+  const executor = new DarkFeeCollectionExecutor(f.store, [rail, f.rail], () => new Date("2026-10-29T00:00:00Z"), f.sessions);
   const setup = { version: "fake-dd-setup.v1", environment: "synthetic_demo", tenantId: ctx.tenantId,
     commandId: id(80), mandateId: id(81), approvedDecisionId: id(82), noticeApproved: true, providerDefaultsDisabled: true };
   rail.setup(setup);
@@ -18,26 +19,87 @@ function ddFixture(now = () => new Date("2026-10-29T00:00:00Z")) {
   const intent = { ...f.intent, rail: "direct_debit" };
   const event = (state: string, eventId = id(90), commandId = id(10), kind = "collection") => ({
     version: "fake-dd-event.v1", environment: "synthetic_demo", account: "fake_jobguard_dd", tenantId: ctx.tenantId,
-    eventId, commandId, objectId: rail.objectId(ctx.tenantId, commandId), amountPence: 600, kind, state });
+    eventId, commandId, objectId: rail.objectId(ctx.tenantId, commandId), amountPence: kind === "refund" ? f.refund.amountPence : 600, kind, state });
   const batch = (events: unknown[]) => {
-    const body = JSON.stringify({ events }); return executor.webhook(ctx, "direct_debit", body, rail.sign(body));
+    const body = JSON.stringify({ events }); return executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, rail.sign(body));
   };
   const start = async () => { await executor.reserve(ctx, intent); await executor.execute(ctx, id(10)); };
   return { ...f, stripe: f.rail, rail, executor, setup, mandate, intent, event, batch, start };
 }
 describe("M4-15 dark Direct Debit", () => {
+  it("records signed provider events without a user session and cannot use that path to reserve, collect or refund", async () => {
+    const f = ddFixture(); await f.start();
+    // Provider delivery continues even after the approving user's session expires.
+    f.expireSession();
+    const authenticate = vi.fn(async () => { throw new Error("USER_SESSION_NOT_AVAILABLE"); });
+    const provider = new DarkFeeCollectionExecutor(f.store, [f.rail], undefined,
+      { ...f.sessions, authenticate });
+    const routing = { tenantId: ctx.tenantId, environment: "synthetic_demo" as const };
+    const body = JSON.stringify({ events: [f.event("paid_out")] });
+    await expect(provider.directDebitWebhook(routing, body, f.rail.sign(body))).resolves.toEqual([{ code: "processed" }]);
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(f.book().attempts[0]?.state).toBe("settled");
+    const before = f.book();
+    const credentials = routing as CollectionSessionContext;
+    await expect(provider.reserve(credentials, { ...f.intent, commandId: id(11) })).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(provider.execute(credentials, id(10))).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(provider.reserveRefund(credentials, f.refund)).rejects.toThrow("COLLECTION_REFUSED");
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(f.book()).toEqual(before);
+    await expect(provider.directDebitWebhook({ ...routing, environment: "production" } as unknown as typeof routing,
+      body, f.rail.sign(body))).rejects.toThrow("COLLECTION_DARK");
+    expect(await provider.directDebitWebhook({ ...routing, tenantId: id(99) }, body, f.rail.sign(body)))
+      .toEqual([{ code: "COLLECTION_REFUSED" }]);
+    expect(f.book()).toEqual(before);
+  });
+  it("holds late DD payout after release and blocks an already reserved replacement on either rail", async () => {
+    const f = ddFixture(); await f.start(); await f.batch([f.event("failed")]);
+    await f.executor.reserve(ctx, { ...f.intent, commandId: id(11), rail: "stripe_card" });
+    await f.batch([f.event("paid_out", id(91)), f.event("paid_out", id(92))]);
+    expect(f.book().attempts[0]?.state).toBe("reconciliation_required");
+    expect(f.book().audit.filter(a => a.state === "reconciliation_required")).toHaveLength(1);
+    await expect(f.executor.execute(ctx, id(11))).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await expect(f.executor.reserve(ctx, { ...f.intent, commandId: id(12) })).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await expect(f.executor.reserveRefund(ctx, f.refund)).rejects.toThrow("RECONCILIATION_REQUIRED");
+    expect(f.book().attempts[1]?.state).toBe("reserved");
+  });
+  it("binds DD replay, execution and refund approval to the current session actor", async () => {
+    const f = ddFixture(); await f.start(); await f.batch([f.event("paid_out")]);
+    await f.executor.reserveRefund(ctx, f.refund);
+    Object.assign(f.membership, { id: id(99) });
+    await expect(f.executor.reserve(ctx, f.intent)).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(f.executor.reserveRefund(ctx, f.refund)).rejects.toThrow("COLLECTION_REFUSED");
+    await expect(f.executor.execute(ctx, id(20))).rejects.toThrow("COLLECTION_REFUSED");
+    Object.assign(f.membership, { id: id(2), revokedAt: 1 });
+    await expect(f.executor.execute(ctx, id(20))).rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts[1]?.state).toBe("reserved");
+  });
+  it("caps DD refunds at principal and holds a late refund payout before a replacement can run", async () => {
+    const f = ddFixture(); await f.start(); await f.batch([f.event("paid_out")]);
+    f.credit.amountPence = f.credit.approvedAmountPence = 501;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, amountPence: 501 })).rejects.toThrow("COLLECTION_REFUSED");
+    f.credit.amountPence = f.credit.approvedAmountPence = 500;
+    await f.executor.reserveRefund(ctx, f.refund); await f.executor.execute(ctx, id(20));
+    await f.batch([f.event("failed", id(91), id(20), "refund")]);
+    f.credit.creditNoteId = id(22);
+    await f.executor.reserveRefund(ctx, { ...f.refund, commandId: id(23), creditNoteId: id(22) });
+    await f.batch([f.event("paid_out", id(92), id(20), "refund")]);
+    expect(f.book().attempts[1]?.state).toBe("reconciliation_required");
+    await expect(f.executor.execute(ctx, id(23))).rejects.toThrow("RECONCILIATION_REQUIRED");
+    expect(f.book().attempts[2]?.state).toBe("reserved");
+  });
   it.each([-300, 0, 60])("accepts a signed event at the replay-window boundary %s seconds", async offset => {
     const f = ddFixture(); await f.start();
     const body = JSON.stringify({ events: [f.event("confirmed")] });
     const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000 + offset;
-    expect(await f.executor.webhook(ctx, "direct_debit", body, f.rail.sign(body, timestamp))).toEqual([{ code: "processed" }]);
+    expect(await f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, f.rail.sign(body, timestamp))).toEqual([{ code: "processed" }]);
     expect(f.book().attempts[0]?.paymentState).toBe("confirmed");
   });
   it.each([-301, 61])("refuses an event outside the replay window (%s seconds) without mutation", async offset => {
     const f = ddFixture(); await f.start(); const before = structuredClone(f.book());
     const body = JSON.stringify({ events: [f.event("paid_out")] });
     const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000 + offset;
-    await expect(f.executor.webhook(ctx, "direct_debit", body, f.rail.sign(body, timestamp))).rejects.toThrow("INVALID_WEBHOOK");
+    await expect(f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, f.rail.sign(body, timestamp))).rejects.toThrow("INVALID_WEBHOOK");
     expect(f.book()).toEqual(before);
   });
   it("binds the timestamp to the signature and checks it before parsing", async () => {
@@ -45,7 +107,7 @@ describe("M4-15 dark Direct Debit", () => {
     const body = JSON.stringify({ events: [f.event("paid_out")] });
     const timestamp = Date.parse("2026-10-29T00:00:00Z") / 1000;
     const signed = f.rail.sign(body, timestamp);
-    await expect(f.executor.webhook(ctx, "direct_debit", body, signed.replace(`t=${timestamp}`, `t=${timestamp + 1}`))).rejects.toThrow("INVALID_WEBHOOK");
+    await expect(f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, signed.replace(`t=${timestamp}`, `t=${timestamp + 1}`))).rejects.toThrow("INVALID_WEBHOOK");
     const parse = vi.spyOn(JSON, "parse");
     try {
       expect(() => f.rail.verifyWebhookBatch("not json", f.rail.sign("not json", timestamp - 301))).toThrow("INVALID_WEBHOOK");
@@ -57,13 +119,13 @@ describe("M4-15 dark Direct Debit", () => {
     let time = Date.parse("2026-10-29T00:00:00Z");
     const f = ddFixture(() => new Date(time)); await f.start();
     const body = JSON.stringify({ events: [f.event("paid_out")] }); const signed = f.rail.sign(body);
-    await f.executor.webhook(ctx, "direct_debit", body, signed);
+    await f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, signed);
     const settled = structuredClone(f.book());
     time += 300_000;
-    expect(await f.executor.webhook(ctx, "direct_debit", body, signed)).toEqual([{ code: "processed" }]);
+    expect(await f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, signed)).toEqual([{ code: "processed" }]);
     expect(f.book()).toEqual(settled);
     time += 1;
-    await expect(f.executor.webhook(ctx, "direct_debit", body, signed)).rejects.toThrow("INVALID_WEBHOOK");
+    await expect(f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, body, signed)).rejects.toThrow("INVALID_WEBHOOK");
     expect(f.book()).toEqual(settled);
   });
   it("applies the same replay window to mandate events", () => {
@@ -98,7 +160,7 @@ describe("M4-15 dark Direct Debit", () => {
   });
   it("authenticates before parsing and processes invalid routing separately from valid batch events", async () => {
     const f = ddFixture(); await f.start(); const e = f.event("confirmed");
-    await expect(f.executor.webhook(ctx, "direct_debit", "not json", "0".repeat(64))).rejects.toThrow("INVALID_WEBHOOK");
+    await expect(f.executor.directDebitWebhook({ tenantId: ctx.tenantId, environment: "synthetic_demo" }, "not json", "0".repeat(64))).rejects.toThrow("INVALID_WEBHOOK");
     const result = await f.batch([{ ...e, account: "other" }, { ...e, environment: "production" },
       { ...e, tenantId: id(99) }, { ...e, shadowSignals: ["secret-text"] }, e]);
     expect(result).toEqual([...Array.from({ length: 4 }, () => ({ code: "INVALID_WEBHOOK" })), { code: "processed" }]);
@@ -143,7 +205,7 @@ describe("M4-15 dark Direct Debit", () => {
     await expect(f.rail.submit(ctx.tenantId, { ...a, amountPence: 599 })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     f.rail.crashAfterAcceptance = true;
     await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
-    await expect(new DarkFeeCollectionExecutor(f.store, [f.rail]).execute(ctx, id(10))).rejects.toThrow("RECONCILIATION_REQUIRED");
+    await expect(new DarkFeeCollectionExecutor(f.store, [f.rail], undefined, f.sessions).execute(ctx, id(10))).rejects.toThrow("RECONCILIATION_REQUIRED");
     await expect(f.executor.reserve(ctx, { ...f.intent, commandId: id(11), rail: "stripe_card" })).rejects.toThrow();
   });
   it("refunds original settled DD once, blocks over-refunds, and stops an unsent refund after chargeback", async () => {
