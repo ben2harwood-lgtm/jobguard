@@ -773,3 +773,36 @@ All eight files remain unstaged/uncommitted. Dispatcher owns commit/push, review
 CI, exact-head reviews and separate acceptance; parent must be accepted and merged
 before this piece merges. This handoff completes the available bounded work, not
 CH5-E's dependency-bound positive acceptance or the CH-5 journey.
+
+## PR #386 catch-up — 29 October 2026
+
+CH-5 part 1, RED. Entry HEAD `2198b35c` already contains the merge of main
+`32411c4e`; the worktree had no unresolved conflicts or conflict markers. Both
+shared JSON catalogues (OpenAPI and effective privileges) retain all object keys
+from both merge parents. No production behavior changed in this catch-up.
+
+Replaced the stale `0337` predecessor assertion with a filesystem-only Vitest
+case: enumerate migration SQL filenames below `0349`, sort them, and check that
+0349's immediate predecessor in `MIGRATION_URLS` is the highest one. It currently
+resolves to `0340_recovery_attribution_hookup.sql` and follows later predecessors
+without another hard-coded pin. The existing PostgreSQL upgrade proof still
+installs all predecessors and preserves its row/type/security/replay assertions.
+The existing lane file records this catch-up and retains the combined PR paths.
+
+Actual local checks (installed dependencies, Node v24.17.0, no package downloads):
+
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/job-import-v3-upgrade.integration.test.ts -t 'orders 0349 immediately'`
+  passed: 1 filesystem assertion; 1 PostgreSQL test deselected, not executed.
+- From `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- `node tools/agent-lane-boundary-lint.mjs` passed against merged main.
+- `git diff --check` passed.
+- Read-only Python byte comparison against RED-reviewed `84171946` passed for
+  both migrations: 0349 SHA-256 `f2e6cc28139d25adfcd7279ffb8aad965d05ad615823ab96beed5e5495a4f932`;
+  0350 SHA-256 `ec760547c2e313dbbe4ed65a7f5fe834cf55f69ed8240af06ef8be7fb8295798`.
+- Read-only Python comparison confirmed both shared catalogues retain both merge
+  parents' object keys. No catalogue edit was needed.
+
+PostgreSQL/browser suites and full required checks remain GitHub CI duties under
+the issued sandbox constraint. No database/listener started; no git write,
+commit, push, provider call or release performed. This is builder validation,
+not a new independent review. Router owns commit/push and CI/review disposition.

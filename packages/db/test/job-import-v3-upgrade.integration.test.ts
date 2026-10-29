@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { createWorkFixture, closeWorkFixture, seedWorkJob, type WorkFixture } from "./job-work-state-fixtures.js";
@@ -7,6 +7,16 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
 const signature = "app.adopt_in_flight_job_v3(uuid,uuid,text,uuid,uuid,jsonb)";
+it("orders 0349 immediately after the highest existing predecessor migration", async () => {
+  const own = "0349_job_import_v3.sql";
+  const predecessors = (await readdir(new URL("../migrations/", import.meta.url)))
+    .filter(name => /^\d{4}_[a-z0-9_]+\.sql$/u.test(name) && name.slice(0, 4) < own.slice(0, 4))
+    .sort();
+  const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith(own));
+  expect(index).toBeGreaterThan(0);
+  expect(predecessors.length).toBeGreaterThan(0);
+  expect(MIGRATION_URLS[index - 1]?.pathname.split("/").at(-1)).toBe(predecessors.at(-1));
+});
 describe("CH5-P own 0349 upgrade, no adoption persistence claimed — CI only", () => {
   let f: WorkFixture;
   beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
@@ -14,8 +24,6 @@ describe("CH5-P own 0349 upgrade, no adoption persistence claimed — CI only", 
   it("applies alone after actual predecessor, preserves rows/types/security and permits successors twice", async () => {
     const own = "0349_job_import_v3.sql", index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(own));
     expect(index).toBeGreaterThan(0);
-    // Assert the actual predecessor under current main rather than the obsolete build-ahead base.
-    expect(MIGRATION_URLS[index - 1]?.pathname.split("/").at(-1)).toBe("0337_enterprise_fee_posting_tidy.sql");
     await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
     for (const url of MIGRATION_URLS.slice(0, index)) {
       await f.admin.query(await readFile(url, "utf8"));

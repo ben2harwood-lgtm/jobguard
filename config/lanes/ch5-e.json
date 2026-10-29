@@ -6,7 +6,7 @@
         "codex/sandbox/ch5-e"
       ],
       "receipt": "docs/verdicts/CH5-E/BUILDER_RECEIPT.md",
-      "note": "CH-5 combined payload; PR #386 RED CI round 4 authorized 29 Oct. Preserve merged main behavior and exact catalogue unions; register import route/command phases, forward original provenance scope, scope browser alert to main, and move migrations 0323/0324 to reserved 0349/0350 with unchanged SQL bytes.",
+      "note": "CH-5 combined payload; PR #386 RED CI round 4 authorized 29 Oct. Preserve merged main behavior and exact catalogue unions; register import route/command phases, forward original provenance scope, scope browser alert to main, and move migrations 0323/0324 to reserved 0349/0350 with unchanged SQL bytes. Catch-up for PR #386: derive the 0349 upgrade predecessor from existing migration filenames; preserve both merged-main catalogue entries and 0349/0350 SQL bytes.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
