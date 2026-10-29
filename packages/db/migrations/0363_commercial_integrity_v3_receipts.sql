@@ -132,7 +132,7 @@ BEGIN
  IF jsonb_typeof(review) IS DISTINCT FROM 'object' OR review->>'version' IS DISTINCT FROM 'commercial-integrity-review.v3'
   OR review->>'outcome' IS DISTINCT FROM 'dismissed_false_positive' OR review->>'commandId' !~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
   OR review->>'findingSnapshotHash' !~ '^[a-f0-9]{64}$' OR coalesce(length(review->>'findingKey'),0)=0
-  OR (SELECT coalesce(sum(CASE WHEN ascii(c)>65535 THEN 2 ELSE 1 END),0) FROM regexp_split_to_table(review->>'explanation','') ch(c)) NOT BETWEEN 1 AND 500 OR btrim(review->>'explanation',convert_from(decode('090a0b0c0d20c2a0e19a80e28080e28081e28082e28083e28084e28085e28086e28087e28088e28089e2808ae280a8e280a9e280afe2819fe38080efbbbf','hex'),'UTF8')) IS DISTINCT FROM review->>'explanation'
+  OR (SELECT coalesce(sum((CASE WHEN ascii(c)>65535 THEN 2 ELSE 1 END)),0) FROM regexp_split_to_table(review->>'explanation','') ch(c)) NOT BETWEEN 1 AND 500 OR btrim(review->>'explanation',convert_from(decode('090a0b0c0d20c2a0e19a80e28080e28081e28082e28083e28084e28085e28086e28087e28088e28089e2808ae280a8e280a9e280afe2819fe38080efbbbf','hex'),'UTF8')) IS DISTINCT FROM review->>'explanation'
  THEN RAISE EXCEPTION 'INVALID_INTEGRITY_REVIEW'; END IF;
  cid:=(review->>'commandId')::uuid;
  canonical_review:=jsonb_build_object('version','commercial-integrity-review.v3','commandId',cid,'findingKey',review->>'findingKey','findingSnapshotHash',review->>'findingSnapshotHash','outcome','dismissed_false_positive','explanation',review->>'explanation');

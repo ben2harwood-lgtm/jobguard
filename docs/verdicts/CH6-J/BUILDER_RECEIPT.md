@@ -1139,3 +1139,47 @@ router stages the resolved working tree. PostgreSQL, migration execution,
 browser suites, full required GitHub CI and the exact-head RED review remain
 external gates. No customer data, live money, providers or releases.
 Commit message: `/tmp/ch6-j-20261029T094730Z-commit-msg.txt`.
+
+## 29 Oct 11:29 continuing catch-up 2 — LP-2 CI repair
+
+RED, CH-6 / PR #392. Read all saved failure traces in
+`~/.local/share/full-steam/codex-runs/ch6-j-ci-traces-1129.txt` against
+HEAD `fa31a496` (current main already merged, no conflicts).
+All seven failing suites share one setup root cause: the CH-6 fixture calls
+`app.issue_practice_session` in database `postgres`, but main's latest LP-2
+0356 body correctly rejects it with MODE_FORBIDDEN before session creation.
+Affected suites: query-isolation, receipt-guard, review, base integration,
+HTTP integration, upgrade integration and sources integration.
+
+The shared fixture now creates `jobguard_synthetic_demo` and connects both
+owner and runtime pools there. It still calls the existing checked session
+writer, which authenticates the existing practice owner before minting its
+private exact practice-home permits. No direct permit access, guard bypass,
+new grant, widened exception, or changed assertion. Main's latest adoption
+writer already includes its authenticated private adoption permit; CH-6 does
+not redefine that routine and this repair does not re-create any routine.
+The separate SQL_ASCII installation-only test keeps its `postgres` connection:
+it never issues a practice session and continues to test installation.
+
+As explicitly requested, parenthesised the CASE expression nested inside the
+review-validation IF condition in each own new migration, 0363 and 0364
+(`sum(CASE ... END)` -> `sum((CASE ... END))`). This is the only SQL byte
+change; no semantic change or SQL bug is claimed. All 147 migrations on main
+are byte-identical to incoming main. No tests were weakened/skipped/loosened,
+no privileges/inventory expectations were changed, and no Git writes ran.
+
+Checks actually run with installed tools (at most two workers):
+- From packages/db: installed Vitest, `run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS, rerun after the final SQL parentheses edit.
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS after the final edit, including protected exception checks.
+- Installed tsc, `-p packages/db/tsconfig.json --noEmit`: PASS (src scope).
+- Changed fixture TypeScript syntax transpilation and lane-path checks: PASS.
+- Exact main SQL preservation, own SQL change restricted to the requested
+  parentheses, no unresolved index paths, and `git diff --check`: PASS.
+
+PostgreSQL execution, including all seven formerly failing suites, remains
+for GitHub CI because this sandbox cannot start PostgreSQL. The exact-head
+RED review remains required. Ready for router commit/push and CI verification;
+commit message: `/tmp/ch6-j-20261029T112955Z-commit-msg.txt`.

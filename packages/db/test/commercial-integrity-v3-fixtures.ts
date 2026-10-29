@@ -17,8 +17,9 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  const dir=await mkdtemp(join(tmpdir(),"ch6-p-")),port=await freePort(59200,300),password=randomUUID();
  const logs:string[]=[];
  const pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C",`--encoding=${encoding}`],onLog:line=>logs.push(line)});
- await pg.initialise();await pg.start();
- const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"postgres"});
+ // LP-2 practice issuance requires this trusted database and mints its private job permits.
+ await pg.initialise();await pg.start();await pg.createDatabase("jobguard_synthetic_demo");
+ const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"jobguard_synthetic_demo"});
  if(throughCurrent)await migrate(admin);
  else {
   for(const url of MIGRATION_URLS.filter(url=>url.pathname<migrationUrl.pathname))await admin.query(await readFile(url,"utf8"));
@@ -31,7 +32,7 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  const login=`ch6_${randomUUID().replaceAll("-","")}`;
  await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'; GRANT jobguard_runtime TO ${login}`);
  await admin.query(`ALTER ROLE ${login} SET log_statement='all'`);
- const runtime=new Pool({host:"127.0.0.1",port,user:login,password,database:"postgres",max:2});
+ const runtime=new Pool({host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo",max:2});
  const previous=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
  const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
  const otherToken=await issuePracticeSession(runtime),other=await authenticatePracticeSession(runtime,otherToken);
