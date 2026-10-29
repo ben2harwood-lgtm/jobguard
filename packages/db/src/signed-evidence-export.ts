@@ -103,7 +103,7 @@ export function verifySignedEvidenceExport(raw: unknown, rawContext: unknown) {
     const keyExpired = !!trusted && context.checkedAt >= trusted.expiresAt;
     const gaps = ["No external timestamp; signing time is asserted, not independently proven (M4-4).",
       "Revocation and key identity depend on the independently supplied registry snapshot.",
-      "Audit checkpoint origin is signer-attested; no independent timestamp is verified.",
+      "Audit checkpoint origin is signer-attested; no independent timestamp is checked.",
       ...pack.manifest.trustLimitations];
     for (const section of pack.manifest.sections) {
       if (section.status === "absent") gaps.push(`Evidence section ${section.kind} absent: ${section.reason}.`);
