@@ -18,7 +18,18 @@ export const auditEventInputV1Schema = z.object({
   payload: auditPayloadV1Schema,
 });
 /** Requests remain v1; only the database emits v2. Legacy history has no trust assertion. */
-export const auditStoredInputSchema = auditEventInputV1Schema.extend({ version: z.enum(["audit.v1", "audit.v2"]) });
+const checkedExclusionsSchema = auditEventInputV1Schema.extend({
+  version: z.literal("audit.v2"), actorRef: z.literal("system:final_check"),
+  eventType: z.literal("final_check.sources_excluded"), subjectType: z.literal("job"),
+  payload: auditPayloadV1Schema.extend({ references: z.object({
+    manifestId: z.guid(), lockId: z.guid(), auditTrust: z.literal("checked_operation"),
+    exclusions: z.array(z.object({ uploadId: z.guid(), state: z.enum(["rejected", "expired"]),
+      reason: z.string().min(1).max(200).regex(/^[A-Za-z0-9_:/-]+$/u) }).strict()),
+  }).strict() }),
+});
+export const auditStoredInputSchema = z.union([
+  auditEventInputV1Schema.extend({ version: z.enum(["audit.v1", "audit.v2"]) }), checkedExclusionsSchema,
+]);
 export function auditEventTrust(event: Pick<AuditEvent, "version" | "payload">): "legacy" | "lower_trust" | "checked_operation" {
   if (event.version === "audit.v1") return "legacy";
   const trust = event.payload.references?.auditTrust;
@@ -26,8 +37,7 @@ export function auditEventTrust(event: Pick<AuditEvent, "version" | "payload">):
   return trust;
 }
 export type AuditEventInput = z.infer<typeof auditEventInputV1Schema>;
-export interface AuditEvent extends Omit<AuditEventInput, "version"> {
-  version: "audit.v1" | "audit.v2";
+export type AuditEvent = z.infer<typeof auditStoredInputSchema> & {
   tenantId: string; sequence: number; occurredAt: Date; payloadHash: string;
   previousHash: string | null; eventHash: string;
 }

@@ -898,6 +898,9 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
 // LP-4 part 1: exact catalogue delta only. Never learn expected grants from `after`.
+// Catch-up reroutes 13 latest-main writers without any ACL/owner/security/config
+// delta. They remain compared unchanged here; lp4-audit.integration.test.ts also
+// checks each full definition digest against LP-0, not a live-derived expectation.
 // This file is retained from origin/main on the LP-3 base so the additive B5 gate survives integration.
 async function lp4AuditAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
  const expected = structuredClone(prior);

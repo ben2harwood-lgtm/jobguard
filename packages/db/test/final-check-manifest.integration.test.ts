@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,type FinalCheckFixture} from "./final-check-fixture.js";
@@ -64,6 +65,8 @@ it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, ex
  expect((await builder.read(a.context,a.jobId,a.digest)).state).toBe('completed');
  expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]))).rows[0].complete).toBe(true);
  const events=(await f.admin.query("SELECT payload->'references'->'exclusions' exclusions FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
+ await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.sources_excluded");
+ await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.completed");
  expect(events).toEqual([{exclusions:[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}]}]);
 });
 

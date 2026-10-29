@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
 import {ContractorBillingDelivery} from "../src/contractor-billing-delivery.js";
@@ -13,6 +14,7 @@ it("E6-23 E6-24 outcome_unknown delivery is reconciled, never blindly retried",a
  await delivery.reconcile(w.ctx,w.session,w.s.jobId,action.outboxActionId);expect(reconciliations).toBe(1);expect(calls).toBe(1);
  const after=await w.repo.read(w.ctx,w.session,w.s.jobId);
  expect(after.deliveries[0]).toMatchObject({status:"succeeded",outbox_action_id:action.outboxActionId});
+ await assertLp4SealedEvents(c.admin, w.w.p.tenantId, "contractor.billing.delivery_claimed");
  // The screen offers export only to contracts on this job's own work orders.
  expect(after.clientContractIds).toEqual((await c.admin.query("SELECT DISTINCT contract_id::text id FROM app.work_order WHERE job_id=$1 ORDER BY 1",[w.s.jobId])).rows.map(r=>r.id));
  expect(after.clientContractIds.length).toBeGreaterThan(0);

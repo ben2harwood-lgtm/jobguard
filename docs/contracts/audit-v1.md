@@ -77,3 +77,10 @@ before directing traffic to the new database routine. On failure, roll back the 
 transaction or fix forward; never restore runtime INSERT or rewrite audit history.
 PostgreSQL upgrade/concurrency/permission tests and the existing owner-operation suites
 remain CI gates, and an independent Claude RED review remains required.
+
+LP-4 catch-up preserves the existing `final_check.sources_excluded` receipt,
+including its structured `references.exclusions` array (upload UUID, rejected or
+expired state, identifier-only reason). Only the private checked-operation path
+accepts that shape for `system:final_check` job events. Generic append still
+refuses it. Stored-event verification and signed exports validate this same
+shape; the manifest retains the exact exclusions and its original inventory hash.

@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 // Real PostgreSQL acceptance, deferred to CI: this sandbox cannot bind localhost.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -73,6 +74,7 @@ it("stores immutable history, serializes replay once, reproduces with a new repo
     teamBindings: [{ sourceTeamId: "pilot", teamId: w.demo.teamId }, { sourceTeamId: "rest", teamId: w.otherDemo.teamId }] };
   const [a, b] = await Promise.all([repo.import(context, finance, input), repo.import(context, finance, input)]);
   expect(a.batchId).toBe(b.batchId); expect([a.replayed, b.replayed].sort()).toEqual([false, true]);
+ await assertLp4SealedEvents(c.admin, w.p.tenantId, "enterprise.baseline.imported");
   expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='enterprise.baseline.imported'", [w.p.tenantId])).rows[0].n).toBe(1);
   const viewer = await invite(c, w, "commercial_manager", { kind: "tenant", id: w.p.tenantId }), s = await session(viewer.member), ctx = await contractorSessionContext(c.runtime, s);
   const read = { version: "baseline-read.v1", batchId: a.batchId, cohorts: { version: "baseline-cohorts.v1", pilotTeamIds: ["pilot"], restTeamIds: ["rest"] },

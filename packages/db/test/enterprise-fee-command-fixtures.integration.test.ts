@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { statementLines, exactPence, sumExactPence } from "@jobguard/core";
@@ -169,6 +170,7 @@ it("fractional duplicate credit preserves 250000/31 net pence in storage, replay
   const stored = (await c.admin.query(`SELECT c.corrections,c.content_hash,a.content_hash authorization_hash,a.amount_pence::int,
     app.final_lock_hash(jsonb_build_object('version','enterprise-duplicate-correction.v1','jobId',c.job_id,'duplicateId',c.duplicate_id,'canonicalId',c.canonical_id,'corrections',c.corrections)) recomputed_hash
     FROM app.enterprise_duplicate_correction c JOIN app.action_authorization a ON(a.tenant_id,a.id)=(c.tenant_id,c.authorization_id) WHERE c.tenant_id=$1 AND c.id=$2`, [t.w.w.p.tenantId,result.correctionId])).rows[0];
+ await assertLp4SealedEvents(c.admin, t.w.w.p.tenantId, "contractor.extra.duplicate_linked");
   expect(stored).toEqual({ corrections: result.corrections, content_hash: result.contentHash, authorization_hash: result.contentHash, recomputed_hash: result.contentHash, amount_pence: 28800 });
   expect(await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command)).toEqual({ ...result, replayed: true });
 });
@@ -276,6 +278,7 @@ it("Self-check: posting command IDs bind the exact statement and authorization, 
   expect(await t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,commandId: randomUUID() })).toMatchObject({ replayed: true });
   const p = next(t.p); await derive(t,p); const second = await approve(p);
   expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ version: "enterprise-fee-post-statement.v1",commandId,...second }))).toBe("COMMAND_CONFLICT");
+ await assertLp4SealedEvents(c.admin, t.w.w.p.tenantId, "enterprise_fee.statement_posted");
   expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='enterprise_fee.statement_posted'",[t.w.w.p.tenantId])).rows[0].n).toBe(1);
   expect(await t.repo.readPostings(t.w.ctx,t.w.session,first.statementId)).toEqual([]); await chain(c,t.w.w);
 });

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { lp4WriterSources } from "./lp4-writer-catchup-fixture.js";
 import type { Pool, PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendAuditBatch, auditEventTrust, verifyAuditChain, type AuditEvent, type AuditEventInput } from "../src/audit.js";
@@ -35,6 +37,40 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
     expect(events.every(e => e.version === "audit.v2" && auditEventTrust(e) === "lower_trust")).toBe(true);
     expect(events.every(e => Math.abs(e.occurredAt.getTime() - Date.now()) < 60_000)).toBe(true);
   });
+
+  it.each(Object.keys(lp4WriterSources))("%s installs its exact sealed definition and retains its main security contract", async name => {
+    const inventory = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
+    const expected = inventory.recorded.routines.filter((r: { identity: string }) => r.identity.startsWith(`function:${name}(`));
+    expect(expected).toHaveLength(1);
+    const rows = (await db.owner.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef security,
+      p.proconfig config,encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex') digest,
+      has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+      p.prosrc source FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname||'.'||p.proname=$1`, [name])).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
+      config: [expected[0].searchPath], digest: expected[0].definitionSha256, runtime: expected[0].runtimeExecute });
+    expect(rows[0].source).toContain("app.lp4_seal_audit(");
+    expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
+  });
+  it("preserves checked manifest exclusions while refusing the same generic input", async () => {
+    const input = statement({ actorRef: "system:final_check", eventType: "final_check.sources_excluded", subjectType: "job" });
+    const payload = { references: { manifestId: randomUUID(), lockId: randomUUID(),
+      exclusions: [{ uploadId: randomUUID(), state: "rejected", reason: "verification_invalid" }] } };
+    const event = { ...input, payload };
+    await expect(transaction(db.runtime, tenant, client => client.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]))).rejects.toMatchObject({ code: "22023" });
+    await transaction(db.owner, tenant, client => client.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')", [JSON.stringify([event])]));
+    const stored = (await chain(tenant)).find(e => e.id === input.id)!;
+    expect(stored.payload).toEqual({ references: { ...payload.references, auditTrust: "checked_operation" } });
+    expect(auditEventTrust(stored)).toBe("checked_operation");
+    verifyAuditChain(await chain(tenant));
+    for (const exclusions of [[{ ...payload.references.exclusions[0], reason: "fictional@example.invalid" }],
+      [{ ...payload.references.exclusions[0], state: "verified" }], [{ ...payload.references.exclusions[0], extra: "private" }]]) {
+      await expect(transaction(db.owner, tenant, client => client.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')",
+        [JSON.stringify([{ ...event, id: randomUUID(), payload: { references: { ...payload.references, exclusions } } }])]))).rejects.toMatchObject({ code: "22023" });
+    }
+  });
+
   it("rolls back a partial batch, its head, and business writes; retry can commit", async () => {
     const candidate = statement(), account = randomUUID(), before = (await chain(tenant)).length;
     await expect(transaction(db.owner, tenant, async client => {

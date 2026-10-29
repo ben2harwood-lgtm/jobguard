@@ -11,7 +11,11 @@ const uuid = z.guid({ error: "Invalid uuid" }), digest = z.string().regex(/^[a-f
 const sequence = z.number().int().positive().safe();
 const timestamp = utcDatetimeV1;
 export const auditExportRequestV1 = z.object({ version: z.literal("audit-export-request.v1"), commandId: uuid }).strict();
-const eventV1 = auditStoredInputSchema.extend({ tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest }).strict();
+const storedFields = { tenantId: uuid, sequence, occurredAt: timestamp, payloadHash: digest, previousHash: digest.nullable(), eventHash: digest };
+const eventV1 = z.union([
+  auditStoredInputSchema.options[0].extend(storedFields).strict(),
+  auditStoredInputSchema.options[1].extend(storedFields).strict(),
+]);
 const checkpointV1 = z.object({ tenantId: uuid, sequence, eventHash: digest, recordedAt: timestamp }).strict();
 export const auditExportPayloadV1 = z.object({
   version: z.literal("audit-export.v1"), environment: z.literal("synthetic_demo"), notice: z.literal(AUDIT_EXPORT_NOTICE), sandbox: z.literal(AUDIT_EXPORT_SANDBOX),
