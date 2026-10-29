@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-2b": {
+      "branches": ["codex/sandbox/mon-2b"],
+      "note": "RED MON-2B dark deterministic Stripe-shaped fake only; no live provider or migration. The lane's own config/lanes/mon-2b.json is implicitly editable under lane policy.",
+      "allow": [
+        "docs/operations/subscription-synthetic.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/subscription-stripe-sandbox-adapter.ts",
+        "packages/db/src/subscription-stripe-sandbox-adapter.test.ts",
+        "packages/db/test/subscription-stripe-sandbox.integration.test.ts"
+      ]
+    }
+  }
+}

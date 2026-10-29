@@ -121,6 +121,7 @@ export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
 export * from "./subscription-simulated-payment-adapter.js";
+export * from "./subscription-stripe-sandbox-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
