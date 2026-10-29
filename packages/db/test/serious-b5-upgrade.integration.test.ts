@@ -1078,6 +1078,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
+ Object.assign(expected, await customerQuoteAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
@@ -1119,7 +1120,7 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  const routines = after.routines.filter(r => identities.some(([schema, name, args]) => r.nspname === schema && r.proname === name && r.args === args));
  expect(routines.map(r => [r.nspname,r.proname,r.args])).toEqual(identities);
  const indexes = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
-  JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [tables])).rows;
+  JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[]) AND i.relname<>'customer_portal_session_scope_key'`, [tables])).rows;
  expect(indexes.filter(i => i.table_name === tables[0])).toHaveLength(3);
  expect(indexes.filter(i => i.table_name === tables[1])).toHaveLength(3);
  const relationNames = [...tables, ...indexes.map(i => i.relname as string)];
@@ -1130,4 +1131,16 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
  const additive = <T>(old: T[], added: T[], live: T[]): T[] => { const expected = [...old]; for(const r of added)expected.splice(live.indexOf(r),0,r);return expected; };
  return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
+}
+
+// MON-5 M5-QUOTE: only 0388's private table/two indexes, session scope key, policy and checked routine.
+async function customerQuoteAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const routines=after.routines.filter(r=>r.nspname==="identity"&&r.proname==="customer_portal_quote"&&r.args==="t uuid, j uuid, c uuid, digest text, cmd jsonb");
+ expect(routines).toHaveLength(1);
+ const names=["customer_quote_approval","customer_quote_approval_pkey","customer_quote_approval_tenant_id_acceptance_id_key","customer_portal_session_scope_key"];
+ const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));expect(relations.map(r=>r.relname).sort()).toEqual(names.sort());
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&p.tablename==="customer_quote_approval");expect(policies.map(p=>p.policyname)).toEqual(["tenant_isolation"]);
+ const additive=<T>(old:T[],added:T[],live:T[]):T[]=>{const expected=[...old];for(const r of added)expected.splice(live.indexOf(r),0,r);return expected;};
+ return {rows:{...before.rows,"app.customer_quote_approval":[]},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }

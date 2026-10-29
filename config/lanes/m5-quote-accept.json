@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-quote-accept": {
+      "branches": [
+        "codex/sandbox/m5-quote-accept"
+      ],
+      "receipt": "docs/verdicts/m5-quote-accept/BUILDER_RECEIPT.md",
+      "note": "MON-5 M5-QUOTE; RED customer-session exact quote acceptance. Shared barrel, portal and registry catch-ups must union sibling additions. Lane file itself is implicitly owned by this lane.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/auth/customer-quote.controller.ts",
+        "apps/api/src/auth/customer-quote.test.ts",
+        "apps/api/src/auth/customer-quote.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/auth/sso/oidc.controller.ts",
+        "apps/web/app/api/customer-portal/quote-accept/route.ts",
+        "apps/web/app/api/customer-portal/quote/route.ts",
+        "apps/web/app/customer/quote/page.tsx",
+        "apps/web/app/customer/quote/quote.tsx",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/customer-signin.spec.ts",
+        "apps/web/middleware.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/verdicts/m5-quote-accept/BUILDER_RECEIPT.md",
+        "packages/core/src/customer-quote-acceptance.test.ts",
+        "packages/core/src/customer-quote-acceptance.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0388_customer_quote_acceptance.sql",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-quote-acceptance.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

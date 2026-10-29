@@ -21,6 +21,20 @@ async function seedJob(admin: Pool, tenant: string) {
   await db.query("COMMIT"); return { job, customer };
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
+/** Uses the existing domain/command writers to make a synthetic issued quote, never a provider. */
+async function seedQuote(admin: Pool, tenant: string, job: string, member: string, user: string) {
+ const nativeImport=new Function("specifier","return import(specifier)") as (specifier:string)=>Promise<any>;
+ const db=await nativeImport("@jobguard/db") as typeof import("@jobguard/db");
+ const core=await nativeImport("@jobguard/core") as typeof import("@jobguard/core");
+ const context=db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:tenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0]);
+ const scope=randomUUID(),revision=randomUUID();
+ await admin.query("UPDATE app.job SET status='quoting',revision=1 WHERE tenant_id=$1 AND id=$2",[tenant,job]);
+ await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",[tenant,scope,job]);
+ await admin.query("INSERT INTO app.scope_revision(tenant_id,id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',10000,10000)",[tenant,revision,job,scope]);
+ await new db.QuoteRepository(admin).saveDraft(context,{jobId:job,draftId:randomUUID(),expectedRevision:0,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),actorRef:member,lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:revision,description:"Fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:10000,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
+ const preview=await new db.QuoteDeliveryRepository(admin).preview(context,job,"portal@example.invalid");
+ await new db.UserCommandDispatcher(admin).dispatch(context,{version:"command.v1",commandId:randomUUID(),commandType:"quote.send",semanticKey:`quote-send:${preview.documentId}`,actorMembershipId:member,subjectType:"quote_document",subjectRef:preview.documentId,authorizationId:randomUUID(),action:{actionType:"quote.send",recipient:JSON.stringify(["portal@example.invalid"]),contentHash:preview.hash,aggregateRevision:preview.document.documentVersion,amountPence:null,currency:null,policyVersion:"free-quote-send.v1",expiresAt:new Date(Date.now()+3600000)}},new db.IssueQuoteMutation({tenantId:tenant,jobId:job,documentId:preview.documentId,outboxActionId:randomUUID(),recipients:["portal@example.invalid"],immutableContent:new TextDecoder().decode(core.renderQuotePdf(preview.document))}));
+}
 test("emailed fictional link signs into exactly one job with a browser-session cookie, rejects replay and signs out", async ({ page, browser, baseURL }) => {
  const admin = new Pool({ connectionString: process.env.E2E_ADMIN_DATABASE_URL });
  const customerContext = await browser.newContext();
@@ -33,6 +47,7 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
+  await seedQuote(admin,tenant,fixture.job,session.memberships[0].id,session.principal.id);
   const issued = await api(page, "issue", { version: "customer-link-issue.v1", tenantId: tenant, jobId: fixture.job, customerId: fixture.customer }, session.csrfToken);
   expect(issued.status).toBe(200);
   const outbox = (await admin.query("SELECT o.immutable_content,o.adapter,o.recipient FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, issued.body.grantId])).rows[0];
@@ -48,6 +63,21 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
   const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
   expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
+  await tab.getByRole("link",{name:"Review your quote"}).click();
+  await expect(tab.getByText("Fictional work: 1 item — £100.00")).toBeVisible();
+  const view=(await api(tab,"quote",{version:"customer-quote-read.v1",jobId:fixture.job})).body;
+  const command={version:"customer-quote-acceptance.v1",commandId:randomUUID(),jobId:fixture.job,expectedJobRevision:view.jobRevision,target:{kind:"quote",id:view.quote.id,revision:view.quote.revision,hash:view.quote.hash}};
+  expect((await api(tab,"quote-accept",{...command,expectedJobRevision:view.jobRevision+1})).status).toBe(401);
+  expect((await api(tab,"quote-accept",{...command,target:{...command.target,hash:"0".repeat(64)}})).status).toBe(401);
+  const sent=tab.waitForRequest(request=>request.url().endsWith("/api/customer-portal/quote-accept")&&request.method()==="POST");
+  await tab.getByRole("button",{name:"Accept this quote",exact:true}).click();
+  const acceptedCommand=(await sent).postDataJSON();
+  await expect(tab.getByText("You accepted this quote.",{exact:true})).toBeVisible();
+  expect((await api(tab,"quote-accept",acceptedCommand)).status).toBe(200);
+  expect((await api(tab,"quote-accept",{...acceptedCommand,target:{...acceptedCommand.target,hash:"0".repeat(64)}})).status).toBe(401);
+  const accepted=(await admin.query("SELECT acceptance_kind,actor_membership_id,document_hash FROM app.quote_acceptance WHERE tenant_id=$1 AND job_id=$2",[tenant,fixture.job])).rows;
+  expect(accepted).toEqual([{acceptance_kind:"customer_authenticated",actor_membership_id:null,document_hash:view.quote.hash}]);
+  await tab.goto("/customer/sign-in");
   await tab.getByRole("button", { name: "Sign out", exact: true }).click(); await expect(tab.getByText("You are signed out.", { exact: true })).toBeVisible();
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   await customerContext.addCookies([cookie]);

@@ -1,6 +1,42 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/quote": {
+      "post": {
+        "operationId": "CustomerQuoteController_quote",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read the current exact issued quote for this customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/quote-accept": {
+      "post": {
+        "operationId": "CustomerQuoteController_accept",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Accept the exact quote revision and hash through the customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/customer-portal/issue": {
       "post": {
         "operationId": "CustomerSigninController_issue",

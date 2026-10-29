@@ -15,7 +15,7 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_quote_approval": [], "app.customer_portal_grant": [], "app.customer_portal_session": [] });
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {
