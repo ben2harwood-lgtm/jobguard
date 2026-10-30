@@ -4,6 +4,17 @@ import { jobMutationRegistry } from "@jobguard/core";
 import { lp5ReadTables, lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
 const sql = readFileSync(new URL("../migrations/0475_lp5a_commands.sql", import.meta.url), "utf8");
 describe("LP-5a exact catalogue expectations", () => {
+  it.each([
+    ["0456_lp4_database_audit.sql", "jobguard_audit_writer"],
+    ["0475_lp5a_commands.sql", "jobguard_command_writer"],
+  ])("%s requires administrative role provisioning without CREATEROLE", (file, role) => {
+    const migration = readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8");
+    expect(migration).not.toMatch(/CREATE ROLE/i);
+    expect(migration).toContain(`IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}')`);
+    expect(migration).toContain(`RAISE EXCEPTION '${role} is missing; run administrative ensureRoles before migrations'`);
+    expect(migration).toContain(`GRANT CREATE ON SCHEMA app TO ${role}`);
+    expect(migration).toContain(`REVOKE CREATE ON SCHEMA app FROM ${role}`);
+  });
   it("enumerates every installed registry rule and shares the watchdog keys", () => {
     const seeds = sql.split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!;
     const installed = [...seeds.matchAll(/\(([^()]+)\)/g)].map(match => Object.fromEntries(match[1]!.split(",").map((v, i) =>
