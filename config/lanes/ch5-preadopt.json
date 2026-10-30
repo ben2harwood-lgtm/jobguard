@@ -19,6 +19,7 @@
         "packages/db/test/import-pre-adoption-repository.test.ts",
         "packages/db/test/import-pre-adoption.integration.test.ts",
         "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]

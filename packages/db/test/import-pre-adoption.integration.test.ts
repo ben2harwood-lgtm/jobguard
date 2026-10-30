@@ -61,6 +61,13 @@ it("CH-5 persists historical provenance once, returns GBP 0 and refuses scope, r
     await expect(repo.assess(context, d, jobId, catchCommand)).rejects.toThrow("FORBIDDEN");
   for (const sql of ["SELECT * FROM app.import_pre_adoption_evidence", "UPDATE app.import_pre_adoption_evidence SET classification='not_pre_adoption_by_timing'", "TRUNCATE app.import_pre_adoption_evidence"])
     await expect(withTenant(f.runtime, auth.context, db => db.$client.query(sql))).rejects.toThrow("permission denied");
+  // A second real tenant cannot read or insert another tenant's exclusion, even by exact IDs.
+  await expect(withTenant(f.runtime, other.auth.context, db => db.$client.query(
+    "SELECT * FROM app.import_pre_adoption_evidence WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [t, jobId, a.historyId],
+  ))).rejects.toMatchObject({ code: "42501" });
+  await expect(withTenant(f.runtime, other.auth.context, db => db.$client.query(
+    "INSERT INTO app.import_pre_adoption_evidence(tenant_id,job_id,id) VALUES($1,$2,$3)", [t, jobId, randomUUID()],
+  ))).rejects.toMatchObject({ code: "42501" });
   await expect(workTenant(f.admin, t, db => db.query("UPDATE app.import_pre_adoption_evidence SET fee_pence=1"))).rejects.toThrow();
   expect((await f.admin.query("SELECT count(*)::int n FROM app.import_pre_adoption_evidence WHERE tenant_id=$1 AND job_id=$2", [t, jobId])).rows[0].n).toBe(1);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='job.imported_historical_evidence'", [t, jobId])).rows[0].n).toBe(1);

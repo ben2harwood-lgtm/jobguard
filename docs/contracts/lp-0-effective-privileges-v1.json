@@ -1985,6 +1985,7 @@
 {"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]}
 ],
 "rls":[
+"app.import_pre_adoption_evidence|rls=t|forced=t",
 "app.job_import_v3|rls=t|forced=t",
 "app.meter_work_ledger|rls=t|forced=t",
 "app.northside_run|rls=t|forced=t",

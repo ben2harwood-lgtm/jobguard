@@ -96,6 +96,36 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(role).toMatchObject({ super: false, bypassrls: false, createrole: false, createdb: false, replication: false, inherit: false });
   });
 
+  it("[CH-5] pre-adoption exclusion retains its inventoried FORCE RLS and tenant policy", async () => {
+    const relation = "app.import_pre_adoption_evidence";
+    // Bounded CH-5 regression; the general LP0-13 comparator hold is unchanged.
+    const assertProtection = async (client: PoolClient | Lp0Database["admin"]) => {
+      const catalogue = await readCatalogue(client);
+      const table = catalogue.relations.find(r => `${r.schema}.${r.name}` === relation);
+      expect(table, "CH-5 exclusion requires ENABLE and FORCE RLS").toMatchObject({ rlsEnabled: true, rlsForced: true });
+      expect(inventory.recorded.rls).toContain(`${relation}|rls=t|forced=t`);
+      const policies = catalogue.policies.filter(p => p.relation === relation);
+      expect(policies, "CH-5 exclusion requires its sole tenant policy").toHaveLength(1);
+      const policy = policies[0]!;
+      expect(policy).toMatchObject({ name: "tenant_isolation", permissive: true, command: "ALL", roles: ["jobguard_migration"] });
+      expect(inventory.recorded.policies).toContain(`${relation}|${policy.name}|PERMISSIVE|ALL|jobguard_migration|${policy.digest.slice(0, 16)}`);
+    };
+    await assertProtection(db.admin);
+    for (const defect of [
+      `DROP POLICY tenant_isolation ON ${relation}`,
+      `ALTER TABLE ${relation} NO FORCE ROW LEVEL SECURITY`,
+      `ALTER TABLE ${relation} DISABLE ROW LEVEL SECURITY`,
+      `ALTER POLICY tenant_isolation ON ${relation} USING (true) WITH CHECK (true)`,
+    ]) {
+      await rolledBack(db.admin, async client => {
+        await assertProtection(client);
+        await client.query(defect);
+        await expect(assertProtection(client), defect).rejects.toThrow();
+      });
+      await assertProtection(db.admin);
+    }
+  });
+
   it("[LP0-03] dangerous column grant fails the freeze", async () => {
     for (const column of ["status", "accepted_net_value_pence", "recovery_cap_pence", "fee_policy_version", "accepted_quote_version_id"]) {
       const result = await control(
