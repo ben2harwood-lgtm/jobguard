@@ -21,3 +21,14 @@ it("Q3 remains refused, and zero records a derivation without a journal",()=>{
  expect(successFeeResultV1.safeParse(result).success).toBe(true);
  for(const patch of [{journalId:id},{derivationId:null},{postingRevision:0}])expect(successFeeResultV1.safeParse({...result,...patch}).success).toBe(false);
 });
+it("accepts an exact negative statement only with a compensation identity and a posted journal",()=>{
+ const reversed={...statement,qualifyingPrincipal:{numerator:"0",denominator:"1"},feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:id};
+ expect(successFeeStatementV1.safeParse(reversed).success).toBe(true);
+ expect(successFeeStatementV1.safeParse({...reversed,compensatesDerivationId:undefined}).success).toBe(false);
+ expect(successFeeStatementV1.safeParse({...reversed,deltaPence:-7999}).success).toBe(false);
+ expect(successFeeStatementV1.safeParse({...statement,compensatesDerivationId:id}).success).toBe(false);
+ const result={version:"success-fee-result.v1",jobId:id,commandId:id,action:"approve",reviewId:id,statementHash:"a".repeat(64),statement:reversed,
+  derivationId:id,journalId:id,postingRevision:1,replayed:false,environment:"synthetic_demo",productionEnabled:false,realExternalActions:0};
+ expect(successFeeResultV1.safeParse(result).success).toBe(true);
+ expect(successFeeResultV1.safeParse({...result,journalId:null}).success).toBe(false);
+});

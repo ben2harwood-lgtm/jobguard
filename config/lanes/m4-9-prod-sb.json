@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-prod-sb": {
+      "branches": [
+        "codex/sandbox/m4-9-prod-sb"
+      ],
+      "receipt": "packages/db/migration-notes/0473_success_fee_production_safety.md",
+      "note": "RED M4-9 part 2: synthetic small-builder posting guard, exact rebuild and linked compensation. Stacked on m4-9-s-posting; router opens PR after base merges.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",
+        "docs/contracts/success-fee-posting-v3.md",
+        "packages/core/src/success-fee-catch-posting.test.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/db/migration-notes/0473_success_fee_production_safety.md",
+        "packages/db/migrations/0473_success_fee_production_safety.sql",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/success-fee-catch-fixture.ts",
+        "packages/db/test/success-fee-production-safety.integration.test.ts",
+        "packages/db/test/success-fee-production-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

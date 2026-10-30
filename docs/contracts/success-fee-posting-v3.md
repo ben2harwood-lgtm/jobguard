@@ -1,6 +1,29 @@
 # M4-9-S — synthetic catch success-fee posting
 
-## 29 October 2026: migrations 0392–0393 (current)
+## 30 October 2026: migration 0473 (current)
+
+M4-9 part 2 adds a per-job posting lock, insert bounds and an exact deferred rebuild
+of the principal, statement authority and allocation-level source links. The private
+`success_fee_inputs` helper is shared by the command and rebuild, using the latest
+0393 writer's source checks. The inherited coarse source fence remains in place.
+
+After a posting, a changed source can only reduce its previously approved principal.
+An excluded source contributes zero. A fresh source still requires current approved
+SV-6 attribution and all qualifying facts. Review and approve now support a negative
+statement delta with `compensatesDerivationId`; its authorization binds the absolute
+amount and the signed statement hash. Approval appends one or more negative journals,
+each linked to a positive original in the same job. Outstanding original pence and
+the rebuilt job liability bound every split. Existing journals are never edited.
+The negative receivable adjustment remains visible as credit due; no provider,
+refund execution or collection is enabled. Replay has no additional effect.
+
+`success_fee_production_command(uuid,text,jsonb)` always raises `FEE_GATE_CLOSED`,
+before reading any tenant or hidden data. G4-S, approved policies, production source
+adapters and RED review remain separate gates. Q2 non-catch qualification stays closed.
+The historical Q3 catch compensation hold below is superseded only by this synthetic
+review/approve path; direct `reverse` actions remain invalid.
+
+## 29 October 2026: migrations 0392–0393 (historical)
 
 The current stacked SV-6 review and M4-8-S v1 producer replace the historical
 source dependency described below for **catch-only positive/zero posting**.

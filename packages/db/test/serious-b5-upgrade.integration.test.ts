@@ -913,14 +913,15 @@ async function successFeeCatchAdditions(before: Awaited<ReturnType<typeof snapsh
   "success_fee_derivation_pkey","success_fee_derivation_tenant_id_job_id_id_key",
   "success_fee_derivation_tenant_id_job_id_revision_key","success_fee_derivation_tenant_id_review_id_key",
   "success_fee_source_pkey","success_fee_journal_pkey","success_fee_journal_tenant_id_job_id_id_key",
-  "success_fee_journal_tenant_id_derivation_id_key","success_fee_journal_line_pkey",
+  "success_fee_journal_positive_derivation","success_fee_journal_compensation","success_fee_journal_line_pkey",
  ];
- const identities=["check_success_fee_journal","check_success_fee_derivation"];
+ const identities=["check_success_fee_journal","check_success_fee_derivation","success_fee_inputs","success_fee_posting_integrity","success_fee_production_command"];
  const routines=after.routines.filter(r=>r.nspname==="app"&&identities.includes(r.proname));
  expect(routines.map(r=>r.proname).sort()).toEqual([...identities].sort());
  for(const r of routines){
-  expect(r.args).toBe("");expect(r.prosecdef).toBe(true);expect(r.proconfig).toEqual(["search_path=pg_catalog, app"]);
-  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+  expect(r.args).toBe(r.proname==="success_fee_inputs"?"t uuid, j uuid, p_actor uuid":r.proname==="success_fee_production_command"?"p_job uuid, p_session text, p_command jsonb":"");
+  expect(r.prosecdef).toBe(r.proname!=="success_fee_inputs");expect(r.proconfig).toEqual(["search_path=pg_catalog, app"]);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl).toEqual(r.proname==="success_fee_production_command"?["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]:["jobguard_migration=X/jobguard_migration"]);
   expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
  }
  const names=[...tables,...indexes],relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
