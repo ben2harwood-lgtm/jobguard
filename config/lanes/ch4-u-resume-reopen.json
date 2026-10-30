@@ -6,7 +6,8 @@
       "note": "CH-4 UI follow-on: saved-job buttons drive resume and unlocked reopen through the existing checked server command. Preserve meter cap/refusal, lock and exact-command replay rules. Synthetic-only browser coverage; no server, migration or successor-link changes.",
       "allow": [
         "apps/web/app/ui/job-work-state.tsx",
-        "apps/web/e2e/CH-4.spec.ts"
+        "apps/web/e2e/CH-4.spec.ts",
+        "packages/db/test/job-work-state-fixtures.ts"
       ]
     }
   }

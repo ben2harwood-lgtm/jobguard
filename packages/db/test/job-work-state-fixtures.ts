@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { proofEvidenceTypeSchema } from "@jobguard/core";
+import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
-import { migrate } from "../src/migrate.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
@@ -18,7 +17,10 @@ export async function createWorkFixture(install = true, database = "jobguard_syn
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
- if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
+ if (install) {
+  const { migrate } = await import("../src/migrate.js");
+  await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
+ }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);
  const runtime = new Pool({ ...connection, user: install ? login : "postgres", max: 4 });
  return { postgres, directory, admin, runtime };
