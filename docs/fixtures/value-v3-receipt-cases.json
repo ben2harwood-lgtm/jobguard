@@ -1,0 +1,117 @@
+{
+  "version": "value-v3-receipt-cases.v1",
+  "evidence": "illustrative_unbound",
+  "cases": [
+    {
+      "fixture": "recovery",
+      "category": "withheld",
+      "expected": [
+        "£2820.00",
+        "£282.00",
+        "£2538.00"
+      ],
+      "boundRows": [
+        "category=withheld; Supplied qualifying principal illustration: £2820.00; currency=GBP",
+        "category=withheld; Fee illustration (SV-6 supplied): £282.00; currency=GBP",
+        "category=withheld; yours before VAT and tax: £2538.00; currency=GBP",
+        "category=withheld; Supplied settled amount; source binding held: £2820.00; currency=GBP"
+      ]
+    },
+    {
+      "fixture": "reversed",
+      "category": "withheld",
+      "expected": [
+        "£320.00",
+        "£32.00",
+        "£288.00",
+        "−£2500.00",
+        "−£250.00"
+      ],
+      "corrects": "withheld",
+      "boundRows": [
+        "category=withheld; Supplied qualifying principal illustration: £320.00; currency=GBP",
+        "category=withheld; Fee illustration (SV-6 supplied): £32.00; currency=GBP",
+        "category=withheld; yours before VAT and tax: £288.00; currency=GBP",
+        "category=withheld; Supplied settled amount; source binding held: £320.00; currency=GBP",
+        "category=withheld; netMovement=−£2500.00; currency=GBP; basis=net_principal; source=\"withheld-reversal\"",
+        "category=withheld; feeMovement=−£250.00; currency=GBP; basis=net_principal; source=\"withheld-reversal\"",
+        "category=withheld; netMovement=£2820.00; currency=GBP; basis=net_principal; source=\"withheld\"",
+        "category=withheld; feeMovement=£282.00; currency=GBP; basis=net_principal; source=\"withheld\""
+      ]
+    },
+    {
+      "fixture": "shadow",
+      "category": "found",
+      "expected": [
+        "£3600.00",
+        "£0.00",
+        "£800.00",
+        "£80.00",
+        "£720.00"
+      ],
+      "boundRows": [
+        "category=tracked; Supplied recorded amount: £3600.00; currency=GBP",
+        "category=tracked; Fee illustration (SV-6 supplied): £0.00; currency=GBP",
+        "category=found; Supplied qualifying principal illustration: £800.00; currency=GBP",
+        "category=found; Fee illustration (SV-6 supplied): £80.00; currency=GBP",
+        "category=found; yours before VAT and tax: £720.00; currency=GBP",
+        "category=found; Supplied settled amount; source binding held: £800.00; currency=GBP"
+      ]
+    },
+    {
+      "fixture": "fiveHundred",
+      "category": "withheld",
+      "expected": [
+        "£500.00",
+        "£50.00",
+        "£450.00"
+      ],
+      "boundRows": [
+        "category=withheld; Supplied qualifying principal illustration: £500.00; currency=GBP",
+        "category=withheld; Fee illustration (SV-6 supplied): £50.00; currency=GBP",
+        "category=withheld; yours before VAT and tax: £450.00; currency=GBP",
+        "category=withheld; Supplied settled amount; source binding held: £500.00; currency=GBP"
+      ]
+    },
+    {
+      "fixture": "zero",
+      "category": "withheld",
+      "expected": [
+        "£0.00",
+        "Unavailable (unknown)"
+      ],
+      "boundRows": [
+        "category=withheld; Supplied qualifying principal illustration: £0.00; currency=GBP",
+        "category=withheld; Fee illustration (SV-6 supplied): £0.00; currency=GBP",
+        "category=withheld; yours before VAT and tax: £0.00; currency=GBP",
+        "category=withheld; Supplied settled amount; source binding held: Unavailable (unknown); reason=not_reported; basis/sources unavailable"
+      ]
+    },
+    {
+      "fixture": "core",
+      "category": "tracked",
+      "expected": [
+        "£1100.00",
+        "£1320.00",
+        "£125.00",
+        "−£25.00",
+        "£50.00",
+        "£500.00",
+        "£820.00",
+        "−£820.00",
+        "−£100.00"
+      ],
+      "boundRows": [
+        "Fact \"fact:invoice-net\"; category=tracked; kind=invoice; £1100.00; currency=GBP",
+        "Fact \"fact:invoice-gross\"; category=tracked; kind=invoice; £1320.00; currency=GBP",
+        "Fact \"fact:extra\"; category=tracked; kind=approved_variation; £125.00; currency=GBP",
+        "Fact \"fact:reduction\"; category=tracked; kind=approved_variation; −£25.00; currency=GBP",
+        "Fact \"fact:pending\"; category=tracked; kind=unapproved_variation; £50.00; currency=GBP",
+        "Fact \"fact:payment-500\"; category=tracked; kind=recorded_payment; Builder-recorded payment; bank verification not asserted; £500.00; currency=GBP",
+        "Fact \"fact:payment-820\"; category=tracked; kind=recorded_payment; Builder-recorded payment; bank verification not asserted; £820.00; currency=GBP",
+        "Fact \"fact:payment-reversal\"; category=tracked; kind=payment_reversal; −£820.00; currency=GBP",
+        "Fact \"fact:invoice-correction\"; category=tracked; kind=invoice_correction; −£100.00; currency=GBP"
+      ]
+    }
+  ]
+}

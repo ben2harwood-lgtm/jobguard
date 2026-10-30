@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "m48-b1": {
+      "branches": [
+        "codex/sandbox/m48-b1"
+      ],
+      "receipt": "docs/verdicts/M48-B1/BUILDER_RECEIPT.md",
+      "note": "Issued build ahead only. Fail-closed persistence boundary; source authority, coordinator integration, CI and independent acceptance remain held.",
+      "allow": [
+        "packages/db/src/receipt-line-allocation-repository.ts",
+        "packages/db/migrations/0258_receipt_line_source_bridge.sql",
+        "packages/db/migration-notes/0258_receipt_line_source_bridge.md",
+        "packages/db/test/receipt-line-allocation-facts.integration.test.ts",
+        "packages/db/test/receipt-line-allocation-facts-access.integration.test.ts",
+        "packages/db/test/receipt-line-allocation-facts-races.integration.test.ts",
+        "packages/db/test/receipt-line-allocation-facts-upgrade.integration.test.ts",
+        "apps/api/src/receipt-line-allocation.contracts.ts",
+        "apps/api/src/receipt-line-allocation.application.ts",
+        "apps/api/src/receipt-line-allocation.controller.ts",
+        "apps/api/src/receipt-line-allocation.application.test.ts",
+        "apps/api/src/receipt-line-allocation.http.test.ts",
+        "apps/web/app/api/jobs/[id]/receipt-line-allocations/route.ts",
+        "apps/web/app/jobs/[id]/receipt-line-allocations/page.tsx",
+        "apps/web/app/ui/receipt-line-allocations.tsx",
+        "apps/web/app/ui/receipt-line-allocations.test.tsx",
+        "apps/web/e2e/M48-SOURCE-BRIDGE.spec.ts",
+        "docs/verdicts/M48-B1/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/receipt-line-allocation-source.ts",
+        "packages/core/src/receipt-line-allocation-source.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}

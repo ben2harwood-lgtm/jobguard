@@ -1,4 +1,5 @@
 /** Single SELECT snapshot: current session, membership, dashboard grants, job AND operative scope precede aggregation.
+ * Billing joins only matched exported lines after ENT-6's full-invoice allocation, at the same snapshot.
  * Output is an allowlist; no contact, free text, credential, provider or commercial command is selected.
  */
 export const enterpriseDashboardSourceSql = `
@@ -96,12 +97,47 @@ WITH actor AS MATERIALIZED (
  JOIN app.membership m ON(m.tenant_id,m.id)=(v.tenant_id,v.membership_id)
  LEFT JOIN app.closeout_answer a ON(a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
  WHERE v.completed_at IS NOT NULL AND EXISTS(SELECT 1 FROM covered_subjects cs WHERE(cs.tenant_id,cs.job_id,cs.membership_id)=(v.tenant_id,v.job_id,v.membership_id))
+), billed_signal_json AS (
+ SELECT f.id, jsonb_build_object('jobId',f.job_id,'sourceId',f.id,'runId',r.id,
+  'at',f.payload->>'effectiveAt','recordedAt',to_char(f.server_recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+  'dimensions',jsonb_build_object('region',j.region_id,'team',j.team_id,'operative',NULL,'client',j.client_id,'contract',j.contract_id),
+  'line',line,'billedNet',summary->'billedNet','creditedNet',summary->'creditedNet',
+  'rejected',summary->'rejected','complete',jsonb_array_length(r.projection->'held')=0) content
+ FROM app.billing_fact f JOIN jobs j ON(j.tenant_id,j.job_id,j.contract_id)=(f.tenant_id,f.job_id,f.client_contract_id)
+ JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.source,r.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
+ CROSS JOIN LATERAL jsonb_array_elements(f.payload->'composition'->'lines') line
+ JOIN LATERAL jsonb_array_elements(r.projection->'lines') summary ON summary->>'lineId'=line->>'externalInvoiceLineId'
+ WHERE f.match_valid AND f.payload->>'factType'='invoiced' AND line->>'kind'='other' AND line->'match'='null'::jsonb
+ AND NOT EXISTS(SELECT 1 FROM app.billing_quarantine q WHERE(q.tenant_id,q.fact_id)=(f.tenant_id,f.id))
+ AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE(n.tenant_id,n.predecessor_id)=(r.tenant_id,r.id))
+ -- A newly imported fact without a successor run must never reuse a stale balance.
+ AND NOT EXISTS(SELECT 1 FROM app.billing_fact newer WHERE(newer.tenant_id,newer.job_id,newer.source,newer.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
+  AND newer.server_recorded_at>r.server_recorded_at)
 )
 SELECT EXISTS(SELECT 1 FROM grants) authorized,
  jsonb_build_object('version','enterprise-dashboard-facts.v1','cutoff',to_char(statement_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM extra_json),'[]'::jsonb),'closeouts',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM closeout_json),'[]'::jsonb),'billing',jsonb_build_object('status','held','prerequisite','ENT-6B')) facts,
  jsonb_build_object('version','enterprise-signal-facts.v1','extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM signal_extra),'[]'::jsonb),
-  'orderLines',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM order_json),'[]'::jsonb),'billedVariations','[]'::jsonb,'closeouts','[]'::jsonb,'outlierPolicy',NULL) signals
+  'orderLines',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM order_json),'[]'::jsonb),'billedVariations','[]'::jsonb,'closeouts','[]'::jsonb,'outlierPolicy',NULL) signals,
+ jsonb_build_object('version','enterprise-billed-signal-rows.v1','rows',coalesce((SELECT jsonb_agg(content ORDER BY id,content->'line'->>'externalInvoiceLineId') FROM billed_signal_json),'[]'::jsonb)) signal_billing,
+ coalesce((SELECT jsonb_agg(jsonb_build_object(
+  'jobId',e.job_id,'extraId',e.variation_id,'exportLineId',l.id,'revisionId',l.revision_id,'runId',r.id,
+  'factId',f.id,'inputHash',r.input_hash,'lineId',m.external_invoice_line_id,
+  'billedNet',coalesce(summary->'billedNet','{"numerator":"0","denominator":"1"}'::jsonb),
+  'creditedNet',coalesce(summary->'creditedNet','{"numerator":"0","denominator":"1"}'::jsonb),
+  'paidNet',coalesce(summary->'matchedExtraNet','{"numerator":"0","denominator":"1"}'::jsonb),
+  'rejected',coalesce(summary->'rejected','false'::jsonb),'complete',summary IS NOT NULL AND jsonb_array_length(r.projection->'held')=0,
+  'allocations',coalesce((SELECT jsonb_agg(a.id ORDER BY a.id) FROM app.contractor_receipt_line_allocation a
+   WHERE(a.tenant_id,a.run_id,a.export_line_id)=(r.tenant_id,r.id,l.id)),'[]'::jsonb)
+ ) ORDER BY l.id)
+ FROM extras e JOIN app.billing_export_line l ON(l.tenant_id,l.job_id,l.extra_id)=(e.tenant_id,e.job_id,e.variation_id)
+ JOIN app.billing_line_match m ON(m.tenant_id,m.line_job_id,m.export_line_id)=(l.tenant_id,l.job_id,l.id)
+ JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id) AND f.payload->>'factType'='invoiced'
+ JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.source,r.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
+ LEFT JOIN LATERAL jsonb_array_elements(r.projection->'lines') summary ON summary->>'lineId'=m.external_invoice_line_id
+ WHERE e.canonical_id=e.variation_id
+ AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE(n.tenant_id,n.predecessor_id)=(r.tenant_id,r.id))
+ ),'[]'::jsonb) billing
 `;
 /** Same shared tenant gate as the existing contractor reads; administration/imports take its exclusive counterpart. */
 export const enterpriseDashboardScopeLockSql = "SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))";

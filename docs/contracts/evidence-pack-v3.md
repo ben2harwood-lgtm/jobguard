@@ -117,3 +117,82 @@ version-aware downstream source validation/latest-pack compatibility
 and EP-B/EP-C remain external holds. Coordinator owns additive public exports;
 no unauthorised deep imports are offered to consumers. Actual independent
 review, CI and separate acceptance remain required; Ben owns merge/enablement.
+
+## CH-8 part 2 draft extension (28 October 2026)
+
+The ch8-rest draft retains unbound specimen compatibility and adds a separate `synthetic-records`
+binding. This label describes exact persisted synthetic database records exported by a checked
+worker; it never asserts real work, debt validity, fee eligibility or production approval. Its first
+trust limitation states that boundary. The remaining limitations are unchanged.
+
+The worker consumes a strict material envelope with server-derived tenant/job/case, lifecycle and
+record entries (`kind`, `sourceId`, exact PostgreSQL JSON `content`, microsecond `recordedAt`).
+A source's version and `database-record:` object-version label are content hashes of the record text;
+actual object versions/original base64 bytes remain inside that record. These labels do not claim
+S3 immutability. No section-to-section causality is invented: original producer keys and references
+remain in the exact records. Missing sections are declared `not_yet_available`, or `unpaid` when no
+settlement allocations exist. Reversal and source-attempt history are retained, never netted away.
+
+Generation requests bind a visible ordinary-source revision and an order-time pre-lock flag. Runtime
+can request/read, but cannot read the private material or insert packs/check receipts/approvals. The
+worker completes the deterministic must-surface handoff before pre-lock export and the checked writer
+rechecks the session, inventory and canonical artifact under serialization. Post-lock material comes
+only through that worker path. Approval is also queued and compares exact current material and hashes;
+recording it is not a claim of lasting freshness or permission to bypass legacy attachment sinks.
+
+For this binding, the offline verifier's `complete` means matching supplied content and a matching
+externally supplied trusted manifest digest. It is an integrity result only. Unbound specimens still
+always return `complete: false` and `producerBindings: held`. A digest read from the artifact itself
+is not independent trust.
+
+This draft does not satisfy CH-8 acceptance: the public SV-6 attribution assessment producer still
+refuses on this base, and the fresh shadow-30000 source-to-settlement/browser journey remains missing.
+Do not treat fixture or private-storage rounds as that acceptance. See the CH8-REST builder receipt.
+
+## Router-scoped part 2 activation boundary (28 October 2026)
+
+This supersedes the earlier draft readiness wording: part 2 is preparatory implementation; the
+fresh shadow-30000 source-to-settlement/UI/verifier journey belongs to part 3 after the SV-6
+runtime hookup. While assessment is unbound, v3 generation and approval refuse with
+EVIDENCE_PACK_V3_DEPENDENCY_HELD in the authenticated application, SQL request and SQL writer
+boundaries. No runtime pack is created with absent or invented attribution/settlement sections.
+Queued work from an older deployment cannot bypass the writer refusal. Pure assembly specimens
+and source preparation do not activate runtime creation. v1 behaviour is preserved.
+
+## CH-8 part 3 synthetic activation (28 October 2026)
+
+Migration 0375 activates the queued application/request/writer path after the installed 0340 SV-6
+source resolver. This supersedes the part 2 runtime refusal above. Compatibility preparation ports
+remain held and are not a fallback writer. Production and external delivery remain disabled.
+
+Post-lock material includes immutable SV-6 attribution history, stored case/line allocations, neutral
+fact sources/lines, exact invoice bindings and invoiced lines, settled movements/matches/payments,
+credits and payment reversals. Source IDs/versions and rational strings remain exact. The accepted
+attribution and allocation writers retain #346 job binding, #356 cumulative caps/distinct lines and
+#368 locked original revision versus completed-check supplementary descendant binding. Pack generation
+does not allocate money, approve attribution or grant a fee. Earlier artifacts never change.
+
+Commands claim the shared command receipt before any business/audit locks; identical requests replay,
+changed payloads and other command families conflict. The worker serializes the case, stored allocation
+inventory and job before its final material comparison. Approval refers only to the exact stored pack
+and is refused if the current material differs. A newly recorded adjustment makes older content
+historical; an old approval never claims continuing freshness.
+
+CI coverage exercises SQL canonical bytes against the TypeScript renderer, fresh synthetic
+shadow-30000 source-to-settlement storage/browser/verifier agreement, and completed pre-lock exports
+with zero/many hidden signals. These are tests awaiting execution in CI, not independent acceptance.
+Pre-lock material exits before hidden SQL; must-surface processing remains worker-owned and completes
+before ordinary export. Timing coverage checks statement shape and hidden-query exclusion; it does not
+claim wall-clock constancy or production side-channel certification.
+
+## RED repair round 1: export disclosure boundary
+
+0375 projects processing sources and attempts to IDs and input/result hashes only. Neither frozen
+processing input nor signal lists are exported. The reconciliation run projection retains only run,
+manifest and lock IDs plus manifest/result hashes; its classifications and zero-result flag stay private.
+Reveal and disposition records require a `reveal` classification and this case's own catch origin,
+traced through its referenced variation revision and a matching final-account line `source_id` and
+`commercial_revision_id`. A variation ID alone does not bind a real line. Non-catch cases receive no
+reveal/disposition rows. Ordinary catch-origin records also exclude other catches' signal IDs.
+The original pre-lock branch still returns before any hidden query. 0306 remains exactly PR #389;
+these changes are confined to the not-yet-merged 0375 activation.

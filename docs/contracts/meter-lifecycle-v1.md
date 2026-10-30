@@ -51,6 +51,10 @@ alone is not fabricated into first evidence. Close and lock produce exact
 terminal candidates. Co-earliest IDs are retained in canonical order; the
 lexical cause label is diagnostic ordering, not economic attribution.
 Post-lock activity produces an explicit linked-job hold and no restart.
+Under **H-METER-CLOCK**, a first-evidence or day-31 candidate exactly at
+the earliest close/lock stop produces no start. Only a strictly earlier
+candidate can start. This conservative candidate tie rule does not approve
+stop-day inclusion or a complete counting interval.
 
 Every timeline currently returns status `held`, `H-METER-CLOCK` and **empty
 intervals**. Start/stop fields are candidates, not the earliest complete
@@ -69,11 +73,11 @@ returns every calendar label in the supplied range. `places` and
 `countedPlaces` are **null**, with held status, on every date. Separately named
 `classifications`, `candidatePlaces` and `candidateAllowance` are diagnostics
 over **all supplied jobs**, irrespective of interval membership, activation date
-or stop. `candidateAllowance.countedPlaces` is typed **null** until real day
-membership exists; allowance fields describe supplied-job diagnostics only.
+or stop. `candidateAllowance.rawPlaces`, `freeSmallPlaces` and `countedPlaces` are
+all typed **null** until real day membership exists. Numeric raw/free fields
+would reconstruct a count over supplied jobs and must remain held.
 They must never be billed or displayed as actual counting places.
-Grouping uses `groupSuppliedMeterPlaces`; allowance uses
-`computeSmallPlaceAllowance` without duplicating pricing arithmetic. Same
+Grouping uses `groupSuppliedMeterPlaces`; no allowance is computed. Same
 customer/site forms one candidate place, mixed groups are non-small, and a
 different customer remains separate. An immutable trip makes its job non-small
 from the original London date forward; there is no omission/untrip field.

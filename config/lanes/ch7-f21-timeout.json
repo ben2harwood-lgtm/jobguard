@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch7-f21-timeout": {
+      "branches": [
+        "codex/sandbox/ch7-f21-timeout"
+      ],
+      "note": "Test-only: give the F21 own-migration upgrade proof a 120 s per-test timeout (it installs every predecessor and a fresh database twice). Assertions unchanged.",
+      "allow": [
+        "packages/db/test/ch7-f21-reason-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

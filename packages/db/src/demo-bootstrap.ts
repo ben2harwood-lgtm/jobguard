@@ -35,11 +35,11 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
-      CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+      CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
-    const posture = (await admin.query(`SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolinherit,rolcanlogin,
+    const posture = (await admin.query(`SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolinherit,rolcanlogin,rolreplication,
       EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid) AS member
       FROM pg_roles WHERE rolname=$1`, [name])).rows[0];
     if (!posture || Object.values(posture).some(value => value !== false)) {
@@ -54,7 +54,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -67,6 +67,57 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`GRANT jobguard_infrastructure TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(SYNTHETIC_DATABASE_NAME)} TO jobguard_migration`);
   await admin.query("GRANT USAGE,CREATE ON SCHEMA public TO jobguard_migration");
+}
+/** Administrative post-migration step; never executed as jobguard_migration.
+ * PostgreSQL requires SET membership in the target owner and CREATE on its
+ * schema for ownership transfer. Both capabilities are temporary and rolled
+ * back on failure. The restricted owner retains neither after COMMIT.
+ */
+export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promise<void> {
+  const signatures = [
+    "app.mon1_lifecycle_actor(uuid,text,boolean)",
+    "app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)",
+    "app.mon1_lifecycle_rebuild(uuid,text,uuid)",
+    "app.mon1_lifecycle_read(uuid,text,uuid)",
+    "app.mon1_counted_meter_today(uuid,text)",
+    "app.mon1_fresh_counted_meter_today(uuid,text)",
+    "app.mon1_today_source(uuid,text)",
+  ];
+  const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
+  if (owner === "jobguard_migration") throw new Error("Meter ownership requires the administrative bootstrap principal");
+  const migrationMembership = (await admin.query<{ inherit_option: boolean; set_option: boolean }>(
+    "SELECT inherit_option,set_option FROM pg_auth_members WHERE roleid='jobguard_migration'::regrole AND member=current_user::regrole AND grantor=current_user::regrole",
+  )).rows[0];
+  await admin.query("BEGIN");
+  try {
+    // The CREATEROLE administrator holds ADMIN OPTION, including on rerun.
+    await admin.query(`GRANT jobguard_meter_owner TO ${quoteIdentifier(owner)} WITH INHERIT FALSE, SET TRUE`);
+
+    await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)} WITH INHERIT TRUE, SET TRUE`);
+    await admin.query("GRANT CREATE ON SCHEMA app TO jobguard_meter_owner");
+    for (const signature of signatures) {
+      // First install is migration-owned; reruns are already meter-owned.
+      const current = (await admin.query<{ owner: string }>(
+        "SELECT pg_get_userbyid(proowner) AS owner FROM pg_proc WHERE oid=$1::regprocedure", [signature],
+      )).rows[0]!.owner;
+      if (!["jobguard_migration", "jobguard_meter_owner"].includes(current)) throw new Error("Unexpected meter routine owner");
+      if (current === "jobguard_meter_owner") await admin.query("SET LOCAL ROLE jobguard_meter_owner");
+      await admin.query(`ALTER FUNCTION ${signature} OWNER TO jobguard_meter_owner`);
+      await admin.query("SET LOCAL ROLE jobguard_meter_owner");
+      await admin.query(`ALTER FUNCTION ${signature} SECURITY DEFINER`);
+      if (signature === "app.mon1_counted_meter_today(uuid,text)") {
+        await admin.query("REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime");
+      }
+      await admin.query("RESET ROLE");
+    }
+    await admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
+    if (migrationMembership) await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)} WITH INHERIT ${migrationMembership.inherit_option ? "TRUE" : "FALSE"}, SET ${migrationMembership.set_option ? "TRUE" : "FALSE"}`);
+    else await admin.query(`REVOKE jobguard_migration FROM ${quoteIdentifier(owner)}`);
+    // Remove only this administrator's explicit grant. PostgreSQL 16's
+    // superuser-granted ADMIN-only creator membership remains untouched.
+    await admin.query(`REVOKE jobguard_meter_owner FROM ${quoteIdentifier(owner)}`);
+    await admin.query("COMMIT");
+  } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
   await client.query("SET ROLE jobguard_migration");
@@ -95,7 +146,8 @@ async function seedDatabase(client: PoolClient) {
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    await client.query("SET LOCAL ROLE jobguard_runtime");
+    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
+    await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
@@ -135,6 +187,7 @@ export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtim
     await client.query("SELECT pg_advisory_lock(hashtext('jobguard_demo_bootstrap_v1'))");
     await ensureRoles(client, decodeURIComponent(runtime.password));
     const migrations = await migrateAsMigrationOwner(client);
+    await finalizeMeterLifecycleOwnership(client);
     await seedDatabase(client);
     return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations };
   } finally {

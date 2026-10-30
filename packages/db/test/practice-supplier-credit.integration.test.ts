@@ -17,13 +17,13 @@ beforeAll(async()=>{
   process.env.JOBGUARD_ENV='synthetic_demo';
   const directory=await mkdtemp(join(tmpdir(),'jg-pf1b-')),port=await freePort(61700,100),value=randomUUID();
   const options={databaseDir:directory,port,user:'postgres',persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined};
-  postgres=new EmbeddedPostgres({...options,password:value}); await postgres.initialise(); await postgres.start();
-  admin=new Pool({host:'127.0.0.1',port,database:'postgres',user:'postgres',password:value});
+  postgres=new EmbeddedPostgres({...options,password:value}); await postgres.initialise(); await postgres.start(); await postgres.createDatabase('jobguard_synthetic_demo');
+  admin=new Pool({host:'127.0.0.1',port,database:'jobguard_synthetic_demo',user:'postgres',password:value});
   await migrate(admin); await seedIdentity(admin);
   // PostgreSQL quotes the generated value as a string. It is generated here, never committed.
   await admin.query(`CREATE ROLE pf1b_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
   await admin.query('GRANT jobguard_runtime TO pf1b_login');
-  runtime=new Pool({host:'127.0.0.1',port,database:'postgres',user:'pf1b_login',password:value,max:4});
+  runtime=new Pool({host:'127.0.0.1',port,database:'jobguard_synthetic_demo',user:'pf1b_login',password:value,max:4});
 });
 afterAll(async()=>{await closeTestPools(runtime,admin);if(postgres)await postgres.stop();if(previousEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousEnvironment;});
 // Administrative setup supplies identity, parties and captured scope only. Commercial lifecycle

@@ -10,11 +10,12 @@ describe("CH-4 read statements and context stamping",()=>{
   await expect(new JobWorkStateRepository(pool).read({...stamped},randomUUID(),"a".repeat(64))).rejects.toThrow("A verified tenant context");expect(connections).toBe(0);
  });
  it("CH4-A22 public read statement has no signal-count input or shadow query (scripted boundary)",async()=>{
-  const tenantId=randomUUID(),jobId=randomUUID(),statements:string[]=[];
+  const tenantId=randomUUID(),jobId=randomUUID(),statements:string[]=[],bindings:unknown[]=[];
   const row={version:"job-work-state-read.v1",jobId,events:[],links:[],lock:null,environment:"synthetic_demo",realExternalActions:0};
-  const pool={connect:async()=>({query:async(sql:string)=>{statements.push(sql);return {rows:sql.includes("ch4_read_work_facts")?[{result:row}]:[]}},release:()=>undefined})} as unknown as Pool;
+  const pool={connect:async()=>({query:async(sql:string,values?:unknown[])=>{statements.push(sql);bindings.push(values);return {rows:sql.includes("ch4_read_work_facts")?[{result:row}]:[]}},release:()=>undefined})} as unknown as Pool;
   const repo=new JobWorkStateRepository(pool);expect(await repo.read(testTenantContext(tenantId),jobId,"a".repeat(64))).toEqual(row);
   expect(statements).toEqual(["BEGIN","SELECT set_config('app.tenant_id', $1, true)","SELECT app.ch4_read_work_facts($1,$2,$3) result","COMMIT"]);
+  expect(bindings).toEqual([undefined,[tenantId],[tenantId,jobId,"a".repeat(64)],undefined]);
   expect(statements.join(" ")).not.toMatch(/shadow|signal|finding/iu);
  });
 });

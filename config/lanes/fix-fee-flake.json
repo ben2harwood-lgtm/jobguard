@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-fee-flake": {
+      "branches": ["codex/sandbox/fix-fee-flake"],
+      "note": "CI flake fix (29 Oct tidy-ups), RED: attach rejection handlers immediately in the ENT-7/ENT-11b cross-company posting test; synthetic only. Own lane file is permitted by the lane policy.",
+      "allow": [
+        "packages/db/test/enterprise-fee-posting.integration.test.ts"
+      ]
+    }
+  }
+}

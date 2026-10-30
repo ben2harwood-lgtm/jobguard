@@ -40,7 +40,7 @@ describe("CH-4 rollback and link storage (held admission remains unbuilt)",()=>{
 });
 
 describe("CH-4 persisted authenticated read",()=>{
- let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
+ let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(true,"jobguard_synthetic_demo")},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A20 CH4-A23 CH4-A27 fresh repositories read the same synthetic history through persisted session authority",async()=>{
   const {seedWorkPractice}=await import("./job-work-state-fixtures.js"),{JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
   const {authorizePracticeJob}=await import("../src/practice-session.js"),p=await seedWorkPractice(f),auth=await authorizePracticeJob(f.runtime,p.sessionId,p.jobId);
@@ -53,7 +53,7 @@ describe("CH-4 persisted authenticated read",()=>{
 });
 
 describe("CH-4 hidden-data equivalence (actual PostgreSQL)",()=>{
- let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
+ let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(true,"jobguard_synthetic_demo")},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A22 zero and many hidden signals leave persisted public history byte-identical",async()=>{
   const {seedWorkPractice}=await import("./job-work-state-fixtures.js"),{JobWorkStateRepository}=await import("../src/job-work-state-repository.js"),{randomUUID}=await import("node:crypto"),p=await seedWorkPractice(f);
   const before=JSON.stringify(await new JobWorkStateRepository(f.runtime).read(p.auth.context,p.jobId,p.auth.digest));

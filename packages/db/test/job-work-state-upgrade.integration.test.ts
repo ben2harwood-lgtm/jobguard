@@ -55,7 +55,10 @@ describe("CH-4 own-migration upgrade",()=>{
   const policyNames=new Set(originalPolicies.map(r=>r.name));
   expect((await policies(f.admin)).filter(r=>policyNames.has(r.name))).toEqual(originalPolicies);
   const oldPolicyTables=new Set(originalPolicies.map(r=>r.name.split('.').slice(0,2).join('.')));
-  const compareOldPolicies=async(db:Pick<PoolClient,"query">)=>expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.')))).toEqual(originalPolicies);
+  const compareOldPolicies=async(db:Pick<PoolClient,"query">,additions:typeof originalPolicies=[])=>{
+   const byName=(a:typeof originalPolicies[number],b:typeof originalPolicies[number])=>a.name.localeCompare(b.name);
+   expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.'))).sort(byName)).toEqual([...originalPolicies,...additions].sort(byName));
+  };
   await compareOldPolicies(f.admin);
   const reader=await f.admin.connect();try{
    await reader.query("BEGIN");await reader.query("SET LOCAL ROLE jobguard_migration");
@@ -71,7 +74,12 @@ describe("CH-4 own-migration upgrade",()=>{
    await reader.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([]);
    await reader.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([{id:stageId}]);
   }finally{await reader.query("ROLLBACK");reader.release()}
-  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin);
+  // Reviewed 0209 additions on exactly these six pre-0144 policy tables.
+  const meterSourcePolicies=["final_account_lock","job","job_activation","job_activation_terms","job_party_binding","membership"].map(table=>({
+   name:`app.${table}.meter_lifecycle_source_read`,permissive:"PERMISSIVE",roles:["jobguard_meter_owner"],cmd:"SELECT",
+   qual:"(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",with_check:null,
+  }));
+  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,meterSourcePolicies);
   for(const mutation of ["UPDATE app.evidence_object SET server_received_at=server_received_at+interval '1 microsecond'","ALTER TABLE app.job ALTER COLUMN title TYPE text"]){
    const db=await f.admin.connect();try{await db.query("BEGIN");await db.query("SET LOCAL session_replication_role='replica'");await db.query(mutation);await expect(compare(db,before)).rejects.toThrow()}finally{await db.query("ROLLBACK");db.release()}
   }

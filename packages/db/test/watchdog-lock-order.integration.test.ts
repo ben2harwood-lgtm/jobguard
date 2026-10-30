@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { watchdogCommandGuards } from "@jobguard/core";
+import { watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { appendAuditBatch, requireLiveJob, withTenant } from "../src/index.js";
 import { analyseLockOrder, mutableTables, type ObservedTransaction, type Ownership } from "./lock-observer.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
@@ -70,7 +70,7 @@ describe("the lock observer itself (it must be able to fail)", () => {
 
 describe("every guarded command: the job share lock first, no contending lock after the audit append", () => {
   it("has a case for every guarded command in the registry", () => {
-    expect(cases.map(c => c.key).sort()).toEqual(watchdogCommandGuards.map(entry => `${entry.file}#${entry.method}`).sort());
+    expect(cases.map(c => c.key).sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
   });
 
   it.each(cases.map(c => [c.key, c] as const))("%s", async (key, c) => {

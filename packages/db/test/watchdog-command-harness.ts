@@ -9,7 +9,7 @@ import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, JobSourceRepository, migrate,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -199,6 +199,11 @@ const cases: Case[] = [
     prepare: async job => { await pre.evidence(job); },
     run: async (job, id, variant) => proof.complete(ctx, { version: "proof.complete.v1", commandId: id, actorMembershipId: member, jobId: job, scopeItemId: st(job).scope, stage: variant === "changed" ? "other-stage" : "electrical-stage", evidenceId: st(job).upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null }),
     later: async job => { await proof.invalidate(ctx, { version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: member, evidenceId: st(job).upload.id, reasonCode: "verification_invalid" }); } },
+  // SV-7A: one intake routine for both kinds; diary is replayed, a customer message is the later command.
+  { key: "job-source-repository.ts#intake", registry: ["/api/jobs/[id]/diary", "nest:/jobs/:id/diary", "command:JobSource.diary", "/api/jobs/[id]/customer-messages", "nest:/jobs/:id/customer-messages", "command:JobSource.customer_message"],
+    prepare: async () => {},
+    run: async (job, id, variant) => new JobSourceRepository(observed.pool).intake(ctx, job, member, "diary", { version: "job-diary-input.v1", commandId: id, entryMode: "typed", onSite: false, text: variant === "changed" ? "Fictional off-site note, changed." : "Fictional off-site note." }),
+    later: async job => { await new JobSourceRepository(observed.pool).intake(ctx, job, member, "customer_message", { version: "customer-message-input.v1", commandId: randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional customer" }, text: "Fictional customer message." }); } },
 ];
 const caseKeys = cases.map(c => c.key);
 

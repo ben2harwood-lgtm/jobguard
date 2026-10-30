@@ -20,7 +20,7 @@ export const northsideRules = northsideSettings.rules;
 
 export type NorthsideSeed = {
   companyName: string; clientIds: string[]; journey: { clientId: string; jobId: string; orderReference: string; operativeMembershipId: string };
-  surveyorMembershipId: string; supervisorMembershipId: string; clientApproverMembershipId: string; clientApproverEmail: string;
+  financeMembershipId: string; surveyorMembershipId: string; supervisorMembershipId: string; clientApproverMembershipId: string; clientApproverEmail: string;
 };
 
 const pad = (n: number, width = 4) => String(n).padStart(width, "0");
@@ -36,6 +36,11 @@ export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembersh
     const command = async (fields: Record<string, unknown>) => contractors.command(owner, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
     const before = await view();
     await registerNorthsideRun(pool, owner, context);
+    const financeMembershipId = before.members.find(m => m.email === "finance@northside-fictional.invalid")?.membership_id
+      ?? (await command({ kind: "member.invite", role: "finance", email: "finance@northside-fictional.invalid", scope: { kind: "tenant", id: owner.tenantId }, clientId: null, contractId: null })).id;
+    // Read-only job/dashboard access lets finance follow the work order without approval authority.
+    if (!before.grants.some(g => g.membership_id === financeMembershipId && g.role === "read_only" && g.scope_kind === "tenant" && g.scope_id === owner.tenantId && !g.revoked))
+      await command({ kind: "grant.create", membershipId: financeMembershipId, role: "read_only", scope: { kind: "tenant", id: owner.tenantId }, contractId: null });
     if (before.units.some(u => u.name === northsideName)) return await storedSeed(pool, owner, context);
 
     // Clients 1..3, each with its own branch, team and contract (client 1 is the standard demo organisation; 2 and 3 are added by the merged helper).
@@ -93,6 +98,7 @@ async function storedSeed(pool: Pool, owner: AuthenticatedMembership, context: V
        JOIN app.contractor_member m ON(m.tenant_id,m.membership_id)=(a.tenant_id,a.membership_id) WHERE w.tenant_id=$1 AND w.reference='NS-1-0001' AND m.email='demo.operative@fictional.invalid' LIMIT 1`))[0];
     if (!journey) throw new Error("The generated Northside organisation is incomplete");
     return { companyName: northsideName, clientIds: clients.map(c => c.id), journey: { clientId: journey.client_id, jobId: journey.job_id, orderReference: journey.reference, operativeMembershipId: journey.membership_id },
+      financeMembershipId: await person("finance@northside-fictional.invalid"),
       supervisorMembershipId: await person("supervisor@northside-fictional.invalid"), surveyorMembershipId: await person("surveyor@northside-fictional.invalid"),
       clientApproverMembershipId: await person("client.approver@northside-fictional.invalid"), clientApproverEmail: "client.approver@northside-fictional.invalid" };
   });

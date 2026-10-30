@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { seedWorkJob, workTenant } from "./job-work-state-fixtures.js";
-export async function meterCompany(f: WorkFixture) {
- const company=await seedWorkJob(f), digest=createHash("sha256").update(randomUUID()).digest("hex"), sessionId=randomUUID();
+export async function meterCompany(f: WorkFixture, tenantId?: string) {
+ const company=await seedWorkJob(f,tenantId), digest=createHash("sha256").update(randomUUID()).digest("hex"), sessionId=randomUUID();
  const user=(await f.admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1",[company.actorId])).rows[0].identity_user_id;
  await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${randomUUID()}@meter.invalid`,user]);
  await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[user,company.tenantId,company.actorId]);

@@ -93,3 +93,23 @@ Checks used preinstalled dependencies and cached pnpm 10.28.1 via `/private/tmp/
 - `git diff --check`: **PASS**.
 
 Local logs: `/private/tmp/ent-10-oidc-a-r1-{checks,build,units,openapi}.log`. Intended commit message: `/private/tmp/jg-msg-ent-10-oidc-a.txt`. No staging, commit or push performed by builder.
+
+## Current-main repair — 29 October 2026
+
+Piece ENT-10-OIDC-A, RED. Read the current SIMPLE_LOOP.md and simplicity rule and inspected AGENTS.md, BUILD_PLAN.md §ENT-10, PR #289's current description, adapter, callers and tests. PR #289 describes a synthetic protocol adapter without a sign-in route; it specifies no additional implementation for this slice. Current origin/main (`fe80add5`) already contains the adapter (commit `a2ae1c01`). This repair does not reopen the separate persistence/sign-in slice.
+
+Resolved all three file-content conflicts: API manifest keeps main's Zod 4.6.6 pin and the existing openid-client pin; OIDC schemas keep main's shared auth URL parser and Zod 4 GUID/email compatibility; lane keeps both registered branch names and the historical exact-path union. The resolved manifest and schemas are byte-identical to current main. Added five adversarial tests: sequential consumed-code replay, concurrent fixture-code exchange, another company's stored request before transport, swapped callbacks between valid company requests, and privileged/provider authority claims remaining bounded proposal data. No adapter behavior change, route, session, grant, schema, SQL or migration change. No PL/pgSQL IF/CASE introduced. `node --check tools/migration-renumber.mjs` and `node tools/migration-renumber.mjs` pass; no own migration needs renumbering, so reserved 0346 is unused.
+
+Dependencies were absent from this worktree despite the brief. The first cached-pnpm invocation could not find Vitest. Linked existing dependencies from the `ci-speed` worktree into ignored local node_modules, preserving workspace package links to this worktree. No packages downloaded or installed. Built this worktree's config, core, storage and DB TypeScript outputs (at most two concurrent package tasks); these are compilation checks, not database execution. Initial OIDC collection failed before config was compiled; the first URL-compatibility collection failed before DB was compiled. Both were resolved by the normal prerequisite builds, without altering checks.
+
+Commands use the cached pnpm 10.28.1 launcher at `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs` with Node 24.17.0:
+
+- `pnpm --filter @jobguard/config build`: PASS.
+- `pnpm --filter @jobguard/core --filter @jobguard/storage --filter @jobguard/db --workspace-concurrency=2 run build`: PASS.
+- `pnpm --filter @jobguard/api exec vitest run src/auth/sso/oidc.test.ts src/auth/sso/oidc.contracts.test.ts src/auth/sso/saml.test.ts --maxWorkers=2`: PASS, 92 tests / 3 files.
+- Final `pnpm --filter @jobguard/api exec vitest run src/auth/sso/oidc.test.ts src/auth/sso/oidc.contracts.test.ts src/auth/url-compatibility.test.ts --maxWorkers=2`: PASS, 457 tests / 3 files, including the final callback test refinement.
+- `pnpm --filter @jobguard/api typecheck` and `pnpm --filter @jobguard/api lint`: PASS.
+- `git diff --check`: PASS; conflict-marker search in the three resolved files: no markers.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: FAIL before router staging, because HEAD/index still reflect the unfinished merge and the gate counts incoming main paths. Do not interpret this as a passed lane gate. Direct use of the unchanged lane-policy loader and path predicate against `git diff origin/main` confirms the resolved working-tree delta stays within this lane. Router must stage the three conflict resolutions, finish the merge and rerun the actual lane gate.
+
+Actual delta from current main: OIDC adversarial test file, this existing receipt and the lane note. No new reporting document. No git writes, commit or push performed. Full CI, database/migrations and browser suites remain for CI under the issued sandbox limits. Fixture replay tests demonstrate issuer code-consumption handling only, not durable database replay prevention. Live-provider, advisories/provenance, real-data and parent ENT-10 acceptance remain outstanding. Under the current simple loop the router arranges one fresh independent Claude review of the exact RED head; earlier two-review/separate-acceptance workflow references above are historical.

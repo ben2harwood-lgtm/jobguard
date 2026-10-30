@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch5-b": {
+      "branches": ["codex/sandbox/ch5-b"],
+      "receipt": "docs/verdicts/CH5-B/BUILDER_RECEIPT.md",
+      "note": "C268 build-ahead on CH5-P c6c4ec97. DEPENDENCY-BOUND: no persisted v3 baseline/terms source or accepted DTO. C1: held internal reader/pure boundary only; no route/page/browser workflow. Final Account/lock integration remains coordinator-owned.",
+      "allow": [
+        "packages/db/src/imported-baseline-sources.ts",
+        "packages/db/test/imported-baseline-sources.integration.test.ts",
+        "packages/core/src/imported-baseline-sources.ts",
+        "packages/core/src/imported-baseline-sources.test.ts",
+        "docs/contracts/imported-baseline-sources-v1.md",
+        "docs/verdicts/CH5-B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
