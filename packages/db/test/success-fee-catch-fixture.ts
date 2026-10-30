@@ -4,7 +4,7 @@ import type {FinalCheckFixture} from "./final-check-fixture.js";
 import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
 import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
-export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatches=false){
+export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatches=false,stageSecondCatch=false){
  const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,twoCatches);
  const subjects=[{caseId:x.caseId,workId:x.workId,line:x.line,fact:x.fact}];
  if(twoCatches){
@@ -20,7 +20,7 @@ export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatch
  }
  const allocator=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo"),attribution=new RecoveryAttributionRepository(f.runtime);
  const assessments=[];
- for(const subject of subjects){
+ const addSubject=async(subject:typeof subjects[number])=>{
   const revision=(await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,subject.caseId])).rows[0].revision as number;
   const p={version:"stored-receipt-case-command.v1",commandId:randomUUID(),action:"review",factLineId:subject.fact.lineAllocationId,caseId:subject.caseId,workId:subject.workId,expectedCaseRevision:revision};
   const review=await allocator.command(x.context,x.jobId,x.auth.digest,p);
@@ -32,8 +32,9 @@ export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatch
    await attribution.approveReview(x.context,x.jobId,x.auth.digest,{...selection,action:"approve_review",commandId:randomUUID(),expectedAttributionRevision:assessment.revision,assessmentId:assessment.assessmentId,expectedSourceHash:assessment.sourceHash,reviewArtifactHash:hash});
   }
   assessments.push(assessment);
- }
+ };
+ for(const subject of stageSecondCatch?subjects.slice(0,1):subjects)await addSubject(subject);
  const repo=new SuccessFeeRepository(f.runtime),command={version:"success-fee-command.v1",action:"review",commandId:randomUUID(),expectedPostingRevision:0};
  const execute=(p:unknown=command)=>repo.command(x.context,x.jobId,x.auth.digest,p);
- return {...x,repo,assessment:assessments[0]!,execute,command};
+ return {...x,repo,assessment:assessments[0]!,execute,command,addSecondCatch:()=>addSubject(subjects[1]!)};
 }

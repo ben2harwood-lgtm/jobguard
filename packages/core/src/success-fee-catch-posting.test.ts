@@ -22,7 +22,7 @@ it("Q3 remains refused, and zero records a derivation without a journal",()=>{
  for(const patch of [{journalId:id},{derivationId:null},{postingRevision:0}])expect(successFeeResultV1.safeParse({...result,...patch}).success).toBe(false);
 });
 it("accepts an exact negative statement only with a compensation identity and a posted journal",()=>{
- const reversed={...statement,qualifyingPrincipal:{numerator:"0",denominator:"1"},feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:id};
+ const reversed={...statement,qualifyingPrincipal:{numerator:"0",denominator:"1"},feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:id,compensations:[{journalId:id,derivationId:id,amountPence:8000}]};
  expect(successFeeStatementV1.safeParse(reversed).success).toBe(true);
  expect(successFeeStatementV1.safeParse({...reversed,compensatesDerivationId:undefined}).success).toBe(false);
  expect(successFeeStatementV1.safeParse({...reversed,deltaPence:-7999}).success).toBe(false);
@@ -31,4 +31,16 @@ it("accepts an exact negative statement only with a compensation identity and a 
   derivationId:id,journalId:id,postingRevision:1,replayed:false,environment:"synthetic_demo",productionEnabled:false,realExternalActions:0};
  expect(successFeeResultV1.safeParse(result).success).toBe(true);
  expect(successFeeResultV1.safeParse({...result,journalId:null}).success).toBe(false);
+});
+
+it("split compensation preserves exact totals and refuses missing, duplicate or mismatched links",()=>{
+ const other="10000000-0000-4000-8000-000000000002";
+ const compensations=[{journalId:id,derivationId:id,amountPence:3000},{journalId:other,derivationId:other,amountPence:5000}];
+ const reversed={...statement,qualifyingPrincipal:{numerator:"0",denominator:"1"},feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:id,compensations};
+ expect(successFeeStatementV1.parse(reversed)).toEqual(reversed);
+ for(const patch of [{compensatesDerivationId:other},{compensations:undefined},{compensations:[]},
+  {compensations:[compensations[0]]},{compensations:[compensations[0],{...compensations[1],journalId:id}]},
+  {compensations:[compensations[0],{...compensations[1],amountPence:5001}]}])
+  expect(successFeeStatementV1.safeParse({...reversed,...patch}).success).toBe(false);
+ expect(successFeeStatementV1.safeParse({...statement,compensations}).success).toBe(false);
 });

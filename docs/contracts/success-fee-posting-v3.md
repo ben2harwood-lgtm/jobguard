@@ -10,8 +10,12 @@ of the principal, statement authority and allocation-level source links. The pri
 After a posting, a changed source can only reduce its previously approved principal.
 An excluded source contributes zero. A fresh source still requires current approved
 SV-6 attribution and all qualifying facts. Review and approve now support a negative
-statement delta with `compensatesDerivationId`; its authorization binds the absolute
-amount and the signed statement hash. Approval appends one or more negative journals,
+statement delta with `compensatesDerivationId` naming the first cancelled derivation
+and `compensations` listing every cancelled `journalId`, its `derivationId` and
+positive `amountPence`, oldest outstanding journal first. The split amounts total
+the negative delta exactly. Authorization binds the absolute amount and the signed
+statement hash, including the full split. The deferred rebuild compares this list
+with the actual cancelled journals; a different derivation link is refused. Approval appends one or more negative journals,
 each linked to a positive original in the same job. Outstanding original pence and
 the rebuilt job liability bound every split. Existing journals are never edited.
 The negative receivable adjustment remains visible as credit due; no provider,

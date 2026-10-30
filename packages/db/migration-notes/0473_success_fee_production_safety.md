@@ -36,3 +36,40 @@ Local validation (30 October 2026):
 Still required: GitHub PostgreSQL/migration suites, required CI against current
 main, and independent Claude RED review against the final head. No database or
 browser server was started locally; no Git mutation, push or PR was performed.
+
+
+30 October 2026 follow-up (RED, m4-9-prod-sb): compensation linkage
+
+The review now constructs the oldest-first cancellation split before hashing it.
+`compensatesDerivationId` names the first cancelled derivation, and `compensations`
+binds every original journal, its actual derivation and exact positive pence.
+Posting consumes that same split; the deferred derivation check independently
+rebuilds the list from the cancelled journals. This removes the duplicate split
+calculation and prevents a latest-positive label from misdescribing older credits.
+Only branch-own 0473 is edited; it is absent from the local main tree.
+
+The fixture can stage two genuine catch allocations to produce two 4,000p accruals.
+The new PostgreSQL case reverses their 8,000p total, checks both links, refuses a
+coherently rehashed mismatched saved link, checks replay and zero rederivation,
+and preserves both original journals. Core tests reject missing, duplicate,
+mismatched and inexact splits. LP-0 and its downstream recorded input update only
+the two named routine staticCalls records; all other records and the exact
+SERIOUS-B5 union remain unchanged.
+
+Follow-up local checks use installed binaries only (no downloads):
+- Core build and db typecheck passed.
+- Core Vitest: src/success-fee-catch-posting.test.ts and
+  src/success-fee-posting.test.ts, maxWorkers=2: 49 passed.
+- DB Vitest: test/lp-0-catalog.test.ts, maxWorkers=2: 27 passed.
+- DB Vitest: src/success-fee-repository.test.ts and src/migrate-discovery.test.ts,
+  maxWorkers=2: 12 passed.
+- PostgreSQL Vitest list discovered all 9 safety/upgrade cases without running hooks.
+- Core purity, money arithmetic, commercial boundary and PL/pgSQL lint passed.
+- Both named staticCalls records match the source scanner in both inventories;
+  every other privilege union fact is unchanged from HEAD.
+- git diff --check passed. The lane retains exactly the piece's cumulative paths
+  relative to codex/sandbox/m4-9-s-posting (its own lane file is implicit).
+
+Database/migration/browser execution remains for GitHub CI; independent Claude RED
+review and required CI on the final head remain pending. No real customer data,
+live money, provider action, release, Git mutation or merge was performed.

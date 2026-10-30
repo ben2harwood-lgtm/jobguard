@@ -9,7 +9,7 @@ beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 type Catch=Awaited<ReturnType<typeof catchFeeFixture>>;
 const approve=(r:Awaited<ReturnType<Catch["execute"]>>)=>({version:"success-fee-command.v1",action:"approve",commandId:randomUUID(),reviewId:r.reviewId,statementHash:r.statementHash,expectedPostingRevision:r.postingRevision});
-const journals=async(x:Catch)=>(await f.admin.query("SELECT id,derivation_id,amount_pence,reverses_journal_id FROM app.success_fee_journal WHERE tenant_id=$1 AND job_id=$2 ORDER BY amount_pence DESC",[x.context.tenantId,x.jobId])).rows;
+const journals=async(x:Catch)=>(await f.admin.query("SELECT id,derivation_id,amount_pence,reverses_journal_id FROM app.success_fee_journal WHERE tenant_id=$1 AND job_id=$2 ORDER BY amount_pence DESC,id",[x.context.tenantId,x.jobId])).rows;
 it("the direct production entry always refuses, including forged policy and environment flags",async()=>{
  for(const command of [null,{}, {approved:true,environment:"production",policyVersion:"reference_fee_policy_v3"}])
   await expect(f.runtime.query("SELECT app.success_fee_production_command($1,$2,$3)",[randomUUID(),"forged",command])).rejects.toMatchObject({code:"42501",message:"FEE_GATE_CLOSED"});
@@ -88,4 +88,37 @@ it("rebuild verifies source attribution and expired/revoked statement authority 
   })).rejects.toThrow(attack==="environment"?"FEE_GATE_CLOSED":attack==="source"||attack==="statement"?"SUCCESS_FEE_SOURCE_CHANGED":"SUCCESS_FEE_DERIVATION_INVALID");
   expect(await journals(x)).toEqual([]);
  }
+});
+
+it("split reversal names each cancelled derivation, refuses a mismatched link, and replays once",async()=>{
+ const x=await catchFeeFixture(f,true,true,true);
+ const first=await x.execute(approve(await x.execute()));
+ await x.addSecondCatch();
+ const second=await x.execute(approve(await x.execute({...x.command,commandId:randomUUID(),expectedPostingRevision:1})));
+ const before=await journals(x);
+ expect(before.map(j=>j.amount_pence)).toEqual(["4000","4000"]);
+ await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional split reversal"});
+ const review=await x.execute({...x.command,commandId:randomUUID(),expectedPostingRevision:2});
+ const compensations=[{journalId:first.journalId,derivationId:first.derivationId,amountPence:4000},
+  {journalId:second.journalId,derivationId:second.derivationId,amountPence:4000}];
+ expect(review.statement).toMatchObject({feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:first.derivationId,compensations});
+ // Even a coherently rehashed saved review cannot authorize a mismatched derivation.
+ await expect(rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("ALTER TABLE app.success_fee_review DISABLE TRIGGER USER");
+  await db.query("UPDATE app.success_fee_review SET statement=jsonb_set(statement,'{compensations,1,derivationId}',to_jsonb($3::text)) WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,review.reviewId,first.derivationId]);
+  const forged=(await db.query("UPDATE app.success_fee_review SET statement_hash=app.final_lock_hash(statement) WHERE tenant_id=$1 AND id=$2 RETURNING statement_hash",[x.context.tenantId,review.reviewId])).rows[0].statement_hash as string;
+  await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,{...approve(review),statementHash:forged}]);
+ })).rejects.toThrow("SUCCESS_FEE_STALE");
+ expect(await journals(x)).toEqual(before);
+ const command=approve(review),result=await x.execute(command);
+ expect(await x.execute(command)).toEqual({...result,replayed:true});
+ const after=await journals(x);
+ expect(after.filter(j=>BigInt(j.amount_pence)>0)).toEqual(before);
+ const credits=after.filter(j=>BigInt(j.amount_pence)<0);
+ expect(credits).toHaveLength(2);
+ for(const link of compensations)expect(credits).toContainEqual(expect.objectContaining({amount_pence:String(-link.amountPence),reverses_journal_id:link.journalId,derivation_id:result.derivationId}));
+ expect(after.reduce((sum,j)=>sum+BigInt(j.amount_pence),0n)).toBe(0n);
+ const zero=await x.execute({...x.command,commandId:randomUUID(),expectedPostingRevision:3});
+ await x.execute(approve(zero));expect(await journals(x)).toEqual(after);
 });

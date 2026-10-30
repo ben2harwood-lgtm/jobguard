@@ -78,7 +78,7 @@ DECLARE t uuid; actor record; c record; a record; approval app.action_authorizat
  posting_revision integer; posted bigint; fee bigint; delta bigint; deadline timestamptz; source_deadline timestamptz;
  cid uuid; rid uuid:=gen_random_uuid(); did uuid:=gen_random_uuid(); jid uuid;
  decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); authorization uuid:=gen_random_uuid();
- inputs jsonb; original record; remaining bigint; portion bigint;
+ inputs jsonb; original record; remaining bigint; portion bigint; compensations jsonb:='[]';
  digest text; action text:=p_command->>'action';
 BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session);
@@ -141,7 +141,17 @@ BEGIN
   'feePence',fee,'priorPence',posted,'deltaPence',delta,'expectedPostingRevision',posting_revision,'sources',sources,
   'environment','synthetic_demo','productionEnabled',false,'realExternalActions',0);
  IF delta<0 THEN
-  statement:=statement||jsonb_build_object('compensatesDerivationId',(SELECT d.id FROM app.success_fee_derivation d WHERE d.tenant_id=t AND d.job_id=p_job AND d.delta_pence>0 ORDER BY d.revision DESC LIMIT 1));
+  remaining:=-delta;
+  FOR original IN SELECT x.id,x.derivation_id,x.amount_pence+coalesce((SELECT sum(y.amount_pence) FROM app.success_fee_journal y
+   WHERE y.tenant_id=t AND y.job_id=p_job AND y.reverses_journal_id=x.id),0) available
+   FROM app.success_fee_journal x JOIN app.success_fee_derivation d ON(d.tenant_id,d.id)=(x.tenant_id,x.derivation_id)
+   WHERE x.tenant_id=t AND x.job_id=p_job AND x.amount_pence>0 ORDER BY d.revision,x.id LOOP
+   portion:=least(remaining,original.available); IF portion<=0 THEN CONTINUE; END IF;
+   compensations:=compensations||jsonb_build_array(jsonb_build_object('journalId',original.id,'derivationId',original.derivation_id,'amountPence',portion));
+   remaining:=remaining-portion; EXIT WHEN remaining=0;
+  END LOOP;
+  IF remaining<>0 THEN RAISE EXCEPTION 'SUCCESS_FEE_JOURNAL_INVALID' USING ERRCODE='23514'; END IF;
+  statement:=statement||jsonb_build_object('compensatesDerivationId',compensations->0->>'derivationId','compensations',compensations);
  END IF;
  digest:=app.final_lock_hash(statement);
  SELECT least(s.expires_at,m.expires_at,source_deadline) INTO deadline FROM control_plane.practice_session s
@@ -174,20 +184,13 @@ BEGIN
    INSERT INTO app.success_fee_journal_line(tenant_id,job_id,journal_id,account,side,amount_pence)
     VALUES(t,p_job,jid,'fee_receivable','debit',delta),(t,p_job,jid,'fee_income','credit',delta);
   ELSIF delta<0 THEN
-   remaining:=-delta;
-   FOR original IN SELECT x.id,x.amount_pence+coalesce((SELECT sum(y.amount_pence) FROM app.success_fee_journal y
-    WHERE y.tenant_id=t AND y.job_id=p_job AND y.reverses_journal_id=x.id),0) available
-    FROM app.success_fee_journal x JOIN app.success_fee_derivation d ON(d.tenant_id,d.id)=(x.tenant_id,x.derivation_id)
-    WHERE x.tenant_id=t AND x.job_id=p_job AND x.amount_pence>0 ORDER BY d.revision,x.id LOOP
-    portion:=least(remaining,original.available); IF portion<=0 THEN CONTINUE; END IF;
-    jid:=gen_random_uuid();
+   FOR original IN SELECT * FROM jsonb_to_recordset(compensations) AS x("journalId" uuid,"derivationId" uuid,"amountPence" bigint) LOOP
+    portion:=original."amountPence"; jid:=gen_random_uuid();
     INSERT INTO app.success_fee_journal(tenant_id,job_id,id,derivation_id,amount_pence,currency,reverses_journal_id)
-     VALUES(t,p_job,jid,did,-portion,'GBP',original.id);
+     VALUES(t,p_job,jid,did,-portion,'GBP',original."journalId");
     INSERT INTO app.success_fee_journal_line(tenant_id,job_id,journal_id,account,side,amount_pence)
      VALUES(t,p_job,jid,'fee_receivable','credit',portion),(t,p_job,jid,'fee_income','debit',portion);
-    remaining:=remaining-portion; EXIT WHEN remaining=0;
    END LOOP;
-   IF remaining<>0 THEN RAISE EXCEPTION 'SUCCESS_FEE_JOURNAL_INVALID' USING ERRCODE='23514'; END IF;
   END IF;
  END IF;
  result:=jsonb_build_object('version','success-fee-result.v1','jobId',p_job,'commandId',cid,'action',action,'reviewId',rid,
@@ -217,7 +220,7 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION app.check_success_fee_derivation() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE n integer; amount numeric; inputs jsonb; saved app.success_fee_review; prior bigint; stored jsonb;
+DECLARE n integer; amount numeric; inputs jsonb; saved app.success_fee_review; prior bigint; stored jsonb; compensations jsonb;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'FEE_GATE_CLOSED' USING ERRCODE='42501'; END IF;
  IF NOT EXISTS(SELECT 1 FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
@@ -230,6 +233,14 @@ BEGIN
   ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) WHERE j.tenant_id=NEW.tenant_id AND j.job_id=NEW.job_id AND d.revision<NEW.revision;
  SELECT coalesce(jsonb_agg(jsonb_build_object('assessmentId',s.assessment_id,'allocationId',s.allocation_id,'reviewAuthorizationId',s.review_authorization_id) ORDER BY s.assessment_id,s.allocation_id),'[]')
  INTO stored FROM app.success_fee_source s WHERE s.tenant_id=NEW.tenant_id AND s.job_id=NEW.job_id AND s.derivation_id=NEW.id;
+ -- Reconstruct links from the actual cancelled journals, never a convenient latest derivation.
+ SELECT coalesce(jsonb_agg(jsonb_build_object('journalId',original.id,'derivationId',original.derivation_id,'amountPence',-credit.amount_pence)
+  ORDER BY d.revision,original.id),'[]') INTO compensations
+ FROM app.success_fee_journal credit
+ JOIN app.success_fee_journal original ON(original.tenant_id,original.job_id,original.id)=(credit.tenant_id,credit.job_id,credit.reverses_journal_id)
+ JOIN app.success_fee_derivation d ON(d.tenant_id,d.job_id,d.id)=(original.tenant_id,original.job_id,original.derivation_id)
+ WHERE credit.tenant_id=NEW.tenant_id AND credit.job_id=NEW.job_id AND credit.derivation_id=NEW.id
+  AND credit.amount_pence<0 AND original.amount_pence>0 AND d.revision<NEW.revision;
  IF inputs->'sources' IS DISTINCT FROM saved.statement->'sources'
  OR stored IS DISTINCT FROM (SELECT jsonb_agg(jsonb_build_object('assessmentId',s->>'assessmentId','allocationId',x,'reviewAuthorizationId',s->>'reviewAuthorizationId') ORDER BY s->>'assessmentId',x)
   FROM jsonb_array_elements(inputs->'sources') s CROSS JOIN LATERAL jsonb_array_elements_text(s->'allocationIds') x)
@@ -245,8 +256,9 @@ BEGIN
  OR saved.statement->'productionEnabled' IS DISTINCT FROM 'false'::jsonb
  OR saved.statement->'realExternalActions' IS DISTINCT FROM '0'::jsonb
  OR (saved.statement->>'expectedPostingRevision')::integer IS DISTINCT FROM NEW.revision-1
- OR (NEW.delta_pence<0 AND NOT EXISTS(SELECT 1 FROM app.success_fee_derivation d WHERE d.tenant_id=NEW.tenant_id AND d.job_id=NEW.job_id AND d.id::text=saved.statement->>'compensatesDerivationId' AND d.revision<NEW.revision AND d.delta_pence>0))
- OR (NEW.delta_pence>=0 AND saved.statement ? 'compensatesDerivationId')
+ OR (NEW.delta_pence<0 AND (saved.statement->>'compensatesDerivationId' IS DISTINCT FROM saved.statement->'compensations'->0->>'derivationId'
+  OR saved.statement->'compensations' IS DISTINCT FROM compensations))
+ OR (NEW.delta_pence>=0 AND saved.statement ?| ARRAY['compensatesDerivationId','compensations'])
  OR saved.expected_revision<>NEW.revision-1 OR saved.expires_at<=clock_timestamp()
  OR (saved.statement->>'feePence')::bigint IS DISTINCT FROM NEW.fee_pence
  OR (saved.statement->>'priorPence')::bigint IS DISTINCT FROM NEW.prior_pence

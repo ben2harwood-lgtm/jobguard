@@ -56,6 +56,7 @@ export const successFeeStatementV1=z.object({
  roundingPolicy:z.literal("commercial_half_even.v1"),qualifyingPrincipal:exactPenceV1,
  feePence:pence,priorPence:pence,deltaPence:z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE),expectedPostingRevision:revision,
  compensatesDerivationId:id.optional(),
+ compensations:z.array(z.object({journalId:id,derivationId:id,amountPence:pence.positive()}).strict()).min(1).max(10000).optional(),
  sources:z.array(z.object({assessmentId:id,sourceHash:z.string().regex(/^[a-f0-9]{64}$/u),
   reviewAuthorizationId:id,allocationIds:z.array(id).min(1).max(10000)}).strict()).min(1).max(10000),
  environment:z.literal("synthetic_demo"),productionEnabled:z.literal(false),realExternalActions:z.literal(0),
@@ -65,6 +66,13 @@ export const successFeeStatementV1=z.object({
   qualifyingPrincipal:value.qualifyingPrincipal,priorPostedPrincipalPence:value.priorPence,compensatesDerivationId:value.compensatesDerivationId??null});
  if((value.deltaPence<0)!==(value.compensatesDerivationId!==undefined))
   ctx.addIssue({code:"custom",message:"compensation link required only for a negative statement"});
+ if(value.deltaPence<0){
+  const links=value.compensations;
+  if(!links || links[0]?.derivationId!==value.compensatesDerivationId
+   || links.reduce((sum,link)=>sum+BigInt(link.amountPence),0n)!==BigInt(-value.deltaPence)
+   || new Set(links.map(link=>link.journalId)).size!==links.length)
+   ctx.addIssue({code:"custom",message:"compensation splits must name each cancelled journal and derivation and total the credit"});
+ } else if(value.compensations!==undefined) ctx.addIssue({code:"custom",message:"compensation splits require a negative statement"});
  if(proposal.successFeePrincipal.pence!==value.feePence || proposal.postingDelta.pence!==value.deltaPence)
   ctx.addIssue({code:"custom",message:"inconsistent fee arithmetic"});
  } catch { ctx.addIssue({code:"custom",message:"invalid fee arithmetic"}); }
