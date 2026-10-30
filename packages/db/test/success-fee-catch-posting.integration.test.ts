@@ -1,6 +1,8 @@
 // CI ONLY: actual PostgreSQL and v1 producer; no seeded qualifying fee facts.
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,expect,it} from "vitest";
+import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
+import {rolledBack} from "./upgrade-proof-utils.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
@@ -137,4 +139,71 @@ it("revoked attribution approval cannot authorize a new fee statement or posting
  await f.admin.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,review.statement.sources[0]!.reviewAuthorizationId]);
  await expect(x.execute(approve(review))).rejects.toThrow("SUCCESS_FEE_REVIEW_REQUIRED");
  expect(await counts(x)).toEqual(before);
+});
+
+// R1: count every fee effect, including authority/audit rows outside the six private tables.
+async function feeEffects(x:Awaited<ReturnType<typeof catchFeeFixture>>){
+ return {
+  ...await counts(x),
+  decisions:(await f.admin.query("SELECT count(*)::int n FROM app.decision WHERE tenant_id=$1 AND subject_type='success_fee'",[x.context.tenantId])).rows[0].n,
+  resolutions:(await f.admin.query("SELECT count(*)::int n FROM app.decision_resolution r JOIN app.decision d ON(d.tenant_id,d.id)=(r.tenant_id,r.decision_id) WHERE d.tenant_id=$1 AND d.subject_type='success_fee'",[x.context.tenantId])).rows[0].n,
+  authorizations:(await f.admin.query("SELECT count(*)::int n FROM app.action_authorization WHERE tenant_id=$1 AND action_type='success_fee.post'",[x.context.tenantId])).rows[0].n,
+  audit:(await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type LIKE 'success_fee.%'",[x.context.tenantId,x.jobId])).rows[0].n,
+ };
+}
+it.each(["approve_review","recovery.attribution_review"])("a directly inserted %s authorization without an SV-6 command cannot review or post",async action=>{
+ const x=await catchFeeFixture(f,false),decision=randomUUID(),resolution=randomUUID(),authorization=randomUUID();
+ expect(x.assessment.assessmentOutcome).toBe("eligible_for_review");
+ const artifact=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[x.assessment])).rows[0].hash as string;
+ const deadline=(await f.admin.query("SELECT expires_at FROM control_plane.practice_session WHERE token_digest=$1",[x.auth.digest])).rows[0].expires_at as Date;
+ // Deliberately bypass SV-6's writer using the runtime's existing generic authority grants.
+ // Both the literal command action and the canonical authorization action are covered.
+ await finalCheckTenant(f.runtime,x.context.tenantId,async db=>{
+  await db.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'recovery_attribution',$3,$4)",[decision,x.context.tenantId,x.assessment.assessmentId,action]);
+  await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[resolution,x.context.tenantId,decision,x.actor.membershipId]);
+  await db.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+   [authorization,x.context.tenantId,decision,resolution,x.actor.membershipId,action,x.assessment.assessmentId,artifact,x.assessment.revision,x.assessment.eligibilityPolicyVersion,deadline]);
+ });
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.action_authorization WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,authorization])).rows).toEqual([{n:1}]);
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_attribution_command WHERE tenant_id=$1 AND assessment_id=$2 AND payload->>'action'='approve_review'",[x.context.tenantId,x.assessment.assessmentId])).rows).toEqual([{n:0}]);
+ const before=await feeEffects(x);
+ await expect(x.execute()).rejects.toThrow("SUCCESS_FEE_REVIEW_REQUIRED");
+ await expect(x.execute({...x.command,action:"approve",commandId:randomUUID(),reviewId:randomUUID(),statementHash:artifact})).rejects.toThrow("SUCCESS_FEE_REVIEW_REQUIRED");
+ expect(await feeEffects(x)).toEqual(before);
+ expect(await counts(x)).toEqual({command:0,review:0,derivation:0,source:0,journal:0,journal_line:0});
+});
+it("a newer unapproved assessment supersedes the assessment in an already saved fee review",async()=>{
+ const x=await catchFeeFixture(f),review=await x.execute();
+ expect(review.statement.sources[0]!.assessmentId).toBe(x.assessment.assessmentId);
+ const successor=await new RecoveryAttributionRepository(f.runtime).assess(x.context,x.jobId,x.auth.digest,{
+  version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,
+  lineId:x.line,lockId:x.fact.invoiceBinding.lockId,expectedCaseRevision:x.assessment.caseRevision,expectedAttributionRevision:x.assessment.revision,
+ });
+ expect(successor).toMatchObject({previousAssessmentId:x.assessment.assessmentId,revision:x.assessment.revision+1,sourceHash:x.assessment.sourceHash,assessmentOutcome:"eligible_for_review"});
+ expect(successor.assessmentId).not.toBe(x.assessment.assessmentId);
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_attribution_command WHERE tenant_id=$1 AND assessment_id=$2 AND payload->>'action'='approve_review'",[x.context.tenantId,successor.assessmentId])).rows).toEqual([{n:0}]);
+ const before=await feeEffects(x);
+ await expect(x.execute(approve(review))).rejects.toThrow("SUCCESS_FEE_REVIEW_REQUIRED");
+ await expect(x.execute({...x.command,commandId:randomUUID()})).rejects.toThrow("SUCCESS_FEE_REVIEW_REQUIRED");
+ expect(await feeEffects(x)).toEqual(before);
+ expect(await counts(x)).toEqual({command:1,review:1,derivation:0,source:0,journal:0,journal_line:0});
+});
+it("no case allocations fails in SQL before saving a review with null allocationIds",async()=>{
+ const x=await catchFeeFixture(f),before=await feeEffects(x);
+ // Rollback-only corruption attack: retain the genuine approved assessment/binding,
+ // remove its case allocations temporarily, and call SQL directly (no Zod rollback).
+ await expect(rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("ALTER TABLE app.stored_receipt_case_allocation DISABLE TRIGGER USER");
+  await db.query("DELETE FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);
+  await db.query("ALTER TABLE app.stored_receipt_case_allocation ENABLE TRIGGER USER");
+  expect((await db.query("SELECT count(*)::int n,jsonb_agg(id) allocation_ids FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0,allocation_ids:null}]);
+  expect((await db.query("SELECT count(*)::int n FROM app.stored_receipt_case_binding WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:1}]);
+  await db.query("SET LOCAL ROLE jobguard_runtime");
+  return db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[x.jobId,x.auth.digest,x.command]);
+ })).rejects.toMatchObject({code:"40001",message:"SUCCESS_FEE_SOURCE_CHANGED"});
+ expect(await feeEffects(x)).toEqual(before);
+ expect(await counts(x)).toEqual({command:0,review:0,derivation:0,source:0,journal:0,journal_line:0});
+ // The attack transaction restores the immutable source; the ordinary positive path remains valid.
+ const review=await x.execute();expect(review.statement.sources[0]!.allocationIds).toEqual([expect.any(String)]);
 });

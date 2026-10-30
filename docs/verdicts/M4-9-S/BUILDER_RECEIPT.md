@@ -567,3 +567,66 @@ Final deterministic handoff checks: exact 22-path lane (21 explicit non-lane pat
 0392/0393 above observed origin/main 0375, no tracked migration changed, and
 `git diff --check`: PASS. These compare the working tree, not a committed PR head.
 Commit message: `/tmp/m4-9-s-posting-20261029T154217Z-commit-msg.txt`.
+
+## 30 October 2026 — test-only RED review follow-up
+
+Order: `m4-9-s-posting`, test-only follow-up to the independent RED PASS at
+`d4fd4b09` reported in the issued brief. That prior verdict is not claimed for
+this merged working tree or these new tests. No production code, SQL or migration
+was changed by this repair; no test proved a new production defect.
+
+Added four PostgreSQL cases in the existing success-fee catch suite:
+
+- Direct runtime inserts create a genuine Decision, approved resolution and exact
+  authorization for an otherwise eligible stored assessment, but no matching
+  `recovery_attribution_command` with action `approve_review`. Both the literal
+  `approve_review` action spelling and canonical `recovery.attribution_review`
+  authorization action are exercised. Fee review and posting attempts must return
+  `SUCCESS_FEE_REVIEW_REQUIRED`; all six fee tables, fee Decisions/resolutions,
+  authorizations and audit counts remain unchanged.
+- Save a real fee review, then re-assess that exact case/work/line/lock through
+  the SV-6 writer. Assert a successor revision with the same source hash and no
+  approval of the successor. Approving the old fee review or requesting a new one
+  must refuse with `SUCCESS_FEE_REVIEW_REQUIRED`, without another fee effect.
+  The unchanged source hash isolates supersession from changed-source staleness.
+- A rollback-only administrative corruption removes the case allocations beneath
+  a genuinely approved assessment while preserving its binding. Assert that the
+  allocation aggregate is null, then call `app.write_success_fee_v3` directly as
+  the runtime role. It must return SQLSTATE 40001 / `SUCCESS_FEE_SOURCE_CHANGED`,
+  rather than save a review with null `allocationIds` and rely on repository Zod
+  validation to roll back. Fee/authority/audit counts remain unchanged. Rollback
+  restores the immutable source, after which a real review has a non-null,
+  non-empty allocation ID array. No synthetic source deletion is committed.
+
+Resolved the sole textual merge conflict in
+`packages/db/test/stored-receipt-case-fixture.ts`. Its third argument accepts
+both this lane's protocol string and main's numeric baseline; main's fourth
+mixed-final-check argument and all merged fixture behavior remain. Existing
+producer, shadow-30000 and mixed-check call sites stay unchanged. The lane now
+includes this test helper. All other staged main changes were preserved.
+There were no shared expectation-list conflicts to resolve or rows to remove.
+
+Actual local checks, using installed Node v24.17.0 and existing executables:
+
+- `./node_modules/.bin/tsc --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop packages/db/test/success-fee-catch-posting.integration.test.ts packages/db/test/receipt-line-command-producer.integration.test.ts packages/db/test/evidence-pack-v3-post-lock.integration.test.ts`:
+  PASS. Compiles the new PostgreSQL cases and both preserved fixture call forms;
+  does not execute them.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- In `packages/db`, `node node_modules/vitest/vitest.mjs list --maxWorkers=2 test/success-fee-catch-posting.integration.test.ts`:
+  PASS; all 19 cases, including the four additions, collected through the actual
+  repository runner. Collection does not run the PostgreSQL hooks or assertions.
+- In `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=2 src/success-fee-repository.test.ts`:
+  PASS, 1 file / 9 tests. Scripted repository coverage, not PostgreSQL proof.
+
+CI must execute the PostgreSQL suite. No PostgreSQL startup, localhost binding,
+package download, provider call, real data/money or git-writing command ran.
+The helper's conflict markers are resolved on disk; its Git index remains
+unmerged because this sandbox cannot stage it. Router must stage the resolved
+content with the other pending main-merge files, commit and push. Intended commit
+message: `/tmp/m4-9-s-posting-20261030T155255Z-commit-msg.txt`.
+
+Final repair-only path check: all four changed repair paths are admitted by the
+existing lane; no conflict markers remain in either changed test file; 0392 and
+0393 match HEAD bytes exactly; `git diff --check` passes. The index-only unmerged
+entry is retained for the router to stage. No new simplicity finding was added
+on this repair; the initial-review advisory above remains unchanged.
