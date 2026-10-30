@@ -14,6 +14,11 @@ import {
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
+import { StoredRecoveryWorkflowRuntime } from "../../../apps/api/src/recovery-timeline.workflow.js";
+import { PostgresRecoveryWorkflowStore } from "../../../apps/api/src/recovery-timeline.store.js";
+import { PracticeRecoveryTimelineActivities } from "../../../apps/api/src/recovery-timeline.activities.js";
+import { PracticeAccess } from "../../../apps/api/src/practice-access.js";
+
 // Real PostgreSQL 16, the real migrations applied as the migration owner, the real non-owner runtime role, and the real SBOX-2 and M4-5-S
 // repositories: no mock stands in for a guarantee here. Every number below is read back from the database.
 const password = "synthetic";
@@ -1161,4 +1166,98 @@ it("ReminderUsesSameGuard: a due reminder cannot preview after its terms prerequ
   await expect(repo.openReview(ctx, base.caseId, input, actor)).rejects.toMatchObject({ code: "RECOVERY_TERMS_NOT_APPROVED" });
   expect(await tenantCounts()).toEqual(before);
   expect((await messages.read(ctx, base.caseId)).sinkCount).toBe(1);
+});
+
+// M4-6-store: real history, actual permission bridge and actual due/cancel application commands.
+describe("M4-6 PostgreSQL timeline history", () => {
+  const timeline = (pool = runtime) => new StoredRecoveryWorkflowRuntime(
+    new PracticeRecoveryTimelineActivities(pool, async () => token, "synthetic_demo"),
+    new PostgresRecoveryWorkflowStore(pool, async ref => (await new PracticeAccess(pool, token).case(ref.caseId)).context, "synthetic_demo"),
+    "synthetic_demo");
+  const event = (base: Awaited<ReturnType<typeof scheduled>>, kind: "timer" | "cancel" | "builder_response" = "timer") => ({
+    version: "recovery-timeline-signal.v1", signalId: randomUUID(), eventId: randomUUID(), kind,
+    ref: { tenantId: DEMO_TENANT_ID, jobId: fixture.jobId, caseId: base.caseId, runId: base.runId, followUpId: base.followUp.id },
+  });
+  async function missedClock(base: Awaited<ReturnType<typeof scheduled>>) {
+    await admin.query("ALTER TABLE app.sandbox_run_event DISABLE TRIGGER recovery_follow_up_due_on_advance");
+    try { await sandbox.advance(token, base.runId, randomUUID()); }
+    finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
+  }
+  it("restart, concurrent duplicate delivery and version upgrade leave one due Decision and immutable signal hash", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    // New connection pool and runtime/store objects have no retained JavaScript history.
+    const restarted = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password, database: "jobguard_synthetic_demo", max: 6 });
+    try {
+      await Promise.all([timeline(restarted).signal(signal), timeline().signal(signal)]);
+      await expect(timeline(restarted).signal({ ...signal, version: "recovery-timeline-signal.v2" })).resolves.toBe("review");
+      await expect(timeline(restarted).signal({ ...signal, kind: "cancel" })).rejects.toThrow("CONFLICT");
+    } finally { await closeTestPools(restarted); }
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(1);
+    expect((await admin.query("SELECT state FROM app.recovery_timeline_run WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).rows).toEqual([{ state: "review" }]);
+  });
+  it("history rollback after an activity commit retries the same idempotent effect", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const real = new PracticeRecoveryTimelineActivities(runtime, async () => token, "synthetic_demo");
+    const store = new PostgresRecoveryWorkflowStore(runtime, async () => ctx, "synthetic_demo");
+    const crash = new StoredRecoveryWorkflowRuntime({ async execute(activity) { await real.execute(activity); throw new Error("synthetic crash"); } }, store, "synthetic_demo");
+    await expect(crash.signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(0);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
+  it("early timers redeliver after the clock becomes due", async () => {
+    const base = await scheduled(), signal = event(base);
+    await expect(timeline().signal(signal)).resolves.toBe("waiting");
+    await missedClock(base);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
+  it("cancel persists across restart; delayed timer and response never create a Decision", async () => {
+    const base = await scheduled();
+    await expect(timeline().signal(event(base, "cancel"))).resolves.toBe("stopped");
+    await missedClock(base);
+    await expect(timeline().signal(event(base))).resolves.toBe("stopped");
+    await expect(timeline().signal(event(base, "builder_response"))).resolves.toBe("stopped");
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    await expect(withTenant(runtime, ctx, db => db.$client.query("UPDATE app.recovery_timeline_run SET state='waiting' WHERE follow_up_id=$1", [base.followUp.id]))).rejects.toThrow("RECOVERY_TIMELINE_STOPPED");
+  });
+  it("revoked membership is honoured when a saved timer executes and when a signal replays", async () => {
+    const base = await scheduled(), signal = event(base);
+    await timeline().signal(signal);
+    await missedClock(base);
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    try {
+      await expect(timeline().signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
+      await expect(timeline().signal(event(base))).rejects.toThrow("ACTIVITY_FAILED");
+      expect(await dueDecisions(base.followUp.id)).toBe(0);
+    } finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]); }
+  });
+  it("signalDue and history are tenant scoped in real PostgreSQL, including missing context and cross-job references", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const foreign = testTenantContext(randomUUID());
+    expect(await repo.signalDue(foreign, base.runId)).toBe(0);
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    await expect(timeline().signal({ ...signal, ref: { ...signal.ref, tenantId: foreign.tenantId } })).rejects.toThrow("NOT_FOUND");
+    for (const field of ["jobId", "caseId", "runId", "followUpId"]) {
+      await expect(timeline().signal({ ...signal, ref: { ...signal.ref, [field]: randomUUID() } })).rejects.toThrow();
+    }
+    await timeline().signal(signal);
+    for (const table of ["recovery_timeline_run", "recovery_timeline_signal"]) {
+      expect((await runtime.query(`SELECT * FROM app.${table}`)).rows).toEqual([]);
+      expect(await withTenant(runtime, foreign, db => db.$client.query(`SELECT * FROM app.${table}`))).toMatchObject({ rows: [] });
+      for (const sql of [`DELETE FROM app.${table}`, `TRUNCATE app.${table}`, `UPDATE app.${table} SET tenant_id=tenant_id`]) {
+        await expect(withTenant(runtime, ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+      }
+    }
+    await expect(withTenant(runtime, foreign, db => db.$client.query("INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint) VALUES($1,$2,$3,$4)", [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query("UPDATE app.recovery_timeline_signal SET fingerprint=$1", [hash("changed")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state) VALUES($1,$2,$3,$4,$5,'waiting')", [DEMO_TENANT_ID, randomUUID(), fixture.jobId, base.caseId, base.runId]))).rejects.toMatchObject({ code: "23503" });
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
 });

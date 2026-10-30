@@ -1221,3 +1221,9 @@ accepted SV-6 source/proof seam; this is not a completed fee-posting migration.
 Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
+
+## 0481 — M4-6-store synthetic timeline history (RED)
+
+Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_migration`, with forced tenant RLS and tenant/subject-qualified foreign keys to the existing follow-up. Runtime has SELECT/INSERT and only UPDATE(state) on run history; no DELETE/TRUNCATE, reference changes or signal edits. A private invoker trigger makes stopped terminal. There are no provider, scheduling-owner, financial, audit or existing-routine changes. No backfill: existing in-memory fake history is not promoted to trusted database history.
+
+Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.

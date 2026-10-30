@@ -882,6 +882,35 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// 0481 is additive history only: exact two tables, their primary indexes and one private trigger routine.
+async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["recovery_timeline_run", "recovery_timeline_signal"];
+ const names = [...tables, ...tables.map(t => `${t}_pkey`)];
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "guard_recovery_timeline_state" && r.args === "");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({prosecdef:false,proconfig:null});
+ const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [routines[0]!.proacl])).rows[0].acl;
+ expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
+ for (const table of tables) {
+  expect(before.rows).not.toHaveProperty(`app.${table}`);
+  expect(after.rows[`app.${table}`]).toEqual([]);
+  const relation = relations.find(r => r.relname === table)!;
+  expect(relation).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
+  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner, $2::aclitem[]::text[] acl", [relation.relowner,relation.relacl])).rows).toEqual([
+   {owner:"jobguard_migration",acl:["jobguard_migration=arwdDxt/jobguard_migration","jobguard_runtime=ar/jobguard_migration"]}
+  ]);
+ }
+ const columns = (await f.admin.query("SELECT c.relname,a.attname,a.attacl::text[] acl FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND a.attacl IS NOT NULL ORDER BY c.relname,a.attname", [tables])).rows;
+ expect(columns).toEqual([{relname:"recovery_timeline_run",attname:"state",acl:["jobguard_runtime=w/jobguard_migration"]}]);
+ const union = <T>(old:T[], added:T[], live:T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r => JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
+  relations:union(before.relations,relations,after.relations),routines:union(before.routines,routines,after.routines),policies:union(before.policies,policies,after.policies)};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -906,6 +935,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await timelineStoreAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
