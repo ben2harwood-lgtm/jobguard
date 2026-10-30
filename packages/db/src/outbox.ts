@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -55,6 +56,7 @@ export class ActionExecutor {
       const r = (await db.$client.query<any>(`SELECT o.* FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
       if (!r) { refusal = await cancelRevokedAction(db, id, [...this.adapters.keys()]); return; }
       if (!this.adapters.has(r.adapter)) return;
+      if (!(await commercialOutboundClaimsEnabled(db))) return;
       // Classify the locked, authorized row, never queue-supplied action metadata.
       beforeClaim?.(r.action_type);
       if (r.status === "executing" && new Date(r.claimed_at).getTime() < Date.now() - 300_000) {

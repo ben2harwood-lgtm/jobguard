@@ -1,12 +1,12 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   ActionExecutor,
   appendOutboundAction,
@@ -30,6 +30,8 @@ let postgres: EmbeddedPostgres;
 let admin: Pool;
 let runtime: Pool;
 let infrastructure: Pool;
+let operatorA: Pool;
+let operatorB: Pool;
 let databaseDir: string;
 let sequence = 1;
 
@@ -60,16 +62,21 @@ beforeAll(async () => {
     GRANT jobguard_runtime TO outbox_runtime;
     CREATE ROLE outbox_infrastructure LOGIN PASSWORD 'infra-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
     GRANT jobguard_infrastructure TO outbox_infrastructure;
+    CREATE ROLE outbound_operator_a LOGIN PASSWORD 'synthetic-a' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+    CREATE ROLE outbound_operator_b LOGIN PASSWORD 'synthetic-b' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+    GRANT jobguard_outbound_operator TO outbound_operator_a, outbound_operator_b;
   `);
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_runtime", password: "runtime-only", application_name: "outbox-test-business-worker", max: 5 });
   infrastructure = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_infrastructure", password: "infra-only" });
+  operatorA = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbound_operator_a", password: "synthetic-a" });
+  operatorB = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbound_operator_b", password: "synthetic-b" });
   admin.on("error", () => undefined);
   runtime.on("error", () => undefined);
   infrastructure.on("error", () => undefined);
 }, 60_000);
 
 afterAll(async () => {
-  await closeTestPools(infrastructure, runtime, admin);
+  await closeTestPools(operatorA, operatorB, infrastructure, runtime, admin);
   await postgres?.stop();
   await rm(databaseDir, { recursive: true, force: true });
 });
@@ -341,4 +348,114 @@ describe("transactional outbox and fake worker execution", () => {
     expect((await admin.query("SELECT has_schema_privilege('outbox_infrastructure','app','USAGE') AS allowed")).rows[0]?.allowed).toBe(false);
     await expect(infrastructure.query("SELECT * FROM app.action_outbox")).rejects.toMatchObject({ code: "42501" });
   });
+});
+
+// M0-13a: actual operator logins, no request-supplied actor identity.
+describe("commercial outbound pause", () => {
+  const command = async (pool: Pool, id: string, operation: string, revision: number, request: string | null = null) =>
+    (await pool.query("SELECT outbound_control.command($1,$2,$3,$4) revision", [id, operation, revision, request])).rows[0].revision as number;
+
+  it("keeps queued artifacts and attempts untouched, requires another person, then replays one delivery effect", async () => {
+    const action = await appendAction();
+    const before = (await admin.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows;
+    const uploadId = randomUUID();
+    await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
+      VALUES($1,$2,$3,$4,$5,'text/plain',100,'standard_evidence','2099-01-01')`,
+      [uploadId,TENANT,randomUUID(),`synthetic-pause/${uploadId}`,hash("Synthetic evidence")]);
+    const evidence = (await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows;
+    const pause = randomUUID(), request = randomUUID(), approval = randomUUID();
+    let revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
+    const paused = await command(operatorA, pause, "pause", revision);
+    expect(await command(operatorA, pause, "pause", revision)).toBe(paused);
+    await expect(command(operatorA, pause, "pause", paused)).rejects.toThrow("OUTBOUND_IDEMPOTENCY_CONFLICT");
+    const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:pause" }));
+    const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), telemetry);
+    try {
+      await executor.execute(context, action.id);
+      await executor.execute(context, action.id);
+      expect(deliver).not.toHaveBeenCalled();
+      expect((await admin.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows).toEqual(before);
+      expect((await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows).toEqual(evidence);
+      expect((await admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1", [action.id])).rows[0].n).toBe(0);
+      // A business runtime cannot unpause via routine, direct SQL, role or GUC.
+      await expect(command(runtime, randomUUID(), "approve_resume", paused, request)).rejects.toMatchObject({ code: "42501" });
+      await expect(runtime.query("UPDATE outbound_control.state SET paused=false")).rejects.toMatchObject({ code: "42501" });
+      await withTenant(runtime, context, async db => {
+        await db.$client.query("SELECT set_config('app.commercial_outbound','enabled',true),set_config('app.outbound_paused','false',true)");
+        expect((await db.$client.query("SELECT outbound_control.claims_enabled() enabled")).rows).toEqual([{enabled:false}]);
+      });
+      await expect(runtime.query("SET ROLE jobguard_outbound_operator")).rejects.toMatchObject({ code: "42501" });
+      const requested = await command(operatorA, request, "request_resume", paused);
+      await expect(command(operatorA, approval, "approve_resume", requested, request)).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
+      await expect(command(operatorB, randomUUID(), "approve_resume", requested, randomUUID())).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
+      await expect(command(operatorB, approval, "approve_resume", paused, request)).rejects.toThrow("OUTBOUND_STALE_REVISION");
+      revision = await command(operatorB, approval, "approve_resume", requested, request);
+      expect(await command(operatorB, approval, "approve_resume", requested, request)).toBe(revision);
+      expect((await operatorA.query("SELECT operation,actor FROM outbound_control.event WHERE command_id=ANY($1::uuid[]) ORDER BY result_revision", [[pause,request,approval]])).rows).toEqual([
+        {operation:"pause",actor:"outbound_operator_a"}, {operation:"request_resume",actor:"outbound_operator_a"}, {operation:"approve_resume",actor:"outbound_operator_b"},
+      ]);
+      await Promise.all([executor.execute(context, action.id), executor.execute(context, action.id)]);
+      await executor.execute(context, action.id);
+      expect(deliver).toHaveBeenCalledOnce();
+      expect(await statusOf(action.id)).toBe("succeeded");
+      await expect(operatorA.query("DELETE FROM outbound_control.event")).rejects.toMatchObject({ code: "42501" });
+      await expect(operatorA.query("UPDATE outbound_control.state SET paused=false")).rejects.toMatchObject({ code: "42501" });
+    } finally {
+      // Cleanup via the same two-person authority if an assertion fails mid-pause.
+      const state = (await operatorA.query("SELECT * FROM outbound_control.state")).rows[0];
+      if (state.paused) {
+        const cleanup = randomUUID();
+        const requested = await command(operatorA, cleanup, "request_resume", state.revision);
+        await command(operatorB, randomUUID(), "approve_resume", requested, cleanup);
+      }
+    }
+  });
+
+  it("deployment pause overrides runtime arguments and preserves queued work", async () => {
+    const action = await appendAction();
+    const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:mode" }));
+    vi.stubEnv("JOBGUARD_COMMERCIAL_OUTBOUND", "paused");
+    try {
+      const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), telemetry);
+      await executor.execute(context, action.id, () => { throw new Error("request callback reached"); });
+      expect(deliver).not.toHaveBeenCalled();
+      expect(await statusOf(action.id)).toBe("pending");
+    } finally { vi.unstubAllEnvs(); }
+  });
+});
+
+it("a later pause permanently supersedes an earlier resume approval request", async () => {
+  const cmd = async (pool: Pool, operation: string, revision: number, request: string | null = null) =>
+    (await pool.query("SELECT outbound_control.command($1,$2,$3,$4) revision", [randomUUID(),operation,revision,request])).rows[0].revision;
+  let revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
+  revision = await cmd(operatorA,"pause",revision);
+  const oldRequest = randomUUID();
+  revision = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [oldRequest,revision])).rows[0].revision;
+  revision = await cmd(operatorA,"pause",revision);
+  await expect(cmd(operatorB,"approve_resume",revision,oldRequest)).rejects.toThrow("OUTBOUND_SECOND_PERSON_REQUIRED");
+  const newRequest = randomUUID();
+  revision = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [newRequest,revision])).rows[0].revision;
+  await cmd(operatorB,"approve_resume",revision,newRequest);
+});
+
+it("pause serializes with an already open claim and a failed lock attempt has no audit effect", async () => {
+  const claim = await runtime.connect(), operator = await operatorA.connect();
+  const id = randomUUID();
+  const revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
+  try {
+    await claim.query("BEGIN");
+    expect((await claim.query("SELECT outbound_control.claims_enabled() enabled")).rows).toEqual([{enabled:true}]);
+    await operator.query("BEGIN");
+    await operator.query("SET LOCAL lock_timeout='100ms'");
+    await expect(operator.query("SELECT outbound_control.command($1,'pause',$2)", [id,revision])).rejects.toMatchObject({code:"55P03"});
+    await operator.query("ROLLBACK");
+    expect((await operatorA.query("SELECT * FROM outbound_control.event WHERE command_id=$1", [id])).rows).toEqual([]);
+  } finally {
+    await operator.query("ROLLBACK"); await claim.query("ROLLBACK");
+    operator.release(); claim.release();
+  }
+  const paused = (await operatorA.query("SELECT outbound_control.command($1,'pause',$2) revision", [id,revision])).rows[0].revision;
+  const request = randomUUID();
+  const requested = (await operatorA.query("SELECT outbound_control.command($1,'request_resume',$2) revision", [request,paused])).rows[0].revision;
+  await operatorB.query("SELECT outbound_control.command($1,'approve_resume',$2,$3)", [randomUUID(),requested,request]);
 });

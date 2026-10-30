@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m0-13a-outbound-pause": {
+      "branches": [
+        "codex/sandbox/m0-13a-outbound-pause"
+      ],
+      "note": "RED M0-13a app-wide commercial outbound pause, operator two-person resume and fake-only adversarial tests. Migration 0474. No worker.ts change or live activation.",
+      "allow": [
+        ".env.example",
+        "apps/api/src/production-settlement-guard.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/commercial-outbound-pause.md",
+        "packages/db/migrations/0474_commercial_outbound_pause.sql",
+        "packages/db/src/commercial-outbound-pause.ts",
+        "packages/db/src/commercial-outbound-pause.test.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/outbox.test.ts",
+        "packages/db/src/later-outbox.test.ts",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/commercial-outbound-pause-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
