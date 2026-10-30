@@ -108,9 +108,10 @@ it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer indepen
  const x=await catchFeeFixture(f),review=await x.execute(),p=approve(review),before=await counts(x);
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
   if(attack==="unsettled"){
-   await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER USER");
-   await db.query("UPDATE app.practice_feed_event SET state='pending' WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId]);
-   await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER USER");
+   // Bypass the receipt-match FK trigger while corrupting its referenced event ID.
+   await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER ALL");
+   await db.query("UPDATE app.practice_feed_event SET state='pending',event_kind='pending',event_id='pending-'||movement_key WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId]);
+   await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER ALL");
   }else if(attack==="allocation_limit"){
    await db.query("ALTER TABLE app.stored_receipt_case_allocation DISABLE TRIGGER USER");
    await db.query("UPDATE app.stored_receipt_case_allocation SET net_numerator='80001' WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);
