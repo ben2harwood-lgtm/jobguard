@@ -1,11 +1,15 @@
 // CH4-U work-state controls and linked-job offer. Synthetic only; runs in CI.
 import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import { expect, test, type Page } from "@playwright/test";
+import { activateMeterJob } from "../../../packages/db/test/meter-journey-fixtures.js";
+import { insertPhoto, seedWorkJob, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
 import { prepareLockJob } from "./helpers/final-account-lock-journey";
 import { prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
 
 const LINKED = "Start a linked job for this customer and site";
+const E2E_RUNTIME_URL = "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo";
 const panel = (page: Page) => page.getByTestId("job-work-state");
 async function click(page: Page, name: string) {
   const button = panel(page).getByRole("button", { name, exact: true });
@@ -14,12 +18,37 @@ async function click(page: Page, name: string) {
 }
 const eventIds = (page: Page) => panel(page).getByTestId("work-state-event").evaluateAll(items => items.map(item => `${item.getAttribute("data-kind")}:${item.getAttribute("data-event-id")}`));
 
-test("finish, cancel and close with a reason persist across reload and a second page; reopen waits for the meter", async ({ page, context }) => {
+test("resume and unlocked reopen persist, retry exactly after an unknown outcome, and refuse the Solo cap", async ({ page, context }) => {
   await openLiveWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   await page.goto(`/jobs/${jobId}#site-work`);
   await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
-  await expect(panel(page).getByRole("button", { name: "Resume site work", exact: true })).toBeDisabled();
+
+  // The server commits the first resume, but the browser loses the response.
+  const commandUrl = `**/api/jobs/${jobId}/work-state`;
+  let lostResume = false;
+  await page.route(commandUrl, async route => {
+    const body = route.request().method() === "POST" ? route.request().postDataJSON() as { action?: string } : null;
+    if (!lostResume && body?.action === "resume") {
+      lostResume = true;
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      await route.fulfill({ status: 503, body: "Synthetic unknown outcome" });
+      return;
+    }
+    await route.continue();
+  });
+  await click(page, "Resume site work");
+  await expect(panel(page).getByRole("alert")).toContainText("The result is unknown");
+  await page.unroute(commandUrl);
+  await click(page, "Retry the same action");
+  await expect(panel(page).getByTestId("work-state-revision")).toHaveText("1");
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Site work resumed");
+  const resumed = await eventIds(page);
+  expect(resumed.map(item => item.split(":")[0])).toEqual(["resumed"]);
+  await page.reload();
+  await expect.poll(() => eventIds(page)).toEqual(resumed);
+  await expect(panel(page).getByTestId("work-state-revision")).toHaveText("1");
 
   await click(page, "Finished on site");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Finished on site");
@@ -31,23 +60,47 @@ test("finish, cancel and close with a reason persist across reload and a second 
   await panel(page).getByLabel("Note (required)").fill("Fictional customer stopped the work");
   await click(page, "Close job");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
-  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
-  // Reopening an unlocked job needs place admission (MON-1), which the server still refuses.
-  await expect(panel(page).getByRole("button", { name: "Reopen job", exact: true })).toBeDisabled();
+  await click(page, "Reopen job");
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Job reopened");
 
-  const saved = await eventIds(page);
-  expect(saved.map(item => item.split(":")[0])).toEqual(["finished_on_site", "finished_cancelled", "closed"]);
+  // Close again, fill the six Solo places with distinct synthetic jobs, then prove
+  // the seventh place is refused through the saved-job Reopen button.
+  await panel(page).getByLabel("Note (required)").fill("Fictional pause before the cap");
+  await click(page, "Close job");
+  const beforeCap = await eventIds(page);
+  const revisionBeforeCap = await panel(page).getByTestId("work-state-revision").textContent();
+  const admin = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "postgres", password: "sbox-e2e-owner", max: 1 });
+  const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  const fixture = { admin, runtime } as WorkFixture;
+  try {
+    const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
+    for (let i = 0; i < 6; i++) {
+      const counted = await seedWorkJob(fixture, tenantId);
+      await activateMeterJob(fixture, counted);
+      await insertPhoto(fixture, counted, "now");
+    }
+  } finally {
+    await runtime.end();
+    await admin.end();
+  }
+  await click(page, "Reopen job");
+  await expect(panel(page).getByRole("alert")).toContainText("Move to Builder");
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
+  await expect(panel(page).getByTestId("work-state-revision")).toHaveText(revisionBeforeCap!);
+  await expect.poll(() => eventIds(page)).toEqual(beforeCap);
   await page.reload();
-  await expect.poll(() => eventIds(page)).toEqual(saved);
+  await expect.poll(() => eventIds(page)).toEqual(beforeCap);
+
   const second = await context.newPage();
   await second.goto(`/jobs/${jobId}#site-work`);
-  await expect.poll(() => eventIds(second)).toEqual(saved);
+  await expect.poll(() => eventIds(second)).toEqual(beforeCap);
 
   // A stale revision is refused and records nothing.
   const stale = await page.request.post(`/api/jobs/${jobId}/work-state`, { data: { version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "finish" } });
   expect(stale.status()).toBe(409);
   await page.reload();
-  await expect.poll(() => eventIds(page)).toEqual(saved);
+  await expect.poll(() => eventIds(page)).toEqual(beforeCap);
 
   // Layout: no sideways scroll on this viewport and 44px actions.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
