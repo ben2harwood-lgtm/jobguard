@@ -133,3 +133,4 @@ export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
 export * from "./simulation-fee-collection.js";
+export * from "./simulation-money-run.js";

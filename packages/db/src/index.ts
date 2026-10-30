@@ -157,3 +157,4 @@ export * from "./value-business-reader.js";
 export * from "./simulation-fee-statement-repository.js";
 
 export * from "./simulation-fee-collection-repository.js";
+export * from "./simulation-money-run-repository.js";
