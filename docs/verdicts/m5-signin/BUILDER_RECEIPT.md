@@ -242,3 +242,30 @@ Ready for router commit/push and CI. PostgreSQL, migration/upgrade and browser
 execution cannot run in this sandbox and remain required CI gates. Full green
 CI against current main and one independent Claude RED review of the exact
 pushed head remain merge gates. This source inspection is not that review.
+
+## PR #423 — merged-main verification, 30 October 2026 19:18 UTC
+
+Verified the router's completed merge 667b017e (origin/main 48843eeb).
+The worktree started clean, with no unmerged index entries or conflict markers.
+The merge changes no LP-0 inventory, tenancy, SERIOUS-B5 or entitlement upgrade
+expectations relative to its first parent; both sides' previously accumulated
+expectation rows remain intact. No source, SQL, migration or expectation repair
+was necessary. This update records verification only, within the existing lane.
+
+Local checks used installed binaries (Node 24.17.0, Vitest 4.1.12), with
+maxWorkers=1 per test process and at most two test workers total:
+
+- apps/api: `vitest run --maxWorkers=1 src/auth/customer-signin.test.ts
+  src/auth/sso/oidc-paths.test.ts src/watchdog-registry.test.ts` — 157 passed.
+- packages/db: `vitest run --maxWorkers=1 test/lp-0-catalog.test.ts
+  test/upgrade-proof-utils.test.ts src/outbox.test.ts` — 35 passed.
+- Installed `tsc -p <package>/tsconfig.json --noEmit` for apps/api, packages/db
+  and apps/web — all passed.
+- `node tools/lint.mjs` — passed, including normal lane boundary lint now that
+  the merge is complete, core purity, money arithmetic and PL/pgSQL CASE checks.
+- `git diff --check` — passed. No git-writing commands were run.
+
+Router owns commit/push and CI. Real PostgreSQL, migration/upgrade and browser
+execution remain CI gates; none was executed or claimed here. Green CI against
+current main and one independent Claude RED review of the exact pushed head
+remain required before merge. No live providers or real customer data used.
