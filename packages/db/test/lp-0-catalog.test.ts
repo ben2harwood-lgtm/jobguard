@@ -353,3 +353,19 @@ describe("DEMO-I exact installed capability inventory",()=>{
   expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
  });
 });
+
+it("DEMO-J2 stacked inventory preserves current posting controls and read-only reconciliation availability", async () => {
+ const {inventory}=await loadReviewedInventory();
+ expect(new Set(inventory.authorityPaths.map(row=>row.id)).size).toBe(inventory.authorityPaths.length);
+ expect(new Set(inventory.recorded.routines.map(row=>row.identity)).size).toBe(inventory.recorded.routines.length);
+ const posting=inventory.recorded.routines.find(row=>row.identity==="function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)")!;
+ expect(posting.staticWrites).toContain("app.success_fee_derivation");
+ expect(posting.staticCalls).toContain("app.recovery_attribution_sources");
+ const availability=inventory.recorded.routines.find(row=>row.identity==="function:app.read_money_trail_availability(uuid,text)")!;
+ expect(availability.staticWrites).toEqual([]);
+ expect(availability.staticCalls).toEqual(["app.read_success_fee_v3"]);
+ expect(availability.publicExecute).toBe(false);
+ const path=inventory.authorityPaths.find(row=>row.id==="ap-recovery-money")!;
+ for(const source of ["packages/db/migrations/0393_success_fee_catch_posting.sql","packages/db/migrations/0310_money_trail_reconciliation.sql"])
+  expect(path.sources).toContain(source);
+});

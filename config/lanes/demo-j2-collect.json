@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j2-collect": {
+      "branches": [
+        "codex/sandbox/demo-j2-collect"
+      ],
+      "note": "RED DEMO-S recovery-18800: resolve the stacked merge and expose incomplete statement/collection/refund/reconciliation steps. Executable downstream producers are missing; no asserted end-state totals or financial commands are fabricated.",
+      "allow": [
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/lib/recovery-journey.ts",
+        "apps/web/app/lib/recovery-journey.test.ts",
+        "apps/web/app/ui/recovery-journey.tsx",
+        "apps/web/e2e/DEMO-J2.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/index.ts",
+        "packages/db/test/lp-0-catalog.test.ts"
+      ]
+    }
+  }
+}
