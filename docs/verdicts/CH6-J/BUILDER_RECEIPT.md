@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0395_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0402_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1403,8 +1403,8 @@ Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
   0376 and 0377 must be numbered above main's 0380.
 
 The brief says existing branch migrations are all above 0380, but this checkout
-has 0395_commercial_integrity_v3_receipts.sql and
-0396_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+has 0402_commercial_integrity_v3_receipts.sql and
+0403_commercial_integrity_sources.sql. Preserved their numbers per the explicit
 instruction; no reservation was invented and the check was not weakened.
 Handoff: do not commit until the router supplies/resolves valid migration
 reservations. Database and browser suites were not run because this sandbox
@@ -1494,3 +1494,55 @@ files as unmerged until the router stages them because .git is read-only here.
 PostgreSQL, migration execution and browser suites were not run: this sandbox
 cannot start PostgreSQL or bind localhost. Full required checks remain for GitHub
 CI after push; independent RED review remains required before merge.
+
+## 30 October 2026 — reserved renumber catch-up through main b6a0941d
+
+Plan piece CH-6 / CH6-J, PR #392, RED. The router had already merged
+origin/main b6a0941da6468919400f8da32cb69d30deef707a (#433, highest
+migration 0398) into HEAD de1ba6fa. No git-writing command was run.
+
+Used tools/migration-renumber.mjs's exported planRenumber with the supplied
+reservation boundary 0401 to produce the required 0395 -> 0402 and
+0396 -> 0403 mapping. Applied that plan with filesystem moves and the tool's
+bounded stem-reference replacement, including migration notes and receipts.
+The CLI --write mode was not used because it stages changes and .git is
+read-only. Both SQL files are byte-identical to reviewed head 187d536e:
+- 0402: SHA-256 39d8b96dd7504b721126c5bdea59ac3bed2026fb385f8ed4c518ea2c8c2393c2
+- 0403: SHA-256 e5c1fe39a5561167b52915b842188967813fb610b6735614e58d467c11bfabc3
+
+Verified all 334 migration/lane files on current main remain byte-identical.
+LP-0 is the exact recursive identity union with main, retaining every latest
+main record, including routine, policy and trigger inventories. Shared
+SERIOUS-B5, contractor entitlement, privilege and tenancy expectations retain
+every main line. The lane allow list exactly covers the 55 net branch paths
+excluding its own file. No main routine was recreated. The protected
+lp-downstream-effects-v1.md contract is unchanged against both HEAD and main.
+No new behavior, dependency or substantial complexity was introduced.
+
+Checks actually executed using installed Node 24.17.0 / Vitest 4.1.12:
+- node --check tools/migration-renumber.mjs — PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 6 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- apps/api: node --import tsx src/generate-openapi.ts --check — PASS.
+- Node test runner executed tools/commercial-integrity-boundary.test.mjs with --test-concurrency=2 — PASS, 84 tests. The initial invocation also named a nonexistent migration-renumber.test.mjs; that file supplied no tests and is not claimed as tested.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- Deterministic exact union, main bytes, reviewed SQL bytes, protected contract,
+  shared expectation preservation, net lane paths, migration order and conflict
+  scan — PASS (verification helper /tmp/ch6-verify.mjs).
+- node tools/lint.mjs — NOT GREEN locally: core purity passed (307 files),
+  then the lane guard counted old 0395/0396 migration/note paths from the
+  unstaged deletion diff alongside the committed branch diff. Those paths are
+  absent from main and absent from the final net branch tree. The exact net
+  lane-path and migration-order checks pass; no obsolete allow-list entries
+  were added to bypass this transient local result. CI must run on the router's
+  committed tree.
+- git diff --check — PASS.
+
+Ready for the router to stage and commit the renumber. PostgreSQL, migration
+execution and browser suites were not run because this sandbox cannot start
+PostgreSQL or bind localhost; required CI checks and the independent RED review
+remain before merge. Per the brief, meter-track-review-upgrade.integration.test.ts
+was not run or changed; its main-wide table-count failure belongs to the
+separate fix. No commit, push, provider action or release was performed.
