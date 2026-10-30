@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import {
@@ -48,15 +47,11 @@ export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
     catch { throw new RecoveryTimelineError("ACTIVITY_FAILED"); }
     if (context.tenantId !== signal.ref.tenantId) throw new RecoveryTimelineError("NOT_FOUND");
     const { tenantId, jobId, caseId, runId, followUpId } = signal.ref;
-    const fingerprint = createHash("sha256").update(JSON.stringify(signal)).digest("hex");
     return withTenant(this.pool, context, async db => {
       // All instances take signal then intent locks before the activity takes business/audit locks.
       for (const lock of [`signal:${signal.signalId}`, `intent:${followUpId}`]) {
         await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`recovery-timeline:${tenantId}:${lock}`]);
       }
-      const previous = (await db.$client.query<{ fingerprint: string }>(
-        "SELECT fingerprint FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [tenantId, signal.signalId])).rows[0];
-      if (previous && previous.fingerprint !== fingerprint) throw new RecoveryTimelineError("CONFLICT");
       const run = (await db.$client.query<{ state: TimelineState; job_id: string; case_id: string; run_id: string }>(
         "SELECT state,job_id,case_id,run_id FROM app.recovery_timeline_run WHERE tenant_id=$1 AND follow_up_id=$2", [tenantId, followUpId])).rows[0];
       if (run && (run.job_id !== jobId || run.case_id !== caseId || run.run_id !== runId)) throw new RecoveryTimelineError("CONFLICT");
@@ -67,12 +62,16 @@ export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
       if (!target.rowCount) throw new RecoveryTimelineError("NOT_FOUND");
       // Always re-execute the authorized, idempotent activity, including duplicates and early timers.
       // Savepoints keep its effect and history atomic; retry uses the same derived command identity.
-      const state = await update(run?.state ?? "waiting", activityPool(this.pool, db.$client));
-      await db.$client.query(`INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state)
-        VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,follow_up_id) DO UPDATE SET state=excluded.state`,
-      [tenantId, followUpId, jobId, caseId, runId, state]);
-      if (!previous) await db.$client.query("SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)", [tenantId, signal.signalId, followUpId, fingerprint]);
-      return state;
+      await update(run?.state ?? "waiting", activityPool(this.pool, db.$client));
+      try {
+        const result = await db.$client.query<{ state: TimelineState }>(
+          "SELECT app.apply_recovery_timeline_signal($1,$2::jsonb) AS state", [tenantId, JSON.stringify(signal)]);
+        return result.rows[0]!.state;
+      } catch (error) {
+        // Conflict rolls the activity back with history; no rejected signal has a business effect.
+        if (error instanceof Error && error.message === "RECOVERY_TIMELINE_CONFLICT") throw new RecoveryTimelineError("CONFLICT");
+        throw error;
+      }
     });
   }
 }

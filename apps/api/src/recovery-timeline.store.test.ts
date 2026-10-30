@@ -37,14 +37,14 @@ describe("single-connection activity transaction", () => {
     const query = vi.fn(async (sql: string) => {
       statements.push(sql);
       if (sql.startsWith("SELECT state,job_id")) return { rows: [], rowCount: 0 };
-      if (sql.startsWith("SELECT fingerprint")) return { rows: [], rowCount: 0 };
+      if (sql.startsWith("SELECT app.apply_recovery_timeline_signal")) return { rows: [{ state: "review" }], rowCount: 1 };
       return { rows: [], rowCount: 1 };
     });
     const connect = vi.fn(async () => ({ query, release }));
     const pool = { connect } as unknown as Pool;
     const store = new PostgresRecoveryWorkflowStore(pool,
       async () => verifiedTenantContextForQueuedJob(signal.ref.tenantId), "synthetic_demo");
-    return { pool, store, connect, release, statements };
+    return { pool, store, connect, release, statements, query };
   }
   it("runs activity queries and nested transactions on the one history connection", async () => {
     const f = singleConnection();
@@ -68,7 +68,21 @@ describe("single-connection activity transaction", () => {
     expect(f.statements.filter(sql => sql === "COMMIT")).toHaveLength(1);
     expect(f.statements).toContain("SAVEPOINT timeline_activity_1");
     expect(f.statements).toContain("RELEASE SAVEPOINT timeline_activity_2");
-    expect(f.statements).toContain("SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)");
+    expect(f.statements).toContain("SELECT app.apply_recovery_timeline_signal($1,$2::jsonb) AS state");
+  });
+  it("maps a database fingerprint conflict and rolls back the activity transaction", async () => {
+    const f = singleConnection();
+    const original = f.query.getMockImplementation()!;
+    f.query.mockImplementation(async sql => {
+      if (sql.startsWith("SELECT app.apply_recovery_timeline_signal")) throw new Error("RECOVERY_TIMELINE_CONFLICT");
+      return original(sql);
+    });
+    const execute = vi.fn(async () => "review" as const);
+    const runtime = new StoredRecoveryWorkflowRuntime({ execute }, f.store, "synthetic_demo");
+    await expect(runtime.signal(signal)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(f.statements.at(-1)).toBe("ROLLBACK");
+    expect(f.statements).not.toContain("COMMIT");
   });
   it("rolls back the activity and history when the activity fails", async () => {
     const f = singleConnection();
