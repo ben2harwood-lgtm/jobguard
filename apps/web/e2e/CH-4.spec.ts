@@ -24,24 +24,36 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await page.goto(`/jobs/${jobId}#site-work`);
   await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
 
-  // The server commits the first resume, but the browser loses the response.
-  const commandUrl = `**/api/jobs/${jobId}/work-state`;
-  let lostResume = false;
-  await page.route(commandUrl, async route => {
-    const body = route.request().method() === "POST" ? route.request().postDataJSON() as { action?: string } : null;
-    if (!lostResume && body?.action === "resume") {
-      lostResume = true;
-      const response = await route.fetch();
-      expect(response.status()).toBe(201);
-      await route.fulfill({ status: 503, body: "Synthetic unknown outcome" });
-      return;
-    }
-    await route.continue();
+  // The real browser request commits, but its successful response is lost at
+  // the client boundary. Avoid route.fetch(): it issues a second API-context
+  // request rather than exercising the button's original browser transport.
+  const commandPath = `/api/jobs/${jobId}/work-state`;
+  const resumeCommands: unknown[] = [];
+  page.on("request", request => {
+    if (new URL(request.url()).pathname !== commandPath || request.method() !== "POST") return;
+    const body = request.postDataJSON() as { action?: string };
+    if (body.action === "resume") resumeCommands.push(body);
   });
+  await page.evaluate(path => {
+    const nativeFetch = window.fetch.bind(window);
+    let loseResume = true;
+    window.fetch = async (input, init) => {
+      const response = await nativeFetch(input, init);
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) as { action?: string } : null;
+      if (loseResume && new URL(url, window.location.href).pathname === path && body?.action === "resume" && response.status === 201) {
+        loseResume = false;
+        await response.arrayBuffer();
+        throw new TypeError("Synthetic unknown outcome");
+      }
+      return response;
+    };
+  }, commandPath);
   await click(page, "Resume site work");
   await expect(panel(page).getByRole("alert")).toContainText("The result is unknown");
-  await page.unroute(commandUrl);
   await click(page, "Retry the same action");
+  expect(resumeCommands).toHaveLength(2);
+  expect(resumeCommands[1]).toEqual(resumeCommands[0]);
   await expect(panel(page).getByTestId("work-state-revision")).toHaveText("1");
   await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Site work resumed");
   const resumed = await eventIds(page);
