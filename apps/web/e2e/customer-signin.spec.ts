@@ -1,4 +1,8 @@
-import { randomUUID } from "node:crypto";
+import type { OutboundAdapter } from "@jobguard/db";
+import { pathToFileURL } from "node:url";
+import { join } from "node:path";
+import { E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET } from "./global-setup";
+import { createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test, type Page } from "@playwright/test";
 const api = (page: Page, action: string, body: unknown, csrf?: string) => page.evaluate(async ({ action, body, csrf }) => {
@@ -22,7 +26,10 @@ async function seedJob(admin: Pool, tenant: string) {
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 test("emailed fictional link signs into exactly one job with a browser-session cookie, rejects replay and signs out", async ({ page, browser, baseURL }) => {
+ const nativeImport = new Function("specifier", "return import(specifier)") as (specifier:string) => Promise<typeof import("@jobguard/db")>;
+ const { customerSigninLink, ActionExecutor, verifiedTenantContextForQueuedJob } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
  const admin = new Pool({ connectionString: process.env.E2E_ADMIN_DATABASE_URL });
+ const runtime = new Pool({ connectionString: E2E_RUNTIME_URL });
  const customerContext = await browser.newContext();
  try {
   await page.goto("/sign-in");
@@ -35,9 +42,17 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
   const issued = await api(page, "issue", { version: "customer-link-issue.v1", tenantId: tenant, jobId: fixture.job, customerId: fixture.customer }, session.csrfToken);
   expect(issued.status).toBe(200);
-  const outbox = (await admin.query("SELECT o.immutable_content,o.adapter,o.recipient FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, issued.body.grantId])).rows[0];
+  const outbox = (await admin.query("SELECT o.id,o.immutable_content,o.adapter,o.recipient FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, issued.body.grantId])).rows[0];
   expect(outbox).toMatchObject({ adapter: "fake_email", recipient: "portal@example.invalid" });
-  const tab = await customerContext.newPage(); await tab.goto(`${baseURL}${outbox.immutable_content}`);
+  const digest = (value:string) => createHmac("sha256",E2E_AUTH_CODE_SECRET).update(value).digest("hex");
+  let deliveredLink = "", deliveries = 0;
+  const adapter:OutboundAdapter = {name:"fake_email",supportsProviderDeduplication:false,deliver:async (_action,link)=>{deliveredLink=link!;deliveries++;return {kind:"succeeded",providerReference:"fictional-portal-email"};},reconcile:async()=>"unknown"};
+  const context = verifiedTenantContextForQueuedJob(tenant);
+  const executor = new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined},digest);
+  await executor.execute(context,outbox.id);await executor.execute(context,outbox.id);
+  expect(deliveries).toBe(1);expect(deliveredLink).toBe(customerSigninLink(outbox.immutable_content,digest));
+  expect(outbox.immutable_content).not.toContain(deliveredLink.split("/").at(-1)!);
+  const tab = await customerContext.newPage(); await tab.goto(`${baseURL}${deliveredLink}`);
   await expect(tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true })).toBeVisible(); expect(tab.url()).not.toContain("#");
   await tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab.getByRole("main").getByText("You are signed in to this job.", { exact: true })).toBeVisible();
@@ -46,13 +61,13 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: randomUUID() })).status).toBe(401);
   expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
-  const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
+  const [tenantId, jobId, customerId, token] = deliveredLink.split("#")[1]!.split("/");
   expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
   await tab.getByRole("main").getByRole("button", { name: "Sign out", exact: true }).click(); await expect(tab.getByRole("main").getByText("You are signed out.", { exact: true })).toBeVisible();
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   await customerContext.addCookies([cookie]);
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(401);
- } finally { await customerContext.close(); await admin.end(); }
+ } finally { await customerContext.close(); await runtime.end(); await admin.end(); }
  const fresh = await browser.newContext();
  try { const tab = await fresh.newPage(); await tab.goto("/customer/sign-in"); expect((await api(tab, "read", { version: "customer-read.v1", jobId: randomUUID() })).status).toBe(401); }
  finally { await fresh.close(); }

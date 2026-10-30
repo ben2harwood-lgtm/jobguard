@@ -8,7 +8,16 @@ export const outboundActionV1Schema=z.object({version:z.literal("outbound-action
 export type OutboundAction=z.infer<typeof outboundActionV1Schema>;
 export async function appendOutboundAction(db:TenantTransaction,tenantId:string,raw:unknown){const a=outboundActionV1Schema.parse(raw);if(createHash("sha256").update(a.immutableContent).digest("hex")!==a.contentHash)throw new Error("CONTENT_HASH_MISMATCH");await db.$client.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[a.id,tenantId,a.authorizationId,a.adapter,a.providerEffectKey,a.actionType,a.recipient,a.contentHash,a.immutableContent,a.aggregateRevision,a.amountPence,a.currency,a.policyVersion,a.authorizationExpiresAt]);}
 export type FakeDeliveryResult={kind:"succeeded";providerReference:string}|{kind:"retryable";code:string}|{kind:"outcome_unknown";code:string};
-export interface OutboundAdapter {readonly name:`fake_${string}`;readonly supportsProviderDeduplication:boolean;deliver(action:Readonly<OutboundAction>):Promise<FakeDeliveryResult>;reconcile(providerEffectKey:string):Promise<"succeeded"|"not_found"|"unknown">;}
+/** signinLink is transient delivery input; adapters must never persist it in outbox, audit or telemetry. */
+export interface OutboundAdapter {readonly name:`fake_${string}`;readonly supportsProviderDeduplication:boolean;deliver(action:Readonly<OutboundAction>, signinLink?:string):Promise<FakeDeliveryResult>;reconcile(providerEffectKey:string):Promise<"succeeded"|"not_found"|"unknown">;}
+/** The stored nonce is not a credential. Only the identity HMAC key can materialize it. */
+export function customerSigninLink(reference: string, digest: (value: string) => string): string {
+  const match = /^customer-signin-reference\.v1:([a-f0-9-]{36}\/[a-f0-9-]{36}\/[a-f0-9-]{36})\/([A-Za-z0-9_-]{43})$/u.exec(reference);
+  if (!match) throw new Error("INVALID_CUSTOMER_SIGNIN_REFERENCE");
+  for (const id of match[1]!.split("/")) z.guid().parse(id);
+  const secret = z.string().regex(/^[a-f0-9]{64}$/u).parse(digest(`customer-delivery:${reference}`));
+  return `/customer/sign-in#${match[1]}/${Buffer.from(secret, "hex").toString("base64url")}`;
+}
 export interface SafeTelemetry{emit(name:"outbox.queue_age"|"outbox.failure"|"outbox.retry"|"outbox.unknown_outcome",fields:Readonly<Record<string,string|number>>):void;}
 const rowToAction=(r:any):OutboundAction=>outboundActionV1Schema.parse({version:"outbound-action.v1",id:r.id,authorizationId:r.authorization_id,adapter:r.adapter,providerEffectKey:r.provider_effect_key,actionType:r.action_type,recipient:r.recipient,contentHash:r.content_hash,immutableContent:r.immutable_content,aggregateRevision:r.aggregate_revision,amountPence:r.amount_pence===null?null:Number(r.amount_pence),currency:r.currency,policyVersion:r.policy_version,authorizationExpiresAt:r.authorization_expires_at});
 /** Terminal refusal: no adapter call or delivery attempt is made. */
@@ -44,11 +53,12 @@ async function auditOutcome(db: TenantTransaction, id: string, status: string, r
 }
 
 export class ActionExecutor {
-  constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry) {}
+  constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry, private customerSigninDigest?: (value: string) => string) {}
 
   async execute(context: VerifiedTenantContext, id: string) {
     let action: OutboundAction | undefined;
     let attempt = 0;
+    let signinLink: string | undefined;
     let refusal: OutboxRevocationRefusal | undefined;
     await withTenant(this.pool, context, async db => {
       await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, [context.tenantId]);
@@ -69,6 +79,11 @@ export class ActionExecutor {
         return;
       }
       action = rowToAction(r);
+      if (action.actionType === "customer_portal.signin.send") {
+        if (action.adapter !== "fake_email" || action.policyVersion !== "customer-signin.synthetic.v1" || !this.customerSigninDigest) throw new Error("CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE");
+        if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) throw new Error("CONTENT_HASH_MISMATCH");
+        signinLink = customerSigninLink(action.immutableContent, this.customerSigninDigest);
+      }
       attempt = Number((await db.$client.query(`SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1`, [id])).rows[0].n) + 1;
       await db.$client.query(`UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, [id]);
       await db.$client.query(`INSERT INTO app.action_attempt(id,tenant_id,action_id,attempt_number,outcome) VALUES($1,$2,$3,$4,'started')`, [randomUUID(), context.tenantId, id, attempt]);
@@ -76,7 +91,9 @@ export class ActionExecutor {
     if (!action) return refusal;
     const adapter = this.adapters.get(action.adapter);
     if (!adapter) throw new Error("FAKE_ADAPTER_NOT_REGISTERED");
-    const result = await adapter.deliver(Object.freeze(action));
+    const result = signinLink === undefined
+      ? await adapter.deliver(Object.freeze(action))
+      : await adapter.deliver(Object.freeze(action), signinLink);
     await withTenant(this.pool, context, async db => {
       const status = result.kind === "retryable" && attempt >= 5 ? "dead_letter" : result.kind;
       if (status === "dead_letter") this.telemetry.emit("outbox.failure", { actionId: id, attempt });

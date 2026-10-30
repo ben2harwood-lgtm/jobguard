@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { customerSigninLink } from "@jobguard/db";
 import { customerApprovalMethodV1 } from "@jobguard/core";
 import { variationCommandV1 } from "../variation/contracts.js";
 import { BadRequestException, type ArgumentsHost } from "@nestjs/common";
@@ -22,7 +24,7 @@ const headers = { origin, cookie: `jobguard_customer=${cookie}` };
 function fixture(environment = "synthetic_demo") {
   const query = vi.fn().mockResolvedValue({ rows: [{ result: { version: "customer-session.v1", jobId: job } }] });
   const context = vi.fn().mockResolvedValue({});
-  const digest = vi.fn((v: string) => `hmac:${v}`);
+  const digest = vi.fn((v: string) => createHmac("sha256", "fictional-test-secret").update(v).digest("hex"));
   const identity = { allowedOrigin: origin, context, provider: { digest, repository: { pool: { query } } } } as unknown as IdentityApplication;
   return { query, context, digest, identity, app: new CustomerSigninApplication(identity, environment) };
 }
@@ -50,8 +52,10 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     expect(result).toEqual({ body: { version: "customer-link-issued.v1", grantId: customer } });
     expect(f.context).toHaveBeenCalledWith({ sessionToken: "builder", requestedTenantId: tenant, origin, csrfToken: "csrf" });
     const args = f.query.mock.calls[0]![1] as string[];
-    expect(args[5]).toMatch(new RegExp(`^/customer/sign-in#${tenant}/${job}/${customer}/[A-Za-z0-9_-]{43}$`));
-    expect(f.digest).toHaveBeenCalledWith(`customer-link:${args[5]!.split("/").at(-1)}`);
+    expect(args[5]).toMatch(new RegExp(`^customer-signin-reference\\.v1:${tenant}/${job}/${customer}/[A-Za-z0-9_-]{43}$`));
+    const path = customerSigninLink(args[5]!, f.digest);
+    expect(f.digest).toHaveBeenCalledWith(`customer-link:${path.split("/").at(-1)}`);
+    expect(JSON.stringify(f.query.mock.calls)).not.toContain(path.split("/").at(-1)!);
     expect(JSON.stringify(result)).not.toContain(args[5]!);
   });
   it.each(["issue", "revoke"] as const)("rejects a customer cookie on %s even with builder credentials", async action => {
@@ -148,7 +152,7 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     expect(f.query).not.toHaveBeenCalled();
     await f.app.run("issue",{version:"customer-link-issue.v1",...scope,tenantId:"ABCDEF00-0000-4000-8000-000000000001"},{headers:{origin,cookie:"jobguard_session=builder"}});
     expect(f.query.mock.calls[0]![1][0]).toBe("abcdef00-0000-4000-8000-000000000001");
-    expect(f.query.mock.calls[0]![1][5]).toContain("#abcdef00-0000-4000-8000-000000000001/");
+    expect(f.query.mock.calls[0]![1][5]).toContain(":abcdef00-0000-4000-8000-000000000001/");
   });
 
 });
