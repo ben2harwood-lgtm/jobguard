@@ -180,7 +180,7 @@ function compare(s: Snapshot) {
 
 const runCommand = z.object({ version: z.literal("financial-reconciliation-run.v1"), ...scope, commandId: id,
  trigger: z.enum(["daily", "on_demand"]), day: z.iso.date(), environment: z.literal("synthetic_demo") }).strict();
-const adjustment = z.object({ version: z.literal("financial-reconciliation-adjustment.v1"), ...scope, commandId: id,
+export const financialReconciliationAdjustmentV1 = z.object({ version: z.literal("financial-reconciliation-adjustment.v1"), ...scope, commandId: id,
  reportHash: z.string().regex(/^[a-f0-9]{64}$/u), invoiceRevision: id, fact: journal.optional(), correction: correction.optional(),
 }).strict().refine(c => (c.fact !== undefined) !== (c.correction !== undefined));
 export type ReconciliationAuthority = Readonly<{
@@ -220,7 +220,7 @@ export class FakeFinancialReconciliationRunner {
  }
  appendAdjustment(raw: unknown, authority: ReconciliationAuthority) {
   this.access(authority,true);
-  const parsed = adjustment.safeParse(raw); if (!parsed.success) return fail();
+  const parsed = financialReconciliationAdjustmentV1.safeParse(raw); if (!parsed.success) return fail();
   const command = parsed.data, fact = command.fact ?? command.correction!;
   if (command.tenantId !== authority.tenantId || command.jobId !== authority.jobId || fact.tenantId !== authority.tenantId || fact.jobId !== authority.jobId) return fail("RECONCILIATION_FORBIDDEN");
   const contentHash = hash(command), prior = this.replay(command.commandId,contentHash);
@@ -260,5 +260,5 @@ export class FakeFinancialReconciliationRunner {
 }
 /** Exact fake Decision binding helper; hashes only validated commands and contains no recipient/free text. */
 export function reconciliationAdjustmentHash(raw: unknown) {
- const parsed = adjustment.safeParse(raw); if (!parsed.success) return fail(); return hash(parsed.data);
+ const parsed = financialReconciliationAdjustmentV1.safeParse(raw); if (!parsed.success) return fail(); return hash(parsed.data);
 }

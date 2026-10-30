@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-queue": {
+      "branches": [
+        "codex/sandbox/m4-17-queue"
+      ],
+      "note": "M4-17 RED: synthetic stored reference runs, immutable difference queue and distinct-identity finance review facts. Migration 0479. No external execution or commercial posting; built ahead on m4-17-recon.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/money-trail-reconciliation-v1.md",
+        "packages/core/src/financial-reconciliation.ts",
+        "packages/db/migrations/0479_financial_reconciliation_queue.sql",
+        "packages/db/src/financial-reconciliation-queue-repository.test.ts",
+        "packages/db/src/financial-reconciliation-queue-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/financial-reconciliation-queue-upgrade.integration.test.ts",
+        "packages/db/test/financial-reconciliation-queue.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

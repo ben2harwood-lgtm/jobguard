@@ -450,6 +450,22 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
+// M4-17 queue / 0479: exact new tables, indexes, policies and routine only.
+async function reconciliationQueueAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const tables=["financial_reconciliation_adjustment", "financial_reconciliation_approval", "financial_reconciliation_command", "financial_reconciliation_difference", "financial_reconciliation_run"];
+ const indexes=["financial_reconciliation_adjustment_pkey", "financial_reconciliation_approval_pkey", "financial_reconciliation_command_pkey", "financial_reconciliation_difference_pkey", "financial_reconciliation_run_pkey", "fr_run_command", "fr_run_revision", "fr_daily", "fr_adjustment_command", "fr_approval_command", "fr_approval_adjustment"];
+ const names=[...tables,...indexes];
+ const relations=after.relations.filter(r=>r.nspname==='app'&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
+ const routines=after.routines.filter(r=>r.nspname==='app'&&r.proname==='financial_reconciliation_queue'&&r.args==='p_session uuid, p_job uuid, p_command jsonb');
+ expect(routines).toHaveLength(1);
+ const policies=after.policies.filter(p=>p.schemaname==='app'&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,'tenant_isolation']).sort());
+ for(const t of tables)expect(Object.keys(before.rows)).not.toContain('app.'+t);
+ const add=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>['app.'+t,[]]))},routines:add(before.routines,routines,after.routines),relations:add(before.relations,relations,after.relations),policies:add(before.policies,policies,after.policies)};
+}
 // SV6-PERSIST-A / C253: exactly 0260 additions. No predecessor exclusion or wildcard.
 async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -748,6 +764,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await with0245Additions(expected));
  Object.assign(expected, await attributionAdditions(expected));
  Object.assign(expected, await catchAdditions(expected));
+ Object.assign(expected, await reconciliationQueueAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

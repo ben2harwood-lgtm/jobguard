@@ -303,3 +303,66 @@ Full workspace CI, PostgreSQL, browser suites and independent Claude RED review
 were not executed here. The pnpm launcher stalled before invoking checks and
 was interrupted; verification used the already-installed Vitest and TypeScript
 binaries from the repository's package scripts. No package was downloaded.
+
+## M4-17 queue persistence (0479; synthetic reference analysis only)
+
+The `FinancialReconciliationQueueRepository` stores the existing supplied fake
+snapshots and deterministic reports, plus each report's unexplained differences.
+It recomputes reports when reading; changed source rows or balances refuse.
+No authoritative source adapter, route, scheduler, provider or live execution is
+added. Every report retains all four reference/disabled flags. This extends only
+the dark M4-17 seam; the accepted-source/production run holds above remain.
+
+0479 adds five append-only, FORCE-RLS tables: `financial_reconciliation_run`,
+`financial_reconciliation_difference`, `financial_reconciliation_adjustment`,
+`financial_reconciliation_approval`, and `financial_reconciliation_command`.
+The last retains exact command payloads, identity and result references, including
+daily aliases, so a restart cannot lose a claimed command identity. Daily runs
+retain the first report per tenant/job/day; on-demand runs use supplied current
+observations. A new run never rewrites old runs or their queues. A per-tenant
+transaction lock serializes claims, run revisions and reviews; audit is last.
+The scheduling caller is not installed.
+
+Runtime has no table privileges. One new SECURITY DEFINER entry point,
+`app.financial_reconciliation_queue(uuid,uuid,jsonb)`, has a fixed pg_catalog
+search path, explicit runtime-only EXECUTE and no PUBLIC/infrastructure/shadow
+access. It reuses `ef_actor`'s persisted live contractor finance session, active
+membership and unrevoked tenant finance grant, restricted to the synthetic
+database and a synthetic job. This slice consequently serves the existing
+finance-session seam; the single-identity small-builder practice session cannot
+supply independent approval. A second browser/session of the proposer is not a
+second identity. No production role or commercial permission is introduced.
+RLS still assumes the server supplies the correctly authenticated tenant context;
+it does not protect against a stolen privileged connection.
+
+A proposal binds one stored run/source hash, the exact adjustment command/content
+hash and invoice revision. The existing fake runner previews it and refuses new
+or expanded discrepancies. SQL independently checks scope, hashes, source/run and
+invoice revision. A separate active finance identity approves that exact stored
+proposal. Newer runs invalidate unapproved proposals conservatively, even if
+balances happen to match. Replays still authenticate current finance authority;
+changed payloads or identities conflict. Run/proposal/approval facts and their
+audit event commit together. No authoritative invoice, journal, allocation,
+reservation, bill lock or recovery proof is changed. **Approval is an immutable
+review fact, not executable commercial authorization**: there is no adjustment
+executor, Decision-to-money path or override. Production execution would require
+the existing exact Decision/expiry/revocation gates and accepted source adapters.
+
+The only shared expectation additions are the installed five tables and their
+exact indexes/policies, and the one new routine's LP-0 owner/EXECUTE/protection
+record. Existing expectations and migrations remain intact. No data migration or
+backfill occurs. Forward-fix by additive migration; do not edit or remove stored
+history. Restore uses these immutable snapshots for deterministic report rebuild;
+this does not certify full financial restore, external replay prevention or a
+production gate. External execution remains absent/disabled.
+
+Initial self-review: LATER / SIMPLICITY at
+`packages/db/src/financial-reconciliation-queue-repository.ts:stored` — if another
+persisted reference report needs structural comparison, reuse a shared canonical
+encoder rather than adding another local comparator; this would reduce encoding
+maintenance. No unrelated canonical-format refactor is part of this piece.
+
+Validation is recorded in the router commit-message handoff. PostgreSQL queue,
+approval, privilege, upgrade and RLS tests are CI-only in this sandbox. Full
+workspace checks and the independent exact-head Claude RED review remain owed.
+This is not completion of M4-17's production reconciliation/security/restore gate.
