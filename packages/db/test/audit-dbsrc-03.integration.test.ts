@@ -25,8 +25,8 @@ beforeAll(async () => {
   const port = await freePort(57000, 500);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" , database: "jobguard_synthetic_demo"});
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
   for (const [tenant, account, member] of [[DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID], [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID]]) {
@@ -36,7 +36,7 @@ beforeAll(async () => {
   }
   // Disposable cluster only: use the existing restricted runtime role, no GRANT.
   await admin.query("ALTER ROLE jobguard_runtime LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "jobguard_runtime", password: "synthetic" });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "jobguard_runtime", password: "synthetic" });
 }, 60000);
 afterAll(async () => {
   vi.unstubAllEnvs(); await closeTestPools(runtime, admin); await postgres?.stop();

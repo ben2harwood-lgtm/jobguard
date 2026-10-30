@@ -1,0 +1,21 @@
+import * as React from "react";
+import { createHash } from "node:crypto";
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
+import { subscriptionConsentText } from "@jobguard/core";
+import { subscriptionTermsContentHash } from "@jobguard/db";
+import PlansPage from "./page";
+vi.stubGlobal("React", React);
+it("hashes the exact server-rendered consent plus the reviewed selection and company", () => {
+ const page=PlansPage();
+ const text=page.props.consentText as string;
+ expect(text).toBe(subscriptionConsentText);
+ expect(renderToStaticMarkup(page.props.consentTerms)).toBe(`<p data-testid="subscription-consent">${text}</p>`);
+ const tenantId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ const selection={plan:"Solo",cadence:"monthly",anchorDay:1,maximumPence:4900,termsVersion:"subscription_terms_v1",catalogueVersion:"subscription_pricing_policy_v4",expectedRevision:0};
+ const bound={tenantId,...selection,consentText:text};
+ const expected=createHash("sha256").update(JSON.stringify(Object.fromEntries(Object.entries(bound).sort(([a],[b])=>a<b?-1:a>b?1:0)))).digest("hex");
+ expect(subscriptionTermsContentHash(tenantId,{...selection,consentText:text})).toBe(expected);
+ expect(subscriptionTermsContentHash("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",selection)).not.toBe(expected);
+ expect(()=>subscriptionTermsContentHash(tenantId,{...selection,consentText:text+" altered"})).toThrow();
+});

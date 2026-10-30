@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch8-v-catchup": {
+      "branches": [
+        "codex/sandbox/ch8-v-catchup"
+      ],
+      "receipt": "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
+      "note": "RED — CH-8 part 1, BUILD_PLAN.md §10.4, finish-list row 11. Replaces inherited ch8-v lane. Exact payload paths against main; this lane file is implicitly permitted. V3 creation and approval still refuse; remaining CH-8 work is a separate piece.",
+      "allow": [
+        "apps/api/src/evidence-pack-v3.application.test.ts",
+        "apps/api/src/evidence-pack-v3.controller.test.ts",
+        "apps/api/src/evidence-pack.application.ts",
+        "apps/api/src/evidence-pack.contracts.ts",
+        "apps/api/src/evidence-pack.errors.ts",
+        "apps/web/app/api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval/route.ts",
+        "apps/web/app/api/recovery-cases/[id]/evidence-packs/route-v3.test.ts",
+        "apps/web/app/api/recovery-cases/[id]/evidence-packs/route.ts",
+        "apps/web/e2e/CH-8.spec.ts",
+        "docs/operations/evidence-pack-v3.md",
+        "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
+        "packages/db/src/evidence-pack-v3-command.ts",
+        "packages/db/src/evidence-pack-v3-ports.ts",
+        "packages/db/src/evidence-pack-v3-sources.ts",
+        "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-fixture.ts",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-sources.integration.test.ts"
+      ]
+    }
+  }
+}

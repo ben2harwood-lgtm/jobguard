@@ -2,9 +2,10 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskList } from "graphile-worker";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
-import { executeFinalCheckTask, FinalCheckTaskError } from "./final-check-task-executor.js";
+import { executeFinalCheckTask } from "./final-check-task-executor.js";
 
 const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+const unavailablePorts = { read: vi.fn(async () => { throw new Error("FINAL_CHECK_FORBIDDEN"); }), execute: vi.fn(), publish: vi.fn() };
 const task = {
   version: "final-check-task.v1", tenantId: "10000000-0000-4000-8000-000000000001",
   jobId: "10000000-0000-4000-8000-000000000002", lockId: "10000000-0000-4000-8000-000000000003",
@@ -39,6 +40,7 @@ describe("SV5PRE final-check registration", () => {
       ActionExecutor: class { execute = async () => undefined; },
       ShadowObservationReader: class { assertTermsRelation = async () => undefined; },
       ShadowDetectionRepository: class {}, FixtureObservationSources: class {},
+      FinalCheckRepository: class { manifest = unavailablePorts.read; },
     }));
     const listeners = vi.spyOn(process, "once").mockReturnValue(process);
     for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
@@ -50,7 +52,21 @@ describe("SV5PRE final-check registration", () => {
       expect(options.taskList.final_check).toBeTypeOf("function");
       const handler = options.taskList.final_check!, helpers = {} as Parameters<typeof handler>[1];
       await expect(handler({ ...task, completed: true }, helpers)).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
-      await expect(handler(task, helpers)).rejects.toMatchObject({ code: "FINAL_CHECK_HANDLER_NOT_INSTALLED" });
+      await expect(handler(task, helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      const discovery=options.taskList.discover_final_check_requests!;
+      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId};
+      for(const fail of [false,true]){
+        const statements:string[]=[];
+        const query=vi.fn(async(sql:string)=>{
+          statements.push(sql);
+          if(sql.startsWith("SELECT lock_id"))return {rows:[request]};
+          if(fail&&sql.includes("graphile_worker.add_job"))throw new Error("QUEUE_UNAVAILABLE");
+          return {rows:[]};
+        });
+        const discoveryHelpers={withPgClient:async(fn:(client:unknown)=>Promise<unknown>)=>fn({query})} as unknown as Parameters<typeof discovery>[1];
+        if(fail){await expect(discovery({},discoveryHelpers)).rejects.toThrow("QUEUE_UNAVAILABLE");expect(statements.at(-1)).toBe("ROLLBACK");expect(statements.some(sql=>sql.startsWith("UPDATE"))).toBe(false);}
+        else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");}
+      }
     } finally {
       listeners.mockRestore(); vi.unstubAllEnvs(); vi.doUnmock("pg"); vi.doUnmock("graphile-worker"); vi.doUnmock("@jobguard/db"); vi.resetModules();
     }
@@ -58,9 +74,8 @@ describe("SV5PRE final-check registration", () => {
 
   it("PRE-Q6-02 registration preserves the sole queued constructor", async () => {
     const context = testTenantContext(task.tenantId);
-    await expect(executeFinalCheckTask(context, task)).rejects.toBeInstanceOf(FinalCheckTaskError);
-    await expect(executeFinalCheckTask(context, task)).rejects.toMatchObject({ code: "FINAL_CHECK_HANDLER_NOT_INSTALLED" });
-    await expect(executeFinalCheckTask(testTenantContext(task.jobId), task)).rejects.toMatchObject({ code: "FINAL_CHECK_TASK_TENANT_MISMATCH" });
+    await expect(executeFinalCheckTask(context, task, unavailablePorts, "synthetic_demo")).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+    await expect(executeFinalCheckTask(testTenantContext(task.jobId), task, unavailablePorts, "synthetic_demo")).rejects.toMatchObject({ code: "FINAL_CHECK_TASK_TENANT_MISMATCH" });
     // Inspect the new modules' import boundaries, without pinning any shared file's bytes or hashes.
     const ts = await import("typescript");
     for (const name of ["worker-task-extensions.ts", "final-check-task-executor.ts"]) {
@@ -84,9 +99,9 @@ describe("SV5PRE final-check registration", () => {
     expect(tasks.discover_outbox).toBe(discover);
   });
 
-  it("PRE-Q6-04 the uninstalled executor rejects without a successful result", async () => {
+  it("PRE-Q6-04 the installed executor rejects unavailable manifests without a successful result", async () => {
     const context = testTenantContext(task.tenantId);
-    await expect(executeFinalCheckTask(context, task)).rejects.toMatchObject({ code: "FINAL_CHECK_HANDLER_NOT_INSTALLED" });
-    await expect(executeFinalCheckTask(context, { ...task, completed: true })).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
+    await expect(executeFinalCheckTask(context, task, unavailablePorts, "synthetic_demo")).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+    await expect(executeFinalCheckTask(context, { ...task, completed: true }, unavailablePorts, "synthetic_demo")).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
   });
 });

@@ -2,7 +2,7 @@ import { authenticatePracticeSession } from "./practice-session.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { appendAuditBatch } from "./audit.js";
-import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
+import { DEMO_TENANT_ID } from "./demo-seed.js";
 import { withTenant } from "./tenant-context.js";
 
 const actor = "synthetic-session";
@@ -23,7 +23,7 @@ export class SandboxRepository {
    if(replay.rowCount)return this.readIn(db.$client,sessionId,replay.rows[0]!.subject_ref);
    if(previousRunId){const old=await this.lockRun(db.$client,sessionId,previousRunId);if(old.status==="Archived")return old;await this.event(db.$client,previousRunId,"archived",commandId,payloadHash,old.step+2);}
    const runId=randomUUID(),jobId=randomUUID();
-   await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,revision,practice_session_digest,practice_scenario) VALUES($1,$2,'Practice kitchen','quoting',0,$3,'core-1000')",[jobId,DEMO_TENANT_ID,auth.digest]);
+   await db.$client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)",[DEMO_TENANT_ID,jobId,auth.membershipId,auth.digest]);
    await db.$client.query("INSERT INTO app.sandbox_run(id,tenant_id,job_id,session_id,scenario,environment,status) VALUES($1,$2,$3,$4,'core-1000','synthetic_demo','active')",[runId,DEMO_TENANT_ID,jobId,deterministicId(`practice-session:${hash(sessionId)}`)]);
    for(const [i,adapter,amount] of [[1,"fake_quote_review",100000],[2,"fake_job_progress",12500],[3,"fake_final_account",132000]] as const){const input=hash(`core-1000|${i}|${amount}|GBP`);await db.$client.query("INSERT INTO app.sandbox_work(id,tenant_id,run_id,step,adapter,input_hash,amount_pence,currency,environment,approved) VALUES($1,$2,$3,$4,$5,$6,$7,'GBP','synthetic_demo',true)",[deterministicId(`${runId}|work|${i}`),DEMO_TENANT_ID,runId,i,adapter,input,amount]);}
    await this.event(db.$client,runId,"created",commandId,payloadHash,1);

@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AclEntry, type Catalogue, type Inventory, type RelationRow, type RoutineRow, type RoleRow,
   compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness, staleEntries,
-  routineIdentity, staticScan, InventoryError,
+  routineIdentity, staticScan, InventoryError, loadReviewedInventory,
 } from "./lp-0-catalog.js";
 
 const RT = "jobguard_runtime";
@@ -316,4 +316,40 @@ describe("recorded routine facts and static scan", () => {
     expect(problems.some(p => p.includes("test file not found: t.test.ts"))).toBe(true);
     expect(pathCompleteness(inv, () => true)).toEqual([]);
   });
+});
+
+
+describe("DEMO-I exact installed capability inventory",()=>{
+ it("records only the runtime entry point and owner, retaining private tables and helpers",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const tables=["small_builder_demo_run","small_builder_demo_receipt","small_builder_demo_report"];
+  const routines=[
+   routine("small_builder_demo","uuid,text,text,uuid,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]}),
+   routine("small_builder_demo_audit","uuid,uuid,uuid,text,text,text",[],{securityDefiner:false,config:["search_path=pg_catalog"]}),
+   routine("small_builder_demo_guard","",[],{securityDefiner:false,returnsTrigger:true,config:["search_path=pg_catalog"]}),
+  ];
+  const without=base({relations:[],routines:[]});
+  const baseline=new Set(deriveFacts(without).map(f=>f.key));
+  const cat=base({relations:tables.map(name=>table(name,[])),routines});
+  const additions=(c:Catalogue)=>deriveFacts(c).filter(f=>!baseline.has(f.key));
+  const installed=additions(cat);
+  const entries=inventory.entries.filter(e=>e.key.includes("app.small_builder_demo"));
+  expect(entries.map(e=>e.key).sort()).toEqual(installed.map(f=>f.key).sort());
+  expect(entries).toHaveLength(2);
+  expect(compareInventory(inventory,installed).ok).toBe(true);
+  for(const name of tables){
+   const extra=base({...cat,relations:cat.relations.map(r=>r.name===name?{...r,acl:[...r.acl,acl(RT,"SELECT")]}:r)});
+   expect(compareInventory(inventory,additions(extra)).diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({code:"TABLE_GRANT_ADDED",object:`app.${name}`,privilege:"SELECT"})]));
+  }
+  for(const name of ["small_builder_demo_audit","small_builder_demo_guard"]){
+   for(const grantee of [RT,"PUBLIC","jobguard_infrastructure"]){
+    const extra=base({...cat,routines:routines.map(r=>r.name===name?{...r,acl:[...r.acl,acl(grantee,"EXECUTE")]}:r)});
+    expect(compareInventory(inventory,additions(extra)).ok).toBe(false);
+   }
+  }
+  const records=inventory.recorded.routines.filter(r=>r.identity.startsWith("function:app.small_builder_demo"));
+  expect(records.map(r=>r.identity).sort()).toEqual(routines.map(routineIdentity).sort());
+  expect(records.filter(r=>r.runtimeExecute).map(r=>r.identity)).toEqual([routineIdentity(routines[0]!)]);
+  expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
+ });
 });

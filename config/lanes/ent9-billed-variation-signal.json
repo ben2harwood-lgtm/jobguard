@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent9-billed-variation-signal": {
+      "branches": ["codex/sandbox/ent9-billed-variation-signal"],
+      "note": "ENT-9 RED advisory-only acceptance coverage. Main already contains ENT-9E's scoped stored read and dashboard signal; reuse it without another implementation or migration. Matched/mixed invoice regressions preserve authoritative totals. This lane file is implicitly editable.",
+      "allow": [
+        "packages/db/test/enterprise-dashboard-signals.test.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

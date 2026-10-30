@@ -46,4 +46,7 @@ it("SV5-24 real builder requests preserve identical runtime statement sequence w
  // Inspect this piece's own routine branch as well: server log_statement shows outer calls, not nested PL/pgSQL reads.
  const sql=await readFile(new URL('../migrations/0238_final_check.sql',import.meta.url),'utf8'),routine=sql.slice(sql.indexOf('CREATE FUNCTION app.read_final_check_reveal'),sql.indexOf('CREATE FUNCTION app.record_final_check_disposition'));
  expect(routine.indexOf("IF NOT FOUND THEN RETURN jsonb_build_object('state','unlocked'")).toBeLessThan(routine.indexOf('app.shadow_commercial_signal'));
+ // 0247 restates the same routine; its pre-lock branch must still return before any shadow read.
+ const restated=await readFile(new URL('../migrations/0262_final_check_reveal_lines.sql',import.meta.url),'utf8');
+ expect(restated.indexOf("IF NOT FOUND THEN RETURN jsonb_build_object('state','unlocked'")).toBeLessThan(restated.indexOf('app.shadow_commercial_signal'));
 });

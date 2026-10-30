@@ -65,7 +65,7 @@ describe("DEMO-P1 documentation and fixture contract only", () => {
       expect(binding?.commandSchemaAndRoute).toContain(port);
       for (const other of ["DemoMeterCommands", "DemoSubscriptionCommands", "DemoTrialCommands"].filter(p => p !== port)) expect(binding?.commandSchemaAndRoute).not.toContain(other);
   });
-  it.each(["core-1000", "recovery-18800", "shadow-30000"])("r1 B parses %s source with the installed capture parser", async family => {
+  it.each(["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"])("r1 B parses %s source with the installed capture parser", async family => {
     // Load the actual pure parser source through Vitest without adding an AI dependency
     // to core's production graph or pulling another package under core's rootDir.
     const parserUrl = new URL("../../ai/src/capture-fixture-parser.ts", import.meta.url);
@@ -74,11 +74,12 @@ describe("DEMO-P1 documentation and fixture contract only", () => {
     };
     const input = fixture.parse(inputs).recipes.find(r => r.family === family)!;
     const result = parseCaptureFixture(input.id, input.source.text);
-    expect(result.lines.map(line => line.description.value)).toEqual([
-      "Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site", "Replace shelves",
-    ]);
+    const descriptions = ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"];
+    expect(result.lines.map(line => line.description.value)).toEqual(family === "shadow-30000" ? descriptions : [...descriptions, "Replace shelves"]);
     expect(result.questions.map(q => q.question.value)).toEqual(["Confirm disposal and waste allowance"]);
-    expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
+    expect(result.lines.map(line => line.unitPricePence.value)).toEqual(
+      family === "shadow-30000" ? Array(5).fill(600000) : Array(6).fill(null),
+    );
     expect(input.source.text).not.toMatch(/Customer:|recipient:|@/iu);
   });
   it("DP1-02 rejects hidden end states at every source-input level", () => {

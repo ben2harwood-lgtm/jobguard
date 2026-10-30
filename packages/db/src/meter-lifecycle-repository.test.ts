@@ -60,7 +60,7 @@ describe("MON1-S normal-company lifecycle source adapter", () => {
     expect(read.result.timelines[0]?.asOf).toBe("2026-10-15T12:00:00.123456Z");
     expect(read.resultHash).toBe(projectStoredMeterLifecycle(tenant, raw).resultHash);
     expect(read.corrections).toEqual([]);
-    expect(p.calls[2]?.values).toEqual([tenant, digest, computationId]);
+    expect(p.calls.find(call => call.sql.includes("app.mon1_lifecycle_read("))?.values).toEqual([tenant, digest, computationId]);
     expect(p.calls.at(-1)?.sql).toBe("COMMIT");
     expect(p.released()).toBe(true);
   });

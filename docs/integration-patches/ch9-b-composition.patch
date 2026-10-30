@@ -1,0 +1,41 @@
+# CH9-B coordinator-only HELD-boundary composition. Not applied by builder.
+# This patch registers only the unavailable service. It supplies no producer,
+# company/period authority, CH9-J integration, money or positive acceptance.
+# Before using it, serialize with CH9-J and move the business method into the
+# accepted shared ValueV3Application if required by that accepted handoff.
+# Next currently authenticates directly and returns held states. After export
+# composition, coordinator must change it to workspaceApplication().businessValue
+# and businessValueFailure/Status, update its adapter tests, regenerate OpenAPI,
+# and run both registered Nest and in-process Next checks on that exact head.
+# No DB/core barrel or package-export change is needed for these held exports:
+# the existing @jobguard/api/workspace subpath exposes workspace/index.ts.
+# Actual producer readBusiness exports remain STOP: contracts absent on base.
+--- a/apps/api/src/app.module.ts
++++ b/apps/api/src/app.module.ts
+@@ -1,3 +1,4 @@
++import { BusinessValueController } from "./value/value-business.controller.js";
+ import { EnterpriseLivePromptController } from "./contractor/enterprise-live-prompt.controller.js";
+ import { JobSourceController } from "./job-source.controller.js";
+ import { PracticeWorkerSwitchController } from "./contractor/practice-worker-switch.controller.js";
+@@ -68,5 +69,5 @@
+ // DecisionsController's type-only Pool import otherwise emits Function as its DI token.
+ Inject(Pool)(DecisionsController, undefined, 0);
+ 
+-@Module({ controllers: [EnterpriseLivePromptController,JobSourceController,PracticeWorkerSwitchController,ScimController,SiteExtraController,SiteExtraPricingController,SiteVisitController,ContractorPracticeSessionController,SsoRequiredController,SsoController,AuditExportController,RecoveryFollowUpController,RecoveryMessageController,PreventionCheckController,HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,ContractorPartiesController,WorkOrderController,SchedulingController,JobPartiesController,JobPartiesListController,PracticeFeedController,IdentityController,PracticeFactsController,FinalAccountLockController,RecoveryAllocationController,JobWorkStateController], providers:[{provide:APP_FILTER,useClass:JobWorkStateExceptionFilter},{provide:SCIM_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).scim!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_REQUIRED_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).ssoRequired!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).sso!,inject:[Pool,IDENTITY_APPLICATION]},{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
++@Module({ controllers: [BusinessValueController,EnterpriseLivePromptController,JobSourceController,PracticeWorkerSwitchController,ScimController,SiteExtraController,SiteExtraPricingController,SiteVisitController,ContractorPracticeSessionController,SsoRequiredController,SsoController,AuditExportController,RecoveryFollowUpController,RecoveryMessageController,PreventionCheckController,HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,ContractorPartiesController,WorkOrderController,SchedulingController,JobPartiesController,JobPartiesListController,PracticeFeedController,IdentityController,PracticeFactsController,FinalAccountLockController,RecoveryAllocationController,JobWorkStateController], providers:[{provide:APP_FILTER,useClass:JobWorkStateExceptionFilter},{provide:SCIM_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).scim!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_REQUIRED_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).ssoRequired!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).sso!,inject:[Pool,IDENTITY_APPLICATION]},{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
+ export class AppModule {}
+--- a/apps/api/src/workspace/application.ts
++++ b/apps/api/src/workspace/application.ts
+@@ -1,3 +1,4 @@
++import { BusinessValueApplication } from "../value/value-business.controller.js";
+ import { JobSourceApplication } from "../job-source.application.js";
+ import { JobWorkStateApplication } from "../job-work-state.application.js";
+ import { jobWorkStateFailure } from "../job-work-state.errors.js";
+--- a/apps/api/src/workspace/index.ts
++++ b/apps/api/src/workspace/index.ts
+@@ -90,3 +90,5 @@
+ 
+ export * from "../plan-entitlements.application.js";
+ export * from "../contractor/practice-worker-switch.application.js";
++
++export { BusinessValueApplication, businessValueResultV1, businessValueFailure, businessValueStatus } from "../value/value-business.controller.js";

@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-b": {
+      "branches": [
+        "codex/sandbox/ch9-b"
+      ],
+      "receipt": "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
+      "note": "RED: CH-9 part 1 value-read composition. Catch-up preserves CH-9 reads alongside main success-fee registration, job-source intake, evidence-pack v3 and enterprise exports. Shared expectations and all migration SQL match incoming main; no new behaviour. Own lane file is implicitly permitted.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/value/value-business.application.ts",
+        "apps/api/src/value/value-business.controller.test.ts",
+        "apps/api/src/value/value-business.controller.ts",
+        "apps/api/src/value/value-composition.test.ts",
+        "apps/api/src/value/value-v3-business.application.test.ts",
+        "apps/api/src/value/value-v3.application.test.ts",
+        "apps/api/src/value/value-v3.application.ts",
+        "apps/api/src/value/value-v3.controller.test.ts",
+        "apps/api/src/value/value-v3.controller.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.test.ts",
+        "apps/web/app/api/jobs/[id]/value/v3/route.ts",
+        "apps/web/app/api/value/route.test.ts",
+        "apps/web/app/api/value/route.ts",
+        "apps/web/app/ui/business-value-v3.tsx",
+        "apps/web/app/value/page.tsx",
+        "apps/web/e2e/CH-9-business.spec.ts",
+        "docs/fixtures/value-v3-receipt-cases.json",
+        "docs/integration-patches/ch9-b-composition.patch",
+        "docs/integration-patches/ch9-j-composition.patch",
+        "docs/verdicts/CH9-B/BUILDER_RECEIPT.md",
+        "docs/verdicts/CH9-J/BUILDER_RECEIPT.md",
+        "docs/verdicts/CH9-J/LANE_ARCHIVE.json",
+        "docs/verdicts/CH9-R/BUILDER_RECEIPT.md",
+        "docs/verdicts/CH9-R/LANE_ARCHIVE.json",
+        "packages/core/src/value-v3-copy.test.ts",
+        "packages/core/src/value-v3-receipt.test.ts",
+        "packages/core/src/value-v3-receipt.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/value-v3-reader.ts",
+        "packages/db/test/value-v3-business.integration.test.ts",
+        "packages/db/test/value-v3-reader.integration.test.ts"
+      ]
+    }
+  }
+}

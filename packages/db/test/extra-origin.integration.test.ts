@@ -242,6 +242,7 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
+   // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
    "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
@@ -249,7 +250,8 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/sor-repository.ts": "122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2",
    "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
    "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
-   "apps/api/src/auth/context-boundary.test.ts": "ad2b6cd2fe2d1d7a4edd8351312a9fc8bee0dde18bb2eafa215f233727766e03"
+   // Scanner bytes change only for the renewed caller review citation above.
+   "apps/api/src/auth/context-boundary.test.ts": "f28d7a24691179f265720ae4e213241cff8ddc926ad3e5993d1bdb35c720ae20"
 };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

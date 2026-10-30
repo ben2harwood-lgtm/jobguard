@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent7-posting-followups": {
+      "branches": ["codex/sandbox/ent7-posting-followups"],
+      "note": "ENT-7 posting follow-ups, RED: preserve bounded compensation and zero replay idempotency; restore fresh-key journal replay audit. Migration 0369.",
+      "allow": [
+        "packages/db/migrations/0369_enterprise_fee_posting_followups.sql",
+        "packages/db/migration-notes/0369_enterprise_fee_posting_followups.md",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts"
+      ]
+    }
+  }
+}

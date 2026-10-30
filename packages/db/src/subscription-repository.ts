@@ -1,3 +1,4 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -37,7 +38,7 @@ export const subscriptionCommandResultV1=z.union([
 ]);
 
 export class SubscriptionPersistenceError extends Error {
- constructor(readonly code:"INVALID_SUBSCRIPTION_INPUT"|"SUBSCRIPTION_FORBIDDEN"|"SUBSCRIPTION_UNAVAILABLE"|"SUBSCRIPTION_SYNTHETIC_ONLY"|"SUBSCRIPTION_PROJECTION_MISMATCH"){super(code);this.name="SubscriptionPersistenceError";}
+ constructor(readonly code:"INVALID_SUBSCRIPTION_INPUT"|"SUBSCRIPTION_FORBIDDEN"|"SUBSCRIPTION_UNAVAILABLE"|"SUBSCRIPTION_SYNTHETIC_ONLY"|"SUBSCRIPTION_PROJECTION_MISMATCH"|"SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY"|"SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE"){super(code);this.name="SubscriptionPersistenceError";}
 }
 export function parseSubscriptionCommand(raw:unknown):SubscriptionCommand {
  const parsed=subscriptionCommandV1.safeParse(raw);
@@ -77,6 +78,8 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
   catch(error){
    if(error instanceof SubscriptionPersistenceError)throw error;
    if(error instanceof Error&&["METER_FORBIDDEN","SUBSCRIPTION_FORBIDDEN"].includes(error.message))throw new SubscriptionPersistenceError("SUBSCRIPTION_FORBIDDEN");
+   if(error instanceof Error && error.message === "SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY")throw new SubscriptionPersistenceError("SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY");
+   if(error instanceof Error && error.message === "SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE")throw new SubscriptionPersistenceError("SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE");
    throw new SubscriptionPersistenceError("SUBSCRIPTION_UNAVAILABLE");
   }
  }
@@ -84,7 +87,7 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
 
 /** Canonical approval content for a reviewed synthetic terms selection; no acceptance is performed. */
 export function subscriptionTermsContentHash(tenantId:string,raw:unknown):string {
- const selected=z.object(terms).omit({contentHash:true}).strict().parse(raw);
+ const selected=z.object(terms).omit({contentHash:true}).extend({consentText:z.literal(subscriptionConsentText).default(subscriptionConsentText)}).strict().parse(raw);
  const bound={tenantId:z.guid({ error: "Invalid uuid" }).parse(tenantId).toLowerCase(),...selected};
  const canonical=JSON.stringify(Object.fromEntries(Object.entries(bound).sort(([a],[b])=>a<b?-1:a>b?1:0)));
  return createHash("sha256").update(canonical).digest("hex");

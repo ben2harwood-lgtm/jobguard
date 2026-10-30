@@ -1,0 +1,19 @@
+{
+  "proposal_only": false,
+  "source_head": "0b523164a8300d89f0075a8df79598b721c9c979",
+  "originals": {
+    "packages/db/migrations/0206_free_first_job_admission.sql": "c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8",
+    "packages/db/migration-notes/0206_free_first_job_admission.md": "6bfd20f9b96495e0a46717b3949dd11d8929e75422d58615da9f7bf8b0fdaf90"
+  },
+  "zip_sha256": "24cbb1afe7f9da2fccfedfd4e39b6346b2bd913bfcfd7f277b27ecd4bf5d7de5",
+  "zip_integrity": "PASS; both members byte identical to committed originals",
+  "archive_destination": "archive/2026-10-26/mon3-0206-renumber-preservation/",
+  "new_exact_lane_allowances": [
+    "archive/2026-10-26/mon3-0206-renumber-preservation/original-0206.zip",
+    "archive/2026-10-26/mon3-0206-renumber-preservation/MANIFEST.json",
+    "archive/2026-10-26/mon3-0206-renumber-preservation/ACTIVITY.md"
+  ],
+  "verified_utc": "2026-10-26T13:59:57.994082+00:00",
+  "human_approval": "msg_01a17853-5052-7d21-a239-17e69beaae05 at2026-10-26T13:08:08.402Z",
+  "source_head_preserved": "0b523164a8300d89f0075a8df79598b721c9c979"
+}

@@ -18,8 +18,8 @@ beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   const directory = await mkdtemp(join(tmpdir(), "jg-pf1b-money-")), port = await freePort(62000, 100), value = randomUUID();
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: value, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: value });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: value });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [T]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]);
@@ -27,7 +27,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [M, T, A, U]);
   await admin.query(`CREATE ROLE pf1b_money_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
   await admin.query("GRANT jobguard_runtime TO pf1b_money_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "pf1b_money_login", password: value });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "pf1b_money_login", password: value });
 });
 afterAll(async () => {
   await closeTestPools(runtime, admin); if (postgres) await postgres.stop();

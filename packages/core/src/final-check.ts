@@ -10,6 +10,12 @@ export const finalCheckDispositionV1 = z.object({
  referenceId:uuid.nullable(),
 }).strict().refine(v=>["already_included","in_original_scope"].includes(v.answer)||v.referenceId===null);
 export type FinalCheckDisposition = z.infer<typeof finalCheckDispositionV1>;
+/** "Yes, this was extra work": creates only an unpriced catch variation; the server checks everything else. */
+export const finalCheckCatchV1 = z.object({
+ version:z.literal("final-check.catch.v1"), commandId:uuid, lockId:uuid, runId:uuid, signalId:uuid,
+ expectedSignalRevision:z.number().int().nonnegative().safe(),
+}).strict();
+export type FinalCheckCatch = z.infer<typeof finalCheckCatchV1>;
 export const finalCheckTaskV1 = z.object({version:z.literal("final-check.task.v1"),jobId:uuid,manifestId:uuid}).strict();
 export class FinalCheckError extends Error {
  constructor(readonly code:"INVALID_FINAL_CHECK_INPUT"|"FINAL_CHECK_FORBIDDEN"|"FINAL_CHECK_PENDING"|"FINAL_CHECK_SOURCE_CHANGED"|"FINAL_CHECK_FAILED"|"IDEMPOTENCY_CONFLICT"|"STALE_REVISION"|"FINAL_ACCOUNT_LOCK_REQUIRED"){super(code);}
@@ -19,9 +25,13 @@ export function parseFinalCheckDisposition(raw:unknown):FinalCheckDisposition{
 }
 export type FinalCheckSourceStatus="pending"|"failed"|"unsupported"|"zero_result"|"detected";
 /** Compare every inventory identity to its latest append-only result, including input bytes. */
-export function checkSourceCompletion(sources:readonly {id:string;inputHash:string}[],results:readonly {id:string;inputHash:string;status:FinalCheckSourceStatus}[]):boolean{
+/** The job's own walk-it text: listed in the inventory as builder capture (AGENTS 5.14), never scanned. */
+export const FINAL_CHECK_BUILDER_CAPTURE="builder_capture_not_scanned";
+/** Only the job-linked capture entry qualifies; an evidence file whose free-text type collides is still scanned. */
+export const isBuilderCaptureNotScanned=(s:{sourceKind?:string;evidenceId?:string|null}):boolean=>s.sourceKind===FINAL_CHECK_BUILDER_CAPTURE&&s.evidenceId===null;
+export function checkSourceCompletion(sources:readonly {id:string;inputHash:string;sourceKind?:string;evidenceId?:string|null}[],results:readonly {id:string;inputHash:string;status:FinalCheckSourceStatus}[]):boolean{
  if(new Set(sources.map(s=>s.id)).size!==sources.length)return false;
- return sources.every(s=>{const r=results.findLast(r=>r.id===s.id);return r?.inputHash===s.inputHash&&(r.status==="zero_result"||r.status==="detected");});
+ return sources.every(s=>{if(isBuilderCaptureNotScanned(s))return true;const r=results.findLast(r=>r.id===s.id);return r?.inputHash===s.inputHash&&(r.status==="zero_result"||r.status==="detected");});
 }
 export function finalCheckIncludedReference(answer:"already_included"|"in_original_scope",id:string|null,lines:readonly string[],baseline:readonly string[]):"already_included"|"in_original_scope"|"attribution_disputed"{
  if(id===null)return "attribution_disputed";

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-track-review": {
+      "branches": [
+        "codex/sandbox/mon1-track-review"
+      ],
+      "note": "RED MON-1 Decision-only follow-up to PR #388. Migration 0385. PostgreSQL CI and independent Claude review required.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migration-notes/0385_meter_track_review.md",
+        "packages/db/migrations/0385_meter_track_review.sql",
+        "packages/db/src/meter-track-review.test.ts",
+        "packages/db/test/meter-track-review-upgrade.integration.test.ts",
+        "packages/db/test/meter-track-review.integration.test.ts"
+      ]
+    }
+  }
+}
