@@ -1,10 +1,11 @@
 import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { migrate } from "../src/migrate.js";
+import { verifyAuditChain } from "../src/audit.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 const own = "0387_customer_signin.sql";
 const hmac = (v: string) => createHmac("sha256", "fictional-customer-secret-at-least-32-bytes").update(v).digest("hex");
@@ -22,7 +23,25 @@ beforeAll(async () => {
   const beforeUpgrade = await snapshot(c.admin);
   await migrate(c.admin); await migrate(c.admin);
   const stored = (await c.admin.query("SELECT o.* FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2",[w.tenant,grant])).rows[0];
-  expect(stored.immutable_content).toBe(`customer-signin-redacted.v1:${stored.content_hash}`);
+  const originalHash = createHash("sha256").update(path).digest("hex");
+  const redactedContent = `customer-signin-redacted.v1:${originalHash}`;
+  const redactedHash = createHash("sha256").update(redactedContent).digest("hex");
+  expect(stored.immutable_content).toBe(redactedContent);
+  expect(stored.content_hash).toBe(redactedHash);
+  expect(stored.content_hash).not.toBe(originalHash);
+  const history = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='action_outbox.redacted'",[w.tenant])).rows;
+  expect(history).toHaveLength(1);
+  expect(history[0]).toMatchObject({subject_type:"action_outbox",subject_ref:stored.id,payload:{
+    references:{outboxId:stored.id}, hashes:{originalContentHash:originalHash,redactedContentHash:redactedHash},
+    classifications:{action:"security"}
+  }});
+  // The new history uses the existing append-only chain, not a mutable replacement record.
+  await expect(c.admin.query("UPDATE app.audit_event SET payload=payload WHERE tenant_id=$1 AND id=$2",[w.tenant,history[0].id])).rejects.toMatchObject({code:"55000"});
+  const chain = (await c.admin.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,
+    actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",
+    occurred_at AS "occurredAt",payload,trim(payload_hash) AS "payloadHash",trim(previous_hash) AS "previousHash",trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`,[w.tenant])).rows;
+  expect(() => verifyAuditChain(chain)).not.toThrow();
   expect(stored.status).toBe("cancelled");expect(JSON.stringify(stored)).not.toContain(token);
   await expect(use(w,credential,"resolve")).rejects.toMatchObject({code:"42501"});
   const after = await snapshot(c.admin);
@@ -30,15 +49,17 @@ beforeAll(async () => {
   for (const table of Object.keys(beforeUpgrade)) {
     const rows = beforeUpgrade[table] as Record<string,unknown>[];
     if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,revoked_at:expect.any(String)} : row));
-    else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:`customer-signin-redacted.v1:${row.content_hash}`,status:"cancelled",updated_at:expect.any(String)} : row));
+    else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:redactedContent,content_hash:redactedHash,status:"cancelled",updated_at:expect.any(String)} : row));
     else if (table === "app.audit_event") {
       expect(after[table]).toEqual(expect.arrayContaining(rows));
-      expect((after[table] as unknown[]).length).toBe(rows.length+1);
+      expect((after[table] as unknown[]).length).toBe(rows.length+2);
       expect(JSON.stringify(after[table])).not.toContain(token);
     } else if (table === "audit_control.audit_head") {
-      expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,sequence:Number(row.sequence)+1,event_hash:expect.stringMatching(/^[a-f0-9]{64}$/u)} : row));
+      expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,sequence:Number(row.sequence)+2,event_hash:expect.stringMatching(/^[a-f0-9]{64}$/u)} : row));
     } else expect(after[table]).toEqual(rows);
   }
+  expect(JSON.stringify(after)).not.toContain(token);
+  expect(JSON.stringify(after)).not.toContain(path);
   await migrate(c.admin); expect(await snapshot(c.admin)).toEqual(after);
 }, 120000);
 afterAll(async () => { await c?.close(); });

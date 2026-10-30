@@ -337,3 +337,48 @@ Additional local checks: LP-0 catalogue and upgrade-proof-utils unit suites —
 30 passed. Exact path-set comparison matches the lane (including its implicit
 own file). Byte comparison confirms 0387 unchanged and the recreated issuer
 routine differs only in CREATE OR REPLACE plus the reference validation/comment.
+
+## m5-signin-redact — RED hash-history follow-up, 30 October 2026
+
+The branch-owned 0388 migration now computes each redacted outbox row's current
+SHA-256 from its replacement content. In the same transaction it appends an
+`action_outbox.redacted` event to the existing tenant audit chain with the outbox
+ID, original content hash and replacement content hash. It keeps the original
+authorization hash, prior audit events and grant-redaction events unchanged.
+No plaintext content or credential enters the new event. All business updates
+precede the audit-head lock; no new table, routine, grant or catalogue fact is
+introduced. Inline migration code reuses the existing canonical hash and audit
+head routines, avoiding a persistent helper/interface solely for this backfill.
+
+Attacked the old behavior with PostgreSQL regression assertions: current hash
+matches replacement bytes and differs from the original; history binds both
+hashes to the exact outbox; history UPDATE is rejected; the entire audit chain
+verifies; no legacy token or plaintext path appears anywhere in the post-upgrade
+snapshot; existing authorization/data preservation, revocation, cancellation and
+repeat-migration assertions remain. Database assertions await actual CI execution.
+LP-0 and SERIOUS-B5 union expectations are unchanged byte-for-byte against HEAD;
+0387 is unchanged against the build-ahead base. No migration on main was edited.
+The lane remains exact against d71db32f, including its implicit own lane file.
+
+Local validation (installed binaries only, one Vitest worker):
+
+- packages/db: `vitest run --maxWorkers=1 src/outbox.test.ts
+  test/lp-0-catalog.test.ts test/upgrade-proof-utils.test.ts` — 39 passed.
+- `tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- In packages/db: `tsc --noEmit --target ES2023 --module NodeNext
+  --moduleResolution NodeNext --strict --skipLibCheck
+  test/customer-signin.integration.test.ts` — passed, including the changed
+  integration file (the package tsconfig includes src only).
+- `vitest list --maxWorkers=1 test/customer-signin.integration.test.ts` —
+  26 cases collected, not executed; upgrade assertions execute in beforeAll.
+- `LANE_BASE_REF=d71db32f node tools/lint.mjs` — passed against this piece's
+  build-ahead base. Default `node tools/lint.mjs` stops at migration ordering:
+  origin/main has advanced to 0398, above the reserved branch migration 0388.
+  The router must catch up and renumber branch-only migrations at integration;
+  no new number was claimed during this bounded follow-up.
+- `git diff --check` — passed. No git-writing commands or downloads used.
+
+Ready as a follow-up on the unmerged built-ahead branch. Router owns commit/push,
+main catch-up/renumbering and CI. PostgreSQL/migration/upgrade and browser suites,
+green CI against current main and one independent exact-head Claude RED review
+remain merge gates. Made-up data only; no live provider, release or money action.
