@@ -17,6 +17,7 @@ export function storeFixture(tenantId = randomUUID(), jobId = randomUUID(), case
   const pack = assembleEvidencePackV3({ tenantId, jobId, caseId, lifecycle: { state: "pre_lock" },
     records: [{ kind: "ordinary", sourceId: "scope-r1", recordedAt: "2026-10-29T08:00:00.000000Z", content: "Fictional builder scope revision 1" }] });
   const bundle = signer.sign(pack.artifactText, audit, createdAt);
-  return { tenantId, jobId, caseId, signer, bundle, request: { version: "signed-evidence-export-store.v1" as const,
-    authorizationId: randomUUID(), actorMembershipId: randomUUID(), recipient: "assurance@example.invalid", bundle } };
+  const actor = { membershipId: randomUUID(), identityUserId: randomUUID() };
+  return { tenantId, jobId, caseId, signer, bundle, actor, request: { version: "signed-evidence-export-store.v1" as const,
+    authorizationId: randomUUID(), actorMembershipId: actor.membershipId, recipient: "assurance@example.invalid", bundle } };
 }

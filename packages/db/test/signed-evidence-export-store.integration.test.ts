@@ -38,13 +38,12 @@ beforeAll(async () => {
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); });
 
 async function provision(f = storeFixture()) {
-  const user = randomUUID();
   // Admin-only synthetic setup. The exercised operations below use the real runtime role and triggers.
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [f.tenantId]);
-  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [f.actor.identityUserId]);
   await withTenant(admin, testTenantContext(f.tenantId), async db => {
     await db.$client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$1,'Fictional builder')", [f.tenantId]);
-    await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$2,$3,'owner')", [f.request.actorMembershipId, f.tenantId, user]);
+    await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$2,$3,'owner')", [f.request.actorMembershipId, f.tenantId, f.actor.identityUserId]);
     await db.$client.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional export job')", [f.jobId, f.tenantId]);
     await db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,synthetic) VALUES($1,$2,$3,100,'GBP','identified',true)", [f.caseId, f.tenantId, f.jobId]);
   });
@@ -67,11 +66,34 @@ const count = async (tenant: string) => (await admin.query("SELECT count(*)::int
 
 it("persists exact bytes and public key, concurrent replay audits once, conflicting replay fails", async () => {
   const f = await provision(); await approve(f);
-  const results = await Promise.all([store.persist(testTenantContext(f.tenantId), f.request), store.persist(testTenantContext(f.tenantId), f.request)]);
+  const results = await Promise.all([store.persist(testTenantContext(f.tenantId), f.actor, f.request), store.persist(testTenantContext(f.tenantId), f.actor, f.request)]);
   expect(results.map(r => r.reused).sort()).toEqual([false, true]); expect(await count(f.tenantId)).toBe(1);
-  await expect(store.persist(testTenantContext(f.tenantId), { ...f.request, recipient: "other@example.invalid" })).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
-  const row = (await admin.query("SELECT bundle_text,recipient FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows[0];
-  expect(JSON.parse(row.bundle_text)).toEqual(f.bundle); expect(row.recipient).toBe(f.request.recipient);
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, recipient: "other@example.invalid" })).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
+  const row = (await admin.query("SELECT bundle_text,recipient,actor_membership_id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows[0];
+  expect(JSON.parse(row.bundle_text)).toEqual(f.bundle); expect(row.recipient).toBe(f.request.recipient); expect(row.actor_membership_id).toBe(f.actor.membershipId);
+});
+it("refuses another owner's approved request on creation and replay, and binds the session identity", async () => {
+  const f = await provision(); await approve(f);
+  const other = { membershipId: randomUUID(), identityUserId: randomUUID() };
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [other.identityUserId]);
+  await withTenant(admin, testTenantContext(f.tenantId), db => db.$client.query(
+    "INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$2,$3,'owner')",
+    [other.membershipId, f.tenantId, other.identityUserId]));
+  // The victim has a real valid approval; knowing that actor ID grants no authority.
+  await expect(store.persist(testTenantContext(f.tenantId), other, f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
+  await expect(store.persist(testTenantContext(f.tenantId), { ...f.actor, identityUserId: other.identityUserId }, f.request))
+    .rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
+  // Matching the request to the attacker still cannot borrow the victim's approval.
+  await expect(store.persist(testTenantContext(f.tenantId), other, { ...f.request, actorMembershipId: other.membershipId }))
+    .rejects.toThrow("SIGNED_EXPORT_AUTHORIZATION_INVALID");
+  expect(await count(f.tenantId)).toBe(0);
+  expect((await admin.query("SELECT id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).resolves.toMatchObject({ reused: false });
+  await expect(store.persist(testTenantContext(f.tenantId), other, f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
+  await expect(store.persist(testTenantContext(f.tenantId), { ...f.actor, identityUserId: other.identityUserId }, f.request))
+    .rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).resolves.toMatchObject({ reused: true });
+  expect(await count(f.tenantId)).toBe(1);
 });
 it.each(["missing approval", "wrong recipient", "wrong bytes", "revoked", "expired", "rejected", "revoked member"])("refuses %s and rolls back audit and export", async attack => {
   const f = await provision();
@@ -84,27 +106,28 @@ it.each(["missing approval", "wrong recipient", "wrong bytes", "revoked", "expir
     try { await admin.query(attack === "expired" ? "UPDATE app.action_authorization SET expires_at='2026-01-01' WHERE tenant_id=$1" : "UPDATE app.decision_resolution SET resolution='rejected' WHERE tenant_id=$1", [f.tenantId]); }
     finally { await admin.query("SET session_replication_role=origin"); }
   }
-  await expect(store.persist(testTenantContext(f.tenantId), f.request)).rejects.toThrow();
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).rejects.toThrow();
   expect(await count(f.tenantId)).toBe(0);
   expect((await admin.query("SELECT id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
 });
 it("refuses a foreign tenant, missing/altered/out-of-scope files and unknown keys", async () => {
   const f = await provision(); await approve(f);
-  await expect(store.persist(testTenantContext(randomUUID()), f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
+  await expect(store.persist(testTenantContext(randomUUID()), f.actor, f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
   const pack = JSON.parse(f.bundle.evidenceText);
   for (const evidenceText of ["", JSON.stringify({ ...pack, sources: [] }), f.bundle.evidenceText.replace("Fictional builder", "Altered builder")])
-    await expect(store.persist(testTenantContext(f.tenantId), { ...f.request, bundle: { ...f.bundle, evidenceText } })).rejects.toThrow();
-  await expect(store.persist(testTenantContext(f.tenantId), { ...f.request, bundle: { ...f.bundle, payload: { ...f.bundle.payload, caseId: randomUUID() } } })).rejects.toThrow();
+    await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, bundle: { ...f.bundle, evidenceText } })).rejects.toThrow();
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, bundle: { ...f.bundle, payload: { ...f.bundle.payload, caseId: randomUUID() } } })).rejects.toThrow();
   const other = storeFixture(f.tenantId, f.jobId, f.caseId);
   await expect(retainEvidenceExportKey(admin, testTenantContext(f.tenantId), other.signer.verificationKeys()[0])).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
-  await expect(store.persist(testTenantContext(f.tenantId), other.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_INVALID" });
+  other.request.actorMembershipId = f.actor.membershipId;
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, other.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_INVALID" });
   expect(await count(f.tenantId)).toBe(0);
 });
 it("rotation retains old bytes and independent verification material across a new store instance", async () => {
-  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.request);
+  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.actor, f.request);
   f.signer.rotate("v2", "2026-10-29T08:00:00.000Z", "2027-01-01T00:00:00.000Z");
-  const next = storeFixture(f.tenantId, f.jobId, f.caseId, f.signer); next.request.actorMembershipId = f.request.actorMembershipId;
-  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId), next.request);
+  const next = storeFixture(f.tenantId, f.jobId, f.caseId, f.signer); next.request.actorMembershipId = f.request.actorMembershipId; next.actor = f.actor;
+  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId), next.actor, next.request);
   const rows = (await admin.query("SELECT bundle_text FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows;
   const keys = (await admin.query("SELECT record FROM app.evidence_export_signer_key WHERE tenant_id=$1", [f.tenantId])).rows.map(r => r.record);
   expect(rows).toHaveLength(2); expect(keys).toHaveLength(2);
@@ -115,7 +138,7 @@ it("rotation retains old bytes and independent verification material across a ne
   }).signerTrusted).toBe(true); }
 });
 it("actual catalogs and RLS deny foreign reads, key writes, updates, deletes and truncation", async () => {
-  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.request);
+  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.actor, f.request);
   const rows = (await admin.query(`SELECT relname,relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class
     WHERE oid IN ('app.evidence_export_signer_key'::regclass,'app.signed_evidence_export'::regclass) ORDER BY relname`)).rows;
   expect(rows).toEqual(["evidence_export_signer_key", "signed_evidence_export"].map(relname => ({ relname, relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" })));
@@ -148,6 +171,6 @@ it("a valid signature cannot create a cross-job case reference", async () => {
   const f = await provision(), other = storeFixture(f.tenantId, randomUUID(), f.caseId, f.signer);
   other.request.actorMembershipId = f.request.actorMembershipId;
   await approve(other);
-  await expect(store.persist(testTenantContext(f.tenantId), other.request)).rejects.toMatchObject({ code: "23503" });
+  await expect(store.persist(testTenantContext(f.tenantId), f.actor, other.request)).rejects.toMatchObject({ code: "23503" });
   expect(await count(f.tenantId)).toBe(0);
 });

@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import type { AuditExportActor } from "./audit-export-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { evidenceSignerKeyV1, signedEvidenceExportV1, verifySignedEvidenceExport } from "./signed-evidence-export.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
+const actorV1 = z.object({ membershipId: uuid, identityUserId: uuid }).strict();
 const requestV1 = z.object({ version: z.literal("signed-evidence-export-store.v1"),
   authorizationId: uuid, actorMembershipId: uuid,
   recipient: z.email().regex(/^[^@]+@example\.invalid$/u), bundle: signedEvidenceExportV1,
@@ -21,23 +23,24 @@ export function signedEvidenceBundleHash(raw: unknown): string {
 /** No delivery/provider action. Public verification material comes from an independently provisioned registry. */
 export class SignedEvidenceExportStore {
   constructor(private readonly pool: Pool) {}
-  async persist(context: VerifiedTenantContext, raw: unknown) {
+  /** actor comes from the verified session, separately from the untrusted request. */
+  async persist(context: VerifiedTenantContext, rawActor: AuditExportActor, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SignedEvidenceStoreError("SIGNED_EXPORT_MODE_HELD");
-    const input = requestV1.parse(raw), p = input.bundle.payload;
-    if (context.tenantId !== p.tenantId) throw new SignedEvidenceStoreError("SIGNED_EXPORT_FORBIDDEN");
+    const actor = actorV1.parse(rawActor), input = requestV1.parse(raw), p = input.bundle.payload;
+    if (context.tenantId !== p.tenantId || input.actorMembershipId !== actor.membershipId) throw new SignedEvidenceStoreError("SIGNED_EXPORT_FORBIDDEN");
     const bundleText = JSON.stringify(input.bundle), bundleHash = signedEvidenceBundleHash(input.bundle);
     return withTenant(this.pool, context, async db => {
       // Same tenant membership fence as AuditExportRepository. All business locks precede audit.
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [context.tenantId]);
       const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2
-        AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())
-        AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation v WHERE v.tenant_id=$1 AND v.membership_id=$2)`, [context.tenantId, input.actorMembershipId]);
+        AND identity_user_id=$3 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())
+        AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation v WHERE v.tenant_id=$1 AND v.membership_id=$2)`, [context.tenantId, actor.membershipId, actor.identityUserId]);
       if (!member.rowCount) throw new SignedEvidenceStoreError("SIGNED_EXPORT_FORBIDDEN");
       const prior = (await db.$client.query<{ bundle_text: string; recipient: string; authorization_id: string; actor_membership_id: string }>(
         "SELECT bundle_text,recipient,authorization_id,actor_membership_id FROM app.signed_evidence_export WHERE tenant_id=$1 AND id=$2",
         [context.tenantId, p.exportId])).rows[0];
       if (prior) {
-        if (prior.bundle_text !== bundleText || prior.recipient !== input.recipient || prior.authorization_id !== input.authorizationId || prior.actor_membership_id !== input.actorMembershipId)
+        if (prior.bundle_text !== bundleText || prior.recipient !== input.recipient || prior.authorization_id !== input.authorizationId || prior.actor_membership_id !== actor.membershipId)
           throw new SignedEvidenceStoreError("SIGNED_EXPORT_CONFLICT");
         return { exportId: p.exportId, bundleHash, reused: true };
       }
@@ -55,9 +58,9 @@ export class SignedEvidenceExportStore {
       await db.$client.query(`INSERT INTO app.signed_evidence_export(tenant_id,id,job_id,case_id,actor_membership_id,
         authorization_id,recipient,signer_id,key_version,signer_fingerprint,bundle_text,bundle_hash,audit_event_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [context.tenantId, p.exportId, p.jobId, p.caseId, input.actorMembershipId, input.authorizationId,
+      [context.tenantId, p.exportId, p.jobId, p.caseId, actor.membershipId, input.authorizationId,
         input.recipient, p.signerId, p.keyVersion, p.signerFingerprint, bundleText, bundleHash, auditId]);
-      await appendAuditBatch(db, [{ id: auditId, version: "audit.v1", actorRef: `membership:${input.actorMembershipId}`,
+      await appendAuditBatch(db, [{ id: auditId, version: "audit.v1", actorRef: `membership:${actor.membershipId}`,
         eventType: "evidence_export.stored", subjectType: "audit-export", subjectRef: p.exportId,
         payload: { references: { jobId: p.jobId, caseId: p.caseId, authorizationId: input.authorizationId, signerId: p.signerId, keyVersion: p.keyVersion },
           hashes: { bundle: bundleHash, recipient: createHash("sha256").update(input.recipient).digest("hex") }, classifications: { action: "security" } } }]);
