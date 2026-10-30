@@ -10,7 +10,7 @@ An addition above Solo's five or Builder's twelve paid places raises
 (14 committed places), it immediately raises `subscription.track_review`, once
 per company. IDs bind tenant and purpose (plus agreement for grace). Closing,
 reopening, command replay and later additions cannot duplicate these effects.
-The latest mon2_issue (0373) and mon2_review (0195) bodies reuse an existing track Decision;
+The latest mon2_issue (0374) and mon2_review (0195) bodies reuse an existing track Decision;
 their existing review and operations-card records are still produced by billing
 review. This piece adds Decisions only, not a new operations workflow.
 
@@ -30,3 +30,21 @@ Repair 1 preserves MON-3 source pinning and zero trial plan/extra numerators fro
 0373. The trial regression combines immediate admission review with zero-price
 issue/replay and immutable source pinning. The lane file remains implicitly
 self-editable: the existing lane validator rejects listing config/lanes/ in allow.
+
+Catch-up only after MON-1 / PR #388 merged: 0385 now starts from the latest
+0374 mon2_issue body, preserving its first-period acceptance guard alongside
+MON-3 source pinning and zero trial numerators. The source-equivalence test
+compares against 0374 with the same assertion; integration expectations are
+unchanged. Admission remains based on 0380 and LP-0 retains the union with main.
+
+Catch-up local verification (30 October 2026): installed db Vitest,
+`run --maxWorkers=2 src/meter-track-review.test.ts src/meter-work-admission.test.ts
+src/meter-day-ledger.test.ts`, passed 3 files / 12 tests after building core with
+its installed TypeScript compiler. Installed db `tsc -p tsconfig.json --noEmit`,
+`node tools/lint.mjs` and `git diff --check` passed. A deterministic comparison
+confirmed exact lane paths, no edits to main migrations, and LP-0 differs from
+main only by the admission Decision write. The pnpm launcher stalled and was
+stopped; direct installed binaries were used without downloads. The initial
+Vitest attempt had 10 passing tests and a missing core dist import; building the
+existing dependency resolved it. PostgreSQL and browser suites remain for CI
+after the router pushes; no local database/browser verification is claimed.

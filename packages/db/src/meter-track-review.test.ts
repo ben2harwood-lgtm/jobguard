@@ -22,7 +22,7 @@ describe("MON-1 track review migration source inspection", () => {
   expect(migration).not.toMatch(/CREATE (?:TABLE|POLICY)|GRANT /u);
  });
  it.each(["mon2_issue", "mon2_review"])("%s only reuses an existing immediate Decision", name => {
-  const parent = read(name === "mon2_issue" ? "0373_free_first_job_eligibility.sql" : "0195_subscription_persistence.sql");
+  const parent = read(name === "mon2_issue" ? "0374_subscription_first_period_safety.sql" : "0195_subscription_persistence.sql");
   const start = `CREATE ${name === "mon2_issue" ? "OR REPLACE " : ""}FUNCTION app.${name}(`;
   const original = parent.slice(parent.indexOf(start), parent.indexOf("\nEND $$;", parent.indexOf(start)) + 8);
   const updatedStart = `CREATE OR REPLACE FUNCTION app.${name}(`;
