@@ -913,7 +913,10 @@ async function successFeeCatchAdditions(before: Awaited<ReturnType<typeof snapsh
   "success_fee_derivation_pkey","success_fee_derivation_tenant_id_job_id_id_key",
   "success_fee_derivation_tenant_id_job_id_revision_key","success_fee_derivation_tenant_id_review_id_key",
   "success_fee_source_pkey","success_fee_journal_pkey","success_fee_journal_tenant_id_job_id_id_key",
-  "success_fee_journal_tenant_id_derivation_id_key","success_fee_journal_line_pkey",
+  // 0489 replaces per-derivation uniqueness with positive/compensation uniqueness.
+  "success_fee_positive_derivation","success_fee_compensation_original","success_fee_journal_line_pkey",
+  "success_fee_source_tenant_id_derivation_id_allocation_id_key",
+  "success_fee_source_tenant_id_derivation_id_recovery_allocat_key",
  ];
  const identities=["check_success_fee_journal","check_success_fee_derivation"];
  const routines=after.routines.filter(r=>r.nspname==="app"&&identities.includes(r.proname));

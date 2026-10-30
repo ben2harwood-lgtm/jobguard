@@ -106,9 +106,13 @@ it("Q2 and Q3 stay closed, and journal history cannot be edited or truncated",as
 });
 it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer independently refuses %s source corruption",async attack=>{
  const x=await catchFeeFixture(f),review=await x.execute(),p=approve(review),before=await counts(x);
- await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+ await expect(rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
   if(attack==="unsettled"){
    await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER USER");
+   // Deliberately bypass the tuple CHECK too: this transaction rolls back,
+   // and the assertion must exercise the writer despite corrupted stored data.
+   await db.query("ALTER TABLE app.practice_feed_event DROP CONSTRAINT practice_feed_event_check2");
    await db.query("UPDATE app.practice_feed_event SET state='pending' WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId]);
    await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER USER");
   }else if(attack==="allocation_limit"){
@@ -123,6 +127,10 @@ it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer indepen
   await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[x.jobId,x.auth.digest,p]);
  })).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
  expect(await counts(x)).toEqual(before);
+ if(attack==="unsettled"){
+  expect((await f.admin.query("SELECT convalidated FROM pg_constraint WHERE conrelid='app.practice_feed_event'::regclass AND conname='practice_feed_event_check2'")).rows).toEqual([{convalidated:true}]);
+  expect((await f.admin.query("SELECT state FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId])).rows).toEqual([{state:"settled"}]);
+ }
 });
 it("a zero derivation cannot acquire an unbalanced or spurious journal even through owner SQL",async()=>{
  const x=await catchFeeFixture(f),review=await x.execute(),first=await x.execute(approve(review));

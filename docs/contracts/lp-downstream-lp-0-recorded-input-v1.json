@@ -72,7 +72,6 @@
 "entries":[
 {"key":"acl|routine|function:app.simulation_money_run(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.simulation_money_run(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.simulation_money_sources(uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.small_builder_demo(uuid,text,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-demo-i-lifecycle"},
@@ -1484,8 +1483,7 @@
 {"key":"acl|routine|function:app.read_platform_fee_collection(uuid,text)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.read_platform_fee_collection(uuid,text)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.write_platform_fee_collection(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
-{"key":"owner|routine|function:app.write_platform_fee_collection(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.success_fee_withheld_source(uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"}
+{"key":"owner|routine|function:app.write_platform_fee_collection(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"}
 ],
 "authorityPaths":[
 {"id":"ap-demo-i-lifecycle","title":"DEMO-I practice run lifecycle","description":"The runtime-executable small_builder_demo(uuid,text,text,uuid,jsonb) checks the synthetic database, tenant context and persisted company session/member before reads or replay, rechecks after the company lock, and enforces exact owner membership. Only lifecycle metadata and command audit hashes are written; guard and audit helpers are owner-only.","cards":["LP-11","LP-12"],"responsibilities":{"LP-11":"Preserve authenticated company/member ownership, current session checks and synthetic database refusal.","LP-12":"Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."},"sources":["packages/db/migrations/0313_small_builder_demo_runs.sql","packages/db/src/small-builder-demo-repository.ts"],"tests":["packages/db/test/small-builder-demo.integration.test.ts","packages/db/test/small-builder-demo-upgrade.integration.test.ts"],"gaps":["No product journey execution or production capability is enabled."]},
