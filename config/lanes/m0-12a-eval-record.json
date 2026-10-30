@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m0-12a-eval-record": {
+      "branches": ["codex/sandbox/m0-12a-eval-record"],
+      "note": "M0-12a fixture-only golden record and CI gate; no migration or live provider. AI evaluator paths serialize with other changes to these files. Own lane file is implicitly permitted.",
+      "allow": [
+        "docs/fixtures/ai/EVALUATION.md",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-evaluation.ts",
+        "packages/ai/src/evaluation-cli.ts",
+        "packages/ai/src/evaluation-runner.ts",
+        "packages/ai/src/golden-run-record.ts",
+        "packages/ai/src/golden-run-record.test.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,747 @@
+{
+  "recordVersion": "jobguard-fixture-golden-run/1",
+  "deployment": {
+    "provider": "recorded-fixture",
+    "model": "fixture-v1",
+    "deployment": "local-only"
+  },
+  "implementationSha256": {
+    "packages/core/src/capture.ts": "299efdbcca2376fb61f2da3a9ca75dbb8c0c4ccd3492d117c3ffaff83633757a",
+    "packages/ai/src/capture.ts": "dc20b0cc319122aea1c9100837bc1d4f308cba622ea973626c05fba3873504fa",
+    "packages/ai/src/capture-fixture-parser.ts": "707e6ecea061eec150ca1eb03552a4ac7faa0908e3539bb6989615009740bbcb",
+    "packages/ai/src/fixture-provider.ts": "1d1f8094ecfa3d9670e5beab5a0bceee8d431fcec3cde10f549a65abed86be66",
+    "packages/ai/src/gateway.ts": "1c8a064729d39c065ceb95b977d6c1862e9965c4b4dee437554e298638d65257",
+    "packages/ai/src/types.ts": "5ec490f7e93cecadb3c6e672beb9eebf23e53f2acaf99bfde83e5f585b4b0911",
+    "packages/ai/src/capture-evaluation.ts": "4bcecbf1c87f34dcc7e4d3d13dfeae069d31aad2e22201b7b1ef85d5b5f20eaf",
+    "packages/ai/src/evaluation-runner.ts": "e4b9cdb8f6f51cd1e3eff4f5338dd5f09aedc081e0c7150fcb77d1cd5fefb65a",
+    "packages/ai/src/golden-run-record.ts": "4365cf3ce5a3ee77d4c03f4d5d9ccac716735e0dc14e5d32cf51aae11ecc4291"
+  },
+  "schema": "jobguard-capture-evaluation/1",
+  "status": "PASS",
+  "executionMode": "DETERMINISTIC_STRUCTURED_FIXTURES",
+  "releaseDecision": "NOT_AUTHORIZED",
+  "labelStatus": "AUTHOR_PROPOSED_INDEPENDENT_REVIEW_PENDING",
+  "versions": {
+    "dataset": "synthetic-walkarounds/1",
+    "labels": "synthetic-capture-labels/1",
+    "parser": "structured-capture-fixture/2",
+    "fixtureRoute": "fixture-capture-v1",
+    "prompt": "job-record-proposal-v1",
+    "schema": "job-record-proposal-v1"
+  },
+  "hashes": {
+    "datasetSha256": "5af8e52d50338febf261ef2fae2ef01b24795ed43885ecaf5eaf0a94fe8a830f",
+    "labelsSha256": "783ff1e46e41edf5d80e85a73b8d87ca9b54da75fd029714d17b2c0839ca74e3"
+  },
+  "targets": {
+    "scopeIntentRecallPercent": 95,
+    "unsupportedMonetaryFacts": 0,
+    "validCitationsPercent": 100,
+    "designatedAmbiguities": "ALL",
+    "additionalGuard": "Every case must match its explicit labels; no pooling away failures"
+  },
+  "cases": {
+    "passed": 32,
+    "total": 32
+  },
+  "totals": {
+    "scopeIntentRecall": {
+      "numerator": 41,
+      "denominator": 41
+    },
+    "citations": {
+      "valid": 119,
+      "total": 119
+    },
+    "unsupportedMonetaryFacts": 0,
+    "ambiguityChecks": {
+      "passed": 63,
+      "total": 63
+    }
+  },
+  "citationStage": "PROPOSAL_OUTPUT_BEFORE_DATABASE_PERSISTENCE",
+  "citationOffsetUnit": "UTF-16-code-units",
+  "negativeControl": null,
+  "costPence": 0,
+  "notTested": [
+    "Live model or natural-language extraction accuracy",
+    "Independent label review",
+    "Database-persisted citation retrieval",
+    "Real builder usability",
+    "Provider residency or release approval"
+  ],
+  "results": [
+    {
+      "id": "walk-01",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 5,
+        "denominator": 5
+      },
+      "citations": {
+        "valid": 11,
+        "total": 11,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "ebc85d6f8166b1c0f100f5e081368349c0a219b8cfc8e1098f2a97613d41ca30",
+      "predictionSha256": "3dd661c51bf5e7272f6f7b7aeb199a203c11e833953d5d24c4db00c97f562329"
+    },
+    {
+      "id": "walk-02",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 3,
+        "denominator": 3
+      },
+      "citations": {
+        "valid": 6,
+        "total": 6,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 2,
+        "total": 2
+      },
+      "errors": [],
+      "sourceSha256": "e23c09c9dc415910a900858f6868d8ea86d782acc46f90fea034694e1d063989",
+      "predictionSha256": "3d8e1b42022e3822ddb019829b64f2e3a80c0d499b4e2fc53506c79dbca2dc7c"
+    },
+    {
+      "id": "walk-03",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "18eafb6f542d4edc58c65f57ba19b1c2ae46c40a18a2fe23a6c25e35f32d872c",
+      "predictionSha256": "0abda846922ab68c3f94c49dd7597542a2d0eddc32b52a255c33aec7bfdb4b55"
+    },
+    {
+      "id": "walk-04",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "96c7bbc62c513f818480db1ca87590c55f17ff9e56419c2523bad0ef476c0d16",
+      "predictionSha256": "21e19e6cc4a580cc16d711317cf12cf5b8c71cd17205c0bbb68d871ebb0d134c"
+    },
+    {
+      "id": "walk-05",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "d2ac2d1adf3d5a8933e0bc4c2b349ee580b625f8b20d32320efb8236db8062c2",
+      "predictionSha256": "ed0f758fa471803bb834607ae9593562fe9afa00dfe3af8c2eef381e9828ecd8"
+    },
+    {
+      "id": "walk-06",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "cd51d7cf4b376a380ff0350888e1423a039dda32aa6c061b11b8284a5e444409",
+      "predictionSha256": "4e26ebccea802203e3245e62a09deabf041033242c8c4cfc999abd60b2df55c0"
+    },
+    {
+      "id": "walk-07",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "68301202cd196ca0963401582d01c403d97a234916349190d090bd9b775d0507",
+      "predictionSha256": "9847574fae43fad47b67063945387abf3adea81a6457ad9d37c08525a7b9bf20"
+    },
+    {
+      "id": "walk-08",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "53231970b4882c8ebadcebc4d9e6ee2271e37ef4cfaf291cb3043cd9d173cbad",
+      "predictionSha256": "046735cda0138453a758881c1ede588d8f2a8e41df825bef8510d23e0c40e3ba"
+    },
+    {
+      "id": "walk-09",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "40c9cc9c38288f21268f58734f7307394f965dc1e47dc28ad86d4c3f7fad3520",
+      "predictionSha256": "1c6337d3e2b21897d95644743c8847c2b07e35907ccc50614b986932890defe7"
+    },
+    {
+      "id": "walk-10",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "f89571713ef2c0843438788dc69fb98862cfd9898a727933a89827fe12890a18",
+      "predictionSha256": "a7d31efa0f5a54c1a38c09f4f7466e6eda4f56fe7dfcc7cccb1ce906c1673f34"
+    },
+    {
+      "id": "walk-11",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 2,
+        "denominator": 2
+      },
+      "citations": {
+        "valid": 9,
+        "total": 9,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "d798918dcf3874aca48c21cd3f4f55fe0212386f5ee1fc4007eb81667f92b139",
+      "predictionSha256": "6d15025e00b2ec09017b5e02602f7f55c34c10ed49a48e32e164229d90391b03"
+    },
+    {
+      "id": "walk-12",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 2,
+        "denominator": 2
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "2d8baa3f02da3b571cc36635a6b48d57e0dbf5faf16d000a00e58c83d6109761",
+      "predictionSha256": "3e2eab21b5cbe77814eb78cbaa78efb134349b4345407b5894fb5be1d1719947"
+    },
+    {
+      "id": "walk-13",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 2,
+        "denominator": 2
+      },
+      "citations": {
+        "valid": 5,
+        "total": 5,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "c7412bb7b14ed6178cfad9ac86ba35b176a23af0845445103000a371ddc8667f",
+      "predictionSha256": "f89c3e9c29f556de43c4182447386c4458543f015bbada8992fb139949060ab4"
+    },
+    {
+      "id": "walk-14",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 5,
+        "total": 5,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "23b15d9f211f5e5c2e0f4d3301cd0220111e9f4b72e7b1f027bcf1629044cab0",
+      "predictionSha256": "322fa8cb48f244f5329fcbfda3bc7d5dfcb7b235d6cd9d1b3f8710b9b41b4c61"
+    },
+    {
+      "id": "walk-15",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "f4cb81ac419200490151f04c035bd23774219f6f809655fbbc8cd33d4428ab43",
+      "predictionSha256": "bdbd361fbb1a70f5ade2134b31bafde0ed4509082791b8323a02265d84629fdf"
+    },
+    {
+      "id": "walk-16",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "5c0774613de5bd61310eb443165fe8db5399d7f6a8c72360dee27d17316e0ba9",
+      "predictionSha256": "54347a7c9d4a48dda4220a0acf76f01406887bbaa53be9064e803398ebaf4d51"
+    },
+    {
+      "id": "walk-17",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "336f7fbbc03b0508d62eb5bb55ec2ccdd66def9fbe80c8c37b91ec62315bb39e",
+      "predictionSha256": "b40c444cc8ecc0ddc4a8ab95058fdcac48f1cdd2bb3eb76da147bb31daf3b0b5"
+    },
+    {
+      "id": "walk-18",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 1,
+        "total": 1,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 4,
+        "total": 4
+      },
+      "errors": [],
+      "sourceSha256": "3ef3b99f70e73ee5e198db26b942cdb7211d7b3d68f37a0b1334cf8b16fbd8de",
+      "predictionSha256": "1056acfffb0726145b0764e57d6bd1053050fdaea778686bfa88aebb8351a841"
+    },
+    {
+      "id": "walk-19",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "143a8c23342500a57921a41a67389804c01dbb6f32b5912e370d82c60da3f96f",
+      "predictionSha256": "0e106ec4d49f4156664b5f9de1ef91a43fe03c877b6754d2832382979cc44c73"
+    },
+    {
+      "id": "walk-20",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "085fe7d8c33304035814eea9839c93009ec533379169dee2f1585d73adbd298d",
+      "predictionSha256": "6806a160e13cbaea95603182063545d2ddf171e58043cbaf2acf4efedbaf477d"
+    },
+    {
+      "id": "walk-21",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "450c734cab5b036e4c0d7ee05f4e912de45623cb869f10e4e99e43b142cca741",
+      "predictionSha256": "78e5733ff255c50f4264bbf957951dd80a34732d70b8976d092ebf16523137a0"
+    },
+    {
+      "id": "walk-22",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "2cf4ca6dece34976d11d7d98df19592c324e90d0bed2a4e894cdbacd1c000db9",
+      "predictionSha256": "3e215f9fd9cf7b408f3ff8fc10f9a9e35550bb99b85f1ece0d7050cf85fa84f8"
+    },
+    {
+      "id": "walk-23",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "8d871fd9f4ccee894d5737319350e18740bfeed27b6bd7708a3f9b7f65e8fd93",
+      "predictionSha256": "6b9b4f4e2943d24528b84cee732777da5ca67da454ed717d8979497d67af6b23"
+    },
+    {
+      "id": "walk-24",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 5,
+        "total": 5,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "b97a3c954a9344e1ffef355b9b915219b617c936f21d6f8baeb435ddcb3fd507",
+      "predictionSha256": "6dc338325902c588e63f7caef870d58315f5c4e3a7336236bcdc6112bc31a02b"
+    },
+    {
+      "id": "walk-25",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 5,
+        "total": 5,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "63ef773a0c669e1667b2b9c755b35b7575ccc61270ee6ef4adba45cab18c22d1",
+      "predictionSha256": "3e2310aba3898702c75e9bbaa211ce59780755edd5a8f6868a1b9b64ed8349e9"
+    },
+    {
+      "id": "walk-26",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "5427bbce203da2f1193573f40792f62dcc124bcd12009842a97569b48b0ce34d",
+      "predictionSha256": "55b49d507cd4d1562e68ebea3c0617bb067dcaaf096ba6efdc4aef7a7852c178"
+    },
+    {
+      "id": "walk-27",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 5,
+        "total": 5,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "97cdf43cf134f96a03af894c1c387f67037f2f4f3c8fe763cc46f0c2423739e7",
+      "predictionSha256": "eb3e5c523a2262d2ea056c5ad1af7c8f70110e820952877ef79c1a0e89c83490"
+    },
+    {
+      "id": "walk-28",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "037d806283fd55001f605768af49e3182f0dc9b723d7c1aeec00a3db59cfde54",
+      "predictionSha256": "d6faae1c515b4b7171b4809857a2059455a4154c16d056090ccae7f705c7042d"
+    },
+    {
+      "id": "walk-29",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "f9f2b4969c266d87a59d932435dd00e4543d0f15ed5b79965c7f4bdd2110770c",
+      "predictionSha256": "8cf5616d9e0c157f8fc4b5220ab73990dbc65e259ee805ca730f412b1f310fe4"
+    },
+    {
+      "id": "walk-30",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 2,
+        "total": 2,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 1,
+        "total": 1
+      },
+      "errors": [],
+      "sourceSha256": "7c16c93aa37bb744ab867028e0efd4976f9ae8695293323a5d848b7da6ad83e1",
+      "predictionSha256": "1bc0066b3a56a608252cc86e389440d8f02afe8980f2da0186f40168c4eb4535"
+    },
+    {
+      "id": "walk-31",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 3,
+        "total": 3,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 2,
+        "total": 2
+      },
+      "errors": [],
+      "sourceSha256": "a8a0d58f5fb274a8f30b1f262f60249c0e21aa7e08b416b3fefaf8442a13552f",
+      "predictionSha256": "99bbcfd144aaf0b279f616b05626b1172ff3406a5f3b30085cb3eb7d4772e4c0"
+    },
+    {
+      "id": "walk-32",
+      "passed": true,
+      "scopeIntentRecall": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "citations": {
+        "valid": 4,
+        "total": 4,
+        "offsetUnit": "UTF-16-code-units"
+      },
+      "unsupportedMonetaryFacts": 0,
+      "ambiguityChecks": {
+        "passed": 3,
+        "total": 3
+      },
+      "errors": [],
+      "sourceSha256": "37006a079871ea1efea5f1dbf773e6090d31ad537432abee2a54c1edf674d899",
+      "predictionSha256": "9aa922bce6b2e565958502fa1985da7211a3ccdbd0bcb52b2d8032a52f750a76"
+    }
+  ]
+}
