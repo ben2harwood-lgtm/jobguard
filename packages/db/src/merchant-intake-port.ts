@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { VerifiedTenantContext } from "./tenant-context.js";
 import { formatReceiptQuantity, receiptQuantityMicros, supplierFixtures, MAX_MONEY_PENCE } from "@jobguard/core";
 import { merchantOrderV1, requireSyntheticOrders, type MerchantOrder } from "./purchase-order-action.js";
 
@@ -15,8 +16,8 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
 }
 const id = z.guid();
 const fixtureAddress = z.string().regex(/^[a-z0-9-]+@[a-z0-9-]+\.invalid$/u);
-const bindingV1 = z.object({ tenantId: id, jobId: id, alias: fixtureAddress, sender: fixtureAddress }).strict();
-const scopeV1 = z.object({ tenantId: id, jobId: id }).strict();
+const bindingV1 = z.object({ jobId: id, alias: fixtureAddress, sender: fixtureAddress }).strict();
+const scopeV1 = z.object({ jobId: id }).strict();
 export const MAX_MERCHANT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const fixtureIds = ["invoice", "forward", "changed", "other-supplier", "bundle", "delivery", "later-delivery", "credit", "new-date", "new-amount", "oversized", "password", "unreadable", "partial", "malformed", "malicious"] as const;
 const intakeV1 = z.object({ version: z.literal("dark-merchant-intake.v1"), commandId: id,
@@ -44,7 +45,7 @@ function fixture(name: typeof fixtureIds[number]) {
   return { bytes, metadata, quarantine, deliveryQuantity, type: deliveryQuantity !== null ? "delivery" as const : name === "credit" ? "credit" as const : "invoice" as const,
     pages: name === "bundle" ? 3 : 1 };
 }
-type Scope = z.infer<typeof scopeV1>;
+type Scope = z.infer<typeof scopeV1> & { tenantId: string };
 type Document = { id: string; scope: Scope; type: "delivery" | "invoice" | "credit"; deliveryQuantity: string | null; original: {
   objectKey: string; objectVersionId: string; contentHash: string; byteLength: number;
 }; parts: { sourcePages: number[]; objectVersionId: string }[]; identity: string;
@@ -55,21 +56,25 @@ type Receipt = { revision: number; ordered: string; delivered: string; accepted:
 /** In-process synthetic adapter contract ONLY. No HTTP registration, durable business writes,
  * mailbox, PDF parser, storage SDK, URL fetch, outbound actions or live enable switch.
  * Constructor seeds are server-owned test fixtures, never request-provided mappings or orders.
+ * Bindings and request scopes derive tenant identity only from the trusted caller context.
  */
 export class FakeMerchantIntakePort {
-  private readonly bindings: z.infer<typeof bindingV1>[];
+  private readonly bindings: (z.infer<typeof bindingV1> & { tenantId: string })[];
   private readonly orders: { order: MerchantOrder; state: "open" | "locked" | "superseded" | "cancelled" }[];
   private readonly documents = new Map<string, Document>();
   private readonly originals = new Map<string, string>();
   private readonly receipts = new Map<string, Receipt>();
   private readonly documentDelivered = new Map<string, bigint>();
   private readonly commands = new Map<string, { fingerprint: string; result: unknown }>();
-  constructor(bindings: unknown[], orders: { order: MerchantOrder; state: "open" | "locked" | "superseded" | "cancelled" }[]) {
+  constructor(context: VerifiedTenantContext, bindings: unknown[], orders: { order: MerchantOrder; state: "open" | "locked" | "superseded" | "cancelled" }[]) {
     requireSyntheticOrders();
-    this.bindings = bindings.map(value => parse(bindingV1, value));
+    this.bindings = bindings.map(value => ({ ...parse(bindingV1, value), tenantId: context.tenantId }));
     this.orders = orders.map(value => ({ order: parse(merchantOrderV1, value.order), state: value.state }));
   }
-  private scope(raw: unknown) { requireSyntheticOrders(); return parse(scopeV1, raw); }
+  private scope(context: VerifiedTenantContext, raw: unknown): Scope {
+    requireSyntheticOrders();
+    return { ...parse(scopeV1, raw), tenantId: context.tenantId };
+  }
   private command<T>(scope: Scope, kind: string, input: { commandId: string; idempotencyKey: string }, work: () => T): T {
     const fingerprint = hash(JSON.stringify({ scope, kind, input }));
     const keys = [`${scope.tenantId}:command:${input.commandId}`, `${scope.tenantId}:key:${input.idempotencyKey}`];
@@ -81,8 +86,8 @@ export class FakeMerchantIntakePort {
     for (const key of keys) this.commands.set(key, { fingerprint, result: structuredClone(result) });
     return structuredClone(result);
   }
-  receive(rawScope: unknown, raw: unknown) {
-    const scope = this.scope(rawScope), input = parse(intakeV1, raw);
+  receive(context: VerifiedTenantContext, rawScope: unknown, raw: unknown) {
+    const scope = this.scope(context, rawScope), input = parse(intakeV1, raw);
     return this.command(scope, "intake", input, () => {
       if (input.channel === "inbound_alias") {
         const matches = this.bindings.filter(binding => binding.alias === input.alias);
@@ -119,22 +124,22 @@ export class FakeMerchantIntakePort {
       return { status, documentId, reason: quarantine ? "attachment_review" : null };
     });
   }
-  document(rawScope: unknown, documentId: string) {
-    const scope = this.scope(rawScope), doc = this.documents.get(documentId);
+  document(context: VerifiedTenantContext, rawScope: unknown, documentId: string) {
+    const scope = this.scope(context, rawScope), doc = this.documents.get(documentId);
     if (!doc || doc.scope.tenantId !== scope.tenantId || doc.scope.jobId !== scope.jobId)
       throw new MerchantIntakeError("SOURCE_UNAVAILABLE");
     return structuredClone(doc);
   }
-  original(rawScope: unknown, documentId: string) {
-    const doc = this.document(rawScope, documentId);
+  original(context: VerifiedTenantContext, rawScope: unknown, documentId: string) {
+    const doc = this.document(context, rawScope, documentId);
     return { ...doc.original, bytes: this.originals.get(doc.original.objectVersionId)! };
   }
-  captureReceipt(rawScope: unknown, raw: unknown) {
-    const scope = this.scope(rawScope), input = parse(receiptV1, raw);
+  captureReceipt(context: VerifiedTenantContext, rawScope: unknown, raw: unknown) {
+    const scope = this.scope(context, rawScope), input = parse(receiptV1, raw);
     return this.command(scope, "receipt", input, () => {
       const source = this.orders.find(({ order }) => order.tenantId === scope.tenantId && order.jobId === scope.jobId
         && order.revisionId === input.revisionId && order.line.requirementId === input.requirementId);
-      const doc = this.document(scope, input.documentId);
+      const doc = this.document(context, { jobId: scope.jobId }, input.documentId);
       if (!source || source.state !== "open" || doc.status !== "verified" || doc.type !== "delivery" || doc.deliveryQuantity === null)
         throw new MerchantIntakeError("SOURCE_UNAVAILABLE");
       const key = `${scope.tenantId}:${scope.jobId}:${input.revisionId}:${input.requirementId}`;

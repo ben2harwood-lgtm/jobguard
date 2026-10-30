@@ -28,6 +28,17 @@ describe("M2-4 confirmed synthetic line matching", () => {
     const input = fixture(); input.receipts[0]!.acceptedQuantity = "8";
     expect(codes(input)).toEqual(["short_delivery", "billed_above_received"]);
   });
+  it("keeps group flags visible alongside a complete clean match", () => {
+    const input = fixture();
+    input.orders.push({ ...input.orders[0]!, ...identity(40), sku: "BRICK" });
+    input.receipts.push({ ...identity(50), sku: "BRICK", acceptedQuantity: "8" });
+    input.bills.push({ ...input.bills[0]!, ...identity(60), sku: "BRICK", documentReference: "INV-2" });
+    const result = matchSupplierLines(input);
+    expect(result.unresolved).toEqual([]);
+    expect(result.groups[0]!.issues).toEqual([]);
+    expect(result.groups[1]!.issues.map(issue => issue.code)).toEqual(["short_delivery", "billed_above_received"]);
+    expect(result.groups[1]).toMatchObject({ deliveredQuantity: "8000000000000", billedQuantity: "10000000000000" });
+  });
   it("represents partial deliveries and split invoices as one-to-many, without reusing quantities", () => {
     const input = fixture();
     input.receipts[0]!.acceptedQuantity = "3";
