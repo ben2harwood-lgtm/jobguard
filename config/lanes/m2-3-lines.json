@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-3-lines": {
+      "branches": ["codex/sandbox/m2-3-lines"],
+      "allow": [
+        "docs/contracts/merchant-extraction-v1.md",
+        "packages/ai/src/index.ts",
+        "packages/ai/src/merchant-extraction.ts",
+        "packages/ai/src/merchant-extraction.test.ts"
+      ],
+      "note": "M2-3 RED synthetic extraction and exact reconciliation only; no live route, migration, debt or fee writes. Built on m2-2-intake; router opens PR after base merges."
+    }
+  }
+}
