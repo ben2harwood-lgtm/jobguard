@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-1-persist": {
+      "branches": [
+        "codex/sandbox/m5-1-persist"
+      ],
+      "allow": [
+        "apps/api/src/accounting-export.persisted.ts",
+        "docs/contracts/accounting-export-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migrations/0484_accounting_export_persistence.sql",
+        "packages/db/src/accounting-export-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/accounting-export-executor.test.ts",
+        "packages/db/test/accounting-export-upgrade.integration.test.ts",
+        "packages/db/test/accounting-export.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ],
+      "note": "M5-1 RED synthetic persistence atop unmerged m5-2-xero; shared contract docs and catalog expectation lists serialize with other migrations. Own lane file implicitly permitted.",
+      "test": "packages/db/test/accounting-export-executor.test.ts packages/db/test/accounting-export.integration.test.ts"
+    }
+  }
+}

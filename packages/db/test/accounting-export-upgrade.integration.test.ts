@@ -1,0 +1,23 @@
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { startBeforeMigration, applyMigration } from "./contractor-practice-session-fixtures.js";
+import type { Cluster } from "./extra-fixtures.js";
+import type { WorkFixture } from "./job-work-state-fixtures.js";
+import { meterCompany } from "./meter-persistence-fixtures.js";
+import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+import { migrate } from "../src/migrate.js";
+const migration="0484_accounting_export_persistence.sql";
+let c:Cluster;
+beforeAll(async()=>{c=await startBeforeMigration(migration);},240000);
+afterAll(async()=>{await c?.close();});
+it("0484 alone preserves populated company, identity, job and financial predecessors; repeated runner is safe",async()=>{
+ await meterCompany(c as unknown as WorkFixture);
+ const tables=["control_plane.tenant","identity.session","app.account","app.membership","app.job","app.command_receipt","app.audit_event","app.journal","app.journal_line"];
+ const before=await proofBefore(c.admin,tables);
+ const functions=(await c.admin.query("SELECT p.oid,pg_get_functiondef(p.oid) definition,p.proacl::text FROM pg_proc p WHERE p.pronamespace IN('app'::regnamespace,'identity'::regnamespace) AND p.prokind='f' ORDER BY p.oid")).rows;
+ await applyMigration(c,migration);
+ expect(await proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
+ expect((await c.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE oid=ANY($1::oid[]) ORDER BY oid",[functions.map(row=>row.oid)])).rows).toEqual(functions);
+ for(const name of ["fixture","decision","ledger","outbox","attempt"])expect((await c.admin.query(`SELECT * FROM app.accounting_export_${name}`)).rows).toEqual([]);
+ await migrate(c.admin);await migrate(c.admin);
+ expect(await proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
+},240000);
