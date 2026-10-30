@@ -53,7 +53,7 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
     expect(rows[0].source).toContain("app.lp4_seal_audit(");
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
   });
-  it.each(["app.append_audit", "app.lp4_seal_audit"])("%s matches its recorded database definition", async name => {
+  it.each(["app.append_audit", "app.lp4_seal_audit", "app.ch4_append_fact_audit"])("%s matches its recorded database definition", async name => {
     const inventory=JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
     const expected=inventory.recorded.routines.filter((r: {identity:string})=>r.identity.startsWith(`function:${name}(`));
     expect(expected).toHaveLength(1);

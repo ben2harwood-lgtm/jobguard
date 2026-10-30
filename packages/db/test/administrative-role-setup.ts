@@ -14,6 +14,12 @@ const testPath = expect.getState().testPath;
 // not per filename/migration list, so mixed old/current databases stay honest.
 // Protocol/unit doubles retain the unwrapped production module.
 if (testPath?.endsWith(".integration.test.ts")) {
+  vi.doMock("../src/enterprise-identity-repository.js", async () => {
+    const identity=await vi.importActual<typeof import("../src/enterprise-identity-repository.js")>("../src/enterprise-identity-repository.js");
+    const audit=await vi.importActual<typeof import("../src/audit.js")>("../src/audit.js");
+    const {legacySsoAuditModule}=await import("./legacy-audit-fixture.js");
+    return legacySsoAuditModule(identity,audit);
+  });
   vi.doMock("../src/audit.js", async () => {
     const audit = await vi.importActual<typeof import("../src/audit.js")>("../src/audit.js");
     const {legacyAuditModule} = await import("./legacy-audit-fixture.js");

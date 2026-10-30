@@ -190,7 +190,7 @@ BEGIN
  PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',audit_id,'version','audit.v1','actorRef',actor,'eventType','shadow.must_surface_fired','subjectType','job','subjectRef',p_job::text,'payload',jsonb_build_object('classifications',jsonb_build_object('action','operational'),'references',jsonb_build_object('decisionId',p_decision,'firingId',p_firing,'jobId',p_job,'rule',p_rule,'ruleVersion',p_version,'signalId',p_signal)))),'checked_operation');
  RETURN p_decision;
 END $$;
-CREATE OR REPLACE FUNCTION app.ch4_append_fact_audit() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+CREATE OR REPLACE FUNCTION app.ch4_append_fact_audit() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=NEW.tenant_id; seq bigint; prev text; ts timestamptz; payload jsonb; ph text; eh text; actor text; typ text; subject uuid;
  old_context text:=current_setting('app.tenant_id',true);
 BEGIN

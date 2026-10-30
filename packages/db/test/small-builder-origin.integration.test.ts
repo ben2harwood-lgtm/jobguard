@@ -71,8 +71,8 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   const repo=new VariationRepository(runtime),input=capture();
   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,M]);
   try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"FORBIDDEN"})}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M])}
-  await admin.query("REVOKE INSERT ON app.audit_event FROM jobguard_runtime");
-  try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"42501"})}finally{await admin.query("GRANT INSERT ON app.audit_event TO jobguard_runtime")}
+  await admin.query("REVOKE EXECUTE ON FUNCTION app.append_audit(jsonb) FROM jobguard_runtime");
+  try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"42501"})}finally{await admin.query("GRANT EXECUTE ON FUNCTION app.append_audit(jsonb) TO jobguard_runtime")}
   expect((await admin.query("SELECT * FROM app.variation WHERE id=$1",[input.proposal.id])).rowCount).toBe(0);
   expect((await admin.query("SELECT * FROM app.extra_origin WHERE variation_id=$1",[input.proposal.id])).rowCount).toBe(0);
   expect((await admin.query("SELECT * FROM app.command_receipt WHERE command_id=$1",[input.proposal.id])).rowCount).toBe(0);

@@ -1,3 +1,5 @@
+import type {Pool,PoolClient} from "pg";
+import {EnterpriseIdentityRepository} from "../src/enterprise-identity-repository.js";
 // Protocol routing checks only; no PostgreSQL execution is claimed here.
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
@@ -65,4 +67,19 @@ describe("shared integration audit routing (protocol checks, no PostgreSQL proof
     expect(f.query).toHaveBeenCalledTimes(1);
     expect(f.query.mock.calls[0]![0]).toContain("FROM app.append_audit");
   });
+  it.each([false,true])("routes SSO fixture audit through its matching bridge (LP-4=%s)",async installed=>{
+    const tenant=randomUUID(),connection=randomUUID();let stored:Record<string,unknown>|undefined;
+    const query=vi.fn(async(sql:string,args?:unknown[])=>{
+      if(sql.includes("to_regprocedure"))return {rows:[{installed,sealed_schema:installed}]};
+      if(sql.includes("sso_audit_head"))return {rows:[{tenant_id:tenant,sequence:"1",previous_hash:null,occurred_at:new Date("2026-10-30T23:23:00.000Z")}]};
+      if(sql.includes("sso_audit_append"))stored=JSON.parse(args![1] as string);
+      return {rows:[]};
+    });
+    await new EnterpriseIdentityRepository({} as Pool).audit({query} as unknown as PoolClient,connection,"sso.configured");
+    expect(query.mock.calls.some(([sql])=>sql.includes("sso_audit_head"))).toBe(!installed);
+    expect(stored).toBeDefined();
+    if(installed)expect(Object.keys(stored!).sort()).toEqual(["actorRef","eventType","id","payload","subjectRef","subjectType","version"]);
+    else expect(()=>verifyAuditChain([{...stored,occurredAt:new Date(stored!.occurredAt as string)} as unknown as import("../src/audit.js").AuditEvent])).not.toThrow();
+  });
+
 });

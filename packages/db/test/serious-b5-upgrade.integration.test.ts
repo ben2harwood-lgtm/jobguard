@@ -1106,7 +1106,7 @@ async function lp4AuditAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
  await changeAcl(routine('identity','sso_audit_head'),'proacl',['jobguard_identity=X/jobguard_migration'],[]);
  await changeAcl(routine('app','final_lock_canonical'),'proacl',[],['jobguard_audit_writer=X/jobguard_migration']);
  for (const [schema,name] of [['app','append_shadow_audit'],['app','append_final_lock_audit'],
-   ['app','surface_shadow_signal_early'],['app','ch4_append_fact_audit'],['identity','sso_audit_append']])
+   ['app','surface_shadow_signal_early'],['identity','sso_audit_append']])
   routine(schema!,name!).proconfig=['search_path=pg_catalog, pg_temp'];
  const audit = expected.relations.find(r => r.nspname==='app' && r.relname==='audit_event')!;
  await changeAcl(audit,'relacl',['jobguard_runtime=ar/jobguard_migration'],

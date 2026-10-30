@@ -1015,7 +1015,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const base = await scheduled(), commandId = randomUUID();
     const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
     const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
-    const repair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const historicalRepair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const sealedMigration = await readFile(new URL("../migrations/0456_lp4_database_audit.sql", import.meta.url), "utf8");
+    const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
+    // Restore the repaired semantics with the currently installed sealed writer,
+    // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
+    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, sealedEvaluator);
     const owner = await admin.connect();
     try {
       // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
@@ -1105,11 +1110,11 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();
