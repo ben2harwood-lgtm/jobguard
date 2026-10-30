@@ -1366,8 +1366,6 @@
 {"key":"owner|routine|function:app.sor_line_net_pence(text,bigint,bigint,bigint)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.start_contractor_practice(uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.start_quote_from_review(uuid,uuid,integer,uuid,uuid,uuid,uuid,text)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.success_fee_inputs(uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.success_fee_posting_integrity()|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.surface_shadow_signal_early(uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.switch_job_live(uuid,uuid,uuid,uuid,uuid,uuid,integer,character,integer,bigint,bigint,character varying,character varying,character varying,uuid,timestamp with time zone)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:app.switch_job_live_v3(uuid,uuid,uuid,uuid,uuid,integer,character,integer,uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
