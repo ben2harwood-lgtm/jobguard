@@ -32,6 +32,16 @@ describe("LP-5b draft catalogue additions", () => {
       "app.lp5b_contractor_permission(text,uuid,uuid,jsonb) TO jobguard_command_writer",
     ]);
   });
+  it("permits restricted ownership transfers only inside the migration transaction", () => {
+    const grant = sql.indexOf("GRANT CREATE ON SCHEMA app TO jobguard_command_writer;");
+    const transfer = sql.indexOf("ALTER TABLE app.repository_operational_record OWNER TO jobguard_command_writer;");
+    const revoke = sql.indexOf("REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;");
+    expect(grant).toBeGreaterThan(sql.indexOf("BEGIN;"));
+    expect(grant).toBeLessThan(transfer);
+    expect(revoke).toBeGreaterThan(sql.lastIndexOf("OWNER TO jobguard_command_writer;"));
+    expect(revoke).toBeLessThan(sql.lastIndexOf("COMMIT;"));
+    expect(sql).not.toMatch(/CREATE\s+ROLE/i);
+  });
   it("keeps proof's checked resolution before completion audit and caller audit", () => {
     const complete = sql.split("CREATE OR REPLACE FUNCTION app.complete_command")[1]!;
     expect(complete.indexOf("INSERT INTO app.decision_resolution")).toBeGreaterThan(0);

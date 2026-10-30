@@ -28,6 +28,7 @@
         "packages/db/src/variation-repository.ts",
         "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/job-parties.integration.test.ts",
         "packages/db/test/lp5-command-catalog.test.ts",
         "packages/db/test/lp5-command-catalog.ts",

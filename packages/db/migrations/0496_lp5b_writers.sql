@@ -1,6 +1,8 @@
 -- LP-5b RED: operational receipt writers. No actor binding or grant withdrawal (LP-6 / LP-5c).
 -- Forward fix only: preserve receipts and immutable history when repairing this migration.
 BEGIN;
+-- Ownership transfers need schema CREATE only for this transaction.
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
 ALTER TABLE app.command_type_registry DROP CONSTRAINT command_type_registry_permission_rule_check;
 ALTER TABLE app.command_type_registry ADD CONSTRAINT command_type_registry_permission_rule_check CHECK(permission_rule IN('owner','active_member','contractor'));
 INSERT INTO app.command_type_registry VALUES
@@ -1240,4 +1242,5 @@ BEGIN
   'classifications',jsonb_build_object('action',reg.audit_class)))),'checked_operation');
  RETURN value;
 END $$;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 COMMIT;
