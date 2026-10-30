@@ -86,6 +86,11 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
     }
     const role = (await db.owner.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_audit_writer'")).rows[0];
     expect(role).toEqual({ rolcanlogin: false, rolsuper: false, rolbypassrls: false });
+    expect((await db.owner.query(`SELECT has_schema_privilege('jobguard_audit_writer','app','CREATE') can_create,
+      pg_has_role('jobguard_migration','jobguard_audit_writer','USAGE') can_use,
+      pg_has_role('jobguard_migration','jobguard_audit_writer','SET') can_set`)).rows).toEqual([
+      { can_create: false, can_use: false, can_set: false },
+    ]);
   });
   it("refuses forged metadata, reserved collisions and private content without echoing it", async () => {
     const before = (await chain(tenant)).length;

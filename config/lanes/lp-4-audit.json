@@ -40,9 +40,12 @@
         "packages/db/test/extra-links.integration.test.ts",
         "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/test/extra-unlink.integration.test.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
         "packages/db/test/final-check-manifest.integration.test.ts",
         "packages/db/test/final-check.integration.test.ts",
+        "packages/db/test/job-parties.integration.test.ts",
         "packages/db/test/job-work-state-post-lock.integration.test.ts",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
         "packages/db/test/lp4-audit-upgrade.integration.test.ts",
         "packages/db/test/lp4-audit.integration.test.ts",
         "packages/db/test/lp4-writer-catchup-fixture.ts",
@@ -59,6 +62,7 @@
         "packages/db/test/small-builder-demo.integration.test.ts",
         "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
         "packages/db/test/subscription-actions.integration.test.ts",
+        "packages/db/test/watchdog-command-harness.ts",
         "packages/db/test/watchdog-legacy-identities.integration.test.ts"
       ]
     }

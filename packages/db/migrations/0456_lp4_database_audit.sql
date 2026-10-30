@@ -4,7 +4,11 @@
 -- Forward-only candidate: no history is rewritten.
 BEGIN;
 CREATE ROLE jobguard_audit_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+-- Ownership transfer under the non-superuser bootstrap migration role needs
+-- CREATE on the destination schema and temporary usable owner membership.
+GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE;
 GRANT USAGE ON SCHEMA app, audit_control TO jobguard_audit_writer;
+GRANT CREATE ON SCHEMA app TO jobguard_audit_writer;
 GRANT SELECT, INSERT ON app.audit_event TO jobguard_audit_writer;
 GRANT SELECT, INSERT, UPDATE ON audit_control.audit_head TO jobguard_audit_writer;
 GRANT EXECUTE ON FUNCTION app.final_lock_canonical(jsonb) TO jobguard_audit_writer;
@@ -98,6 +102,8 @@ $$;
 ALTER FUNCTION app.append_audit(jsonb) OWNER TO jobguard_audit_writer;
 REVOKE ALL ON FUNCTION app.append_audit(jsonb) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
 GRANT EXECUTE ON FUNCTION app.append_audit(jsonb) TO jobguard_runtime,jobguard_migration;
+REVOKE CREATE ON SCHEMA app FROM jobguard_audit_writer;
+REVOKE jobguard_audit_writer FROM jobguard_migration;
 REVOKE INSERT ON app.audit_event FROM jobguard_runtime;
 REVOKE ALL ON FUNCTION app.lock_audit_head(),app.advance_audit_head(bigint,char(64)) FROM jobguard_runtime;
 REVOKE ALL ON FUNCTION identity.sso_audit_head(uuid) FROM jobguard_identity;
