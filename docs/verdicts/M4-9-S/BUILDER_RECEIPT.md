@@ -630,3 +630,75 @@ existing lane; no conflict markers remain in either changed test file; 0392 and
 0393 match HEAD bytes exactly; `git diff --check` passes. The index-only unmerged
 entry is retained for the router to stage. No new simplicity finding was added
 on this repair; the initial-review advisory above remains unchanged.
+
+## 30 October 2026 — m4-9-s-compensate (RED, migration 0489)
+
+Plan piece M4-9-S, BUILD_PLAN.md 2421–2433. Built ahead on
+`codex/sandbox/m4-9-s-posting` at `51ce7389973d00f1fd0291b361e33c7f1a5aa434`;
+router opens the PR after that base merges. Shared schema, core, contract and
+receipt paths serialize behind the posting slice. No Git-writing command ran.
+
+Adds approved builder-opened withheld-payment receipt allocations to the existing
+cumulative writer, alongside unchanged catch qualification. Reuses the existing
+allocator, eligibility approval, finalized proof, terms, settled feed match,
+command receipts and Decision authorizations. A source hash binds current case,
+eligibility, evidence, movement and reversal facts. Sources are stored with
+job-qualified links. Current proof/terms/allocator revocation and unallocated
+refunds fail closed; a changed composition requires a fresh exact statement.
+
+Negative deltas append balanced journals linked to earlier positive journals.
+The statement identifies every original and amount; each original has an
+aggregate compensation limit. Several earlier postings may require several
+negative journals. This is necessary to support a full reversal without linking
+more compensation to one journal than it posted. The existing authorization
+amount remains nonnegative: its absolute magnitude and the signed statement
+hash jointly bind the approved correction. Zero retains its derivation and
+creates no journal. Command replay returns the original effect once. Old catch
+statements remain valid; no existing migration is edited.
+
+The same six tables, RLS policies, roles, function signatures and ACLs remain.
+LP-0's two inventory files add the existing payer helper to call metadata and
+record the new behavior; there are no new table/routine/grant identities to add
+to entitlement, SERIOUS-B5, tenancy or privilege expectation lists. Existing
+expectations are preserved. Forward fix only; disable the route or append a
+reviewed migration if correction is needed. Never remove posted history.
+
+Regression coverage authored: F10/F11 £320 → £2,820 → £320, linked −£250;
+zero derivation/no journal; compensation replay; two competing case-source
+approvals on one job yielding one serial derivation; complete reversal of one
+combined posting and of two separate postings; invalidated proof, revoked
+terms/allocation approval, superseded eligibility, unallocated refund, wrong
+mode, cross-tenant/job calls, stale statements and direct INSERT refusal.
+Upgrade coverage retains populated predecessor catch/receipt history, exact
+command replay, owner/FORCE RLS and closed runtime INSERT grants. The existing
+catch tests only change two property-access assertions to accommodate the
+strict source union; their assertions are retained.
+
+Actual local checks (Node v24.17.0, installed package executables; at most two
+Vitest workers, at most two named files per invocation):
+
+- `packages/core/node_modules/.bin/tsc -p packages/core/tsconfig.json`: PASS
+  (also builds the core dependency for the repository runner).
+- `packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- Targeted strict TypeScript compilation of the changed/new PostgreSQL tests
+  through `/tmp/m4-9-s-compensate-test-tsconfig.json`: PASS; not DB execution.
+- In `packages/core`, `node_modules/.bin/vitest run --maxWorkers=2 src/success-fee-catch-posting.test.ts src/cumulative-fee.test.ts`:
+  PASS, 2 files / 64 tests.
+- In `packages/db`, `node_modules/.bin/vitest run --maxWorkers=2 src/success-fee-repository.test.ts`:
+  PASS, 1 file / 9 tests (scripted adapter boundary, not PostgreSQL proof).
+- Installed TypeScript builds of storage/config dependencies: PASS. Initial
+  PostgreSQL test collection lacked their local dist output; after these builds,
+  the normal runner collects the two new integration suites, 13 cases, with
+  `vitest list --maxWorkers=2`. No PostgreSQL hooks/assertions were executed.
+- Core-purity, money-arithmetic, commercial-boundary and CASE-in-IF lints: PASS.
+- Full `node tools/lint.mjs` stops at the default lane check because comparing
+  this built-ahead branch to current main includes the unchanged posting,
+  SV-6 and receipt-producer base commits. No lane scope was widened for those
+  inherited paths. The existing exported lane validator passes every own
+  working-tree path. Router must merge the base before the PR CI lane check.
+
+PostgreSQL/migration execution, full required CI and an independent Claude RED
+review against the eventual exact head remain required. No database/browser
+startup, live provider or money action, release, commit, push or PR was performed.
+Supplier qualification, catch reassessment, fee VAT and collection are outside
+this slice. This record is builder evidence, not an independent review.

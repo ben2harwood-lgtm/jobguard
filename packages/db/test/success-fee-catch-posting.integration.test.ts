@@ -174,7 +174,7 @@ it.each(["approve_review","recovery.attribution_review"])("a directly inserted %
 });
 it("a newer unapproved assessment supersedes the assessment in an already saved fee review",async()=>{
  const x=await catchFeeFixture(f),review=await x.execute();
- expect(review.statement.sources[0]!.assessmentId).toBe(x.assessment.assessmentId);
+ expect(review.statement.sources[0]).toMatchObject({assessmentId:x.assessment.assessmentId});
  const successor=await new RecoveryAttributionRepository(f.runtime).assess(x.context,x.jobId,x.auth.digest,{
   version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,
   lineId:x.line,lockId:x.fact.invoiceBinding.lockId,expectedCaseRevision:x.assessment.caseRevision,expectedAttributionRevision:x.assessment.revision,
@@ -205,5 +205,5 @@ it("no case allocations fails in SQL before saving a review with null allocation
  expect(await feeEffects(x)).toEqual(before);
  expect(await counts(x)).toEqual({command:0,review:0,derivation:0,source:0,journal:0,journal_line:0});
  // The attack transaction restores the immutable source; the ordinary positive path remains valid.
- const review=await x.execute();expect(review.statement.sources[0]!.allocationIds).toEqual([expect.any(String)]);
+ const review=await x.execute();expect(review.statement.sources[0]).toMatchObject({allocationIds:[expect.any(String)]});
 });
