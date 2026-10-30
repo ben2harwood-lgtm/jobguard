@@ -2,12 +2,23 @@
   "version": 2,
   "lanes": {
     "sv7b-accounting": {
-      "branches": ["codex/sandbox/sv7b-accounting"],
-      "note": "RED SV-7B: disabled process-local accounting evidence fake; shared SV-7A observation contract, no migration or live provider. Built ahead; router handles PR and independent Claude review.",
+      "branches": [
+        "codex/sandbox/sv7b-accounting"
+      ],
+      "note": "RED SV-7B follow-up: server-disabled synthetic accounting emitter with durable tenant/evidence/version receipts. Branch-owned 0399, exact additive LP-0/SERIOUS-B5/tenancy union; router handles CI, commit, PR and independent Claude review.",
       "allow": [
-        "apps/api/src/accounting-observation-connector.ts",
         "apps/api/src/accounting-observation-connector.test.ts",
-        "docs/operations/accounting-observation-data-flow.md"
+        "apps/api/src/accounting-observation-connector.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/accounting-observation-data-flow.md",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0399_accounting_observation_receipt.sql",
+        "packages/db/src/accounting-observation-receipt-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/accounting-observation-receipt.integration.test.ts",
+        "packages/db/test/accounting-observation-receipt.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
       ]
     }
   }

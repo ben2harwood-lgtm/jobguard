@@ -1221,3 +1221,14 @@ accepted SV-6 source/proof seam; this is not a completed fee-posting migration.
 Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
+
+### 0399 — SV-7B synthetic accounting observation receipts (branch-owned)
+
+Adds an append-only receipt keyed by tenant/evidence/object version, with a job
+foreign key and observation hash for conflicting replay detection. Forced tenant
+RLS and SELECT/INSERT only for jobguard_shadow; no runtime, infrastructure or
+emergency grant. Migration discovery registers this file. No existing rows need
+backfill: the previous adapter retained no durable receipts. Deployment must
+precede the synthetic emitter. Forward fix: leave the server entrypoint disabled
+and append a reviewed migration; retain receipts to preserve replay protection.
+No live provider, real-data approval or fee authority is introduced.

@@ -217,6 +217,7 @@ describe("migration and privilege catalog", () => {
     expect(result.rows).toEqual([
       { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "accounting_observation_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_outbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -583,6 +584,7 @@ describe("migration and privilege catalog", () => {
     expect(ownership.rows).toEqual([
       { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
+      { relname: "accounting_observation_receipt", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
       { relname: "action_authorization", owner: "jobguard_migration" },
       { relname: "action_outbox", owner: "jobguard_migration" },

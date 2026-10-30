@@ -574,6 +574,25 @@ async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snaps
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
+// Exact additive union for SV-7B's branch-owned synthetic receipt table.
+async function accountingReceiptAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const names = ["accounting_observation_receipt", "accounting_observation_receipt_pkey"];
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname)).toEqual(names);
+ expect(relations[0]).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true,
+  relacl: "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_shadow=ar/jobguard_migration}" });
+ const policies = after.policies.filter(p => p.schemaname === "app" && p.tablename === names[0]);
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", roles: "{jobguard_migration,jobguard_shadow}", cmd: "ALL" });
+ expect(after.rows["app.accounting_observation_receipt"]).toEqual([]);
+ expect(before.rows["app.accounting_observation_receipt"]).toBeUndefined();
+ const position = (row: typeof relations[number]) => after.relations.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ const policyPosition = (row: typeof policies[number]) => after.policies.findIndex(p => JSON.stringify(p) === JSON.stringify(row));
+ return { ...before, rows: { ...before.rows, "app.accounting_observation_receipt": [] },
+  relations: [...before.relations, ...relations].sort((a,b) => position(a)-position(b)),
+  policies: [...before.policies, ...policies].sort((a,b) => policyPosition(a)-policyPosition(b)) };
+}
 // SV-7A (0303): only the intake and authorized SHARE-lock routines, migration-owned, definer, runtime EXECUTE only.
 async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1121,6 +1140,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
  Object.assign(expected, await paymentFeeAdditions(expected));
  Object.assign(expected, await sourceIntakeAdditions(expected));
+ Object.assign(expected, await accountingReceiptAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
