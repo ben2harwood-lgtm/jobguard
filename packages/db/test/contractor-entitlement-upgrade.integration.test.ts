@@ -47,6 +47,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_scope":[],
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
+ "app.meter_work_ledger":[],
  "app.trial_admission":[],
  "app.trial_start":[],
  "app.trial_end_source":[],
