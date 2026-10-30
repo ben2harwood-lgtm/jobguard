@@ -25,7 +25,7 @@ export class JobImportV3Controller {
   source(@Req() request: { headers: { cookie?: string } }, @Param("id") id: string) {
     return this.execute(() => this.application(request).source(id));
   }
-  @Post("catch") @ApiOperation({ summary: "Refuse an imported catch until the persisted SV-6 attribution adapter is connected" })
+  @Post("catch") @ApiOperation({ summary: "Assess a stored pre-adoption catch at GBP 0; other imported attribution remains unavailable" })
   assessCatch(@Req() request: { headers: { cookie?: string } }, @Param("id") id: string, @Body() raw: unknown) {
     return this.execute(() => this.application(request).assessCatch(id, raw));
   }

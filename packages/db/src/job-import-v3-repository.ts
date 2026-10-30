@@ -7,6 +7,7 @@ import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { importFixtureV3, importTargetJobIdV3, importPublicRequestHashV3 } from "./job-import-v3-fixtures.js";
+import { ImportPreAdoptionRepository, importedCatchCommand } from "./import-pre-adoption-repository.js";
 
 const uuid = z.string().uuid().transform(v => v.toLowerCase());
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -139,10 +140,21 @@ export class JobImportV3Repository {
         lineageLabel: "Builder-attested imported baseline — weaker lineage than a customer-accepted quote" };
     });
   }
-  async assessCatch(context: VerifiedTenantContext, digest: string, importedJobId: string, raw: unknown): Promise<never> {
+  async assessCatch(context: VerifiedTenantContext, digest: string, importedJobId: string, raw: unknown) {
     // Authenticate and read the durable import first. This result never varies
     // with hidden sources, a lock, receipts or attribution-table contents.
     const stored = await this.read(context, digest, importedJobId);
+    const historical = importedCatchCommand.safeParse(raw);
+    if (historical.success) {
+      if (historical.data.baselineId !== stored.result.baselineId) throw new JobImportV3Error("REVISION_CONFLICT");
+      return new ImportPreAdoptionRepository(this.pool).assess(context, digest, importedJobId, historical.data).catch(error => {
+        if (error instanceof Error && error.message === "COMMAND_CONFLICT") throw new JobImportV3Error("COMMAND_CONFLICT");
+        if (error instanceof Error && error.message === "FORBIDDEN") throw new JobImportV3Error("FORBIDDEN");
+        if (error instanceof Error && error.message === "REVISION_CONFLICT") throw new JobImportV3Error("REVISION_CONFLICT");
+        if (error instanceof Error && error.message === "PRE_ADOPTION_SOURCE_REQUIRED") throw new JobImportV3Error("ATTRIBUTION_UNAVAILABLE");
+        throw error;
+      });
+    }
     const input = z.object({ version: z.literal("import-catch-command.v1"), commandId: uuid, baselineId: uuid }).strict().safeParse(raw);
     if (!input.success) throw new JobImportV3Error("INVALID_IMPORT");
     if (input.data.baselineId !== stored.result.baselineId) throw new JobImportV3Error("REVISION_CONFLICT");

@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch5-preadopt": {
+      "branches": [
+        "codex/sandbox/ch5-preadopt"
+      ],
+      "note": "CH-5 RED, built ahead on ch5-j-journey. Migration 0472; persisted pre-adoption exclusion and imported-catch v2 adapter. PostgreSQL CI and independent RED review required.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/job-import-v3.controller.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migration-notes/0472_import_pre_adoption.md",
+        "packages/db/migrations/0472_import_pre_adoption.sql",
+        "packages/db/src/import-pre-adoption-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/import-pre-adoption-repository.test.ts",
+        "packages/db/test/import-pre-adoption.integration.test.ts",
+        "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

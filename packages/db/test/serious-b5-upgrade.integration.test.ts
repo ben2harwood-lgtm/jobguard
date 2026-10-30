@@ -815,6 +815,34 @@ async function importActorAddition(before: Awaited<ReturnType<typeof snapshot>>)
  const rows = [...before.routines, ...routines].sort((a,b) => after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {...before, routines: rows};
 }
+async function preAdoptionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [
+  ["ch5_history_actor", "t uuid, j uuid, d text"],
+  ["ch5_history_audit_guard", ""],
+  ["ch5_write_history", "t uuid, j uuid, d text, cmd uuid, eid uuid, aid uuid"],
+  ["ch5_imported_catch", "t uuid, j uuid, d text, b uuid, eid uuid, cmd uuid"],
+  ["ch5_refuse_historical_shadow_source", ""],
+ ];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name,args]) => r.proname === name && r.args === args));
+ expect(routines).toHaveLength(5);
+ for (const r of routines) {
+  expect(r).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog"] });
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  const acl = (await f.admin.query("SELECT ARRAY(SELECT CASE WHEN grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(grantee)::text END FROM aclexplode($1::aclitem[]) ORDER BY 1) names", [r.proacl])).rows[0].names;
+  expect(acl).toEqual(["ch5_write_history","ch5_imported_catch"].includes(r.proname) ? ["jobguard_migration","jobguard_runtime"] : ["jobguard_migration"]);
+ }
+ const relations = after.relations.filter(r => r.nspname === "app" && (r.relname === "import_pre_adoption_evidence" || r.relname.startsWith("import_pre_adoption_evidence_")));
+ expect(relations).toHaveLength(4);
+ expect(relations.find(r => r.relname === "import_pre_adoption_evidence")).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
+ const policies = after.policies.filter(r => r.schemaname === "app" && r.tablename === "import_pre_adoption_evidence");
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL", roles: ["jobguard_migration"] });
+ expect(before.rows["app.import_pre_adoption_evidence"]).toBeUndefined();
+ expect(after.rows["app.import_pre_adoption_evidence"]).toEqual([]);
+ const append = <T>(old: T[], added: T[], actual: T[]) => [...old,...added].sort((a,b) => actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return { rows: {...before.rows,"app.import_pre_adoption_evidence":[]}, routines: append(before.routines,routines,after.routines), relations: append(before.relations,relations,after.relations), policies: append(before.policies,policies,after.policies) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -839,6 +867,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await invoicedImportAdditions(expected));
  Object.assign(expected, await workAdmissionAdditions(expected));
  Object.assign(expected, await importActorAddition(expected));
+ Object.assign(expected, await preAdoptionAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
