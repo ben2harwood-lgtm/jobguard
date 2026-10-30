@@ -9,6 +9,8 @@
         "apps/api/src/worker.ts",
         "apps/api/src/safe-logging.ts",
         "apps/api/src/safe-logging.test.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
         "packages/ai/src/gateway.ts",
         "packages/ai/src/fixture-provider.ts",
         "packages/ai/src/gateway.test.ts"

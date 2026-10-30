@@ -9,7 +9,7 @@ import { IdentityApplication } from "./auth/identity.application.js";
 import { IdentityController } from "./auth/identity.controller.js";
 import { PersistedAuthProvider } from "./auth/persisted-auth-provider.js";
 import { FixtureIdentityEmail } from "./auth/identity-email.js";
-import { redactLogValue, RedactingLogger, redactingTasks, redactingWorkerLogger } from "./safe-logging.js";
+import { redactLogValue, RedactingLogger, redactingTasks, redactingWorkerLogger, redactedWorkerError } from "./safe-logging.js";
 
 const privateValues = [
   "https://example.invalid/accept/one-time-link-123?token=once-secret",
@@ -108,4 +108,38 @@ it("redacts failing worker commands before logging and Graphile last_error persi
   await expect(tasks.success!({}, {} as JobHelpers)).resolves.toBeUndefined();
   expect(records).toHaveLength(2);
   assertPrivateValuesAbsent(records.join("\n"));
+});
+
+it.each([
+  "TERMS_RELATION_UNAVAILABLE", "SHADOW_TERMS_NOT_ACCEPTED", "FINAL_CHECK_FORBIDDEN",
+  "INVALID_FINAL_CHECK_TASK", "QUEUE_UNAVAILABLE",
+])("preserves the fixed %s refusal without its private diagnostics", async code => {
+  const original = Object.assign(new Error(code, { cause: new Error(privateText) }), {
+    stack: privateText, detail: privateText, payload: privateText,
+  });
+  const tasks = redactingTasks({ refuse: async () => { throw original; } });
+  const error: unknown = await Promise.resolve(tasks.refuse!({}, {} as JobHelpers)).catch(error => error);
+  expect(error).toMatchObject({ message: code, code });
+  expect(error).not.toBe(original);
+  expect((error as Error).cause).toBeUndefined();
+  assertPrivateValuesAbsent(JSON.stringify(error) + (error as Error).stack);
+  const records: string[] = [];
+  new RedactingLogger(record => records.push(record)).error(error);
+  expect(records).toEqual(['{"level":"error","message":"[REDACTED]"}']);
+  expect(redactedWorkerError(original, "WORKER_START_FAILED")).toMatchObject({ message: code, code });
+  // Even a known refusal with appended data is never passed through.
+  expect(redactedWorkerError(new Error(`${code}: ${privateText}`))).toMatchObject({ message: "WORKER_TASK_FAILED" });
+});
+
+it("sanitizes startup failures and does not read arbitrary message getters", () => {
+  const message = vi.fn(() => privateText);
+  const original = Object.defineProperty(new Error(), "message", { get: message });
+  for (const error of [original, new Error(privateText), privateText, null,
+    new Proxy(new Error(), { getOwnPropertyDescriptor() { throw new Error(privateText); } })]) {
+    const safe = redactedWorkerError(error, "WORKER_START_FAILED");
+    expect(safe).toMatchObject({ message: "WORKER_START_FAILED", code: "WORKER_START_FAILED" });
+    expect(safe.cause).toBeUndefined();
+    assertPrivateValuesAbsent(JSON.stringify(safe) + safe.stack);
+  }
+  expect(message).not.toHaveBeenCalled();
 });

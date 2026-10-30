@@ -58,12 +58,29 @@ export function redactingWorkerLogger(logger = new RedactingLogger()): WorkerLog
   });
 }
 
+// Existing queue/startup contracts consume these exact, application-owned refusals.
+// They are not free text and are still redacted by the console logger above.
+const workerRefusals = new Set([
+  "TERMS_RELATION_UNAVAILABLE", "SHADOW_TERMS_NOT_ACCEPTED",
+  "FINAL_CHECK_FORBIDDEN", "INVALID_FINAL_CHECK_TASK", "QUEUE_UNAVAILABLE",
+]);
+
+export function redactedWorkerError(error: unknown, fallback: "WORKER_TASK_FAILED" | "WORKER_START_FAILED" = "WORKER_TASK_FAILED"): Error {
+  let code = fallback === "WORKER_START_FAILED" ? "WORKER_START_FAILED" : "WORKER_TASK_FAILED";
+  try {
+    const message: unknown = error instanceof Error ? Object.getOwnPropertyDescriptor(error, "message")?.value : undefined;
+    if (typeof message === "string" && workerRefusals.has(message)) code = message;
+  } catch { /* Unknown errors, including hostile proxies, remain generic. */ }
+  // Create a fresh error: no original stack, cause, database detail or payload.
+  return Object.assign(new Error(code), { code });
+}
+
 export function redactingTasks(tasks: TaskList): TaskList {
   return Object.fromEntries(Object.entries(tasks).map(([name, task]) => {
     const safeTask: Task = async (payload, helpers) => {
       try { return await task?.(payload, helpers); }
       // Graphile also persists thrown messages in last_error. Do not attach the cause.
-      catch { throw new Error("WORKER_TASK_FAILED"); }
+      catch (error) { throw redactedWorkerError(error); }
     };
     return [name, task ? safeTask : undefined];
   }));

@@ -15,7 +15,7 @@ import { Pool } from "pg";
 import { z } from "zod";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
-import { RedactingLogger, redactingWorkerLogger, redactingTasks } from "./safe-logging.js";
+import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
 const logger = new RedactingLogger();
 async function startWorker() {
@@ -112,4 +112,4 @@ for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
 });
 }
 try { await startWorker(); }
-catch { logger.error("WORKER_START_FAILED"); process.exit(1); }
+catch (error) { logger.error("WORKER_START_FAILED"); throw redactedWorkerError(error, "WORKER_START_FAILED"); }
