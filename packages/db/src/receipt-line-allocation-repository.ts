@@ -1,13 +1,13 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { mapRecoveryReceiptToLines, recoveryReceiptFactsV1, receiptLineAllocationSnapshotV1,
+import { mapRecoveryReceiptToLines, recoveryReceiptFactsV1, receiptLineAllocationSnapshotV1, receiptLineAllocationCommandV1,
  type ReceiptLineAllocationSnapshot } from "@jobguard/core";
 import { practiceMaterialPool } from "./practice-session.js";
 import type { RecoveryAllocationActor } from "./recovery-allocation-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export type ReceiptLineAllocationErrorCode = "RECEIPT_LINE_SYNTHETIC_ONLY" | "RECEIPT_LINE_FORBIDDEN" |
- "INVALID_RECEIPT_LINE_QUERY" | "INVALID_RECEIPT_LINE_COMMAND" | "INVALID_RECEIPT_LINE_RESULT" | "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED";
+ "INVALID_RECEIPT_LINE_QUERY" | "INVALID_RECEIPT_LINE_COMMAND" | "INVALID_RECEIPT_LINE_RESULT";
 export class ReceiptLineAllocationError extends Error {
  constructor(readonly code: ReceiptLineAllocationErrorCode) { super(code); this.name = "ReceiptLineAllocationError"; }
 }
@@ -84,8 +84,7 @@ export class RecoveryLineAllocationRepository {
  }
  async command(context:VerifiedTenantContext,actor:RecoveryAllocationActor,digest:string,jobId:string,raw:unknown):Promise<NeutralReceiptFactResult>{
   this.guard(actor,digest,jobId);
-  if(typeof raw==="object"&&raw!==null&&"version" in raw&&raw.version==="receipt-line-allocation-command.v1")fail("RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED");
-  const command=neutralReceiptFactCommandV1.safeParse(raw);
+  const command=z.union([neutralReceiptFactCommandV1,receiptLineAllocationCommandV1]).safeParse(raw);
   if(!command.success)fail("INVALID_RECEIPT_LINE_COMMAND");
   // SSI is selected at BEGIN, before the digest/tenant configuration queries.
   // Unknown transport/commit outcomes remain errors; retry the same command id.
