@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WormBoundaryError, type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
@@ -135,12 +135,7 @@ export class WormCommandRepository {
       if (prior.status === "applied") return prior; // Concurrent reconciliation already committed.
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_reconcile($1,$2,$3)",
         [commandId, c.attempts, observed])).rows[0]!;
-      const operator = (await db.$client.query<{ operator_ref: string }>("SELECT session_user::text AS operator_ref")).rows[0]!;
-      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1",
-        actorRef: `worm-operator:${createHash("sha256").update(operator.operator_ref).digest("hex")}`,
-        eventType: "worm.reconciled", subjectType: "evidence", subjectRef: finished.evidence_id,
-        payload: { references: { command: finished.id, action: finished.action, status: finished.status },
-          hashes: { imprint: finished.imprint.trim() } } }]);
+      // The restricted SQL routine appends the audit event in this transaction.
       return finished;
     }).catch(refuse);
   }

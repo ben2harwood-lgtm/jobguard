@@ -8,6 +8,7 @@ import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { WormBoundaryError } from "@jobguard/storage";
+import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { WormCommandRepository } from "../src/worm-command-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
@@ -80,6 +81,32 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, executor, operator, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 describe("durable synthetic WORM SQL", () => {
+  it("limits operators to the two recovery routines and no table authority", async () => {
+    await expect(withTenant(operator, context, db => db.$client.query(
+      "SELECT * FROM app.worm_submit($1::jsonb)", [JSON.stringify(command())]))).rejects.toMatchObject({ code: "42501" });
+    for (const role of ["jobguard_runtime", "jobguard_worm_executor", "jobguard_migration"]) {
+      await expect(withTenant(operator, context, db => db.$client.query(`SET LOCAL ROLE ${role}`))).rejects.toMatchObject({ code: "42501" });
+    }
+    // Check every overload, including PUBLIC predicates and trigger helpers.
+    const routines = (await operator.query(`SELECT p.oid::text, p.oid::regprocedure::text signature,
+      has_function_privilege(current_user,p.oid,'EXECUTE') executable
+      FROM pg_proc p WHERE p.pronamespace='app'::regnamespace ORDER BY 2`)).rows;
+    expect(routines.filter(r => r.executable).map(r => r.signature).sort()).toEqual([
+      "app.worm_reconcile(uuid,integer,boolean)", "app.worm_recovery_target(uuid)",
+    ]);
+    for (const r of routines.filter(r => !r.executable)) {
+      const call = (await admin.query(`SELECT format('%I.%I(%s)',n.nspname,p.proname,
+        (SELECT string_agg('NULL::'||format_type(arg,NULL),',' ORDER BY ord) FROM unnest(p.proargtypes::oid[]) WITH ORDINALITY a(arg,ord))) sql
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE p.oid=$1::oid`, [r.oid])).rows[0].sql;
+      await expect(withTenant(operator, context, db => db.$client.query(`SELECT ${call}`))).rejects.toMatchObject({ code: "42501" });
+    }
+    for (const table of ["app.audit_event", "audit_control.audit_head", "app.action_outbox", "infrastructure.outbox_signal", "app.journal", "app.journal_line", "app.worm_command", "app.worm_attempt"]) {
+      for (const sql of [`INSERT INTO ${table} DEFAULT VALUES`, `UPDATE ${table} SET tenant_id=tenant_id`, `DELETE FROM ${table}`, `TRUNCATE ${table}`]) {
+        await expect(withTenant(operator, context, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+      }
+      await expect(withTenant(operator, context, db => db.$client.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({ code: "42501" });
+    }
+  });
   it("rejects wrong-job/cross-tenant references and unadmitted evidence", async () => {
     await expect(repo.submit(context, command({ jobId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(testTenantContext(other), command())).rejects.toThrow("WORM_REFUSED");
@@ -152,6 +179,11 @@ describe("durable synthetic WORM SQL", () => {
     const audits = (await admin.query("SELECT actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.reconciled' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows;
     expect(audits).toHaveLength(1);
     expect(audits[0].actor_ref).toMatch(/^worm-operator:/);
+    const events = (await admin.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,
+      actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",
+      occurred_at AS "occurredAt",payload,payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
+      FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows as AuditEvent[];
+    expect(() => verifyAuditChain(events)).not.toThrow();
     expect((await admin.query("SELECT outcome,attempt FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "applied", attempt: 1 }]);
     await expect(withTenant(operator, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
@@ -217,10 +249,12 @@ describe("durable synthetic WORM SQL", () => {
       "SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     await expect(withTenant(operator, context, db => db.$client.query(
       "SELECT * FROM app.worm_reconcile($1,2,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
+    const auditsBeforeRollback = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n;
     await expect(withTenant(operator, context, async db => {
       await db.$client.query("SELECT * FROM app.worm_reconcile($1,1,true)", [c.commandId]);
       throw new Error("synthetic audit transaction failure");
     })).rejects.toThrow("synthetic audit transaction failure");
+    expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(auditsBeforeRollback);
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("outcome_unknown");
     expect((await repo.recover(context, recovery, { read: async () => ({ held: true, retainUntil: null }) })).status).toBe("applied");
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {

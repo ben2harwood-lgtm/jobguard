@@ -884,6 +884,22 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
 }
 // M4-4 base persistence (0455) plus operator recovery (0488), exact additive union.
 async function wormAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ // 0488 closes precisely these predecessor PUBLIC EXECUTE grants. Preserve every
+ // other routine field/ACL, and preserve access for the prior app-schema roles.
+ const restricted = ["app.assert_journal_balanced()", "app.guard_authorization_revocation()", "app.guard_fixed_baseline()", "app.guard_imported_job()", "app.half_even_ratio(bigint,bigint,bigint)", "app.reference_recovery_cap(bigint)", "app.reject_audit_mutation()", "app.reject_capture_mutation()", "app.reject_evidence_object_mutation()", "app.reject_immutable_authorization_record()", "app.reject_immutable_commercial_mutation()", "app.reject_ledger_mutation()", "app.reject_mandatory_finding_suppression()", "app.reject_recovery_mutation()", "app.require_approved_resolution()", "app.review_invalidated_recovery_evidence()", "app.signal_outbox()"];
+ const priorRoles = ["jobguard_runtime", "jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_migration"];
+ const restrictedRows = (await f.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid))`, [restricted])).rows;
+ expect(restrictedRows).toHaveLength(restricted.length);
+ for (const r of restrictedRows) {
+  const prior = before.routines.find(b => b.nspname===r.nspname && b.proname===r.proname && b.args===r.args);
+  expect(prior).toBeDefined();
+  prior!.proacl = (await f.admin.query(`SELECT
+   ARRAY(SELECT a FROM unnest(coalesce($1::aclitem[],acldefault('f',$2::oid))) a WHERE a::text NOT LIKE '=%')
+   || ARRAY(SELECT (quote_ident(role)||'=X/'||quote_ident(pg_get_userbyid($2::oid)))::aclitem FROM unnest($3::text[]) role WHERE role<>pg_get_userbyid($2::oid)) AS acl`,
+   [prior!.proacl,prior!.proowner,priorRoles])).rows[0].acl;
+ }
  const after = await snapshot();
  const tables = ["worm_synthetic_version", "worm_command", "worm_attempt"];
  const indexes = ["worm_synthetic_version_pkey", "worm_command_pkey", "worm_command_tenant_id_idempotency_key_key", "worm_attempt_pkey"];

@@ -144,8 +144,9 @@ describe("read-only operator WORM recovery", () => {
     await operator().recover(context, request(), storage);
     expect(storage.read).toHaveBeenCalledTimes(1);
     expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
-    expect(fake.audit).toHaveBeenCalledTimes(1);
-    expect(fake.audit.mock.calls[0]?.[1][0]).toMatchObject({ eventType: "worm.reconciled", actorRef: expect.stringMatching(/^worm-operator:/) });
+    expect(fake.query.mock.calls.filter(([sql]) => sql.includes("worm_reconcile"))).toHaveLength(1);
+    // PostgreSQL proves audit atomicity; callers have no audit write access.
+    expect(fake.audit).not.toHaveBeenCalled();
     expect(fake.pools.every(p => p === operatorPool)).toBe(true);
   });
   it.each(["mismatch", "missing", "malformed"])("keeps %s readback unknown without leaking details or retrying writes", async mode => {

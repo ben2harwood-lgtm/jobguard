@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m4-4-recover"
       ],
-      "note": "M4-4 RED: read-only operator recovery on m4-4-persist; migration 0488. Parent persistence must merge first. Exact shared catalogue union includes prerequisite 0455 objects.",
+      "note": "M4-4 RED: read-only operator recovery on m4-4-persist; migration 0488. Parent persistence must merge first. Exact shared catalogue union includes prerequisite 0455 objects and withdrawal of 17 PUBLIC routine grants; operator has only two recovery routines and no runtime membership.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/operations/evidence-storage.md",

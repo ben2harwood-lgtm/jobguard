@@ -67,8 +67,9 @@ this adapter-only synthetic slice.
 A crashed `executing` or `outcome_unknown` durable hold/release command is blocked
 from worker retries. Provision a separate operator login inheriting
 `jobguard_worm_operator`; runtime and `jobguard_worm_executor` must never receive
-that role. The operator role inherits tenant-scoped runtime reads/audit access but
-has no executor claim/finish privilege. Its SQL recovery routines are inaccessible
+that role. The operator has app-schema USAGE and EXECUTE only on
+`worm_recovery_target` and `worm_reconcile`, with no direct table reads/writes,
+runtime membership or executor claim/finish privilege. Its SQL recovery routines are inaccessible
 to runtime, executors and PUBLIC. Operator credentials remain outside the repository.
 
 In the synthetic harness, pass that separately provisioned pool as the fourth
@@ -95,7 +96,10 @@ No provider error text or object key enters the audit payload. The trust boundar
 includes the separately provisioned operator login and its configured storage reader;
 readback confirms protection state, not the authenticity of the evidence's contents.
 
-Migration 0488 adds only the operator role and two routines; it does not replace old
-routines or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
+Migration 0488 adds the operator role and two routines. It withdraws PUBLIC EXECUTE
+on the exact 17 legacy app predicates/trigger helpers, preserving their access for
+the existing app-schema roles through explicit grants. Reconciliation appends its audit
+event inside the restricted SQL routine; the operator cannot invoke general audit helpers.
+It does not replace old routine bodies or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
 audit and immutable versions. D07, production residency/store validation and RED review
 remain required before release. The fake-adapter tests are not live-provider proof.
