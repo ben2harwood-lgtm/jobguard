@@ -12,6 +12,7 @@
         "packages/db/migrations/0400_trial_activation_lock_order.sql",
         "packages/db/src/free-first-job-lifecycle-repository.test.ts",
         "packages/db/src/free-first-job-lifecycle-repository.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/trial-lock-order-source.test.ts",
         "packages/db/test/trial-lock-order.integration.test.ts"
       ]

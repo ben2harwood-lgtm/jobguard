@@ -21,8 +21,7 @@ describe("MON-3 lifecycle boundary",()=>{
   const mutation=new TrialActivationMutation(tenant,"a".repeat(64),input);
   await mutation.lock(db,{actorMembershipId:actor} as ConsequentialCommand);
   expect(statements).toEqual([
-   {sql:"SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",values:[tenant,job]},
-   {sql:"SELECT app.mon3_owner($1,$2) actor",values:[tenant,"a".repeat(64)]},
+   {sql:"SELECT app.mon3_lock_activation($1,$2,$3) actor",values:[tenant,"a".repeat(64),job]},
   ]);
   await expect(mutation.lock(db,{actorMembershipId:randomUUID()} as ConsequentialCommand)).rejects.toThrow("FREE_FIRST_JOB_ACCESS_DENIED");
  });

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FreeFirstJobLifecycleRepository } from "../src/free-first-job-lifecycle-repository.js";
 import { createWorkFixture, closeWorkFixture, meterCompany, verifyBusiness, workTenant, type WorkFixture } from "./free-first-job-admission-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
+import { exactTarget } from "./free-first-job-lifecycle-fixtures.js";
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 
 describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => {
@@ -33,6 +34,27 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   }
  });
 
+ it("preserves capacity refusal through the restricted runtime and rejects foreign or expired session authority", async () => {
+  const a = await meterCompany(f); await verifyBusiness(f, a); await exactTarget(f, a);
+  const grants = (await f.admin.query(`SELECT has_table_privilege('jobguard_runtime','app.job','UPDATE') job_update,
+   pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+   has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+   has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+   EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public
+   FROM pg_proc p WHERE p.oid='app.mon3_lock_activation(uuid,text,uuid)'::regprocedure`)).rows;
+  expect(grants).toEqual([{job_update:false,owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime:true,infrastructure:false,public:false}]);
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId])))
+   .rejects.toMatchObject({code:'42501'});
+  const repo = new FreeFirstJobLifecycleRepository(f.runtime), view = await repo.read(a.context,a.digest,a.jobId);
+  await expect(repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:a.jobId,...view.target}))
+   .rejects.toThrow('CAPACITY_ADMISSION_UNAVAILABLE');
+  const b = await meterCompany(f);
+  const lock = (tenant:string,digest:string) => workTenant(f.runtime,tenant,db => db.query("SELECT app.mon3_lock_activation($1,$2,$3)",[tenant,digest,a.jobId]));
+  await expect(lock(b.tenantId,a.digest)).rejects.toThrow('METER_FORBIDDEN');
+  await f.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
+  await expect(lock(a.tenantId,a.digest)).rejects.toThrow('METER_FORBIDDEN');
+ });
+
  it.each(["dispatcher", "SQL"] as const)("%s trial waits for the job without blocking same-job meter admission", async entry => {
   const a = await meterCompany(f); await historicalAgreement(f, a); await verifyBusiness(f, a); await activateMeterJob(f, a);
   const input = { version: "trial-switch-live.v1", commandId: randomUUID(), jobId: a.jobId,
@@ -53,7 +75,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   try {
    await meter.query("BEGIN"); await meter.query("SET LOCAL statement_timeout='10s'");
    await meter.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
-   await meter.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId, a.jobId]);
+   await meter.query("SELECT app.require_watchdog_live($1)", [a.jobId]);
    const pid = (await meter.query("SELECT pg_backend_pid() pid")).rows[0].pid;
    pending = trial();
    // Observe the real lock wait before running capacity admission; no timing assumption.

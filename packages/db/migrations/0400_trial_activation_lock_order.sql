@@ -64,4 +64,16 @@ BEGIN
  VALUES(t,terms.job_id,terms.activation_id,snap,b.id,command_id,CASE WHEN prior_count=0 THEN 'first' ELSE 'second' END);
  RETURN jsonb_build_object('jobId',terms.job_id,'activationId',terms.activation_id,'termsId',terms.id,'snapshotId',snap,'state','live');
 END $$;
+-- Runtime cannot SELECT FOR UPDATE on app.job (0003/0096). Keep that boundary:
+-- expose only the authenticated job-first lock and the existing owner check.
+CREATE OR REPLACE FUNCTION app.mon3_lock_activation(t uuid,digest text,j uuid) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ PERFORM app.mon1_company_actor(t,digest);
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR UPDATE;
+ RETURN app.mon3_owner(t,digest);
+END $$;
+ALTER FUNCTION app.mon3_lock_activation(uuid,text,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon3_lock_activation(uuid,text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.mon3_lock_activation(uuid,text,uuid) TO jobguard_runtime;
 COMMIT;
