@@ -92,7 +92,7 @@ CREATE FUNCTION app.write_platform_fee_statement(p_job uuid,p_session text,p_com
 DECLARE t uuid; actor record; c record; action text:=p_command->>'action'; cid uuid;
  prior app.platform_fee_statement_command; existing app.platform_fee_statement; previous app.platform_fee_statement;
  snapshot jsonb; source_hash text; document jsonb; history jsonb; digest text; result jsonb;
- sid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); authorization uuid;
+ sid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); auth_id uuid;
  sequence integer; amount bigint; deadline timestamptz;
 BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
@@ -160,23 +160,23 @@ BEGIN
    OR existing.source_hash IS DISTINCT FROM source_hash
   THEN RAISE EXCEPTION 'SUCCESS_FEE_STALE' USING ERRCODE='40001'; END IF;
   sid:=existing.id; digest:=existing.document_hash;
-  SELECT id INTO authorization FROM app.action_authorization WHERE tenant_id=t AND decision_id=existing.decision_id AND revoked_at IS NULL AND expires_at>clock_timestamp();
-  IF authorization IS NULL THEN
+  SELECT id INTO auth_id FROM app.action_authorization WHERE tenant_id=t AND decision_id=existing.decision_id AND revoked_at IS NULL AND expires_at>clock_timestamp();
+  IF auth_id IS NULL THEN
    IF EXISTS(SELECT 1 FROM app.decision_resolution WHERE tenant_id=t AND decision_id=existing.decision_id)
    THEN RAISE EXCEPTION 'SUCCESS_FEE_STALE' USING ERRCODE='40001'; END IF;
    SELECT least(s.expires_at,m.expires_at) INTO deadline FROM control_plane.practice_session s JOIN app.membership m ON m.tenant_id=t AND m.id=actor.member_id WHERE s.token_digest=p_session;
    IF deadline IS NULL OR deadline<=clock_timestamp() THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
-   authorization:=gen_random_uuid();
+   auth_id:=gen_random_uuid();
    INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution,t,existing.decision_id,'approved',actor.member_id);
    INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
-    VALUES(authorization,t,existing.decision_id,resolution,actor.member_id,'success_fee.statement_approve',sid::text,digest,
+    VALUES(auth_id,t,existing.decision_id,resolution,actor.member_id,'success_fee.statement_approve',sid::text,digest,
      abs((existing.document->'documentPrincipal'->>'pence')::bigint),'GBP',(snapshot->>'postingRevision')::integer,'reference_fee_policy_v3',deadline);
   END IF;
  END IF;
- result:=jsonb_build_object('version','simulation-fee-statement-result.v1','commandId',cid,'statementId',sid,'documentHash',digest,'authorizationId',authorization,'replayed',false);
+ result:=jsonb_build_object('version','simulation-fee-statement-result.v1','commandId',cid,'statementId',sid,'documentHash',digest,'authorizationId',auth_id,'replayed',false);
  INSERT INTO app.platform_fee_statement_command VALUES(t,p_job,cid,actor.member_id,p_command,result);
  PERFORM app.append_final_check_audit(gen_random_uuid(),'membership:'||actor.member_id::text,p_job,'simulation_fee_statement.'||action,
-  jsonb_build_object('commandId',cid,'statementId',sid,'documentHash',digest,'authorizationId',authorization));
+  jsonb_build_object('commandId',cid,'statementId',sid,'documentHash',digest,'authorizationId',auth_id));
  RETURN result;
 EXCEPTION WHEN deadlock_detected THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001';
 END $$;
