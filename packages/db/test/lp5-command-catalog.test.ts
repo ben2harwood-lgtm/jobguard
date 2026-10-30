@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { jobMutationRegistry } from "@jobguard/core";
-import { lp5ReadTables, lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
+import { lp5aReadTables as lp5ReadTables, lp5aRegistryRows as lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
 const sql = readFileSync(new URL("../migrations/0475_lp5a_commands.sql", import.meta.url), "utf8");
 describe("LP-5a exact catalogue expectations", () => {
   it("enumerates every installed registry rule and shares the watchdog keys", () => {

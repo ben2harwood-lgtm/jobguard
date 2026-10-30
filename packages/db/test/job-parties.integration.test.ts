@@ -1,3 +1,4 @@
+import type { TenantTransaction } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -150,9 +151,12 @@ beforeAll(async () => {
   legacyInvoice=(await admin.query(`SELECT id,pdf_bytes,pdf_sha256 FROM app.customer_invoice WHERE tenant_id=$1`,[tenant])).rows[0];
   const migration=await readFile(migrationURL,"utf8");
   await admin.query(migration.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);"));
+  // Keep the populated 0095 upgrade setup and every historical assertion, then
+  // run current repository callers against their actual lifecycle successors.
+  for(const successor of MIGRATION_URLS.slice(MIGRATION_URLS.indexOf(migrationURL)+1))await admin.query(await readFile(successor,"utf8"));
   await admin.query(`CREATE ROLE ch3a_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch3a_login;`);
   runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch3a_login",password:"synthetic",max:5});repository=new JobPartiesRepository(runtime);
-},60000);
+},300000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("CH-3a real PostgreSQL guarantees",()=>{
@@ -296,11 +300,17 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     }finally{await fresh.end();}
   }, 60_000);
   it("applies the full migration chain to a SQL_ASCII database without UTF8 encoding", async () => {
-    // Reuse this suite's cluster; template0 permits a different database encoding.
-    // Do not change the encoding flags of the six earlier regression suites.
-    await admin.query("CREATE DATABASE ch3a_sql_ascii TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'");
-    const ascii = new Pool({ ...admin.options, password: "synthetic", database: "ch3a_sql_ascii", max: 1 });
+    // Role names are cluster-wide. Keep this full-chain proof isolated from
+    // the current-schema callers without altering any production migration SQL.
+    const asciiPort=await freePort(58700,300),asciiPostgres=new EmbeddedPostgres({databaseDir:join(dir,"sql-ascii-server"),
+      port:asciiPort,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,
+      initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+    let ascii:Pool|undefined,asciiControl:Pool|undefined;
     try {
+      await asciiPostgres.initialise();await asciiPostgres.start();
+      asciiControl=new Pool({host:"127.0.0.1",port:asciiPort,user:"postgres",password:"synthetic",database:"postgres",max:1});
+      await asciiControl.query("CREATE DATABASE ch3a_sql_ascii TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'");
+      ascii=new Pool({host:"127.0.0.1",port:asciiPort,user:"postgres",password:"synthetic",database:"ch3a_sql_ascii",max:1});
       expect((await ascii.query("SHOW server_encoding")).rows).toEqual([{ server_encoding: "SQL_ASCII" }]);
       await migrate(ascii);
       const expected = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1));
@@ -309,28 +319,39 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       await migrate(ascii);
       expect((await ascii.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name)).toEqual(expected);
     } finally {
-      await ascii.end();
-      await admin.query("DROP DATABASE ch3a_sql_ascii");
+      await closeTestPools(ascii,asciiControl);await asciiPostgres.stop();
     }
-  }, 60_000);
+  }, 180_000);
 });
 
 describe("CH-3a adoption authorization boundary (round 2)",()=>{
   const OWNER_POLICY="synthetic_import_terms_candidate.v1";
   const adoptInput=(job:string,hash:string,customerRevisionId:string,siteRevisionId:string)=>({parties:{customerRevisionId,siteRevisionId},version:"adopt-job.v1" as const,jobId:job,baselineId:randomUUID(),title:"Fictional import",lifecyclePoint:"live" as const,provenance:"imported" as const,lineageStrength:"builder_attested_weaker" as const,baselineHash:hash,baselineDescription:"Fictional baseline",acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation" as const,attestedByMembershipId:member,attestedAt:new Date(0),importTermsVersion:OWNER_POLICY as typeof OWNER_POLICY,feePolicyVersion:"reference_fee_policy_v1" as const,mode:"synthetic_candidate" as const});
   const commandFor=(job:string,hash:string)=>({version:"command.v1" as const,commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${job}`,actorMembershipId:member,subjectType:"job",subjectRef:job,action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:hash,aggregateRevision:0,amountPence:100000,currency:"GBP" as const,policyVersion:OWNER_POLICY,expiresAt:new Date(Date.now()+60000)}});
-  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,db=>db.$client.query(
-    `SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-    [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]));
-  // The rows the command dispatcher writes, created directly so each defect can be isolated.
+  // A processing receipt cannot be committed on its own after LP-5a. These
+  // owner-connected adversarial seeds join the exact transaction under test.
+  const stagedAuthority=new Map<string,(db:TenantTransaction)=>Promise<void>>();
+  const materializeAuthority=async(db:TenantTransaction,command:string,authorization:string)=>{
+    const seeds=new Set([stagedAuthority.get(command),stagedAuthority.get(authorization)]);
+    for(const seed of seeds)if(seed)await seed(db);
+  };
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,async db=>{
+    await materializeAuthority(db,a.command,a.authorization);
+    return db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
+  });
+  // Each original authority defect is still materialized independently.
   async function authority(o:{job:string;hash:string;actor?:string;net?:number;policy?:string;expiresInMs?:number;revoked?:boolean;receipt?:"processing"|"succeeded";subject?:string}){
     const command=randomUUID(),decision=randomUUID(),resolution=randomUUID(),authorization=randomUUID(),actor=o.actor??member,receipt=o.receipt??"processing";
-    await admin.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
+    const seed=async(db:TenantTransaction)=>{
+      await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
       [command,tenant,`import:${o.job}`,"d".repeat(64),receipt,actor,receipt==="succeeded"?"{}":null,receipt==="succeeded"?new Date():null]);
-    await admin.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
-    await admin.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
-    await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
+      await db.$client.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
+      await db.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
+      await db.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
       [authorization,tenant,decision,resolution,actor,o.hash,o.net??100000,o.policy??OWNER_POLICY,new Date(Date.now()+(o.expiresInMs??60000)),o.revoked?new Date():null]);
+    };
+    stagedAuthority.set(command,seed);stagedAuthority.set(authorization,seed);
     return {command,authorization};
   }
   async function extraOwner(kind:"revoked"|"expired"){
@@ -342,6 +363,7 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
   }
   // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
   const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(runtime,context,async db=>{
+    await materializeAuthority(db,a.command,a.authorization);
     const baseline=randomUUID();
     await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
     if(steps.audit!==false)await appendAuditBatch(db,[

@@ -1,5 +1,6 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
+import type { TenantTransaction } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
-import { createHash } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { migrate } from "./migrate.js";
 import {
@@ -160,16 +161,19 @@ async function seedDatabase(client: PoolClient) {
       ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
     await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
+    const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
-      const result = await client.query(
-        `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-         VALUES($1,$2,'synthetic_demo.seed',$3,$4,'succeeded',$5::jsonb,$6,transaction_timestamp())
-         ON CONFLICT(tenant_id,command_type,semantic_key) DO NOTHING RETURNING command_id`,
-        [command.commandId, command.tenantId, command.semanticKey,
-          createHash("sha256").update(JSON.stringify(command)).digest("hex"), JSON.stringify({ checkpoint: command.checkpoint }), DEMO_MEMBERSHIP_ID],
-      );
-      return result.rowCount === 1 ? "created" : "replayed";
+      const db = { $client: client } as TenantTransaction;
+      const claim = await beginRepositoryCommand(db,{tenantId:command.tenantId,actorMembershipId:DEMO_MEMBERSHIP_ID,
+        commandId:command.commandId,commandType:"synthetic_demo.seed",semanticKey:command.semanticKey,
+        jobId:command.jobId,legacyJson:JSON.stringify(command)});
+      if(claim.kind==="replay")return "replayed";
+      await client.query("SELECT app.record_repository_command($1)",[command.commandId]);
+      pendingSeedCommands.push(command.commandId);
+      return "created";
+
     }});
+    for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }

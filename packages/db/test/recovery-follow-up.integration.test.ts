@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -44,7 +45,11 @@ async function activatePursuitFixture(client: import("pg").PoolClient, tenant: s
   await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
   await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
   await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
-  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  const switched=await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  // Owner-only fixture: the real mutation and its terminal receipt commit
+  // together; LP-5a refuses a processing receipt left behind at commit.
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[tenant,command,JSON.stringify({fixtureActivation:true,jobId:job})]);
+  return switched;
 }
 
 /** The practice demo tenant's invoiced job, owned by one practice session, exactly as the persisted recovery journey leaves it. */
@@ -1163,4 +1168,70 @@ it("ReminderUsesSameGuard: a due reminder cannot preview after its terms prerequ
   await expect(repo.openReview(ctx, base.caseId, input, actor)).rejects.toMatchObject({ code: "RECOVERY_TERMS_NOT_APPROVED" });
   expect(await tenantCounts()).toEqual(before);
   expect((await messages.read(ctx, base.caseId)).sinkCount).toBe(1);
+});
+
+describe("LP-5b recovery follow-up marker lifecycle",()=>{
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s stores one checked marker, preserves exact replay, conflicts and refuses revoked replay",async action=>{
+    let caseId:string,run:(changed?:boolean)=>Promise<RecoveryFollowUpState>;
+    const commandId=randomUUID();
+    if(action==="schedule"){
+      const base=await deliveredCase();caseId=base.caseId;await newRun();
+      const input=scheduleCommand(base.message,base.state.readiness.caseRevision,commandId);
+      run=(changed=false)=>repo.schedule(ctx,caseId,changed?{...input,expectedCaseRevision:input.expectedCaseRevision+1}:input,actor);
+    }else if(action==="advance"){
+      const base=await scheduled();caseId=base.caseId;
+      const input={version:V,action:"advance_time" as const,commandId,followUpId:base.followUp.id};
+      run=(changed=false)=>repo.advanceTime(ctx,caseId,changed?{...input,followUpId:randomUUID()}:input,actor,
+        (runId,command)=>sandbox.advance(token,runId,command));
+    }else if(action==="open_review"){
+      const base=await due();caseId=base.caseId;
+      const input=reviewCommand(base.followUp,await messages.read(ctx,caseId),commandId);
+      run=(changed=false)=>repo.openReview(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }else{
+      const base=await scheduled();caseId=base.caseId;
+      const input=cancelCommand(base.followUp,commandId);
+      run=(changed=false)=>repo.cancel(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }
+    const first=await run();
+    const marker=()=>admin.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId]).then(r=>r.rows);
+    expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+    expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(1);
+    const before=await tenantCounts(),auditBefore=await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID]);
+    expect(await run()).toEqual(first);
+    expect(await tenantCounts()).toEqual(before);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID])).toBe(auditBefore);
+    expect(await code(()=>run(true))).toBe("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>run())).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s cannot complete without its business effect and refuses unknown types",async action=>{
+    const caseId=await newCase();
+    for(const commandType of [`recovery.follow_up.${action}`,"unknown.recovery.follow_up"]){
+      const commandId=randomUUID();
+      await expect(withTenant(runtime,ctx,async db=>{
+        const claim=await beginRepositoryCommand(db,{tenantId:DEMO_TENANT_ID,actorMembershipId:actor.membershipId,commandId,commandType,
+          semanticKey:commandId,jobId:fixture.jobId,legacyJson:JSON.stringify({caseId,membershipId:actor.membershipId,commandId,
+            action,followUpId:randomUUID(),sourceMessageId:randomUUID()})});
+        expect(claim.kind).toBe("claim");
+        await completeRepositoryCommand(db,commandId);
+      })).rejects.toMatchObject({message:"AUTHORIZATION_INVALID"});
+      expect(await count("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+      expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+    }
+  });
+  it("approveReminder rechecks the current owner before inspecting a prior approval on replay",async()=>{
+    const base=await previewed(),input=approveReminderCommand(base.followUp,base.reminder);
+    await repo.approveReminder(ctx,base.caseId,input,actor);
+    const before=await tenantCounts();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,input,actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,{...input,body:"Changed fictional replay body"},actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
 });

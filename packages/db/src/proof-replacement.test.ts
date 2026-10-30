@@ -10,12 +10,22 @@ vi.mock("./audit.js", () => ({ appendAuditBatch: vi.fn() }));
 it("S13 replacement proof completes the same stage after invalidation instead of colliding with the original receipt", async () => {
   const tenant = randomUUID(), job = randomUUID(), scope = randomUUID(), actor = randomUUID(), oldId = randomUUID(), evidence = randomUUID();
   const bytes = Buffer.from("fictional proof"), hash = createHash("sha256").update(bytes).digest("hex");
-  const stageKey = `${job}:${scope}:electrical-stage`, oldReceipt = { request_hash: "old-request-hash", result: { completionId: oldId } };
+  const stageKey = `${job}:${scope}:electrical-stage`, completionId=randomUUID();
+  const storedResult={completionId,evidenceId:evidence,state:"complete",decisionId:null};
+  let claimedSemantic:string|undefined;
   const query = async (sql: string, values: unknown[] = []) => {
     const result = (rows: unknown[] = []) => ({ rows, rowCount: rows.length });
     if (sql.startsWith("SELECT 1 FROM app.membership")) return result([{}]);
-    if (sql.includes("FROM app.command_receipt")) return result(sql.includes("semantic_key") && values[2] === stageKey ? [oldReceipt] : []);
-    if (sql.startsWith("INSERT INTO app.command_receipt")) return result(values[2] === stageKey ? [] : [{ command_id: values[0] }]);
+    if (sql.includes("FROM app.command_receipt")) return result();
+    if (sql.includes("app.begin_command(")) {
+      claimedSemantic=values[3] as string;
+      if(claimedSemantic===stageKey)throw new Error("COMMAND_CONFLICT");
+      return result([{result:{kind:"claim"}}]);
+    }
+    if (sql.includes("app.complete_command(")) {
+      expect(JSON.parse(values[1] as string)).toEqual({});
+      return result([{result:storedResult}]);
+    }
     if (sql.includes("FROM app.stage_completion")) return result([{ id: oldId, invalidated: true }]);
     if (sql.includes("FROM app.evidence_object") && sql.includes("e.kind='original'")) return result([{ id: evidence, sha256: hash, object_key: "proof", object_version_id: "v1" }]);
     if (sql.includes("FROM app.evidence_link")) return result([{ id: randomUUID() }]);
@@ -27,5 +37,6 @@ it("S13 replacement proof completes the same stage after invalidation instead of
   await expect(new ProofCommandService(pool, storage).complete(testTenantContext(tenant), {
     version: "proof.complete.v1", commandId: randomUUID(), actorMembershipId: actor, jobId: job, scopeItemId: scope,
     stage: "electrical-stage", evidenceId: evidence, requiredEvidenceType: "electrical_certificate", decisionId: null,
-  })).resolves.toMatchObject({ evidenceId: evidence, state: "complete" });
+  })).resolves.toEqual(storedResult);
+  expect(claimedSemantic).toBe(`${stageKey}:${oldId}`);
 });

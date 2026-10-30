@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -96,25 +97,15 @@ export class CommercialIntegrityApplicationRepository {
       const owned = (await db.$client.query(practiceOwnedJobsSql("$2") + " SELECT id FROM practice_owned_job WHERE id=$3",
         [context.tenantId, digest, jobId])).rows[0];
       if (!member || !owned) throw new PracticeAccessError("NOT_FOUND");
-      // Complete receipt and feedback are one insert. A racing replay waits on
-      // uniqueness; all business work precedes the audit head lock.
-      const result = feedbackV1.parse({ jobId, ...input, recordedAt: new Date().toISOString() });
-      const inserted = await db.$client.query(`INSERT INTO app.command_receipt
-        (command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-        VALUES($1,$2,$3,$4,$5,'succeeded',$6::jsonb,$7,clock_timestamp()) ON CONFLICT DO NOTHING RETURNING command_id`,
-      [input.commandId, context.tenantId, commandType, `${jobId}:${input.commandId}`, requestHash, JSON.stringify(result), membershipId]);
-      if (!inserted.rowCount) {
-        const prior = (await db.$client.query<{ request_hash: string; status: string; result: unknown }>(
-          "SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",
-          [context.tenantId, input.commandId])).rows[0];
-        if (!prior || prior.request_hash !== requestHash || prior.status !== "succeeded") throw new Error("IDEMPOTENCY_CONFLICT");
-        return feedbackV1.parse(prior.result);
-      }
+      const claim = await beginRepositoryCommand<unknown>(db,{tenantId:context.tenantId,actorMembershipId:membershipId,
+        commandId:input.commandId,commandType,semanticKey:`${jobId}:${input.commandId}`,jobId,legacyJson:JSON.stringify({jobId,...input})});
+      if(claim.kind==="replay")return feedbackV1.parse(claim.result);
+      await db.$client.query("SELECT app.record_repository_command($1)",[input.commandId]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${membershipId}`,
         eventType: "commercial_integrity.reviewed", subjectType: "job", subjectRef: jobId,
         payload: { references: { jobId, commandId: input.commandId }, hashes: { requestHash },
           classifications: { action: "operational" } } }]);
-      return result;
-    });
+      return feedbackV1.parse(await completeRepositoryCommand(db,input.commandId));
+    }).catch((error:unknown)=>{if(error instanceof Error && error.message==="COMMAND_CONFLICT")throw new Error("IDEMPOTENCY_CONFLICT");throw error;});
   }
 }

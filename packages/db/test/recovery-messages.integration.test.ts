@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -38,7 +39,11 @@ async function activatePursuitFixture(client: import("pg").PoolClient, tenant: s
   await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
   await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
   await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
-  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  const switched=await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  // Owner-only fixture: the real mutation and its terminal receipt commit
+  // together; LP-5a refuses a processing receipt left behind at commit.
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[tenant,command,JSON.stringify({fixtureActivation:true,jobId:job})]);
+  return switched;
 }
 
 /** Select v3 through its checked routine at the primary fixture's first live
@@ -1795,5 +1800,56 @@ describe('an old check request replayed after a retry cycle returns current stat
     // A fresh check from the reloaded panel is what asks again, and it can settle the message.
     const settled = await repo.command(context, base.caseId, simple('reconcile', answered.latest!), actor);
     expect(settled.latest).toMatchObject({ status: 'retryable', attempts: 1 });
+  });
+});
+
+// LP-5b retains the route's current-state response. Its receipt is the immutable
+// operation marker, whose replay must stay fixed and must not repeat effects.
+describe('LP-5b recovery message marker lifecycle', () => {
+  it.each(['preview', 'revoke', 'advance', 'reconcile'] as const)('%s stores one checked marker, replays it, conflicts and refuses revoked replay', async action => {
+    await inIsolatedWorld(async () => {
+      let caseId: string, run: (changed?: boolean) => Promise<RecoveryMessageState>;
+      const commandId=randomUUID();
+      if(action==='preview'){
+        const base=await attached();caseId=base.caseId;
+        const input=previewCommand(await repo.read(context,caseId),commandId);
+        run=(changed=false)=>repo.preview(context,caseId,changed?{...input,expectedCaseRevision:input.expectedCaseRevision+1}:input,actor);
+      }else{
+        const base=await approved();caseId=base.caseId;
+        let view=base.view;
+        if(action==='reconcile')view=(await repo.command(context,caseId,advanceCommand(view,'response_lost'),actor)).latest!;
+        const input=action==='advance'?advanceCommand(view,'success',commandId):simple(action,view,commandId);
+        run=(changed=false)=>repo.command(context,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+      }
+      const first=await run();
+      const marker=()=>admin.query('SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2',[fixture.tenantId,commandId]).then(r=>r.rows);
+      expect(await marker()).toEqual([{status:'succeeded',result:{recoveryMessageCommand:action}}]);
+      expect(await count('SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2',[fixture.tenantId,commandId])).toBe(1);
+      const before=await writeCounts();
+      expect(await run()).toEqual(first);
+      expect(await writeCounts()).toEqual(before);
+      expect(await code(()=>run(true))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+      await admin.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2',[fixture.tenantId,actor.membershipId]);
+      try{
+        expect(await code(()=>run())).toBe('RECOVERY_MESSAGE_FORBIDDEN');
+        expect(await marker()).toEqual([{status:'succeeded',result:{recoveryMessageCommand:action}}]);
+        expect(await writeCounts()).toEqual(before);
+      }finally{await admin.query('UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2',[fixture.tenantId,actor.membershipId]);}
+    });
+  });
+  it.each(['preview','revoke','advance','reconcile'] as const)('%s cannot complete without its business effect; unknown types fail closed',async action=>{
+    const caseId=await newCase();
+    for(const type of [`recovery.message.${action}`,'unknown.recovery.message']){
+      const commandId=randomUUID();
+      await expect(withTenant(runtime,context,async db=>{
+        const claim=await beginRepositoryCommand(db,{tenantId:fixture.tenantId,actorMembershipId:actor.membershipId,commandId,
+          commandType:type,semanticKey:commandId,jobId:fixture.jobId,
+          legacyJson:JSON.stringify({caseId,membershipId:actor.membershipId,commandId,action,messageId:randomUUID()})});
+        expect(claim.kind).toBe("claim");
+        await completeRepositoryCommand(db,commandId);
+      })).rejects.toMatchObject({message:'AUTHORIZATION_INVALID'});
+      expect(await count('SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2',[fixture.tenantId,commandId])).toBe(0);
+      expect(await count('SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2',[fixture.tenantId,commandId])).toBe(0);
+    }
   });
 });

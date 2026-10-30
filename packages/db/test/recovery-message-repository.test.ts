@@ -114,12 +114,14 @@ describe('real evidence-pack command ownership boundary (Sol 4)', () => {
     const service = repo as unknown as { [key: string]: (...args: any[]) => Promise<any> };
     service.lockCase = async () => undefined;
     const db = { $client: { query: async (sql: string) => {
-      if (sql.includes('pg_advisory') || sql.includes('INSERT INTO app.command_receipt')) return { rows: [], rowCount: 1 };
+      if(sql.includes('app.begin_command('))return {rows:[{result:{kind:'claim'}}],rowCount:1};
+      if (sql.includes('pg_advisory')) return { rows: [], rowCount: 1 };
       if (sql.includes('app.evidence_pack_revision') || sql.includes('app.evidence_pack_attachment_approval')) return { rows: [{ family }], rowCount: 1 };
-      if (sql.includes('app.recovery_case') || sql.includes('app.membership')) return { rows: [{}], rowCount: 1 };
+      if (sql.includes('app.recovery_case'))return {rows:[{job_id:id(2)}],rowCount:1};
+      if(sql.includes('app.membership'))return {rows:[{}],rowCount:1};
       throw new Error(`Unexpected SQL: ${sql}`);
     } } };
-    await expect(service.begin!(db, ctx.tenantId, id(1), id(50), actor, true, { action: 'preview', requestHash: 'c'.repeat(64) }))
+    await expect(service.begin!(db, ctx.tenantId, id(1), id(50), actor, true, { action: 'preview', requestHash: 'c'.repeat(64), requestJson: JSON.stringify({caseId:id(1),membershipId:actor.membershipId}) }))
       .rejects.toMatchObject({ code: 'RECOVERY_MESSAGE_COMMAND_CONFLICT' });
   });
 });

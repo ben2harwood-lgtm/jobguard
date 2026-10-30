@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { jobPartiesSnapshotV1, preventionCommandV1, preventionCommandResultV1, preventionViewV1, preventionResultV1,
@@ -80,13 +81,9 @@ export class PreventionCheckRepository {
       await this.authorize(db,tenant,actor,job,practiceDigest,true);
       // One receipt claim, then aggregate serialization/current-party share guard;
       // domain writes finish before the audit head. No new privileged helper.
-      const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-        VALUES($1,$2,'prevention.check',$5,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId,tenant,requestHash,actor,input.commandId]);
-      if (!claim.rowCount) {
-        const prior = (await db.$client.query(`SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`, [tenant,input.commandId])).rows[0];
-        if (!prior || prior.request_hash !== requestHash || prior.status !== "succeeded") throw new PreventionCheckError("COMMAND_CONFLICT");
-        return preventionCommandResultV1.parse(prior.result);
-      }
+      const claim=await beginRepositoryCommand<unknown>(db,{tenantId:tenant,actorMembershipId:actor,commandId:input.commandId,
+        commandType:"prevention.check",semanticKey:input.commandId,jobId:job,legacyJson:JSON.stringify({job,input})});
+      if(claim.kind==="replay")return preventionCommandResultV1.parse(claim.result);
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`prevention:${tenant}:${job}`]);
       let current: JobPartiesSnapshotV1;
       try {
@@ -127,11 +124,12 @@ export class PreventionCheckRepository {
         else await db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [tenant,randomUUID(),job,current.bindingId,current.customerRevisionId,input.commandId,result.kind,watchRevision,result.source.id,result.source.name,result.retrievedAt,JSON.stringify(result),auditId]);
       }
-      const result = preventionCommandResultV1.parse({version:"prevention-command-result.v1",environment:"synthetic_demo",commandId:input.commandId,view:await this.viewIn(db,tenant,job),realExternalActions:0});
-      await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant,input.commandId,JSON.stringify(result)]);
       await appendAuditBatch(db,[{id:auditId,version:"audit.v1",actorRef:`membership:${actor}`,eventType:`prevention.${input.action}`,subjectType:"job",subjectRef:job,
         payload:{references:{commandId:input.commandId,bindingId:current.bindingId,fixtureId:PREVENTION_FIXTURE_ID},hashes:{request:requestHash},classifications:{action:"operational"}}}]);
-      return result;
+      return preventionCommandResultV1.parse(await completeRepositoryCommand(db,input.commandId));
+    }).catch((error:unknown)=>{
+      if(error instanceof Error && ["COMMAND_CONFLICT","FORBIDDEN"].includes(error.message))throw new PreventionCheckError(error.message as "COMMAND_CONFLICT"|"FORBIDDEN");
+      throw error;
     });
   }
 }

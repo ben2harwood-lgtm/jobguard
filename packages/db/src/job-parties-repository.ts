@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { jobPartiesCommandV1, jobPartiesCommandResultV1, jobPartiesWorkspaceV1, jobPartiesListV1, siteMatchKey } from "@jobguard/core";
@@ -81,13 +82,10 @@ export class JobPartiesRepository {
             if (!found.rowCount) throw new JobPartiesError("NOT_FOUND");
           }
         }
-        const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-          VALUES($1,$2,'job.parties',$5,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId, context.tenantId, requestHash, actor, input.commandId]);
-        if (!claim.rowCount) {
-          const prior = (await db.$client.query(`SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`, [context.tenantId, input.commandId])).rows[0];
-          if (!prior || prior.request_hash !== requestHash || prior.status !== "succeeded") throw new JobPartiesError("COMMAND_CONFLICT");
-          return jobPartiesCommandResultV1.parse(prior.result);
-        }
+        const claim = await beginRepositoryCommand<unknown>(db, { tenantId: context.tenantId, actorMembershipId: actor,
+          commandId: input.commandId, commandType: "job.parties", semanticKey: input.commandId, jobId,
+          legacyJson: JSON.stringify({ jobId, input }) });
+        if (claim.kind === "replay") return jobPartiesCommandResultV1.parse(claim.result);
         let result: Record<string, unknown>;
         if (input.action === "create_customer" || input.action === "revise_customer") {
           const id = input.action === "create_customer" ? randomUUID() : input.customerId;
@@ -121,13 +119,14 @@ export class JobPartiesRepository {
         }
         result = jobPartiesCommandResultV1.parse({ ...result, version:"job-parties-command-result.v1", environment: "synthetic_demo", commandId: input.commandId, realExternalActions: 0 });
         // Finish domain/receipt writes before taking the audit head: no later business locks.
-        await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`, [context.tenantId, input.commandId, JSON.stringify(result)]);
+
         await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`, eventType: `job.parties.${input.action}`, subjectType: "job", subjectRef: jobId,
           payload: { references: { commandId: input.commandId, identityId: String(result.id) }, hashes: { request: requestHash }, classifications: { action: "operational" } } }]);
-        return result;
+        return jobPartiesCommandResultV1.parse(await completeRepositoryCommand(db,input.commandId,{id:result.id,revisionId:result.revisionId}));
       });
     } catch (error) {
       if (error instanceof JobPartiesError) throw error;
+      if (error instanceof Error && error.message === "COMMAND_CONFLICT") throw new JobPartiesError("COMMAND_CONFLICT");
       const dbError = error as { code?: string; message?: string };
       if (dbError.message?.includes("CORRECTION_REASON_REQUIRED")) throw new JobPartiesError("CORRECTION_REASON_REQUIRED");
       if (dbError.code === "40001" || dbError.code === "23505") throw new JobPartiesError("REVISION_CONFLICT");

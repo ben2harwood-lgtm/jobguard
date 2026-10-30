@@ -1,4 +1,4 @@
-import { lp5ReadTables, lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
+import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -1143,7 +1143,7 @@ async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) 
   expect(items).not.toContain(addition); row[field]=await acl([...items,addition]);
  };
  const inserts = ['decision','decision_resolution','action_authorization','command_receipt'];
- for (const table of lp5ReadTables) {
+ for (const table of [...lp5ReadTables,...lp5bReadViews]) {
   const relation = expected.relations.find(r=>r.nspname==='app'&&r.relname===table)!;
   expect(relation).toBeDefined();
   await addAcl(relation,'relacl',`${role}=${inserts.includes(table)?'ar':'r'}/jobguard_migration`);
@@ -1161,6 +1161,17 @@ async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) 
    proacl:await acl([`${role}=X/${role}`,...(exposed?[`jobguard_runtime=X/${role}`,`jobguard_migration=X/${role}`]:name.proname==='lp5_bind_effect'?[`jobguard_migration=X/${role}`]:[])]),
    prosecdef:name.proname!=='lp5_command_result',proconfig:['search_path=pg_catalog, pg_temp']});
  }
+ for (const spec of lp5bRoutines) {
+  const identity=(await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args FROM pg_proc p WHERE p.oid=$1::regprocedure`,[spec.signature])).rows[0];
+  const routineOwner=(await f.admin.query('SELECT oid FROM pg_roles WHERE rolname=$1',[spec.owner])).rows[0].oid;
+  expected.routines.push({nspname:'app',proname:identity.proname,args:identity.args,proowner:routineOwner,
+   proacl:await acl([`${spec.owner}=X/${spec.owner}`,...spec.execute.map(grantee=>`${grantee}=X/${spec.owner}`)]),
+   prosecdef:spec.securityDefiner,proconfig:['search_path=pg_catalog, pg_temp']});
+ }
+ expected.rows['app.repository_operational_record']=[];
+ expected.relations.push({nspname:'app',relname:'repository_operational_record',relowner:owner,
+  relacl:await acl([`${role}=arwdDxt/${role}`]),relrowsecurity:true,relforcerowsecurity:true},
+  {nspname:'app',relname:'repository_operational_record_pkey',relowner:owner,relacl:null,relrowsecurity:false,relforcerowsecurity:false});
  for (const name of ['command_type_registry','command_lifecycle_claim']) {
   expect(Object.keys(prior.rows)).not.toContain(`app.${name}`);
   expected.rows[`app.${name}`]=name==='command_type_registry'?[...lp5RegistryRows].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))):[];
@@ -1172,9 +1183,10 @@ async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) 
  const template=prior.policies.find(p=>p.schemaname==='app'&&p.tablename==='audit_event'&&p.policyname==='tenant_isolation')!;
  const policy=(table:string,name:string,cmd:string)=>({...template,tablename:table,policyname:name,roles:`{${role}}`,cmd,
   qual:cmd==='INSERT'?null:template.qual,with_check:cmd==='SELECT'?null:template.with_check});
- for (const table of lp5ReadTables) expected.policies.push(policy(table,'lp5_command_read','SELECT'));
+ for (const table of lp5ReadTables) expected.policies.push(policy(table,lp5bReadTables.includes(table)?'lp5b_command_read':'lp5_command_read','SELECT'));
  for (const table of inserts) expected.policies.push(policy(table,'lp5_command_insert','INSERT'));
  expected.policies.push(policy('command_receipt','lp5_command_complete','UPDATE'),policy('command_lifecycle_claim','tenant_isolation','ALL'));
+ expected.policies.push(policy('repository_operational_record','tenant_isolation','ALL'));
  // JSONB table-row ordering is the server's lexical JSON representation, not JS property insertion order.
  const registry=(await f.admin.query("SELECT coalesce(jsonb_agg(value ORDER BY value::text),'[]') data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data;
  expected.rows['app.command_type_registry']=registry;
