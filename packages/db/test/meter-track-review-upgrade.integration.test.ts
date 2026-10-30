@@ -25,9 +25,18 @@ describe("MON-1 0385 upgrade (PostgreSQL CI)", () => {
    routines: (await f.admin.query("SELECT oid,proowner,proacl::text,prosecdef,proconfig FROM pg_proc WHERE pronamespace='app'::regnamespace ORDER BY oid")).rows,
   });
   const oldCatalog = await catalog();
-  await migrate(f.admin); await migrate(f.admin);
+  // Isolate 0385's preservation proof from legitimate changes in later migrations.
+  await f.admin.query(await readFile(MIGRATION_URLS[position]!, "utf8"));
+  await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [own]);
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
   expect(await catalog()).toEqual(oldCatalog);
+  // Compare the same complete migration set before and after replay.
+  await migrate(f.admin);
+  const upgradedCatalog = await catalog();
+  const upgradedRows = await proofBefore(f.admin, Object.keys(before));
+  await migrate(f.admin);
+  expect(await proofDifferences(f.admin, upgradedRows)).toEqual({ rows: [], types: [] });
+  expect(await catalog()).toEqual(upgradedCatalog);
   expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
  });
 });
