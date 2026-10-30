@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7b-messaging": {
+      "branches": [
+        "codex/sandbox/sv7b-messaging"
+      ],
+      "note": "RED SV-7B-MSG: disabled synthetic messaging evidence fake; existing SV-7A contract, process-local batch deduplication, no migration or live provider. Router handles built-ahead handoff and independent Claude review.",
+      "allow": [
+        "apps/api/src/messaging-observation-connector.ts",
+        "apps/api/src/messaging-observation-connector.test.ts",
+        "docs/operations/messaging-observation-data-flow.md"
+      ]
+    }
+  }
+}
