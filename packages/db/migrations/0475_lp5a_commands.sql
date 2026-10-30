@@ -1,7 +1,13 @@
 -- LP-5a RED: checked dispatcher lifecycle. Actor/tenant binding remains LP-6;
 -- direct writers/grants remain until LP-5b/c. No production gate is opened.
 BEGIN;
-CREATE ROLE jobguard_command_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_command_writer') THEN
+  RAISE EXCEPTION 'jobguard_command_writer is missing; run administrative ensureRoles before migrations' USING ERRCODE='42704';
+ END IF;
+END $$;
+-- Required only while transferring ownership; removed before this transaction commits.
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
 GRANT USAGE ON SCHEMA app TO jobguard_command_writer;
 -- Private control-plane configuration, deliberately not tenant-owned business data.
 CREATE TABLE app.command_type_registry (
@@ -631,4 +637,5 @@ BEGIN
  VALUES(p_baseline,p_tenant,p_job,'imported','builder_attested_weaker',p_hash,p_description,'builder_attestation',p_net,'GBP',p_cap,p_policy,p_terms,p_actor,p_attested) RETURNING * INTO b;
  PERFORM app.lp5_bind_effect(p_command,p_authorization,'import',jsonb_build_object('baselineId',b.id)); RETURN b;
 END $$;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 COMMIT;

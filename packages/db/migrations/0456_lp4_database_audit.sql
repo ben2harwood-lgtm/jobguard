@@ -3,7 +3,13 @@
 -- consumers are NOT closed here. No production/real-data enablement.
 -- Forward-only candidate: no history is rewritten.
 BEGIN;
-CREATE ROLE jobguard_audit_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_audit_writer') THEN
+  RAISE EXCEPTION 'jobguard_audit_writer is missing; run administrative ensureRoles before migrations' USING ERRCODE='42704';
+ END IF;
+END $$;
+-- Required only while transferring ownership; removed before this transaction commits.
+GRANT CREATE ON SCHEMA app TO jobguard_audit_writer;
 GRANT USAGE ON SCHEMA app, audit_control TO jobguard_audit_writer;
 GRANT SELECT, INSERT ON app.audit_event TO jobguard_audit_writer;
 GRANT SELECT, INSERT, UPDATE ON audit_control.audit_head TO jobguard_audit_writer;
@@ -788,4 +794,5 @@ BEGIN
 
  RETURN outcome;
 END $$;
+REVOKE CREATE ON SCHEMA app FROM jobguard_audit_writer;
 COMMIT;
