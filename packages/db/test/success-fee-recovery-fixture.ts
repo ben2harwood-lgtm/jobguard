@@ -8,7 +8,7 @@ import {RecoveryCaseTermsRepository} from "../src/recovery-case-terms-repository
 import {RecoveryAllocationRepository} from "../src/recovery-allocation-repository.js";
 import {PracticeFeedRepository} from "../src/practice-feed-repository.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
-export async function recoveryFeeFixture(f:FinalCheckFixture){
+export async function recoveryFeeFixture(f:FinalCheckFixture,settleReceipts=true){
  const x=await realReceiptFixture(f,"F5","receipt-line-allocation-command.v1");
  const cases=new RecoveryCaseRepository(x.scoped),allocator=new RecoveryAllocationRepository(f.runtime,"synthetic_demo");
  const opened:RecoveryCaseView[]=[];
@@ -29,7 +29,7 @@ export async function recoveryFeeFixture(f:FinalCheckFixture){
  const payments:string[]=[];
  for(const [movement,amount] of [["receipt-384",38400],["receipt-3000",300000]] as const){
   const payment=(await x.invoices.recordReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-30",amountPence:amount,method:"bank_transfer",reference:"Fictional case receipt"})).paymentId;
-  for(const action of ["advance","match_receipt"] as const){
+  if(settleReceipts)for(const action of ["advance","match_receipt"] as const){
    const v=await feed.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"practice-feed-command.v1",action,commandId:randomUUID(),expectedRevision:revision,movement,...(action==="advance"?{step:"settled"}:{paymentId:payment})});revision=v.revision;
   }
   payments.push(payment);

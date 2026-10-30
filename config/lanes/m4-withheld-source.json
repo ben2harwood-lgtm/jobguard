@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-withheld-source": {
+      "branches": [
+        "codex/sandbox/m4-withheld-source"
+      ],
+      "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
+      "note": "RED M4-9-S/M4-10-S/M4-17-S withheld-payment statement source adapter, reserved migration 0497. Built ahead on m4-17-s-run; router owns commit, push, PR and independent Claude review. Own lane file is implicitly owned.",
+      "allow": [
+        "apps/web/app/ui/simulation-fee-statements.tsx",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",
+        "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
+        "packages/core/src/issued-simulation-fee-statement.test.ts",
+        "packages/core/src/issued-simulation-fee-statement.ts",
+        "packages/core/src/simulation-money-run.test.ts",
+        "packages/core/src/simulation-money-run.ts",
+        "packages/db/migrations/0497_withheld_payment_statement_source.sql",
+        "packages/db/test/simulation-money-run.integration.test.ts",
+        "packages/db/test/success-fee-recovery-fixture.ts",
+        "packages/db/test/withheld-payment-statement-source-catalog.test.ts",
+        "packages/db/test/withheld-payment-statement-source-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -72,3 +72,30 @@ it("withheld source-adapter gaps remain explicit after compensation has posted",
  const report=reconcileSimulationMoney(s);expect(report.successFee.postedPence).toBe(3200);
  expect(report.label).toBe("Review needed");expect(report.differences).toContainEqual(expect.objectContaining({code:"CURRENT_ELIGIBILITY_UNAVAILABLE",sourceRefs:["withheld_payment_statement_source_adapter"]}));
 });
+function withheldFixture(){
+ const s=fixture();s.stored_receipt_case_allocation=[];
+ s.recovery_case_allocation=[{id:id(30),payment_id:id(5),invoice_id:id(3),gross_pence:38400,eligible_net_pence:32000}];
+ s.recovery_case_allocation_reversal=[];
+ s.receipt_line_allocation=[{id:id(31),allocation_id:id(30),reversal_id:null,gross_numerator:"38400",gross_denominator:"1",net_numerator:"32000",net_denominator:"1"}];
+ return s;
+}
+it("reconciles source-backed withheld allocations, and detects orphan, excessive and missing reversals or lines",()=>{
+ const s=withheldFixture();expect(reconcileSimulationMoney(s).unresolvedDifferenceCount).toBe(0);
+ s.customer_payment_reversal.push({id:id(32),payment_id:id(5)});
+ expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).toContain("LATE_RECEIPT_REVERSAL");
+ s.recovery_case_allocation_reversal!.push({id:id(33),allocation_id:id(30),gross_pence:38401,eligible_net_pence:32001,payment_reversal_id:id(32),credit_note_id:null});
+ expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).toEqual(expect.arrayContaining(["ALLOCATION_EXCEEDS_RECEIPT","CASE_ALLOCATION_MISMATCH"]));
+ s.recovery_case_allocation![0]!.payment_id=id(99);
+ s.recovery_case_allocation_reversal![0]!.allocation_id=id(99);
+ s.receipt_line_allocation![0]!.allocation_id=id(99);
+ expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).toEqual(expect.arrayContaining(["ORPHAN_CASE_ALLOCATION","ORPHAN_REVERSAL","ORPHAN_ALLOCATION_LINE"]));
+});
+it("checks exact withheld reversal lines and linked original receipt facts",()=>{
+ const s=withheldFixture();s.customer_payment_reversal=[{id:id(32),payment_id:id(5)}];
+ s.receipt_allocation_fact_revision.push({id:id(36),payment_id:id(5),direction:"reversal"});
+ s.recovery_case_allocation_reversal=[{id:id(33),allocation_id:id(30),gross_pence:38400,eligible_net_pence:32000,payment_reversal_id:id(32),credit_note_id:null}];
+ s.receipt_line_allocation!.push({id:id(34),allocation_id:id(30),reversal_id:id(33),gross_numerator:"-38400",gross_denominator:"1",net_numerator:"-32000",net_denominator:"1"});
+ expect(reconcileSimulationMoney(s).unresolvedDifferenceCount).toBe(0);
+ s.receipt_line_allocation![1]!.net_numerator="-31999";
+ expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).toContain("CASE_ALLOCATION_MISMATCH");
+});
