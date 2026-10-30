@@ -1,5 +1,5 @@
-// Test-only historical client: actual PostgreSQL v1 append protocol. Never
-// imported by production or used as a fallback on a fully migrated database.
+// Test-only schema-aware client: real PostgreSQL v1 protocol for historical
+// fixtures, and the unchanged production client once LP-4 is installed.
 export async function legacyAuditModule(audit: typeof import("../src/audit.js")) {
   const { createHash } = await import("node:crypto");
   const canonical = (value: unknown): string => {
@@ -12,6 +12,15 @@ export async function legacyAuditModule(audit: typeof import("../src/audit.js"))
     inputs: readonly import("../src/audit.js").AuditEventInput[]) => {
     if (!inputs.length) return [];
     const parsed = inputs.map(input => audit.auditEventInputV1Schema.strict().parse(input));
+    // Readable catalogue metadata avoids requiring runtime SELECT on the
+    // owner-only migration registry. A damaged LP-4 schema still fails closed.
+    const schema = (await database.$client.query<{installed:boolean;sealed_schema:boolean}>(`SELECT
+      to_regprocedure('app.append_audit(jsonb)') IS NOT NULL AS installed,
+      EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=to_regclass('app.audit_event')
+        AND c.conname='audit_event_version_check' AND pg_get_constraintdef(c.oid) LIKE '%audit.v2%') AS sealed_schema`)).rows[0];
+    if (schema?.installed !== false || schema.sealed_schema !== false) {
+      return audit.appendAuditBatch(database,inputs);
+    }
     const tenantId = (await database.$client.query("SELECT nullif(current_setting('app.tenant_id',true),'')::uuid::text tenant_id")).rows[0]?.tenant_id;
     if (!tenantId) throw new audit.AuditVerificationError("Missing transaction-local tenant context");
     const head = (await database.$client.query("SELECT sequence::text,event_hash FROM app.lock_audit_head()")).rows[0];

@@ -51,6 +51,7 @@
         "packages/db/test/job-parties.integration.test.ts",
         "packages/db/test/job-work-state-post-lock.integration.test.ts",
         "packages/db/test/legacy-audit-fixture.ts",
+        "packages/db/test/legacy-audit-routing.integration.test.ts",
         "packages/db/test/lp-0-grant-freeze.integration.test.ts",
         "packages/db/test/lp3-upgrade.integration.test.ts",
         "packages/db/test/lp4-audit-upgrade.integration.test.ts",

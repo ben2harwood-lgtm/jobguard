@@ -5,19 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
-// This suite deliberately freezes PostgreSQL at 0095 to prove that upgrade.
-// Use the actual pre-LP4 client protocol against those historical tables. This
-// is not a fallback in the application: fully migrated databases use only the
-// sealed database writer, with direct runtime INSERT/head grants withdrawn.
-vi.mock("../src/audit.js", async importOriginal => {
-  const {legacyAuditModule} = await import("./legacy-audit-fixture.js");
-  return legacyAuditModule(await importOriginal<typeof import("../src/audit.js")>());
-});
-
+// The shared integration setup selects the actual pre-LP4 audit client for
+// this deliberately frozen 0095 schema; fully migrated fixtures stay sealed.
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
 const context = testTenantContext(tenant);

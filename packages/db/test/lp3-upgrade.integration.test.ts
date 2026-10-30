@@ -1,16 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsDatabase, transaction } from "./lp-job-doors-fixtures.js";
 import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate } from "../src/migrate.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-// Seed the historical schema with its real pre-LP4 audit client only.
-vi.mock("../src/audit.js", async importOriginal => {
-  const {legacyAuditModule} = await import("./legacy-audit-fixture.js");
-  return legacyAuditModule(await importOriginal<typeof import("../src/audit.js")>());
-});
+// Shared integration setup seeds historical schemas with their real v1 audit client.
 const own="0404_lp3_activation_acceptance.sql",context=testTenantContext(T),environment=process.env.JOBGUARD_ENV;
 let db:Awaited<ReturnType<typeof jobDoorsDatabase>>;
 beforeAll(async()=>{

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 
 // Tests that execute migration SQL directly still need the administrative
 // prerequisite. This starts real PostgreSQL and provisions cluster roles only;
@@ -9,6 +9,17 @@ import { expect } from "vitest";
 // suites importing bootstrapSyntheticDemo deliberately start without these roles
 // and exercise ensureRoles themselves (including the restricted-owner suites).
 const testPath = expect.getState().testPath;
+// Every real integration suite can use partial schemas through shared fixtures
+// (sessions, repositories or seeds). Select the client per connected database,
+// not per filename/migration list, so mixed old/current databases stay honest.
+// Protocol/unit doubles retain the unwrapped production module.
+if (testPath?.endsWith(".integration.test.ts")) {
+  vi.doMock("../src/audit.js", async () => {
+    const audit = await vi.importActual<typeof import("../src/audit.js")>("../src/audit.js");
+    const {legacyAuditModule} = await import("./legacy-audit-fixture.js");
+    return legacyAuditModule(audit);
+  });
+}
 if (testPath && !readFileSync(testPath, "utf8").includes("bootstrapSyntheticDemo")) {
   const start = EmbeddedPostgres.prototype.start;
   EmbeddedPostgres.prototype.start = async function () {
