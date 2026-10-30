@@ -63,7 +63,7 @@ CREATE FUNCTION app.write_platform_fee_collection(p_job uuid,p_session text,p_co
 DECLARE t uuid; actor record; c record; action text:=p_command->>'action'; cid uuid;
  prior app.platform_fee_collection_command; statement app.platform_fee_statement; attempt app.platform_fee_attempt;
  event app.platform_fee_attempt_event; snapshot jsonb; view jsonb; result jsonb; approval jsonb;
- aid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); authorization uuid:=gen_random_uuid();
+ aid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); auth_id uuid:=gen_random_uuid();
  amount bigint; deadline timestamptz; next_state text;
 BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
@@ -121,9 +121,9 @@ BEGIN
   INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision,t,'simulation_fee_attempt',aid::text,'success_fee.simulated_'||action);
   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution,t,decision,'approved',actor.member_id);
   INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
-   VALUES(authorization,t,decision,resolution,actor.member_id,'success_fee.simulated_'||action,'fake-rail:'||aid::text,statement.document_hash,amount,'GBP',
+   VALUES(auth_id,t,decision,resolution,actor.member_id,'success_fee.simulated_'||action,'fake-rail:'||aid::text,statement.document_hash,amount,'GBP',
     (statement.document->'sourceSnapshot'->>'postingRevision')::integer,'reference_fee_policy_v3',deadline);
-  INSERT INTO app.platform_fee_attempt VALUES(t,p_job,aid,statement.id,authorization,CASE WHEN action='collect' THEN 'collection' ELSE 'refund' END,amount);
+  INSERT INTO app.platform_fee_attempt VALUES(t,p_job,aid,statement.id,auth_id,CASE WHEN action='collect' THEN 'collection' ELSE 'refund' END,amount);
   INSERT INTO app.platform_fee_attempt_event VALUES(t,p_job,aid,1,'pending');
  ELSE
   aid:=(p_command->>'attemptId')::uuid;

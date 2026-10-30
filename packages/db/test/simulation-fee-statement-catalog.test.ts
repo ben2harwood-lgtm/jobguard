@@ -6,6 +6,9 @@ it("both LP inventories enumerate exactly the three 0490 routines and their actu
  const sql=await readFile(new URL("../migrations/0490_simulation_fee_statement_issue.sql",import.meta.url),"utf8");
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1]).sort()).toEqual(["platform_fee_statement_sources","read_platform_fee_statements","write_platform_fee_statement"]);
+ // The inventory records the fully migrated routines, including 0497 replacements.
+ const replacementSql=await readFile(new URL("../migrations/0497_withheld_payment_statement_source.sql",import.meta.url),"utf8");
+ const replacements=new Map([...replacementSql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)].map(m=>[m[1],m[2]]));
  for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
   const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
   const knownRoutines=new Set<string>(raw.recorded.routines.map((r:{identity:string})=>r.identity.slice("function:".length).split("(")[0]));
@@ -13,7 +16,7 @@ it("both LP inventories enumerate exactly the three 0490 routines and their actu
   for(const [_,name,body] of definitions){
    const facts=raw.recorded.routines.filter((r:{identity:string})=>r.identity.startsWith(`function:app.${name}(`));
    expect(facts).toHaveLength(1);
-   expect(staticScan(body!,knownRoutines,relations)).toEqual({staticCalls:facts[0].staticCalls,staticWrites:facts[0].staticWrites});
+   expect(staticScan(replacements.get(name)??body!,knownRoutines,relations)).toEqual({staticCalls:facts[0].staticCalls,staticWrites:facts[0].staticWrites});
    expect(facts[0].runtimeExecute).toBe(name!=="platform_fee_statement_sources");
    if(name!=="platform_fee_statement_sources"){
     expect(raw.entries.filter((e:{key:string})=>e.key===`acl|routine|${facts[0].identity}|jobguard_runtime|EXECUTE|-`)).toHaveLength(1);
