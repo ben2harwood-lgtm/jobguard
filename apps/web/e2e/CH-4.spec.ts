@@ -1,10 +1,11 @@
 // CH4-U work-state controls and linked-job offer. Synthetic only; runs in CI.
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test, type Page } from "@playwright/test";
 import { activateMeterJob } from "../../../packages/db/test/meter-journey-fixtures.js";
+import { meterCompany } from "../../../packages/db/test/meter-persistence-fixtures.js";
+import { subscriptionConsentText } from "../../../packages/core/src/subscription-plan-view.js";
 import { insertPhoto, seedWorkJob, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
-import { openLiveWatchdogJob } from "./helpers/capture-journey";
 import { prepareLockJob } from "./helpers/final-account-lock-journey";
 import { prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
 
@@ -18,11 +19,38 @@ async function click(page: Page, name: string) {
 }
 const eventIds = (page: Page) => panel(page).getByTestId("work-state-event").evaluateAll(items => items.map(item => `${item.getAttribute("data-kind")}:${item.getAttribute("data-event-id")}`));
 
+async function acceptSolo(fixture: WorkFixture, tenantId: string, digest: string) {
+  const anchorDay = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric" }).format(new Date()));
+  const commandTerms = { plan: "Solo", cadence: "monthly", anchorDay, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", maximumPence: 4900, expectedRevision: 0 };
+  const canonical = JSON.stringify(Object.fromEntries(Object.entries({ tenantId, ...commandTerms, consentText: subscriptionConsentText }).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)));
+  const db = await fixture.runtime.connect();
+  try {
+    await db.query("BEGIN");
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb)", [tenantId, digest, randomUUID(), JSON.stringify({ version: "subscription-command.v1", kind: "accept", ...commandTerms, contentHash: createHash("sha256").update(canonical).digest("hex") })]);
+    await db.query("COMMIT");
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  } finally {
+    db.release();
+  }
+}
+
 test("resume and unlocked reopen persist, retry exactly after an unknown outcome, and refuse the Solo cap", async ({ page, context }) => {
-  await openLiveWatchdogJob(page);
-  const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
-  await page.goto(`/jobs/${jobId}#site-work`);
-  await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
+  const admin = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "postgres", password: "sbox-e2e-owner", max: 1 });
+  const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  const fixture = { admin, runtime } as WorkFixture;
+  try {
+    const account = await meterCompany(fixture), token = randomUUID();
+    const digest = createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
+    await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, account.sessionId]);
+    await acceptSolo(fixture, account.tenantId, digest);
+    await activateMeterJob(fixture, account);
+    await context.addCookies([{ name: "jobguard_session", value: token, url: "http://127.0.0.1:3000" }]);
+    const jobId = account.jobId;
+    await page.goto(`/jobs/${jobId}#site-work`);
+    await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
 
   // The real browser request commits, but its successful response is lost at
   // the client boundary. Avoid route.fetch(): it issues a second API-context
@@ -82,20 +110,12 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await click(page, "Close job");
   const beforeCap = await eventIds(page);
   const revisionBeforeCap = await panel(page).getByTestId("work-state-revision").textContent();
-  const admin = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "postgres", password: "sbox-e2e-owner", max: 1 });
-  const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
-  const fixture = { admin, runtime } as WorkFixture;
-  try {
     const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
     for (let i = 0; i < 6; i++) {
       const counted = await seedWorkJob(fixture, tenantId);
       await activateMeterJob(fixture, counted);
       await insertPhoto(fixture, counted, "now");
     }
-  } finally {
-    await runtime.end();
-    await admin.end();
-  }
   await click(page, "Reopen job");
   await expect(panel(page).getByRole("alert")).toContainText("Move to Builder");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
@@ -116,8 +136,12 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
 
   // Layout: no sideways scroll on this viewport and 44px actions.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  const box = await panel(page).getByRole("button", { name: "Load saved site work", exact: true }).boundingBox();
-  expect(box!.height).toBeGreaterThanOrEqual(44);
+    const box = await panel(page).getByRole("button", { name: "Load saved site work", exact: true }).boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  } finally {
+    await runtime.end();
+    await admin.end();
+  }
 });
 
 test("after lock, new site work is refused and the screen offers a linked job", async ({ page }) => {
