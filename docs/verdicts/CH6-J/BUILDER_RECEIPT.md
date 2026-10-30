@@ -1313,3 +1313,62 @@ required. During final checks origin/main advanced to cd8703fc (#408 CH-8,
 migrations 0374/0375). This completed catch-up is pinned to the requested #418
 MERGE_HEAD, not that newer main. The router must merge the newer main after
 committing this resolution before claiming CI against current main.
+
+## CI repair try 1 — 30 October 2026 (incomplete; do not commit)
+
+CH-6 / PR #392, RED. Began on clean 67586eed (router already merged current
+main cd8703fc into 8d6a8147); no merge conflicts remained.
+
+Fetched all four supplied logs through the GitHub connector after the shell's
+GitHub request failed network access. Jobs 123559376160, 123559376092,
+123559376112 and 123559376248 are web shards 1, 2, 3 and 4 respectively. Each
+production build passed, then many browser journeys timed out until the job was
+cancelled. The connector's job-step response confirms the Playwright evidence
+upload was skipped after cancellation. The logs contain timed-out test names,
+but no terminal assertion stack or failed-locator detail. They include CH-1,
+CH-2, CH-3a, CH-4/5, CH-6, M1-16 and M4 recovery/receipt journeys. These broad
+capture/quote/recovery timeouts are not all explained by the patch below.
+
+Confirmed root cause and focused patch: the legacy repository explicitly returns
+null for absent draft cap/basis (commercial-integrity-application-repository.ts,
+lines 84–85), and CommercialIntegrityApplication.view passes them through. The
+CH-6 client schema rejected both nulls, putting a valid draft into its error
+state. Accept exactly null or the existing nonnegative safe-integer amounts;
+preserve null in parsed state and explicitly render the former £0.00 presentation
+at the existing display boundary. This restores compatibility rather than
+changing commercial policy. The v3 schema, authority and review controls are
+unchanged. Existing test expectations remain intact.
+
+Added a draft-null regression and separate invalid-amount controls for both
+fields (negative, fractional, unsafe integer, string, missing). The draft test
+fails with the original schema and passes with the patch. The CH-6 saved-v1
+browser test additionally asserts the actual nullable API contract. Its product
+locators are scoped to main so Next's route announcer and the sandbox banner
+cannot satisfy assertions. No fixtures substitute for API results.
+
+Local verification (installed tools, at most two workers):
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2 app/ui/commercial-integrity-v3.test.tsx: PASS, 52 tests.
+- Original-schema negative control with only the new draft-null test selected:
+  expected FAIL, "Expected the saved v1 draft"; fixed source restored in finally,
+  then all 52 tests rerun successfully. No tests are skipped in the final run.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity.audit.test.ts src/commercial-integrity.application.test.ts: PASS, 5 tests.
+- Installed TypeScript: ./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit: PASS.
+- apps/web: ./node_modules/.bin/playwright test --list --workers=2 e2e/ch6-integrity-v3.spec.ts: PASS, 4 tests discovered across mobile and desktop; discovery only, not browser execution.
+- node tools/commercial-integrity-boundary.mjs: PASS, 77 protected roots, zero diagnostics.
+- Existing lane policy path validation: PASS, all five repair source/test paths covered.
+- All main migrations/lane files checked byte-for-byte against origin/main;
+  0376/0377 and lp-downstream-effects-v1.md checked against HEAD: unchanged.
+- git diff --check: PASS.
+- React skill checklist: nullable values formatted only at rendering, hooks and
+  async state ownership unchanged, no new dependencies/listeners or authority path.
+
+A first edit script used the API-relative path from apps/web and stopped before
+writing; it was corrected to absolute repository paths. No git-writing commands,
+package downloads, database startup or browser server were attempted.
+
+Handoff is NOT READY as the requested complete CI repair: the other shard
+failures still need their first failing locator/stack or a DB-backed browser run.
+Asked for a saved report/error-context path while continuing the bounded work;
+none was supplied before this handoff. The commit-message file says do not commit.
+Do not present the confirmed draft-cap repair or local tests as proof that all
+four shards are fixed. The router retains CI and RED-review ownership.

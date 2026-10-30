@@ -192,3 +192,21 @@ it("default browser transport calls fetch without an IntegrityJourney receiver",
  try {await new IntegrityJourney(job,state=>states.push(state)).load();expect(states.at(-1)?.status).toBe("v1");}
  finally {vi.unstubAllGlobals();}
 });
+
+
+it("CH-6 accepts the repository's null draft cap and basis without inventing findings", async () => {
+ const s = setup([family("v1"), { ...legacy, acceptedCapPence: null, capBasisPence: null }]);
+ await s.journey.load(); const state = s.latest();
+ if (state.status !== "v1") throw Error("Expected the saved v1 draft");
+ expect(state.view.acceptedCapPence).toBeNull(); expect(state.view.capBasisPence).toBeNull();
+ const markup = renderToStaticMarkup(<LegacyIntegrityResults view={state.view} open={async () => {}} />);
+ expect(markup).toContain('data-testid="integrity-frozen-accepted-cap">£0.00');
+ expect(markup).toContain("£0.00 accepted (quoted/final signals do not alter it)");
+ expect(markup).toContain("No checks in this filter."); expect(markup).not.toContain('role="alert"');
+});
+it.each(["acceptedCapPence", "capBasisPence"])("CH-6 still refuses invalid legacy %s amounts", async field => {
+ for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, "0", undefined]) {
+  const s = setup([family("v1"), { ...legacy, [field]: value }]);
+  await s.journey.load(); expect(s.latest().status).toBe("error");
+ }
+});

@@ -15,6 +15,9 @@ test("CH-6 saved v1 keeps its own pricing and recorded checks through family-fir
  expect(family.ok(), await family.text()).toBe(true);
  expect(family.headers()["cache-control"]).toBe("no-store");
  expect(await family.json()).toMatchObject({ jobId, family: "v1" });
+ const draft = await page.request.get(`/api/jobs/${jobId}/commercial-integrity`);
+ expect(draft.ok(), await draft.text()).toBe(true);
+ expect(await draft.json()).toMatchObject({ acceptedCapPence: null, capBasisPence: null, findings: [] });
  await page.reload(); await expectInstalledV1Panel(page);
  const reopened = await browser.newContext({ storageState: await page.context().storageState(), viewport: page.viewportSize()!, ...(baseURL ? { baseURL } : {}) });
  try {
@@ -57,8 +60,8 @@ test("CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock 
  const unrelated = await browser.newContext({ ...(baseURL ? { baseURL } : {}) });
  try {
   const other = await unrelated.newPage(); await other.goto("/");
-  await other.getByRole("button", { name: "Start the demo", exact: true }).click();
-  await other.getByRole("button", { name: "Skip tour", exact: true }).click();
+  await other.getByRole("main").getByRole("button", { name: "Start the demo", exact: true }).click();
+  await other.getByRole("main").getByRole("button", { name: "Skip tour", exact: true }).click();
   const denied = await other.request.get(`/api/jobs/${jobId}/commercial-integrity/v3`);
   expect(denied.status()).toBe(404); expect(await denied.json()).toEqual({ code: "NOT_FOUND" });
  } finally { await unrelated.close(); }
