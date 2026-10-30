@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lock-order-418": {
+      "branches": [
+        "codex/sandbox/lock-order-418"
+      ],
+      "note": "RED lock-order-418: align trial dispatcher and latest mon3_activate with MON-1 job-first locking; migration 0400. PostgreSQL concurrency/upgrade checks and independent Claude review pending CI.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migration-notes/0400_trial_activation_lock_order.md",
+        "packages/db/migrations/0400_trial_activation_lock_order.sql",
+        "packages/db/src/free-first-job-lifecycle-repository.test.ts",
+        "packages/db/src/free-first-job-lifecycle-repository.ts",
+        "packages/db/test/trial-lock-order-source.test.ts",
+        "packages/db/test/trial-lock-order.integration.test.ts"
+      ]
+    }
+  }
+}

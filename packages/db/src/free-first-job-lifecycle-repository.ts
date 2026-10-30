@@ -48,11 +48,13 @@ export class FreeFirstJobLifecycleRepository {
   },new TrialActivationMutation(context.tenantId,digest,input));}catch(error){return trialFailure(error);}
  }
 }
-/** Company lock and persisted authority are checked before dispatcher replay/receipt locks. */
+/** Job, company, then dispatcher replay/receipt locks; audit remains last. */
 export class TrialActivationMutation implements CommandMutation<Record<string,unknown>> {
  constructor(private readonly tenantId:string,private readonly digest:string,private readonly input:z.infer<typeof trialSwitchLiveV1>){}
  async lock(db:TenantTransaction,command:ConsequentialCommand){
-  assertTrialSynthetic();const row=(await db.$client.query("SELECT app.mon3_owner($1,$2) actor",[this.tenantId,this.digest])).rows[0];
+  assertTrialSynthetic();
+  await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[this.tenantId,this.input.jobId]);
+  const row=(await db.$client.query("SELECT app.mon3_owner($1,$2) actor",[this.tenantId,this.digest])).rows[0];
   if(row?.actor!==command.actorMembershipId)throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_ACCESS_DENIED");
  }
  async mutate(db:TenantTransaction,command:ConsequentialCommand){
