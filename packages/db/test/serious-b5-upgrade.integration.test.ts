@@ -882,6 +882,46 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// 0493 is additive: retain every predecessor row and catalog fact.
+async function signedExportStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["evidence_export_signer_key", "signed_evidence_export"];
+ const names = [...tables, "evidence_export_signer_key_pkey", "evidence_export_signer_key_ref",
+  "signed_evidence_export_pkey", "signed_evidence_export_tenant_id_authorization_id_key"];
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "guard_signed_evidence_export" && r.args === "");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]!.prosecdef).toBe(false);
+ expect(routines[0]!.proconfig).toEqual(["search_path=pg_catalog, app"]);
+ const access = (await f.admin.query(`SELECT c.relname,pg_get_userbyid(c.relowner) owner,
+  has_table_privilege('jobguard_runtime',c.oid,'SELECT') read,
+  has_table_privilege('jobguard_runtime',c.oid,'INSERT') write,
+  has_table_privilege('jobguard_runtime',c.oid,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') other
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname`, [tables])).rows;
+ expect(access).toEqual(tables.map(relname => ({relname,owner:"jobguard_migration",read:true,write:relname==="signed_evidence_export",other:false})));
+ const executors = (await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+  has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+  EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
+  FROM pg_proc p WHERE p.oid='app.guard_signed_evidence_export()'::regprocedure`)).rows;
+ expect(executors).toEqual([{owner:"jobguard_migration",runtime:false,infrastructure:false,public:false}]);
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
+ for (const t of tables) {
+  expect(before.rows).not.toHaveProperty(`app.${t}`);
+  expect(after.rows[`app.${t}`]).toEqual([]);
+  const r = relations.find(r => r.relname === t)!;
+  expect(r.relrowsecurity).toBe(true); expect(r.relforcerowsecurity).toBe(true);
+ }
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ const position = (rows: unknown[], row: unknown) => rows.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
+  routines:[...before.routines,...routines].sort((a,b) => position(after.routines,a)-position(after.routines,b)),
+  relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
+  policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -906,6 +946,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await signedExportStoreAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

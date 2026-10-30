@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-9-store": {
+      "branches": ["codex/sandbox/m5-9-store"],
+      "note": "RED M5-9 synthetic audited export storage and retained public verification keys. Built ahead on m5-9-signing; database CI and independent Claude review remain required. This lane file is implicitly allowed by the lane checker.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/signed-evidence-export-v1.md",
+        "packages/db/migrations/0493_signed_evidence_export_store.sql",
+        "packages/db/src/signed-evidence-export-store.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/signed-evidence-export-store-fixture.ts",
+        "packages/db/test/signed-evidence-export-store.integration.test.ts",
+        "packages/db/test/signed-evidence-export-store.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

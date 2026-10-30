@@ -70,6 +70,12 @@
 {"id":"x-variation-writes","title":"Runtime INSERT (and variation column UPDATE) on variation, approval, revision, rejection, withdrawal and rate observation","kind":"commitment","status":"existing_exception","target":{"state":"review_at_card","note":"LP-5c inventories the approval write; LP-6d converts the remaining writers"},"cards":["LP-5c","LP-6d"],"responsibilities":{"LP-5c":"variation_approval and similar approval records are authority-changing grants inventoried for closure","LP-6d":"each remaining direct writer is converted to a checked routine or classified working data with its downstream effect"},"downstream":"variation_approval records an approval of changed price; variation_revision and variation_approval are fingerprinted. Direct writes can create approval records without the approval routine.","sources":["packages/db/migrations/0003_job_spine.sql:113","packages/db/migrations/0003_job_spine.sql:114"],"tests":["packages/db/test/quote.integration.test.ts","packages/db/test/variation.integration.test.ts","packages/db/test/fingerprinted-row-shape.integration.test.ts"],"gaps":[],"path":"ap-quote-variation-commitments","alsoPaths":["ap-lp13-legacy-unknown-raiser"]}
 ],
 "entries":[
+{"key":"acl|rel|table|app.evidence_export_signer_key|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.evidence_export_signer_key|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|rel|table|app.signed_evidence_export|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.signed_evidence_export|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|rel|table|app.signed_evidence_export|jobguard_runtime|INSERT|-","group":"x-audit-event-insert"},
+
 {"key":"acl|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.small_builder_demo(uuid,text,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-demo-i-lifecycle"},
