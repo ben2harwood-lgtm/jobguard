@@ -44,6 +44,9 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  // MON-2A C2/C3: the same entered-code company session explicitly accepts terms and changes plans.
  const consent=page.getByRole("checkbox",{name:/I accept these monthly terms/});
  await expect(page.getByRole("button",{name:"Accept monthly terms"})).toBeDisabled();
+ await expect(page.getByLabel("Billing anchor day")).toHaveCount(0);
+ const serverBillingDay=(await api(page,"/api/subscriptions/current",{headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":tenant!}})).body.billingDay;
+ await expect(page.getByRole("region",{name:"Your subscription",exact:true})).toContainText(`Your billing day: the ${serverBillingDay}`);
  const shownConsent=await page.getByTestId("subscription-consent").textContent();
  const consentRequest=page.waitForRequest(request=>request.url().endsWith("/api/subscriptions/commands") && request.method()==="POST");
  await consent.check();await page.getByRole("button",{name:"Accept monthly terms"}).click();

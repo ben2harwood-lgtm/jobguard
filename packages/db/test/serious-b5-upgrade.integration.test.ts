@@ -1,3 +1,4 @@
+import { lp5ReadTables, lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -318,7 +319,11 @@ async function baselineAdditions(before: Awaited<ReturnType<typeof snapshot>>, a
 async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const livePrompt = await livePromptAdditions(before, after);
+ const admission = await trialAdmissionAdditions(before, after);
  const finalCheck = await finalCheckAdditions(before, after);
+ const eligibility = after.routines.filter(r => r.nspname === "app" && r.proname === "mon3_read_eligibility");
+ expect(eligibility.map(r => r.proname)).toEqual(["mon3_read_eligibility"]);
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "mon3_read_eligibility")).toBe(false);
  const receiptFacts = await receiptFactAdditions(before, after);
  const baseline = await baselineAdditions(before, after);
  const enterpriseFee = await enterpriseFeeAdditions(before, after);
@@ -366,10 +371,10 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, ...baseline.rows, ...enterpriseFee.rows, ...enterpriseStatement.rows, ...enterprisePosting.rows, ...enterpriseReconciliation.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines, ...baseline.routines, ...enterpriseFee.routines, ...enterpriseStatement.routines, ...enterprisePosting.routines, ...enterpriseReconciliation.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations, ...baseline.relations, ...enterpriseFee.relations, ...enterpriseStatement.relations, ...enterprisePosting.relations, ...enterpriseReconciliation.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...baseline.policies, ...enterpriseFee.policies, ...enterpriseStatement.policies, ...enterprisePosting.policies, ...enterpriseReconciliation.policies], after.policies),
+  rows: { ...before.rows, ...admission.rows, ...subscription.rows, ...livePrompt.rows, ...finalCheck.rows, ...billing.rows, ...receiptFacts.rows, ...baseline.rows, ...enterpriseFee.rows, ...enterpriseStatement.rows, ...enterprisePosting.rows, ...enterpriseReconciliation.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...admission.routines, ...subscription.routines, ...livePrompt.routines, ...finalCheck.routines, ...billing.routines, ...receiptFacts.routines, ...baseline.routines, ...enterpriseFee.routines, ...enterpriseStatement.routines, ...enterprisePosting.routines, ...enterpriseReconciliation.routines, ...eligibility], after.routines),
+  relations: additive(before.relations, [...relations, ...admission.relations, ...subscription.relations, ...livePrompt.relations, ...finalCheck.relations, ...billing.relations, ...receiptFacts.relations, ...baseline.relations, ...enterpriseFee.relations, ...enterpriseStatement.relations, ...enterprisePosting.relations, ...enterpriseReconciliation.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...admission.policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...baseline.policies, ...enterpriseFee.policies, ...enterpriseStatement.policies, ...enterprisePosting.policies, ...enterpriseReconciliation.policies], after.policies),
  };
 }
 // Standing ruling 113: additive expectations for ENT-10-OIDC-B objects only.
@@ -730,6 +735,24 @@ async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
+// Dispatcher-assigned catalogue row: 0361 creates only this private refusal routine.
+async function jobImportV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "adopt_in_flight_job_v3"
+  && r.args === "t uuid, source_job_id uuid, session_digest text, command_id uuid, authorization_id uuid, snapshot jsonb");
+ expect(routines).toHaveLength(1);
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r.proowner).toBe(owner);
+  expect(r.prosecdef).toBe(true);
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
+  expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -746,14 +769,20 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
 // SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
-// their table, triggers and constraint sit outside this snapshot.
+// their table, triggers and constraint sit outside this snapshot. 0381 adds only the private lock-request trigger function.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const identities = [["confirm_final_check_catch", "t uuid, j uuid, d text, p jsonb"], ["final_check_claim_catch_case", ""], ["final_check_open_catch_case", ""],
   ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"],
-  ["final_check_practice_source_current", "s app.final_check_processing_source"]];
+  ["final_check_practice_source_current", "s app.final_check_processing_source"], ["request_practice_final_check_on_lock", ""]];
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines).toHaveLength(identities.length);
+ const lockRequest = routines.find(r => r.proname === "request_practice_final_check_on_lock");
+ expect(lockRequest).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog, app, infrastructure"]});
+ const lockRequestAcl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+  FROM pg_proc p WHERE p.oid='app.request_practice_final_check_on_lock()'::regprocedure`)).rows;
+ expect(lockRequestAcl).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration"]}]);
  const helper = routines.find(r => r.proname === "final_check_practice_source_current");
  expect(helper).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog, app"]});
  const helperAcl = (await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
@@ -818,6 +847,77 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
+// MON-1 0380: enumerate only its committed projection, policy and seven routines.
+// Every predecessor row, privilege, routine posture and policy stays compared.
+async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const identities=[
+  ["mon1_work_committed","t uuid, j uuid, activated timestamp with time zone, cutoff timestamp with time zone"],
+  ["mon1_refresh_work_ledger","t uuid"],
+  ["mon1_admit_work_event",""],
+  ["mon1_admit_live_source",""],
+  ["mon1_refresh_after_source",""],
+  ["mon1_fresh_counted_meter_today","t uuid, digest text"],
+  ["mon1_today_source","t uuid, digest text"],
+ ];
+ const routines=after.routines.filter(r=>r.nspname==='app' && identities.some(([name,args])=>r.proname===name && r.args===args));
+ expect(routines).toHaveLength(identities.length);
+ const owner=(await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for(const row of routines) {
+  expect(before.routines.some(r=>r.nspname===row.nspname && r.proname===row.proname && r.args===row.args)).toBe(false);
+  expect(row.proowner).toBe(owner);
+  expect(row.prosecdef).toBe(['mon1_admit_work_event','mon1_admit_live_source','mon1_refresh_after_source'].includes(row.proname));
+  expect(row.proconfig.map((value:string)=>value.toLowerCase())).toEqual(row.proname==='mon1_refresh_work_ledger'?['search_path=pg_catalog','timezone=utc']:['search_path=pg_catalog']);
+  const executors=(await f.admin.query("SELECT ARRAY(SELECT CASE WHEN grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(grantee)::text END FROM aclexplode($1::aclitem[]) ORDER BY 1) names",[row.proacl])).rows[0].names;
+  expect(executors).toEqual(['mon1_fresh_counted_meter_today','mon1_today_source'].includes(row.proname)?['jobguard_migration','jobguard_runtime']:['jobguard_migration']);
+ }
+ const names=['meter_work_ledger','meter_work_ledger_pkey'];
+ const relations=after.relations.filter(r=>r.nspname==='app' && names.includes(r.relname));
+ expect(relations.map(r=>r.relname)).toEqual(names);
+ for(const row of relations) {
+  expect(before.relations.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
+  expect(row.relowner).toBe(owner);
+  expect((await f.admin.query("SELECT count(*)::int n FROM aclexplode(coalesce($1::aclitem[],acldefault('r',$2))) WHERE grantee<>$2",[row.relacl,owner])).rows[0].n).toBe(0);
+ }
+ expect(relations[0]).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
+ const policies=after.policies.filter(p=>p.schemaname==='app' && p.tablename==='meter_work_ledger');
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({policyname:'tenant_isolation',cmd:'ALL',permissive:'PERMISSIVE'});
+ expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policies[0]!.roles])).rows[0].roles).toEqual(['jobguard_migration']);
+ expect(policies[0]!.qual).toBe(policies[0]!.with_check);
+ expect(policies[0]!.qual).toContain("current_setting('app.tenant_id'");
+ const append=<T>(old:T[],added:T[],actual:T[])=>[...old,...added].sort((a,b)=>actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,'app.meter_work_ledger':[]},routines:append(before.routines,routines,after.routines),relations:append(before.relations,relations,after.relations),policies:append(before.policies,policies,after.policies)};
+}
+// CH-5 / 0362: exactly one immutable import aggregate, its policy and checked writer.
+async function invoicedImportAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const relations = after.relations.filter(r => r.nspname === "app" && r.relname === "job_import_v3");
+ const policies = after.policies.filter(r => r.schemaname === "app" && r.tablename === "job_import_v3");
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "adopt_invoiced_job_v3"
+  && r.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text");
+ expect(relations).toHaveLength(1); expect(policies).toHaveLength(1); expect(routines).toHaveLength(1);
+ expect(relations[0]).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
+ expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL", permissive: "PERMISSIVE" });
+ // pg returns name[] as a string; reuse the catalogue cast used above.
+ const roles = (await f.admin.query("SELECT $1::name[]::text[] roles", [policies[0].roles])).rows[0].roles;
+ expect(roles.sort()).toEqual(["jobguard_migration", "jobguard_runtime"]);
+ expect(policies[0].qual).toBe("(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)");
+ expect(policies[0].with_check).toBe(policies[0].qual);
+ expect(routines[0]).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"] });
+ expect((await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,
+ ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
+ FROM pg_proc p WHERE p.oid='app.adopt_invoiced_job_v3(uuid,uuid,text,uuid,uuid,jsonb,text)'::regprocedure`)).rows)
+ .toEqual([{owner:"jobguard_migration",executors:["jobguard_migration","jobguard_runtime"]}]);
+ expect(before.rows["app.job_import_v3"]).toBeUndefined(); expect(after.rows["app.job_import_v3"]).toEqual([]);
+ // Primary/unique indexes have their own relation catalogue rows.
+ const indexes = after.relations.filter(r => r.nspname === "app" && r.relname.startsWith("job_import_v3_"));
+ expect(indexes).toHaveLength(5);
+ const ordered = <T>(all: T[], rows: T[]) => rows.sort((a,b) => all.findIndex(x=>JSON.stringify(x)===JSON.stringify(a))-all.findIndex(x=>JSON.stringify(x)===JSON.stringify(b)));
+ return {...before, rows:{...before.rows,"app.job_import_v3":[]},
+  relations:ordered(after.relations,[...before.relations,...relations,...indexes]),
+  policies:ordered(after.policies,[...before.policies,...policies]), routines:ordered(after.routines,[...before.routines,...routines])};
+}
 // M4-8-S part 2 (0335): exact additive money consumer. No predecessor
 // routine/ACL/row is excluded from comparison. The legacy table gains one guard.
 async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -850,6 +950,39 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
  for(const policy of policies) expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
  const guards=(await f.admin.query("SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='app.recovery_case_allocation'::regclass AND tgfoid='app.guard_legacy_stored_receipt_cash()'::regprocedure")).rows;
  expect(guards).toEqual([{tgname:"stored_receipt_cash_guard",tgenabled:"O"}]);
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
+// MON-4A 0359: enumerate only the two new immutable tables and five routines.
+async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const tables=["payment_fee_statement","payment_fee_command"];
+ const indexes=["payment_fee_statement_pkey","pf_stmt_job","pf_stmt_receipt","payment_fee_command_pkey"];
+ const identities=[
+  ["payment_fee_receipt_sources","t uuid, j uuid, payment uuid, actor uuid"],
+  ["payment_fee_actor","j uuid, d text"],["payment_fee_current","t uuid, j uuid, s uuid, actor uuid"],
+  ["read_payment_fees","j uuid, d text"],["write_payment_fee","j uuid, d text, p jsonb"],
+ ];
+ const routines=after.routines.filter(r=>r.nspname==="app"&&identities.some(([name,args])=>r.proname===name&&r.args===args));
+ expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
+ for(const r of routines){
+  expect(r.proconfig).toEqual(["search_path=pg_catalog, app"]);
+  const exposed=["read_payment_fees","write_payment_fee"].includes(r.proname);
+  expect(r.prosecdef).toBe(exposed);
+  const acl=(await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl;
+  expect(acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration",...(exposed?["jobguard_runtime=X/jobguard_migration"]:[])].sort());
+  expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
+ }
+ const relations=after.relations.filter(r=>r.nspname==="app"&&[...tables,...indexes].includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...tables,...indexes].sort());
+ for(const t of tables){
+  expect(before.rows).not.toHaveProperty(`app.${t}`);expect(after.rows[`app.${t}`]).toEqual([]);
+  const relation=relations.find(r=>r.relname===t)!;expect(relation.relrowsecurity).toBe(true);expect(relation.relforcerowsecurity).toBe(true);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[relation.relacl])).rows[0].acl).toEqual(["jobguard_migration=arwdDxt/jobguard_migration"]);
+ }
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"payment_fee_tenant"]).sort());
+ for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
  const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -999,6 +1132,56 @@ async function lp4AuditAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
  order(expected.routines,after.routines);order(expected.relations,after.relations);order(expected.policies,after.policies);
  return expected;
 }
+// LP-5a: exact owner/grant/policy additions; every predecessor stays compared.
+async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
+ const expected = structuredClone(prior), after = await snapshot();
+ const role = 'jobguard_command_writer';
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname=$1",[role])).rows[0].oid;
+ const acl = async (items: string[]) => (await f.admin.query("SELECT $1::text[]::aclitem[] acl",[items])).rows[0].acl;
+ const addAcl = async (row: {relacl?:unknown;proacl?:unknown}, field:'relacl'|'proacl', addition:string) => {
+  const items = (await f.admin.query("SELECT $1::aclitem[]::text[] items",[row[field]])).rows[0].items as string[];
+  expect(items).not.toContain(addition); row[field]=await acl([...items,addition]);
+ };
+ const inserts = ['decision','decision_resolution','action_authorization','command_receipt'];
+ for (const table of lp5ReadTables) {
+  const relation = expected.relations.find(r=>r.nspname==='app'&&r.relname===table)!;
+  expect(relation).toBeDefined();
+  await addAcl(relation,'relacl',`${role}=${inserts.includes(table)?'ar':'r'}/jobguard_migration`);
+ }
+ for (const name of ['final_lock_canonical','lp4_seal_audit']) {
+  const routine=expected.routines.find(r=>r.nspname==='app'&&r.proname===name)!;
+  await addAcl(routine,'proacl',`${role}=X/${name==='lp4_seal_audit'?'jobguard_audit_writer':'jobguard_migration'}`);
+ }
+ const names = (await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p WHERE p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid))`,[lp5Signatures])).rows;
+ expect(names).toHaveLength(lp5Signatures.length);
+ for (const name of names) {
+  const exposed=['begin_command','complete_command'].includes(name.proname);
+  expected.routines.push({nspname:'app',proname:name.proname,args:name.args,proowner:owner,
+   proacl:await acl([`${role}=X/${role}`,...(exposed?[`jobguard_runtime=X/${role}`,`jobguard_migration=X/${role}`]:name.proname==='lp5_bind_effect'?[`jobguard_migration=X/${role}`]:[])]),
+   prosecdef:name.proname!=='lp5_command_result',proconfig:['search_path=pg_catalog, pg_temp']});
+ }
+ for (const name of ['command_type_registry','command_lifecycle_claim']) {
+  expect(Object.keys(prior.rows)).not.toContain(`app.${name}`);
+  expected.rows[`app.${name}`]=name==='command_type_registry'?[...lp5RegistryRows].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))):[];
+  expected.relations.push({nspname:'app',relname:name,relowner:owner,relacl:await acl([`${role}=arwdDxt/${role}`]),
+   relrowsecurity:name==='command_lifecycle_claim',relforcerowsecurity:name==='command_lifecycle_claim'});
+ }
+ for (const name of ['command_type_registry_pkey','command_lifecycle_claim_pkey','command_lifecycle_claim_tenant_id_authorization_id_key'])
+  expected.relations.push({nspname:'app',relname:name,relowner:owner,relacl:null,relrowsecurity:false,relforcerowsecurity:false});
+ const template=prior.policies.find(p=>p.schemaname==='app'&&p.tablename==='audit_event'&&p.policyname==='tenant_isolation')!;
+ const policy=(table:string,name:string,cmd:string)=>({...template,tablename:table,policyname:name,roles:`{${role}}`,cmd,
+  qual:cmd==='INSERT'?null:template.qual,with_check:cmd==='SELECT'?null:template.with_check});
+ for (const table of lp5ReadTables) expected.policies.push(policy(table,'lp5_command_read','SELECT'));
+ for (const table of inserts) expected.policies.push(policy(table,'lp5_command_insert','INSERT'));
+ expected.policies.push(policy('command_receipt','lp5_command_complete','UPDATE'),policy('command_lifecycle_claim','tenant_isolation','ALL'));
+ // JSONB table-row ordering is the server's lexical JSON representation, not JS property insertion order.
+ const registry=(await f.admin.query("SELECT coalesce(jsonb_agg(value ORDER BY value::text),'[]') data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data;
+ expected.rows['app.command_type_registry']=registry;
+ for (const key of ['routines','relations','policies'] as const) expected[key].sort((a,b)=>
+  after[key].findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-after[key].findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return expected;
+}
 // LP-2 is applied by jobDoorAdditions above. Add only LP-3 catalogue changes;
 // historical business rows still compare in full.
 async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1088,10 +1271,14 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
  Object.assign(expected, await placeAdmissionAdditions(expected));
+ Object.assign(expected, await jobImportV3Additions(expected));
  Object.assign(expected, await with0245Additions(expected));
  Object.assign(expected, await attributionAdditions(expected));
  Object.assign(expected, await catchAdditions(expected));
+ Object.assign(expected, await workAdmissionAdditions(expected));
+ Object.assign(expected, await invoicedImportAdditions(expected));
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
+ Object.assign(expected, await paymentFeeAdditions(expected));
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
@@ -1100,8 +1287,30 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await lp3Additions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await lp4AuditAdditions(expected));
+ Object.assign(expected, await lp5CommandAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 60000);
+
+// MON-3-P-B: ONLY the four new side tables and five new routines from 0235.
+async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = ["trial_admission", "trial_business_verification", "trial_card_attempt", "trial_card_result", "trial_start", "trial_end_source", "trial_subscription_source"];
+ const names = ["mon3_admit", "mon3_audit", "mon3_owner", "mon3_record_card_fixture", "mon3_request_card", "mon3_activate", "mon3_build_source", "mon3_capture_lifecycle", "mon3_pin_source", "mon3_read_lifecycle", "mon3_require_registered_admission", "mon3_simulate_card", "mon3_trial_date", "mon3_validate_billing"].sort();
+ const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
+ expect(routines.map(r => r.proname).sort()).toEqual(names);
+ const indexRows = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows;
+ for (const [table, count] of [["trial_admission",4],["trial_business_verification",2],["trial_card_attempt",3],["trial_card_result",2],["trial_start",3],["trial_end_source",1],["trial_subscription_source",1]] as const) expect(indexRows.filter(r => r.table_name === table)).toHaveLength(count);
+ const relationNames = [...tables, ...indexRows.map(r => r.relname as string)];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}

@@ -2,6 +2,8 @@ import { Catch, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common"
 import { JobWorkStateError, LINKED_JOB_COPY, linkedJobOfferV1 } from "@jobguard/core";
 export function jobWorkStateFailure(error:unknown):{status:number;body:Record<string,unknown>}|null {
  if(!(error instanceof JobWorkStateError))return null;
+ if(error.code==="METER_PROJECTION_MISMATCH")return {status:409,body:{code:error.code,message:"The jobs-on-the-go meter could not be verified. Nothing was changed.",environment:"synthetic_demo",realExternalActions:0}};
+ if(error.code==="METER_UPGRADE_REQUIRED")return {status:409,body:{code:error.code,message:"Your Solo plan and grace place are full. Move to Builder before starting this site work.",environment:"synthetic_demo",realExternalActions:0}};
  if(error.code==="POST_LOCK_WORK_REQUIRES_LINKED_JOB"){
   const offer=linkedJobOfferV1.safeParse("offer" in error?error.offer:undefined);
   return {status:422,body:{...(offer.success?offer.data:{code:error.code,message:LINKED_JOB_COPY}),environment:"synthetic_demo",realExternalActions:0}};

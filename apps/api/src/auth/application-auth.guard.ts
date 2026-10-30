@@ -23,6 +23,8 @@ export class ApplicationAuthGuard implements CanActivate {
     try {
       await this.application().context({sessionToken:cookieToken(request),requestedTenantId:request.body?.requested_tenant_id,tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin});
     }catch(error){const {code}=identityStatus(error);if(code==="TENANT_FORBIDDEN"||code==="ORIGIN_FORBIDDEN")throw new ForbiddenException({code});throw new UnauthorizedException({code:"UNAUTHENTICATED"});}
+    // MON-3 independently rechecks the current synthetic company owner/session in SQL.
+    if(/^\/jobs\/[^/]+\/(?:trial|quotes\/activation)$/u.test(request.path)&&process.env.JOBGUARD_ENV==="synthetic_demo")return true;
     // Existing commercial modules are synthetic projections: never run them as a real principal.
     throw new ForbiddenException({code:"SYNTHETIC_WORKFLOW_ONLY"});
   }

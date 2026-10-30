@@ -100,17 +100,24 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
       merchant: [], sku: [], rate: [],
     };
     const bothReads = deferred();
-    let reads = 0, lockTail = Promise.resolve();
+    let reads = 0;
+    const lockTails = new Map<string, Promise<void>>();
     const pool = { connect: async () => {
       const staged = { merchant: [] as unknown[][], sku: [] as unknown[][], rate: [] as unknown[][] };
-      let locked = false, unlock: (() => void) | undefined;
+      let locked = false;
+      const heldLocks = new Set<string>(), unlocks: Array<() => void> = [];
       const query: Query = async (sql, values = []) => {
         if (sql.startsWith("SELECT pg_advisory_xact_lock")) {
-          const previous = lockTail, acquired = deferred();
-          lockTail = acquired.promise;
-          await previous;
+          // PostgreSQL locks serialize by key and are reentrant within a transaction.
+          const key = JSON.stringify([sql, values]);
+          if (!heldLocks.has(key)) {
+            const previous = lockTails.get(key) ?? Promise.resolve(), acquired = deferred();
+            lockTails.set(key, acquired.promise);
+            await previous;
+            heldLocks.add(key);
+            unlocks.push(acquired.resolve);
+          }
           locked = true;
-          unlock = acquired.resolve;
         } else if (sql.startsWith("SELECT m.id")) {
           const rows = committed.rate.map(r => ({ merchantId: r[2], skuId: r[3], version: r[4] }));
           // Force the unprotected implementation's two reads to see no identity.
@@ -127,8 +134,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
           committed.merchant.push(...staged.merchant);
           committed.sku.push(...staged.sku);
           committed.rate.push(...staged.rate);
-          unlock?.();
-        } else if (sql === "ROLLBACK") unlock?.();
+          for (const unlock of unlocks) unlock();
+        } else if (sql === "ROLLBACK") { for (const unlock of unlocks) unlock(); }
         else if (!transactionSql(sql)) throw new Error(`Unexpected SQL: ${sql}`);
         return { rows: [] };
       };

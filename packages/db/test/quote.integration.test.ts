@@ -49,3 +49,16 @@ it("CH-3a refuses, inside the send transaction, a quote whose frozen binding cha
  // Once the new binding is committed, the same document is refused in a plain send as well.
  const later=send();await expect(later.promise).rejects.toThrow("QUOTE_CHANGED");expect(await effects(later)).toEqual({send:0,outbox:0,receipt:0,decision:0});
 });
+
+it("LP-5a concurrent send retries recover the original generated grant expiry",async()=>{
+ const preview=await new QuoteDeliveryRepository(runtime).preview(context,JOB,"lp5@fictional.invalid");
+ const semanticKey=`lp5-send:${preview.documentId}`,dispatcher=new UserCommandDispatcher(runtime);
+ const send=(offset:number)=>dispatcher.dispatch(context,{version:"command.v1",commandId:randomUUID(),commandType:"quote.issue",semanticKey,
+  actorMembershipId:MEMBER,subjectType:"quote_document",subjectRef:preview.documentId,action:{actionType:"quote.send",recipient:JSON.stringify(["lp5@fictional.invalid"]),
+   contentHash:preview.hash,aggregateRevision:preview.document.documentVersion,amountPence:null,currency:null,policyVersion:"free-quote-send.v1",expiresAt:new Date(Date.parse("2099-01-01T00:00:00Z")+offset)}},
+  new IssueQuoteMutation({tenantId:TENANT,jobId:JOB,documentId:preview.documentId,outboxActionId:randomUUID(),recipients:["lp5@fictional.invalid"],immutableContent:new TextDecoder().decode(preview.pdf)}));
+ const [first,duplicate]=await Promise.all([send(0),send(1000)]);
+ expect(duplicate).toEqual(first);expect(await send(2000)).toEqual(first);
+ expect((await admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='quote.issue' AND semantic_key=$2",[TENANT,semanticKey])).rows[0].n).toBe(1);
+ expect((await admin.query("SELECT count(*)::int n FROM app.quote_send WHERE tenant_id=$1 AND document_id=$2",[TENANT,preview.documentId])).rows[0].n).toBe(1);
+});
