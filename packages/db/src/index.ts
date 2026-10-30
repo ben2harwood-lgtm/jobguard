@@ -129,12 +129,17 @@ export * from "./enterprise-live-prompt-repository.js";
 
 export * from "./contractor-entitlement-authority-repository.js";
 
+export * from "./free-first-job-repository.js";
+export * from "./free-first-job-card-repository.js";
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export * from "./free-first-job-eligibility-repository.js";
+
+export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
-export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
 export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
 export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
 export * from "./evidence-pack-v3-repository.js";

@@ -1,6 +1,6 @@
 # MON-2A plan/subscription screen and actions v1 (C2/C3)
 
-Synthetic made-up companies only. RED: company sign-in and money presentation. The `/plans` screen reads persisted periods and supports explicit terms acceptance, upgrades, downgrade requests and approved simulated settlement. Statement issue remains internal to the engine; MON-2B and all production/commercial release gates remain closed. No migration or new database grants.
+Synthetic made-up companies only. RED: company sign-in and money presentation. The `/plans` screen reads persisted periods and supports explicit terms acceptance, upgrades, downgrade requests and approved simulated settlement. Statement issue remains internal to the engine; MON-2B and all production/commercial release gates remain closed. The initial screen introduced no migration or new grants; MON-2A first-period safety adds migration 0374 without changing grants.
 
 ## Authority and transport
 
@@ -11,6 +11,8 @@ The screen calls C1's existing `GET /api/subscriptions/current` and `POST /api/s
 ## Consumed C1 data
 
 `subscriptionPlanReadV1` in core validates the consumed projection of `subscription-persisted-read.v1`, requiring `environment: synthetic_demo` and `hypothetical: true`. Arrays are mandatory, even when empty. Actual C1 rows retain additional SQL fields; unconsumed fields and arrays are stripped and cannot affect this view.
+
+The HTTP application also supplies `billingDay` (integer 1–31) from its server London clock. Before acceptance the screen displays `Your billing day: the {day}` and submits that day with the reviewed terms; there is no anchor input. After acceptance it displays the stored agreement anchor. Older fixtures may omit the field, but first acceptance then stays disabled. If London midnight passes before acceptance, SQL refuses a stale day and the builder reloads.
 
 | Array | Consumed fields (SQL names) |
 | --- | --- |
