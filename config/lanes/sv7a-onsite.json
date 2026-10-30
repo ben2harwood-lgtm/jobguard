@@ -9,6 +9,7 @@
       "allow": [
         "apps/api/src/job-source.controller.test.ts",
         "apps/api/src/job-source.errors.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "packages/db/migration-notes/0477_onsite_diary_admission.md",
         "packages/db/migrations/0477_onsite_diary_admission.sql",
         "packages/db/src/job-source-repository.ts",
