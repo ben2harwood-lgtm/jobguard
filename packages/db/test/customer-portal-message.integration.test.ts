@@ -30,6 +30,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
  async function customer(practice=f.practice){
   const {auth,jobId}=practice,t=auth.context.tenantId,digest=hash(randomUUID());
   const member=(await f.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[t,auth.membershipId])).rows[0];
+  await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)",[`${member.identity_user_id}@fixture.invalid`,member.identity_user_id]);
   await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[member.identity_user_id,t,auth.membershipId]);
   await f.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fixture-csrf',clock_timestamp()+interval '1 hour','synthetic_demo')",[randomUUID(),member.identity_user_id,digest]);
   const c=(await f.admin.query("SELECT b.customer_id FROM app.job_party_current pc JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(pc.tenant_id,pc.job_id,pc.binding_id) WHERE pc.tenant_id=$1 AND pc.job_id=$2",[t,jobId])).rows[0].customer_id as string;
