@@ -23,6 +23,11 @@ it("actual catalogs retain least privilege",async()=>{
 // C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
 const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
+ "app.customer_portal_grant":[],
+ "app.customer_portal_session":[],
+ "app.job_import_v3":[],
+ "app.payment_fee_command":[],
+ "app.payment_fee_statement":[],
  "app.lp_job_insert_permit":[],
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
@@ -43,6 +48,14 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_scope":[],
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
+ "app.meter_work_ledger":[],
+ "app.trial_admission":[],
+ "app.trial_start":[],
+ "app.trial_end_source":[],
+ "app.trial_subscription_source":[],
+ "app.trial_business_verification":[],
+ "app.trial_card_attempt":[],
+ "app.trial_card_result":[],
  "app.enterprise_baseline_batch":[],
  "app.enterprise_baseline_team":[],
  "app.billing_allocation_run":[],
@@ -76,6 +89,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.recovery_attribution_revision":[],
  "app.recovery_attribution_command":[],
  "app.recovery_attribution_reassessment":[],
+ "app.activation_acceptance_operation_use":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
@@ -88,6 +102,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
  {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
  ]);
+ // 0236 successor routine follows 0208; preserve both additive catalogue expectations.
+ expect((await c.admin.query("SELECT proname FROM pg_proc WHERE oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure")).rows).toEqual([{proname:"mon3_read_eligibility"}]);
 });
 it("negative controls detect changed prior rows grants and shapes",async()=>{
  const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);

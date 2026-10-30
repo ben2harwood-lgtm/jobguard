@@ -35,7 +35,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -54,7 +54,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -80,6 +80,8 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     "app.mon1_lifecycle_rebuild(uuid,text,uuid)",
     "app.mon1_lifecycle_read(uuid,text,uuid)",
     "app.mon1_counted_meter_today(uuid,text)",
+    "app.mon1_fresh_counted_meter_today(uuid,text)",
+    "app.mon1_today_source(uuid,text)",
   ];
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   if (owner === "jobguard_migration") throw new Error("Meter ownership requires the administrative bootstrap principal");
@@ -103,6 +105,9 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
       await admin.query(`ALTER FUNCTION ${signature} OWNER TO jobguard_meter_owner`);
       await admin.query("SET LOCAL ROLE jobguard_meter_owner");
       await admin.query(`ALTER FUNCTION ${signature} SECURITY DEFINER`);
+      if (signature === "app.mon1_counted_meter_today(uuid,text)") {
+        await admin.query("REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime");
+      }
       await admin.query("RESET ROLE");
     }
     await admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
@@ -115,8 +120,11 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
   } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
-  await client.query("SET ROLE jobguard_migration");
+  // Only the administrator can grant owner membership; migrations remain
+  // NOCREATEROLE. Remove the temporary capability on success and failure.
+  await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
   try {
+    await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
     return result.rows[0]!.count;
@@ -125,6 +133,7 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
+    await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration");
   }
 }
 async function seedDatabase(client: PoolClient) {

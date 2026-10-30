@@ -112,6 +112,7 @@ describe("MIGFIX-4 exact quote acceptance", () => {
       const ready = new Promise<void>(resolve => { reached = resolve; });
       let pid = 0;
       const held: CommandMutation<Record<string, unknown>> = {
+        inputHash: command => first.mutation.inputHash(command),
         async mutate(db: TenantTransaction, command: ConsequentialCommand) {
           pid = (await db.$client.query("SELECT pg_backend_pid() AS pid")).rows[0]!.pid as number;
           const result = await first.mutation.mutate(db, command); reached(); await hold; return result;
@@ -169,9 +170,9 @@ describe("MIGFIX-4 exact quote acceptance", () => {
   it("[MIGFIX-4.exact] exact document hash, version, total, issue record and live baseline refusals remain", async () => {
     const f = await issued(), a = acceptance(f);
     for (const input of [{ ...a.input, documentHash: "b".repeat(64) }, { ...a.input, documentVersion: 2 }, { ...a.input, acceptedTotalPence: 1 }, { ...a.input, documentId: randomUUID() }]) {
-      await expect(withTenant(c.runtime, f.context, db => new RecordBuilderAcceptanceMutation(f.tenant, input).mutate(db, {
-        ...a.command, action: { ...a.command.action, contentHash: input.documentHash, aggregateRevision: input.documentVersion, amountPence: input.acceptedTotalPence },
-      }))).rejects.toMatchObject({ code: "22023" });
+      await expect(f.dispatcher.dispatch(f.context, {
+        ...a.command, subjectRef: input.documentId, action: { ...a.command.action, contentHash: input.documentHash, aggregateRevision: input.documentVersion, amountPence: input.acceptedTotalPence },
+      }, new RecordBuilderAcceptanceMutation(f.tenant, input))).rejects.toMatchObject({ code: "22023" });
     }
     // A document with no matching send must also fail even when its identity and exact terms match.
     await rolledBack(c.admin, async db => {

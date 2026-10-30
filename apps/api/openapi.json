@@ -1,6 +1,152 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/issue": {
+      "post": {
+        "operationId": "CustomerSigninController_issue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Owner or finance requests a fictional customer sign-in email",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/revoke": {
+      "post": {
+        "operationId": "CustomerSigninController_revoke",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke a customer grant and its sessions",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signin": {
+      "post": {
+        "operationId": "CustomerSigninController_signin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Atomically consume a ten-minute link and set a browser-session cookie",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signout": {
+      "post": {
+        "operationId": "CustomerSigninController_signout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke the current customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/read": {
+      "post": {
+        "operationId": "CustomerSigninController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read only the authenticated customer job scope",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/jobs/{id}/trial": {
+      "get": {
+        "operationId": "FreeFirstJobLifecycleController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current company's synthetic first-job trial",
+        "tags": [
+          "trial"
+        ]
+      },
+      "post": {
+        "operationId": "FreeFirstJobLifecycleController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Request or explicitly simulate the company's card setup",
+        "tags": [
+          "trial"
+        ]
+      }
+    },
+    "/jobs/{id}/payment-fees": {
+      "get": {
+        "operationId": "PaymentFeeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read verified synthetic receipt statements and current approval/dispute state",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentFeeController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare, approve the exact hash, or pause a synthetic receipt fee statement",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      }
+    },
     "/auth/oidc/{connectionId}/start": {
       "post": {
         "operationId": "OidcController_start",
@@ -293,6 +439,49 @@
         ]
       }
     },
+    "/jobs/{id}/parties/import-v3/preview": {
+      "post": {
+        "operationId": "JobImportV3Controller_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the server-selected fictional v3 import and its availability",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3": {
+      "post": {
+        "operationId": "JobImportV3Controller_adopt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      },
+      "get": {
+        "operationId": "JobImportV3Controller_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned immutable v3 imported baseline and zero-count exclusion",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
     "/value": {
       "get": {
         "operationId": "BusinessValueController_get",
@@ -345,10 +534,10 @@
             "description": "Stored sources, expected revisions or command replay conflict"
           },
           "503": {
-            "description": "Review approval remains dependency-bound"
+            "description": "Required runtime dependency unavailable"
           }
         },
-        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
+        "summary": "Assess a stored synthetic catch or approve its exact owner review",
         "tags": [
           "synthetic recovery attribution"
         ]

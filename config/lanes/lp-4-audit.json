@@ -18,11 +18,13 @@
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
         "packages/db/src/audit-protocol-test-fixture.ts",
         "packages/db/src/audit.ts",
+        "packages/db/src/demo-bootstrap.ts",
         "packages/db/src/enterprise-identity-repository.ts",
         "packages/db/src/later-outbox.test.ts",
         "packages/db/src/lp4-audit.test.ts",
         "packages/db/src/outbox.test.ts",
         "packages/db/src/serious-b7.test.ts",
+        "packages/db/test/administrative-role-setup.ts",
         "packages/db/test/audit-api-capture.test.ts",
         "packages/db/test/audit-api-file-final-account.test.ts",
         "packages/db/test/audit-api-file-supplier-document.test.ts",
@@ -34,6 +36,7 @@
         "packages/db/test/contractor-billing-export.integration.test.ts",
         "packages/db/test/contractor-practice-session.integration.test.ts",
         "packages/db/test/decisions-later.integration.test.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
         "packages/db/test/enterprise-dashboard-stored.integration.test.ts",
         "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts",
         "packages/db/test/enterprise-fee-derivation.integration.test.ts",
@@ -63,7 +66,8 @@
         "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
         "packages/db/test/subscription-actions.integration.test.ts",
         "packages/db/test/watchdog-command-harness.ts",
-        "packages/db/test/watchdog-legacy-identities.integration.test.ts"
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts",
+        "packages/db/vitest.config.ts"
       ]
     }
   }

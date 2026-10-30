@@ -27,7 +27,10 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       'ALTER FUNCTION app.mon1_lifecycle_rebuild(uuid,text,uuid) OWNER TO jobguard_meter_owner',
       'ALTER FUNCTION app.mon1_lifecycle_read(uuid,text,uuid) OWNER TO jobguard_meter_owner',
       'ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_today_source(uuid,text) OWNER TO jobguard_meter_owner',
     ]);
+    expect(sql).toContain('REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime');
     expect(sql).toContain('GRANT jobguard_migration TO "synthetic_owner" WITH INHERIT FALSE, SET TRUE');
     expect(sql.indexOf('REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner')).toBeLessThan(sql.indexOf('COMMIT'));
     expect(sql.at(-2)).toBe('REVOKE jobguard_meter_owner FROM "synthetic_owner"');
@@ -46,13 +49,40 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     expect(sql).not.toContain('COMMIT');
   });
 
+  it("revokes temporary audit ownership membership when migration setup fails", async () => {
+    const queries: string[] = [];
+    const client = {release() {}, async query(sql: string) {
+      queries.push(sql);
+      if (sql.includes("WHERE rolname='jobguard_runtime'")) return {rowCount:1,rows:[{rolsuper:false,rolbypassrls:false,rolcreatedb:false,rolcreaterole:false,rolinherit:false,rolcanlogin:true}]};
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1")) return {rows:[{rolsuper:false,rolbypassrls:false,rolcreatedb:false,rolcreaterole:false,rolinherit:false,rolcanlogin:false,rolreplication:false,member:false}]};
+      if (sql === "SELECT current_user") return {rows:[{current_user:"synthetic_owner"}]};
+      if (sql === "SET ROLE jobguard_migration") throw new Error("fixture migration setup failure");
+      return {rowCount:0,rows:[]};
+    }} as unknown as PoolClient;
+    const connect=vi.spyOn(Pool.prototype,"connect").mockImplementation(async()=>client);
+    const end=vi.spyOn(Pool.prototype,"end").mockResolvedValue(undefined);
+    const previousMode=process.env.JOBGUARD_ENV;
+    process.env.JOBGUARD_ENV="synthetic_demo";
+    try {
+      await expect(bootstrapSyntheticDemo({ownerUrl:"postgresql://owner:synthetic@localhost/jobguard_synthetic_demo",
+        runtimeUrl:"postgresql://jobguard_runtime:synthetic@localhost/jobguard_synthetic_demo"})).rejects.toThrow("fixture migration setup failure");
+      const failed=queries.indexOf("SET ROLE jobguard_migration");
+      expect(queries.indexOf("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE")).toBeLessThan(failed);
+      expect(queries.indexOf("RESET ROLE")).toBeGreaterThan(failed);
+      expect(queries.indexOf("REVOKE jobguard_audit_writer FROM jobguard_migration")).toBeGreaterThan(queries.indexOf("RESET ROLE"));
+    } finally {
+      connect.mockRestore();end.mockRestore();
+      if(previousMode===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousMode;
+    }
+  });
+
   it("binds the synthetic small-builder track in the fixture transaction before going live", async () => {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       queries.push({ sql, values });
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
@@ -70,6 +100,12 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       expect(queries.findIndex(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter'))
         .toBeLessThan(queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration'));
       expect(queries.some(({sql}) => sql.includes('CREATE ROLE jobguard_meter_owner'))).toBe(true);
+      const auditCreate = queries.findIndex(({sql}) => sql.includes('CREATE ROLE jobguard_audit_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS'));
+      const migrationStart = queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration');
+      expect(auditCreate).toBeGreaterThan(-1);
+      expect(auditCreate).toBeLessThan(migrationStart);
+      expect(queries.findIndex(({sql}) => sql === 'GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE')).toBeLessThan(migrationStart);
+      expect(queries.findIndex(({sql}) => sql === 'REVOKE jobguard_audit_writer FROM jobguard_migration')).toBeGreaterThan(migrationStart);
       const reset = queries.findIndex(({sql}) => sql === 'RESET ROLE');
       const transfer = queries.findIndex(({sql}) => sql.includes('ALTER FUNCTION app.mon1_lifecycle_actor') && sql.includes('OWNER TO jobguard_meter_owner'));
       expect(transfer).toBeGreaterThan(reset);
@@ -156,6 +192,14 @@ describe("synthetic Vercel/Neon bootstrap", () => {
         owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true, can_select: true, can_insert: false, can_update: false, can_delete: false,
       }]);
     }
+    expect((await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolinherit,rolreplication FROM pg_roles WHERE rolname='jobguard_audit_writer'")).rows).toEqual([
+      {rolcanlogin:false,rolsuper:false,rolbypassrls:false,rolcreaterole:false,rolcreatedb:false,rolinherit:false,rolreplication:false},
+    ]);
+    expect((await admin.query(`SELECT has_schema_privilege('jobguard_audit_writer','app','CREATE') can_create,
+      pg_has_role('jobguard_migration','jobguard_audit_writer','MEMBER') migration_member,
+      pg_has_role('jobguard_runtime','jobguard_audit_writer','MEMBER') runtime_member`)).rows).toEqual([
+      {can_create:false,migration_member:false,runtime_member:false},
+    ]);
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
@@ -180,6 +224,15 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     await admin.query("GRANT jobguard_meter_owner TO sv2_probe_holder");
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("holder other than the PostgreSQL 16 ADMIN-only creator membership");
     await admin.query("REVOKE jobguard_meter_owner FROM sv2_probe_holder");
+    await admin.query("GRANT jobguard_audit_writer TO sv2_probe_holder");
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("jobguard_audit_writer has a holder other than the PostgreSQL 16 ADMIN-only creator membership");
+    await admin.query("REVOKE jobguard_audit_writer FROM sv2_probe_holder");
+    await admin.query("ALTER ROLE jobguard_audit_writer LOGIN");
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("jobguard_audit_writer does not have the required least-privilege posture");
+    await admin.query("ALTER ROLE jobguard_audit_writer NOLOGIN");
+    await admin.query("GRANT jobguard_runtime TO jobguard_audit_writer");
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("jobguard_audit_writer does not have the required least-privilege posture");
+    await admin.query("REVOKE jobguard_runtime FROM jobguard_audit_writer");
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
     expect(await holderShape()).toEqual([{ role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
   }, 60_000);

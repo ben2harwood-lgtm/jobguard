@@ -7,6 +7,20 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { jobDoorsActor, jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 describe("LP-4 compatible upgrade and dark refusal", () => {
+  it("requires administrative role provisioning before the restricted migration", async () => {
+    const db = await jobDoorsDatabase(true, "0456_lp4_database_audit.sql");
+    try {
+      await db.owner.query("ALTER ROLE jobguard_audit_writer RENAME TO lp4_missing_role_fixture");
+      try {
+        await expect(migrate(db.owner)).rejects.toMatchObject({code:"42704",
+          message:"jobguard_audit_writer is missing; run administrative ensureRoles before migrations"});
+      } finally {
+        await db.owner.query("ROLLBACK");
+        await db.owner.query("ALTER ROLE lp4_missing_role_fixture RENAME TO jobguard_audit_writer");
+      }
+      await migrate(db.owner);
+    } finally { await db.close(); }
+  }, 300_000);
   it("preserves historical bytes/checkpoint and appends v2 without granting runtime legacy writers", async () => {
     const db = await jobDoorsDatabase(true, "0456_lp4_database_audit.sql");
     try {
