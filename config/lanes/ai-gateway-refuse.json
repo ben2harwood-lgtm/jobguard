@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "ai-gateway-refuse": {
+      "branches": [
+        "codex/sandbox/ai-gateway-refuse"
+      ],
+      "note": "RED tenant isolation: fail-closed AI source/session binding. Built ahead on m0-12a-claude; shared AI files serialize with that base and other AI changes. Recorded synthetic fixtures and fake transports only; no live route, database change or migration. Own lane file is implicitly permitted.",
+      "allow": [
+        "docs/operations/claude-data-flow.md",
+        "packages/ai/src/capture.ts",
+        "packages/ai/src/claude-provider.test.ts",
+        "packages/ai/src/enterprise-ai-prompts.test.ts",
+        "packages/ai/src/enterprise-ai-prompts.ts",
+        "packages/ai/src/fixture-provider.ts",
+        "packages/ai/src/gateway.test.ts",
+        "packages/ai/src/gateway.ts",
+        "packages/ai/src/later-gateway.test.ts",
+        "packages/ai/src/shadow-proposal.ts",
+        "packages/ai/src/sor-suggestion.ts"
+      ]
+    }
+  }
+}

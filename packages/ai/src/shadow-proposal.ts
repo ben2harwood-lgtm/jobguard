@@ -17,14 +17,14 @@ export const SHADOW_PROMPT_VERSION = "shadow-proposal.fixture.v1";
 export function shadowGatewayRequest(o: Observation, fixtureId: string): AiGatewayRequest {
   return { contractVersion: "ai_gateway_request_v1", fixtureId, operation: "shadow_cited_proposals",
     promptVersion: SHADOW_PROMPT_VERSION, schemaVersion: "shadow-ai-proposals.v1",
-    sources: [{ id: o.evidence.id, content: o.text, sha256: sha256(o.text) }], timeoutMs: 1000, maxOutputTokens: 2048 };
+    sources: [{ tenantId: o.tenantId, visibility: "public", id: o.evidence.id, content: o.text, sha256: sha256(o.text) }], timeoutMs: 1000, maxOutputTokens: 2048 };
 }
 /** Constructible only with recorded responses. No provider factory, SDK, region fallback or network client. */
 export class ShadowFixtureProposer {
-  private readonly gateway: AiGateway;
-  constructor(fixtures: Readonly<Record<string, RecordedFixture>>) { this.gateway = new AiGateway(new FixtureAiProvider(fixtures)); }
+  private readonly provider: FixtureAiProvider;
+  constructor(fixtures: Readonly<Record<string, RecordedFixture>>) { this.provider = new FixtureAiProvider(fixtures); }
   async propose(raw: unknown, fixtureId: string, at: string) {
-    const o = parseObservation(raw), result = await this.gateway.generate(shadowGatewayRequest(o, fixtureId), shadowAiOutputV1);
+    const o = parseObservation(raw), result = await new AiGateway(this.provider, () => ({ tenantId: o.tenantId })).generate(shadowGatewayRequest(o, fixtureId), shadowAiOutputV1);
     const proposals: ShadowProposal[] = [], seen = new Set<string>(); let droppedCitations = 0;
     for (const candidate of result.output.proposals) {
       const c = candidate.citation;

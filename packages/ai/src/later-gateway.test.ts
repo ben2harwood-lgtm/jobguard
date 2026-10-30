@@ -1,3 +1,4 @@
+import { fixtureAiSession } from "./fixture-provider.js";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { jobRecordProposalV1, parseObservation, sha256, type JobRecordProposal } from "@jobguard/core";
@@ -13,10 +14,10 @@ const hash = createHash("sha256").update(text).digest("hex");
 const request = {
   contractVersion: "ai_gateway_request_v1", fixtureId: "capture", operation: "capture_job_record_proposal",
   promptVersion: "job-record-proposal-v1", schemaVersion: "job-record-proposal-v1",
-  sources: [{ id: sourceId, content: text, sha256: hash }], timeoutMs: 1000, maxOutputTokens: 2048,
+  sources: [{ tenantId: "tenant-a", visibility: "public", id: sourceId, content: text, sha256: hash }], timeoutMs: 1000, maxOutputTokens: 2048,
 };
 const proposal = () => parseCaptureFixture(sourceId, text);
-const gateway = (output: unknown) => new AiGateway(new FixtureAiProvider({ capture: { output, citations: [] } }));
+const gateway = (output: unknown) => new AiGateway(new FixtureAiProvider({ capture: { output, citations: [] } }), fixtureAiSession);
 const fields = ["title", "description", "quantity", "unit", "unitPricePence", "material", "question"] as const;
 function field(output: JobRecordProposal, name: typeof fields[number]) {
   if (name === "title") return output.title;
@@ -100,7 +101,7 @@ describe("LATER-B3 capture gateway", () => {
       { ...candidate, citation: { start: 0, end: 19, quote: "unsupported" } },
       { ...candidate, citation: { start: 0, end: 99, quote: "outside source" } },
     ] }, citations: [] } };
-    const generated = await new AiGateway(new FixtureAiProvider(fixtures)).generate(shadowGatewayRequest(observation, "shadow"), shadowAiOutputV1);
+    const generated = await new AiGateway(new FixtureAiProvider(fixtures), () => ({ tenantId: observation.tenantId })).generate(shadowGatewayRequest(observation, "shadow"), shadowAiOutputV1);
     expect(generated.output).toEqual(fixtures.shadow.output);
     expect(generated.repairAttempts).toBe(0);
     const result = await new ShadowFixtureProposer(fixtures).propose(observation, "shadow", "2026-10-12T00:00:00Z");

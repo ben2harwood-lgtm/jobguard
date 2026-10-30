@@ -47,7 +47,7 @@ describe("ENT-8B fixture possible extras", () => {
   });
   it("ENT-8B-2 Citations and embedded instructions: missing evidence, foreign tenant/job, hash/version, text and invalid lifecycle refuse", async () => {
     const row = await example();
-    const result = await new AiGateway(new FixtureAiProvider({ [row.id]: row.response })).generate(enterpriseFixtureRequest(row), enterpriseAiOutputV1);
+    const result = await new AiGateway(new FixtureAiProvider({ [row.id]: row.response }), () => ({ tenantId: row.tenantId })).generate(enterpriseFixtureRequest(row), enterpriseAiOutputV1);
     for (const patch of [
       { evidenceId: "00000000-0000-4000-8000-999999999999" },
       { tenantId: "00000000-0000-4000-8000-999999999999" }, { jobId: "00000000-0000-4000-8000-999999999999" },

@@ -12,8 +12,16 @@ import {
 
 export type RepairOutput = (invalidOutput: unknown) => unknown;
 
+/** Server-owned session bridge. Resolve authentication and active membership here,
+ * never from the AI request body. No resolver means no authority to execute. */
+export type AiSessionResolver = () =>
+  { readonly tenantId: string } | null | Promise<{ readonly tenantId: string } | null>;
+
 export class AiGateway {
-  constructor(private readonly provider: AiProvider) {}
+  constructor(
+    private readonly provider: AiProvider,
+    private readonly resolveSession?: AiSessionResolver,
+  ) {}
 
   async generate<T>(
     untrustedRequest: unknown,
@@ -22,12 +30,22 @@ export class AiGateway {
   ): Promise<AiGatewayResponse<T>> {
     const parsedRequest = aiGatewayRequestSchema.safeParse(untrustedRequest);
     if (!parsedRequest.success) throw typedZodError("invalid_request", "Invalid AI request", parsedRequest.error);
-    const request = parsedRequest.data;
-    // Unscoped sources remain supported only for the existing synthetic fixtures.
-    // Tenant context must come from the authenticated caller before any future route.
+    let session: Awaited<ReturnType<AiSessionResolver>> | undefined;
+    try {
+      session = await this.resolveSession?.();
+    } catch {
+      throw new AiGatewayError("invalid_request", "AI session is not permitted");
+    }
+    if (!session || typeof session.tenantId !== "string" || !session.tenantId.trim()) {
+      throw new AiGatewayError("invalid_request", "AI session is not permitted");
+    }
+    const tenantId = session.tenantId;
+    if (parsedRequest.data.tenantId !== undefined && parsedRequest.data.tenantId !== tenantId) {
+      throw new AiGatewayError("invalid_request", "AI source is not permitted");
+    }
+    const request = { ...parsedRequest.data, tenantId };
     if (request.sources.some((source) =>
-      (source.visibility !== undefined && source.visibility !== "public") ||
-      source.tenantId !== request.tenantId
+      source.visibility !== "public" || source.tenantId !== tenantId
     )) {
       throw new AiGatewayError("invalid_request", "AI source is not permitted");
     }

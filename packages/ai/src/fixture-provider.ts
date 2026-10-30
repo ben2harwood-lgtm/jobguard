@@ -1,6 +1,9 @@
 import { AiGatewayError } from "./errors.js";
 import type { AiGatewayRequest, AiProvider } from "./types.js";
 
+/** Synthetic authority for recorded fixture routes only; never a live session. */
+export const fixtureAiSession = () => ({ tenantId: "tenant-a" });
+
 export type RecordedFixture = {
   readonly output: unknown;
   readonly citations: readonly { sourceId: string; start: number; end: number }[];
