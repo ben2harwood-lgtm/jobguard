@@ -31,3 +31,9 @@ it("shows a loading state without company numbers before authentication", () => 
   const html = renderToStaticMarkup(<MeterScreen />);
   expect(html).toContain('role="status"'); expect(html).toContain("hypothetical"); expect(html).not.toContain("of 7 jobs");
 });
+
+it("MON1-J held counted source stays unavailable; it never falls back to capacity numbers", async () => {
+ const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({version:"meter-today-error.v1",code:"METER_UNAVAILABLE"},{status:503}));
+ await expect(loadMeter(fetcher)).rejects.toThrow("READ_UNAVAILABLE");
+ expect(fetcher).toHaveBeenCalledTimes(2);
+});

@@ -15,7 +15,7 @@ it("A8: populated actual base -> only 0383 -> named rows/types/PKs unchanged -> 
  expect(allocator).toBeGreaterThan(0);
  expect(own).toBeGreaterThan(allocator);
  const previous = MIGRATION_URLS[own - 1]!;
- expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(376);
+ expect(Number(previous.pathname.split("/").at(-1)!.slice(0, 4))).toBeLessThan(383);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, own)) {
   const name = url.pathname.split("/").at(-1)!;

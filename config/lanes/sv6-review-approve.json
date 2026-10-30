@@ -26,7 +26,8 @@
         "apps/api/src/job-source.errors.ts",
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/framework-boundary.test.ts",
-        "apps/web/e2e/M0-6L.spec.ts"
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/api/src/workspace/index.ts"
       ]
     }
   }
