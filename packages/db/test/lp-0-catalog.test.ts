@@ -353,3 +353,24 @@ describe("DEMO-I exact installed capability inventory",()=>{
   expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
  });
 });
+
+describe("M4-16 exact dunning capability inventory",()=>{
+ it("allows only its checked entry point and refuses direct runtime table grants",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const tables=["dunning_invoice","dunning_reminder"];
+  const routines=[routine("dunning_workbench","uuid,text,uuid,text,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]})];
+  const baseline=new Set(deriveFacts(base({relations:[],routines:[]})).map(f=>f.key));
+  const cat=base({relations:tables.map(name=>table(name,[])),routines});
+  const additions=(c:Catalogue)=>deriveFacts(c).filter(f=>!baseline.has(f.key));
+  const entries=inventory.entries.filter(e=>e.key.includes("app.dunning_"));
+  expect(entries.map(e=>e.key).sort()).toEqual(additions(cat).map(f=>f.key).sort());
+  expect(entries).toHaveLength(2);expect(compareInventory(inventory,additions(cat)).ok).toBe(true);
+  for(const name of tables){
+   for(const privilege of ["SELECT","INSERT","UPDATE","DELETE"]){
+    const extra=base({...cat,relations:cat.relations.map(r=>r.name===name?{...r,acl:[...r.acl,acl(RT,privilege)]}:r)});
+    expect(compareInventory(inventory,additions(extra)).ok).toBe(false);
+   }
+  }
+  expect(inventory.recorded.routines.filter(r=>r.identity.startsWith("function:app.dunning_"))).toHaveLength(1);
+ });
+});
