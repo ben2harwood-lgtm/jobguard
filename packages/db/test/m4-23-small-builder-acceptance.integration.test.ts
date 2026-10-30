@@ -2,6 +2,19 @@
 // Coverage limits are executable TODOs below. A withheld-payment recovery is
 // deliberately not described as the plan's merchant-overcharge Chain A.
 import { randomUUID } from "node:crypto";
+import { verifyStandalonePack } from "@jobguard/core";
+import { MaterialRepository } from "../src/material-repository.js";
+import { PurchaseOrderRepository } from "../src/purchase-order-repository.js";
+import { SupplierDocumentRepository } from "../src/supplier-document-repository.js";
+import { SupplierMatchRepository } from "../src/supplier-match-repository.js";
+import { DiscrepancyRepository } from "../src/discrepancy-repository.js";
+import { EvidencePackRepository } from "../src/evidence-pack-repository.js";
+import { RecoveryMessageRepository } from "../src/recovery-message-repository.js";
+import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
+import { VariationRepository } from "../src/variation-repository.js";
+import { FinalCheckRepository } from "../src/final-check-repository.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SuccessFeeRepository } from "../src/success-fee-repository.js";
 import { SimulationFeeStatementRepository } from "../src/simulation-fee-statement-repository.js";
@@ -88,7 +101,77 @@ async function collectOnce(x: Subject, saved: Awaited<ReturnType<typeof issue>>,
 // Each fixture uses owner-connected practice sessions (LP R4); no fee,
 // derivation, qualifying allocation or settlement rows are inserted by this pack.
 describe("M4-23-SB integrated sandbox outcomes", () => {
-  it("£320 withheld-payment substitute: approved eligibility and settled allocation → £32 posts/collects once → balanced reconciliation", async () => {
+  it("Chain A available stages: source-bound £320 supplier discrepancy → owner-confirmed claim → verifiable pack → exact approved pursuit", async () => {
+    let merchantCaseId: string | undefined;
+    const x = await realReceiptFixture(f, "F5", "receipt-line-allocation-command.v1", false, false, async source => {
+      const { context, jobId, digest } = source, scoped = practiceMaterialPool(f.runtime, digest);
+      const scopeId = (await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",
+        [context.tenantId, jobId])).rows[0].id as string;
+      const materials = new MaterialRepository(scoped);
+      const rate = await materials.addRate(context, { merchantName: `Fictional merchant ${jobId}`, sku: "MAT-B",
+        description: "Synthetic supplier material", pricePence: 2000, priceUnit: "each", taxBasis: "net",
+        effectiveFrom: "2026-09-20", sourceLabel: "materials-B", expectedVersion: 0 });
+      const requirement = await materials.addRequirement(context, { jobId, scopeItemId: scopeId, skuId: rate.skuId,
+        quantity: "10", unit: "each", expectedRevision: 0 });
+      await new PurchaseOrderRepository(scoped).revise(context, jobId, { version: "purchase-order-draft.v1",
+        requirementId: requirement.id, quantity: "10", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid",
+        requiredDate: "2026-10-01", expectedRevision: 0 });
+      const docs = new SupplierDocumentRepository(scoped);
+      await docs.intake(context, jobId, { version: "supplier-document-intake.v1", fixtureId: "materials-B-delivery", channel: "picker", expectedRevision: 0 });
+      await docs.intake(context, jobId, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "picker", expectedRevision: 1 });
+      const view = await docs.view(context, jobId);
+      const invoice = view.documents.find((d: { document_type: string }) => d.document_type === "invoice")!;
+      const delivery = view.documents.find((d: { document_type: string }) => d.document_type === "delivery")!;
+      // The existing correction command records a human-confirmed figure,
+      // separately from the original adapter proposal; never rewrite its bytes.
+      await docs.confirm(context, jobId, { version: "supplier-fact-correction.v1", documentId: invoice.id,
+        commandId: randomUUID(), documentType: "invoice", quantity: "10", unitPricePence: 4800, netPence: 48000, expectedRevision: 0 });
+      const match = await new SupplierMatchRepository(scoped).create(context, jobId, { commandId: randomUUID(), expectedRevision: 0 });
+      expect(match.proposal).toMatchObject({ ordered: "10 each", received: "8 each", billed: "10 each", state: "matched" });
+      const detection = await new DiscrepancyRepository(scoped).evaluate(context, jobId, { commandId: randomUUID(), ruleRevision: "supplier-overcharge.v1" });
+      expect(detection.finding).toMatchObject({ pricePence: 28000, quantityPence: 4000, totalPence: 32000 });
+      const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
+      const cases = new RecoveryCaseRepository(scoped);
+      let claim = await cases.command(context, jobId, { version: "recovery-case-command.v1", action: "open",
+        commandId: randomUUID(), expectedRevision: 0, caseType: "merchant_overcharge", claimedNetPence: detection.finding.totalPence,
+        counterparty: "Fictional supplier", book: "supplier_cost", sourceType: "supplier_documents",
+        sourceRefs: [rate.id, invoice.id, delivery.id] }, actor);
+      merchantCaseId = claim.id;
+      expect(claim).toMatchObject({ caseType: "merchant_overcharge", claimedNetPence: 32000 });
+      claim = await cases.command(context, jobId, { version: "recovery-case-command.v1", action: "transition",
+        commandId: randomUUID(), caseId: claim.id, expectedRevision: claim.revision, eventType: "assemble_evidence" }, actor);
+      const actorRef = `membership:${actor.membershipId}`, packs = new EvidencePackRepository(scoped);
+      const pack = await packs.generate(context, claim.id, { commandId: randomUUID() }, actorRef);
+      expect(pack.omissions).toEqual([]);
+      const bytes = await packs.download(context, claim.id, pack.id);
+      expect(verifyStandalonePack(bytes).contentMatches).toBe(true);
+      expect(pack.sources.map(s => s.sourceId)).toContain(`material_rate_revision:${rate.id}`);
+      await packs.approveAttachment(context, claim.id, pack.id, { commandId: randomUUID(),
+        expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actorRef);
+      const messages = new RecoveryMessageRepository(scoped), ready = await messages.read(context, claim.id);
+      expect(ready.readiness).toMatchObject({ eligible: true, outstandingPence: 32000 });
+      const preview = await messages.preview(context, claim.id, { version: "recovery-message-preview.v1", commandId: randomUUID(),
+        expectedCaseRevision: ready.readiness.caseRevision, packId: pack.id }, { membershipId: actor.membershipId, actorRef });
+      const message = preview.latest!;
+      expect(message.message).toMatchObject({ caseType: "merchant_overcharge", amountPence: 32000, packId: pack.id,
+        recipient: "practice-supplier@example.invalid" });
+      const approved = await messages.command(context, claim.id, { version: "recovery-message-command.v1", action: "approve",
+        commandId: randomUUID(), messageId: message.id, expectedRevision: message.revision, recipient: message.message.recipient,
+        body: message.message.body, amountPence: message.message.amountPence, packId: pack.id, contentHash: message.message.contentHash },
+      { membershipId: actor.membershipId, actorRef });
+      expect(approved.latest!.status).toBe("queued");
+      // Pursuit permission is not cash billability or positive fee entitlement.
+      // No merchant cash allocation adapter exists here: see the precise TODO.
+    });
+    expect(merchantCaseId).toBeDefined();
+    await expect(new SuccessFeeRepository(f.runtime).command(x.context, x.jobId, x.auth.digest, feeCommand()))
+      .rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
+    await expect(issue(x)).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
+    expect(await feeTotal(x)).toBe("0");
+  });
+
+
+  it("Additional £320 withheld-payment regression: approved eligibility and settled allocation → £32 posts/collects once → balanced reconciliation", async () => {
     const x = await recoveryFeeFixture(f);
     await x.allocate(0);
     await post(x, 32000, 3200);
@@ -130,22 +213,91 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
       await expect(x.approve(review)).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
       await expect(issue(x)).rejects.toThrow("SUCCESS_FEE_DEPENDENCY_BOUND");
       expect(await feeTotal(x)).toBe("0");
-      expect((await collection(x).view()).attempts).toEqual([]);
+      await expect(collection(x).view()).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
     }
   });
 
-  it("prevented loss and a builder-captured item cannot supply a catch fee source", async () => {
-    const x = await realReceiptFixture(f, "F5", "receipt-line-allocation-command.v1");
-    const prevented = await new RecoveryCaseRepository(x.scoped).command(x.context, x.jobId, {
-      version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), expectedRevision: 0,
-      caseType: "prevention", claimedNetPence: 32000, counterparty: "Fictional payer", book: "builder_customer",
-      sourceType: "customer_invoice", sourceRefs: [x.invoiceId],
+  it("a genuine settled catch changed to prevented loss fails the confirmed-work attribution guard", async () => {
+    const x = await catchFeeFixture(f), reviewed = await x.execute();
+    expect(reviewed.statement.sources).toHaveLength(1);
+    const cases = new RecoveryCaseRepository(x.scoped);
+    const prevented = await cases.command(x.context, x.jobId, {
+      version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(),
+      caseId: x.caseId, expectedRevision: x.assessment.caseRevision, eventType: "prevent",
     }, x.actor);
     expect(prevented.state).toBe("prevented");
-    await expect(new SuccessFeeRepository(f.runtime).command(x.context, x.jobId, x.auth.digest, feeCommand())).rejects.toThrow("SUCCESS_FEE_DEPENDENCY_BOUND");
-    await expect(issue(x)).rejects.toThrow("SUCCESS_FEE_DEPENDENCY_BOUND");
+    // The original complete, approved catch source exists. Its current prevented
+    // state changes attribution, so the fee writer must reject this exact review.
+    await expect(x.execute({ version: "success-fee-command.v1", action: "approve", commandId: randomUUID(),
+      expectedPostingRevision: reviewed.postingRevision, reviewId: reviewed.reviewId, statementHash: reviewed.statementHash,
+    })).rejects.toMatchObject({ code: "SUCCESS_FEE_SOURCE_CHANGED" });
+    const excluded = await new RecoveryAttributionRepository(f.runtime).assess(x.context, x.jobId, x.auth.digest, {
+      version: "recovery-attribution-command.v1", action: "assess", commandId: randomUUID(),
+      caseId: x.caseId, workId: x.workId, lineId: x.line, lockId: x.lock.id,
+      expectedCaseRevision: prevented.revision, expectedAttributionRevision: x.assessment.revision,
+    });
+    expect(excluded.assessmentOutcome).toBe("excluded");
+    expect(excluded.reasonCodes).toContain("builder_confirmed_genuine_extra_and_completed");
+    const attribution = new RecoveryAttributionRepository(f.runtime);
+    await expect(attribution.approveReview(x.context, x.jobId, x.auth.digest, {
+      version: "recovery-attribution-command.v1", action: "approve_review", commandId: randomUUID(),
+      caseId: x.caseId, workId: x.workId, lineId: x.line, lockId: x.lock.id,
+      expectedCaseRevision: prevented.revision, expectedAttributionRevision: excluded.revision,
+      assessmentId: excluded.assessmentId, expectedSourceHash: excluded.sourceHash,
+      reviewArtifactHash: (await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash", [excluded])).rows[0].hash,
+    })).rejects.toThrow("RECOVERY_ATTRIBUTION_REVIEW_EXCLUDED");
+    await expect(issue(x)).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
     expect(await feeTotal(x)).toBe("0");
-    expect((await collection(x).view()).attempts).toEqual([]);
+    await expect(collection(x).view()).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
+  });
+
+  it("an evidenced signal classified against a genuine pre-lock builder capture cannot be confirmed as a catch", async () => {
+    let source: (Subject & { signalId: string }) | undefined;
+    const captureId = randomUUID();
+    // The shared fixture proposes reveal with an empty capture comparison. Stop
+    // at that refusal, then reconcile against the actual frozen capture below.
+    await expect(realReceiptFixture(f, "F7", "receipt-line-allocation-command.v1", false, false, async x => {
+      source = { context: x.context, jobId: x.jobId, auth: { digest: x.digest }, signalId: x.signalId };
+      await new VariationRepository(practiceMaterialPool(f.runtime, x.digest)).addFinalReviewExtra(x.context, {
+        version: "final-review-extra.v1", actorMembershipId: DEMO_MEMBERSHIP_ID,
+        proposal: { version: "variation-proposal.v1", id: captureId, jobId: x.jobId, scopeItemId: randomUUID(),
+          existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text",
+          captureText: "Fictional catch", description: "Fictional catch", suggestion: null },
+        price: null, deviceId: null, deviceCapturedAt: null,
+      });
+      // Detector input only: bind the existing evidenced signal to the real
+      // capture through the shadow role's normal update grants, guards enabled.
+      await finalCheckTenant(f.shadow, x.context.tenantId, db => db.query(
+        "UPDATE app.shadow_commercial_signal SET matched_variation_id=$1,outcome='builder_captured',revision=revision+1 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",
+        [captureId, x.context.tenantId, x.jobId, x.signalId]));
+    })).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
+    expect(source).toBeDefined();
+    const x = source!, worker = new FinalCheckRepository(f.shadow);
+    const manifestId = (await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2",
+      [x.context.tenantId, x.jobId])).rows[0].id as string;
+    const manifest = await worker.manifest(x.context, x.jobId, manifestId);
+    expect(manifest.signals.map(signal => signal.signalId)).toContain(x.signalId);
+    expect(manifest.sources.some(s => s.evidenceId !== null && s.status === "detected")).toBe(true);
+    const captureIds = manifest.comparisons.captures.map(c => (c as { id: string }).id);
+    expect(captureIds).toContain(captureId);
+    const comparisons = { baselineItemIds: manifest.comparisons.baselineItemIds, captureIds,
+      lockedLineIds: manifest.comparisons.lines.map(line => line.id) };
+    const expectedRevision = manifest.signals.find(s => s.signalId === x.signalId)!.revision;
+    // Valid comparisons remove the setup refusal: this now reaches the actual
+    // matched-variation-in-capture-register guard against a forged reveal.
+    await expect(worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+      outcome: "reveal", references: [], comparisons }])).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
+    const result = await worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+      outcome: "builder_captured", references: [captureId], comparisons }]) as { runId: string; lockId: string };
+    await expect(new FinalCheckRepository(practiceMaterialPool(f.runtime, x.auth.digest)).confirmCatch(x.context, x.jobId, x.auth.digest, {
+      version: "final-check.catch.v1", commandId: randomUUID(), lockId: result.lockId, runId: result.runId,
+      signalId: x.signalId, expectedSignalRevision: expectedRevision + 1,
+    })).rejects.toMatchObject({ code: "FINAL_CHECK_FORBIDDEN" });
+    expect((await f.admin.query("SELECT outcome FROM app.shadow_signal_classification WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3",
+      [x.context.tenantId, x.jobId, x.signalId])).rows).toEqual([{ outcome: "builder_captured" }]);
+    await expect(issue(x)).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
+    expect(await feeTotal(x)).toBe("0");
+    await expect(collection(x).view()).rejects.toMatchObject({ code: "SUCCESS_FEE_DEPENDENCY_BOUND" });
   });
 
   it("a catch disclosed before lock cannot be revealed as a fee-bearing catch", async () => {
@@ -221,7 +373,13 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
 });
 
 // Explicitly unshipped, not mocked success. These TODOs must remain visible in CI.
-it.todo("NOT COVERED — Chain A merchant £320 overcharge detection → billability → verifiable evidence pack → approved pursuit → merchant landing: this base's fee/statement adapter accepts withheld_customer_payment only (0489/0497)");
+// Chain A's detection, claim, pack and pursuit run above. Approved merchant
+// cash billability is not claimed: v1 only offers evidence_backed_withheld_payment;
+// v3 merchant F14 is a supplier-credit path, not a merchant cash landing.
+// M4-2/M4-7/M4-8/M4-9-S still need a
+// merchant-cash qualification/allocation source (0489 accepts withheld only).
+// Neither a supplier credit nor a customer receipt may stand in for that source.
+it.todo("NOT COVERED — Chain A merchant cash qualification/allocation into the v3 £32 fee source (M4-2, M4-7, M4-8, M4-9-S); the fee statement/collection/reconciliation depend on this missing merchant adapter");
 it.todo("NOT COVERED — competing payment rails: M4-15 is absent from this base; only the simulation collection command is exercised");
-it.todo("NOT COVERED — duplicate/out-of-order incoming provider notifications: no live webhook/rail path is exercised; command replays and simulated terminal events are covered above");
-it.todo("NOT COVERED — actual part receipt ingestion: the partial test bounds allocation from an existing settled receipt, not a newly ingested partial bank movement");
+it.todo("NOT COVERED — duplicate/out-of-order incoming provider notifications: M4-15 / live provider webhook adapter is absent; command replays and simulated terminal events are covered above");
+it.todo("NOT COVERED — actual part receipt ingestion: M4-7 / live provider ingestion is absent; the partial test bounds allocation from an existing settled receipt");
