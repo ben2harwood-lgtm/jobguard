@@ -38,8 +38,16 @@ preserves the existing enabled state on upgrade. Set `paused` explicitly before
 restoring or starting a deployment that must not dispatch. Keep deployment mode
 and all existing no-charge/settlement gates unchanged. This adds no live adapter.
 
-The check runs on the locked, authorized outbox row before any attempt or status
-change. A paused action remains queued, with its artifact, evidence and audit
+ActionExecutor checks the locked, authorized outbox row before any attempt or
+status change. ContractorBillingDelivery checks in the transaction immediately
+before `cb_delivery_step(..., 'claim')`. SubscriptionExecutor's repository checks
+in the transaction before the `execute_simulation` SQL command, including direct
+repository callers; paused execution returns `SUBSCRIPTION_UNAVAILABLE`. The
+legacy `executeAuthorizedCommercialAction` adapter boundary also checks before
+invocation, returning its existing authorization refusal while paused. Recovery
+messages and the worker's quote, purchase-order and invoice adapters use
+ActionExecutor. Identity challenge email and storage operations are outside this
+commercial switch. A paused action remains queued, with its artifact, evidence and audit
 history intact; resume still checks current authorization and expiry. A shared
 state lock serializes claim commits with operator changes. Calls already claimed
 or in flight when pause is requested cannot be recalled. Stop/drain workers and

@@ -33,3 +33,24 @@ it("E6-24 an interrupted claim is inspected as unknown and reconciliation never 
  const delivery=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));await delivery.execute(own.ctx,own.session,own.s.jobId,action.outboxActionId);await delivery.reconcile(own.ctx,own.session,own.s.jobId,action.outboxActionId);await delivery.execute(own.ctx,own.session,own.s.jobId,action.outboxActionId);
  expect(sends).toBe(0);expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).deliveries[0]).toMatchObject({status:"outcome_unknown"});
 });
+it("M0-13a paused contractor delivery keeps its queued artifact and records no attempt or send",async()=>{
+ const w=await world(c),batch=await w.exported(),view=await w.repo.read(w.ctx,w.session,w.s.jobId);
+ const action=await w.repo.approveDelivery(w.ctx,w.session,w.s.jobId,{version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()});
+ const before=(await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows;
+ const prior=(await c.admin.query("SELECT paused FROM outbound_control.state")).rows[0].paused;
+ let calls=0;
+ const adapter:OutboundAdapter={name:"fake_api",supportsProviderDeduplication:true,async deliver(){calls++;return {kind:"succeeded",providerReference:"fictional-pause"};},async reconcile(){return "unknown";}};
+ const executor=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));
+ await c.admin.query("UPDATE outbound_control.state SET paused=true");
+ try{
+  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
+  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
+  expect(calls).toBe(0);
+  expect((await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows).toEqual(before);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1",[action.outboxActionId])).rows).toEqual([{n:0}]);
+ }finally{await c.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+ await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
+ await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
+ expect(calls).toBe(1);
+ expect((await w.repo.read(w.ctx,w.session,w.s.jobId)).deliveries[0]).toMatchObject({status:"succeeded"});
+});
