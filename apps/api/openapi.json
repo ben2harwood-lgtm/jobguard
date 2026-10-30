@@ -1,6 +1,96 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/issue": {
+      "post": {
+        "operationId": "CustomerSigninController_issue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Owner or finance requests a fictional customer sign-in email",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/revoke": {
+      "post": {
+        "operationId": "CustomerSigninController_revoke",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke a customer grant and its sessions",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signin": {
+      "post": {
+        "operationId": "CustomerSigninController_signin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Atomically consume a ten-minute link and set a browser-session cookie",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signout": {
+      "post": {
+        "operationId": "CustomerSigninController_signout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke the current customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/read": {
+      "post": {
+        "operationId": "CustomerSigninController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read only the authenticated customer job scope",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/jobs/{id}/trial": {
       "get": {
         "operationId": "FreeFirstJobLifecycleController_read",
