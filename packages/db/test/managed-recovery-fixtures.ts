@@ -53,9 +53,9 @@ export async function qualifyingAllocation(c: Cluster, f: Fixture, caseId: strin
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.tenant]);
   await db.query('SET LOCAL session_replication_role=replica');
   await db.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)
-   VALUES($1,$2,$3,$2::text,$4,'text/plain',100,'standard_evidence','verified','synthetic-v1',clock_timestamp(),clock_timestamp()+interval '1 day')`,[f.tenant,upload,f.job,h]);
+   VALUES($1,$2::uuid,$3,($2::uuid)::text,$4,'text/plain',100,'standard_evidence','verified','synthetic-v1',clock_timestamp(),clock_timestamp()+interval '1 day')`,[f.tenant,upload,f.job,h]);
   await db.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,'original','payment_proof',$3::text,'synthetic-v1',$5,1,'text/plain','standard_evidence',clock_timestamp(),clock_timestamp())`,[f.tenant,evidence,upload,f.job,h]);
+   VALUES($1,$2,$3::uuid,$4,'original','payment_proof',($3::uuid)::text,'synthetic-v1',$5,1,'text/plain','standard_evidence',clock_timestamp(),clock_timestamp())`,[f.tenant,evidence,upload,f.job,h]);
   await db.query(`INSERT INTO app.practice_feed_event(tenant_id,id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash)
    VALUES($1,$2,$3,$4,$5,'settled','receipt-384','settled-receipt-384','identified','feed',38400,'GBP','settled','synthetic_demo','practice-feed-event.v1',$6)`,[f.tenant,movement,f.job,account,randomUUID(),h]);
   await db.query(`INSERT INTO app.recovery_eligibility_revision(tenant_id,id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)

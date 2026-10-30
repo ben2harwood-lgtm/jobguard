@@ -888,7 +888,7 @@ async function managedRecoveryAdditions(before: Awaited<ReturnType<typeof snapsh
  const tables = ['managed_recovery_election','managed_recovery_pursuit'];
  const names = [...tables,'managed_recovery_election_pkey','managed_recovery_election_tenant_id_command_id_key',
   'managed_recovery_election_tenant_id_authorization_id_key','managed_recovery_pursuit_pkey'];
- const identities = [['mon9_elect','j uuid, c uuid, actor uuid, command uuid, authorization uuid, service text, points integer, terms text'],['mon9_pursuit_guard',''],['mon9_session','digest text, actor uuid']];
+ const identities = [['mon9_elect','j uuid, c uuid, actor uuid, command uuid, auth_id uuid, service text, points integer, terms text'],['mon9_pursuit_guard',''],['mon9_session','digest text, actor uuid']];
  const routines = after.routines.filter(r => r.nspname==='app' && identities.some(([n,a]) => r.proname===n && r.args===a));
  expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
  for (const r of routines) {
