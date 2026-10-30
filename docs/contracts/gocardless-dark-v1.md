@@ -68,3 +68,73 @@ The pnpm wrapper stalled before executing checks and was stopped; installed
 binaries were used without downloading packages. Database/browser/full CI and the
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
+
+## MON-4B: receipt success fees (synthetic executor seam)
+
+Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. The optional
+`receipt_success_fee` purpose on the existing collection intent selects
+`LockedCollectionSources.successFee(jobId, invoiceId, statementHash)` inside the
+same tenant-serialized reservation transaction at reservation and dispatch.
+Absent readers refuse with `SUCCESS_FEE_DEPENDENCY_BOUND`; there is no fallback
+to subscription authority. The original subscription collection path is preserved.
+No migration, SDK, route, worker or production implementation is added.
+
+Source-inspected MON-4A on origin/main (`mon4a-fees`, PR #407) has immutable
+`payment-fee-statement.v1` documents and per-statement `app.action_authorization`
+records. It does **not** implement standing-authority creation (its view returns
+null). This slice reuses `paymentFeeBindingV1`, already present on the build base,
+and consumes a normalized, locked source envelope. The source owner maps
+statementId/revision/statementHash/sourceHash and feePence to that binding,
+policy `reference_fee_policy_v3`, recipient `platform:jobguard`, and the statement's
+own separate platform invoice identity. It must reconstruct current verified
+settlement, receipt/case/attribution disputes, current prior-statement sources,
+credits and receipts, and current exact authorization (including actor, expiry
+and revocation). Historical command results and read-view state alone are not
+execution tokens. Statement fees are consumed unchanged; there is no new rounding,
+allocation, fee formula, VAT calculation or customer-payment mutation.
+
+Per-statement authorization binds statement ID/hash and exact fee amount. The
+fake standing-authority specimen requires explicit opt-in, the same tenant/actor,
+job, action, policy, recipient, currency, expiry and current approved state. Its
+per-receipt cap may not exceed that receipt's verified fee, and it must cover the
+exact collection. No standing-authority grant, renewal, dispute resolution or
+production terms are inferred or written. A persisted MON-4A reader and a standing
+writer remain unregistered; these are integration limitations, not evidence of a
+source-backed database collection journey. In particular this build does not
+claim to complete the live-gated MON-4B milestone.
+
+`SuccessFeeCollectionError.reason` gives bounded pause reasons for unverified
+settlement, each dispute scope, stale/revoked/disputed/expired authority, fee cap,
+and inactive/revoked mandate. A pause before dispatch leaves the attempt reserved
+and performs no provider submission. The mandate check is local fake state; the
+rail also checks again during submit. A cancellation racing after initiation is
+handled by the existing signed lifecycle/reconciliation rules. Accepted/unknown
+requests are not resubmitted when authority changes.
+
+Both rails share the existing statement/invoice reservation balance; changing
+purpose, rail or payload is not a second entitlement. Duplicate commands and
+concurrent clicks reserve/submit once; pending/confirmed are not payout. Payout
+reversal holds the balance for reconciliation, including replacement card attempts.
+Refunds retain the original statement/purpose and use the existing exact approved
+credit path; neither reversals nor refunds silently reopen fee debt. Customer
+receipts remain outside the collection write interface. The shadow-30000 fixture
+amounts remain £41,280 received, £800 qualifying, £80 fee, £720 before tax; VAT is
+uncalculated in this simulation. No demo/UI fixtures were changed.
+
+Local verification (30 October 2026): installed Vitest, three named files,
+`--maxWorkers=2`, passed 128 tests (`success-fee-direct-debit.test.ts`,
+`executor.test.ts`, `fake-gocardless.test.ts`). API TypeScript `--noEmit` passed.
+The first test invocation could not resolve the unbuilt core package; building
+existing core/config outputs restored resolution without package downloads.
+Initial type checking exposed optional-property and branded-money fixture typing;
+both were fixed. PostgreSQL, browser, full CI and independent Claude RED review
+remain for the router/CI. This in-memory seam does not prove durability or RLS.
+
+Additional local checks: `git diff --check`, core-purity, money-arithmetic and
+commercial-boundary checks passed. `node tools/lint.mjs` stopped at lane-boundary:
+the main comparison includes inherited M4-12/M4-13/M4-15 files outside MON-4B's
+allowed paths. No allow list was broadened to absorb those predecessor changes.
+A working-tree-only path check using the existing `lanePathAllowed` function
+passed for all eight changed/new files, and the lane lists exactly this slice's
+seven non-lane paths. This limited check does not replace CI's full lane gate;
+the router must respect predecessor merge order when opening the PR.

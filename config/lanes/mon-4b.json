@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-4b": {
+      "branches": [
+        "codex/sandbox/mon-4b"
+      ],
+      "note": "RED MON-4B built-ahead synthetic receipt success-fee executor seam on M4-15. Shared collection edits serialize with M4-12/M4-15. No persistence or production route; persisted source reader and standing writer remain unregistered. Own lane file is implicitly permitted.",
+      "allow": [
+        "apps/api/src/fee-collection/contracts.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/fake-gocardless.ts",
+        "apps/api/src/fee-collection/test-fixture.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.test.ts",
+        "docs/contracts/gocardless-dark-v1.md"
+      ]
+    }
+  }
+}

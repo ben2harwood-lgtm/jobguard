@@ -2,11 +2,11 @@ import type { ActiveMembership, AuthPrincipal } from "../auth/auth-provider.js";
 import { subscriptionAgreementHash } from "@jobguard/core";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import { FakeStripeCardRail } from "./fake-stripe.js";
-import type { CollectionBook, CollectionSources, CreditSources, ReservationStore, CollectionSessionContext } from "./contracts.js";
+import type { CollectionBook, CollectionSources, CreditSources, ReservationStore, CollectionSessionContext, LockedCollectionSources } from "./contracts.js";
 export const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 export const hash = "a".repeat(64);
 export const ctx: CollectionSessionContext = { tenantId: id(1), sessionToken: "synthetic-session", environment: "synthetic_demo" };
-export function fixture() {
+export function fixture(successFee?: LockedCollectionSources["successFee"]) {
   const selection = { version: "subscription-agreement-selection.v1" as const, termsVersion: "synthetic_subscription_success_terms.v1" as const,
     catalogueVersion: "subscription_pricing_policy_v4" as const, tenantId: id(1), agreementId: id(2), revision: 1,
     plan: "Solo" as const, cadence: "monthly" as const, anchorDay: 1, recipientRef: id(3),
@@ -48,7 +48,7 @@ export function fixture() {
     try {
       if (tenantId !== ctx.tenantId) throw new Error("COLLECTION_REFUSED");
       const copy = structuredClone(book);
-      const result = await work(copy, { collection: async () => structuredClone(source), credit: async () => structuredClone(credit) });
+      const result = await work(copy, { collection: async () => structuredClone(source), credit: async () => structuredClone(credit), ...(successFee ? { successFee } : {}) });
       book = copy; return result as T;
     } finally { unlock(); }
   } };

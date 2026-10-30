@@ -7,6 +7,7 @@ export const collectionIntentV1 = z.object({
   version: z.literal("fee-collection.v1"), commandId: id, jobId: id, invoiceId: id,
   statementHash: hash, amountPence: pence.refine(v => v > 0),
   rail: z.enum(["stripe_card", "direct_debit"]),
+  purpose: z.literal("receipt_success_fee").optional(),
 }).strict();
 export type CollectionIntent = z.infer<typeof collectionIntentV1>;
 export const refundIntentV1 = z.object({
@@ -54,6 +55,8 @@ export type Attempt = {
   statementHash: string; statementId: string; amountPence: number; rail: "stripe_card" | "direct_debit";
   decisionId: string; settlementCommandId: string | null; settlementObjectId: string | null; creditNoteId: string | null;
   state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released" | "reconciliation_required";
+  purpose?: "receipt_success_fee" | undefined;
+  authorizationId?: string | undefined;
   paymentState?: DirectDebitPaymentState;
   providerObjectId: string | null;
 };
@@ -75,6 +78,9 @@ export interface LockedCollectionSources {
    * query pre-lock shadow tables, or count this book's settlements in priorReceiptsPence. */
   collection(jobId: string, invoiceId: string): Promise<unknown>;
   credit(intent: RefundIntent): Promise<unknown>;
+  /** MON-4A statement + current authorization/source reconstruction under this same lock.
+   * Never return the cached read_payment_fees view as execution authority. Unregistered by default. */
+  successFee?(jobId: string, invoiceId: string, statementHash: string): Promise<unknown>;
 }
 /** Credentials only: membership and actor are resolved through AuthProvider on every operation. */
 export type CollectionSessionContext = Readonly<{ tenantId: string; environment: "synthetic_demo"; sessionToken: string }>;
