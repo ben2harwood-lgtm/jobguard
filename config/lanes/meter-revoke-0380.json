@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "meter-revoke-0380": {
+      "branches": ["codex/sandbox/meter-revoke-0380"],
+      "note": "RED: retire legacy meter reader access in migration 0399; no existing migration edits.",
+      "allow": [
+        "packages/db/migrations/0399_meter_reader_revoke.sql",
+        "packages/db/migration-notes/0399_meter_reader_revoke.md",
+        "packages/db/src/meter-reader-revoke.test.ts",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/meter-today.integration.test.ts",
+        "packages/db/test/meter-work-admission-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
