@@ -68,3 +68,22 @@ The pnpm wrapper stalled before executing checks and was stopped; installed
 binaries were used without downloading packages. Database/browser/full CI and the
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
+
+
+M4-12 reservation persistence (0478): `PostgresReservationStore` implements the
+shared seam with one tenant row lock, including concurrent first use. It is an
+explicit server composition dependency, with no default registration. Its context
+resolver must verify the caller's tenant authority; the executor separately checks
+the current session/membership. Its source factory must read and lock current
+invoice/statement/terms/credit revisions through the supplied transaction. A fake
+source factory in the PostgreSQL tests is not a production source implementation.
+Both rails must receive the same database-backed store. Provider calls remain
+outside its transaction. Book state, event fingerprints and appended chain audit
+commit together. Existing command bindings/events/audit cannot be rewritten by
+this adapter; unknown outcomes remain reserved across restarts. The book is
+internal reservation state, not a journal, invoice, receipt or settlement posting.
+Only the reservation book is durable here: the fake provider and mandate still
+use memory. Forward fix: stop new executor initiation and preserve the table and
+audit while repairing; never roll back by dropping or clearing unknown attempts.
+Database CI and the independent RED review must verify migration, row locking,
+RLS and durability before merge. No live capability is enabled by this addition.

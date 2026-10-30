@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-12-reserve-pg": {
+      "branches": [
+        "codex/sandbox/m4-12-reserve-pg"
+      ],
+      "note": "M4-12 RED shared PostgreSQL reservation store; migration 0478. Built ahead on m4-15-gocardless; shared catalogue tests and DD contract serialize with that base. Own lane file is implicitly permitted. PostgreSQL CI and independent RED review required.",
+      "allow": [
+        "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "apps/api/src/fee-collection/postgres-reservation-store.ts",
+        "docs/contracts/gocardless-dark-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migrations/0478_fee_reservation_book.sql",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
