@@ -20,7 +20,7 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
-  EXECUTE format('CREATE POLICY success_fee_tenant ON app.%I FOR ALL TO jobguard_migration USING(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN nullif(current_setting(''app.tenant_id'',true),)::uuid END) WITH CHECK(tenant_id=CASE WHEN pg_input_is_valid(current_setting(app.tenant_id,true),uuid) THEN nullif(current_setting(app.tenant_id,true),)::uuid END)',n);
+  EXECUTE format('CREATE POLICY success_fee_tenant ON app.%I FOR ALL TO jobguard_migration USING(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN nullif(current_setting(''app.tenant_id'',true),'''')::uuid END) WITH CHECK(tenant_id=CASE WHEN pg_input_is_valid(current_setting(''app.tenant_id'',true),''uuid'') THEN nullif(current_setting(''app.tenant_id'',true),'''')::uuid END)',n);
   EXECUTE format('REVOKE ALL ON app.%I FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access',n);
   EXECUTE format('CREATE TRIGGER success_fee_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON app.%I FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation()',n);
  END LOOP;
@@ -56,7 +56,17 @@ BEGIN
  SELECT result||jsonb_build_object('practice_feed_command',coalesce(jsonb_agg(source_row ORDER BY app.final_lock_canonical(source_row) COLLATE "C"),'[]'::jsonb)) INTO result FROM (SELECT to_jsonb(x) source_row FROM app.practice_feed_command x WHERE x.tenant_id=t AND x.job_id=j) source_rows;
  IF EXISTS(SELECT 1 FROM app.success_fee_derivation WHERE tenant_id=t AND job_id=j) THEN
   BEGIN
-   live:=app.platform_fee_statement_sources(t,j,actor);
+   -- 0489 supports withheld-payment derivations, but 0490 still loads catch
+   -- assessments only. Do not mistake those allocation sources for an empty
+   -- catch list or manufacture an assessment to make the books match.
+   IF EXISTS(SELECT 1 FROM app.success_fee_review r JOIN app.success_fee_derivation d
+    ON(d.tenant_id,d.job_id,d.review_id)=(r.tenant_id,r.job_id,r.id)
+    WHERE d.tenant_id=t AND d.job_id=j AND d.revision=(SELECT max(revision) FROM app.success_fee_derivation WHERE tenant_id=t AND job_id=j)
+     AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.statement->'sources') x WHERE x ? 'recoveryAllocationId')) THEN
+    live:=jsonb_build_object('unavailable',true,'dependency','withheld_payment_statement_source_adapter');
+   ELSE
+    live:=app.platform_fee_statement_sources(t,j,actor);
+   END IF;
   EXCEPTION WHEN SQLSTATE '40001' OR SQLSTATE '0A000' THEN
    live:=jsonb_build_object('unavailable',true);
   END;

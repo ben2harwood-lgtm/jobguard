@@ -6,7 +6,7 @@
         "codex/sandbox/m4-17-s-run"
       ],
       "receipt": "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md",
-      "note": "RED M4-17-S persisted synthetic reconciliation, migration 0492. Built ahead on m4-12-s-collect; router owns commit/push/PR and Claude review. Own lane file is implicitly owned. Full recovery-18800 compensation/source journey remains upstream.",
+      "note": "RED M4-17-S persisted synthetic reconciliation, migration 0492. Built ahead on m4-12-s-collect; router owns commit/push/PR and Claude review. Own lane file is implicitly owned. 0489 compensation is merged; the withheld-payment statement-source adapter and full recovery-18800 journey remain incomplete.",
       "allow": [
         "apps/api/src/success-fee.application.test.ts",
         "apps/api/src/success-fee.application.ts",

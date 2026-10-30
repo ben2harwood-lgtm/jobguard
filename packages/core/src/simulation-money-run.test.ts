@@ -61,3 +61,14 @@ it("persisted incoming feed anomalies retain their row references until the orig
  const report=reconcileSimulationMoney(s);expect(report.differences.map(d=>d.code)).toEqual(expect.arrayContaining(["UNKNOWN_FEED_EVENT","POSSIBLE_DUPLICATE_EVENT","ORPHAN_FEED_EVENT"]));expect(report.differences.some(d=>d.sourceRefs.includes(id(80)))).toBe(true);
  s.practice_feed_command.push({id:id(82),action:"reconcile_duplicate",movement_key:"receipt-3000"});expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).not.toContain("POSSIBLE_DUPLICATE_EVENT");
 });
+it("journal duplicate identities use the validated side even when account metadata is absent",()=>{
+ const s=fixture();for(const line of s.success_fee_journal_line)delete line.account;
+ expect(reconcileSimulationMoney(s).unresolvedDifferenceCount).toBe(0);
+ s.success_fee_journal_line.push({...s.success_fee_journal_line[0]!});
+ expect(reconcileSimulationMoney(s).differences.map(d=>d.code)).toContain("DUPLICATE_ROW");
+});
+it("withheld source-adapter gaps remain explicit after compensation has posted",()=>{
+ const s=fixture();s.liveFee={unavailable:true,dependency:"withheld_payment_statement_source_adapter"};
+ const report=reconcileSimulationMoney(s);expect(report.successFee.postedPence).toBe(3200);
+ expect(report.label).toBe("Review needed");expect(report.differences).toContainEqual(expect.objectContaining({code:"CURRENT_ELIGIBILITY_UNAVAILABLE",sourceRefs:["withheld_payment_statement_source_adapter"]}));
+});

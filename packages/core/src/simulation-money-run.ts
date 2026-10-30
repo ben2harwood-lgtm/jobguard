@@ -31,7 +31,7 @@ export const simulationMoneySnapshotV1=z.object({
  platform_statement_line:rows(row({statement_id:id,period_id:id,line_key:z.string(),amount_pence:amount})),
  subscription_simulated_work:rows(row({...identity,statement_id:id,amount_pence:amount})),
  subscription_simulated_result:rows(row({...identity,work_id:id,outcome:z.enum(["redirect","settled","outcome_unknown","failed"])})),
- liveFee:z.union([z.null(),z.object({unavailable:z.literal(true)}).strict(),z.object({feePence:amount,qualifyingPrincipal:exactPenceInputV1}).passthrough()]),
+ liveFee:z.union([z.null(),z.object({unavailable:z.literal(true),dependency:z.literal("withheld_payment_statement_source_adapter").optional()}).strict(),z.object({feePence:amount,qualifyingPrincipal:exactPenceInputV1}).passthrough()]),
 }).strict();
 export const simulationMoneyCommandV1=z.discriminatedUnion("action",[
  z.object({version:z.literal("simulation-money-command.v1"),commandId:id,action:z.literal("run")}).strict(),
@@ -53,7 +53,7 @@ export function reconcileSimulationMoney(raw:unknown){
  const has=(rs:readonly Record<string,unknown>[],key:unknown)=>rs.some(r=>r.id===key);
  // Preserve duplicate rows as differences, rather than collapsing the evidence.
  for(const [table,rs] of Object.entries(s))if(Array.isArray(rs)){
-  const seen=new Set<string>();for(const r of rs){const key=String(r.id??(table==="platform_fee_attempt_event"?`${r.attempt_id}/${r.revision}`:table==="success_fee_journal_line"?`${r.journal_id}/${r.account}`:`${r.statement_id??r.period_id}/${r.line_key}`));
+  const seen=new Set<string>();for(const r of rs){const key=String(r.id??(table==="platform_fee_attempt_event"?`${r.attempt_id}/${r.revision}`:table==="success_fee_journal_line"?`${r.journal_id}/${r.side}`:`${r.statement_id??r.period_id}/${r.line_key}`));
    if(seen.has(key))add(table.startsWith("subscription")||table.startsWith("platform_statement")?"subscription":table.startsWith("customer")?"customer":"success_fee","DUPLICATE_ROW",[table,key]);seen.add(key);
   }
  }
@@ -92,7 +92,7 @@ export function reconcileSimulationMoney(raw:unknown){
   else if(BigInt(l.net_numerator)*BigInt(a.net_denominator)!==BigInt(a.net_numerator)*BigInt(l.net_denominator))add("success_fee","CASE_ALLOCATION_MISMATCH",[a.id,l.id]);
  }
  const posted=sum(s.success_fee_journal,"amount_pence");
- if(s.liveFee===null||"unavailable" in s.liveFee)add("success_fee","CURRENT_ELIGIBILITY_UNAVAILABLE",["approved attribution and fee derivation"]);
+ if(s.liveFee===null||"unavailable" in s.liveFee)add("success_fee","CURRENT_ELIGIBILITY_UNAVAILABLE",[s.liveFee&&"unavailable" in s.liveFee&&typeof s.liveFee.dependency==="string"?s.liveFee.dependency:"approved attribution and fee derivation"]);
  else if(posted!==n(s.liveFee.feePence))add("success_fee","FEE_COMPENSATION_REQUIRED",s.success_fee_journal.map(j=>j.id));
  if(s.customer_invoice.length===0)add("customer","CUSTOMER_INVOICE_MISSING",[s.jobId]);
  if(s.receipt_allocation_fact_line.length===0)add("customer","RECEIPT_LINE_ALLOCATION_MISSING",[s.jobId]);

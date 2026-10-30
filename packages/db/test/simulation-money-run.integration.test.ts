@@ -82,3 +82,14 @@ it("raw SQL cannot supply a forged snapshot or reuse a run ID for review; incomi
  const ids=result.snapshot.practice_feed_event.filter(e=>e.movement_key==="receipt-384").map(e=>e.id);
  expect(result.report.differences.some(d=>d.sourceRefs.some(id=>ids.includes(id)))).toBe(true);
 });
+it("0489 posts the recovery compensation, but the catch-only statement adapter keeps the withheld journey visibly incomplete",async()=>{
+ const {recoveryFeeFixture}=await import("./success-fee-recovery-fixture.js");
+ const x=await recoveryFeeFixture(f);await x.allocate(0);await x.approve(await x.review());
+ await x.allocate(1);await x.approve(await x.review(1));await x.reverse(1);
+ const compensation=await x.approve(await x.review(2));expect(compensation.statement).toMatchObject({feePence:3200,deltaPence:-25000});
+ const result=await repo.command(x.context,x.jobId,x.auth.digest,{version,action:"run",commandId:randomUUID()});
+ expect(result.report.successFee.postedPence).toBe(3200);expect(result.report.realExternalActions).toBe(0);
+ expect(result.report.label).toBe("Review needed");expect(result.report.unresolvedDifferenceCount).toBeGreaterThan(0);
+ expect(result.report.differences).toContainEqual(expect.objectContaining({code:"CURRENT_ELIGIBILITY_UNAVAILABLE",sourceRefs:["withheld_payment_statement_source_adapter"]}));
+ expect(result.report.successFee.refundedPence).toBe(0);expect(result.report.successFee.yoursBeforeTax).toBeNull();
+});
