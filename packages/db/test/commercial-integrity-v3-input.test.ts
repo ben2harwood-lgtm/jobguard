@@ -20,7 +20,7 @@ it("CH-6 source decoder refuses hidden pre-lock fields, foreign scope, malformed
  const {db,query}=database(raw,false);await expect(readCommercialIntegrityV3Input(db,scope)).rejects.toThrow("NOT_FOUND");expect(query).toHaveBeenCalledTimes(1);
 });
 it("CH-6 source migration confines publication calls to the locked branch and adds no runtime table grants",async()=>{
- const sql=await readFile(new URL("../migrations/0377_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0396_commercial_integrity_sources.sql",import.meta.url),"utf8");
  const body=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_integrity_sources"),sql.indexOf("-- Re-resolve all source facts"));
  const pre=body.slice(0,body.indexOf("IF has_lock THEN"));
  expect(pre).not.toMatch(/app\.(?:shadow_|final_check_|ch6_integrity_published)/u);
@@ -45,7 +45,7 @@ it("CH-6 revocation between the ordinary authority read and controlled source qu
 });
 
 it("CH-6 SQL receipt projection has a distinct identity while conflicting facts still fail closed",async()=>{
- const sql=await readFile(new URL("../migrations/0377_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0396_commercial_integrity_sources.sql",import.meta.url),"utf8");
  // Use the namespace actually emitted by the installed SQL receipt projection.
  const receiptType=sql.match(/app\.ch6_source\(t,j,d,p\.id::text,'([^']+)',p\.created_at/u)?.[1];
  expect(receiptType).toBeDefined();

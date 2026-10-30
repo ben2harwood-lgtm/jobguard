@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0376_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0395_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1372,3 +1372,42 @@ Asked for a saved report/error-context path while continuing the bounded work;
 none was supplied before this handoff. The commit-message file says do not commit.
 Do not present the confirmed draft-cap repair or local tests as proof that all
 four shards are fixed. The router retains CI and RED-review ownership.
+
+
+## 30 October 2026 — MON-1 catch-up only, migration reservation mismatch
+
+Plan piece CH-6 / CH6-J, RED. Current origin/main is ea2a8cfe (#388 MON-1).
+Resolved both conflict hunks in docs/contracts/lp-0-effective-privileges-v1.json:
+the policies list retains both CH-6 tenant-isolation rows and MON-1 meter-work
+isolation; the triggers list retains all three CH-6 triggers and all five MON-1
+triggers. Policies, triggers and RLS arrays equal the exact set union of HEAD
+and origin/main with no duplicates. All main privilege entries and all CH-6
+entries survive; main's withdrawal of runtime EXECUTE on the replaced
+mon1_counted_meter_today routine remains intact.
+
+Shared SERIOUS-B5, contractor-entitlement and tenancy expectation changes
+relative to main are additive only (57, 28 and 28 lines respectively); both
+MON-1 work-admission and CH-6 additions remain. No test expectations were
+changed by this catch-up. No routines were recreated. All 156 main migrations
+are byte-identical to origin/main, and CH-6 SQL is byte-identical to HEAD.
+Lane allow paths exactly match the working diff against origin/main, excluding
+the lane file itself as permitted by the lane policy.
+
+Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- Exact LP-0 union, main migration byte comparison and lane path comparison — PASS.
+- git diff --check — PASS.
+- Existing migrationOrderViolations against origin/main — FAIL: CH-6 migrations
+  0376 and 0377 must be numbered above main's 0380.
+
+The brief says existing branch migrations are all above 0380, but this checkout
+has 0395_commercial_integrity_v3_receipts.sql and
+0396_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+instruction; no reservation was invented and the check was not weakened.
+Handoff: do not commit until the router supplies/resolves valid migration
+reservations. Database and browser suites were not run because this sandbox
+cannot start PostgreSQL or bind localhost; GitHub CI and independent RED review
+remain required. The router must stage the resolved inventory because .git is
+read-only here. No git-writing commands, package downloads or external actions.

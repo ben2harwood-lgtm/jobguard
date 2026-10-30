@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up 3 through main 72226d28 (#418 MON-3, migrations 0372/0373). Preserve both parents in API wiring, OpenAPI, LP-0, SERIOUS-B5, entitlement, privileges, tenancy and lane files. Renumber own migrations to reserved 0376/0377 with unchanged SQL bytes; all main migrations and the LP downstream contract remain unchanged. No new behavior; PostgreSQL and browser suites run in GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up only through main ea2a8cfe (#388 MON-1, migration 0380). Resolve LP-0 policy and trigger conflicts by retaining both CH-6 and MON-1 rows; retain main privilege withdrawal and shared expectation unions. No new behavior or test expectation changes. Existing CH-6 migrations 0376/0377 preserved as instructed, but fail migration ordering against 0380; router must resolve the reservation mismatch before commit. PostgreSQL and browser suites require GitHub CI.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
@@ -41,10 +41,10 @@
         "packages/core/src/commercial-integrity-v3.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0376_commercial_integrity_v3_receipts.md",
-        "packages/db/migration-notes/0377_commercial_integrity_sources.md",
-        "packages/db/migrations/0376_commercial_integrity_v3_receipts.sql",
-        "packages/db/migrations/0377_commercial_integrity_sources.sql",
+        "packages/db/migration-notes/0395_commercial_integrity_v3_receipts.md",
+        "packages/db/migration-notes/0396_commercial_integrity_sources.md",
+        "packages/db/migrations/0395_commercial_integrity_v3_receipts.sql",
+        "packages/db/migrations/0396_commercial_integrity_sources.sql",
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/commercial-integrity-v3-sources.ts",
         "packages/db/src/index.ts",
