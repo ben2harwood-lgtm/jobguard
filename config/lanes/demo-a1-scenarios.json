@@ -2,9 +2,18 @@
   "version": 2,
   "lanes": {
     "demo-a1-scenarios": {
-      "branches": ["codex/sandbox/demo-a1-scenarios"],
+      "branches": [
+        "codex/sandbox/demo-a1-scenarios"
+      ],
       "note": "RED DEMO-S dedicated refusal journeys: no proof, prevention, disclosure before lock, tenant/session and cross-job isolation, stale authority and corrupted evidence. No migration. Browser/PostgreSQL execution remains CI-only.",
-      "allow": ["apps/web/e2e/DEMO-A1-scenarios.spec.ts"]
+      "allow": [
+        "apps/web/e2e/DEMO-A1-scenarios.spec.ts",
+        "apps/api/src/job-work-state.failure.ts",
+        "apps/api/src/job-work-state.errors.ts",
+        "apps/api/src/job-source.errors.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/nest-free-boundary.test.ts"
+      ]
     }
   }
 }

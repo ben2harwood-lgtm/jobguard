@@ -106,6 +106,7 @@ test("DEMO-S corrupted evidence: wrong immutable version fails verification and 
 const loadDb = () => (new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>)(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
 
 test("DEMO-S disclosure before lock: real detection and support disclosure remain ineligible after lock", async ({ page }) => {
+  test.setTimeout(240_000);
   const { jobId, account } = await prepareLockJob(page);
   await post(page, path(jobId, "final-account/terms"), { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   const note = { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: "Fitted outside tap." };
@@ -149,9 +150,17 @@ test("DEMO-S disclosure before lock: real detection and support disclosure remai
       }
       await page.goto(`/jobs/${jobId}#final-account-title`);
       await finishDispositionsAndTerms(page);
-      await page.getByRole("button", { name: "Complete final account", exact: true }).click();
+      await page.getByRole("main").getByRole("button", { name: "Complete final account", exact: true }).click();
       await expect.poll(async () => (await get(page, path(jobId, "final-account"))).lock?.finalAccountRevisionId).toBe(account.id);
-      await expect.poll(async () => (await get(page, path(jobId, "final-check"))).state).toBe("completed");
+      await page.goto(`/jobs/${jobId}#final-check`);
+      // Locking saves the bill; the separate checked request starts the worker.
+      const panel = page.getByRole("main").getByTestId("final-check-reveal");
+      await panel.getByRole("button", { name: "Run the final check (practice)", exact: true }).click();
+      await expect(panel.getByTestId("final-check-run-requested")).toBeVisible();
+      // Same bounded wait as SV-5: discovery runs once a minute, then processes
+      // sources and publishes. The completed-state assertion remains mandatory.
+      await expect.poll(async () => (await get(page, path(jobId, "final-check"))).state,
+        { timeout: 180_000, intervals: [5_000] }).toBe("completed");
       await db.withTenant(shadow, auth.context, async tx => {
         const signal = await tx.$client.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, signalId]);
         expect(signal.rows).toEqual([{ disclosed_before_lock: true }]);
@@ -182,18 +191,18 @@ test("DEMO-S tenant isolation: foreign session and same-session foreign job cann
     }
     // A second real job of the owner still cannot consume the first job's upload.
     await page.goto("/");
-    await page.getByRole("button", { name: "＋ Start a new job", exact: true }).click();
-    await page.getByRole("button", { name: "Make my draft", exact: true }).click();
-    await page.getByRole("button", { name: "Check and edit my draft", exact: true }).click();
-    await page.getByRole("button", { name: "Save customer and site", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "＋ Start a new job", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "Make my draft", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "Check and edit my draft", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "Save customer and site", exact: true }).click();
     await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
     for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) {
-      await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
+      await page.getByRole("main").getByRole("button", { name: `Accept ${name}`, exact: true }).click();
     }
-    await page.getByRole("button", { name: "Dismiss Replace shelves", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "Dismiss Replace shelves", exact: true }).click();
     await page.getByLabel("Dismissal reason Replace shelves").fill("Outside this second fictional job");
     await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
-    await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+    await page.getByRole("main").getByRole("button", { name: "Confirm scope", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
     await startWatchdogJob(page);
     const secondId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
