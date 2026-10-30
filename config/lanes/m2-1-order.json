@@ -7,6 +7,7 @@
       ],
       "allow": [
         "packages/db/src/index.ts",
+        "packages/db/src/tenant-context.ts",
         "packages/db/src/outbox.ts",
         "packages/db/src/watchdog.ts",
         "packages/db/src/purchase-order-action.ts",

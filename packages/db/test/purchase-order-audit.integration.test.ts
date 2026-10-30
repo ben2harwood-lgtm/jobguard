@@ -149,7 +149,7 @@ async function darkFixture() {
   const port = new FakeMerchantOrderPort();
   const executor = new ActionExecutor(runtime, new Map([[port.name, port]]), { emit() {} });
   const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
-    commandId: randomUUID(), actorMembershipId: f.auth.membershipId, supplierReference: `synthetic-${randomUUID()}` };
+    commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
   return { ...f, revision, repo, scope, preview, approved, port, executor, manual };
 }
 
@@ -186,10 +186,44 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(f.repo.preview(testTenantContext(randomUUID()), f.scope)).rejects.toThrow();
     expect(await effects()).toEqual(before);
   });
+  it("refuses another active owner's supplied id without recording an attestation or audit", async () => {
+    const f = await darkFixture(), otherOwner = randomUUID(), otherIdentity = randomUUID();
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [otherIdentity]);
+    await admin.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
+      SELECT tenant_id,$1,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4`,
+      [otherOwner, otherIdentity, DEMO_TENANT_ID, f.auth.membershipId]);
+    const before = await effects();
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner })).rejects.toThrow();
+    expect(await effects()).toEqual(before);
+    expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
+      [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(0);
+  });
+  it("rechecks a verified session's owner membership after revocation, even on replay", async () => {
+    const f = await darkFixture();
+    await f.repo.attestManual(f.auth.context, f.manual);
+    const before = await effects();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, f.auth.membershipId]);
+    try {
+      await expect(f.repo.attestManual(f.auth.context, f.manual)).rejects.toThrow("ORDER_ACTION_INVALID");
+      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() })).rejects.toThrow("ORDER_ACTION_INVALID");
+      expect(await effects()).toEqual(before);
+      expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
+        [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(1);
+    } finally {
+      await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",
+        [DEMO_TENANT_ID, f.auth.membershipId]);
+    }
+  });
   it("manual placement is append-only, replayable, and mutually exclusive with either send route", async () => {
     const f = await darkFixture(), before = await effects();
     const fact = await f.repo.attestManual(f.auth.context, f.manual);
     expect(await f.repo.attestManual(f.auth.context, f.manual)).toEqual(fact);
+    expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND id=$2",
+      [DEMO_TENANT_ID, fact.attestationId])).rows).toEqual([{ actor_membership_id: f.auth.membershipId }]);
+    expect((await admin.query(`SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'
+      AND payload->'references'->>'attestationId'=$2`, [DEMO_TENANT_ID, fact.attestationId])).rows)
+      .toEqual([{ actor_ref: `membership:${f.auth.membershipId}` }]);
     expect((await effects()).action_outbox).toBe(before.action_outbox);
     expect((await effects()).action_authorization).toBe(before.action_authorization);
     await expect(f.repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_ALREADY_COMMITTED");

@@ -6,14 +6,14 @@ import { appendAuditBatch } from "./audit.js";
 import { consequentialCommandV1Schema, UserCommandDispatcher } from "./commands.js";
 import { appendOutboundAction } from "./outbox.js";
 import { claimCommandIdentity, requestHashFor, requireLiveJob, runStoredCommand } from "./watchdog.js";
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { authenticatedMembershipId, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { requireSyntheticOrders, readMerchantOrder, merchantOrderContent, orderContentHash, orderAmount,
   PurchaseOrderActionError } from "./purchase-order-action.js";
 
 const uuid = z.guid({ error: "Invalid uuid" });
 const scopeV1 = z.object({ version: z.literal("merchant-order-scope.v1"), jobId: uuid, revisionId: uuid }).strict();
 const attestationV1 = z.object({ version: z.literal("manual-order-attestation.v1"), jobId: uuid, revisionId: uuid,
-  commandId: uuid, actorMembershipId: uuid, supplierReference: z.string().regex(/^synthetic-[a-zA-Z0-9-]{1,80}$/u),
+  commandId: uuid, supplierReference: z.string().regex(/^synthetic-[a-zA-Z0-9-]{1,80}$/u),
 }).strict();
 
 async function lockOrder(db: TenantTransaction, tenantId: string, jobId: string) {
@@ -89,22 +89,23 @@ export class PurchaseOrderActionRepository {
   /** Records the owner's assertion, never an outbound action or provider-confirmed placement. */
   async attestManual(context: VerifiedTenantContext, raw: unknown) {
     requireSyntheticOrders(); const input = attestationV1.parse(raw);
+    const actorMembershipId = authenticatedMembershipId(context);
     try { return await withTenant(this.pool, context, async db => {
       await lockOrder(db, context.tenantId, input.jobId);
       const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'
-        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [context.tenantId, input.actorMembershipId]);
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [context.tenantId, actorMembershipId]);
       if (!member.rowCount) throw new PurchaseOrderActionError("ORDER_ACTION_INVALID");
       return runStoredCommand(db, { tenantId: context.tenantId, jobId: input.jobId, kind: "purchase_order.attest_manual",
-        commandId: input.commandId, request: input }, { work: async () => {
+        commandId: input.commandId, request: { ...input, actorMembershipId } }, { work: async () => {
         const order = await readMerchantOrder(db, context.tenantId, input.jobId, input.revisionId);
         if ((await db.$client.query("SELECT 1 FROM app.purchase_order_placement WHERE tenant_id=$1 AND draft_id=$2",
           [context.tenantId, order.draftId])).rowCount) throw new PurchaseOrderActionError("ORDER_ALREADY_COMMITTED");
         const id = randomUUID();
         await db.$client.query(`INSERT INTO app.purchase_order_manual_attestation(id,tenant_id,job_id,draft_id,revision_id,
           merchant_id,actor_membership_id,command_id,supplier_reference_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [id, context.tenantId, input.jobId, order.draftId, order.revisionId, order.merchantId, input.actorMembershipId,
+          [id, context.tenantId, input.jobId, order.draftId, order.revisionId, order.merchantId, actorMembershipId,
             input.commandId, orderContentHash(input.supplierReference)]);
-        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${input.actorMembershipId}`,
+        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actorMembershipId}`,
           eventType: "purchase_order.manual_attested", subjectType: "job", subjectRef: input.jobId,
           payload: { references: { attestationId: id }, classifications: { action: "operational" } } }]);
         return { attestationId: id, fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 };
