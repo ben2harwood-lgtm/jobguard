@@ -106,7 +106,7 @@ from administrative fixture setup in this slice. No client can supply or replace
 invoice facts, balances, a tenant or an actor through the repository command.
 Actual invoice/settlement ingestion is a separate upstream integration requirement.
 
-A request stores one Decision per invoice snapshot and the fixed
+A request stores at most one live (pending/approved) Decision per invoice snapshot and the fixed
 `dunning-reference.v1` preview policy. Its `snapshotHash` is the existing canonical
 SQL hash of the entire stored invoice projection, binding balance, revision,
 recipient, category, source hash, final-account lock and suppression facts.
@@ -114,14 +114,21 @@ The rendered reminder's `contentHash` remains the existing core hash; it is
 separate from this storage fingerprint. An approval must name the stored Decision
 and current snapshot, and appends an approved `decision_resolution`. Preview
 Decisions expire after one practice hour. A dismissed or expired Decision cannot
-be approved; this slice does not renew it. Changed source facts require a fresh
+be approved or replayed as usable. A new command can create a fresh Decision for
+the same still-unpaid snapshot after expiry, dismissal or rejection. Under the
+company lock, request retires terminal lifecycle statuses before looking up a
+live Decision; a partial unique index enforces one pending/approved draft per
+snapshot. Expiry is checked against server time on every command, including
+replay; lifecycle status is a projection updated lazily, not expiry authority.
+Only lifecycle status can change; snapshot fields, expiry, Decisions and
+resolutions retain their immutable history. Changed source facts require a fresh
 snapshot/Decision. Historical snapshots and approvals remain immutable, while
 current validity is checked again on every command, including replay.
 
 Each request/approval uses a durable command receipt and appends a hash/reference
 only audit event in the same transaction. Exact command replays do not repeat
 approval or audit; changed command payloads conflict. Distinct request commands
-for the same snapshot reuse its Decision. Suppressed amounts cannot create or
+for the same snapshot reuse its live Decision. Suppressed amounts cannot create or
 approve reminder Decisions. No `action_authorization`, financial posting or
 outbound work is created: an approved preview always returns `executable:false`.
 There is no delivery claim and no second retry owner.

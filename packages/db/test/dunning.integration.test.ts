@@ -69,14 +69,59 @@ describe("M4-16 durable synthetic dunning",()=>{
   await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[a.sessionId]);
   await expect(repo.command(a.context,a.digest,a.jobId,"request",input)).rejects.toThrow("DUNNING_UNAVAILABLE");
  });
- it.each(["expired","dismissed"])("refuses %s stored Decisions",async state=>{
+ it.each(["expired","expired_approved","dismissed","rejected"])("redrafts after %s while refusing the old Decision",async state=>{
   const a=await company();await seed(a);const row=(await read(a)).invoices[0]!,did=randomUUID();
   await c.admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'dunning_invoice',$3,'dunning.reminder.preview')",[did,a.tenantId,row.invoiceId]);
   await c.admin.query(`INSERT INTO app.dunning_reminder(tenant_id,job_id,invoice_id,decision_id,snapshot_hash,snapshot,expires_at)
-   SELECT tenant_id,job_id,invoice_id,$3,$4,projection,clock_timestamp()+(CASE WHEN $5='expired' THEN interval '-1 hour' ELSE interval '1 hour' END)
+   SELECT tenant_id,job_id,invoice_id,$3,$4,projection,clock_timestamp()+(CASE WHEN $5 LIKE 'expired%' THEN interval '-1 hour' ELSE interval '1 hour' END)
    FROM app.dunning_invoice WHERE tenant_id=$1 AND invoice_id=$2`,[a.tenantId,row.invoiceId,did,row.snapshotHash,state]);
-  if(state==="dismissed")await c.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'dismissed',$4)",[randomUUID(),a.tenantId,did,a.actorId]);
-  await expect(new DunningRepository(c.runtime).command(a.context,a.digest,a.jobId,"approve",command(row,{decisionId:did}))).rejects.toThrow("DUNNING_UNAVAILABLE");
+  if(state!=="expired")await c.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,$4,$5)",[randomUUID(),a.tenantId,did,state==="expired_approved"?"approved":state,a.actorId]);
+  const repo=new DunningRepository(c.runtime), oldApproval=command(row,{decisionId:did});
+  await expect(repo.command(a.context,a.digest,a.jobId,"approve",oldApproval)).rejects.toThrow("DUNNING_UNAVAILABLE");
+  const [fresh,concurrent]=await Promise.all([repo.command(a.context,a.digest,a.jobId,"request",command(row)),repo.command(a.context,a.digest,a.jobId,"request",command(row))]);
+  expect(fresh.decisionId).not.toBe(did);expect(fresh.status).toBe("pending");
+  expect(concurrent.decisionId).toBe(fresh.decisionId);
+  await expect(repo.command(a.context,a.digest,a.jobId,"approve",oldApproval)).rejects.toThrow("DUNNING_UNAVAILABLE");
+  expect(await repo.command(a.context,a.digest,a.jobId,"approve",command(row,{decisionId:fresh.decisionId}))).toMatchObject({status:"approved",executable:false});
+  const history=(await c.admin.query("SELECT decision_id,status FROM app.dunning_reminder WHERE tenant_id=$1 ORDER BY decision_id",[a.tenantId])).rows;
+  expect(history).toHaveLength(2);
+  expect(history).toEqual(expect.arrayContaining([
+   {decision_id:did,status:state.startsWith("expired")?"expired":state},{decision_id:fresh.decisionId,status:"approved"}
+  ]));
+ });
+ it("refuses replay of a dismissed request and retains immutable snapshots",async()=>{
+  const a=await company();await seed(a);const row=(await read(a)).invoices[0]!,repo=new DunningRepository(c.runtime),input=command(row);
+  const old=await repo.command(a.context,a.digest,a.jobId,"request",input);
+  await c.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'dismissed',$4)",[randomUUID(),a.tenantId,old.decisionId,a.actorId]);
+  await expect(repo.command(a.context,a.digest,a.jobId,"request",input)).rejects.toThrow("DUNNING_UNAVAILABLE");
+  const fresh=await repo.command(a.context,a.digest,a.jobId,"request",command(row));
+  expect(fresh.decisionId).not.toBe(old.decisionId);
+  await expect(repo.command(a.context,a.digest,a.jobId,"request",input)).rejects.toThrow("DUNNING_UNAVAILABLE");
+  await expect(c.admin.query("UPDATE app.dunning_reminder SET snapshot='{}' WHERE tenant_id=$1",[a.tenantId])).rejects.toMatchObject({code:"55000"});
+  await expect(c.admin.query("UPDATE app.dunning_reminder SET expires_at=clock_timestamp()+interval '1 day' WHERE tenant_id=$1",[a.tenantId])).rejects.toMatchObject({code:"55000"});
+ });
+ it.each(["pending","approved"])("database refuses a second %s draft for the same snapshot",async status=>{
+  const index=(await c.admin.query("SELECT indisunique,pg_get_expr(indpred,indrelid) predicate FROM pg_index WHERE indexrelid='app.dunning_reminder_live_snapshot'::regclass")).rows[0];
+  expect(index).toEqual({indisunique:true,predicate:"(status = ANY (ARRAY['pending'::text, 'approved'::text]))"});
+  const a=await company();await seed(a);const row=(await read(a)).invoices[0]!,repo=new DunningRepository(c.runtime);
+  const first=await repo.command(a.context,a.digest,a.jobId,"request",command(row));
+  if(status==="approved")await repo.command(a.context,a.digest,a.jobId,"approve",command(row,{decisionId:first.decisionId}));
+  const did=randomUUID();
+  await c.admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'dunning_invoice',$3,'dunning.reminder.preview')",[did,a.tenantId,row.invoiceId]);
+  await expect(c.admin.query(`INSERT INTO app.dunning_reminder(tenant_id,job_id,invoice_id,decision_id,snapshot_hash,snapshot,status)
+   SELECT tenant_id,job_id,invoice_id,$3,snapshot_hash,snapshot,$4 FROM app.dunning_reminder WHERE tenant_id=$1 AND decision_id=$2`,[a.tenantId,first.decisionId,did,status])).rejects.toMatchObject({code:"23505"});
+ });
+ it.each([{disputed:true},{outstandingPence:0}])("refuses redrafting and old approvals after suppression %j",async changed=>{
+  const a=await company(),p=await seed(a),row=(await read(a)).invoices[0]!,repo=new DunningRepository(c.runtime);
+  const old=await repo.command(a.context,a.digest,a.jobId,"request",command(row));
+  const approval=command(row,{decisionId:old.decisionId});
+  await repo.command(a.context,a.digest,a.jobId,"approve",approval);
+  await c.admin.query("UPDATE app.dunning_invoice SET projection=$3::jsonb WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,p.invoiceId,JSON.stringify({...p,...changed})]);
+  const hash=(await c.admin.query("SELECT app.final_lock_hash(projection) h FROM app.dunning_invoice WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,p.invoiceId])).rows[0].h;
+  for(const [operation,input] of [["request",command({...row,snapshotHash:hash})],["approve",approval]] as const){
+   await expect(repo.command(a.context,a.digest,a.jobId,operation,input)).rejects.toThrow("DUNNING_UNAVAILABLE");
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,$4,$5::jsonb)",[a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]))).rejects.toThrow("DUNNING_UNAVAILABLE");
+  }
  });
  it("skips malformed rows and denies direct runtime reads/writes and cross-job references",async()=>{
   const a=await company(),b=await company();await seed(a);await seed(a,{outstandingPence:"malformed-secret"});

@@ -787,7 +787,7 @@ async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
 async function dunningAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const tables=["dunning_invoice","dunning_reminder"];
- const indexes=["dunning_invoice_pkey","dunning_invoice_tenant_id_job_id_invoice_id_key","dunning_reminder_pkey","dunning_reminder_tenant_id_invoice_id_snapshot_hash_key"];
+ const indexes=["dunning_invoice_pkey","dunning_invoice_tenant_id_job_id_invoice_id_key","dunning_reminder_pkey","dunning_reminder_live_snapshot"];
  const identities=[["dunning_workbench","t uuid, digest text, j uuid, operation text, v jsonb"]];
  const routines=after.routines.filter(r=>r.nspname==="app"&&identities.some(([name,args])=>r.proname===name&&r.args===args));
  expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());

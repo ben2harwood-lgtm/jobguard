@@ -12,10 +12,15 @@ CREATE TABLE app.dunning_reminder (
  snapshot_hash text NOT NULL CHECK(snapshot_hash ~ '^[a-f0-9]{64}$'), snapshot jsonb NOT NULL,
  policy_version text NOT NULL DEFAULT 'dunning-reference.v1' CHECK(policy_version='dunning-reference.v1'),
  expires_at timestamptz NOT NULL DEFAULT clock_timestamp()+interval '1 hour',
- PRIMARY KEY(tenant_id,decision_id), UNIQUE(tenant_id,invoice_id,snapshot_hash),
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN('pending','approved','expired','dismissed','rejected')),
+ PRIMARY KEY(tenant_id,decision_id),
  FOREIGN KEY(tenant_id,job_id,invoice_id) REFERENCES app.dunning_invoice(tenant_id,job_id,invoice_id),
  FOREIGN KEY(tenant_id,decision_id) REFERENCES app.decision(tenant_id,id)
 );
+-- Wall-clock expiry and resolutions are checked under the company lock before
+-- reuse. Only lifecycle status changes; the historical snapshot stays immutable.
+CREATE UNIQUE INDEX dunning_reminder_live_snapshot ON app.dunning_reminder(tenant_id,invoice_id,snapshot_hash)
+ WHERE status IN('pending','approved');
 DO $$ DECLARE n text; BEGIN
  FOREACH n IN ARRAY ARRAY['dunning_invoice','dunning_reminder'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
@@ -25,7 +30,7 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('REVOKE ALL ON app.%I FROM PUBLIC,jobguard_runtime,jobguard_infrastructure',n);
  END LOOP;
 END $$;
-CREATE TRIGGER immutable_rows BEFORE UPDATE OR DELETE ON app.dunning_reminder
+CREATE TRIGGER immutable_rows BEFORE UPDATE OF tenant_id,job_id,invoice_id,decision_id,snapshot_hash,snapshot,policy_version,expires_at OR DELETE ON app.dunning_reminder
  FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record();
 CREATE TRIGGER immutable_table BEFORE TRUNCATE ON app.dunning_reminder
  FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_authorization_record();
@@ -83,11 +88,20 @@ BEGIN
  SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=t AND command_id=cid;
  IF FOUND THEN
   IF prior.command_type<>'dunning.'||operation OR prior.request_hash<>request_hash THEN RAISE EXCEPTION 'DUNNING_CONFLICT'; END IF;
-  IF (prior.result->>'expiresAt')::timestamptz<=clock_timestamp() THEN RAISE EXCEPTION 'DUNNING_UNAVAILABLE'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.dunning_reminder r WHERE r.tenant_id=t AND r.decision_id=(prior.result->>'decisionId')::uuid
+   AND r.status IN('pending','approved') AND r.expires_at>clock_timestamp()
+   AND NOT EXISTS(SELECT 1 FROM app.decision_resolution x WHERE x.tenant_id=t AND x.decision_id=r.decision_id AND x.resolution<>'approved'))
+  THEN RAISE EXCEPTION 'DUNNING_UNAVAILABLE'; END IF;
   RETURN prior.result;
  END IF;
  IF operation='request' THEN
-  SELECT * INTO draft FROM app.dunning_reminder WHERE tenant_id=t AND invoice_id=iid AND snapshot_hash=fingerprint;
+  -- Retire only the lifecycle projection, preserving old Decisions, resolutions,
+  -- snapshots and receipts. The existing company lock serializes redrafts.
+  UPDATE app.dunning_reminder r SET status=CASE WHEN r.expires_at<=clock_timestamp() THEN 'expired'
+   ELSE (SELECT x.resolution FROM app.decision_resolution x WHERE x.tenant_id=t AND x.decision_id=r.decision_id) END
+   WHERE r.tenant_id=t AND r.invoice_id=iid AND r.snapshot_hash=fingerprint AND r.status IN('pending','approved')
+   AND (r.expires_at<=clock_timestamp() OR EXISTS(SELECT 1 FROM app.decision_resolution x WHERE x.tenant_id=t AND x.decision_id=r.decision_id AND x.resolution<>'approved'));
+  SELECT * INTO draft FROM app.dunning_reminder WHERE tenant_id=t AND invoice_id=iid AND snapshot_hash=fingerprint AND status IN('pending','approved');
   IF NOT FOUND THEN
    did:=gen_random_uuid();
    INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(did,t,'dunning_invoice',iid::text,'dunning.reminder.preview');
@@ -96,12 +110,13 @@ BEGIN
  ELSE
   did:=(v->>'decisionId')::uuid;
   SELECT * INTO draft FROM app.dunning_reminder WHERE tenant_id=t AND job_id=j AND invoice_id=iid AND decision_id=did AND snapshot_hash=fingerprint;
-  IF NOT FOUND OR draft.expires_at<=clock_timestamp() OR draft.snapshot IS DISTINCT FROM source
+  IF NOT FOUND OR draft.status NOT IN('pending','approved') OR draft.expires_at<=clock_timestamp() OR draft.snapshot IS DISTINCT FROM source
    OR NOT EXISTS(SELECT 1 FROM app.decision WHERE tenant_id=t AND id=did AND subject_type='dunning_invoice' AND subject_ref=iid::text AND action_type='dunning.reminder.preview')
    OR EXISTS(SELECT 1 FROM app.decision_resolution WHERE tenant_id=t AND decision_id=did AND resolution<>'approved')
   THEN RAISE EXCEPTION 'DUNNING_UNAVAILABLE'; END IF;
   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id)
    VALUES(gen_random_uuid(),t,did,'approved',actor) ON CONFLICT(tenant_id,decision_id) DO NOTHING;
+  UPDATE app.dunning_reminder SET status='approved' WHERE tenant_id=t AND decision_id=did;
  END IF;
  IF draft.expires_at<=clock_timestamp() OR EXISTS(SELECT 1 FROM app.decision_resolution WHERE tenant_id=t AND decision_id=draft.decision_id AND resolution<>'approved')
  THEN RAISE EXCEPTION 'DUNNING_UNAVAILABLE'; END IF;
