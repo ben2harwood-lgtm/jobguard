@@ -1,6 +1,6 @@
 # LP-3: activation and acceptance cutover (RED, dark)
 
-0397 adds checked overloads for the four legacy routes, closes runtime EXECUTE on
+0404 adds checked overloads for the four legacy routes, closes runtime EXECUTE on
 all four old signatures in the same transaction, and leaves owner-connected
 historical fixture calls available. New overloads refuse outside the trusted
 `jobguard_synthetic_demo` database, regardless of caller-set deployment flags.
@@ -110,3 +110,32 @@ because the sandbox starts at detached HEAD; no lane rules were changed.
 PostgreSQL/migration/browser execution is deferred to GitHub CI under the issued
 sandbox constraint. Router must commit on the registered branch and rerun lane
 checking and CI; exact-head RED review remains a separate gate.
+
+## PR #414 current-main catch-up — 30 October 2026, 20:42 UTC
+
+The router pre-merged current origin/main b6a0941d (PR #433, through migration
+0398) at 188b66d0. Verified that merge retains main's migrations, lane files,
+LP-0 inventory and SERIOUS-B5, entitlement and tenancy expectations, with only
+LP-3's already-reviewed additions/replacements. No routine body was recreated;
+existing overloads still call main's authoritative legacy bodies. The downstream
+effects contract is unchanged.
+
+Renumbered 0397 to the reserved 0404 with the exported planRenumber from
+tools/migration-renumber.mjs, reserving through 0403 in the planner input. Used
+filesystem moves and reference edits because CLI write mode stages Git files.
+SQL remains byte-identical to reviewed c2fe17c5, SHA-256
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+Earlier dated paragraphs retain their historical migration numbers.
+
+Local checks: package-local Vitest 4.1.12, --maxWorkers=2, ran
+src/lp3-operation.test.ts, src/lp3-mutations.test.ts and
+test/lp-0-catalog.test.ts: 3 files, 86 tests passed. Package-local
+tsc -p tsconfig.json --noEmit passed. Core purity, money arithmetic, commercial
+boundary and PL/pgSQL CASE-in-IF lints passed; git diff --check passed.
+The lane CLI refused detached HEAD; direct exported lane-path and migration-order
+checks passed against origin/main and the final filesystem. Router must rerun
+the actual lane CLI on the registered branch after committing. PostgreSQL,
+migration and browser suites are deferred to GitHub CI by the issued sandbox
+constraint. The known main-wide meter-track-review-upgrade table-count failure
+was left untouched as instructed. No new behavior; RED exact-head review and
+green current-main CI remain separate merge gates.
