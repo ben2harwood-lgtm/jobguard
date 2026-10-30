@@ -1,4 +1,5 @@
 import { JobWorkStateError, LINKED_JOB_COPY, linkedJobOfferV1 } from "@jobguard/core";
+
 export function jobWorkStateFailure(error:unknown):{status:number;body:Record<string,unknown>}|null {
  if(!(error instanceof JobWorkStateError))return null;
  if(error.code==="METER_PROJECTION_MISMATCH")return {status:409,body:{code:error.code,message:"The jobs-on-the-go meter could not be verified. Nothing was changed.",environment:"synthetic_demo",realExternalActions:0}};
