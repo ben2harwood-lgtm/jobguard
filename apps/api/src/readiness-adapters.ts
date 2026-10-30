@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export class ReadinessSeamError extends Error {
-  constructor(readonly code: "READINESS_LIVE_DISABLED" | "INVALID_READINESS_PLAN" | "READINESS_SCOPE_MISMATCH" | "INVALID_READINESS_SCHEDULE" | "READINESS_TASK_ALREADY_REGISTERED" | "INVALID_READINESS_TASK" | "READINESS_NOT_DUE") { super(code); this.name = "ReadinessSeamError"; }
+  constructor(readonly code: "READINESS_LIVE_DISABLED" | "INVALID_READINESS_PLAN" | "READINESS_SCOPE_MISMATCH" | "INVALID_READINESS_SCHEDULE" | "READINESS_TASK_ALREADY_REGISTERED" | "INVALID_READINESS_TASK" | "READINESS_NOT_DUE" | "READINESS_STORE_CONFLICT" | "INVALID_READINESS_PROPOSAL") { super(code); this.name = "ReadinessSeamError"; }
 }
 export const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).refine(
   value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value,

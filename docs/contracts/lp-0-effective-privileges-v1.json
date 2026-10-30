@@ -70,6 +70,12 @@
 {"id":"x-variation-writes","title":"Runtime INSERT (and variation column UPDATE) on variation, approval, revision, rejection, withdrawal and rate observation","kind":"commitment","status":"existing_exception","target":{"state":"review_at_card","note":"LP-5c inventories the approval write; LP-6d converts the remaining writers"},"cards":["LP-5c","LP-6d"],"responsibilities":{"LP-5c":"variation_approval and similar approval records are authority-changing grants inventoried for closure","LP-6d":"each remaining direct writer is converted to a checked routine or classified working data with its downstream effect"},"downstream":"variation_approval records an approval of changed price; variation_revision and variation_approval are fingerprinted. Direct writes can create approval records without the approval routine.","sources":["packages/db/migrations/0003_job_spine.sql:113","packages/db/migrations/0003_job_spine.sql:114"],"tests":["packages/db/test/quote.integration.test.ts","packages/db/test/variation.integration.test.ts","packages/db/test/fingerprinted-row-shape.integration.test.ts"],"gaps":[],"path":"ap-quote-variation-commitments","alsoPaths":["ap-lp13-legacy-unknown-raiser"]}
 ],
 "entries":[
+{"key":"acl|rel|table|app.scheduled_readiness_plan|jobguard_runtime|INSERT|-","group":"x-scope-proposal-writes"},
+{"key":"acl|rel|table|app.scheduled_readiness_plan|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.scheduled_readiness_plan|jobguard_migration","group":"a-owner-tables-views"},
+{"key":"acl|rel|table|app.scheduled_readiness_proposal|jobguard_runtime|INSERT|-","group":"x-scope-proposal-writes"},
+{"key":"acl|rel|table|app.scheduled_readiness_proposal|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.scheduled_readiness_proposal|jobguard_migration","group":"a-owner-tables-views"},
 {"key":"acl|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.small_builder_demo(uuid,text,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-demo-i-lifecycle"},
@@ -2006,6 +2012,8 @@
 {"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]}
 ],
 "rls":[
+"app.scheduled_readiness_plan|rls=t|forced=t",
+"app.scheduled_readiness_proposal|rls=t|forced=t",
 "app.northside_run|rls=t|forced=t",
 "app.northside_action_attribution|rls=t|forced=t",
 "app.acceptance_event|rls=t|forced=t",
@@ -2265,6 +2273,8 @@
 "infrastructure.outbox_signal|rls=f|forced=f"
 ],
 "policies":[
+"app.scheduled_readiness_plan|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03",
+"app.scheduled_readiness_proposal|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03",
 "app.final_account_lock|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",
 "app.job|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",
 "app.job_activation|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",

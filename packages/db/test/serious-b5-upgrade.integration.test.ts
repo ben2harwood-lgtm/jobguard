@@ -748,6 +748,28 @@ async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
+// M2-6 store: union only the two tables, their three indexes and their tenant policies.
+async function scheduledReadinessAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ["scheduled_readiness_plan", "scheduled_readiness_proposal"];
+ const indexes = ["scheduled_readiness_plan_pkey", "scheduled_readiness_plan_tenant_id_job_id_task_id_plan_hash_key", "scheduled_readiness_proposal_pkey"];
+ const names = [...tables, ...indexes];
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const table of tables) {
+  expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+  const acl = (await f.admin.query(`SELECT pg_get_userbyid(c.relowner) owner,c.relrowsecurity,c.relforcerowsecurity,
+   ARRAY(SELECT a.privilege_type FROM aclexplode(c.relacl) a WHERE a.grantee='jobguard_runtime'::regrole ORDER BY 1) runtime_grants,
+   EXISTS(SELECT 1 FROM aclexplode(c.relacl) a WHERE a.grantee NOT IN(c.relowner,'jobguard_runtime'::regrole)) extra_grants
+   FROM pg_class c WHERE c.oid=$1::regclass`, [`app.${table}`])).rows;
+  expect(acl).toEqual([{owner:"jobguard_migration",relrowsecurity:true,relforcerowsecurity:true,runtime_grants:["INSERT","SELECT"],extra_grants:false}]);
+ }
+ const additive = <T>(old: T[], added: T[], live: T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(a)) - live.findIndex(r => JSON.stringify(r) === JSON.stringify(b)));
+ return {...before, rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
+  relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
 // DEMO-I: exactly the private lifecycle objects installed by 0313; no extra grants.
 async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -906,6 +928,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await scheduledReadinessAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-6-store": {
+      "branches": ["codex/sandbox/m2-6-store"],
+      "note": "M2-6 RED synthetic durable readiness storage and atomic audit; base m2-6-readiness; live routes remain disabled.",
+      "allow": [
+        "apps/api/src/readiness-adapters.ts",
+        "apps/api/src/readiness-store.ts",
+        "apps/api/src/readiness-store.test.ts",
+        "packages/db/migrations/0485_scheduled_readiness_store.sql",
+        "packages/db/test/readiness-store.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}
