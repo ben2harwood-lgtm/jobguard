@@ -366,3 +366,36 @@ Validation is recorded in the router commit-message handoff. PostgreSQL queue,
 approval, privilege, upgrade and RLS tests are CI-only in this sandbox. Full
 workspace checks and the independent exact-head Claude RED review remain owed.
 This is not completion of M4-17's production reconciliation/security/restore gate.
+
+### M4-17 queue follow-up: SQL source and report verification
+
+Branch-owned 0479 now rebuilds the entire synthetic customer-invoice set for
+this tenant/job from `app.customer_invoice`, including each immutable
+`final_account_revision_id` and net/tax/gross pence. A different amount,
+revision, invented identity or missing stored invoice refuses, even if the
+caller supplies a fresh consistent source hash. SQL independently recomputes
+all balances and differences for the supported snapshot and compares the whole
+report, including canonical difference IDs. Fabricated, altered or omitted
+queue entries and changed balances refuse before persistence or audit. Daily
+aliases also validate their supplied snapshot/report before retaining the first
+run of the day; exact command replay still returns its immutable original.
+
+Provider observations remain supplied fictional inputs and never establish
+verified settlement. The stored platform journal has different kinds and book
+semantics from these invoice-scoped reference journal observations; there is no
+accepted adapter for that shape or for reference duplicate corrections. SQL
+therefore refuses nonempty `journals` and `corrections` rather than accepting
+unbacked facts. A proposed/approved reference adjustment is still a review fact,
+not a posted journal or executable authorization. Supporting persisted journal
+or correction inputs requires their actual source mapping and SQL comparison;
+this follow-up does not invent it. Honest invoice/provider-only reports retain
+the same report format, disabled flags, balances, hashes and queues.
+
+The PostgreSQL regression fixture now uses the existing historical invoice
+fixture with a real stored final-account revision and authorization. It attacks
+the SQL entry point directly, bypassing repository validation. Tests also
+compare supported provider chains, duplicate effects, limits, missing parents,
+orphans, overpayments and late observations against the pure reference engine.
+No new table, routine, ACL or policy is introduced: the exact LP-0 / SERIOUS-B5
+unions remain unchanged. Only the unmerged branch-owned migration is edited.
+PostgreSQL integration and upgrade execution remain CI-only here.

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m4-17-queue"
       ],
-      "note": "M4-17 RED: synthetic stored reference runs, immutable difference queue and distinct-identity finance review facts. Migration 0479. No external execution or commercial posting; built ahead on m4-17-recon.",
+      "note": "M4-17 RED: stored-invoice-verified synthetic reference runs, SQL-recomputed difference queue and distinct-identity finance review facts. Unbacked journal/correction snapshots refuse. Migration 0479. No external execution or commercial posting; built ahead on m4-17-recon.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/money-trail-reconciliation-v1.md",

@@ -6,6 +6,7 @@ import { FinancialReconciliationQueueRepository } from "../src/financial-reconci
 import { withTenant } from "../src/tenant-context.js";
 import { cluster, world, type World } from "./contractor-billing-fixtures.js";
 import { invite } from "./extra-approval-chain-fixtures.js";
+import { seedAccount, issueHistoricalInvoice, LOCK_OWNER } from "./sv5pre-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await cluster(); }, 240000);
@@ -13,7 +14,13 @@ afterAll(async () => { await c?.close(); });
 const tables = ["financial_reconciliation_run", "financial_reconciliation_difference", "financial_reconciliation_adjustment", "financial_reconciliation_approval", "financial_reconciliation_command"];
 async function setup() {
  const w = await world(c), repo = new FinancialReconciliationQueueRepository(c.runtime);
- const scope = { tenantId: w.w.p.tenantId, jobId: w.s.jobId }, invoiceId = randomUUID(), revision = randomUUID(), paymentId = randomUUID(), effectId = randomUUID();
+ // Reuse the genuine historical invoice fixture, including its immutable
+ // final-account revision and authorization. Never seed a claimed snapshot.
+ const account = await seedAccount(c.admin, w.w.p.tenantId as ReturnType<typeof randomUUID>, 10000);
+ await issueHistoricalInvoice(c.admin, account.tenantId, { jobId: account.jobId, finalAccountRevisionId: account.revisionId, actorMembershipId: LOCK_OWNER });
+ await c.admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT DO NOTHING",[account.tenantId,account.jobId]);
+ const stored=(await c.admin.query("SELECT id,final_account_revision_id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[account.tenantId,account.jobId])).rows[0]!;
+ const scope = { tenantId: account.tenantId, jobId: account.jobId }, invoiceId = stored.id as string, revision = stored.final_account_revision_id as string, paymentId = randomUUID(), effectId = randomUUID();
  const payment = { ...scope, id: paymentId, effectId, invoiceId, kind: "payment", amount: 12000, parentId: null, late: true };
  const snapshot = { ...scope, version: "financial-reconciliation-snapshot.v1", environment: "synthetic_demo", corrections: [],
   invoices: [{ ...scope, id: invoiceId, revision, net: 10000, vat: 2000, gross: 12000 }], provider: [payment], journals: [] };
@@ -87,4 +94,65 @@ it("denies direct writes, enforces append-only even for owner, and leaks no cros
  const unknown=randomUUID();await expect(a.repo.read(a.w.ctx,unknown,a.scope.jobId,run.runId)).rejects.toThrow();
  await withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.revoke_contractor_practice_session($1)",[a.w.session]));
  await expect(a.run()).rejects.toThrow();
+});
+
+// Bypass the TypeScript repository deliberately: the runtime SQL boundary must
+// reject coherent forged snapshots/reports, even with recomputed source hashes.
+async function rawRun(a: Awaited<ReturnType<typeof setup>>, snapshot: unknown, report: unknown = reconcileFinancialSnapshot(snapshot)) {
+ return withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb) result",[a.w.session,a.scope.jobId,JSON.stringify({
+  version:"financial-reconciliation-storage.v1",action:"run",commandId:randomUUID(),trigger:"on_demand",day:"2026-10-30",snapshot,report,
+ })]));
+}
+it("SQL rejects forged invoice money, revision, unknown invoice and omission of a stored invoice despite fresh hashes",async()=>{
+ const a=await setup();
+ for(const invoices of [
+  [{...a.snapshot.invoices[0],net:10001,gross:12001}],
+  [{...a.snapshot.invoices[0],revision:randomUUID()}],
+  [{...a.snapshot.invoices[0],id:randomUUID()}],
+  [],
+ ]) await expect(rawRun(a,{...a.snapshot,invoices})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ expect((await c.admin.query("SELECT id FROM app.financial_reconciliation_run WHERE tenant_id=$1 AND job_id=$2",[a.scope.tenantId,a.scope.jobId])).rows).toEqual([]);
+});
+it("SQL refuses fabricated, omitted and altered differences and forged balances; an honest direct run is unchanged",async()=>{
+ const a=await setup(),report=reconcileFinancialSnapshot(a.snapshot);
+ for(const bad of [
+  {...report,queue:[]}, {...report,queue:report.queue.slice(1)},
+  {...report,queue:[...report.queue,{...report.queue[0],differenceId:'f'.repeat(64),code:'FABRICATED'}]},
+  {...report,queue:report.queue.map((q,i)=>i? q:{...q,observed:{pence:1,currency:'GBP'}})},
+  {...report,balances:{...report.balances,grossCharged:{pence:1,currency:'GBP'}}},
+ ]) await expect(rawRun(a,a.snapshot,bad)).rejects.toThrow("RECONCILIATION_CONFLICT");
+ const honest=await rawRun(a,a.snapshot);
+ expect(honest.rows[0].result).toMatchObject({snapshot:a.snapshot,report});
+});
+it("SQL refuses unbacked journal and correction facts rather than treating reviews as posted money",async()=>{
+ const a=await setup();
+ const journal={...a.scope,id:randomUUID(),invoiceId:a.invoiceId,kind:'payment',amount:12000,sourceId:a.payment.id};
+ await expect(rawRun(a,{...a.snapshot,journals:[journal]})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ const duplicate={...a.payment,id:randomUUID()};
+ const correction={...a.scope,id:randomUUID(),invoiceId:a.invoiceId,target:'provider',voidId:duplicate.id,duplicateOf:a.payment.id};
+ await expect(rawRun(a,{...a.snapshot,provider:[a.payment,duplicate],corrections:[correction]})).rejects.toThrow("RECONCILIATION_CONFLICT");
+});
+it("SQL and core agree on supported provider chains, duplicate effects, limits, orphans and late events",async()=>{
+ const a=await setup(),payment={...a.payment,late:false};
+ const fee={...payment,id:randomUUID(),effectId:randomUUID(),kind:'fee',parentId:payment.id,amount:200};
+ const payout={...fee,id:randomUUID(),effectId:randomUUID(),kind:'payout',amount:11800};
+ const bank={...fee,id:randomUUID(),effectId:randomUUID(),kind:'bank',parentId:payout.id,amount:11800};
+ const refund={...fee,id:randomUUID(),effectId:randomUUID(),kind:'refund',amount:12001};
+ for(const provider of [[],[payment],[payment,fee,payout,bank],[payment,fee,payout],
+  [payment,{...payment,id:randomUUID()}],[payment,refund,payout,bank],
+  [payout,bank],[{...payment,invoiceId:randomUUID()}],[{...payment,amount:12001}],
+  [payment,{...payout,late:true},bank]]) {
+  const snapshot={...a.snapshot,provider:provider.sort((x,y)=>x.id<y.id?-1:1)};
+  const result=await rawRun(a,snapshot);
+  expect(result.rows[0].result.report).toEqual(reconcileFinancialSnapshot(snapshot));
+ }
+});
+
+it("SQL does not let a daily alias persist a forged report",async()=>{
+ const a=await setup();
+ await a.run({...a.command(),trigger:'daily'});
+ const report={...reconcileFinancialSnapshot(a.snapshot),queue:[]};
+ await expect(withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb)",[a.w.session,a.scope.jobId,JSON.stringify({
+  version:'financial-reconciliation-storage.v1',action:'run',commandId:randomUUID(),trigger:'daily',day:'2026-10-30',snapshot:a.snapshot,report,
+ })]))).rejects.toThrow('RECONCILIATION_CONFLICT');
 });
