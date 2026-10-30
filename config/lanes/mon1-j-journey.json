@@ -3,7 +3,7 @@
   "lanes": {
     "mon1-j-journey": {
       "branches": ["codex/sandbox/mon1-j-journey"],
-      "note": "RED MON-1 browser journey, stacked on mon1-admit PR #388. Synthetic Builder included-place display, Solo grace and cap refusal, replay and company isolation, all with reload assertions in both browser projects. No production or migration changes.",
+      "note": "RED MON-1 browser journey, catch-up only after mon1-admit PR #388 merged to main. Synthetic Builder included-place display, Solo grace and cap refusal, replay and company isolation, all with reload assertions in both browser projects. No production or migration changes.",
       "allow": ["apps/web/e2e/MON1-J.spec.mts"]
     }
   }
