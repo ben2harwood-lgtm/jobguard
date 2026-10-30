@@ -63,7 +63,7 @@ DO $$ DECLARE t uuid; BEGIN
  END LOOP;
  PERFORM set_config('app.tenant_id','',true);
 END $$;
-CREATE FUNCTION app.mon9_elect(j uuid,c uuid,actor uuid,command uuid,authorization uuid,service text,points integer,terms text)
+CREATE FUNCTION app.mon9_elect(j uuid,c uuid,actor uuid,command uuid,auth_id uuid,service text,points integer,terms text)
 RETURNS app.managed_recovery_election LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; prior app.managed_recovery_election; h text;
 BEGIN
@@ -86,7 +86,7 @@ BEGIN
   JOIN app.decision d ON(d.tenant_id,d.id)=(a.tenant_id,a.decision_id)
   WHERE cr.tenant_id=t AND cr.command_id=command AND cr.actor_membership_id=actor AND cr.status='processing'
    AND cr.command_type='managed_recovery.elect' AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
-   AND a.id=authorization AND a.action_type='managed_recovery.elect' AND a.content_hash=h AND a.aggregate_revision=1
+   AND a.id=auth_id AND a.action_type='managed_recovery.elect' AND a.content_hash=h AND a.aggregate_revision=1
    AND a.policy_version=terms AND a.recipient IS NULL AND a.amount_pence IS NULL AND a.currency IS NULL
    AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() AND r.resolution='approved'
    AND r.decision_id=d.id AND r.actor_membership_id=actor AND d.action_type='managed_recovery.elect'
@@ -99,7 +99,7 @@ BEGIN
   OR EXISTS(SELECT 1 FROM app.recovery_case_current r WHERE r.tenant_id=t AND r.job_id=j AND r.id=c AND r.state NOT IN('identified','evidence_assembled'))
  THEN RAISE EXCEPTION 'PURSUIT_ALREADY_STARTED' USING ERRCODE='23514'; END IF;
  INSERT INTO app.managed_recovery_election(tenant_id,job_id,case_id,command_id,actor_membership_id,authorization_id,service,points,terms_version)
- VALUES(t,j,c,command,actor,authorization,service,points,terms) RETURNING * INTO prior;
+ VALUES(t,j,c,command,actor,auth_id,service,points,terms) RETURNING * INTO prior;
  RETURN prior;
 END $$;
 ALTER FUNCTION app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text) OWNER TO jobguard_migration;
