@@ -26,11 +26,11 @@ test("emailed fictional link signs into exactly one job with a browser-session c
  const customerContext = await browser.newContext();
  try {
   await page.goto("/sign-in");
-  await page.getByLabel("Fictional email address").fill(`portal-builder-${randomUUID()}@practice.invalid`);
-  await page.getByRole("button", { name: "Request code", exact: true }).click();
-  const code = await page.getByTestId("fixture-code").textContent();
-  await page.getByLabel("Eight-digit code").fill(code!); await page.getByRole("button", { name: "Verify code" }).click();
-  await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+  await page.getByRole("main").getByLabel("Fictional email address").fill(`portal-builder-${randomUUID()}@practice.invalid`);
+  await page.getByRole("main").getByRole("button", { name: "Request code", exact: true }).click();
+  const code = await page.getByRole("main").getByTestId("fixture-code").textContent();
+  await page.getByRole("main").getByLabel("Eight-digit code").fill(code!); await page.getByRole("main").getByRole("button", { name: "Verify code" }).click();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
   const session = await page.evaluate(async () => (await fetch("/api/auth/session")).json());
   const tenant = session.memberships[0].tenantId as string, fixture = await seedJob(admin, tenant);
   const issued = await api(page, "issue", { version: "customer-link-issue.v1", tenantId: tenant, jobId: fixture.job, customerId: fixture.customer }, session.csrfToken);
@@ -38,9 +38,9 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   const outbox = (await admin.query("SELECT o.immutable_content,o.adapter,o.recipient FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, issued.body.grantId])).rows[0];
   expect(outbox).toMatchObject({ adapter: "fake_email", recipient: "portal@example.invalid" });
   const tab = await customerContext.newPage(); await tab.goto(`${baseURL}${outbox.immutable_content}`);
-  await expect(tab.getByRole("button", { name: "Sign in", exact: true })).toBeVisible(); expect(tab.url()).not.toContain("#");
-  await tab.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(tab.getByText("You are signed in to this job.", { exact: true })).toBeVisible();
+  await expect(tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true })).toBeVisible(); expect(tab.url()).not.toContain("#");
+  await tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(tab.getByRole("main").getByText("You are signed in to this job.", { exact: true })).toBeVisible();
   const cookie = (await customerContext.cookies()).find(c => c.name === "jobguard_customer")!;
   expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: "Strict", expires: -1 });
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);
@@ -48,7 +48,7 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
   const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
   expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
-  await tab.getByRole("button", { name: "Sign out", exact: true }).click(); await expect(tab.getByText("You are signed out.", { exact: true })).toBeVisible();
+  await tab.getByRole("main").getByRole("button", { name: "Sign out", exact: true }).click(); await expect(tab.getByRole("main").getByText("You are signed out.", { exact: true })).toBeVisible();
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   await customerContext.addCookies([cookie]);
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(401);

@@ -158,3 +158,42 @@ Local verification (installed binaries, no downloads):
 PostgreSQL, migration/upgrade and browser execution remain GitHub CI gates,
 as does one independent Claude RED review against the final pushed head.
 No git-writing commands were run.
+
+## PR #423 — CI repair try 2, 30 October 2026
+
+Inspected the full core-checks log for job 124188525009 at 902e0987 via the
+GitHub connector (the local gh command could not reach api.github.com).
+The worktree was clean, with no new merge conflicts.
+
+Root cause: four real Next route imports in customer-signin.test.ts failed
+before assertions with ERR_MODULE_NOT_FOUND for @jobguard/api/identity.
+The export points to apps/api/dist/auth/index.js, but Turbo's API test task
+builds dependencies (^build), not the API itself. Earlier local API output
+masked this clean-CI ordering dependency. The test now maps the Next package
+import to the actual source customer-signin module with a Vitest factory;
+CustomerSigninApplication and customerHttp execute unchanged, and only the
+existing identity-server fixture remains faked. No assertion was removed or
+changed. This introduces no product or build-order behavior change.
+
+Scoped every element locator in customer-signin.spec.ts to main, per the
+repair brief, so document-level accessibility roles cannot interfere with
+the product journey. Cookie, replay, cross-job, sign-out and all other
+expectations remain unchanged. No migrations, SQL routines, shared database
+expectation rows or lane paths changed.
+
+Validation (installed binaries, no downloads):
+
+- Temporarily renamed apps/api/dist, ran `vitest run --maxWorkers=1
+  src/auth/customer-signin.test.ts`, and restored the directory in finally:
+  all 26 tests passed without compiled API output. No output was deleted.
+- apps/api: `vitest run --maxWorkers=1 src/auth/customer-signin.test.ts
+  src/auth/sso/oidc-paths.test.ts` — 32 tests passed.
+- apps/api and apps/web: `tsc -p tsconfig.json --noEmit` — both passed.
+- apps/web: `playwright test --list --workers=1 customer-signin.spec.ts`
+  collected both projects (2 cases); collection is not browser execution.
+- `node tools/lint.mjs` — passed, including lane boundary and PL/pgSQL CASE;
+  `git diff --check` — passed.
+
+The router owns commit/push and the CI rerun. PostgreSQL and Playwright
+execution, green CI against current main and independent exact-head Claude
+RED review remain required. No git-writing command was run.

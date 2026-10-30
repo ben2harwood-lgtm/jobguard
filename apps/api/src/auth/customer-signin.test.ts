@@ -13,6 +13,8 @@ import { HttpException } from "@nestjs/common";
 import { fileURLToPath } from "node:url";
 const routeIdentity = vi.hoisted(() => ({ current: undefined as unknown }));
 vi.mock("../../../web/app/lib/identity-server", () => ({ identityApplication: () => routeIdentity.current }));
+// API tests run before this package is built; exercise the real source behind the Next import.
+vi.mock("@jobguard/api/identity", () => import("./customer-signin.js"));
 const tenant = "10000000-0000-4000-8000-000000000001", job = "20000000-0000-4000-8000-000000000002", customer = "30000000-0000-4000-8000-000000000003";
 const scope = { tenantId: tenant, jobId: job, customerId: customer };
 const origin = "https://fixture.invalid", cookie = `${tenant}.${job}.${customer}.${"a".repeat(43)}`;
