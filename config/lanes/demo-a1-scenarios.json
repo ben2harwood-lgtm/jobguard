@@ -12,7 +12,8 @@
         "apps/api/src/job-work-state.errors.ts",
         "apps/api/src/job-source.errors.ts",
         "apps/api/src/workspace/application.ts",
-        "apps/api/src/workspace/nest-free-boundary.test.ts"
+        "apps/api/src/workspace/nest-free-boundary.test.ts",
+        "apps/api/src/workspace/index.ts"
       ]
     }
   }

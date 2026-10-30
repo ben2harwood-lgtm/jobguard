@@ -151,7 +151,8 @@ test("DEMO-S disclosure before lock: real detection and support disclosure remai
       await page.goto(`/jobs/${jobId}#final-account-title`);
       await finishDispositionsAndTerms(page);
       await page.getByRole("main").getByRole("button", { name: "Complete final account", exact: true }).click();
-      await expect.poll(async () => (await get(page, path(jobId, "final-account"))).lock?.finalAccountRevisionId).toBe(account.id);
+      // The account endpoint returns the draft only; lock state has its own view.
+      await expect.poll(async () => (await get(page, path(jobId, "final-account/lock"))).lock?.finalAccountRevisionId).toBe(account.id);
       await page.goto(`/jobs/${jobId}#final-check`);
       // Locking saves the bill; the separate checked request starts the worker.
       const panel = page.getByRole("main").getByTestId("final-check-reveal");
