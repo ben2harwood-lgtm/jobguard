@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "receipt-movement-job-fk": {
+      "branches": [
+        "codex/sandbox/receipt-movement-job-fk"
+      ],
+      "note": "RED: M4-8-S movement/job foreign-key repair; restores original tenant FK alongside existing job-bound FK. PostgreSQL proofs run in CI. Lane file implicitly owned.",
+      "allow": [
+        "packages/db/migrations/0407_receipt_movement_job_fk.sql",
+        "packages/db/src/receipt-movement-job-fk.test.ts",
+        "packages/db/test/receipt-movement-job-fk-upgrade.integration.test.ts",
+        "packages/db/test/receipt-source-job-binding-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

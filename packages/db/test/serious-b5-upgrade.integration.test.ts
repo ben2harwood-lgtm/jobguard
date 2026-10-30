@@ -251,6 +251,17 @@ async function receiptFactAdditions(before: Awaited<ReturnType<typeof snapshot>>
   "receipt_allocation_fact_revision_tenant_id_job_id_id_key", "receipt_allocation_fact_revision_tenant_id_review_id_key",
   "receipt_allocation_fact_sourc_tenant_id_allocation_revision_key", "receipt_allocation_fact_sourc_tenant_id_job_id_id_invoice_i_key",
   "receipt_allocation_fact_source_pkey", "receipt_allocation_fact_source_tenant_id_job_id_id_key", "receipt_allocation_one_receipt_interpretation"];
+ // 0407 adds back the original FK alongside 0386's job-bound FK. Extend the
+ // receipt catalogue proof without removing any row, privilege or index checks.
+ const movementConstraints=(await f.admin.query(`SELECT conname,convalidated,pg_get_constraintdef(oid) definition
+  FROM pg_constraint WHERE conrelid='app.receipt_allocation_fact_source'::regclass
+  AND confrelid='app.practice_feed_event'::regclass ORDER BY conname`)).rows;
+ expect(movementConstraints).toEqual([
+  {conname:"receipt_allocation_fact_source_tenant_id_movement_id_fkey",convalidated:true,
+   definition:"FOREIGN KEY (tenant_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, id)"},
+  {conname:"receipt_fact_source_job_movement_fk",convalidated:true,
+   definition:"FOREIGN KEY (tenant_id, job_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, job_id, id)"},
+ ]);
  const routineIdentities = [
   ["assert_receipt_fact_bound", "parts jsonb, limit_n numeric, limit_d numeric"], ["assert_receipt_fact_scope", "p_tenant uuid, p_job uuid, p_session_digest text"],
   ["guard_receipt_fact_line", ""], ["read_receipt_allocation_facts", "p_tenant uuid, p_job uuid, p_session_digest text, p_selector jsonb, p_expected jsonb"],

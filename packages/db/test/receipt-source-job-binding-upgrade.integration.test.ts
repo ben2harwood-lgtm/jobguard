@@ -36,8 +36,9 @@ it("#346: populated F5/F7 survive upgrade; SQL refuses a same-tenant movement fr
  await migrate(f.admin);await migrate(f.admin);
  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
  const constraints=(await f.admin.query(`SELECT conname,convalidated,pg_get_constraintdef(oid) definition FROM pg_constraint
-  WHERE conrelid='app.receipt_allocation_fact_source'::regclass AND confrelid='app.practice_feed_event'::regclass`)).rows;
- expect(constraints).toEqual([{conname:"receipt_fact_source_job_movement_fk",convalidated:true,
+  WHERE conrelid='app.receipt_allocation_fact_source'::regclass AND confrelid='app.practice_feed_event'::regclass ORDER BY conname`)).rows;
+ expect(constraints).toEqual([{conname:"receipt_allocation_fact_source_tenant_id_movement_id_fkey",convalidated:true,
+  definition:"FOREIGN KEY (tenant_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, id)"}, {conname:"receipt_fact_source_job_movement_fk",convalidated:true,
   definition:"FOREIGN KEY (tenant_id, job_id, movement_id) REFERENCES app.practice_feed_event(tenant_id, job_id, id)"}]);
  await rolledBack(f.admin,async db=>{
   // Isolate the FK from the independent append-only guard, only in a rolled-back
