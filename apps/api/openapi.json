@@ -444,10 +444,10 @@
             "description": "Stored sources, expected revisions or command replay conflict"
           },
           "503": {
-            "description": "Review approval remains dependency-bound"
+            "description": "Required runtime dependency unavailable"
           }
         },
-        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
+        "summary": "Assess a stored synthetic catch or approve its exact owner review",
         "tags": [
           "synthetic recovery attribution"
         ]
