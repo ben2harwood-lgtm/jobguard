@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { parseSuccessFeeCommand, SuccessFeeError } from "@jobguard/core";
-import { PracticeAccessError, SuccessFeeRepository, SimulationFeeStatementRepository } from "@jobguard/db";
+import { PracticeAccessError, SuccessFeeRepository, SimulationFeeStatementRepository, SimulationFeeCollectionRepository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 import { successFeeQueryV1 } from "./success-fee.contracts.js";
 export function successFeeFailure(error:unknown):{status:number;body:{code:string}}|null {
@@ -45,6 +45,18 @@ export class SuccessFeeApplication {
  async downloadStatement(jobId:string,statementId:string,query:unknown={},tenantSelection=false){
   const auth=await this.authorize(jobId,query,tenantSelection);
   return new SimulationFeeStatementRepository(this.pool).download(auth.context,jobId,auth.digest,statementId);
+ }
+
+ async collection(jobId:string,query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  return new SimulationFeeCollectionRepository(this.pool).view(auth.context,jobId,auth.digest);
+ }
+ async collect(jobId:string,raw:unknown|(()=>Promise<unknown>),query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  let body:unknown;
+  try{body=typeof raw==="function"?await (raw as ()=>Promise<unknown>)():raw;}
+  catch(error){if(error instanceof SyntaxError)throw new SuccessFeeError();throw error;}
+  return new SimulationFeeCollectionRepository(this.pool).command(auth.context,jobId,auth.digest,body);
  }
 
 }

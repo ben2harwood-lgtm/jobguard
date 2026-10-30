@@ -155,3 +155,5 @@ export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./value-business-reader.js";
 export * from "./simulation-fee-statement-repository.js";
+
+export * from "./simulation-fee-collection-repository.js";
