@@ -78,3 +78,47 @@ Final local results:
 Required CI follow-up: full typecheck/lint/test/build, real PostgreSQL tests,
 mandatory migration/tenancy/LP-0/SERIOUS-B5/entitlement suites and Playwright.
 No prompt/model/extraction path changed, so no new AI evaluation gate is introduced.
+
+## PR #423 — CI repair try 1, 30 October 2026
+
+Inspected the complete GitHub job logs for 123564851379 and 123564851420,
+then the worktree after main was merged (0c57ddac). No unresolved conflicts.
+Only the failing test fixtures and their regression coverage change; no product
+behavior, migration or SQL routine is modified or recreated.
+
+- Finance outbox negative-case fixture: PostgreSQL reported `42P08`, inconsistent
+  types for `$1` (`text versus uuid`), at the insert into `app.action_outbox`.
+  The same parameter was a bare UUID target and an explicit `$1::text` provider
+  key. Pin both uses to UUID, then convert the provider key with `$1::uuid::text`.
+  Preserve every forbidden-action/policy/recipient/amount case and assertion.
+- SERIOUS-B5: the complete diff contains the same catalogue property values in
+  different positions, including OIDC relations and policies. The OIDC helper
+  inserts at final database positions while earlier-sorting customer objects are
+  still absent; inserting customer objects later preserves that incorrect order
+  among the already accumulated rows. The final customer union now sorts its
+  retained historical rows and exact approved additions by their final database
+  positions. It copies no new live metadata into historical expectations and
+  accepts no extra catalogue objects. The full snapshot equality, repeat-migrate
+  equality and all shared expectation-list rows remain intact.
+
+Added a seven-line test-only ordering helper in the existing upgrade proof
+utilities. Its regression reproduces OIDC/customer interleaving using distinct
+snapshot objects; the original splice algorithm failed it locally. Negative
+controls prove that changed historical privileges still fail equality and an
+unapproved live row is not adopted. All three tests pass with the repair.
+
+Validation:
+
+- In packages/db, installed Vitest 4.1.12:
+  `vitest run --maxWorkers=1 test/upgrade-proof-utils.test.ts` — 3 passed.
+- Installed TypeScript:
+  `tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext
+  --strict --skipLibCheck packages/db/test/upgrade-proof-utils.ts
+  packages/db/test/upgrade-proof-utils.test.ts` — passed.
+- In packages/db: `vitest list --maxWorkers=1
+  test/customer-signin.integration.test.ts
+  test/serious-b5-upgrade.integration.test.ts` — 26 cases collected, not executed.
+- `node tools/agent-lane-boundary-lint.mjs` and `git diff --check` — passed.
+- PostgreSQL is unavailable in this sandbox. Actual SQL execution and both
+  previously failing database suites require the router's GitHub CI rerun.
+  No git-writing commands, package downloads or live provider calls were used.

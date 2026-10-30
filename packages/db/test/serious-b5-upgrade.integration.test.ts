@@ -1,3 +1,4 @@
+import { catalogueAdditions } from "./upgrade-proof-utils.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -1128,6 +1129,6 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
  expect(policies.map(p => [p.tablename,p.policyname])).toEqual(tables.map(t => [t,"tenant_isolation"]));
  for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
- const additive = <T>(old: T[], added: T[], live: T[]): T[] => { const expected = [...old]; for(const r of added)expected.splice(live.indexOf(r),0,r);return expected; };
+ const additive = catalogueAdditions;
  return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
 }
