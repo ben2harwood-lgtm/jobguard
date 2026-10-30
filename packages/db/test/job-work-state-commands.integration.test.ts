@@ -14,6 +14,25 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   const fresh=new Pool(f.runtime.options);try{expect(await runWorkCommand(fresh,p,input)).toEqual(result)}finally{await fresh.end()}
   expect(await commandCounts(f,p)).toEqual(after);
  });
+ it("close refuses missing or invalid reasons without effects",async()=>{
+  const p=await seedWorkPractice(f),before=await commandCounts(f,p);
+  for(const reason of [undefined,null,"","finished",7,{},["other"]]){
+   const input=workCommand("close",{note:"Fictional closure",...(reason===undefined?{}:{reason})});
+   await expect(runWorkCommand(f.runtime,p,input)).rejects.toThrow("INVALID_WORK_STATE_INPUT");
+   expect(await commandCounts(f,p)).toEqual(before);
+  }
+ });
+ it.each(["cancelled_by_customer","abandoned","completed_outside_jobguard","other"])("close records reason %s once and replay has one effect",async reason=>{
+  const p=await seedWorkPractice(f),input=workCommand("close",{reason,note:"Fictional closure"}),before=await commandCounts(f,p);
+  const result=await runWorkCommand(f.runtime,p,input);
+  expect(result.events).toHaveLength(1);
+  expect(result.events[0]).toMatchObject({kind:"closed",commandId:input.commandId,closeReason:reason,closeNote:"Fictional closure"});
+  const after=await commandCounts(f,p);
+  for(const table of ["command_receipt","job_work_state_event","audit_event"])expect(after[table]).toBe(before[table]!+1);
+  for(const table of ["job_link","synthetic_obligation","journal","recovery_fee_journal","action_outbox"])expect(after[table]).toBe(before[table]);
+  expect(await runWorkCommand(f.runtime,p,input)).toEqual(result);
+  expect(await commandCounts(f,p)).toEqual(after);
+ });
  it("cancel binds the outstanding marker and appends without rewriting it",async()=>{
   const p=await seedWorkPractice(f),finished=await runWorkCommand(f.runtime,p,workCommand()),marker=finished.events.at(-1)!;
   await expect(runWorkCommand(f.runtime,p,workCommand("cancel_finish",{expectedRevision:finished.events.length,markerId:randomUUID()}))).rejects.toThrow("INVALID_WORK_STATE_INPUT");

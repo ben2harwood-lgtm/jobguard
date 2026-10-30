@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch4-close-reason": {
+      "branches": ["codex/sandbox/ch4-close-reason"],
+      "note": "RED CH-4 close-reason regression coverage: missing/invalid reasons, persisted allowed reasons and one-effect replay. Built ahead; serialize the shared CH-4 browser spec with PR #431. Own lane file is implicitly allowed. No runtime or migration change.",
+      "allow": [
+        "apps/web/e2e/CH-4.spec.ts",
+        "packages/core/src/job-work-state-commands.test.ts",
+        "packages/db/test/job-work-state-commands.integration.test.ts"
+      ]
+    }
+  }
+}

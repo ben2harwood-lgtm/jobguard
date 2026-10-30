@@ -18,6 +18,14 @@ it("close requires reason and note",()=>{
  expect(jobWorkStateCommandV1.safeParse({...base,action:"close",reason:"other",note:"  "}).success).toBe(false);
  expect(jobWorkStateCommandV1.safeParse({...base,action:"close",reason:"other",note:"Stop requested"}).success).toBe(true);
 });
+it.each([undefined, null, "", "finished", 7, {}, ["other"]])("close refuses missing or invalid reason %j",reason=>{
+ const input={...base,action:"close",note:"Fictional customer stopped the work",...(reason===undefined?{}:{reason})};
+ expect(jobWorkStateCommandV1.safeParse(input).success).toBe(false);
+ expect(()=>assertWorkStateTransition(input,{finishedMarkerId:null,closedEventId:null})).toThrow("INVALID_WORK_STATE_INPUT");
+});
+it.each(["cancelled_by_customer","abandoned","completed_outside_jobguard","other"])("close accepts issued reason %s",reason=>{
+ expect(assertWorkStateTransition({...base,action:"close",reason,note:"Fictional closure"},{finishedMarkerId:null,closedEventId:null})).toMatchObject({action:"close",reason,note:"Fictional closure"});
+});
 it("reopen binds current close",()=>{
  expect(()=>assertWorkStateTransition({...base,action:"reopen",closeEventId:id},{finishedMarkerId:null,closedEventId:other})).toThrow();
  expect(()=>assertWorkStateTransition({...base,action:"reopen",closeEventId:id},{finishedMarkerId:null,closedEventId:id})).not.toThrow();
