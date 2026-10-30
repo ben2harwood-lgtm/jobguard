@@ -882,6 +882,42 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// 0483 adds only these election/start facts and two controlled routines.
+async function managedRecoveryAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const tables = ['managed_recovery_election','managed_recovery_pursuit'];
+ const names = [...tables,'managed_recovery_election_pkey','managed_recovery_election_tenant_id_command_id_key',
+  'managed_recovery_election_tenant_id_authorization_id_key','managed_recovery_pursuit_pkey'];
+ const identities = [['mon9_elect','j uuid, c uuid, actor uuid, command uuid, authorization uuid, service text, points integer, terms text'],['mon9_pursuit_guard','']];
+ const routines = after.routines.filter(r => r.nspname==='app' && identities.some(([n,a]) => r.proname===n && r.args===a));
+ expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
+ for (const r of routines) {
+  expect(before.routines.some(b=>b.nspname===r.nspname && b.proname===r.proname && b.args===r.args)).toBe(false);
+  expect(r.prosecdef).toBe(true); expect(r.proconfig).toEqual(['search_path=pg_catalog, app']);
+  expect((await f.admin.query('SELECT $1::aclitem[]::text[] acl',[r.proacl])).rows[0].acl.sort()).toEqual([
+   'jobguard_migration=X/jobguard_migration',...(r.proname==='mon9_elect'?['jobguard_runtime=X/jobguard_migration']:[])].sort());
+ }
+ const relations=after.relations.filter(r=>r.nspname==='app' && names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
+ const policies=after.policies.filter(p=>p.schemaname==='app' && tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,'tenant_isolation']).sort());
+ for (const policy of policies) {
+  expect((await f.admin.query('SELECT $1::name[]::text[] roles',[policy.roles])).rows[0].roles).toEqual(['jobguard_migration','jobguard_runtime']);
+  expect(policy.cmd).toBe('ALL'); expect(policy.qual).toBe(policy.with_check);
+ }
+ for (const t of tables) {
+  expect(before.rows).not.toHaveProperty(`app.${t}`); expect(after.rows[`app.${t}`]).toEqual([]);
+  const rel=relations.find(r=>r.relname===t)!;
+  expect(rel.relrowsecurity).toBe(true); expect(rel.relforcerowsecurity).toBe(true);
+  expect((await f.admin.query('SELECT $1::aclitem[]::text[] acl',[rel.relacl])).rows[0].acl.sort()).toEqual([
+   'jobguard_migration=arwdDxt/jobguard_migration','jobguard_runtime=r/jobguard_migration'].sort());
+ }
+ const position=(rows:unknown[],v:unknown)=>rows.findIndex(r=>JSON.stringify(r)===JSON.stringify(v));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
+  routines:[...before.routines,...routines].sort((a,b)=>position(after.routines,a)-position(after.routines,b)),
+  relations:[...before.relations,...relations].sort((a,b)=>position(after.relations,a)-position(after.relations,b)),
+  policies:[...before.policies,...policies].sort((a,b)=>position(after.policies,a)-position(after.policies,b))};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -906,6 +942,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await managedRecoveryAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-9-persist": {
+      "branches": [
+        "codex/sandbox/mon-9-persist"
+      ],
+      "note": "RED MON-9 synthetic persistence, stored principal preview and pursuit lock. Built ahead from mon-9-core; router handles commit/push/PR after base merge. Own lane file implicitly permitted.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/index.ts",
+        "packages/db/migration-notes/0483_managed_recovery_election.md",
+        "packages/db/migrations/0483_managed_recovery_election.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/managed-recovery-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery-fixtures.ts",
+        "packages/db/test/managed-recovery-repository.test.ts",
+        "packages/db/test/managed-recovery-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
