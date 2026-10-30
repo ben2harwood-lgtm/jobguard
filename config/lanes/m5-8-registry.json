@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-8-registry": {
+      "branches": [
+        "codex/sandbox/m5-8-registry"
+      ],
+      "note": "M5-8 RED durable dark key-version/revocation metadata; no live key custody or production composition.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migration-notes/0486_tenant_key_registry.md",
+        "packages/db/migrations/0486_tenant_key_registry.sql",
+        "packages/db/src/tenant-key-registry.test.ts",
+        "packages/db/src/tenant-key-registry.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/lp-0-catalog.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/tenant-key-registry.integration.test.ts"
+      ]
+    }
+  }
+}
