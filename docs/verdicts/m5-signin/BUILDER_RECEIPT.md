@@ -122,3 +122,39 @@ Validation:
 - PostgreSQL is unavailable in this sandbox. Actual SQL execution and both
   previously failing database suites require the router's GitHub CI rerun.
   No git-writing commands, package downloads or live provider calls were used.
+
+## Main catch-up — 30 October 2026
+
+Catch-up only for MON-5 foundation / m5-signin (RED). Resolved all four
+conflict blocks in docs/contracts/lp-0-effective-privileges-v1.json:
+capability groups, routine ACL/owner entries, recorded routine definitions,
+and forced-RLS records. Retained both customer sign-in and MON-1 additions;
+all current-main group/entry/routine values are preserved exactly, including
+main's removal of the obsolete counted-reader runtime grant. No behavior,
+test expectations, or SQL routines changed. Migration 0387 remains unchanged;
+no migration already on main was edited. SERIOUS-B5, entitlement and tenancy
+expectation additions from both branches remain in the automatic merge.
+The existing lane allow list exactly matches the diff against origin/main,
+with its own lane file implicitly permitted; no lane widening was needed.
+
+Local verification (installed binaries, no downloads):
+
+- packages/db: `vitest run --maxWorkers=1 test/lp-0-catalog.test.ts
+  test/upgrade-proof-utils.test.ts src/outbox.test.ts` — 35 passed.
+- apps/api: `vitest run --maxWorkers=1 src/auth/customer-signin.test.ts
+  src/watchdog-registry.test.ts src/meter-work-state.application.test.ts`
+  — 159 passed.
+- apps/api and packages/db: `tsc -p tsconfig.json --noEmit` — both passed.
+- Core purity, money arithmetic, commercial boundary and PL/pgSQL CASE lint
+  passed; `git diff --check` passed and no conflict markers remain.
+- Structural inventory verification preserved exact current-main entries and
+  exact branch customer entries, with no duplicate group/entry/routine keys.
+- `node tools/lint.mjs` stopped at lane lint: its uncommitted-merge comparison
+  includes incoming MON-1 paths. Direct path-set comparison against origin/main
+  passes exactly. The router must stage the resolved file, finish the merge,
+  and rerun the normal lane lint/CI; the index remains unmerged because git
+  writes are prohibited here. This is not a full lint pass.
+
+PostgreSQL, migration/upgrade and browser execution remain GitHub CI gates,
+as does one independent Claude RED review against the final pushed head.
+No git-writing commands were run.
