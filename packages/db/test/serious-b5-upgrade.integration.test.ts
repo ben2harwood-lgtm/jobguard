@@ -882,6 +882,23 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// M2-4: exactly 0494's two immutable proposal tables and audit guard extend the catalogue.
+async function supplierLineCorrectionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot(), tables=["supplier_line_match_snapshot","supplier_line_match_correction"];
+ const names=[...tables,...tables.flatMap(t=>[`${t}_pkey`,`${t}_tenant_id_command_id_key`,`${t}_tenant_id_audit_event_id_key`]),
+  "supplier_line_match_snapshot_tenant_id_job_id_id_key","slmc_revision"];
+ const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
+ const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="supplier_line_match_audit_guard"&&r.args==="");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({prosecdef:false,proconfig:["search_path=pg_catalog"]});
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"tenant_isolation"]).sort());
+ for(const t of tables)expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
+ const add=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
+  routines:add(before.routines,routines,after.routines),relations:add(before.relations,relations,after.relations),policies:add(before.policies,policies,after.policies)};
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -906,6 +923,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await supplierLineCorrectionAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

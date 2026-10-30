@@ -67,9 +67,55 @@ input is mutated. Invalid envelopes raise `SupplierLineMatchError` with
 `INVALID_MATCH_INPUT`; monetary overflow uses the existing typed `MoneyError`.
 
 Mappings are facts supplied to this function, not authorization created by it.
-A future stored multi-line correction command must verify the current source
-versions, expected revision, permission, idempotency and audit in one transaction.
-The existing single-line correction command is unchanged and does not persist
-this new envelope. This piece claims no new UI, concurrent correction persistence,
-held-out benchmark, live PDF/OCR/provider route or G2 release evidence. Inline
-synthetic tests are development regression fixtures, not frozen human ground truth.
+The original pure matcher remains unchanged. The dark synthetic correction seam
+is specified below. Inline fixtures are development regression tests, not frozen
+human ground truth, a held-out benchmark or G2 release evidence.
+
+## M2-4 stored reviewer corrections (0494)
+
+`SupplierLineCorrectionRepository` stores an immutable, server-owned confirmed
+synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
+tenant context and the authenticated server principal's identity user/membership
+IDs. Every create, read, correction and replay checks current active owner
+membership, including identity, expiry and revocation. No HTTP route is registered.
+The seam requires `JOBGUARD_ENV=synthetic_demo`; it cannot accept real uploads or
+activate live matching. Fixture confirmation/source authenticity is the trusted
+caller's responsibility, as in the pure input contract above.
+
+A strict `supplier-line-correction.v1` command contains command/snapshot IDs,
+expected revision, one source version and an order version (or null to withdraw
+the mapping). It cannot carry edited source lines, prices, quantities or a claimed
+approval. A correction replaces only that source's mappings; other mappings and
+all original document/line identities, quantities, amounts, hashes and citations
+survive. Withdrawals restore deterministic automatic matching; ambiguity stays
+unresolved. Duplicates and incompatible units remain subject to the original
+matcher checks even after a reviewer chooses an order.
+
+Snapshots start at revision zero. Under one transaction, the repository locks
+command identity then snapshot identity, checks expected revision, appends an
+immutable correction, and appends identifier/hash-only audit data. All domain
+locks precede the audit-head lock. Concurrent distinct commands with the same
+revision yield one success and one `MATCH_REVISION_CONFLICT`. A command replay
+returns its original revision/result, even after later corrections; changing its
+payload, actor or job raises `MATCH_IDEMPOTENCY_CONFLICT`. Command IDs are unique
+across snapshot/correction commands within this seam. A read can request a prior
+revision; replaying stored corrections through the v1 matcher reproduces the
+same match and discrepancy IDs. New confirmed source versions require a new
+snapshot, never edits to a stored one. No finding, debt, invoice, payment or fee
+is created by these proposal corrections.
+
+Migration 0494 adds only `supplier_line_match_snapshot`,
+`supplier_line_match_correction` and their trigger guard. Tenant-qualified job,
+snapshot, actor and deferred audit foreign keys, FORCE RLS, append-only grants,
+immutable triggers, revision uniqueness and audit actor/type/subject/command/hash
+binding protect the records. The insert guard rejects absent source/order
+versions and nonsequential corrections. RLS still assumes a correctly verified
+tenant context and a trusted application principal; it cannot protect against a
+compromised privileged connection. Source snapshots remain synthetic proposals,
+not evidence of agreed debt or verified original bytes.
+
+Upgrade is additive and backfills no source or financial data. Roll forward with
+a new migration to repair defects; keep the existing tables/history and disable
+the dark caller if necessary. Never edit 0494 after merge. PostgreSQL integration,
+full migration/catalogue CI and one independent RED review remain required before
+merge. There is no browser change or new provider route in this piece.

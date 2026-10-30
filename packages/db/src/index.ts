@@ -147,3 +147,4 @@ export * from "./small-builder-demo-repository.js";
 export * from "./purchase-order-action.js";
 export * from "./purchase-order-action-repository.js";
 export * from "./merchant-intake-port.js";
+export * from "./supplier-line-correction-repository.js";
