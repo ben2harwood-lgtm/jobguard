@@ -60,6 +60,7 @@ it("writer refuses a cross-job proposal before inserting any facts, with the job
  await expect(rolledBack(f.admin,async db=>{
   await db.query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
   // Corrupt only the private proposal's returned movement; keep all FKs enabled.
   const definition=(await db.query("SELECT pg_get_functiondef('app.receipt_fact_proposal(uuid,uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
   const original="'movement',to_jsonb(movement)";
