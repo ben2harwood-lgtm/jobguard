@@ -882,6 +882,26 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// 0482 adds exactly one restricted synthetic identity snapshot and its primary key.
+async function mobileAuthStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const names = ["mobile_auth_fixture_state", "mobile_auth_fixture_state_pkey"];
+ const relations = after.relations.filter(r => r.nspname === "identity" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual(names);
+ for (const r of relations) {
+  expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+  expect(r.relrowsecurity).toBe(false); expect(r.relforcerowsecurity).toBe(false);
+ }
+ const table = relations.find(r => r.relname === "mobile_auth_fixture_state")!;
+ expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl", [table.relacl])).rows[0].acl.sort()).toEqual([
+  "jobguard_identity=arw/jobguard_migration", "jobguard_migration=arwdDxt/jobguard_migration",
+ ]);
+ expect(before.rows).not.toHaveProperty("identity.mobile_auth_fixture_state");
+ expect(after.rows["identity.mobile_auth_fixture_state"]).toEqual([]);
+ const position = (r: typeof relations[number]) => after.relations.findIndex(a => a.nspname === r.nspname && a.relname === r.relname);
+ return { ...before, rows: { ...before.rows, "identity.mobile_auth_fixture_state": [] },
+  relations: [...before.relations, ...relations].sort((a,b) => position(a)-position(b)) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -906,6 +926,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await mobileAuthStoreAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

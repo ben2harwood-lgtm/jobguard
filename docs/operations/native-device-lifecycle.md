@@ -1,8 +1,8 @@
 # Native device lifecycle — M3-2 partial preparation
 
 This note describes obligations, not an installed native implementation.
-Synthetic pure contracts and an opt-in process-local server fake exist in this
-piece. D08 remains proposed; aggregate M3-2 and G3 remain HELD. No new provider route or data flow
+Synthetic pure contracts and an opt-in server fake with optional PostgreSQL
+state persistence exist in this piece. D08 remains proposed; aggregate M3-2 and G3 remain HELD. No new provider route or data flow
 is activated and no operational alert is introduced.
 
 A disconnected device cannot learn a newly recorded revocation instantly.
@@ -35,8 +35,9 @@ the result is `policy_hold`, with no disposal instruction. Even `none` only
 returns `cleanup_required`; it proves no erasure. Do not discard unconfirmed
 work or promise retained access by interpreting this plan as policy approval.
 Revocation scope, disconnected pending revocation and unsynced-work handling
-remain policy questions. The fake invalidates its own mobile families and leases
-only. It never revokes existing web/source sessions.
+remain policy questions. Logout/revoke invalidates all tenant families for the authenticated user/device;
+tenant switch invalidates only the old tenant. Other users/devices are preserved.
+The fake invalidates its own mobile families and leases only. It never revokes existing web/source sessions.
 
 Before release, obtain actual supported iOS/Android development/release builds,
 key-store/encrypted SQLite/media settings, extracted-file inspection, credential
@@ -50,8 +51,9 @@ issued tasks and gates.
 
 The server fake is unregistered in every live application and defaults off.
 Both an explicit synthetic environment and opt-in flag are required, and only
-`MemoryAuthProvider` is accepted. No endpoints, keys, providers, database schema,
-external data flows or deployment settings change. Auth.js is missing; no package
+`MemoryAuthProvider` is accepted. Migration 0482 adds a restricted identity control-plane fixture snapshot, with
+SELECT/INSERT/UPDATE only for the identity role and no business/worker access.
+No endpoints, keys, providers, external data flows or deployment settings change. Auth.js is missing; no package
 was added. There are no new operational alerts because no runtime is activated.
 
 Within a fake instance, refresh is single-use; reuse (including a lost-response
@@ -61,8 +63,15 @@ later registration from restoring the old partition; a new synthetic instance ID
 is required to re-enrol. This placeholder is not an approved D08 recovery policy.
 Every reconnect rechecks source authentication and membership before lease renewal.
 No mobile token can authenticate through the existing web principal bridge.
-Restart loses fake state and refuses old tokens; this does not prove durable
-revocation, production restart recovery, audit or PostgreSQL concurrency.
+Without persistence, restart loses fake state and refuses old tokens. With
+`PostgresSyntheticMobileAuthStore`, fresh instances reload consumed digests and
+revocation tombstones under one coarse transactional row lock. Reuse commits
+family revocation even though the operation returns denial. Other command
+failures restore their prior snapshot. Stored-version errors fail closed.
+This does not prove production restart recovery, audit or native cache erasure.
+PostgreSQL concurrency and restart tests are supplied for CI, not executed locally.
+Forward fix: disable composition if necessary and add a later migration; preserve
+0482 and existing tombstones/history. Do not reset the snapshot to repair an error.
 
 Native file/key erasure and handling of pending work remain obligations above.
 Server logout cannot make a disconnected lease disappear; its prior finite expiry

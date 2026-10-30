@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { mobileReadLeaseV1 } from "@jobguard/core";
+import { emptyMobileAuthStateV1, type MobileAuthStateV1, type SyntheticMobileAuthStore, mobileReadLeaseV1 } from "@jobguard/core";
 import { MemoryAuthProvider } from "./auth-provider.js";
 import { SyntheticMobileAuthApplication } from "./mobile-auth.application.js";
 
 const origin = "https://jobguard.example.test";
 const otherTenant = "20000000-0000-4000-8000-000000000002";
 const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo", policyVersion: "fictional_mobile_auth_policy_v1", accessDurationMs: 100, refreshDurationMs: 500, sessionDurationMs: 1000, readLeaseDurationMs: 200 };
-async function fixture(options: { environment?: string; enabled?: boolean } = { environment: "synthetic_demo", enabled: true }) {
+async function fixture(options: { environment?: string; enabled?: boolean; store?: SyntheticMobileAuthStore } = { environment: "synthetic_demo", enabled: true }) {
  let clock = 1000, sequence = 0, tokens = 0, tokenFailure = false;
  const uuid = () => `10000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`;
  const source = new MemoryAuthProvider("fictional-key-for-synthetic-tests-only", () => {}, () => clock, () => "12345678");
@@ -15,7 +15,8 @@ async function fixture(options: { environment?: string; enabled?: boolean } = { 
  const session = await source.verifyCode(email, "signup", "12345678");
  const membership = source.fixtureMemberships()[0]!;
  const credentials = { ...session, origin, requestedTenantId: membership.tenantId };
- const app = new SyntheticMobileAuthApplication(source, policy, { ...options, allowedOrigin: origin, now: () => clock, uuid, token: () => { if (tokenFailure) throw new Error("fixture-secret-provider-failure"); return String(++tokens).padStart(43, "a"); } });
+ const createApp = () => new SyntheticMobileAuthApplication(source, policy, { ...options, allowedOrigin: origin, now: () => clock, uuid, token: () => { if (tokenFailure) throw new Error("fixture-secret-provider-failure"); return String(++tokens).padStart(43, "a"); } });
+ const app = createApp();
  const exchange = (commandId = uuid(), deviceInstanceId = "fictional-device") => ({ version: "mobile-exchange.v1", requestedTenantId: membership.tenantId, commandId, deviceInstanceId });
  const rotate = (refresh: unknown, commandId = uuid()) => ({ version: "mobile-rotation.v1", commandId, deviceInstanceId: "fictional-device", refresh });
  const reconnect = (access: unknown, deviceInstanceId = "fictional-device") => ({ version: "mobile-reconnect.v1", deviceInstanceId, access });
@@ -25,7 +26,22 @@ async function fixture(options: { environment?: string; enabled?: boolean } = { 
   await source.requestCode({ email, purpose: "invitation", ip: "192.0.2.1" });
   await source.verifyCode(email, "invitation", "12345678");
  };
- return { failTokens: (fail: boolean) => { tokenFailure = fail; }, app, source, credentials, membership, uuid, exchange, rotate, reconnect, lifecycle, secondTenant, advance: (ms: number) => { clock += ms; } };
+ return { createApp, failTokens: (fail: boolean) => { tokenFailure = fail; }, app, source, credentials, membership, uuid, exchange, rotate, reconnect, lifecycle, secondTenant, advance: (ms: number) => { clock += ms; } };
+}
+
+// Test adapter exercises the same snapshot boundary; PostgreSQL tests prove the real lock/commit.
+class FixtureMobileStore implements SyntheticMobileAuthStore {
+ state = emptyMobileAuthStateV1();
+ tail: Promise<unknown> = Promise.resolve();
+ transaction<T>(work: (state: MobileAuthStateV1) => Promise<{ state: MobileAuthStateV1; result: T }>): Promise<T> {
+  const pending = this.tail.then(async () => {
+   const next = await work(structuredClone(this.state));
+   this.state = structuredClone(next.state);
+   return next.result;
+  });
+  this.tail = pending.catch(() => undefined);
+  return pending;
+ }
 }
 
 describe("M3-2 DARK server fake", () => {
@@ -214,4 +230,55 @@ describe("M3-2 DARK server fake", () => {
    expect(() => new SyntheticMobileAuthApplication(f.source, { ...policy, [field]: value }, { allowedOrigin: origin, now: () => 1000 })).toThrow("MOBILE_INVALID_INPUT");
   }
  });
+ it.each(["logout", "revoke"])("%s ends device families across every tenant and preserves other users/devices", async action => {
+  const f = await fixture(); await f.secondTenant();
+  const first = await f.app.exchange(f.exchange(), f.credentials);
+  const otherCredentials = { ...f.credentials, requestedTenantId: otherTenant };
+  const second = await f.app.exchange({ ...f.exchange(), requestedTenantId: otherTenant }, otherCredentials);
+  const otherDevice = await f.app.exchange(f.exchange(f.uuid(), "another-device"), f.credentials);
+  const email = "another-fictional@example.test";
+  await f.source.requestCode({ email, purpose: "signup", ip: "192.0.2.2" });
+  const session = await f.source.verifyCode(email, "signup", "12345678");
+  const member = f.source.fixtureMemberships().find(m => m.email === email)!;
+  const userCredentials = { ...session, origin, requestedTenantId: member.tenantId };
+  const otherUser = await f.app.exchange({ ...f.exchange(), requestedTenantId: member.tenantId }, userCredentials);
+  await f.app.deviceCommand(f.lifecycle(action), f.credentials);
+  for (const [issued, credentials] of [[first, f.credentials], [second, otherCredentials]] as const) {
+   await expect(f.app.reconnect(f.reconnect(issued.access), credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+   await expect(f.app.rotate(f.rotate(issued.refresh), credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  }
+  await expect(f.app.exchange({ ...f.exchange(), requestedTenantId: otherTenant }, otherCredentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  await expect(f.app.reconnect(f.reconnect(otherDevice.access, "another-device"), f.credentials)).resolves.toBeDefined();
+  await expect(f.app.reconnect(f.reconnect(otherUser.access), userCredentials)).resolves.toMatchObject({ partition: otherUser.partition });
+ });
+ it("persists reuse revocation, consumed history and claims across fresh instances", async () => {
+  const store = new FixtureMobileStore(), f = await fixture({ enabled: true, environment: "synthetic_demo", store });
+  const cmd = f.exchange(), first = await f.app.exchange(cmd, f.credentials);
+  await expect(f.createApp().exchange(cmd, f.credentials)).rejects.toMatchObject({ code: "MOBILE_REPLAY" });
+  const next = await f.createApp().rotate(f.rotate(first.refresh), f.credentials);
+  await expect(f.createApp().rotate(f.rotate(first.refresh), f.credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  await expect(f.createApp().rotate(f.rotate(next.refresh), f.credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  await expect(f.createApp().reconnect(f.reconnect(next.access), f.credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  expect(JSON.stringify(store.state)).not.toContain(first.refresh.credential);
+  expect(JSON.stringify(store.state)).not.toContain(next.access.credential);
+ });
+ it("serializes refresh reuse between independent application instances", async () => {
+  const f = await fixture({ enabled: true, environment: "synthetic_demo", store: new FixtureMobileStore() });
+  const first = await f.app.exchange(f.exchange(), f.credentials);
+  const results = await Promise.allSettled([f.app.rotate(f.rotate(first.refresh), f.credentials), f.createApp().rotate(f.rotate(first.refresh), f.credentials)]);
+  const winners = results.filter(r => r.status === "fulfilled");
+  expect(winners).toHaveLength(1);
+  if (winners[0]?.status !== "fulfilled") throw new Error("missing fixture winner");
+  await expect(f.createApp().reconnect(f.reconnect(winners[0].value.access), f.credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+ });
+ it("persists all-tenant device tombstones and rolls back a failed switch", async () => {
+  const f = await fixture({ enabled: true, environment: "synthetic_demo", store: new FixtureMobileStore() });
+  const first = await f.app.exchange(f.exchange(), f.credentials);
+  await expect(f.createApp().deviceCommand(f.lifecycle("tenant_switch", { nextTenantId: otherTenant }), f.credentials)).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+  await expect(f.createApp().reconnect(f.reconnect(first.access), f.credentials)).resolves.toBeDefined();
+  await f.createApp().deviceCommand(f.lifecycle("logout"), f.credentials);
+  await f.secondTenant();
+  await expect(f.createApp().exchange({ ...f.exchange(), requestedTenantId: otherTenant }, { ...f.credentials, requestedTenantId: otherTenant })).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+ });
+
 });
