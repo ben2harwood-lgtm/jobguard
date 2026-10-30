@@ -794,4 +794,28 @@ BEGIN
 
  RETURN outcome;
 END $$;
+-- Latest main definition: packages/db/migrations/0372_free_first_job_admission.sql.
+CREATE OR REPLACE FUNCTION app.mon3_audit(t uuid,actor uuid,command uuid,kind text,hash text,result_hash text) RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+BEGIN
+
+
+ payload:=jsonb_build_object('references',jsonb_build_object('commandId',command::text),'hashes',jsonb_build_object('request',hash,'result',result_hash));
+
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','membership:'||actor::text,'eventType','free_first_job.'||kind,'subjectType','tenant','subjectRef',t::text,'payload',payload)),'checked_operation');
+
+END $$;
+-- Latest main definition: packages/db/migrations/0387_customer_signin.sql.
+CREATE OR REPLACE FUNCTION app.customer_portal_audit(t uuid,subject uuid,kind text) RETURNS void
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+BEGIN
+
+
+ payload:=jsonb_build_object('references',jsonb_build_object('subjectId',subject::text),'classifications',jsonb_build_object('action','security'));
+
+
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','system:customer-portal','eventType','customer_portal.'||kind,'subjectType','customer_portal','subjectRef',subject::text,'payload',payload)),'checked_operation');
+
+END $$;
 COMMIT;

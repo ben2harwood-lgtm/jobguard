@@ -1,3 +1,4 @@
+import {assertLp4SealedEvents} from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import {createWorkFixture,closeWorkFixture,meterCompany,verifyBusiness,requestCard,denyAdmission,workTenant,recordCard,resultFixture,type WorkFixture} from "./free-first-job-admission-fixtures.js";
@@ -6,6 +7,7 @@ describe("MON3 B AUTH-01 REPLAY-01 current persisted authority",()=>{
  it("exact replay rechecks session revocation and current owner",async()=>{
   const a=await meterCompany(f);await verifyBusiness(f,a);const id=randomUUID(),first=await requestCard(f,a,id);
   expect(await requestCard(f,a,id)).toEqual(first);
+  await assertLp4SealedEvents(f.admin,a.tenantId,"free_first_job.request_card");
   await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1",[a.sessionId]);
   await expect(requestCard(f,a,id)).rejects.toThrow('METER_FORBIDDEN');await expect(denyAdmission(f,a)).rejects.toThrow('METER_FORBIDDEN');
   const b=await meterCompany(f);await verifyBusiness(f,b);const second=randomUUID();await requestCard(f,b,second);

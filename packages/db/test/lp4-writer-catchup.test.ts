@@ -59,7 +59,7 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
   });
   it("every audit-writing routine on main is replaced; only the private sealer writes directly", () => {
     const writers = [...main].filter(([, fn]) => directWrite.test(fn.sql)).map(([name]) => name);
-    expect(writers).toHaveLength(19);
+    expect(writers).toHaveLength(21);
     for (const name of writers) expect(replacements.has(name), name).toBe(true);
     const final = new Map([...main].map(([name, fn]) => [name, fn.sql]));
     for (const [name, sql] of replacements) final.set(name, sql);

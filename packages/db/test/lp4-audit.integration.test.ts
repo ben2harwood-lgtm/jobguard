@@ -53,6 +53,14 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
     expect(rows[0].source).toContain("app.lp4_seal_audit(");
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
   });
+  it.each(["app.append_audit", "app.lp4_seal_audit"])("%s matches its recorded database definition", async name => {
+    const inventory=JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+    const expected=inventory.recorded.routines.filter((r: {identity:string})=>r.identity.startsWith(`function:${name}(`));
+    expect(expected).toHaveLength(1);
+    const actual=(await db.owner.query(`SELECT encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex') digest
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname||'.'||p.proname=$1`,[name])).rows;
+    expect(actual).toEqual([{digest:expected[0].definitionSha256}]);
+  });
   it("refuses structured and null references even from checked operations", async () => {
     for (const exclusions of [null, [], [{ uploadId: randomUUID(), state: "rejected", reason: "verification_invalid" }], {}]) {
       const event = statement({ actorRef: "system:final_check", eventType: "final_check.sources_excluded",
