@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-s-compensate": {
+      "branches": ["codex/sandbox/m4-9-s-compensate"],
+      "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+      "note": "RED M4-9-S recovery qualification and linked compensation, migration 0489. Built ahead on m4-9-s-posting; shared source/schema/receipt paths serialize behind that base. Own lane file is implicitly owned.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",
+        "docs/contracts/success-fee-posting-v3.md",
+        "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+        "packages/core/src/success-fee-catch-posting.test.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/db/migrations/0489_success_fee_recovery_compensation.sql",
+        "packages/db/test/success-fee-catch-posting.integration.test.ts",
+        "packages/db/test/success-fee-recovery-compensation.integration.test.ts",
+        "packages/db/test/success-fee-recovery-fixture.ts",
+        "packages/db/test/success-fee-recovery-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
