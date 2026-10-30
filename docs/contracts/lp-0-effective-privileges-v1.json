@@ -2249,6 +2249,7 @@
 "identity.challenge|rls=f|forced=f",
 "identity.idp_group_role_mapping|rls=t|forced=t",
 "identity.invitation|rls=f|forced=f",
+"identity.mobile_auth_fixture_state|rls=f|forced=f",
 "identity.request_window|rls=f|forced=f",
 "identity.security_event|rls=f|forced=f",
 "identity.session|rls=f|forced=f",

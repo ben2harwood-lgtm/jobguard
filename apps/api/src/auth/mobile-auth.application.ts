@@ -119,8 +119,7 @@ export class SyntheticMobileAuthApplication {
 
  /** Fixture inspection contains no bearer credentials, source secrets, email or free text. */
  fixtureRecords() {
-  this.assertEnabled();
-  return structuredClone({ devices: [...this.#devices.values()], families: [...this.#families.values()].map(f => ({ partition: f.partition, expiresAtMs: f.expiresAtMs, revokedAtMs: f.revokedAtMs, reason: f.reason, lease: this.lease(f) })) });
+  return this.run(async () => structuredClone({ devices: [...this.#devices.values()], families: [...this.#families.values()].map(f => ({ partition: f.partition, expiresAtMs: f.expiresAtMs, revokedAtMs: f.revokedAtMs, reason: f.reason, lease: this.lease(f) })) }));
  }
 
  private async run<T>(work: () => Promise<T>): Promise<T> {

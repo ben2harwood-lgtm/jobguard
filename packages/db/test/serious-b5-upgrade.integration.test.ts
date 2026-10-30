@@ -896,6 +896,12 @@ async function mobileAuthStoreAdditions(before: Awaited<ReturnType<typeof snapsh
  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl", [table.relacl])).rows[0].acl.sort()).toEqual([
   "jobguard_identity=arw/jobguard_migration", "jobguard_migration=arwdDxt/jobguard_migration",
  ]);
+ for (const role of ["jobguard_runtime", "jobguard_infrastructure"]) {
+  const access = (await f.admin.query(`SELECT
+   has_table_privilege($1,'identity.mobile_auth_fixture_state','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS table_access,
+   has_any_column_privilege($1,'identity.mobile_auth_fixture_state','SELECT,INSERT,UPDATE,REFERENCES') AS column_access`, [role])).rows;
+  expect(access).toEqual([{ table_access: false, column_access: false }]);
+ }
  expect(before.rows).not.toHaveProperty("identity.mobile_auth_fixture_state");
  expect(after.rows["identity.mobile_auth_fixture_state"]).toEqual([]);
  const position = (r: typeof relations[number]) => after.relations.findIndex(a => a.nspname === r.nspname && a.relname === r.relname);

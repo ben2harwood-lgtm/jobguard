@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m3-2-store"
       ],
-      "note": "M3-2 RED: optional durable synthetic identity state, migration 0482, and all-tenant device logout/revocation. Built ahead on m3-2-lease; PostgreSQL CI and independent RED review pending.",
+      "note": "M3-2 RED: optional durable synthetic identity state, migration 0482, and all-tenant device logout/revocation. Built ahead on m3-2-lease; LP-0 records the identity no-RLS exception and catalogue tests deny runtime/infrastructure access. Fixture inspection reloads committed state. PostgreSQL CI and independent RED review pending.",
       "allow": [
         "apps/api/src/auth/mobile-auth.application.test.ts",
         "apps/api/src/auth/mobile-auth.application.ts",

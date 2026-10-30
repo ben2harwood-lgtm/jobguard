@@ -169,7 +169,12 @@ pre-command state. Lost commit acknowledgements return no credentials; retrying
 a possibly consumed refresh revokes its family. No plaintext response is cached.
 Fresh instances reload the same committed state and cannot resurrect consumed
 credentials or revoked devices. The memory-only default still loses its state.
-Fixture inspection remains synchronous and instance-local, never an authority.
+Fixture inspection is asynchronous and reloads committed state through the same
+serialized store transaction; returned records are detached and never an authority.
+The global synthetic snapshot has no tenant/user row key, so it retains the
+identity control-plane no-RLS exception (like identity.session). LP-0 inventories
+that exact posture. Catalogue tests deny every table and column privilege to
+runtime/infrastructure, including inherited or PUBLIC access.
 
 PostgreSQL concurrency, upgrade and privilege tests are provided for CI; they
 were not executed in the builder sandbox. Native cold start/cache inheritance

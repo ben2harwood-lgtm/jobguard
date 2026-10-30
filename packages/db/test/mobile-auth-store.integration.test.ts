@@ -50,6 +50,15 @@ it("commits refresh reuse revocation across restart and concurrent replicas; nev
  const stored = JSON.stringify((await identity.query("SELECT state FROM identity.mobile_auth_fixture_state")).rows);
  for (const secret of [first.refresh.credential, next.access.credential, f.credentials.sessionToken!, f.credentials.csrfToken!, f.email]) expect(stored).not.toContain(secret);
 });
+it("fixture inspection reads committed state across fresh PostgreSQL-backed instances", async () => {
+ const f = await fixture(), observer = f.app();
+ const ownFamilies = async () => (await observer.fixtureRecords()).families.filter(r => r.partition.userId === f.member.identityUserId);
+ expect(await ownFamilies()).toEqual([]);
+ const issued = await f.app().exchange(f.exchange(), f.credentials);
+ expect(await ownFamilies()).toEqual([expect.objectContaining({ partition: issued.partition })]);
+ await f.app().deviceCommand(f.revoke(), f.credentials);
+ expect(await ownFamilies()).toEqual([expect.objectContaining({ reason: "revoke", revokedAtMs: 1000, lease: expect.objectContaining({ expiresAtMs: 1000 }) })]);
+});
 it.each(["logout", "revoke"])("%s revokes all tenant families durably, and a new user inherits no old partition", async action => {
  const f = await fixture(), otherTenant = randomUUID();
  f.source.invite(f.email, otherTenant, "foreman");
@@ -83,9 +92,14 @@ it("refuses cross-tenant revoke without harming the victim; no business/worker r
  await expect(f.app().reconnect(f.reconnect(victim.access), f.credentials)).resolves.toBeDefined();
  await expect(db.runtime.query("SELECT * FROM identity.mobile_auth_fixture_state")).rejects.toMatchObject({ code: "42501" });
  for (const role of ["jobguard_runtime", "jobguard_infrastructure"]) {
-  const permissions = (await db.admin.query("SELECT has_table_privilege($1,'identity.mobile_auth_fixture_state','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [role])).rows[0];
+  const permissions = (await db.admin.query("SELECT has_table_privilege($1,'identity.mobile_auth_fixture_state','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed", [role])).rows[0];
   expect(permissions.allowed).toBe(false);
+  expect((await db.admin.query("SELECT has_any_column_privilege($1,'identity.mobile_auth_fixture_state','SELECT,INSERT,UPDATE,REFERENCES') allowed", [role])).rows[0].allowed).toBe(false);
  }
+ const posture = (await db.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='identity.mobile_auth_fixture_state'::regclass")).rows;
+ expect(posture).toEqual([{ relrowsecurity: false, relforcerowsecurity: false }]);
+ const inventory = JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
+ expect(inventory.recorded.rls.filter((row: string) => row.startsWith("identity.mobile_auth_fixture_state|"))).toEqual(["identity.mobile_auth_fixture_state|rls=f|forced=f"]);
  expect((await db.admin.query("SELECT tableowner FROM pg_tables WHERE schemaname='identity' AND tablename='mobile_auth_fixture_state'")).rows[0].tableowner).toBe("jobguard_migration");
 });
 it("0482 upgrades the previous supported schema without touching existing identity rows", async () => {
