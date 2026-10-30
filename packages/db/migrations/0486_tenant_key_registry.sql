@@ -30,4 +30,25 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('CREATE TRIGGER immutable_table BEFORE TRUNCATE ON app.%I FOR EACH STATEMENT EXECUTE FUNCTION app.tenant_key_registry_immutable()',n);
  END LOOP;
 END $$;
+-- Only the existing migration/assurance role registers synthetic keys. Conflict
+-- handling also covers invisible foreign-tenant fingerprints and concurrent reuse.
+CREATE FUNCTION app.register_tenant_key(integer,uuid,text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE tenant uuid;
+BEGIN
+ tenant := nullif(current_setting('app.tenant_id',true),'')::uuid;
+ IF current_database()<>'jobguard_synthetic_demo' OR tenant IS NULL
+    OR $1 IS NULL OR $1 NOT BETWEEN 1 AND 1000000 OR $2 IS NULL
+    OR $3 IS NULL OR $3 !~ '^[a-f0-9]{64}$' THEN
+  RAISE EXCEPTION 'TENANT_KEY_REGISTRY_REFUSED';
+ END IF;
+ INSERT INTO app.tenant_key_version(tenant_id,version,command_id,fingerprint)
+ VALUES(tenant,$1,$2,$3) ON CONFLICT DO NOTHING;
+ IF NOT FOUND THEN RAISE EXCEPTION 'TENANT_KEY_REGISTRY_REFUSED'; END IF;
+EXCEPTION WHEN OTHERS THEN
+ RAISE EXCEPTION 'TENANT_KEY_REGISTRY_REFUSED';
+END $$;
+ALTER FUNCTION app.register_tenant_key(integer,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.register_tenant_key(integer,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.register_tenant_key(integer,uuid,text) TO jobguard_migration;
 COMMIT;

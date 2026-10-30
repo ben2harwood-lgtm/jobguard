@@ -355,7 +355,7 @@ describe("DEMO-I exact installed capability inventory",()=>{
 });
 
 describe("M5-8 private key registry inventory", () => {
- it("records the private immutable helper without granting any runtime capability", async () => {
+ it("records both private routines without granting any runtime capability", async () => {
   const { inventory } = await loadReviewedInventory();
   const records = inventory.recorded.routines.filter(r => r.identity === "function:app.tenant_key_registry_immutable()");
   expect(records).toHaveLength(1);
@@ -363,9 +363,18 @@ describe("M5-8 private key registry inventory", () => {
    searchPath: "search_path=pg_catalog", returnsTrigger: true, reachable: false,
    runtimeExecute: false, publicExecute: false, otherExecute: [] });
   const cat = base({ relations: [table("tenant_key_version", []), table("tenant_key_revocation", [])],
-   routines: [routine("tenant_key_registry_immutable", "", [], { securityDefiner: false, returnsTrigger: true, config: ["search_path=pg_catalog"] })] });
+   routines: [routine("tenant_key_registry_immutable", "", [], { securityDefiner: false, returnsTrigger: true, config: ["search_path=pg_catalog"] }),
+    routine("register_tenant_key", "integer,uuid,text", [], { config: ["search_path=pg_catalog"] })] });
+  expect(inventory.recorded.routines.filter(r => r.identity === "function:app.register_tenant_key(integer,uuid,text)")).toEqual([
+   expect.objectContaining({ owner: OWNER, securityDefiner: true, searchPath: "search_path=pg_catalog",
+    returnsTrigger: false, reachable: false, runtimeExecute: false, publicExecute: false,
+    otherExecute: [], staticWrites: ["app.tenant_key_version"] })]);
   const clean = new Set(deriveFacts(base({ relations: [], routines: [] })).map(f => f.key));
   expect(compareInventory(inventory, deriveFacts(cat).filter(f => !clean.has(f.key))).ok).toBe(true);
+  for (const grantee of [RT, "PUBLIC", "jobguard_infrastructure"]) {
+   const extra = base({ ...cat, routines: cat.routines.map(r => r.name === "register_tenant_key" ? { ...r, acl: [...r.acl, acl(grantee, "EXECUTE")] } : r) });
+   expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);
+  }
   for (const name of ["tenant_key_version", "tenant_key_revocation"]) {
    const extra = base({ ...cat, relations: cat.relations.map(r => r.name === name ? { ...r, acl: [...r.acl, acl(RT, "SELECT")] } : r) });
    expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);

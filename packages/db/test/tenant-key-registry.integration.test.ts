@@ -124,3 +124,55 @@ it("fake-crypto failure changes no registry or audit facts; revocation cannot be
   expect(await snapshot(c.admin)).toEqual(revoked);
   await expect(registry.withKey(context, input(version, a.fingerprint, "unwrap"), () => true)).rejects.toThrow(TenantKeyRegistryError);
 });
+
+// Attack the SQL boundary as well as the service: the TypeScript wrapper alone
+// must not be what conceals a foreign tenant's unique-index conflict.
+it("registration refuses malformed and reused keys with identical errors and no constraint metadata", async () => {
+  const registry = new SyntheticTenantKeyRegistry(owner, true), a = key();
+  const version = await registry.rotate(context, { ...request(), fingerprint: a.fingerprint });
+  const before = await snapshot(c.admin);
+  async function sqlRefusal(ctx: typeof context, fingerprint: string) {
+    try {
+      await withTenant(owner, ctx, db => db.$client.query("SELECT app.register_tenant_key($1,$2,$3)", [999999, randomUUID(), fingerprint]));
+      throw new Error("registration unexpectedly succeeded");
+    } catch (error) {
+      const e = error as Error & Record<string, unknown>;
+      expect(e.message).toBe("TENANT_KEY_REGISTRY_REFUSED");
+      expect(e.code).toBe("P0001");
+      expect(e.constraint).toBeUndefined();
+      expect(e.detail).toBeUndefined();
+      return { message: e.message, code: e.code, detail: e.detail, hint: e.hint,
+        constraint: e.constraint, schema: e.schema, table: e.table, column: e.column, where: e.where };
+    }
+  }
+  const malformed = await sqlRefusal(foreign, "malformed");
+  expect(await sqlRefusal(foreign, a.fingerprint)).toEqual(malformed);
+  expect(await sqlRefusal(context, a.fingerprint)).toEqual(malformed);
+  async function serviceRefusal(ctx: typeof context, fingerprint: string) {
+    try {
+      await registry.rotate(ctx, { ...request(), fingerprint });
+      throw new Error("registration unexpectedly succeeded");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TenantKeyRegistryError);
+      const e = error as TenantKeyRegistryError;
+      return { ...e, message: e.message };
+    }
+  }
+  const invalid = await serviceRefusal(foreign, "malformed");
+  expect(await serviceRefusal(foreign, a.fingerprint)).toEqual(invalid);
+  expect(await serviceRefusal(context, a.fingerprint)).toEqual(invalid);
+  expect(await snapshot(c.admin)).toEqual(before);
+  const b = key();
+  expect(await registry.rotate(context, { ...request(), fingerprint: b.fingerprint })).toBe(version + 1);
+  expect(await registry.withKey(context, input(version + 1, b.fingerprint, "sign"), () => true)).toBe(true);
+});
+
+it("concurrent cross-tenant registration permits one owner and generically refuses the other", async () => {
+  const registry = new SyntheticTenantKeyRegistry(owner, true), a = key();
+  const results = await Promise.allSettled([context, foreign].map(ctx => registry.rotate(ctx, { ...request(), fingerprint: a.fingerprint })));
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  const refused = results.filter(r => r.status === "rejected");
+  expect(refused).toHaveLength(1);
+  expect((refused[0] as PromiseRejectedResult).reason).toEqual(new TenantKeyRegistryError());
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.tenant_key_version WHERE fingerprint=$1", [a.fingerprint])).rows[0].n).toBe(1);
+});

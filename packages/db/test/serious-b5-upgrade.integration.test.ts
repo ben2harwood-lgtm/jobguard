@@ -783,19 +783,21 @@ async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
   routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
-// M5-8 registry: union only its two private tables, five indexes and immutable helper.
+// M5-8 registry: union only its two private tables, five indexes and two private routines.
 async function keyRegistryAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
  const tables=["tenant_key_version","tenant_key_revocation"];
  const indexes=["tenant_key_version_pkey","tenant_key_version_tenant_id_command_id_key","tenant_key_version_fingerprint_key","tenant_key_revocation_pkey","tenant_key_revocation_tenant_id_command_id_key"];
  const relations=after.relations.filter(r=>r.nspname==="app"&&[...tables,...indexes].includes(r.relname));
  expect(relations.map(r=>r.relname).sort()).toEqual([...tables,...indexes].sort());
- const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="tenant_key_registry_immutable"&&r.args==="");
- expect(routines).toHaveLength(1);
- const acl=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+ const routines=after.routines.filter(r=>r.nspname==="app"&&((r.proname==="tenant_key_registry_immutable"&&r.args==="")||(r.proname==="register_tenant_key"&&r.args==="integer, uuid, text")));
+ expect(routines).toHaveLength(2);
+ const acl=(await f.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
- FROM pg_proc p WHERE p.oid='app.tenant_key_registry_immutable()'::regprocedure`)).rows;
- expect(acl).toEqual([{owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],executors:["jobguard_migration"]}]);
+ FROM pg_proc p WHERE p.oid IN('app.tenant_key_registry_immutable()'::regprocedure,'app.register_tenant_key(integer,uuid,text)'::regprocedure) ORDER BY p.proname`)).rows;
+ expect(acl).toEqual([
+ {proname:"register_tenant_key",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],executors:["jobguard_migration"]},
+ {proname:"tenant_key_registry_immutable",owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],executors:["jobguard_migration"]}]);
  const tableAcl=(await f.admin.query(`SELECT c.relname,pg_get_userbyid(c.relowner) owner,c.relrowsecurity,c.relforcerowsecurity,
  EXISTS(SELECT 1 FROM aclexplode(c.relacl) a WHERE a.grantee<>c.relowner) non_owner_grants
  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname`,[tables])).rows;

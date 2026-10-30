@@ -53,7 +53,7 @@ export class SyntheticTenantKeyRegistry {
         return prior.version;
       }
       const next = (await db.$client.query<{ version: number }>("SELECT coalesce(max(version),0)+1 AS version FROM app.tenant_key_version WHERE tenant_id=$1", [t])).rows[0]!.version;
-      await db.$client.query("INSERT INTO app.tenant_key_version(tenant_id,version,command_id,fingerprint) VALUES($1,$2,$3,$4)", [t, next, input.commandId, input.fingerprint]);
+      await db.$client.query("SELECT app.register_tenant_key($1,$2,$3)", [next, input.commandId, input.fingerprint]);
       await this.audit(db, input.commandId, "rotate", next, input);
       return next;
     });

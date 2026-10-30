@@ -3,8 +3,13 @@ M5-8 registry — RED (key custody / tenant isolation)
 0486 adds append-only tenant_key_version and tenant_key_revocation metadata. No
 private key bytes, external KMS references, live provider or business runtime
 capabilities are introduced. Both tables have tenant-qualified keys and forced
-RLS; only the migration/assurance role can access them. The immutable helper is
-private. Existing SQL routines and migrations are unchanged.
+RLS; only the migration/assurance role can access them. The immutable helper and
+SECURITY DEFINER register_tenant_key(integer,uuid,text) are private (EXECUTE only for jobguard_migration), with search_path=pg_catalog.
+Registration derives tenant context, validates inputs and maps all failures to
+TENANT_KEY_REGISTRY_REFUSED. ON CONFLICT DO NOTHING catches even invisible
+foreign-tenant fingerprint reuse and concurrent uniqueness races without leaking
+constraint names. The service keeps its existing generic error and audit boundary.
+Earlier SQL routines and migrations are unchanged.
 
 SyntheticTenantKeyRegistry is dark and explicitly enabled only against
 jobguard_synthetic_demo; production is refused. It requires a server-verified
