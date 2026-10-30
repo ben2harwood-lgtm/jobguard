@@ -353,3 +353,17 @@ describe("DEMO-I exact installed capability inventory",()=>{
   expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
  });
 });
+
+describe("DEMO-J5 exact trial guide capability",()=>{
+ it("unions the one controlled entry point without direct table or helper grants",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const cat=base({relations:[table("demo_trial_binding",[])],routines:[routine("demo_trial","uuid,text,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]})]});
+  const facts=deriveFacts(cat).filter(f=>f.key.includes("app.demo_trial"));
+  expect(inventory.entries.filter(e=>e.key.includes("app.demo_trial")).map(e=>e.key).sort()).toEqual(facts.map(f=>f.key).sort());
+  expect(compareInventory(inventory,facts).ok).toBe(true);
+  for(const privilege of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE"]){
+   const altered=base({...cat,relations:[table("demo_trial_binding",[acl(RT,privilege)])]});
+   expect(compareInventory(inventory,deriveFacts(altered).filter(f=>f.key.includes("app.demo_trial"))).ok).toBe(false);
+  }
+ });
+});

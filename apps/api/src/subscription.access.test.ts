@@ -16,7 +16,7 @@ describe("MON-2A exact-path subscription access (Ben, 28 Oct)", () => {
   it("a practice cookie never reaches the subscription paths, even in synthetic mode", async () => {
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     const app = identity(async () => { throw new Error("no real session"); }), guard = new ApplicationAuthGuard(() => app);
-    for (const [method, path] of [["GET", "/subscriptions/current"], ["POST", "/subscriptions/commands"]])
+    for (const [method, path] of [["GET", "/subscriptions/current"], ["POST", "/subscriptions/commands"], ["POST", "/small-builder-demo/trial"]])
       await expect(guard.canActivate(contextFor({ method, path, headers: { cookie: practice } }))).rejects.toMatchObject({ status: 401 });
     vi.unstubAllEnvs();
   });

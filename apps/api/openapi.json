@@ -1,6 +1,20 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/small-builder-demo/trial": {
+      "post": {
+        "operationId": "SmallBuilderTrialDemoController_command",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SmallBuilderTrialDemo"
+        ]
+      }
+    },
     "/jobs/{id}/trial": {
       "get": {
         "operationId": "FreeFirstJobLifecycleController_read",

@@ -130,3 +130,5 @@ export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
 export * from "./value-source-receipt.js";
+
+export * from "./small-builder-trial-demo.js";
