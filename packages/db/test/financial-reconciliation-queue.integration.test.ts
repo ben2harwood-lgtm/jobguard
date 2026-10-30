@@ -88,3 +88,16 @@ it("denies direct writes, enforces append-only even for owner, and leaks no cros
  await withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.revoke_contractor_practice_session($1)",[a.w.session]));
  await expect(a.run()).rejects.toThrow();
 });
+
+it("report reads require current finance access even for a known stored run", async () => {
+ const a = await setup(), run = await a.run();
+ const operator = a.w.w.members.operative.member, session = randomUUID();
+ await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '7 days' FROM (SELECT clock_timestamp() t) r", [session,a.scope.tenantId,operator.membershipId,operator.identityUserId,digestOf(session)]);
+ await expect(a.repo.read(a.w.ctx,session,a.scope.jobId,run.runId)).rejects.toMatchObject({ code: "42501" });
+ // Neither a known run ID nor a missing ID bypasses the same finance gate.
+ await expect(a.repo.read(a.w.ctx,session,a.scope.jobId,randomUUID())).rejects.toMatchObject({ code: "42501" });
+ expect((await a.repo.read(a.w.ctx,a.w.session,a.scope.jobId,run.runId))?.report).toEqual(run.report);
+ await withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.revoke_contractor_practice_session($1)",[a.w.session]));
+ await expect(a.repo.read(a.w.ctx,a.w.session,a.scope.jobId,run.runId)).rejects.toThrow();
+ expect((await c.admin.query("SELECT report FROM app.financial_reconciliation_run WHERE id=$1",[run.runId])).rows[0]?.report).toEqual(run.report);
+});

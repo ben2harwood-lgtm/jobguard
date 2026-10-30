@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-report": {
+      "branches": [
+        "codex/sandbox/m4-17-report"
+      ],
+      "note": "M4-17 RED: read-only synthetic reconciliation report on m4-17-queue; existing finance/session authorization; no migration or external execution.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/route.test.ts",
+        "apps/web/app/api/jobs/[id]/reconciliation/[runId]/route.ts",
+        "apps/web/app/jobs/[id]/reconciliation/[runId]/page.tsx",
+        "apps/web/app/lib/financial-reconciliation-report.ts",
+        "apps/web/app/ui/financial-reconciliation-report.test.tsx",
+        "apps/web/app/ui/financial-reconciliation-report.tsx",
+        "apps/web/e2e/M4-17-report.spec.ts",
+        "apps/web/e2e/helpers/reconciliation-report.ts",
+        "packages/db/test/financial-reconciliation-queue.integration.test.ts"
+      ]
+    }
+  }
+}
