@@ -12,12 +12,13 @@ export class PracticeRecoveryTimelineActivities implements RecoveryTimelineActiv
   constructor(private readonly pool: Pool, private readonly sessionFor: (ref: RecoveryTimelineRef) => Promise<string | undefined>,
     private readonly environment = "disabled") {}
 
-  async execute(activity: TimelineActivity): Promise<TimelineState> {
+  async execute(activity: TimelineActivity, transactionPool?: Pool): Promise<TimelineState> {
     requireSyntheticTimeline(this.environment);
+    const pool = transactionPool ?? this.pool;
     const session = await this.sessionFor(activity.ref);
-    const access = await new PracticeAccess(this.pool, session).case(activity.ref.caseId);
+    const access = await new PracticeAccess(pool, session).case(activity.ref.caseId);
     if (access.context.tenantId !== activity.ref.tenantId) throw new RecoveryTimelineError("NOT_FOUND");
-    const app = new RecoveryFollowUpApplication(this.pool);
+    const app = new RecoveryFollowUpApplication(pool);
     const state = await app.read(session, activity.ref.caseId);
     const followUp = state.followUps.find(row => row.id === activity.ref.followUpId);
     if (state.jobId !== activity.ref.jobId || state.run?.id !== activity.ref.runId || !followUp || followUp.owner.runId !== activity.ref.runId) {
@@ -33,8 +34,8 @@ export class PracticeRecoveryTimelineActivities implements RecoveryTimelineActiv
       return "stopped";
     }
     if (activity.kind === "timer") {
-      const pool = practiceMaterialPool(this.pool, access.digest);
-      const repository = new RecoveryFollowUpRepository(pool, new RecoveryMessageRepository(pool));
+      const practice = practiceMaterialPool(pool, access.digest);
+      const repository = new RecoveryFollowUpRepository(practice, new RecoveryMessageRepository(practice));
       // The persisted practice clock is authoritative. A workflow timer cannot advance it, approve or send.
       await repository.signalDue(access.context, activity.ref.runId);
       const current = await app.read(session, activity.ref.caseId);

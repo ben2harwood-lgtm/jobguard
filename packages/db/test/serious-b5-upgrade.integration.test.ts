@@ -882,18 +882,21 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
-// 0481 is additive history only: exact two tables, their primary indexes and one private trigger routine.
+// 0481 adds exactly two history tables, their primary indexes and two bounded routines.
 async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const tables = ["recovery_timeline_run", "recovery_timeline_signal"];
  const names = [...tables, ...tables.map(t => `${t}_pkey`)];
  const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
- const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "guard_recovery_timeline_state" && r.args === "");
- expect(routines).toHaveLength(1);
- expect(routines[0]).toMatchObject({prosecdef:false,proconfig:null});
- const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [routines[0]!.proacl])).rows[0].acl;
- expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
+ const routines = after.routines.filter(r => r.nspname === "app" && ((r.proname === "guard_recovery_timeline_state" && r.args === "") || (r.proname === "record_recovery_timeline_signal" && r.args === "p_tenant uuid, p_signal uuid, p_follow_up uuid, p_fingerprint text")));
+ expect(routines).toHaveLength(2);
+ for (const routine of routines) {
+  const guarded = routine.proname === "record_recovery_timeline_signal";
+  expect(routine).toMatchObject({prosecdef:guarded,proconfig:guarded ? ["search_path=pg_catalog"] : null});
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [routine.proacl])).rows[0].acl;
+  expect(acl).toEqual(guarded ? ["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"] : ["jobguard_migration=X/jobguard_migration"]);
+ }
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
  expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
  for (const table of tables) {
@@ -902,7 +905,7 @@ async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot
   const relation = relations.find(r => r.relname === table)!;
   expect(relation).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
   expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner, $2::aclitem[]::text[] acl", [relation.relowner,relation.relacl])).rows).toEqual([
-   {owner:"jobguard_migration",acl:["jobguard_migration=arwdDxt/jobguard_migration","jobguard_runtime=ar/jobguard_migration"]}
+   {owner:"jobguard_migration",acl:["jobguard_migration=arwdDxt/jobguard_migration",table === "recovery_timeline_signal" ? "jobguard_runtime=r/jobguard_migration" : "jobguard_runtime=ar/jobguard_migration"]}
   ]);
  }
  const columns = (await f.admin.query("SELECT c.relname,a.attname,a.attacl::text[] acl FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND a.attacl IS NOT NULL ORDER BY c.relname,a.attname", [tables])).rows;

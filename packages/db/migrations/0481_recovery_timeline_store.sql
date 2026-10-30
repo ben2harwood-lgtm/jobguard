@@ -35,5 +35,27 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('GRANT SELECT,INSERT ON app.%I TO jobguard_runtime',n);
  END LOOP;
 END $$;
+-- Runtime cannot pre-seed fingerprints by writing the table directly.
+REVOKE INSERT ON app.recovery_timeline_signal FROM jobguard_runtime;
+CREATE FUNCTION app.record_recovery_timeline_signal(p_tenant uuid,p_signal uuid,p_follow_up uuid,p_fingerprint text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo'
+    OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
+    OR p_tenant IS NULL THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.recovery_timeline_run r
+   JOIN app.recovery_follow_up f ON (f.tenant_id,f.id,f.job_id,f.case_id,f.run_id)=
+     (r.tenant_id,r.follow_up_id,r.job_id,r.case_id,r.run_id)
+   WHERE r.tenant_id=p_tenant AND r.follow_up_id=p_follow_up) THEN
+  RAISE EXCEPTION 'RECOVERY_TIMELINE_NOT_FOUND' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint)
+ VALUES(p_tenant,p_signal,p_follow_up,p_fingerprint);
+END $$;
+ALTER FUNCTION app.record_recovery_timeline_signal(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.record_recovery_timeline_signal(uuid,uuid,uuid,text) FROM PUBLIC,jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.record_recovery_timeline_signal(uuid,uuid,uuid,text) TO jobguard_runtime;
 GRANT UPDATE(state) ON app.recovery_timeline_run TO jobguard_runtime;
 COMMIT;

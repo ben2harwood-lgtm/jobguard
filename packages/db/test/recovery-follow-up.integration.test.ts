@@ -1183,6 +1183,31 @@ describe("M4-6 PostgreSQL timeline history", () => {
     try { await sandbox.advance(token, base.runId, randomUUID()); }
     finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
   }
+  it("a pool of size one completes activities and duplicate signals with one effect", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const single = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password,
+      database: "jobguard_synthetic_demo", max: 1, connectionTimeoutMillis: 2000 });
+    try {
+      await expect(timeline(single).signal(signal)).resolves.toBe("review");
+      await expect(Promise.all([timeline(single).signal(signal), timeline(single).signal(signal)]))
+        .resolves.toEqual(["review", "review"]);
+      expect(await dueDecisions(base.followUp.id)).toBe(1);
+      expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2",
+        [DEMO_TENANT_ID, signal.signalId])).toBe(1);
+      await expect(timeline(single).signal(event(base, "cancel"))).resolves.toBe("stopped");
+    } finally { await closeTestPools(single); }
+  });
+  it("runtime cannot pre-seed a fingerprint even for its own existing history", async () => {
+    const base = await scheduled();
+    await timeline().signal(event(base));
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint) VALUES($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, testTenantContext(randomUUID()), db => db.$client.query(
+      "SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+  });
   it("restart, concurrent duplicate delivery and version upgrade leave one due Decision and immutable signal hash", async () => {
     const base = await scheduled(), signal = event(base);
     await missedClock(base);
@@ -1198,14 +1223,14 @@ describe("M4-6 PostgreSQL timeline history", () => {
     expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(1);
     expect((await admin.query("SELECT state FROM app.recovery_timeline_run WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).rows).toEqual([{ state: "review" }]);
   });
-  it("history rollback after an activity commit retries the same idempotent effect", async () => {
+  it("activity failure rolls back its effect and history, then retries one idempotent effect", async () => {
     const base = await scheduled(), signal = event(base);
     await missedClock(base);
     const real = new PracticeRecoveryTimelineActivities(runtime, async () => token, "synthetic_demo");
     const store = new PostgresRecoveryWorkflowStore(runtime, async () => ctx, "synthetic_demo");
-    const crash = new StoredRecoveryWorkflowRuntime({ async execute(activity) { await real.execute(activity); throw new Error("synthetic crash"); } }, store, "synthetic_demo");
+    const crash = new StoredRecoveryWorkflowRuntime({ async execute(activity, transactionPool) { await real.execute(activity, transactionPool); throw new Error("synthetic crash"); } }, store, "synthetic_demo");
     await expect(crash.signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
-    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
     expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(0);
     await expect(timeline().signal(signal)).resolves.toBe("review");
     expect(await dueDecisions(base.followUp.id)).toBe(1);

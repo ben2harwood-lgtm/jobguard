@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import type { VerifiedTenantContext } from "@jobguard/db";
+import { verifiedTenantContextForQueuedJob, type VerifiedTenantContext } from "@jobguard/db";
 import { PostgresRecoveryWorkflowStore } from "./recovery-timeline.store.js";
 import { StoredRecoveryWorkflowRuntime } from "./recovery-timeline.workflow.js";
 
@@ -27,5 +27,64 @@ describe("PostgreSQL timeline authentication boundary", () => {
     const f = fixture("synthetic_demo"); f.context.mockResolvedValue({ tenantId: id(99) } as VerifiedTenantContext);
     await expect(f.runtime.signal(signal)).rejects.toThrow("NOT_FOUND");
     expect(f.connect).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("single-connection activity transaction", () => {
+  function singleConnection() {
+    const statements: string[] = [];
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      statements.push(sql);
+      if (sql.startsWith("SELECT state,job_id")) return { rows: [], rowCount: 0 };
+      if (sql.startsWith("SELECT fingerprint")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    });
+    const connect = vi.fn(async () => ({ query, release }));
+    const pool = { connect } as unknown as Pool;
+    const store = new PostgresRecoveryWorkflowStore(pool,
+      async () => verifiedTenantContextForQueuedJob(signal.ref.tenantId), "synthetic_demo");
+    return { pool, store, connect, release, statements };
+  }
+  it("runs activity queries and nested transactions on the one history connection", async () => {
+    const f = singleConnection();
+    const runtime = new StoredRecoveryWorkflowRuntime({ async execute(_activity, pool) {
+      expect(pool).toBeDefined();
+      await pool!.query("SELECT synthetic_authentication");
+      for (let i = 0; i < 2; i++) {
+        const client = await pool!.connect();
+        await client.query("BEGIN");
+        await client.query("SELECT synthetic_effect");
+        await client.query("COMMIT");
+        client.release();
+        expect(f.release).not.toHaveBeenCalled();
+      }
+      return "review";
+    } }, f.store, "synthetic_demo");
+    await expect(runtime.signal(signal)).resolves.toBe("review");
+    expect(f.connect).toHaveBeenCalledTimes(1);
+    expect(f.release).toHaveBeenCalledTimes(1);
+    expect(f.statements.filter(sql => sql === "BEGIN")).toHaveLength(1);
+    expect(f.statements.filter(sql => sql === "COMMIT")).toHaveLength(1);
+    expect(f.statements).toContain("SAVEPOINT timeline_activity_1");
+    expect(f.statements).toContain("RELEASE SAVEPOINT timeline_activity_2");
+    expect(f.statements).toContain("SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)");
+  });
+  it("rolls back the activity and history when the activity fails", async () => {
+    const f = singleConnection();
+    const runtime = new StoredRecoveryWorkflowRuntime({ async execute(_activity, pool) {
+      const client = await pool!.connect();
+      await client.query("BEGIN");
+      await client.query("SELECT synthetic_effect");
+      await client.query("ROLLBACK");
+      client.release();
+      throw new Error("synthetic crash");
+    } }, f.store, "synthetic_demo");
+    await expect(runtime.signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
+    expect(f.connect).toHaveBeenCalledTimes(1);
+    expect(f.release).toHaveBeenCalledTimes(1);
+    expect(f.statements).toContain("ROLLBACK TO SAVEPOINT timeline_activity_1");
+    expect(f.statements.at(-1)).toBe("ROLLBACK");
+    expect(f.statements).not.toContain("COMMIT");
   });
 });

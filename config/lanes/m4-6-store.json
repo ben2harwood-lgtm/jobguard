@@ -7,6 +7,8 @@
       ],
       "note": "M4-6 PostgreSQL synthetic timeline history; RED tenant isolation. Built ahead of timeline base; CI and independent Claude review required.",
       "allow": [
+        "apps/api/src/recovery-timeline.activities.test.ts",
+        "apps/api/src/recovery-timeline.activities.ts",
         "apps/api/src/recovery-timeline.store.test.ts",
         "apps/api/src/recovery-timeline.store.ts",
         "apps/api/src/recovery-timeline.workflow.ts",

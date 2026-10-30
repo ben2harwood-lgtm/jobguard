@@ -1,10 +1,39 @@
 import { createHash } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import {
   RecoveryTimelineError, requireSyntheticTimeline, type RecoveryTimelineRef, type RecoveryTimelineSignal,
   type RecoveryWorkflowStore, type TimelineState,
 } from "./recovery-timeline.workflow.js";
+
+/** The activity's sequential repository transactions become savepoints on the history connection.
+ * No inner commit/release may commit or return the outer connection to the pool. */
+function activityPool(pool: Pool, client: PoolClient): Pool {
+  let sequence = 0;
+  return new Proxy(pool, {
+    get(target, property) {
+      if (property === "query") return client.query.bind(client);
+      if (property === "connect") return async () => {
+        const savepoint = `timeline_activity_${++sequence}`;
+        return new Proxy(client, {
+          get(connection, key) {
+            if (key === "release") return () => undefined;
+            if (key === "query") return (sql: string, values?: unknown[]) => {
+              if (sql === "BEGIN") return connection.query(`SAVEPOINT ${savepoint}`);
+              if (sql === "COMMIT") return connection.query(`RELEASE SAVEPOINT ${savepoint}`);
+              if (sql === "ROLLBACK") return connection.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+              return connection.query(sql, values);
+            };
+            const value = Reflect.get(connection, key);
+            return typeof value === "function" ? value.bind(connection) : value;
+          },
+        });
+      };
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
 
 /** Dark synthetic history only. Authentication is resolved afresh before reading any history. */
 export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
@@ -12,7 +41,7 @@ export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
     private readonly contextFor: (ref: RecoveryTimelineRef) => Promise<VerifiedTenantContext>,
     private readonly environment = "disabled") {}
 
-  async apply(signal: RecoveryTimelineSignal, update: (state: TimelineState) => Promise<TimelineState>): Promise<TimelineState> {
+  async apply(signal: RecoveryTimelineSignal, update: (state: TimelineState, transactionPool?: Pool) => Promise<TimelineState>): Promise<TimelineState> {
     requireSyntheticTimeline(this.environment);
     let context: VerifiedTenantContext;
     try { context = await this.contextFor(signal.ref); }
@@ -21,7 +50,7 @@ export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
     const { tenantId, jobId, caseId, runId, followUpId } = signal.ref;
     const fingerprint = createHash("sha256").update(JSON.stringify(signal)).digest("hex");
     return withTenant(this.pool, context, async db => {
-      // All instances take signal then intent locks. Activities use separate transactions and never acquire these locks.
+      // All instances take signal then intent locks before the activity takes business/audit locks.
       for (const lock of [`signal:${signal.signalId}`, `intent:${followUpId}`]) {
         await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`recovery-timeline:${tenantId}:${lock}`]);
       }
@@ -37,13 +66,12 @@ export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
         [tenantId, followUpId, jobId, caseId, runId]);
       if (!target.rowCount) throw new RecoveryTimelineError("NOT_FOUND");
       // Always re-execute the authorized, idempotent activity, including duplicates and early timers.
-      // A crash after its commit rolls history back; retry uses the same derived command identity.
-      const state = await update(run?.state ?? "waiting");
+      // Savepoints keep its effect and history atomic; retry uses the same derived command identity.
+      const state = await update(run?.state ?? "waiting", activityPool(this.pool, db.$client));
       await db.$client.query(`INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state)
         VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,follow_up_id) DO UPDATE SET state=excluded.state`,
       [tenantId, followUpId, jobId, caseId, runId, state]);
-      if (!previous) await db.$client.query(`INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint)
-        VALUES($1,$2,$3,$4)`, [tenantId, signal.signalId, followUpId, fingerprint]);
+      if (!previous) await db.$client.query("SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)", [tenantId, signal.signalId, followUpId, fingerprint]);
       return state;
     });
   }
