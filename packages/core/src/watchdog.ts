@@ -14,6 +14,16 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  "/api/customer-portal/issue": "pre_live_allowed",
+  "/api/customer-portal/revoke": "pre_live_allowed",
+  "/api/customer-portal/signin": "pre_live_allowed",
+  "/api/customer-portal/signout": "pre_live_allowed",
+  "/api/customer-portal/read": "pre_live_allowed",
+  "nest:/customer-portal/issue": "pre_live_allowed",
+  "nest:/customer-portal/revoke": "pre_live_allowed",
+  "nest:/customer-portal/signin": "pre_live_allowed",
+  "nest:/customer-portal/signout": "pre_live_allowed",
+  "nest:/customer-portal/read": "pre_live_allowed",
   // MON-3 card setup precedes switch-live; persisted company sessions require an owner.
   // Classification grants no authority and does not enable non-live watchdog writes.
   "/api/jobs/[id]/trial": "pre_live_allowed",

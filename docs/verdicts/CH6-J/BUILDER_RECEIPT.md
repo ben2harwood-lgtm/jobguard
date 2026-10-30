@@ -1452,3 +1452,45 @@ PostgreSQL/migration and browser suites were not run: this sandbox cannot start
 PostgreSQL or bind localhost; required full checks run in GitHub CI after push.
 Independent RED review remains required before merge. No commit, push, merge,
 package download, live provider or external action was performed.
+
+## 30 October 2026 — catch-up through main 766b4004
+
+Plan piece CH-6 / CH6-J, PR #392, RED. MERGE_HEAD and origin/main both
+resolve to 766b400498b12e560e62b73e9a88af9e2a0c0df8, including #422
+(0383), #426 (0385), #402 (0386), #423 (0387) and #430. The router had
+already started this merge; no git-writing command was run.
+
+Resolved the API module and OpenAPI conflicts by retaining CH-6 alongside
+main's customer sign-in controller, guard and application provider. OpenAPI
+matches the resolved module's generated document. Shared expectations retain
+all main lines and add only existing CH-6 expectations. LP-0 is the exact union
+by identity, retaining latest main records on shared identities, including
+withdrawn privileges. Existing identical arrays, including historical duplicate
+source entries, were preserved rather than cleaned up.
+
+All 332 migration/lane files on main remain byte-identical. CH-6 migrations
+0395/0396 retain their names and exact HEAD SQL bytes; the existing migration
+order check passes above main's 0387. No routine was recreated and no migration
+on main was edited. docs/contracts/lp-downstream-effects-v1.md remains identical
+to both HEAD and main. The lane note reflects this target, and its allow list
+matches all 55 branch paths excluding the lane file itself. No new behavior,
+dependencies or substantial complexity.
+
+Checks actually executed with installed Node 24.17.0 and Vitest 4.1.12:
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: node --import tsx src/generate-openapi.ts --check — PASS.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 6 tests.
+- node --check tools/commercial-integrity-boundary.mjs — PASS.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- Exact LP-0 union/latest-main record comparison, main migration/lane bytes,
+  CH-6 SQL bytes, additive shared expectations, downstream contract bytes,
+  lane paths, existing migrationOrderViolations and conflict-marker scan — PASS.
+- git diff --check — PASS.
+
+Ready for router staging and commit. The index still records the two resolved
+files as unmerged until the router stages them because .git is read-only here.
+PostgreSQL, migration execution and browser suites were not run: this sandbox
+cannot start PostgreSQL or bind localhost. Full required checks remain for GitHub
+CI after push; independent RED review remains required before merge.

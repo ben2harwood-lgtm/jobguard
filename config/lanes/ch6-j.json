@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up only through main fb933151 (#388 MON-1 0380, #404 SV-5 worker 0381, #425 journey). Preserve main migrations and lane files exactly; union LP-0 and shared privilege, entitlement and tenancy expectations. Existing CH-6 migrations 0395/0396 retain their SQL bytes and pass migration ordering above 0381. No new behavior or recreated routines. PostgreSQL and browser suites require GitHub CI; independent RED review remains required.",
+      "note": "RED: CH-6 / PR #392 catch-up only through main 766b4004 (#422 0383, #426 0385, #402 0386, #423 0387, #430). Preserve main migrations and lane files exactly; union LP-0 and shared privilege, entitlement and tenancy expectations with latest main records. Existing CH-6 migrations 0395/0396 retain their SQL bytes and pass migration ordering above 0387. Preserve both CH-6 and customer sign-in API registrations. No new behavior or recreated routines. PostgreSQL and browser suites require GitHub CI; independent RED review remains required.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",

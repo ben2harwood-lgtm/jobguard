@@ -11,7 +11,7 @@ import { RecoveryAttributionApplication, recoveryAttributionFailure } from "../r
 import { JobSourceApplication } from "../job-source.application.js";
 import { JobWorkStateApplication } from "../job-work-state.application.js";
 import { FinalCheckApplication,finalCheckFailure } from "../final-check.application.js";
-import { jobWorkStateFailure } from "../job-work-state.errors.js";
+import { jobWorkStateFailure } from "../job-work-state.failure.js";
 import { ScimApplication } from "../auth/sso/scim.application.js";
 import { scimSeed } from "../auth/sso/scim.contracts.js";
 import { ScimRepository } from "@jobguard/db";
