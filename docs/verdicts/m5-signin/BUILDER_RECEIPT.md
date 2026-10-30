@@ -197,3 +197,48 @@ Validation (installed binaries, no downloads):
 The router owns commit/push and the CI rerun. PostgreSQL and Playwright
 execution, green CI against current main and independent exact-head Claude
 RED review remain required. No git-writing command was run.
+
+
+## PR #423 — current-main catch-up, 30 October 2026 17:39 UTC
+
+MON-5 / m5-signin (RED), from a18dfe11. The router had already started the
+merge of origin/main fb933151 (including #425 and migrations through 0381).
+Resolved the single remaining LP-0 recorded-routines conflict by retaining
+all six customer sign-in routines and main's private final-check lock-request
+trigger function. No behavior or SQL routine was changed or recreated.
+
+Verified the LP-0 groups, capability entries, authority paths, recorded routines,
+RLS, policies and triggers equal the exact union of both sides, with no duplicate
+rows; keyed groups/paths/routines also have unique keys. Every main value remains
+exact. Source inspection of the shared SERIOUS-B5, entitlement and tenancy diffs
+against origin/main confirms only the existing MON-5 additions; main's 0381
+lock-request expectations and ACL assertions remain intact. All main lane files
+and every migration on main are byte-identical to origin/main; 0387 is byte-identical
+to a18dfe11. No older migration copies remain in the diff. In particular, main's
+latest mon2_issue body in 0374 is untouched. The protected contract
+`docs/contracts/lp-downstream-effects-v1.md` is unchanged against both sides.
+The changed-path set against origin/main exactly equals the MON-5 lane allow
+list plus its implicitly permitted own lane file; no lane widening was needed.
+
+Local validation with installed Node 24.17.0, TypeScript 5.8.3 and Vitest 4.1.12
+(no downloads, maxWorkers=1 per Vitest run, at most two test workers total):
+
+- packages/db: `vitest run --maxWorkers=1 test/lp-0-catalog.test.ts
+  test/upgrade-proof-utils.test.ts src/outbox.test.ts` — 35 passed.
+- apps/api: `vitest run --maxWorkers=1 src/auth/customer-signin.test.ts
+  src/auth/sso/oidc-paths.test.ts src/watchdog-registry.test.ts` — 157 passed.
+- Installed `tsc -p <package>/tsconfig.json --noEmit` for apps/api, packages/db
+  and apps/web — all passed.
+- Core purity, money arithmetic, commercial boundary and PL/pgSQL CASE checks
+  passed. `git diff --check` passed; no LP-0 conflict markers remain.
+- `node tools/lint.mjs` stopped at lane lint because its uncommitted-merge
+  comparison counts incoming main paths as branch changes. The independent
+  exact path-set comparison against origin/main passes. This is not a full lint
+  pass; rerun normal lane lint after the router stages the resolution and
+  completes the existing merge. The Git index remains unmerged by design:
+  no Git-writing commands were run in this sandbox.
+
+Ready for router commit/push and CI. PostgreSQL, migration/upgrade and browser
+execution cannot run in this sandbox and remain required CI gates. Full green
+CI against current main and one independent Claude RED review of the exact
+pushed head remain merge gates. This source inspection is not that review.
