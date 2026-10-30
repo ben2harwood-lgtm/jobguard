@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 catch-up only through main ea2a8cfe (#388 MON-1, migration 0380). Resolve LP-0 policy and trigger conflicts by retaining both CH-6 and MON-1 rows; retain main privilege withdrawal and shared expectation unions. No new behavior or test expectation changes. Existing CH-6 migrations 0376/0377 preserved as instructed, but fail migration ordering against 0380; router must resolve the reservation mismatch before commit. PostgreSQL and browser suites require GitHub CI.",
+      "note": "RED: CH-6 / PR #392 catch-up only through main fb933151 (#388 MON-1 0380, #404 SV-5 worker 0381, #425 journey). Preserve main migrations and lane files exactly; union LP-0 and shared privilege, entitlement and tenancy expectations. Existing CH-6 migrations 0395/0396 retain their SQL bytes and pass migration ordering above 0381. No new behavior or recreated routines. PostgreSQL and browser suites require GitHub CI; independent RED review remains required.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",

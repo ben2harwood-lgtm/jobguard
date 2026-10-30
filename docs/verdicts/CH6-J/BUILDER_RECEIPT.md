@@ -1411,3 +1411,44 @@ reservations. Database and browser suites were not run because this sandbox
 cannot start PostgreSQL or bind localhost; GitHub CI and independent RED review
 remain required. The router must stage the resolved inventory because .git is
 read-only here. No git-writing commands, package downloads or external actions.
+
+
+## 30 October 2026 — catch-up through 0381, ready for router staging
+
+Plan piece CH-6 / CH6-J, PR #392, RED. This catch-up supersedes the
+migration-reservation hold in the preceding catch-up section. The router had
+already started the merge; MERGE_HEAD and origin/main both resolve to
+fb933151eba27e4b877229363b2640622e6603c7 (#425), including #388 MON-1
+0380 and #404 SV-5 worker 0381. Local main is older and was not used as the
+target. No git-writing command was run.
+
+Resolved the remaining LP-0 trigger conflict by preserving all three CH-6
+triggers and main's final_check_request_after_lock trigger. LP-0 policies,
+triggers and RLS arrays equal the exact HEAD/origin-main set union, without
+duplicates; every recorded main array entry survives. Main's withdrawn
+privileges remain withdrawn. SERIOUS-B5, contractor-entitlement and tenancy
+test differences against main are additive only, preserving main's 0381
+private lock-request routine expectations and CH-6's existing expectations.
+All 320 main migration/lane files are byte-identical to origin/main. Only
+CH-6 migrations 0395/0396 are additional; their numbers and SQL bytes are
+unchanged from HEAD. Existing migrationOrderViolations returns no violations
+against current origin/main. No SQL routine was recreated, so main's latest
+mon2_issue body (0374) remains unchanged. The downstream contract
+lp-downstream-effects-v1.md is unchanged against both HEAD and origin/main.
+Updated the CH6-J lane note to remove its obsolete migration-reservation
+hold; its allow list exactly covers the 55 branch paths excluding itself.
+No new product behavior, schema changes or dependency changes.
+
+Checks actually run with installed tools:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- Exact LP-0 unions, byte comparisons, additive shared expectations, exact lane paths and existing migration-order check — PASS.
+- Changed-file conflict-marker scan and git diff --check — PASS.
+
+Ready for the router to stage the resolved merge and commit. The index still
+records LP-0 as unmerged until the router stages it, because .git is read-only.
+PostgreSQL/migration and browser suites were not run: this sandbox cannot start
+PostgreSQL or bind localhost; required full checks run in GitHub CI after push.
+Independent RED review remains required before merge. No commit, push, merge,
+package download, live provider or external action was performed.
