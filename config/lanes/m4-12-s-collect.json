@@ -34,6 +34,8 @@
         "packages/db/test/simulation-fee-collection-catalog.test.ts",
         "packages/db/test/simulation-fee-collection-upgrade.integration.test.ts",
         "packages/db/test/simulation-fee-collection.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/success-fee-catch-fixture.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
     }
