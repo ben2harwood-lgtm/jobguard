@@ -710,3 +710,29 @@ in two files. PL/pgSQL CASE-in-IF lint passed (164 migrations); git diff --check
 passed; exact-three-site rename and unchanged-0405 assertions passed. These
 checks do not prove PostgreSQL parsing: database verification remains CI's job.
 No git write command was run. RED review and existing release gates remain.
+
+
+## 30 October 2026: DB repair 2 after PostgreSQL run of 471782e6
+
+The supplied real-PostgreSQL run migrated successfully with 121 passing and
+three failing tests. This repair changes test fixtures/ordering only:
+
+- In both tenancy catalogue lists, move the six success_fee rows immediately
+  before supplier_bill_supersession. A read-only comparison confirms every
+  pre-existing row is retained unchanged and the block is in byte order.
+- The unsettled-source attack now inserts a constraint-valid pending movement
+  copied from the settled movement, then changes the receipt fact source's
+  movement_id to that pending row. Its event kind, event ID, identity and
+  representation satisfy the existing feed checks; all CHECKs and foreign keys
+  remain enabled. Only user triggers on the two deliberately corrupted fixture
+  tables are disabled temporarily and restored before calling the writer.
+  Everything is rollback-only. The exact SUCCESS_FEE_SOURCE_CHANGED expectation
+  and unchanged-effect assertions remain intact.
+
+No migration, production behaviour, LP-0 hash or other expectation changed.
+Local checks: installed packages/db tsc --noEmit passed; installed Vitest with
+--maxWorkers=2 on src/success-fee-repository.test.ts and
+src/receipt-line-command-producer.test.ts passed 14 tests in two files;
+git diff --check passed. Database execution is unavailable in this sandbox:
+the three repaired PostgreSQL cases still require CI verification. This is not
+an independent RED review. No git write commands were run.
