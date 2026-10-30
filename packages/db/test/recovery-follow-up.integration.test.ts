@@ -1020,7 +1020,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
     // Restore the repaired semantics with the currently installed sealed writer,
     // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
-    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, sealedEvaluator);
+    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, () => sealedEvaluator);
     const owner = await admin.connect();
     try {
       // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
