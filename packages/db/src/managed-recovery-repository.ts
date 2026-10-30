@@ -39,13 +39,17 @@ function translate(error: unknown): never {
 }
 /** Session-derived context and actor only; no HTTP endpoint or live offering. */
 export class ManagedRecoveryRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly sessionDigest: string) {}
 
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, job: string, caseId: string, actor: Actor) {
+    if (!/^[a-f0-9]{64}$/u.test(this.sessionDigest)) forbidden();
+    const session = (await db.$client.query<{ identity_user_id: string }>(
+      "SELECT app.mon9_session($1,$2) identity_user_id", [this.sessionDigest, actor.membershipId])).rows[0];
+    if (!session?.identity_user_id || session.identity_user_id !== actor.identityUserId) return forbidden();
     const member = await db.$client.query(`SELECT id FROM app.membership
       WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner'
       AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`,
-    [context.tenantId, actor.membershipId, actor.identityUserId]);
+    [context.tenantId, actor.membershipId, session.identity_user_id]);
     if (member.rowCount !== 1) forbidden();
     await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, caseId]);
     const found = await db.$client.query(`SELECT c.id FROM app.recovery_case c

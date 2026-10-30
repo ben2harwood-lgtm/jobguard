@@ -7,7 +7,7 @@ import { cluster, fixture, newCase, command, start, counts, qualifyingAllocation
 let c: Cluster, f: Fixture;
 beforeAll(async () => { c = await cluster(); f = await fixture(c); }, 120000);
 afterAll(async () => { await c?.close(); });
-const repo = () => new ManagedRecoveryRepository(c.runtime);
+const repo = (session = f) => new ManagedRecoveryRepository(c.runtime, session.sessionDigest);
 it("persists the exact election; concurrent replays produce one authorization and audit batch", async () => {
  const id = await newCase(c,f), input = command(id), before = await counts(c);
  const results = await Promise.all([repo().elect(f.context,f.job,input,f.actor),repo().elect(f.context,f.job,input,f.actor)]);
@@ -60,15 +60,37 @@ it("refuses cross-tenant/job access and impersonated identity, including replay 
  const b = await fixture(c), id = await newCase(c,f), input = command(id);
  await repo().elect(f.context,f.job,input,f.actor);
  const before = await counts(c);
- await expect(repo().elect(b.context,f.job,command(id),b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
- await expect(repo().preview(b.context,f.job,id,b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(repo(b).elect(b.context,f.job,command(id),b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(repo(b).preview(b.context,f.job,id,b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
  await expect(repo().elect(f.context,b.job,input,f.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
  await expect(repo().elect(f.context,f.job,input,{...f.actor,identityUserId:b.actor.identityUserId})).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
  expect(await withTenant(c.runtime,b.context,db=>db.$client.query('SELECT * FROM app.managed_recovery_election'))).toMatchObject({rows:[]});
  expect(await counts(c)).toEqual(before);
- const bid=await newCase(c,b),bi=command(bid);await repo().elect(b.context,b.job,bi,b.actor);
+ const bid=await newCase(c,b),bi=command(bid);await repo(b).elect(b.context,b.job,bi,b.actor);
  await c.admin.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2',[b.tenant,b.actor.membershipId]);
- await expect(repo().elect(b.context,b.job,bi,b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(repo(b).elect(b.context,b.job,bi,b.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+});
+it("refuses a valid owner's identity pair from another verified session, including replay and preview", async () => {
+ const other=await fixture(c),id=await newCase(c,f),input=command(id);
+ await repo().elect(f.context,f.job,input,f.actor);
+ const before=await counts(c);
+ // The forged pair is real and matches membership; only the session differs.
+ await expect(repo(other).elect(f.context,f.job,input,f.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(repo(other).preview(f.context,f.job,id,f.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(repo().preview(f.context,f.job,id,{...f.actor,identityUserId:other.actor.identityUserId})).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ expect(await counts(c)).toEqual(before);
+ expect(await repo().elect(f.context,f.job,input,f.actor)).toMatchObject({election:{actorMembershipId:f.actor.membershipId}});
+});
+it.each(['revoked','expired','unknown'])('refuses a %s session before election replay or preview',async state=>{
+ const local=await fixture(c),id=await newCase(c,local),input=command(id);
+ await repo(local).elect(local.context,local.job,input,local.actor);
+ const before=await counts(c);
+ if(state==='revoked') await c.admin.query('UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1',[local.sessionDigest]);
+ if(state==='expired') await c.admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1",[local.sessionDigest]);
+ const r=state==='unknown'?new ManagedRecoveryRepository(c.runtime,'0'.repeat(64)):repo(local);
+ await expect(r.elect(local.context,local.job,input,local.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ await expect(r.preview(local.context,local.job,id,local.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+ expect(await counts(c)).toEqual(before);
 });
 it("runtime cannot insert, alter, remove or truncate election/start facts or call unapproved SQL", async () => {
  const id = await newCase(c,f);
@@ -115,7 +137,7 @@ it.each(['member','expired'])('refuses an unauthorized %s before any effect',asy
  if(state==='member') await c.admin.query("UPDATE app.membership SET role='member' WHERE tenant_id=$1 AND id=$2",[b.tenant,b.actor.membershipId]);
  else await c.admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[b.tenant,b.actor.membershipId]);
  const before=await counts(c);
- await expect(repo().elect(b.context,b.job,command(id),b.actor)).rejects.toThrow();
+ await expect(repo(b).elect(b.context,b.job,command(id),b.actor)).rejects.toThrow();
  expect(await counts(c)).toEqual(before);
 });
 it('persists the solicitor-letter election separately at ten points',async()=>{

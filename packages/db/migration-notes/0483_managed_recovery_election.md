@@ -8,9 +8,12 @@ migration or routine is replaced. Direct runtime writes are revoked. Existing
 LP-0, tenancy, entitlement-upgrade and SERIOUS-B5 expectations are unioned with
 the exact additions.
 
-The repository takes verified session context and session actor, never a caller
-tenant or amount. Owner identity/membership is checked inside the transaction
-before replay. An election binds case/job, service/points, terms, command, actor,
+The repository requires the server's opaque session digest alongside the verified
+tenant context. mon9_session resolves identity from an active synthetic identity
+session under a shared lock, applies the existing SSO membership bridge, and
+restores the tenant context. A differing supplied identity or membership is refused.
+The resolved identity drives the live owner check inside the transaction before
+replay and preview; revoked, expired and unknown sessions fail closed. An election binds case/job, service/points, terms, command, actor,
 server time and exact authorization, with the normal audit batch. Replays keep
 one effect. Preview principal uses stored ordinary customer-recovery allocations,
 net of reversals, with current approved policy, finalized evidence and settled,

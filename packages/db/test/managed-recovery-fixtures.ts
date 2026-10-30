@@ -9,6 +9,9 @@ export async function fixture(c: Cluster) {
  const tenant = randomUUID(), user = randomUUID(), account = randomUUID(), membershipId = randomUUID(), job = randomUUID();
  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
  await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+ await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`mon9-${user}@fictional.invalid`,user]);
+ const sessionDigest = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+ await c.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(),user,sessionDigest]);
  const context = testTenantContext(tenant);
  await withTenant(c.admin, context, async db => {
   await db.$client.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MON-9')", [tenant,account]);
@@ -16,7 +19,8 @@ export async function fixture(c: Cluster) {
   await db.$client.query("INSERT INTO app.job(tenant_id,id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional MON-9','imported',100000,'reference_fee_policy_v3',1500)", [tenant,job]);
   await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','adoption_import')", [tenant,job]);
  });
- return { tenant, job, context, actor: { membershipId, identityUserId: user } };
+ await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,tenant,membershipId]);
+ return { tenant, job, context, sessionDigest, actor: { membershipId, identityUserId: user } };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export async function newCase(c: Cluster, f: Fixture) {

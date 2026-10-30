@@ -105,4 +105,24 @@ END $$;
 ALTER FUNCTION app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text) TO jobguard_runtime;
+-- Resolve the identity from the opaque session credential, never the supplied actor.
+-- The membership bridge preserves the existing SSO restrictions; restore tenant
+-- context after that bridge's membership walk before returning to business SQL.
+CREATE FUNCTION app.mon9_session(digest text,actor uuid) RETURNS uuid
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; s identity.session; u uuid;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR t IS NULL OR digest !~ '^[a-f0-9]{64}$' THEN RETURN NULL; END IF;
+ PERFORM 1 FROM identity.session se WHERE se.token_digest=digest FOR SHARE;
+ SELECT * INTO s FROM identity.session se WHERE se.token_digest=digest
+  AND se.environment='synthetic_demo' AND se.revoked_at IS NULL AND se.expires_at>clock_timestamp();
+ IF s.id IS NULL THEN RETURN NULL; END IF;
+ SELECT m.identity_user_id INTO u FROM identity.sso_session_memberships(s.user_id,s.id) m
+  WHERE m.tenant_id=t AND m.id=actor AND m.role='owner';
+ PERFORM set_config('app.tenant_id',t::text,true);
+ RETURN u;
+END $$;
+ALTER FUNCTION app.mon9_session(text,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.mon9_session(text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.mon9_session(text,uuid) TO jobguard_runtime;
 COMMIT;

@@ -882,20 +882,20 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
-// 0483 adds only these election/start facts and two controlled routines.
+// 0483 adds only these election/start facts and three controlled routines.
 async function managedRecoveryAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
  const tables = ['managed_recovery_election','managed_recovery_pursuit'];
  const names = [...tables,'managed_recovery_election_pkey','managed_recovery_election_tenant_id_command_id_key',
   'managed_recovery_election_tenant_id_authorization_id_key','managed_recovery_pursuit_pkey'];
- const identities = [['mon9_elect','j uuid, c uuid, actor uuid, command uuid, authorization uuid, service text, points integer, terms text'],['mon9_pursuit_guard','']];
+ const identities = [['mon9_elect','j uuid, c uuid, actor uuid, command uuid, authorization uuid, service text, points integer, terms text'],['mon9_pursuit_guard',''],['mon9_session','digest text, actor uuid']];
  const routines = after.routines.filter(r => r.nspname==='app' && identities.some(([n,a]) => r.proname===n && r.args===a));
  expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
  for (const r of routines) {
   expect(before.routines.some(b=>b.nspname===r.nspname && b.proname===r.proname && b.args===r.args)).toBe(false);
   expect(r.prosecdef).toBe(true); expect(r.proconfig).toEqual(['search_path=pg_catalog, app']);
   expect((await f.admin.query('SELECT $1::aclitem[]::text[] acl',[r.proacl])).rows[0].acl.sort()).toEqual([
-   'jobguard_migration=X/jobguard_migration',...(r.proname==='mon9_elect'?['jobguard_runtime=X/jobguard_migration']:[])].sort());
+   'jobguard_migration=X/jobguard_migration',...(r.proname!=='mon9_pursuit_guard'?['jobguard_runtime=X/jobguard_migration']:[])].sort());
  }
  const relations=after.relations.filter(r=>r.nspname==='app' && names.includes(r.relname));
  expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());

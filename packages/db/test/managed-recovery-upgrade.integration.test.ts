@@ -15,14 +15,14 @@ it('backfills a permanent start, preserves exact history and replays migration s
  await applyMigration(c,own);expect((await history()).rows).toEqual(before);
  const marker=(await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows;
  expect(marker).toHaveLength(1);
- await expect(new ManagedRecoveryRepository(c.runtime).elect(f.context,f.job,command(id),f.actor)).rejects.toMatchObject({code:'PURSUIT_ALREADY_STARTED'});
+ await expect(new ManagedRecoveryRepository(c.runtime,f.sessionDigest).elect(f.context,f.job,command(id),f.actor)).rejects.toMatchObject({code:'PURSUIT_ALREADY_STARTED'});
  await migrate(c.admin);expect((await history()).rows).toEqual(before);
  expect((await c.admin.query('SELECT * FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual(marker);
  // No replaced predecessor routine; executable only via the one checked route.
  const privileges=(await c.admin.query(`SELECT p.proname,p.prosecdef,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
   EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
-  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('mon9_elect','mon9_pursuit_guard') ORDER BY 1`)).rows;
- expect(privileges).toEqual([{proname:'mon9_elect',prosecdef:true,runtime:true,public:false},{proname:'mon9_pursuit_guard',prosecdef:true,runtime:false,public:false}]);
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('mon9_elect','mon9_pursuit_guard','mon9_session') ORDER BY 1`)).rows;
+ expect(privileges).toEqual([{proname:'mon9_elect',prosecdef:true,runtime:true,public:false},{proname:'mon9_pursuit_guard',prosecdef:true,runtime:false,public:false},{proname:'mon9_session',prosecdef:true,runtime:true,public:false}]);
  const sql=await readFile(MIGRATION_URLS.find(u=>u.pathname.endsWith(own))!,'utf8');
  expect(sql).not.toMatch(/CREATE OR REPLACE|DROP /u);
 },120000);
