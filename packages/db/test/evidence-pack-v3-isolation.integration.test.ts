@@ -6,6 +6,67 @@ import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, 
 let f: V3Fixture;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture(); }, 90_000);
 afterAll(async () => { if (f) await closeEvidencePackV3Fixture(f); vi.unstubAllEnvs(); });
+
+it("SB-02 activation: completed pre-lock artifacts, source revision and runtime statement shape stay identical with zero/many hidden signals", async () => {
+  const { EvidencePackV3Repository, EvidencePackV3WorkerRepository } = await import("../src/evidence-pack-v3-repository.js");
+  const { FinalAccountLockRepository } = await import("../src/final-account-lock-repository.js");
+  const { executeEvidencePackV3 } = await import("../../../apps/api/src/evidence-pack-v3.worker.js");
+  const { ShadowObservationReader, FixtureObservationSources } = await import("../src/shadow-observation-reader.js");
+  const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
+  const { detectShadowObservations } = await import("@jobguard/core");
+  await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  // Must-surface reads require a live, session-scoped small-builder job. The
+  // ordinary pack fixture above has already reached invoiced, so create a live
+  // job through the existing quote/activation writers rather than alter its state.
+  const { prepareActivationFixtureV3 } = await import("../src/demo-seed.js");
+  const { PracticeActivationRepository } = await import("../src/activation-repository.js");
+  const { practiceMaterialPool } = await import("../src/practice-session.js");
+  const { RecoveryCaseRepository } = await import("../src/recovery-case-repository.js");
+  const { recoverySourceCatalogueV1 } = await import("@jobguard/core");
+  const scoped = practiceMaterialPool(f.runtime, f.auth.digest);
+  const jobId = await prepareActivationFixtureV3(f.admin, f.auth.context, "CH8 pre-lock isolation", 100000, scoped, 100000, f.auth.digest);
+  await new PracticeActivationRepository(scoped).start(f.auth.context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
+  const opened = await new RecoveryCaseRepository(scoped).command(f.auth.context, jobId, {
+    version: "recovery-case-command.v1", action: "open", commandId: randomUUID(),
+    caseType: "merchant_overcharge", claimedNetPence: 32000, counterparty: "Fictional supplier",
+    book: "supplier_cost", sourceType: "supplier_documents",
+    sourceRefs: [recoverySourceCatalogueV1.supplier_documents[0]!.ref], expectedRevision: 0,
+  }, { membershipId: f.auth.membershipId, identityUserId: f.auth.identityUserId });
+  const caseId = opened.id;
+  const statements: Array<{ sql: string; values: unknown[] | undefined }> = [];
+  const runtime = new EvidencePackV3Repository(recordingPool(f.runtime, statements)), worker = new EvidencePackV3WorkerRepository(f.shadow);
+  const reader = new ShadowObservationReader(scoped, new FixtureObservationSources([])), detector = new ShadowDetectionRepository(f.shadow);
+  const run = async () => {
+    statements.length = 0;
+    const before = await runtime.read(f.auth.context, caseId, f.auth.digest), commandId = randomUUID();
+    await runtime.request(f.auth.context, caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
+    await executeEvidencePackV3(f.auth.context, { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
+      const { observations, captures } = await reader.read(f.auth.context, { version: "shadow-observation-read.v1", jobId });
+      await detector.persist(f.auth.context, { version: "shadow-detection-batch.v1", jobId, observations, captures, proposals: detectShadowObservations(observations, captures, new Date().toISOString()) });
+    }, "synthetic_demo");
+    const pack = (await runtime.read(f.auth.context, caseId, f.auth.digest)).packs.find(p => p.id === commandId)!;
+    expect(pack.manifest.lifecycle).toEqual({ state: "pre_lock" });
+    expect(pack.manifest.sections).toEqual([]);
+    expect(pack.sources.every(s => s.kind === "ordinary")).toBe(true);
+    return { bytes: pack.artifactText, revision: before.visibleSourceRevision, sql: statements.map(s => s.sql) };
+  };
+  const zero = await run();
+  await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
+    for (let n = 0; n < 100; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
+      (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+      VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
+  });
+  expect(await run()).toEqual(zero);
+  // Structural timing check: the public read/request and ordinary material branch
+  // never query a hidden relation. Wall-clock equality is not inferred from a stopwatch.
+  const definitions = (await f.admin.query(`SELECT proname,pg_get_functiondef(oid) body FROM pg_proc WHERE pronamespace='app'::regnamespace
+    AND proname IN('read_evidence_pack_v3','request_evidence_pack_v3','evidence_pack_v3_ordinary','evidence_pack_v3_material')`)).rows;
+  for (const def of definitions) {
+    const ordinaryBody = def.proname === "evidence_pack_v3_material" ? def.body.split("SELECT b0.*")[0] : def.body;
+    expect(ordinaryBody).not.toMatch(/app\.(?:shadow_|final_check_run_binding|recovery_attribution_revision)/u);
+  }
+});
+
 it("ordinary-source bytes and held-request SQL are identical before/after ordinary hidden signals", async () => {
   // This proves this bounded source path only: no v3 artifact, real worker receipt,
   // HTTP timing, server nested-query log or twin-world browser claim is made.
@@ -20,6 +81,7 @@ it("ordinary-source bytes and held-request SQL are identical before/after ordina
     expect(statements.map(s => s.sql).join("\n")).not.toMatch(/app\.(?:shadow|recovery_attribution)|reveal_shadow|break_glass/u);
     return { bytes: JSON.stringify(result), statements: structuredClone(statements) };
   };
+  const beforeHidden = (await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE job_id=$1", [f.source.jobId])).rows[0].n;
   const zeroSources = JSON.stringify(await readOrdinary(f)), zero = await held();
   await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
     for (let n = 0; n < 25; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
@@ -27,7 +89,7 @@ it("ordinary-source bytes and held-request SQL are identical before/after ordina
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:CH8-V',clock_timestamp(),'Fictional held extra','low','held_for_final_check')`,
     [f.source.tenantId, f.source.jobId, randomUUID()]);
   });
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE job_id=$1", [f.source.jobId])).rows[0].n).toBe(25);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE job_id=$1", [f.source.jobId])).rows[0].n).toBe(beforeHidden + 25);
   expect(JSON.stringify(await readOrdinary(f))).toBe(zeroSources);
   expect(await held()).toEqual(zero);
 });

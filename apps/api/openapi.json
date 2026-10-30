@@ -1,6 +1,160 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/trial": {
+      "get": {
+        "operationId": "FreeFirstJobLifecycleController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current company's synthetic first-job trial",
+        "tags": [
+          "trial"
+        ]
+      },
+      "post": {
+        "operationId": "FreeFirstJobLifecycleController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Request or explicitly simulate the company's card setup",
+        "tags": [
+          "trial"
+        ]
+      }
+    },
+    "/jobs/{id}/payment-fees": {
+      "get": {
+        "operationId": "PaymentFeeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read verified synthetic receipt statements and current approval/dispute state",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentFeeController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare, approve the exact hash, or pause a synthetic receipt fee statement",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      }
+    },
+    "/auth/oidc/{connectionId}/start": {
+      "post": {
+        "operationId": "OidcController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-start.v1",
+                      "oidc-admin.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "signin",
+                      "connection.create"
+                    ]
+                  },
+                  "linkExisting": {
+                    "type": "boolean"
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "connection": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Local fictional callback plus Secure HttpOnly browser binding; no verifier or tokens"
+          }
+        },
+        "summary": "Persist a synthetic OIDC request or administer its immutable connection",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/auth/oidc/{connectionId}/callback": {
+      "post": {
+        "operationId": "OidcController_callback",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "callback"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-callback.v1"
+                    ]
+                  },
+                  "callback": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "oidc-signed-in.v1; persisted session token only in Secure HttpOnly cookie"
+          }
+        },
+        "summary": "Consume a persisted OIDC request once and issue a bounded persisted session",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
     "/jobs/{id}/success-fees": {
       "get": {
         "operationId": "SuccessFeeController_get",
@@ -195,6 +349,49 @@
         ]
       }
     },
+    "/jobs/{id}/parties/import-v3/preview": {
+      "post": {
+        "operationId": "JobImportV3Controller_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the server-selected fictional v3 import and its availability",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3": {
+      "post": {
+        "operationId": "JobImportV3Controller_adopt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      },
+      "get": {
+        "operationId": "JobImportV3Controller_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned immutable v3 imported baseline and zero-count exclusion",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
     "/value": {
       "get": {
         "operationId": "BusinessValueController_get",
@@ -204,7 +401,7 @@
             "description": ""
           }
         },
-        "summary": "Read business value availability; producer and billing-period bindings held",
+        "summary": "Read mapped, inspectable company value and subscription periods",
         "tags": [
           "value"
         ]
@@ -219,7 +416,7 @@
             "description": ""
           }
         },
-        "summary": "Read job value v3 availability; producer bindings held",
+        "summary": "Read mapped, inspectable job value from locked bill and attribution sources",
         "tags": [
           "jobs"
         ]
@@ -243,11 +440,14 @@
         "operationId": "RecoveryAttributionController_post",
         "parameters": [],
         "responses": {
+          "409": {
+            "description": "Stored sources, expected revisions or command replay conflict"
+          },
           "503": {
-            "description": "Execution held pending accepted source, authorization and audit dependencies"
+            "description": "Review approval remains dependency-bound"
           }
         },
-        "summary": "Validate synthetic attribution intent; execution dependency-bound",
+        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
         "tags": [
           "synthetic recovery attribution"
         ]
