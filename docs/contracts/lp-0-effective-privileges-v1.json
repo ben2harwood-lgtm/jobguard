@@ -70,6 +70,9 @@
 {"id":"x-variation-writes","title":"Runtime INSERT (and variation column UPDATE) on variation, approval, revision, rejection, withdrawal and rate observation","kind":"commitment","status":"existing_exception","target":{"state":"review_at_card","note":"LP-5c inventories the approval write; LP-6d converts the remaining writers"},"cards":["LP-5c","LP-6d"],"responsibilities":{"LP-5c":"variation_approval and similar approval records are authority-changing grants inventoried for closure","LP-6d":"each remaining direct writer is converted to a checked routine or classified working data with its downstream effect"},"downstream":"variation_approval records an approval of changed price; variation_revision and variation_approval are fingerprinted. Direct writes can create approval records without the approval routine.","sources":["packages/db/migrations/0003_job_spine.sql:113","packages/db/migrations/0003_job_spine.sql:114"],"tests":["packages/db/test/quote.integration.test.ts","packages/db/test/variation.integration.test.ts","packages/db/test/fingerprinted-row-shape.integration.test.ts"],"gaps":[],"path":"ap-quote-variation-commitments","alsoPaths":["ap-lp13-legacy-unknown-raiser"]}
 ],
 "entries":[
+{"key":"acl|rel|table|app.inbox_metric_receipt|jobguard_runtime|INSERT|-","group":"x-prevention-fact-writes"},
+{"key":"acl|rel|table|app.inbox_metric_receipt|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
+{"key":"owner|rel:table|app.inbox_metric_receipt|jobguard_migration","group":"a-owner-tables-views"},
 {"key":"acl|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
 {"key":"owner|routine|function:app.allocate_stored_receipt_line(uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:app.small_builder_demo(uuid,text,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-demo-i-lifecycle"},
@@ -1523,6 +1526,7 @@
 "recorded":{
 "note":"Routine, RLS policy and trigger protection facts recorded for review. They are NOT compared by any guard: comparison of reviewed routine and RLS definitions is held under the Q2 ruling (LP0-13). CH-4-C 0201: seven new routines and five changed definitions are source-inspected only; their null definitionSha256 values require exact PostgreSQL catalogue capture in CI. New public signatures are restricted to ch4_record_work_state(uuid,uuid,text,jsonb) and ch4_link_post_lock_job(uuid,uuid,text,jsonb); no other ACL is changed.",
 "routines":[
+{"identity":"function:app.inbox_metric_immutable()","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_source_approved(uuid,uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_invoice_line(uuid,uuid,uuid,uuid,uuid,uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.receipt_fact_watermark(uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog, app","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_lock_hash"]},
@@ -2006,6 +2010,7 @@
 {"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]}
 ],
 "rls":[
+"app.inbox_metric_receipt|rls=t|forced=t",
 "app.northside_run|rls=t|forced=t",
 "app.northside_action_attribution|rls=t|forced=t",
 "app.acceptance_event|rls=t|forced=t",
@@ -2265,6 +2270,7 @@
 "infrastructure.outbox_signal|rls=f|forced=f"
 ],
 "policies":[
+"app.inbox_metric_receipt|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|6fa387f2f629fba6",
 "app.final_account_lock|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",
 "app.job|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",
 "app.job_activation|meter_lifecycle_source_read|PERMISSIVE|SELECT|jobguard_meter_owner|ade3739356a579ac",
@@ -2552,6 +2558,8 @@
 "identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6"
 ],
 "triggers":[
+"app.inbox_metric_receipt|immutable_rows|app.inbox_metric_immutable|BEFORE DELETE/UPDATE|O",
+"app.inbox_metric_receipt|immutable_table|app.inbox_metric_immutable|BEFORE TRUNCATE|O",
 "app.northside_run|northside_no_truncate|app.northside_immutable|BEFORE TRUNCATE|O",
 "app.northside_run|northside_immutable|app.northside_immutable|BEFORE DELETE/UPDATE|O",
 "app.northside_action_attribution|northside_no_truncate|app.northside_immutable|BEFORE TRUNCATE|O",

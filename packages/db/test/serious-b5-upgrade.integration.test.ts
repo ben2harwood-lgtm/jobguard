@@ -748,6 +748,23 @@ async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
+// M2-7: union only 0487's table, three indexes, immutable guard and tenant policy.
+async function inboxMetricAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const names=["inbox_metric_receipt","inbox_metric_receipt_pkey","inbox_metric_receipt_tenant_id_event_id_key","inbox_metric_receipt_tenant_id_command_id_key"];
+ const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
+ const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="inbox_metric_immutable"&&r.args==="");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({prosecdef:false,proconfig:["search_path=pg_catalog"]});
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&p.tablename==="inbox_metric_receipt");
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({policyname:"tenant_isolation",roles:["jobguard_runtime"]});
+ expect(Object.keys(before.rows)).not.toContain("app.inbox_metric_receipt");
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,"app.inbox_metric_receipt":[]},
+  routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
 // DEMO-I: exactly the private lifecycle objects installed by 0313; no extra grants.
 async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
@@ -906,6 +923,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await inboxMetricAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
