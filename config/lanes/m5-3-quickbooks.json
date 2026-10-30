@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-3-quickbooks": {
+      "branches": [
+        "codex/sandbox/m5-3-quickbooks"
+      ],
+      "allow": [
+        "apps/api/src/accounting-export.fake.ts",
+        "apps/api/src/accounting-export.sandbox.ts",
+        "apps/api/src/accounting-export.sandbox.test.ts",
+        "apps/api/src/accounting-quickbooks.fake.ts",
+        "apps/api/src/accounting-quickbooks.fake.test.ts",
+        "docs/contracts/accounting-export-v1.md"
+      ],
+      "note": "M5-3 RED dark QuickBooks fake, built ahead on M5-2. Shared accounting files serialize with M5-2 repairs; no migration or live provider.",
+      "test": "apps/api/src/accounting-export.sandbox.test.ts apps/api/src/accounting-xero.fake.test.ts apps/api/src/accounting-quickbooks.fake.test.ts"
+    }
+  }
+}

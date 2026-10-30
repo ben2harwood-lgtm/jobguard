@@ -121,7 +121,7 @@ export class AccountingExportSandbox {
         .reduce((sum, e) => sum + BigInt(e.pence), 0n);
       if (allocated + BigInt(source.amount.pence) > BigInt(invoice.amount.pence)) fail("reference_conflict");
     }
-    if (source.tax !== scope.mapping.tax || (adapter.route === "xero" && source.tax === "unsupported")) fail("unsupported_mapping");
+    if (source.tax !== scope.mapping.tax || ((adapter.route === "xero" || adapter.route === "quickbooks") && source.tax === "unsupported")) fail("unsupported_mapping");
     const target = parseAccounting(accountingTargetV1, {
       version: 1, companyId: scope.companyId,
       objectType: { customer_invoice: "invoice", credit: "credit_note", receipt: "payment" }[source.kind],
