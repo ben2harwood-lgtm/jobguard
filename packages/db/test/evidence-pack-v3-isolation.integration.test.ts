@@ -57,12 +57,43 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
   });
   expect(await run()).toEqual(zero);
+  // At activation, an ordinary read/material fetch must not wait on hidden-table
+  // locks. The negative control proves the lock is effective; this is not a
+  // claim of identical HTTP latency. Must-surface detection is intentionally separate.
+  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db =>
+    (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material);
+  const blocker = await f.admin.connect();
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("LOCK TABLE app.shadow_commercial_signal, app.final_check_run_binding, app.recovery_attribution_revision IN ACCESS EXCLUSIVE MODE");
+    await expect(asFixtureTenant(f.admin, f.source.tenantId, async db => {
+      await db.query("SET LOCAL lock_timeout='500ms'");
+      await db.query("SELECT count(*) FROM app.shadow_commercial_signal");
+    })).rejects.toMatchObject({ code: "55P03" });
+    await asFixtureTenant(f.admin, f.source.tenantId, async db => {
+      await db.query("SET LOCAL lock_timeout='500ms'");
+      const result = await db.query(`SELECT app.read_evidence_pack_v3($1,$2,$3) view,
+        app.evidence_pack_v3_material($1,$2,true) material`, [f.source.tenantId, caseId, f.auth.digest]);
+      expect(result.rows[0].view.visibleSourceRevision).toBe(zero.revision);
+      expect(result.rows[0].material).toEqual(ordinaryMaterial);
+    });
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+  }
   // Structural timing check: the public read/request and ordinary material branch
   // never query a hidden relation. Wall-clock equality is not inferred from a stopwatch.
   const definitions = (await f.admin.query(`SELECT proname,pg_get_functiondef(oid) body FROM pg_proc WHERE pronamespace='app'::regnamespace
-    AND proname IN('read_evidence_pack_v3','request_evidence_pack_v3','evidence_pack_v3_ordinary','evidence_pack_v3_material')`)).rows;
+    AND proname IN('read_evidence_pack_v3','request_evidence_pack_v3','evidence_pack_v3_ordinary','evidence_pack_v3_material',
+      'prepare_evidence_pack_v3','complete_evidence_pack_v3_check','finish_evidence_pack_v3','evidence_pack_v3_owner')`)).rows;
+  expect(definitions).toHaveLength(8);
   for (const def of definitions) {
     const ordinaryBody = def.proname === "evidence_pack_v3_material" ? def.body.split("SELECT b0.*")[0] : def.body;
+    if (def.proname === "evidence_pack_v3_material") {
+      expect(def.body).toContain("SELECT b0.*");
+      expect(ordinaryBody).toContain("IF NOT FOUND OR ordinary_only THEN RETURN");
+      expect(ordinaryBody).not.toContain("b app.final_check_run_binding");
+    }
     expect(ordinaryBody).not.toMatch(/app\.(?:shadow_|final_check_run_binding|recovery_attribution_revision)/u);
   }
 });
