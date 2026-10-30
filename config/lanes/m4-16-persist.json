@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m4-16-persist"
       ],
-      "note": "M4-16 RED synthetic durable workbench and preview Decision approvals; migration 0480 with live-only snapshot uniqueness and immutable reminder history.",
+      "note": "M4-16 RED synthetic durable workbench and preview Decision approvals; migration 0480 with live-only snapshot uniqueness and immutable reminder history; server/database clocks govern overdue eligibility, with fixture-only repository clock injection.",
       "allow": [
         "packages/db/migrations/0480_dunning_workbench.sql",
         "packages/db/src/dunning-repository.ts",

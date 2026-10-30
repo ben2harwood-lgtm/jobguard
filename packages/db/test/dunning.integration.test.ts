@@ -22,6 +22,29 @@ describe("M4-16 durable synthetic dunning",()=>{
  }
  const read=(a:Company)=>new DunningRepository(c.runtime).read(a.context,a.digest,{jobId:a.jobId,nowTick:3});
  const command=(row:{invoiceId:string;snapshotHash:string}, extra={})=>({version:"dunning-persist-command.v1",commandId:randomUUID(),invoiceId:row.invoiceId,snapshotHash:row.snapshotHash,nowTick:3,...extra});
+ it("refuses client-forged future eligibility at the repository and direct SQL boundaries",async()=>{
+  const a=await company();await seed(a,{dueTick:Date.now()+86400000});
+  const repo=new DunningRepository(c.runtime), rows=await repo.read(a.context,a.digest,{jobId:a.jobId,nowTick:Number.MAX_SAFE_INTEGER});
+  const row=rows.invoices[0]!;
+  expect(row).toMatchObject({suppression:"not_due",reminder:null});
+  for(const operation of ["request","approve"] as const){
+   const input=command(row,{nowTick:Number.MAX_SAFE_INTEGER,...(operation==="approve"?{decisionId:randomUUID()}:{})});
+   await expect(repo.command(a.context,a.digest,a.jobId,operation,input)).rejects.toThrow("DUNNING_UNAVAILABLE");
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,$4,$5::jsonb)",
+    [a.tenantId,a.digest,a.jobId,operation,JSON.stringify(input)]))).rejects.toThrow("DUNNING_UNAVAILABLE");
+  }
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.dunning_reminder WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+ });
+ it("allows database-time overdue requests and approvals despite a past client tick",async()=>{
+  const a=await company();await seed(a,{dueTick:Date.now()-86400000});
+  const row=(await read(a)).invoices[0]!;expect(row.reminder).not.toBeNull();
+  const request=command(row,{nowTick:0});
+  const draft=(await workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.dunning_workbench($1,$2,$3,'request',$4::jsonb) result",
+   [a.tenantId,a.digest,a.jobId,JSON.stringify(request)]))).rows[0].result;
+  expect(draft.status).toBe("pending");
+  const approved=await new DunningRepository(c.runtime).command(a.context,a.digest,a.jobId,"approve",command(row,{nowTick:0,decisionId:draft.decisionId}));
+  expect(approved).toMatchObject({status:"approved",executable:false});
+ });
  it("survives repository recreation, deduplicates concurrent drafts and approvals, and audits once per command",async()=>{
   const a=await company();await seed(a);const row=(await read(a)).invoices[0]!;
   const repo=new DunningRepository(c.runtime), input=command(row);

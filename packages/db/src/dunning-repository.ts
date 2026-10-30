@@ -16,7 +16,8 @@ const resultSchema = z.object({ decisionId: id, snapshotHash: hash, expiresAt: z
 /** Persisted synthetic preview only. The DB entry point authenticates the company
  * session on every read/command; callers never submit invoice or balance facts. */
 export class DunningRepository {
- constructor(private readonly pool: Pool) {}
+ // Clock injection is for deterministic fixtures only, never request input.
+ constructor(private readonly pool: Pool, private readonly clock: () => number = Date.now) {}
  private async guarded<T>(work: () => Promise<T>): Promise<T> {
   try { return await work(); } catch (error) {
    if (error instanceof DunningError) throw error;
@@ -43,13 +44,14 @@ export class DunningRepository {
     return invoice.success && invoice.data.invoiceId === row.data.invoiceId
      && invoice.data.tenantId === context.tenantId && invoice.data.jobId === input.data.jobId ? invoice.data : null;
    });
-   const workbench = unpaidInvoiceWorkbench(scope, invoices, input.data.nowTick);
+   const nowTick = this.clock();
+   const workbench = unpaidInvoiceWorkbench(scope, invoices, nowTick);
    return { ...workbench, invoices: workbench.invoices.map(row => {
     const index = invoices.findIndex(invoice => invoice?.invoiceId === row.invoiceId);
     const stored = parsed[index]!;
     if (!stored.success) throw new DunningError("DUNNING_UNAVAILABLE");
     return { ...row, snapshotHash: stored.data.snapshotHash,
-     reminder: row.suppression ? null : buildDunningReminder(scope, invoices[index], input.data.nowTick) };
+     reminder: row.suppression ? null : buildDunningReminder(scope, invoices[index], nowTick) };
    }) };
   }));
  }

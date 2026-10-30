@@ -10,13 +10,33 @@ const invoice = { version: "dunning-invoice.v1", environment: "synthetic_demo", 
  pilotNoCharge: false, disputed: false, refundPending: false, reversed: false, cancelled: false, attemptState: "none" };
 const result = { decisionId: uuid(4), snapshotHash, expiresAt: "2026-10-30T19:00:00.000Z", status: "approved", executable: false };
 const input = { version: "dunning-persist-command.v1", commandId: uuid(5), invoiceId: uuid(3), snapshotHash, nowTick: 3 };
-function fixture(projections: unknown[] = [invoice], commandResult: unknown = result) {
+function fixture(projections: unknown[] = [invoice], commandResult: unknown = result, clock: () => number = () => 3) {
  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("dunning_workbench")
   ? [{result: sql.includes("'read'") ? projections.map(projection => ({ invoiceId: uuid(3), projection, snapshotHash })) : commandResult}] : [] }));
  const release = vi.fn(), connect = vi.fn(async () => ({query, release}));
- return { repo: new DunningRepository({connect} as unknown as Pool), query, connect, release, context: testTenantContext(uuid(1)) };
+ return { repo: new DunningRepository({connect} as unknown as Pool, clock), query, connect, release, context: testTenantContext(uuid(1)) };
 }
 describe("durable dunning repository boundary", () => {
+ it("ignores a client future tick for both overdue display and reminder mutations", async () => {
+  const f = fixture([{...invoice, dueTick: 10}]);
+  const rows = await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:100});
+  expect(rows.invoices[0]).toMatchObject({suppression:"not_due",reminder:null});
+  for (const operation of ["request","approve"] as const) {
+   await expect(f.repo.command(f.context,digest,uuid(2),operation,
+    {...input,nowTick:100,...(operation === "approve" ? {decisionId:uuid(4)} : {})})).rejects.toThrow("DUNNING_UNAVAILABLE");
+  }
+  expect(f.query.mock.calls.some(([sql]) => sql.includes("$4,$5"))).toBe(false);
+ });
+ it("uses server overdue time even when the client clock is behind", async () => {
+  const f = fixture([{...invoice,dueTick:2}]);
+  expect((await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:0})).invoices[0]?.reminder).not.toBeNull();
+  expect(await f.repo.command(f.context,digest,uuid(2),"request",{...input,nowTick:0})).toEqual(result);
+ });
+ it("defaults to the server wall clock without a fixture injection", async () => {
+  const f = fixture([{...invoice,dueTick:Date.now()-1000}]);
+  f.repo = new DunningRepository({connect:f.connect} as unknown as Pool);
+  expect((await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:0})).invoices[0]?.reminder).not.toBeNull();
+ });
  it("uses stored rows and typed core content, binding a parameterized command to the source snapshot", async () => {
   const f = fixture();
   const rows = await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:3});

@@ -106,6 +106,14 @@ from administrative fixture setup in this slice. No client can supply or replace
 invoice facts, balances, a tenant or an actor through the repository command.
 Actual invoice/settlement ingestion is a separate upstream integration requirement.
 
+Persisted `dueTick` uses Unix milliseconds. Repository eligibility uses the server
+wall clock (`Date.now`); the optional constructor clock is only for deterministic
+fixtures, never request input. SQL independently checks the database wall clock
+after acquiring source locks on every request/approval, including replays. The
+legacy client `nowTick` field remains validated and included in command payload
+hashes for compatibility, but never determines overdue or reminder eligibility.
+The pure core retains abstract fixture ticks.
+
 A request stores at most one live (pending/approved) Decision per invoice snapshot and the fixed
 `dunning-reference.v1` preview policy. Its `snapshotHash` is the existing canonical
 SQL hash of the entire stored invoice projection, binding balance, revision,

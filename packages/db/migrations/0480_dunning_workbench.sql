@@ -82,7 +82,8 @@ BEGIN
   OR coalesce(source->>'outstandingPence','') !~ '^[0-9]+$'
   OR (source->>'outstandingPence')::numeric NOT BETWEEN 1 AND 1000000000000
   OR (source->>'outstandingPence')::numeric>coalesce((source->>'originalPence')::numeric,0)
-  OR coalesce((source->>'dueTick')::numeric,9007199254740992)>(v->>'nowTick')::numeric
+  -- Persisted dueTick is Unix milliseconds. Client nowTick is compatibility data only.
+  OR coalesce((source->>'dueTick')::numeric,9007199254740992)>floor(extract(epoch FROM clock_timestamp())*1000)
  THEN RAISE EXCEPTION 'DUNNING_UNAVAILABLE'; END IF;
  request_hash:=app.final_lock_hash(jsonb_build_object('operation',operation,'jobId',j,'actor',actor,'input',v));
  SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=t AND command_id=cid;
