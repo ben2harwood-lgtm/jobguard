@@ -61,3 +61,10 @@ export async function scratchReplaceFunction(db: Queryable, signature: string) {
   await db.query(definition.replace("$function$", "$function$/* mo4 scratch */"));
   return (await read()).includes("mo4 scratch");
 }
+
+/** Union only approved catalogue rows, preserving earlier metadata and the database's final ordering. */
+export function catalogueAdditions<T>(previous: T[], added: T[], live: T[]): T[] {
+  const positions = new Map(live.map((row, index) => [JSON.stringify(row), index]));
+  const position = (row: T) => positions.get(JSON.stringify(row)) ?? -1;
+  return [...previous, ...added].sort((a, b) => position(a) - position(b));
+}
