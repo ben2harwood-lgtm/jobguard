@@ -840,6 +840,48 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
  return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
 }
+// MON-1 0380: enumerate only its committed projection, policy and seven routines.
+// Every predecessor row, privilege, routine posture and policy stays compared.
+async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const identities=[
+  ["mon1_work_committed","t uuid, j uuid, activated timestamp with time zone, cutoff timestamp with time zone"],
+  ["mon1_refresh_work_ledger","t uuid"],
+  ["mon1_admit_work_event",""],
+  ["mon1_admit_live_source",""],
+  ["mon1_refresh_after_source",""],
+  ["mon1_fresh_counted_meter_today","t uuid, digest text"],
+  ["mon1_today_source","t uuid, digest text"],
+ ];
+ const routines=after.routines.filter(r=>r.nspname==='app' && identities.some(([name,args])=>r.proname===name && r.args===args));
+ expect(routines).toHaveLength(identities.length);
+ const owner=(await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for(const row of routines) {
+  expect(before.routines.some(r=>r.nspname===row.nspname && r.proname===row.proname && r.args===row.args)).toBe(false);
+  expect(row.proowner).toBe(owner);
+  expect(row.prosecdef).toBe(['mon1_admit_work_event','mon1_admit_live_source','mon1_refresh_after_source'].includes(row.proname));
+  expect(row.proconfig.map((value:string)=>value.toLowerCase())).toEqual(row.proname==='mon1_refresh_work_ledger'?['search_path=pg_catalog','timezone=utc']:['search_path=pg_catalog']);
+  const executors=(await f.admin.query("SELECT ARRAY(SELECT CASE WHEN grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(grantee)::text END FROM aclexplode($1::aclitem[]) ORDER BY 1) names",[row.proacl])).rows[0].names;
+  expect(executors).toEqual(['mon1_fresh_counted_meter_today','mon1_today_source'].includes(row.proname)?['jobguard_migration','jobguard_runtime']:['jobguard_migration']);
+ }
+ const names=['meter_work_ledger','meter_work_ledger_pkey'];
+ const relations=after.relations.filter(r=>r.nspname==='app' && names.includes(r.relname));
+ expect(relations.map(r=>r.relname)).toEqual(names);
+ for(const row of relations) {
+  expect(before.relations.some(r=>r.nspname===row.nspname && r.relname===row.relname)).toBe(false);
+  expect(row.relowner).toBe(owner);
+  expect((await f.admin.query("SELECT count(*)::int n FROM aclexplode(coalesce($1::aclitem[],acldefault('r',$2))) WHERE grantee<>$2",[row.relacl,owner])).rows[0].n).toBe(0);
+ }
+ expect(relations[0]).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
+ const policies=after.policies.filter(p=>p.schemaname==='app' && p.tablename==='meter_work_ledger');
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({policyname:'tenant_isolation',cmd:'ALL',permissive:'PERMISSIVE'});
+ expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policies[0]!.roles])).rows[0].roles).toEqual(['jobguard_migration']);
+ expect(policies[0]!.qual).toBe(policies[0]!.with_check);
+ expect(policies[0]!.qual).toContain("current_setting('app.tenant_id'");
+ const append=<T>(old:T[],added:T[],actual:T[])=>[...old,...added].sort((a,b)=>actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,'app.meter_work_ledger':[]},routines:append(before.routines,routines,after.routines),relations:append(before.relations,relations,after.relations),policies:append(before.policies,policies,after.policies)};
+}
 // CH-5 / 0362: exactly one immutable import aggregate, its policy and checked writer.
 async function invoicedImportAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1125,6 +1167,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await with0245Additions(expected));
  Object.assign(expected, await attributionAdditions(expected));
  Object.assign(expected, await catchAdditions(expected));
+ Object.assign(expected, await workAdmissionAdditions(expected));
  Object.assign(expected, await invoicedImportAdditions(expected));
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
  Object.assign(expected, await paymentFeeAdditions(expected));
