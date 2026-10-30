@@ -69,72 +69,87 @@ binaries were used without downloading packages. Database/browser/full CI and th
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
 
-## MON-4B: receipt success fees (synthetic executor seam)
+## MON-4B: receipt success fees (synthetic, real MON-4A reader)
 
-Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. The optional
-`receipt_success_fee` purpose on the existing collection intent selects
-`LockedCollectionSources.successFee(jobId, invoiceId, statementHash)` inside the
-same tenant-serialized reservation transaction at reservation and dispatch.
-Absent readers refuse with `SUCCESS_FEE_DEPENDENCY_BOUND`; there is no fallback
-to subscription authority. The original subscription collection path is preserved.
-No migration, SDK, route, worker or production implementation is added.
+Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. Repair 1 addresses
+independent review of 4a11b726: the original slice only registered a fake source
+in tests. `createSuccessFeeDirectDebitExecutor` now registers
+`PaymentFeeCollectionRepository` over the actual MON-4A 0359 tables and routines.
+The existing stand-in remains a unit-test double only. No migration is needed;
+there are no new grants, schema objects, source writers or provider routes.
 
-Source-inspected MON-4A on origin/main (`mon4a-fees`, PR #407) has immutable
-`payment-fee-statement.v1` documents and per-statement `app.action_authorization`
-records. It does **not** implement standing-authority creation (its view returns
-null). This slice reuses `paymentFeeBindingV1`, already present on the build base,
-and consumes a normalized, locked source envelope. The source owner maps
-statementId/revision/statementHash/sourceHash and feePence to that binding,
-policy `reference_fee_policy_v3`, recipient `platform:jobguard`, and the statement's
-own separate platform invoice identity. It must reconstruct current verified
-settlement, receipt/case/attribution disputes, current prior-statement sources,
-credits and receipts, and current exact authorization (including actor, expiry
-and revocation). Historical command results and read-view state alone are not
-execution tokens. Statement fees are consumed unchanged; there is no new rounding,
-allocation, fee formula, VAT calculation or customer-payment mutation.
+The caller supplies an explicit owner pool, the stamped PracticeAccess context
+and session digest unchanged, the shared reservation store, sessions and fake
+rails. The repository uses `withTenant` plus `practiceMaterialPool` and refuses
+outside synthetic_demo. Each source read calls `app.payment_fee_actor`, which
+reauthenticates current ownership/membership and the synthetic database and takes
+MON-4A's existing case/allocation/session locks. Every statement lookup has tenant,
+job and statement predicates. The reader invokes `app.payment_fee_current` to
+recompute settlement/qualification, prior-statement source freshness and disputes.
+It reads the immutable document from `app.payment_fee_statement` and the exact
+`app.action_authorization` via `app.payment_fee_command`, binding its approved
+Decision resolution, current actor, recipient, hash/revision, policy, amount and
+currency. The authorization row is locked against revocation until the reservation
+callback finishes. No historical replay or read-view status is used as a token.
 
-Per-statement authorization binds statement ID/hash and exact fee amount. The
-fake standing-authority specimen requires explicit opt-in, the same tenant/actor,
-job, action, policy, recipient, currency, expiry and current approved state. Its
-per-receipt cap may not exceed that receipt's verified fee, and it must cover the
-exact collection. No standing-authority grant, renewal, dispute resolution or
-production terms are inferred or written. A persisted MON-4A reader and a standing
-writer remain unregistered; these are integration limitations, not evidence of a
-source-backed database collection journey. In particular this build does not
-claim to complete the live-gated MON-4B milestone.
+MON-4A has no platform invoice. For this synthetic statement-collection path,
+`CollectionIntent.invoiceId` is the **fee statement ID**, the existing reservation
+interface's balance key. It is never the customer's invoice ID. `statementHash`
+and amount bind the immutable statement; feePence is consumed unchanged, without
+new rounding, allocation, fee formula or VAT calculation. Credits/prior fee
+receipts outside the shared reservation book do not exist on this MON-4A slice;
+reversals invalidate current source authority, and book settlements/refunds retain
+the existing reservation/reconciliation behavior. No customer payment is mutated.
 
-`SuccessFeeCollectionError.reason` gives bounded pause reasons for unverified
-settlement, each dispute scope, stale/revoked/disputed/expired authority, fee cap,
-and inactive/revoked mandate. A pause before dispatch leaves the attempt reserved
-and performs no provider submission. The mandate check is local fake state; the
-rail also checks again during submit. A cancellation racing after initiation is
-handled by the existing signed lifecycle/reconciliation rules. Accepted/unknown
-requests are not resubmitted when authority changes.
+The composition encloses each reservation-store callback in the tenant SQL read
+transaction. Source locks remain held through its local reservation/dispatch
+transition; both complete before provider I/O. The store remains shared across
+card and DD and retains command/balance uniqueness. Production storage is still
+unregistered; this work does not claim restart durability for an in-memory store
+or fake provider. Real database source verification and fake provider settlement
+are distinct evidence.
 
-Both rails share the existing statement/invoice reservation balance; changing
-purpose, rail or payload is not a second entitlement. Duplicate commands and
-concurrent clicks reserve/submit once; pending/confirmed are not payout. Payout
-reversal holds the balance for reconciliation, including replacement card attempts.
-Refunds retain the original statement/purpose and use the existing exact approved
-credit path; neither reversals nor refunds silently reopen fee debt. Customer
-receipts remain outside the collection write interface. The shadow-30000 fixture
-amounts remain £41,280 received, £800 qualifying, £80 fee, £720 before tax; VAT is
-uncalculated in this simulation. No demo/UI fixtures were changed.
+0359 states map to bounded `SuccessFeeCollectionError.reason` values:
+`disputed` → `AUTHORITY_DISPUTED`, `approval_revoked` → `AUTHORITY_REVOKED`,
+`approval_expired` → `AUTHORITY_EXPIRED`, and changed/missing/unapproved authority
+→ `AUTHORITY_STALE`. A pre-dispatch pause preserves the reservation and makes no
+provider call. The original scoped fake-source reasons and local mandate checks
+remain. Accepted or unknown requests are reconciled rather than resubmitted.
+Payout reversal blocks replacement attempts on both rails.
 
-Local verification (30 October 2026): installed Vitest, three named files,
-`--maxWorkers=2`, passed 128 tests (`success-fee-direct-debit.test.ts`,
-`executor.test.ts`, `fake-gocardless.test.ts`). API TypeScript `--noEmit` passed.
-The first test invocation could not resolve the unbuilt core package; building
-existing core/config outputs restored resolution without package downloads.
-Initial type checking exposed optional-property and branded-money fixture typing;
-both were fixed. PostgreSQL, browser, full CI and independent Claude RED review
-remain for the router/CI. This in-memory seam does not prove durability or RLS.
+Standing authority is unchanged and fake-only: MON-4A still returns
+standingAuthority null. The real reader emits only exact statement authority.
+There is no standing grant/renewal writer, production consent, SDK, live endpoint,
+worker or HTTP route. Production remains refused (`productionEnabled:false` on
+the fake), subject to all separate commercial/security approvals and G4-S.
+The shadow-30000 demo definitions are untouched: £41,280 received, £800 qualifying,
+£80 fee and £720 before tax; VAT remains uncalculated in simulation.
 
-Additional local checks: `git diff --check`, core-purity, money-arithmetic and
-commercial-boundary checks passed. `node tools/lint.mjs` stopped at lane-boundary:
-the main comparison includes inherited M4-12/M4-13/M4-15 files outside MON-4B's
-allowed paths. No allow list was broadened to absorb those predecessor changes.
-A working-tree-only path check using the existing `lanePathAllowed` function
-passed for all eight changed/new files, and the lane lists exactly this slice's
-seven non-lane paths. This limited check does not replace CI's full lane gate;
-the router must respect predecessor merge order when opening the PR.
+Repair 1 checks (30 October 2026):
+- Existing three collection Vitest files: 128 passed, maxWorkers=2.
+- payment-fee-collection-repository.test.ts: 9 passed, maxWorkers=2.
+- success-fee-composition.test.ts: 3 passed, maxWorkers=2; verifies real-reader
+  registration overrides a test stand-in and preserves specific pause reasons.
+- DB/API TypeScript, integration-test type checking, diff whitespace, money
+  arithmetic and commercial-boundary checks passed. The exact slice lane check
+  since issued base b1c91ec6 passed for 14 paths (13 non-lane paths), excluding
+  inherited predecessor changes against main.
+- PostgreSQL integration suite is authored in packages/db/test and discovered by
+  the installed repository Vitest runner. It creates actual MON-4A statements and
+  approvals using the real allocator, attribution and payment-fee writers, then
+  drives the concrete composition and fake DD rail. Cases cover once-only
+  collection/replay, disputed/revoked/expired dispatch, cross-tenant refusal,
+  runtime read denial and unchanged customer payments. Only the reservation book
+  and payment rail are test doubles. The expiry negative control follows MON-4A's
+  existing rollback-only protected-row expiry technique; positive fixtures keep
+  all integrity controls enabled.
+
+No PostgreSQL or browser suite was executed in this sandbox. This built-ahead
+base does not yet contain MON-4A migration 0359; coordinator/CI must run the suite
+with its main dependencies integrated. Test discovery initially needed the
+existing storage build output; it was built without downloading packages.
+Full CI/lane comparison and one independent Claude RED review remain required.
+The earlier main-comparison lane failure includes inherited M4-12/M4-13/M4-15
+changes; this lane is not broadened to absorb those predecessor changes. All new
+paths are explicitly listed in config/lanes/mon-4b.json. No acceptance or live
+MON-4B completion is inferred from source inspection, local unit tests or discovery.

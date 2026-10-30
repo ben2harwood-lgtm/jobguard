@@ -79,7 +79,8 @@ export interface LockedCollectionSources {
   collection(jobId: string, invoiceId: string): Promise<unknown>;
   credit(intent: RefundIntent): Promise<unknown>;
   /** MON-4A statement + current authorization/source reconstruction under this same lock.
-   * Never return the cached read_payment_fees view as execution authority. Unregistered by default. */
+   * Never return the cached read_payment_fees view as execution authority.
+   * Registered by createSuccessFeeDirectDebitExecutor for the real MON-4A path. */
   successFee?(jobId: string, invoiceId: string, statementHash: string): Promise<unknown>;
 }
 /** Credentials only: membership and actor are resolved through AuthProvider on every operation. */
