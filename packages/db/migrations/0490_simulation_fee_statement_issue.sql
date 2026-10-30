@@ -91,7 +91,7 @@ CREATE FUNCTION app.write_platform_fee_statement(p_job uuid,p_session text,p_com
 #variable_conflict use_variable
 DECLARE t uuid; actor record; c record; action text:=p_command->>'action'; cid uuid;
  prior app.platform_fee_statement_command; existing app.platform_fee_statement; previous app.platform_fee_statement;
- snapshot jsonb; source_hash text; document jsonb; history jsonb; digest text; result jsonb;
+ snapshot jsonb; v_source_hash text; document jsonb; history jsonb; digest text; result jsonb;
  sid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); auth_id uuid;
  sequence integer; amount bigint; deadline timestamptz; approval_action text;
 BEGIN
@@ -129,10 +129,10 @@ BEGIN
   THEN RAISE EXCEPTION 'SUCCESS_FEE_IDEMPOTENCY_CONFLICT' USING ERRCODE='23514'; END IF;
   RETURN prior.result||jsonb_build_object('replayed',true);
  END IF;
- snapshot:=app.platform_fee_statement_sources(t,p_job,actor.member_id); source_hash:=app.final_lock_hash(snapshot);
+ snapshot:=app.platform_fee_statement_sources(t,p_job,actor.member_id); v_source_hash:=app.final_lock_hash(snapshot);
  SELECT s.* INTO previous FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job ORDER BY s.sequence DESC LIMIT 1;
  IF action='issue' THEN
-  SELECT * INTO existing FROM app.platform_fee_statement WHERE tenant_id=t AND job_id=p_job AND platform_fee_statement.source_hash=write_platform_fee_statement.source_hash;
+  SELECT s.* INTO existing FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job AND s.source_hash=v_source_hash;
   IF existing.id IS NULL THEN
    SELECT coalesce(max(s.sequence),0)+1 INTO sequence FROM app.platform_fee_statement s WHERE s.tenant_id=t;
    amount:=(snapshot->>'feePence')::bigint-coalesce((previous.document->'cumulativeFeePrincipal'->>'pence')::bigint,0);
@@ -151,13 +151,13 @@ BEGIN
    digest:=app.final_lock_hash(document);
    INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision,t,'simulation_fee_statement',sid::text,CASE WHEN amount<0 THEN 'success_fee.statement_correction_approve' ELSE 'success_fee.statement_approve' END);
    INSERT INTO app.platform_fee_statement(tenant_id,job_id,id,sequence,namespace,source_hash,document,document_hash,original_id,decision_id)
-    VALUES(t,p_job,sid,sequence,'success_fee.synthetic.v1',source_hash,document,digest,previous.id,decision);
+    VALUES(t,p_job,sid,sequence,'success_fee.synthetic.v1',v_source_hash,document,digest,previous.id,decision);
   ELSE sid:=existing.id; digest:=existing.document_hash;
   END IF;
  ELSE
-  SELECT * INTO existing FROM app.platform_fee_statement WHERE tenant_id=t AND job_id=p_job AND id=(p_command->>'statementId')::uuid;
+  SELECT s.* INTO existing FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job AND s.id=(p_command->>'statementId')::uuid;
   IF existing.id IS NULL OR existing.id IS DISTINCT FROM previous.id OR existing.document_hash IS DISTINCT FROM p_command->>'statementHash'
-   OR existing.source_hash IS DISTINCT FROM source_hash
+   OR existing.source_hash IS DISTINCT FROM v_source_hash
   THEN RAISE EXCEPTION 'SUCCESS_FEE_STALE' USING ERRCODE='40001'; END IF;
   sid:=existing.id; digest:=existing.document_hash;
   amount:=(existing.document->'documentPrincipal'->>'pence')::bigint;
