@@ -10,7 +10,8 @@
         "packages/db/src/meter-reader-revoke.test.ts",
         "packages/db/test/lp-0-grant-freeze.integration.test.ts",
         "packages/db/test/meter-today.integration.test.ts",
-        "packages/db/test/meter-work-admission-upgrade.integration.test.ts"
+        "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }

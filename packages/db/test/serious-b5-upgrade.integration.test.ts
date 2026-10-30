@@ -643,8 +643,10 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   expect(r.proowner).toBe(owner);
   expect(r.prosecdef).toBe(false);
   expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  // 0399 retires only the legacy reader; every other lifecycle grant stays exact.
   expect((await aclItems(r.proacl)).sort()).toEqual(["jobguard_migration=X/jobguard_migration",
-   `${r.proname === "mon1_lifecycle_actor" ? "jobguard_meter" : "jobguard_runtime"}=X/jobguard_migration`].sort());
+   ...(r.proname === "mon1_counted_meter_today" ? [] :
+    [`${r.proname === "mon1_lifecycle_actor" ? "jobguard_meter" : "jobguard_runtime"}=X/jobguard_migration`])].sort());
  }
  const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
  JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace

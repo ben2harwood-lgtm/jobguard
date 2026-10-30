@@ -25,3 +25,17 @@ the rerun above passed after building workspace dependencies, without downloads.
 repository root. TypeScript syntax checks passed for the three changed integration
 test files; lane validation covered all seven changed paths; `git diff --check`
 passed. Database and browser execution were not run in this sandbox.
+
+## PR #435 — CI repair try 1
+
+SERIOUS-B5's lifecycle additions still expected runtime EXECUTE on the retired
+reader after upgrading through 0399. Its exact ACL expectation now requires only
+the migration owner's entry for that signature, so restoring runtime access fails
+the test. All other lifecycle grant, owner, security-mode and search-path
+expectations remain unchanged. Migration SQL bytes are unchanged; the lane adds
+the affected SERIOUS-B5 test path. Customer-signin table-count failures are outside
+this repair as instructed.
+
+Local checks: the reader-revoke and work-admission source suites passed (2 files,
+7 tests, one Vitest worker); SERIOUS-B5 TypeScript syntax, lane validation and
+`git diff --check` passed. PostgreSQL execution remains a GitHub CI requirement.
