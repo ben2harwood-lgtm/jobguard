@@ -79,6 +79,11 @@ BEGIN
  OR (action NOT IN('collect','refund') AND (NOT coalesce(pg_input_is_valid(p_command->>'attemptId','uuid'),false)
   OR p_command-ARRAY['version','action','commandId','attemptId']<>'{}'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
+ -- session_user is the connection identity, unaffected by this SECURITY DEFINER owner
+ -- or by caller-controlled settings. Only the internal migration/operator connection
+ -- can report fake-rail terminal facts, including replays of already recorded events.
+ IF action IN('settle','fail') AND NOT pg_has_role(session_user,'jobguard_migration','USAGE')
+ THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  cid:=(p_command->>'commandId')::uuid;
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
  LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,

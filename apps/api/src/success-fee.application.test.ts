@@ -89,3 +89,10 @@ it("collection authorizes before deferred input and replay, passes the verified 
  await expect(app().collect(id,body)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
  await expect(app().collection(id)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
 });
+
+it.each(["settle","fail"])("a session cannot submit fake-rail %s even with an authenticated job",async action=>{
+ const c={version:"simulation-fee-collection-command.v1",commandId:randomUUID(),action,attemptId:randomUUID()};
+ await expect(app().collect(id,async()=>c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+ expect(job).toHaveBeenCalledWith(id);expect(collect).not.toHaveBeenCalled();
+ expect(successFeeFailure(new SuccessFeeError("SUCCESS_FEE_FORBIDDEN"))?.status).toBe(403);
+});

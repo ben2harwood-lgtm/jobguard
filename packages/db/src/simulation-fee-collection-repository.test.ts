@@ -24,7 +24,7 @@ it("strict command input refuses tenant/amount/provider authority before connect
  expect(x.query).not.toHaveBeenCalled();
 });
 it("rolls back a substituted attempt identity",async()=>{
- const c={version:"simulation-fee-collection-command.v1",commandId:randomUUID(),action:"settle",attemptId:randomUUID()};
+ const c={version:"simulation-fee-collection-command.v1",commandId:randomUUID(),action:"redirect",attemptId:randomUUID()};
  const x=setup({version:"simulation-fee-collection-result.v1",commandId:c.commandId,attemptId:randomUUID(),replayed:false});
  await expect(x.repo.command(context,job,digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  expect(x.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
@@ -36,4 +36,10 @@ it("maps bounded SQL failures, and wrong-job reads roll back",async()=>{
  }
  const x=setup({version:"simulation-fee-collection-view.v1",jobId:randomUUID(),attempts:[],settledPrincipal:0,refundedPrincipal:0,retainedPrincipal:0,outstandingPrincipal:0,refundDue:0,collectionReserved:0,refundReserved:0,unknownOutcome:false});
  await expect(x.repo.view(context,job,digest)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+});
+
+it.each(["settle","fail"])("refuses builder %s before opening a database connection",async action=>{
+ const x=setup(null);
+ await expect(x.repo.command(context,job,digest,{version:"simulation-fee-collection-command.v1",commandId:randomUUID(),action,attemptId:randomUUID()})).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+ expect(x.query).not.toHaveBeenCalled();
 });

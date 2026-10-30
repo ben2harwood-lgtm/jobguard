@@ -623,9 +623,7 @@
                         "type": "string",
                         "enum": [
                           "redirect",
-                          "unknown",
-                          "settle",
-                          "fail"
+                          "unknown"
                         ]
                       },
                       "attemptId": {
@@ -644,7 +642,7 @@
             "description": ""
           }
         },
-        "summary": "Approve exact synthetic collection/refund or record an explicit fake-rail reconciliation event",
+        "summary": "Approve exact synthetic collection/refund or record a redirect/unknown outcome",
         "tags": [
           "synthetic success fees"
         ]
