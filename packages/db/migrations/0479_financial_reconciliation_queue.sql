@@ -128,7 +128,7 @@ BEGIN
    'revision',final_account_revision_id,'net',net_pence,'vat',tax_pence,'gross',total_pence)
    ORDER BY id),'[]'::jsonb) INTO stored_invoices
   FROM app.customer_invoice WHERE tenant_id=t AND job_id=p_job AND synthetic;
-  IF p_command->'snapshot' IS NULL OR (p_command->'snapshot' - ARRAY['version','environment','tenantId','jobId','invoices','provider','journals','corrections'])<>'{}'::jsonb
+  IF p_command->'snapshot' IS NULL OR ((p_command->'snapshot') - ARRAY['version','environment','tenantId','jobId','invoices','provider','journals','corrections'])<>'{}'::jsonb
    OR p_command->'snapshot'->>'version' IS DISTINCT FROM 'financial-reconciliation-snapshot.v1'
    OR p_command->'snapshot'->>'environment' IS DISTINCT FROM 'synthetic_demo'
    OR p_command->'snapshot'->'invoices' IS DISTINCT FROM stored_invoices
