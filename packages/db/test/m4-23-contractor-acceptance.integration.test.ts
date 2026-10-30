@@ -241,9 +241,14 @@ it("M4-23 cross-customer authority cannot read, import against or post the other
   const d = await derive(own), posted = await post(own, 1500);
   await expect(foreign.fees.read(foreign.ctx, foreign.session, d.id)).rejects.toMatchObject({ code: "FEE_NOT_FOUND" });
   await expect(foreign.fees.readStatement(foreign.ctx, foreign.session, posted.statement.id)).rejects.toMatchObject({ code: "FEE_NOT_FOUND" });
-  await expect(foreign.billing.import(foreign.ctx, foreign.session, s.jobId, {
-    version: "billing-import-command.v1", commandId: randomUUID(), events: [event(own, s.jobId, "paid")], transport: "api", sourceHash: "a".repeat(64),
-  })).rejects.toMatchObject({ code: "BILLING_FORBIDDEN" });
+  // This caller has finance authority in its own tenant. Foreign and unknown jobs
+  // both fail the tenant-scoped lookup; BILLING_FORBIDDEN is for callers lacking finance authority.
+  for (const jobId of [s.jobId, randomUUID()]) {
+    await expect(foreign.billing.import(foreign.ctx, foreign.session, jobId, {
+      version: "billing-import-command.v1", commandId: randomUUID(), events: [event(own, s.jobId, "paid")], transport: "api", sourceHash: "a".repeat(64),
+    })).rejects.toMatchObject({ code: "BILLING_NOT_FOUND" });
+  }
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.billing_fact WHERE tenant_id=$1", [foreign.w.p.tenantId])).rows[0].n).toBe(0);
   await expect(foreign.fees.postStatement(foreign.ctx, foreign.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(),
     statementId: posted.statement.id, authorizationId: posted.statement.approval!.authorizationId })).rejects.toMatchObject({ code: "FEE_NOT_FOUND" });
   expect(await own.fees.readStatement(own.ctx, own.session, posted.statement.id)).toEqual(posted.statement);
