@@ -1,4 +1,4 @@
-# 0368 — SV-5 automatic practice Final Check request
+# 0381 — SV-5 automatic practice Final Check request
 
 An AFTER INSERT trigger on the immutable final-account lock writes identifiers into the existing
 infrastructure.final_check_request table in the lock transaction. Its primary key makes lock replay and

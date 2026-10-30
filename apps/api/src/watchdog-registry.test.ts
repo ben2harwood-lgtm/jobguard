@@ -820,7 +820,7 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
   await withModuleDispatch(async dispatch => {
     for (const scenario of ["stranger", "missing"] as const) {
       routeApplication.session = scenario === "missing" ? undefined : "18000000-0000-4000-8000-000000000001";
-      const query = vi.fn(async (sql: string) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
+      const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
       const connect = vi.fn(async () => ({ query, release: vi.fn() }));
       const pool = { query, connect } as unknown as Pool;
       const cookie = routeApplication.session ? `jg_session=${routeApplication.session}` : undefined;
@@ -841,7 +841,7 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
       const response = await route[endpoint.verb ?? "POST"](new Request("https://synthetic.invalid", { method: endpoint.verb ?? "POST", ...(endpoint.verb ? {} : { body: "{}" }) }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
       expect({ status: response.status, body: await response.json() }).toEqual(expected);
       if (scenario === "missing") { expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); }
-      for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+      for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
     }
   });
 });
