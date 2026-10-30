@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { reconcileFinancialSnapshot } from "@jobguard/core";
 import { FinancialReconciliationQueueRepository } from "../src/financial-reconciliation-queue-repository.js";
+import { ContractorPracticeSessionRepository } from "../src/contractor-practice-session-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import { cluster, world, type World } from "./contractor-billing-fixtures.js";
 import { invite } from "./extra-approval-chain-fixtures.js";
@@ -92,7 +93,7 @@ it("denies direct writes, enforces append-only even for owner, and leaks no cros
  await expect(c.admin.query("DELETE FROM app.financial_reconciliation_run WHERE id=$1",[run.runId])).rejects.toThrow("ENTERPRISE_FEE_IMMUTABLE");
  await withTenant(c.admin,b.w.ctx,async db=>{await db.$client.query("SET LOCAL ROLE jobguard_migration");expect((await db.$client.query("SELECT id FROM app.financial_reconciliation_run WHERE id=$1",[run.runId])).rows).toEqual([]);});
  const unknown=randomUUID();await expect(a.repo.read(a.w.ctx,unknown,a.scope.jobId,run.runId)).rejects.toThrow();
- await withTenant(c.runtime,a.w.ctx,db=>db.$client.query("SELECT app.revoke_contractor_practice_session($1)",[a.w.session]));
+ await new ContractorPracticeSessionRepository(c.runtime).revoke(a.w.ctx,a.w.session);
  await expect(a.run()).rejects.toThrow();
 });
 
