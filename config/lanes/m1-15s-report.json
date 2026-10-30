@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m1-15s-report": {
+      "branches": ["codex/sandbox/m1-15s-report"],
+      "note": "RED M1-15S synthetic report built on m1-15s-metrics; no migration, real-data route or financial action. This lane file is implicitly permitted.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/core/src/shadow-pilot-report.test.ts"
+      ]
+    }
+  }
+}
