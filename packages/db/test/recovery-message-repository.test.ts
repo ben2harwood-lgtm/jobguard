@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildRecoveryMessage } from '@jobguard/core';
 import { UserCommandDispatcher } from '../src/commands.js';
 import type { Pool } from 'pg';
-import { RecoveryMessageRepository } from '../src/recovery-message-repository.js';
+import { RecoveryMessageError, RecoveryMessageRepository } from '../src/recovery-message-repository.js';
 
 // Service fault tests only: these doubles prove orchestration/replay, never PostgreSQL guarantees.
 const id = (n: number) => `b0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -137,5 +137,35 @@ describe('blocked replay current-state ruling (Opus P3-1)', () => {
     service.read = async () => state;
     expect(await repo.command(ctx, id(1), { version: 'recovery-message-command.v1', commandId: id(50), messageId: id(6), expectedRevision: 2, action: 'advance', outcome: 'success' }, actor)).toEqual(state);
     expect(query.mock.calls.every(([sql]) => /^(BEGIN|COMMIT|SELECT)/u.test(sql))).toBe(true);
+  });
+});
+
+
+describe('LP-5a deferred command refusal mapping', () => {
+  it.each([
+    ['23514', 'COMMAND_CONFLICT', 'RECOVERY_MESSAGE_COMMAND_CONFLICT'],
+    ['23505', 'COMMAND_CONFLICT', 'RECOVERY_MESSAGE_COMMAND_CONFLICT'],
+    ['23514', 'unrelated check failure', null],
+    ['23505', 'unrelated unique failure', null],
+    ['XX000', 'COMMAND_CONFLICT', null],
+  ])('maps only the command boundary refusal %s / %s', async (code, message, expected) => {
+    const failure = Object.assign(new Error(message), { code });
+    const queries: string[] = [];
+    const pool = { connect: async () => ({ release() {}, query: async (sql: string) => {
+      queries.push(sql);
+      if (sql === 'COMMIT') throw failure; // deferred PostgreSQL constraint refusal
+      return { rows: [], rowCount: 0 };
+    } }) } as unknown as Pool;
+    const repo = new RecoveryMessageRepository(pool);
+    const service = repo as unknown as { [key: string]: (...args: any[]) => Promise<any> };
+    service.lockCase = async () => undefined;
+    service.finishHistory = async () => undefined;
+    service.state = async () => ({});
+    const outcome = repo.read(ctx, id(1));
+    if (expected) {
+      await expect(outcome).rejects.toBeInstanceOf(RecoveryMessageError);
+      await expect(outcome).rejects.toMatchObject({ code: expected });
+    } else await expect(outcome).rejects.toBe(failure);
+    expect(queries).toContain('ROLLBACK');
   });
 });

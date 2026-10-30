@@ -81,6 +81,17 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     await expect(f.dispatcher.dispatch(f.context, commercial(f, { commandType: "unknown.command", actorMembershipId: randomUUID() }), handler)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(await counts(f.actor.tenant)).toEqual(before);
   });
+  it.each(["recovery.message.approve", "other.family"])("preserves an unconverted %s processing receipt for shared conflict detection", async commandType => {
+    const f = await fixture(), commandId = randomUUID();
+    await withTenant(db.owner, f.context, tx => tx.$client.query(`INSERT INTO app.command_receipt
+      (command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+      VALUES($1,$2,$3,$1::text,repeat('a',64),'processing',$4)`, [commandId, f.actor.tenant, commandType, f.actor.member]));
+    const receipt = await withTenant(db.runtime, f.context, tx => tx.$client.query(
+      "SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId]));
+    expect(receipt.rows).toEqual([{ command_type: commandType, status: "processing" }]);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId])).rows)
+      .toEqual([{ n: 0 }]);
+  });
   it("refuses fabricated completion and a committed processing claim; cancellation rolls back and permits retry", async () => {
     const f = await fixture(), before = await counts(f.actor.tenant), c = commercial(f);
     await expect(f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ jobId: f.job, activationId: randomUUID(), state: "live" }) })).rejects.toMatchObject({ code: "AUTHORIZATION_INVALID" });

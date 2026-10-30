@@ -442,7 +442,7 @@ END $$;
 CREATE FUNCTION app.lp5_check_command_completion() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE c app.command_lifecycle_claim; r app.command_receipt; reg app.command_type_registry;
- value jsonb; outbox uuid; authorization uuid; a app.action_authorization; caller_tenant text:=current_setting('app.tenant_id',true);
+ value jsonb; outbox uuid; outbox_authorization_id uuid; a app.action_authorization; caller_tenant text:=current_setting('app.tenant_id',true);
 BEGIN
  -- Deferred checks run after caller code may have changed or cleared context.
  -- RLS and the result adapter must see the tenant of THIS receipt, not that setting.
@@ -450,10 +450,10 @@ BEGIN
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
  -- LP-5b converts other writers; LP-5c closes their direct grants. This trigger
  -- proves managed dispatcher claims, without declaring the unconverted writers secure.
- IF NEW.status='processing' AND NOT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id AND status='succeeded') THEN
-  RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23514'; END IF;
  IF c.command_id IS NULL THEN
   PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true); RETURN NULL; END IF;
+ IF NEW.status='processing' AND NOT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id AND status='succeeded') THEN
+  RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23514'; END IF;
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
  SELECT * INTO reg FROM app.command_type_registry WHERE command_type=r.command_type AND version=c.version;
  IF r.status IS DISTINCT FROM 'succeeded' OR c.outcome IS NULL THEN
@@ -465,15 +465,15 @@ BEGIN
    AND e.payload->'references'->>'commandId'=r.command_id::text AND e.payload->'references'->>'auditTrust'='checked_operation') THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  IF reg.outbox_class IS NOT NULL THEN
-  authorization:=c.authorization_id;
+  outbox_authorization_id:=c.authorization_id;
   IF reg.completion_adapter='purchase_order' AND value->>'reused'='true' THEN
-   SELECT authorization_id INTO authorization FROM app.purchase_order_placement WHERE tenant_id=r.tenant_id AND id=(value->>'placementId')::uuid;
+   SELECT authorization_id INTO outbox_authorization_id FROM app.purchase_order_placement WHERE tenant_id=r.tenant_id AND id=(value->>'placementId')::uuid;
   END IF;
   IF reg.completion_adapter='invoice' AND value->>'reused'='true' THEN
-   SELECT authorization_id INTO authorization FROM app.customer_invoice WHERE tenant_id=r.tenant_id AND id=(value->>'invoiceId')::uuid;
+   SELECT authorization_id INTO outbox_authorization_id FROM app.customer_invoice WHERE tenant_id=r.tenant_id AND id=(value->>'invoiceId')::uuid;
   END IF;
-  SELECT * INTO a FROM app.action_authorization WHERE tenant_id=r.tenant_id AND id=authorization;
-  IF NOT EXISTS(SELECT 1 FROM app.action_outbox b WHERE b.tenant_id=r.tenant_id AND b.authorization_id=authorization
+  SELECT * INTO a FROM app.action_authorization WHERE tenant_id=r.tenant_id AND id=outbox_authorization_id;
+  IF NOT EXISTS(SELECT 1 FROM app.action_outbox b WHERE b.tenant_id=r.tenant_id AND b.authorization_id=outbox_authorization_id
    AND b.adapter=reg.outbox_class AND b.action_type=a.action_type AND b.content_hash=a.content_hash
    AND b.aggregate_revision=a.aggregate_revision AND b.recipient IS NOT DISTINCT FROM a.recipient
    AND b.amount_pence IS NOT DISTINCT FROM a.amount_pence AND b.currency IS NOT DISTINCT FROM a.currency

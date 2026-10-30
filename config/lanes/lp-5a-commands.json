@@ -19,6 +19,7 @@
         "packages/db/src/customer-billing-repository.ts",
         "packages/db/src/demo-bootstrap.ts",
         "packages/db/src/quote-document-repository.ts",
+        "packages/db/src/recovery-message-repository.ts",
         "packages/db/test/administrative-role-setup.ts",
         "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/commands.integration.test.ts",
@@ -33,6 +34,7 @@
         "packages/db/test/lp5-parties-import.integration.test.ts",
         "packages/db/test/purchase-order-audit.test.ts",
         "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/recovery-message-repository.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/vitest.config.ts"
