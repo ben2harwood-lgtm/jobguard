@@ -28,6 +28,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.accounting_export_ledger":[],
  "app.accounting_export_outbox":[],
  "app.accounting_export_attempt":[],
+ "app.accounting_export_inbox":[],
 
  "app.small_builder_demo_run":[],
  "app.small_builder_demo_receipt":[],

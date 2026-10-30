@@ -785,7 +785,7 @@ async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 async function accountingExportAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after=await snapshot();
- const tables=["accounting_export_fixture","accounting_export_decision","accounting_export_ledger","accounting_export_outbox","accounting_export_attempt"];
+ const tables=["accounting_export_fixture","accounting_export_decision","accounting_export_ledger","accounting_export_outbox","accounting_export_attempt","accounting_export_inbox"];
  const indexes=[...tables.map(t=>`${t}_pkey`),"accounting_export_decision_tenant_id_id_source_id_key","accounting_export_ledger_tenant_id_reference_key"];
  const identities=[
   ["accounting_export","t uuid, digest text, operation text, source text, v jsonb"],

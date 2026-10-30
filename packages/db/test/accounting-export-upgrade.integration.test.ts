@@ -17,7 +17,7 @@ it("0484 alone preserves populated company, identity, job and financial predeces
  await applyMigration(c,migration);
  expect(await proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
  expect((await c.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE oid=ANY($1::oid[]) ORDER BY oid",[functions.map(row=>row.oid)])).rows).toEqual(functions);
- for(const name of ["fixture","decision","ledger","outbox","attempt"])expect((await c.admin.query(`SELECT * FROM app.accounting_export_${name}`)).rows).toEqual([]);
+ for(const name of ["fixture","decision","ledger","outbox","attempt","inbox"])expect((await c.admin.query(`SELECT * FROM app.accounting_export_${name}`)).rows).toEqual([]);
  await migrate(c.admin);await migrate(c.admin);
  expect(await proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
 },240000);

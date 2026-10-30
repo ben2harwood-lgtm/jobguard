@@ -19,7 +19,7 @@
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ],
-      "note": "M5-1 RED synthetic persistence atop unmerged m5-2-xero; shared contract docs and catalog expectation lists serialize with other migrations. Own lane file implicitly permitted.",
+      "note": "M5-1 RED synthetic persistence atop unmerged m5-2-xero; shared contract docs and catalog expectation lists serialize with other migrations. Follow-up binds reconciliation to the private fake-adapter inbox for the exact tenant and attempt. Own lane file implicitly permitted.",
       "test": "packages/db/test/accounting-export-executor.test.ts packages/db/test/accounting-export.integration.test.ts"
     }
   }

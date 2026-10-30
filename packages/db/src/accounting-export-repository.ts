@@ -5,14 +5,12 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 const uuid = z.string().uuid();
 const syntheticId = z.string().regex(/^demo-[a-z0-9-]{1,80}$/);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-const observation = z.object({ id: syntheticId, tenantId: syntheticId, reference: hash,
- contentHash: hash, paid: z.boolean(), payload: z.record(z.string(), z.unknown()) }).strict();
 const schemas = {
  preview: z.object({}).strict(), read: z.object({}).strict(),
  approve: z.object({ version: z.literal(1), decisionId: uuid, previewHash: hash,
   expiresAt: z.iso.datetime(), humanConfirmed: z.literal(true) }).strict(),
  claim: z.object({ version: z.literal(1), attemptId: uuid }).strict(),
- reconcile: z.object({ version: z.literal(1), attemptId: uuid, matches: z.array(observation).max(100) }).strict(),
+ reconcile: z.object({ version: z.literal(1), attemptId: uuid }).strict(),
 };
 export const storedAccountingExportV1 = z.object({ version: z.literal(1), sourceId: syntheticId,
  reference: hash, previewHash: hash, artifact: z.record(z.string(), z.unknown()),

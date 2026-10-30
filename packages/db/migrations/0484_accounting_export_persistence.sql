@@ -37,8 +37,18 @@ CREATE TABLE app.accounting_export_attempt (
  PRIMARY KEY(tenant_id,id),
  FOREIGN KEY(tenant_id,source_id) REFERENCES app.accounting_export_outbox(tenant_id,source_id)
 );
+-- Only the trusted fake adapter's administrative inbox connection can append observations.
+-- Runtime reconciliation cannot submit matches or manufacture evidence of absence.
+CREATE TABLE app.accounting_export_inbox (
+ tenant_id uuid NOT NULL, id uuid NOT NULL,
+ attempt_id uuid NOT NULL, matches jsonb NOT NULL,
+ observed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(tenant_id,id),
+ FOREIGN KEY(tenant_id,attempt_id) REFERENCES app.accounting_export_attempt(tenant_id,id),
+ CHECK(jsonb_typeof(matches)='array' AND jsonb_array_length(matches)<=100)
+);
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['accounting_export_fixture','accounting_export_decision','accounting_export_ledger','accounting_export_outbox','accounting_export_attempt'] LOOP
+ FOREACH n IN ARRAY ARRAY['accounting_export_fixture','accounting_export_decision','accounting_export_ledger','accounting_export_outbox','accounting_export_attempt','accounting_export_inbox'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
@@ -53,10 +63,10 @@ END $$;
 ALTER FUNCTION app.accounting_export_guard() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.accounting_export_guard() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['accounting_export_decision','accounting_export_ledger','accounting_export_attempt'] LOOP
+ FOREACH n IN ARRAY ARRAY['accounting_export_decision','accounting_export_ledger','accounting_export_attempt','accounting_export_inbox'] LOOP
   EXECUTE format('CREATE TRIGGER immutable_rows BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.accounting_export_guard()',n);
  END LOOP;
- FOREACH n IN ARRAY ARRAY['accounting_export_fixture','accounting_export_decision','accounting_export_ledger','accounting_export_outbox','accounting_export_attempt'] LOOP
+ FOREACH n IN ARRAY ARRAY['accounting_export_fixture','accounting_export_decision','accounting_export_ledger','accounting_export_outbox','accounting_export_attempt','accounting_export_inbox'] LOOP
   EXECUTE format('CREATE TRIGGER immutable_delete BEFORE DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.accounting_export_guard()',n);
   EXECUTE format('CREATE TRIGGER immutable_table BEFORE TRUNCATE ON app.%I FOR EACH STATEMENT EXECUTE FUNCTION app.accounting_export_guard()',n);
  END LOOP;
@@ -171,9 +181,14 @@ BEGIN
     UPDATE app.accounting_export_outbox SET status='outcome_unknown',attempt_id=attempt,attempts=attempts+1
      WHERE tenant_id=t AND source_id=source RETURNING * INTO o;
    ELSE
-    IF v-ARRAY['version','attemptId','matches']<>'{}'::jsonb OR jsonb_typeof(v->'matches') IS DISTINCT FROM 'array'
-     OR jsonb_array_length(v->'matches')>100 OR o.attempt_id IS DISTINCT FROM attempt THEN RAISE EXCEPTION 'EXPORT_REPLAY_CONFLICT'; END IF;
-    matches:=v->'matches'; observation:=matches->0;
+    IF v-ARRAY['version','attemptId']<>'{}'::jsonb THEN RAISE EXCEPTION 'EXPORT_INVALID_INPUT'; END IF;
+    IF o.attempt_id IS DISTINCT FROM attempt THEN RAISE EXCEPTION 'EXPORT_REPLAY_CONFLICT'; END IF;
+    SELECT i.matches INTO matches FROM app.accounting_export_inbox i
+     JOIN app.accounting_export_attempt a ON a.tenant_id=i.tenant_id AND a.id=i.attempt_id
+     WHERE i.tenant_id=t AND i.attempt_id=attempt AND a.source_id=source
+     ORDER BY i.observed_at DESC,i.id DESC LIMIT 1;
+    IF NOT FOUND THEN RAISE EXCEPTION 'EXPORT_OBSERVATION_REQUIRED'; END IF;
+    observation:=matches->0;
     IF jsonb_array_length(matches)>1 THEN next_status:='duplicate_import';
     ELSIF jsonb_array_length(matches)=0 THEN next_status:=CASE WHEN o.external_id IS NULL THEN 'confirmed_absent' ELSE 'reference_conflict' END;
     ELSIF observation->>'id' IS NULL OR observation->>'id' !~ '^demo-[a-z0-9-]{1,80}$' THEN RAISE EXCEPTION 'EXPORT_INVALID_INPUT';

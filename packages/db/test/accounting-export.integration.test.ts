@@ -4,7 +4,7 @@ import { cluster, type Cluster } from "./extra-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { AccountingExportRepository, storedAccountingExportV1 } from "../src/accounting-export-repository.js";
-import { pushStoredAccountingExport } from "../../../apps/api/src/accounting-export.persisted.js";
+import { pushStoredAccountingExport, FakeAccountingExportInbox } from "../../../apps/api/src/accounting-export.persisted.js";
 import { FakeCodatAdapter } from "../../../apps/api/src/accounting-export.fake.js";
 import { AccountingExportSandbox } from "../../../apps/api/src/accounting-export.sandbox.js";
 import { ctx, scope, source, consent } from "../../../apps/api/src/accounting-export.test-fixtures.js";
@@ -24,8 +24,9 @@ async function setup() {
  const call = (op: Parameters<typeof repo.execute>[2], input: unknown = {}) => repo.execute(a.context, a.digest, op, source.sourceId, input);
  const preview = await call("preview") as { previewHash: string };
  const approval = { version: 1, decisionId: randomUUID(), previewHash: preview.previewHash, expiresAt: new Date(Date.now() + 600000).toISOString(), humanConfirmed: true };
- const push = () => pushStoredAccountingExport(new AccountingExportRepository(c.runtime), a.context, a.digest, source.sourceId, adapter);
- return { a, adapter, repo, artifact, call, approval, push };
+ const inbox = new FakeAccountingExportInbox(c.admin, adapter);
+ const push = () => pushStoredAccountingExport(new AccountingExportRepository(c.runtime), a.context, a.digest, source.sourceId, inbox);
+ return { a, adapter, repo, artifact, call, approval, push, inbox };
 }
 it("one document persists once across concurrent approvals, retries and repository restart", async () => {
  const f = await setup();
@@ -54,9 +55,12 @@ it("a racing or abandoned claim cannot execute twice; stale attempts cannot over
  const results = await Promise.allSettled([f.call("claim", { version: 1, attemptId }), f.call("claim", { version: 1, attemptId: randomUUID() })]);
  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
  const entry = storedAccountingExportV1.parse(await f.call("read"));
- await f.call("reconcile", { version: 1, attemptId: entry.attemptId, matches: [] });
+ await expect(f.call("reconcile", { version: 1, attemptId: entry.attemptId })).rejects.toThrow("EXPORT_OBSERVATION_REQUIRED");
  await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
- await expect(f.call("reconcile", { version: 1, attemptId: randomUUID(), matches: [] })).rejects.toThrow("EXPORT_REPLAY_CONFLICT");
+ await f.inbox.observe(f.a.context, entry);
+ await f.call("reconcile", { version: 1, attemptId: entry.attemptId });
+ await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
+ await expect(f.call("reconcile", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_REPLAY_CONFLICT");
  expect(f.adapter.pushes).toBe(0);
 });
 it("changed company, mapping or source revision invalidates an approval and never rewrites history", async () => {
@@ -86,7 +90,10 @@ it("external paid never becomes proof, external edits and duplicate imports requ
  const f = await setup(); await f.call("approve", f.approval); await f.push();
  f.adapter.objects[0]!.paid = true;
  const entry = storedAccountingExportV1.parse(await f.call("read"));
- const reconcile = () => f.call("reconcile", { version: 1, attemptId: entry.attemptId, matches: f.adapter.objects });
+ const reconcile = async () => {
+  await f.inbox.observe(f.a.context, entry);
+  return f.call("reconcile", { version: 1, attemptId: entry.attemptId });
+ };
  expect(await reconcile()).toMatchObject({ status: "pushed", qualifyingRecoveryProof: false });
  f.adapter.objects[0]!.payload.amount.pence++;
  expect(await reconcile()).toMatchObject({ status: "external_edit", qualifyingRecoveryProof: false });
@@ -96,11 +103,14 @@ it("external paid never becomes proof, external edits and duplicate imports requ
 });
 it("tables deny all runtime writes and reads, force RLS and preserve immutable records", async () => {
  const f = await setup(); await f.call("approve", f.approval);
- for (const name of ["fixture", "decision", "ledger", "outbox", "attempt"]) {
+ for (const name of ["fixture", "decision", "ledger", "outbox", "attempt", "inbox"]) {
   const table = `app.accounting_export_${name}`;
   expect((await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid=$1::regclass", [table])).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true, allowed: false });
   await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({ code: "42501" });
  }
+ await expect(c.runtime.query("INSERT INTO app.accounting_export_inbox(tenant_id,id,attempt_id,matches) VALUES($1,$2,$3,'[]')",
+   [f.a.tenantId, randomUUID(), randomUUID()])).rejects.toMatchObject({ code: "42501" });
+ expect((await c.admin.query("SELECT has_table_privilege('jobguard_infrastructure','app.accounting_export_inbox','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed")).rows[0].allowed).toBe(false);
  await expect(c.admin.query("UPDATE app.accounting_export_ledger SET company_id='demo-other' WHERE tenant_id=$1", [f.a.tenantId])).rejects.toThrow("EXPORT_IMMUTABLE");
  expect((await c.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
 });
@@ -134,4 +144,29 @@ it("unlocked final-account fixtures are refused; combined receipt/credit reserva
    await run("approve", { ...f.approval, decisionId: randomUUID(), previewHash: preview.previewHash });
   }
  }
+});
+
+it("SQL rejects caller matches and ignores inbox observations for another tenant or attempt", async () => {
+ const f = await setup(), other = await setup();
+ await f.call("approve", f.approval); await other.call("approve", other.approval);
+ const attemptId = randomUUID();
+ const entry = storedAccountingExportV1.parse(await f.call("claim", { version: 1, attemptId }));
+ const otherEntry = storedAccountingExportV1.parse(await other.call("claim", { version: 1, attemptId }));
+ await other.inbox.observe(other.a.context, otherEntry);
+ const unrelatedAttempt = randomUUID();
+ await c.admin.query("INSERT INTO app.accounting_export_attempt(tenant_id,id,source_id) VALUES($1,$2,$3)",
+  [f.a.tenantId, unrelatedAttempt, source.sourceId]);
+ await c.admin.query("INSERT INTO app.accounting_export_inbox(tenant_id,id,attempt_id,matches) VALUES($1,$2,$3,'[]')",
+  [f.a.tenantId, randomUUID(), unrelatedAttempt]);
+ await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(
+  "SELECT app.accounting_export($1,$2,'reconcile',$3,$4::jsonb)",
+  [f.a.tenantId, f.a.digest, source.sourceId, JSON.stringify({ version: 1, attemptId, matches: [] })]
+ ))).rejects.toThrow("EXPORT_INVALID_INPUT");
+ await expect(f.call("reconcile", { version: 1, attemptId })).rejects.toThrow("EXPORT_OBSERVATION_REQUIRED");
+ expect(await f.call("read")).toMatchObject({ status: "outcome_unknown", attempts: 1 });
+ await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
+ await f.inbox.observe(f.a.context, entry);
+ expect(await f.call("reconcile", { version: 1, attemptId })).toMatchObject({ status: "confirmed_absent" });
+ await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");
+ await expect(c.admin.query("UPDATE app.accounting_export_inbox SET matches='[]' WHERE tenant_id=$1", [f.a.tenantId])).rejects.toThrow("EXPORT_IMMUTABLE");
 });
