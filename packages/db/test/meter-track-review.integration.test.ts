@@ -89,7 +89,7 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   expect(first.map(d => d.action_type)).toEqual(["subscription.track_review", "subscription.upgrade"]);
   const secondClose = await work(a, "close", 2, { reason: "other", note: "Fictional stop again" });
   await work(a, "reopen", 1, extra, id); // old result cannot restore capacity
-  await work(a, "reopen", 3, { closeEventId: secondClose.events[0]!.id });
+  await work(a, "reopen", 3, { closeEventId: secondClose.events.at(-1)!.id });
   expect(await decisions(a)).toEqual(first);
   await boundaryLock(f, a);
   const locked = (await f.admin.query("SELECT to_jsonb(l) value FROM app.final_account_lock l WHERE tenant_id=$1", [a.tenantId])).rows;

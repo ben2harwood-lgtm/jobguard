@@ -48,3 +48,17 @@ stopped; direct installed binaries were used without downloads. The initial
 Vitest attempt had 10 passing tests and a missing core dist import; building the
 existing dependency resolved it. PostgreSQL and browser suites remain for CI
 after the router pushes; no local database/browser verification is claimed.
+
+PR #426 CI repair try 1 (30 October 2026), job 124188484524:
+core-db shard 4 passed 1200 tests and failed only the repeated reopen fixture
+at meter-track-review.integration.test.ts:92. Work-state responses contain the
+complete ordered history, so secondClose.events[0] references the first close,
+already reopened. Referencing secondClose.events.at(-1) supplies the current
+close required by the unchanged transition contract. Only this fixture input
+changes; assertions, production code and migrations are untouched.
+
+Local checks with installed binaries: db source suites meter-track-review and
+meter-work-admission passed 10 tests; core job-work-state-commands passed 6
+tests (including current-close binding); db TypeScript --noEmit, source lint
+and lane validation, and git diff --check passed. PostgreSQL cannot start in
+this sandbox, so the repaired integration case awaits the router's CI rerun.
