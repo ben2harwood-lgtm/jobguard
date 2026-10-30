@@ -77,7 +77,7 @@ DECLARE t uuid; actor record; c record; a record; approval app.action_authorizat
  sources jsonb:='[]'; parts jsonb:='[]'; statement jsonb; result jsonb; pair numeric[];
  posting_revision integer; posted bigint; fee bigint; delta bigint; deadline timestamptz; source_deadline timestamptz;
  cid uuid; rid uuid:=gen_random_uuid(); did uuid:=gen_random_uuid(); jid uuid;
- decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); authorization uuid:=gen_random_uuid();
+ decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); auth_id uuid:=gen_random_uuid();
  inputs jsonb; original record; remaining bigint; portion bigint; compensations jsonb:='[]';
  digest text; action text:=p_command->>'action';
 BEGIN
@@ -171,9 +171,9 @@ BEGIN
   rid:=saved.id; decision:=saved.decision_id;
   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution,t,decision,'approved',actor.member_id);
   INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
-   VALUES(authorization,t,decision,resolution,actor.member_id,'success_fee.post','jobguard:synthetic_fee_ledger',digest,abs(delta),'GBP',posting_revision,'reference_fee_policy_v3',least(deadline,saved.expires_at));
+   VALUES(auth_id,t,decision,resolution,actor.member_id,'success_fee.post','jobguard:synthetic_fee_ledger',digest,abs(delta),'GBP',posting_revision,'reference_fee_policy_v3',least(deadline,saved.expires_at));
   INSERT INTO app.success_fee_derivation(tenant_id,job_id,id,review_id,revision,authorization_id,qualifying_numerator,qualifying_denominator,fee_pence,prior_pence,delta_pence,statement_hash)
-   VALUES(t,p_job,did,rid,posting_revision+1,authorization,trunc(pair[1])::text,trunc(pair[2])::text,fee,posted,delta,digest);
+   VALUES(t,p_job,did,rid,posting_revision+1,auth_id,trunc(pair[1])::text,trunc(pair[2])::text,fee,posted,delta,digest);
   INSERT INTO app.success_fee_source(tenant_id,job_id,derivation_id,assessment_id,allocation_id,review_authorization_id,case_id,work_id,line_id,lock_id)
    SELECT t,p_job,did,(s->>'assessmentId')::uuid,x::uuid,(s->>'reviewAuthorizationId')::uuid,ar.case_id,ar.work_id,ar.line_id,ar.lock_id
    FROM jsonb_array_elements(sources) s CROSS JOIN LATERAL jsonb_array_elements_text(s->'allocationIds') x
