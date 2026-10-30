@@ -108,9 +108,17 @@ it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer indepen
  const x=await catchFeeFixture(f),review=await x.execute(),p=approve(review),before=await counts(x);
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
   if(attack==="unsettled"){
-   await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER USER");
-   await db.query("UPDATE app.practice_feed_event SET state='pending' WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId]);
-   await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER USER");
+   // Rollback-only corruption: keep the pending tuple and receipt FK valid while
+   // bypassing immutability and immediate FK checks during the paired updates.
+   await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER ALL");
+   await db.query("ALTER TABLE app.practice_feed_receipt_match DISABLE TRIGGER ALL");
+   const pending=await db.query("UPDATE app.practice_feed_event SET state='pending',event_kind='pending',event_id='pending-'||movement_key WHERE tenant_id=$1 AND job_id=$2 AND id=$3 RETURNING account_id,event_id,movement_key,state,event_kind,identity,representation_id",[x.context.tenantId,x.jobId,x.fact.movementId]);
+   expect(pending.rows).toHaveLength(1);
+   expect(pending.rows[0]).toMatchObject({state:"pending",event_kind:"pending",identity:"identified",representation_id:"feed"});
+   const match=await db.query("UPDATE app.practice_feed_receipt_match SET settled_event_id=$1 WHERE tenant_id=$2 AND job_id=$3 AND account_id=$4 AND movement_key=$5",[pending.rows[0].event_id,x.context.tenantId,x.jobId,pending.rows[0].account_id,pending.rows[0].movement_key]);
+   expect(match.rowCount).toBe(1);
+   await db.query("ALTER TABLE app.practice_feed_receipt_match ENABLE TRIGGER ALL");
+   await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER ALL");
   }else if(attack==="allocation_limit"){
    await db.query("ALTER TABLE app.stored_receipt_case_allocation DISABLE TRIGGER USER");
    await db.query("UPDATE app.stored_receipt_case_allocation SET net_numerator='80001' WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);
