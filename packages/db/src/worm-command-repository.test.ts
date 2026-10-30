@@ -18,6 +18,7 @@ const command = () => ({ version: "worm.command.v1" as const, policyVersion: "sy
   jobId: randomUUID(), evidenceId: randomUUID(), action: "apply_hold" as const });
 const pool = {} as Pool;
 const executorPool = {} as Pool;
+const operatorPool = {} as Pool;
 const repo = () => new WormCommandRepository(pool, true, executorPool);
 let row: WormReceipt;
 let attempts: number;
@@ -30,6 +31,9 @@ beforeEach(() => {
     action: c.action, payload: c, object_key: `synthetic/tenants/${context.tenantId}/one`,
     object_version_id: "immutable-v1", imprint: "a".repeat(64), attempts: 0, status: "queued", result: null };
   fake.query.mockImplementation(async (sql: string, values: unknown[]) => {
+    if (sql.includes("session_user")) return { rows: [{ operator_ref: "synthetic_operator" }] };
+    if (sql.includes("worm_reconcile")) row = { ...row,
+      status: values[2] === (row.action === "apply_hold") ? "applied" : "outcome_unknown" };
     if (sql.includes("pg_advisory")) return { rows: [] };
     if (sql.includes("worm_claim")) { if (["queued", "pending"].includes(row.status)) row = { ...row, status: "executing", attempts: ++attempts }; }
     if (sql.includes("worm_finish")) row = { ...row, status: values[2] as WormReceipt["status"], result: JSON.parse(values[3] as string) };
@@ -115,5 +119,63 @@ describe("dark durable WORM application", () => {
   it("sanitizes SQL exceptions", async () => {
     fake.query.mockRejectedValue(new Error("tenant secrets"));
     await expect(repo().submit(context, command())).rejects.toThrow(/^WORM_REFUSED$/);
+  });
+});
+
+describe("read-only operator WORM recovery", () => {
+  const request = () => ({ version: "worm.recovery.v1", commandId: row.id });
+  const operator = () => new WormCommandRepository(pool, true, executorPool, operatorPool);
+  it("requires the dark switch, strict versioned input and separate operator credentials before reading", async () => {
+    await expect(new WormCommandRepository(pool).recover(context, request(), storage)).rejects.toThrow("DARK_ONLY");
+    await expect(repo().recover(context, request(), storage)).rejects.toThrow("WORM_REFUSED");
+    for (const extra of [{ tenantId: context.tenantId }, { operator: true }, { held: true }, { version: "v2" }]) {
+      await expect(operator().recover(context, { ...request(), ...extra }, storage)).rejects.toThrow("INVALID_INPUT");
+    }
+    expect(fake.query).not.toHaveBeenCalled(); expect(storage.read).not.toHaveBeenCalled();
+  });
+  it.each(["executing", "outcome_unknown"] as const)("reconciles %s once after restart, without a mutation", async status => {
+    row.status = status; row.attempts = 1;
+    vi.mocked(storage.read).mockImplementation(async target => {
+      expect(fake.transactions).toBe(0);
+      expect(target).toEqual({ tenantId: context.tenantId, key: row.object_key, versionId: "immutable-v1" });
+      return { held: true, retainUntil: null };
+    });
+    expect((await operator().recover(context, request(), storage)).status).toBe("applied");
+    await operator().recover(context, request(), storage);
+    expect(storage.read).toHaveBeenCalledTimes(1);
+    expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
+    expect(fake.audit).toHaveBeenCalledTimes(1);
+    expect(fake.audit.mock.calls[0]?.[1][0]).toMatchObject({ eventType: "worm.reconciled", actorRef: expect.stringMatching(/^worm-operator:/) });
+    expect(fake.pools.every(p => p === operatorPool)).toBe(true);
+  });
+  it.each(["mismatch", "missing", "malformed"])("keeps %s readback unknown without leaking details or retrying writes", async mode => {
+    row.status = "outcome_unknown"; row.attempts = 1;
+    if (mode === "missing") vi.mocked(storage.read).mockRejectedValue(new Error("secret object key"));
+    else vi.mocked(storage.read).mockResolvedValue({ held: mode === "malformed" ? undefined as unknown as boolean : false, retainUntil: null });
+    expect((await operator().recover(context, request(), storage)).status).toBe("outcome_unknown");
+    expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
+    expect(JSON.stringify(fake.audit.mock.calls)).not.toContain("secret");
+  });
+  it("reconciles release only from an observed OFF hold", async () => {
+    row.status = "executing"; row.attempts = 1; row.action = "release_hold";
+    expect((await operator().recover(context, request(), storage)).status).toBe("outcome_unknown");
+    vi.mocked(storage.read).mockResolvedValue({ held: false, retainUntil: null });
+    expect((await operator().recover(context, request(), storage)).status).toBe("applied");
+    expect(storage.hold).not.toHaveBeenCalled();
+  });
+  it("refuses unauthorized or cross-tenant SQL targets before object access", async () => {
+    fake.query.mockRejectedValue(new Error("WORM_REFUSED"));
+    await expect(operator().recover(context, request(), storage)).rejects.toThrow(/^WORM_REFUSED$/);
+    expect(storage.read).not.toHaveBeenCalled();
+  });
+  it("collapses concurrent recoveries to one audited effect", async () => {
+    row.status = "outcome_unknown"; row.attempts = 1;
+    // Emulate another operator committing while this operator is outside its transaction.
+    vi.mocked(storage.read).mockImplementation(async () => {
+      row.status = "applied"; return { held: true, retainUntil: null };
+    });
+    expect((await operator().recover(context, request(), storage)).status).toBe("applied");
+    expect(fake.query.mock.calls.some(([sql]) => sql.includes("worm_reconcile"))).toBe(false);
+    expect(fake.audit).not.toHaveBeenCalled();
   });
 });

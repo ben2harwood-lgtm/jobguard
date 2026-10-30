@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WormBoundaryError, type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
@@ -44,7 +44,7 @@ async function audit(db: TenantTransaction, c: WormReceipt, phase: string) {
  */
 export class WormCommandRepository {
   constructor(private readonly pool: Pool, private readonly enabled = false,
-    private readonly executorPool?: Pool) {}
+    private readonly executorPool?: Pool, private readonly operatorPool?: Pool) {}
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
 
   async submit(context: VerifiedTenantContext, input: unknown): Promise<WormReceipt> {
@@ -106,6 +106,41 @@ export class WormCommandRepository {
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_finish($1,$2,$3,$4::jsonb)",
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
       await audit(db, finished, status);
+      return finished;
+    }).catch(refuse);
+  }
+
+  /** Operator reconciliation only: exact-version reads, never a storage mutation or retry.
+   * Separate operator credentials are the authority; no caller-supplied role flag is accepted.
+   */
+  async recover(context: VerifiedTenantContext, input: unknown,
+    storage: Pick<WormStorage, "read">): Promise<WormReceipt> {
+    this.requireDark();
+    const parsed = z.object({ version: z.literal("worm.recovery.v1"), commandId: uuid }).strict().safeParse(input);
+    if (!parsed.success) throw new WormCommandError("INVALID_INPUT");
+    if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
+    const { commandId } = parsed.data;
+    const c = await withTenant(this.operatorPool, context, async db =>
+      (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_recovery_target($1)", [commandId])).rows[0]!
+    ).catch(refuse);
+    if (c.status === "applied") return c;
+    let observed: boolean | null = null;
+    try {
+      const state = await storage.read({ tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id });
+      if (typeof state.held === "boolean") observed = state.held;
+    } catch { /* Unavailable/missing readback cannot prove the write; leave unresolved. */ }
+    return withTenant(this.operatorPool, context, async db => {
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
+      const prior = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_recovery_target($1)", [commandId])).rows[0]!;
+      if (prior.status === "applied") return prior; // Concurrent reconciliation already committed.
+      const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_reconcile($1,$2,$3)",
+        [commandId, c.attempts, observed])).rows[0]!;
+      const operator = (await db.$client.query<{ operator_ref: string }>("SELECT session_user::text AS operator_ref")).rows[0]!;
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1",
+        actorRef: `worm-operator:${createHash("sha256").update(operator.operator_ref).digest("hex")}`,
+        eventType: "worm.reconciled", subjectType: "evidence", subjectRef: finished.evidence_id,
+        payload: { references: { command: finished.id, action: finished.action, status: finished.status },
+          hashes: { imprint: finished.imprint.trim() } } }]);
       return finished;
     }).catch(refuse);
   }

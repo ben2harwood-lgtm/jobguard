@@ -61,3 +61,41 @@ an approved timestamp provider/trust and algorithm policy, durable command/outbo
 token and audit persistence, independently restricted checkpoint retention, and
 actual configured production-store validation. No database migration is needed for
 this adapter-only synthetic slice.
+
+## M4-4 synthetic operator recovery (0488)
+
+A crashed `executing` or `outcome_unknown` durable hold/release command is blocked
+from worker retries. Provision a separate operator login inheriting
+`jobguard_worm_operator`; runtime and `jobguard_worm_executor` must never receive
+that role. The operator role inherits tenant-scoped runtime reads/audit access but
+has no executor claim/finish privilege. Its SQL recovery routines are inaccessible
+to runtime, executors and PUBLIC. Operator credentials remain outside the repository.
+
+In the synthetic harness, pass that separately provisioned pool as the fourth
+`WormCommandRepository` constructor argument and invoke `recover(verifiedContext,
+{ version: "worm.recovery.v1", commandId }, storageReader)`. The input accepts no
+role, tenant, object key, version or observed outcome supplied by a user. Use a
+verified, explicitly scoped tenant context and the registered exact-version reader.
+There is no HTTP recovery route or live activation switch.
+
+Recovery reads the persisted key and immutable version outside a transaction. It
+never invokes hold, retention, PUT, overwrite, deletion or another storage write.
+A readback matching the original hold/release intent reconciles the existing attempt
+to `applied`; it creates no new attempt or command. Missing, unavailable, malformed
+or mismatched readback remains `outcome_unknown`, with no automatic rewrite. This
+state requires operator investigation; it is not permission to remove protection or
+mark a timestamp anchored. Timestamp requests are outside this recovery path.
+
+The transaction checks the original attempt number, serializes completion with
+workers/operators, and atomically records reconciliation and a `worm.reconciled`
+audit event. Its actor reference hashes the database operator login, rather than
+attributing recovery to the builder who authorized the original command. Successful
+replay returns the existing result without storage I/O or another audit effect.
+No provider error text or object key enters the audit payload. The trust boundary
+includes the separately provisioned operator login and its configured storage reader;
+readback confirms protection state, not the authenticity of the evidence's contents.
+
+Migration 0488 adds only the operator role and two routines; it does not replace old
+routines or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
+audit and immutable versions. D07, production residency/store validation and RED review
+remain required before release. The fake-adapter tests are not live-provider proof.

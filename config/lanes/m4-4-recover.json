@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-4-recover": {
+      "branches": [
+        "codex/sandbox/m4-4-recover"
+      ],
+      "note": "M4-4 RED: read-only operator recovery on m4-4-persist; migration 0488. Parent persistence must merge first. Exact shared catalogue union includes prerequisite 0455 objects.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/evidence-storage.md",
+        "packages/db/migrations/0488_worm_operator_recovery.sql",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/worm-command.integration.test.ts"
+      ]
+    }
+  }
+}
