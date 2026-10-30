@@ -54,18 +54,27 @@ it("#346 refuses another job/session/tenant, even when IDs and saved facts are v
  await expect(repo.assess(x.context,other.jobId,other.auth.digest,p)).rejects.toThrow("RECOVERY_ATTRIBUTION_SOURCE_REQUIRED");
  await expect(repo.assess(x.context,x.jobId,other.auth.digest,p)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
  await expect(repo.assess(testTenantContext(randomUUID()),x.jobId,x.auth.digest,p)).rejects.toThrow();
- // A forged 0258 source FK can point at a same-tenant, other-job movement.
- // Deliberately corrupt only that immutable source inside a rolled-back admin
- // transaction: the producer approval/hash remains intact, so the writer itself
- // must check job binding. No fixture relies on disabled constraints to succeed.
+ // The job-qualified FK now stops corruption before the private resolver runs.
+ // Prove that boundary first, then remove only that FK inside this rolled-back
+ // admin transaction to retain the resolver's independent job-binding attack.
+ // The producer approval/hash remains intact. No successful fixture bypasses a guard.
+ const sources=()=>f.admin.query("SELECT row_to_json(s)::text bytes FROM app.receipt_allocation_fact_source s WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[x.context.tenantId,x.jobId]);
+ const before=(await sources()).rows;
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
-  await db.query("ALTER TABLE app.receipt_allocation_fact_source DISABLE TRIGGER USER");
+  await db.query("ALTER TABLE app.receipt_allocation_fact_source DISABLE TRIGGER receipt_fact_immutable");
   const movement=(await db.query("SELECT movement_id,movement_hash FROM app.receipt_allocation_fact_source WHERE tenant_id=$1 AND job_id=$2 LIMIT 1",[x.context.tenantId,other.jobId])).rows[0];
-  await db.query("UPDATE app.receipt_allocation_fact_source SET movement_id=$1,movement_hash=$2 WHERE tenant_id=$3 AND job_id=$4",[movement.movement_id,movement.movement_hash,x.context.tenantId,x.jobId]);
-  await db.query("ALTER TABLE app.receipt_allocation_fact_source ENABLE TRIGGER USER");
+  const corrupt=()=>db.query("UPDATE app.receipt_allocation_fact_source SET movement_id=$1,movement_hash=$2 WHERE tenant_id=$3 AND job_id=$4",[movement.movement_id,movement.movement_hash,x.context.tenantId,x.jobId]);
+  await db.query("SAVEPOINT movement_job_fk");
+  await expect(corrupt()).rejects.toMatchObject({code:"23503",constraint:"receipt_fact_source_job_movement_fk"});
+  await db.query("ROLLBACK TO SAVEPOINT movement_job_fk");
+  await db.query("ALTER TABLE app.receipt_allocation_fact_source DROP CONSTRAINT receipt_fact_source_job_movement_fk");
+  expect((await corrupt()).rowCount).toBe(1);
+  await db.query("ALTER TABLE app.receipt_allocation_fact_source ENABLE TRIGGER receipt_fact_immutable");
   // Invoke the private resolver as its owning role, not as a fake authenticated runtime.
   await db.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4)",[x.context.tenantId,x.jobId,p,x.actor.membershipId]);
  })).rejects.toThrow("RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED");
+ expect((await sources()).rows).toEqual(before);
+ expect((await f.admin.query("SELECT convalidated FROM pg_constraint WHERE conrelid='app.receipt_allocation_fact_source'::regclass AND conname='receipt_fact_source_job_movement_fk'")).rows).toEqual([{convalidated:true}]);
 });
 it.each(["refund","credit","evidence"] as const)("%s appends an excluded assessment and preserves the prior £800 assessment",async kind=>{
  const x=await realReceiptFixture(f);await allocate(x);const first=await assess(x,await command(x));
