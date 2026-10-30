@@ -122,6 +122,12 @@ function checkMigration(sql: string): { bodies: number; conditions: number } {
 }
 
 describe("CH-4 migration syntax without PostgreSQL", () => {
+  it("checks the on-site diary replacement bodies and CASE conditions in migration 0477", async () => {
+    const file = await readFile(new URL("../migrations/0477_onsite_diary_admission.sql", import.meta.url), "utf8");
+    const checked = checkMigration(file);
+    expect(checked.bodies).toBe(4);
+    expect(checked.conditions).toBeGreaterThan(40);
+  });
   it("checks every dollar body and IF/ELSIF condition in the exact query migrate sends", async () => {
     const queries: string[] = [];
     await migrate({ query: async (sql: string, values?: unknown[]) => {
