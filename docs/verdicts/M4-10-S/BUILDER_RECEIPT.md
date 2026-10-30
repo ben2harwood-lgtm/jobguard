@@ -12,6 +12,45 @@ only new migration; no predecessor migration was changed. No git write command,
 provider, live money, customer data or local database/browser service was used.
 The router owns the finish-list/Command Center line and commit/push/PR.
 
+## 30 October 2026 — approval renewal and correction direction follow-up (RED)
+
+Changed only branch-own 0490, its existing PostgreSQL suite, this receipt and
+its statement contract. A fresh approval command checks the current source
+snapshot before selecting any usable authorization. After expiry it creates a
+new immutable Decision/resolution/authorization for the same numbered statement;
+the initial Decision, expired authorization and replay receipt remain unchanged.
+Existing current approvals are reused. Renewal uses the existing locks and
+approval audit transaction; no new table, routine, privilege or abstraction.
+Negative statements record direction as `success_fee.statement_correction_approve`
+on both Decision and authorization while retaining the common nonnegative amount
+invariant. Positive approvals use `success_fee.statement_approve`. Neither is
+collection authority. M4-12-S must enforce its own exact collection action and
+current eligibility. **m4-12-s-collect and later chain branches need a catch-up
+onto this head**, including the directional action and renewal Decision lookup.
+
+Adversarial PostgreSQL tests added (CI execution still owed): expired approval
+cannot reach an adapter or create an attempt; replay never renews it; a new command
+produces a separate audited Decision/resolution/authorization and preserves saved
+bytes; repeated approval reuses only the current authorization; changed receipt
+sources refuse renewal without adding Decisions or authorizations. The existing
+reversal/correction test now checks explicit direction and injects attempted
+positive-statement/collection outbox substitutions as test owner, asserting the
+real executor refuses delivery/attempts. Test-only expiry mutation is confined to
+the owner transaction; production immutable-authorization guards are unchanged.
+
+Executed follow-up checks, installed binaries, Node v24.17.0, no downloads:
+
+- In `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=2 test/simulation-fee-statement-catalog.test.ts src/simulation-fee-statement-repository.test.ts test/lp-0-catalog.test.ts`: **32 passed**.
+- In `packages/core`, `./node_modules/.bin/vitest run --maxWorkers=2 src/issued-simulation-fee-statement.test.ts src/simulation-fee-statement.test.ts src/success-fee-catch-posting.test.ts`: **62 passed**, including statement/correction representations.
+- In `packages/db`, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed (source typecheck).
+- In `packages/db`, Vitest `list` for `test/simulation-fee-statement.integration.test.ts` and `test/simulation-fee-statement-upgrade.integration.test.ts` discovered all ten tests, including both new cases; collection only, no PostgreSQL execution.
+- `node tools/plpgsql-case-in-if-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs` and `git diff --check`: passed.
+- Exact lane path assertion against posting base `51ce7389`: all 29 non-lane paths match the existing allow list. No lane expansion needed. LP inventories and SERIOUS-B5 remain byte-for-byte unchanged from HEAD. Read-only tree inspection confirms 0490 is absent from local `origin/main`; no main migration was edited or renumbered.
+
+Full CI/database/migration/browser gates and the independent exact-head RED review
+remain required after router commit/push. No git writes, real data, live provider,
+collection, release or merge. Router owns the finish-list/Command Center update.
+
 ## Implemented behavior and controls
 
 - Two private, tenant-qualified, FORCE-RLS immutable tables: numbered documents
@@ -34,7 +73,7 @@ The router owns the finish-list/Command Center line and commit/push/PR.
 - Explicit issue/approve commands, current authenticated owner/job/session,
   original receipt replay, changed-payload refusal, source fences, current-source
   approval checks and atomic audit. Approval uses a nonnegative amount magnitude
-  to preserve the existing authorization invariant; the signed delta is hash-bound.
+  and an explicit correction-approval action for negative deltas; the signed delta is hash-bound.
   It is a statement approval, never collection authority.
 - Original bytes survive reversal. One changed source snapshot yields one linked
   documentary correction even across concurrent issue IDs/replays. Corrections
@@ -100,7 +139,7 @@ New real-PostgreSQL suites (not run in this sandbox):
 `simulation-fee-statement.integration.test.ts` and
 `simulation-fee-statement-upgrade.integration.test.ts`. They use genuine
 receipt/allocation/attribution/posting writers, then assert source-linked issuance,
-correction replay/concurrency, negative-document approval magnitude, unchanged
+correction replay/concurrency, negative-document approval magnitude/direction, unchanged
 original downloads, stale hashes and assessments, audit rollback, direct-write
 refusal, cross-tenant empty RLS reads, populated predecessor preservation and
 repeat migration safety. Their genuine existing F7 fixture is £80 -> £0; the
