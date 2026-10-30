@@ -1029,3 +1029,38 @@ Database upgrade/integration tests, HTTP/browser journeys, full CI and the RED
 review still run through the router. This is a local repair handoff, not an
 independent review or merge/release claim.
 Commit message: /tmp/mon8-upgrade-successors-20261029T154727Z-commit-msg.txt.
+
+### 30 October 2026 — PR #302 main-merge catch-up
+
+Resolved the two pending working-tree conflicts against origin/main and MERGE_HEAD
+`cd8703fc90885ecada114adce4d7aa7d9b739065` in the LP-0 inventory and contractor
+entitlement upgrade proof. The MON-8 side already contained the union: retain its
+seven routine inventory additions and successor list, including every main
+successor expectation, without changing expected values or runtime behaviour.
+No routine was rebuilt. In particular, app.mon2_issue remains the latest main
+body from 0374_subscription_first_period_safety.sql; neither 0378 nor 0379
+redefines it. Main ends at 0375, so 0378/0379 retain their numbers and are
+byte-identical to starting HEAD. No migration already on main was edited.
+The existing lane remains exact and needs no edit.
+
+Local validation (installed binaries, no package downloads, at most two workers):
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  test/mon8-combined-migration.test.ts src/plan-entitlement-service.test.ts:
+  2 files, 13 tests passed.
+- Root: ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit: passed.
+- Focused TypeScript compiler program for
+  packages/db/test/contractor-entitlement-upgrade.integration.test.ts using
+  packages/db/tsconfig.json with noEmit and repository rootDir: zero diagnostics.
+- node tools/plpgsql-case-in-if-lint.mjs: 157 migrations, zero exceptions, passed.
+- Read-only comparisons: all 315 latest-main migration/lane files identical;
+  every latest-main LP-0 value retained; all 63 explicit main empty-successor
+  entries plus all 11 final-check tables retained; HEAD successor list unchanged.
+- Exact filesystem delta against origin/main: 98 paths, exactly the lane allow
+  list plus its own lane file. No conflict markers remain. git diff --check passed.
+
+Git index remains unmerged because this sandbox cannot write .git. Router must
+stage the two resolved files and complete the merge, commit and push. Database
+and browser suites were not run: PostgreSQL startup and localhost binding are
+unavailable here. GitHub CI and the exact-head independent RED review remain
+required. No independent-review, merge or release claim is made.
+Commit message: /tmp/mon8-upgrade-successors-20261030T155215Z-commit-msg.txt.
