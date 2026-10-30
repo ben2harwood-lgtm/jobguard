@@ -1494,3 +1494,73 @@ files as unmerged until the router stages them because .git is read-only here.
 PostgreSQL, migration execution and browser suites were not run: this sandbox
 cannot start PostgreSQL or bind localhost. Full required checks remain for GitHub
 CI after push; independent RED review remains required before merge.
+
+## 30 October 2026 — ch6-gaps before-live regressions (RED)
+
+Plan piece CH-6, built ahead on `codex/sandbox/ch6-gaps` from ch6-j
+187d536e (PR #392). Scope: supplementary-descendant catch evidence, cross-tenant
+lock contention, and inventory of workspace-dependent routes. No Ben decision
+is required. Router owns list/work-line updates and commit/push/PR after the base
+merges. This change is ready for that handoff, not database-verified or merged.
+
+Exact source inspection found the requested production fixes already in the
+base. The historical 0395 writer uses table-wide SHARE locks; the latest
+`app.ch6_record_integrity_review` in 0396 replaces it with tenant/job-qualified
+FOR SHARE locks, including session-owned jobs for related-quote comparisons.
+No later migration redefines it. Keep that implementation: no migration is edited
+or recreated, no new grants or shared expectation changes are needed.
+
+The existing published integration test uses real Final Check reconciliation,
+catch confirmation, pricing/approval, final and supplementary invoice issuance,
+and persisted advisory review/replay. Its baseline and descendant revision
+assembly are explicitly synthetic fixture SQL with triggers/FKs enabled; it does
+not exercise `FinalAccountCommandService.assemble` (this fixture has no frozen
+quote-document/line setup for that service). Strengthened the genuine issued
+supplementary catch test with exact original-lock/previous-revision lineage,
+invoice-kind/revision/lock binding, and repeated issue-command equality. Existing
+assertions retain catch-only billing, priced-revision identity, no baseline
+rebilling, and the advisory catch's original lock and issued line.
+
+The existing concurrency test holds a successful review transaction open while
+another tenant and an unrelated same-tenant session write their jobs; it also
+requires an update lock on the reviewed job to fail. Added the reverse direction:
+a foreign tenant holds an uncommitted job UPDATE while the real runtime review
+routine must complete under a 500 ms lock timeout. The historical table-wide
+SHARE lock would fail that test. Receipt replay is then checked through the
+repository. These are real PostgreSQL tests collected locally for execution in CI;
+no concurrency PASS is claimed here.
+
+Workspace-dependent routes left byte-unchanged:
+- GET `/api/jobs/[id]/commercial-integrity/family`
+- GET `/api/jobs/[id]/commercial-integrity/v3`
+- POST `/api/jobs/[id]/commercial-integrity/v3/reviews`
+
+The before-live wording about awaiting the connection is historical: the current
+base's `apps/api/src/workspace/application.ts:105-112` already constructs the
+request/session-bound facade for all three. Their missing-facade 503
+`INTEGRITY_UNAVAILABLE` fallback remains. No new route/composition work is added.
+
+Checks actually run (installed Node 24.17.0 / Vitest 4.1.12, no downloads):
+- Initial DB input run and integration collection failed because core dist was
+  absent. Built core and storage with each package's existing
+  `./node_modules/.bin/tsc -p tsconfig.json`; both PASS. Repeated the affected checks.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 test/commercial-integrity-v3-input.test.ts`
+  — PASS, 1 file / 6 tests.
+- apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 'app/api/jobs/[id]/commercial-integrity/family/route.test.ts' 'app/api/jobs/[id]/commercial-integrity/v3/route.test.ts' 'app/api/jobs/[id]/commercial-integrity/v3/reviews/route.test.ts'`
+  — PASS, 3 files / 30 tests.
+- packages/db: `./node_modules/.bin/vitest list --maxWorkers=1 test/commercial-integrity-v3-published.integration.test.ts test/commercial-integrity-v3-review.integration.test.ts`
+  — PASS, 18 actual registered tests; hooks/database not executed.
+- packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — PASS
+  (source typecheck; test files are outside this package's tsconfig include).
+- TypeScript transpile diagnostics for both modified test files — PASS (syntax).
+- `git diff --check` — PASS. Lane policy parsing and exact changed-path comparison
+  — PASS, own lane file implicitly authorized by the existing lane policy.
+
+No production behavior, migration, stored format, authorization, hidden-data
+access, provider, release or financial policy changed; no operational alert or
+rollback/backfill is introduced. Existing CH-6 adversarial tests are retained.
+PostgreSQL execution, fresh/upgrade migration suites, browser E2E, full required
+CI and an independent Claude RED review remain required after router push.
+The lock fix and genuine supplementary path are inherited implementation, not
+new delivery credited to this test-only follow-up. No substantial complexity or
+worthwhile separate simplification was identified in this bounded initial check.
