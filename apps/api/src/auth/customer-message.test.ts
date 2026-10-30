@@ -10,11 +10,13 @@ import {CustomerMessageController} from "./customer-message.controller.js";
 import type {ExecutionContext} from "@nestjs/common";
 const routeIdentity=vi.hoisted(()=>({current:undefined as unknown}));
 vi.mock("../../../web/app/lib/identity-server",()=>({identityApplication:()=>routeIdentity.current}));
+// Exercise the route with current application source, independent of a pre-existing API dist.
+vi.mock("@jobguard/api/identity",()=>import("./customer-message.js"));
 const tenant="10000000-0000-4000-8000-000000000001",job="20000000-0000-4000-8000-000000000002",customer="30000000-0000-4000-8000-000000000003",commandId="40000000-0000-4000-8000-000000000004",origin="https://fixture.invalid";
 const token=`${tenant}.${job}.${customer}.${"a".repeat(43)}`,headers={origin,cookie:`jobguard_customer=${token}`};
 const body={version:"customer-portal-message.v1",jobId:job,commandId,text:"I agree, perhaps £500?"};
 const receipt={version:"job-source-intake-receipt.v1",jobId:job,sourceKind:"customer_message",environment:"synthetic_demo",realExternalActions:0,
- record:{id:commandId,commandId,text:body.text,actualTesterMembershipId:commandId,fictionalCustomer:{kind:"named_fictional_customer",name:"Fictional customer"},evidence:{id:commandId,objectVersionId:"fixture-version",sha256:"a".repeat(64),serverReceivedAt:"2026-10-29T10:00:00.000Z"}}};
+ record:{id:commandId,commandId,text:body.text,fictionalCustomer:{kind:"named_fictional_customer",name:"Fictional customer"},evidence:{id:commandId,objectVersionId:"fixture-version",sha256:"a".repeat(64),serverReceivedAt:"2026-10-29T10:00:00.000Z"}}};
 function fixture(mode="synthetic_demo"){
  const query=vi.fn<(sql:string,values:unknown[])=>Promise<{rows:{result:unknown}[]}>>().mockImplementation(async sql=>({rows:[{result:sql.includes("customer_portal_message")?receipt:{version:"customer-session.v1",jobId:job}}]}));
  const identity={allowedOrigin:origin,provider:{digest:()=>"a".repeat(64),repository:{pool:{query}}}} as unknown as IdentityApplication;
@@ -57,4 +59,25 @@ it("malformed JSON has the same private 401 on Nest and Next",async()=>{
  const host={switchToHttp:()=>({getRequest:()=>({path:"/customer-portal/messages"}),getResponse:()=>({status,setHeader})})} as unknown as ArgumentsHost;
  await new OidcParseExceptionFilter(()=>({}) as never,{} as never).catch(new BadRequestException(),host);
  expect(status).toHaveBeenCalledWith(next.status);expect(json).toHaveBeenCalledWith(await next.json());expect(f.query).not.toHaveBeenCalled();
+});
+
+it("Nest and Next replay the same redacted receipt without a sponsor membership ID",async()=>{
+ const f=fixture(),controller=new CustomerMessageController(()=>f.app);
+ const first=await controller.post(body,{headers}),replay=await controller.post(body,{headers});
+ routeIdentity.current=f.identity;vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ try{
+  const {POST}=await import(fileURLToPath(new URL("../../../web/app/api/customer-portal/messages/route.ts",import.meta.url)));
+  const next=await POST(req(body)),nextReplay=await POST(req(body));
+  expect(first).toEqual(receipt);expect(replay).toEqual(first);expect(next.status).toBe(201);expect(await next.json()).toEqual(first);
+  expect(nextReplay.status).toBe(201);expect(await nextReplay.json()).toEqual(first);
+  expect(JSON.stringify(first)).not.toMatch(/membership/i);
+  expect(next.headers.get("Cache-Control")).toBe("no-store");
+ }finally{vi.unstubAllEnvs();}
+});
+it("fails closed if SQL returns an internal membership ID or an unknown receipt field",async()=>{
+ for(const record of [{...receipt.record,actualTesterMembershipId:commandId},{...receipt.record,issuerMembershipId:commandId}]){
+  const f=fixture();f.query.mockImplementation(async sql=>({rows:[{result:sql.includes("customer_portal_message")?{...receipt,record}:{version:"customer-session.v1",jobId:job}}]}));
+  const next=await customerMessageHttp(()=>f.app,req(body));
+  expect(next.status).toBe(503);expect(await next.json()).toEqual({code:"CUSTOMER_UNAVAILABLE"});
+ }
 });

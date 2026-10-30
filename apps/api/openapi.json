@@ -7,7 +7,7 @@
         "parameters": [],
         "responses": {
           "201": {
-            "description": "job-source-intake-receipt.v1: saved message and exact verified evidence"
+            "description": "job-source-intake-receipt.v1: saved message and exact checked evidence"
           },
           "401": {
             "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
@@ -38,7 +38,7 @@
             "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
           }
         },
-        "summary": "Save a fictional customer message and its verified original through SV-7A",
+        "summary": "Save a fictional customer message and its checked original through SV-7A",
         "tags": [
           "customer portal"
         ]

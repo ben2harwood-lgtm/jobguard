@@ -10,8 +10,8 @@ export class CustomerMessageController {
   constructor(@Inject(CUSTOMER_MESSAGE_APPLICATION) private readonly application: () => CustomerMessageApplication) {}
   @Post("messages") @HttpCode(201) @UseGuards(CustomerAuthGuard)
   @ApiConflictResponse({description: "JOB_NOT_LIVE or a conflicting command replay", schema: {type: "object", required: ["code"], properties: {code: {type: "string", enum: ["JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT"]}}}})
-  @ApiCreatedResponse({description: "job-source-intake-receipt.v1: saved message and exact verified evidence"})
-  @ApiOperation({summary: "Save a fictional customer message and its verified original through SV-7A"})
+  @ApiCreatedResponse({description: "job-source-intake-receipt.v1: saved message and exact checked evidence"})
+  @ApiOperation({summary: "Save a fictional customer message and its checked original through SV-7A"})
   @ApiResponse({status: 422, description: "POST_LOCK_WORK_REQUIRES_LINKED_JOB"})
   async post(@Body() body: unknown, @Req() request: CustomerRequest) {
     try { return await this.application().post(body, request); }

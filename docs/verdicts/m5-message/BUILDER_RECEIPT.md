@@ -13,16 +13,16 @@ Malformed JSON uses the same private refusal. Both routes are live-only in the
 existing registry; new writes enforce that in SV-7A after authorized replay.
 
 0391 starts from 0303, the latest existing SV-7A writer body. It changes only the
-source authority seam and exact candidate B fixture selection. No existing migration
-is edited. New identity-only entrypoint customer_portal_message resolves/rechecks
+source authority seam, exact candidate B fixture selection, and customer receipt
+projection. Only the branch-owned 0391 is edited; no migration on main is edited. New identity-only entrypoint customer_portal_message resolves/rechecks
 the existing session in the same transaction and retains its job advisory lock;
 it passes server-selected customer kind/name and exact text to SV-7A. The private
 source helper permits a customer credential for customer_message only, leaving
 CH-4 and all other commands unchanged. No source/evidence writes bypass SV-7A.
 No new tables, provider calls, money, approval, detector scheduling, or shadow reads.
 
-Compatibility: SV-7A requires actor_membership_id and exposes it as
-actualTesterMembershipId. For this synthetic adapter it remains the grant issuer
+Compatibility: SV-7A requires actor_membership_id and exposes it to the builder as
+actualTesterMembershipId. Customer responses omit it, including replay responses. For this synthetic adapter it remains the grant issuer
 (the responsible test sponsor), never a customer membership or claimed customer
 identity. A separate identifier-only customer-session audit event binds the command,
 customer, session and source. The session digest participates in the existing
@@ -90,3 +90,37 @@ were preserved, with both SV-7A definitions now covered by the guard check.
 Handoff: ready for router commit/push and CI, followed by independent exact-head
 Claude RED review. Parent PR #423 is a merge-order dependency. Database/upgrade,
 full lint/build, browser execution, independent review and merge remain pending.
+
+
+## 30 October follow-up — customer receipt redaction and claims
+
+RED, MON-5 / M5-MESSAGE. The customer-only SQL entrypoint removes
+`record.actualTesterMembershipId` after the shared intake returns, covering new
+writes and authorized replays. Stored receipts, sponsor provenance, audit and the
+builder read are unchanged. The API derives a strict customer record from the
+existing schema with that field omitted; unexpected internal fields fail closed
+with the existing private CUSTOMER_UNAVAILABLE response. OpenAPI and its source
+use “checked evidence” / “checked original” for this operation.
+
+Attack-first evidence: the new response/replay regression failed against the old
+API (3 failures), including successful leakage of the sponsor-bearing fixture.
+The PostgreSQL test now requires redacted concurrent and later replays while
+asserting that builder reads and stored command receipts retain the sponsor.
+It preserves all prior conflict, revocation, cross-customer, lock and shadow tests.
+No renumbering, grants, routines, LP-0 or SERIOUS-B5 inventory entries were added
+or removed in this follow-up; the existing parent-plus-piece union is retained.
+The lane remains exact for the original piece plus this follow-up.
+
+Follow-up local validation (installed binaries; at most two workers):
+
+- API `./node_modules/.bin/vitest run --maxWorkers=2 src/auth/customer-message.test.ts src/auth/customer-signin.test.ts src/watchdog-registry.test.ts`: PASS, 161 tests.
+- Core `./node_modules/.bin/vitest run --maxWorkers=2 src/job-source-intake.test.ts src/job-sources.test.ts`: PASS, 16 tests; builder receipt schema unchanged.
+- Root `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` and `./node_modules/.bin/tsc -p /tmp/m5-message-integration-tsconfig.json --noEmit`: PASS. The latter checks the DB regression without executing it.
+- API `node --import tsx src/generate-openapi.ts --check`: PASS.
+- Root `./node_modules/.bin/tsc -p apps/api/tsconfig.json`: PASS (API emission; no full build claim).
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 155 migrations. Existing lane-policy helpers confirm the piece's 26 paths exactly equal its lane allowlist plus its implicit own lane file. `git diff --check`: PASS.
+- Next Gen Learning Platform `packages/floor/src/claims-gate.mjs` `checkClaims` on the changed `/customer-portal/messages` OpenAPI operation: PASS; also explicitly checked for absence of bare “verified”. A whole-file scan flags the pre-existing unrelated SSO summary “Mailbox-proven” (`absolute-proof`); it is outside this follow-up and is not claimed as a full-file PASS.
+
+PostgreSQL/migration/catalogue and browser execution remain CI-only under the
+sandbox constraint. Exact-head independent Claude RED review and green CI remain
+required. No git write, commit, push, provider call or release was performed.

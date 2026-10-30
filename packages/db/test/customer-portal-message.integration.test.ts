@@ -46,8 +46,13 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   const commercialCounts=async()=>Promise.all(["quote_acceptance","variation_approval"].map(async table=>(await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[w.t,w.j])).rows[0].n));
   const commercialBefore=await commercialCounts();
   const results=await Promise.all([send(w,raw),send(w,raw)]);expect(results[0]).toEqual(results[1]);
-  expect(results[0].record).toMatchObject({text:raw.text,actualTesterMembershipId:w.practice.auth.membershipId,evidence:{sha256:hash(raw.text)}});
-  const read=await f.repository.read(w.practice.auth.context,w.j,w.practice.auth.digest,"customer_message");expect(read.messages).toContainEqual(results[0].record);
+  expect(results[0].record).toMatchObject({text:raw.text,evidence:{sha256:hash(raw.text)}});
+  expect(JSON.stringify(results[0])).not.toMatch(/membership/i);
+  expect(JSON.stringify(results[0])).not.toContain(w.practice.auth.membershipId);
+  expect(await send(w,raw)).toEqual(results[0]);
+  const read=await f.repository.read(w.practice.auth.context,w.j,w.practice.auth.digest,"customer_message");expect(read.messages).toContainEqual({...results[0].record,actualTesterMembershipId:w.practice.auth.membershipId});
+  const stored=(await f.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[w.t,raw.commandId])).rows[0].result;
+  expect(stored.record.actualTesterMembershipId).toBe(w.practice.auth.membershipId);
   await expect(send(w,{...raw,text:"Changed"})).rejects.toThrow("IDEMPOTENCY_CONFLICT");
   const observations=await withTenant(f.runtime,w.practice.auth.context,db=>readJobSourceObservations(db,w.t,w.j));expect(observations).toEqual([]);
   const audit=(await f.admin.query("SELECT actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='customer_portal.message_recorded'",[w.t,w.j])).rows;

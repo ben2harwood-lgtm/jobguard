@@ -1,11 +1,17 @@
 import { z } from "zod";
-import { jobSourceTextV1, jobSourceIntakeReceiptV1 } from "@jobguard/core";
+import { jobSourceTextV1, customerMessageV1 } from "@jobguard/core";
 import type { IdentityApplication } from "./identity.application.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 import { CustomerSigninApplication, CustomerRefused, customerRefusal, customerToken } from "./customer-signin.js";
 
 export const customerPortalMessageV1 = z.object({
   version: z.literal("customer-portal-message.v1"), jobId: z.guid(), commandId: z.guid(), text: jobSourceTextV1,
+}).strict();
+// Customer output shares the checked message fields, excluding the builder's internal sponsor.
+const customerPortalMessageReceiptV1 = z.object({
+  version: z.literal("job-source-intake-receipt.v1"), jobId: z.guid(),
+  sourceKind: z.literal("customer_message"), environment: z.literal("synthetic_demo"),
+  realExternalActions: z.literal(0), record: customerMessageV1.unwrap().omit({actualTesterMembershipId: true}).readonly(),
 }).strict();
 /** Uses sign-in's persisted session; never constructs a membership or a tenant context. */
 export class CustomerMessageApplication {
@@ -24,7 +30,7 @@ export class CustomerMessageApplication {
         "SELECT identity.customer_portal_message($1,$2,$3,$4,$5::jsonb) result",
         [tenantId, jobId, customerId, digest, JSON.stringify(input)],
       )).rows[0]?.result;
-      const receipt = jobSourceIntakeReceiptV1.parse(result);
+      const receipt = customerPortalMessageReceiptV1.parse(result);
       if (receipt.sourceKind !== "customer_message" || receipt.jobId !== jobId) throw new Error("Invalid message receipt");
       return receipt;
     } catch (error) {

@@ -120,8 +120,10 @@ BEGIN
   PERFORM app.append_final_check_audit(gen_random_uuid(),'customer-session:'||sid::text,j,'customer_portal.message_recorded',
    jsonb_build_object('commandId',input->>'commandId','customerId',c,'sessionId',sid,'sourceId',result->'record'->>'id'));
  END IF;
+ -- Builder storage/receipts retain the sponsor; redact only the customer result,
+ -- including authorized replays of the original stored receipt.
  -- No signal access, counts, detector scheduling or inferred approval/price in this path.
- RETURN result;
+ RETURN result #- '{record,actualTesterMembershipId}';
 END $$;
 ALTER FUNCTION identity.customer_portal_message(uuid,uuid,uuid,text,jsonb) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION identity.customer_portal_message(uuid,uuid,uuid,text,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
