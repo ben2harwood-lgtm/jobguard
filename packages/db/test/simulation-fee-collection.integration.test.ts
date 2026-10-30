@@ -144,7 +144,7 @@ it("collects GBP282, then a genuine GBP3000 receipt reversal refunds GBP250 and 
  const reversal=await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional GBP3000 receipt reversal"});
  // Persist the linked source and case-allocation reversals before using the remaining GBP320.
  const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
- const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-allocation-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:"payment_reversal",sourceId:reversal.reversalId},expectedSourceRevision:snapshot.revision});
+ const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-allocation-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:"payment_reversal",sourceId:reversal.reversalId},grossPence:300000,expectedSourceRevision:snapshot.revision});
  await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-allocation-command.v1",action:"reverse",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision});
  const after=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
  const allocator=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo");

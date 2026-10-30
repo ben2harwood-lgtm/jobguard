@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-sb-pack": {
+      "branches": ["codex/sandbox/m4-23-sb-pack"],
+      "note": "RED M4-23-SB built ahead on M4-17-S plus withheld-source. PostgreSQL execution and independent RED review required. Inherited merge changes retain their source lane ownership; this lane lists the acceptance pack, fixture hook and conflict resolutions only. Own lane file is implicitly owned.",
+      "allow": [
+        "packages/db/migrations/0489_success_fee_recovery_compensation.sql",
+        "packages/db/migrations/0490_simulation_fee_statement_issue.sql",
+        "packages/db/test/m4-23-small-builder-acceptance.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts"
+      ]
+    }
+  }
+}

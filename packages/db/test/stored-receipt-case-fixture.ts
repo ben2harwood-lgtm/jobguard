@@ -20,7 +20,9 @@ import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js"
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 // Preserve protocol callers from the producer lane and numeric-baseline callers from CH-8.
-export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number="receipt-line-facts-command.v1",mixedFinalCheck=false,collection282=false){
+export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number="receipt-line-facts-command.v1",mixedFinalCheck=false,collection282=false,
+ // Optional source-time attack; defaults preserve all existing caller journeys.
+ beforeLock?: (source: {context: ReturnType<typeof testTenantContext>; jobId: string; signalId: string; digest: string}) => Promise<void>){
  const protocol=typeof protocolOrBaseline==="string"?protocolOrBaseline:"receipt-line-facts-command.v1";
  const baselineNetPence=typeof protocolOrBaseline==="number"?protocolOrBaseline:3360000;
  process.env.JOBGUARD_ENV="synthetic_demo";
@@ -84,10 +86,12 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
+ if(beforeLock)await beforeLock({context,jobId,signalId:signal,digest:auth.digest});
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
  const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
  for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
- const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
+ const signalRevisions=beforeLock?new Map((await f.admin.query("SELECT id,revision FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[DEMO_TENANT_ID,jobId])).rows.map(row=>[row.id,row.revision as number])):null;
+ const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:signalRevisions?.get(signalId)??0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
  const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
  await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
