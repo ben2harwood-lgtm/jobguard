@@ -332,3 +332,27 @@ Local validation (installed binaries, no dependencies downloaded):
 PostgreSQL/migration/browser execution, required CI against current main, one
 independent RED review and router commit/push remain outstanding. This sandbox
 cannot start PostgreSQL or bind localhost. No git-writing command was run.
+
+## PR #402 CI repair try 1 — attribution corruption setup (30 October 2026)
+
+CI job 124177973528 failed the attribution hookup suite's #346 attack because
+0386's new job-qualified FK correctly rejects the test's corrupt UPDATE before
+the private resolver runs. The test setup assumed 0258's weaker FK. The resolver
+expectation itself remains correct and unchanged. The attack now first asserts
+23503 on receipt_fact_source_job_movement_fk, rolls back to a savepoint, then
+removes only that FK inside the existing rolled-back admin transaction so it can
+still prove RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED independently. Only the
+named immutability trigger is temporarily disabled, instead of all user triggers.
+After rollback, the test checks source bytes are unchanged and the validated FK
+is restored. No production routine, migration, policy or successful fixture was
+changed; no expectation was loosened or skipped. Lane coverage includes the
+attribution test in this same change.
+
+Validation: 24 tests passed across stored-receipt-migration,
+stored-receipt-case-allocation-repository and migrate-discovery with maxWorkers=2.
+The affected attribution integration file passed strict ES2023/NodeNext tsc with
+noUncheckedIndexedAccess and exactOptionalPropertyTypes. Vitest list collected
+all 12 attribution/upgrade cases across two named files; discovery only. Exact
+six-path branch lane coverage and git diff --check passed. PostgreSQL execution
+remains required in CI; this sandbox cannot start it. No migration on main was
+edited and no git-writing command was used.

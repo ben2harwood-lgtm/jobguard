@@ -58,6 +58,11 @@ export async function approvePricedVariation(db:TenantTransaction,tenantId:strin
  if(row.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
  const exact=await db.$client.query(`SELECT 1 FROM app.variation_revision WHERE tenant_id=$1 AND id=$2 AND revision=$3 AND content_hash=$4 AND signed_delta_pence=$5`,[tenantId,a.revisionId,a.revision,a.contentHash,a.signedDeltaPence]);
  if(!exact.rowCount)throw new Error("EXACT_CURRENT_PRICED_REVISION_REQUIRED");
+ // Customer approval binds finalized original evidence for this exact tenant and job.
+ if(a.method==="customer_evidence"){
+  const evidence=await db.$client.query(`SELECT e.id FROM app.evidence_object e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.id=$3 AND e.kind='original' AND e.server_verified_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)`,[tenantId,row.job_id,a.evidenceId]);
+  if(!evidence.rowCount)throw new Error("CUSTOMER_EVIDENCE_REQUIRED");
+ }
  // One statement: the approval and, for newly approved scope only, its single operational progress identity.
  // Existing scope already has one; a pending or rejected proposal never reaches this statement.
  const inserted=await db.$client.query(`WITH ins AS (INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,evidence_id,approved_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(tenant_id,revision_id) DO NOTHING RETURNING id,variation_id), prog AS (INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) SELECT v.tenant_id,v.job_id,v.scope_item_id FROM app.variation v JOIN ins ON ins.variation_id=v.id WHERE v.tenant_id=$2 AND v.existing_scope_item_id IS NULL ON CONFLICT DO NOTHING) SELECT id FROM ins`,[a.id,tenantId,row.job_id,variationId,a.revisionId,a.revision,a.contentHash,a.signedDeltaPence,a.method,a.actorMembershipId,a.evidenceId,a.approvedAt]);
@@ -124,7 +129,13 @@ export class VariationRepository{
   if(input.price && input.price.confirmedByMembershipId!==input.actorMembershipId)throw new BuilderCaptureError("FORBIDDEN");
   const requestHash=createHash("sha256").update(captureCanonical(input)).digest("hex");
   return withTenant(this.pool,context,async db=>{
-   const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,input.actorMembershipId])).rows[0];
+   const membershipSql=`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`;
+   let member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
+   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
+   // Final locking uses this same command gate before its job lock. A shared ID
+   // cannot claim a receipt while its rival holds the job and waits for it.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`final-review-command:${context.tenantId.toLowerCase()}:${p.id.toLowerCase()}`]);
+   member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
    if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
    const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1,$2,'LogBuilderExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,input.actorMembershipId]);
@@ -133,9 +144,11 @@ export class VariationRepository{
     if(!prior || prior.request_hash!==requestHash || prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");
     return prior.result;
    }
-   // No row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
+   // No direct row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
    // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
    // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
+   // The existing source trigger takes the job SHARE lock before site capture
+   // joins capacity 184 and source 144. Never hold capacity while waiting for job.
    // The variation insert's foreign keys take KEY SHARE locks on this job's track and scope rows.
    // Every synthetic practice environment is accepted (the track column admits only these two);
    // any other value, such as a production one, is refused by default.

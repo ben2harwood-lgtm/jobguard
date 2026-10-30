@@ -16,7 +16,7 @@ async function reviewCommand(x:Fixture,paymentId=x.paymentId){
  return {version,action:"review",commandId:randomUUID(),expectedSourceRevision:current.revision,paymentId};
 }
 it.each(["F5","F7"] as const)("v1 saves %s exact allocations, replays one effect, and refuses double allocation",async kind=>{
- const x=await realReceiptFixture(f,kind,version);
+ const x=await realReceiptFixture(f,kind,undefined,undefined,version);
  expect(x.fact.gross).toEqual({numerator:kind==="F5"?"48000":"96000",denominator:"1"});
  expect(x.fact.net).toEqual({numerator:kind==="F5"?"40000":"80000",denominator:"1"});
  expect(x.fact.rule).toBe(kind==="F5"?"pro_rata":"separate_invoice");
@@ -32,7 +32,7 @@ it.each(["F5","F7"] as const)("v1 saves %s exact allocations, replays one effect
  expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_revision WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:kind==="F5"?2:1}]);
 });
 it("v1 refuses unsettled receipts and settled receipts beyond the invoice line cap",async()=>{
- const x=await realReceiptFixture(f,"F7",version);
+ const x=await realReceiptFixture(f,"F7",undefined,undefined,version);
  const payment=await x.invoices.recordReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:38400,method:"bank_transfer",reference:"Fictional over-cap receipt"});
  await expect(execute(x,await reviewCommand(x,payment.paymentId))).rejects.toThrow("RECEIPT_LINE_SETTLEMENT_REQUIRED");
  const feed=new PracticeFeedRepository(f.runtime,"synthetic_demo");
@@ -45,14 +45,14 @@ it("v1 refuses unsettled receipts and settled receipts beyond the invoice line c
  expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_revision WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:1}]);
 });
 it("v1 cannot borrow another job's settled movement or another tenant's authority",async()=>{
- const x=await realReceiptFixture(f,"F7",version),other=await realReceiptFixture(f,"F7",version);
+ const x=await realReceiptFixture(f,"F7",undefined,undefined,version),other=await realReceiptFixture(f,"F7",undefined,undefined,version);
  await expect(execute(other,await reviewCommand(other,x.paymentId))).rejects.toThrow("RECEIPT_LINE_FORBIDDEN");
  await expect(x.producer.command(testTenantContext(randomUUID()),x.actor,x.auth.digest,x.jobId,await reviewCommand(x))).rejects.toThrow();
  const binding=x.fact.invoiceBinding;
  await expect(finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("SELECT app.receipt_fact_invoice_line($1,$2,$3,$4,$5,$6,$7)",[x.context.tenantId,x.jobId,x.invoiceId,x.line,x.lock.finalAccountRevisionId,binding.lockId,binding.checkId]))).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
 });
 it.each(["payment_reversal","credit_note"] as const)("v1 %s derives reversal money, appends linked rows and replays one effect",async kind=>{
- const x=await realReceiptFixture(f,"F7",version);
+ const x=await realReceiptFixture(f,"F7",undefined,undefined,version);
  const original=(await f.admin.query("SELECT row_to_json(l)::text bytes FROM app.receipt_allocation_fact_line l WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[x.context.tenantId,x.jobId])).rows;
  let sourceId:string;
  if(kind==="payment_reversal"){
