@@ -1160,6 +1160,18 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
+// m4-withheld-source / 0489: one private validator, with no runtime execute grant.
+async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "success_fee_withheld_source");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({args:"t uuid, j uuid, allocation uuid",prosecdef:false,
+  proacl:"{jobguard_migration=X/jobguard_migration}",proconfig:["search_path=pg_catalog"]});
+ expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner",[routines[0]!.proowner])).rows).toEqual([{owner:"jobguard_migration"}]);
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "success_fee_withheld_source")).toBe(false);
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+}
 // CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
 async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1210,6 +1222,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await jobDoorAdditions(expected));
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
+ Object.assign(expected, await withheldSourceAddition(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

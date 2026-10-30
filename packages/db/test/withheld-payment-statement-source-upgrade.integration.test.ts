@@ -29,6 +29,10 @@ it("0497 preserves genuine pre-upgrade withheld allocations and fee postings, an
  const acl=()=>f.admin.query("SELECT proname,proacl::text,prosecdef,proconfig,pg_get_userbyid(proowner) owner FROM pg_proc WHERE oid IN ('app.platform_fee_statement_sources(uuid,uuid,uuid)'::regprocedure,'app.simulation_money_sources(uuid,uuid,uuid)'::regprocedure,'app.write_platform_fee_statement(uuid,text,jsonb)'::regprocedure,'app.write_platform_fee_collection(uuid,text,jsonb)'::regprocedure,'app.simulation_money_run(uuid,text,jsonb)'::regprocedure) ORDER BY proname");
  const prior=await acl();await migrate(f.admin);await migrate(f.admin);
  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});expect((await acl()).rows).toEqual(prior.rows);
+ const helper=(await f.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,proacl::text FROM pg_proc WHERE oid='app.success_fee_withheld_source(uuid,uuid,uuid)'::regprocedure")).rows;
+ expect(helper).toEqual([{owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],proacl:"{jobguard_migration=X/jobguard_migration}"}]);
+ for(const pool of [f.runtime,f.shadow])await expect(pool.query("SELECT app.success_fee_withheld_source($1,$2,$3)",[x.context.tenantId,x.jobId,randomUUID()])).rejects.toMatchObject({code:"42501"});
+
  const statements=new SimulationFeeStatementRepository(f.runtime);
  const command={version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()};
  const issued=await statements.command(x.context,x.jobId,x.auth.digest,command);

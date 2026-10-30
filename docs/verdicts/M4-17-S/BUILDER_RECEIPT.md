@@ -64,3 +64,23 @@ Local validation (Node v24.17.0; installed repository runners; at most two worke
 PostgreSQL fresh/upgrade, full CI, browser suites and the independent Claude RED review remain required after router push. No database, browser, independent review, merge or release success is claimed. The router owns commit, push and the eventual PR after its base merges.
 
 - Full `node tools/lint.mjs` was attempted: core purity passed, then lane checking refused inherited predecessor paths against current main. The lane lists only this piece's actual changed paths, and was not expanded to claim the unmerged base. The router must rerun the unchanged gate once the base merges. No full lint pass is claimed.
+
+
+## m4-withheld-source follow-up — RED allocation approval expiry
+
+Extracted the duplicated withheld proof/terms/eligibility/allocation/reversal checks into the owner-only invoker routine `app.success_fee_withheld_source(uuid,uuid,uuid)` in branch-owned 0489. Both 0489's posting writer and 0497's statement loader call it. The source hash payload and writer statement encoding are retained. Migration 0497 now applies its existing current-authorization gate before branching, so expired or revoked withheld allocation approvals cannot issue/approve statements or start collections, just as catch approvals cannot. Catch validation and the downstream catch path are source-identical to the predecessor.
+
+Source inspection clarified the brief's expiry premise: 0489 checks current expiry on catch attribution approvals; its withheld allocation check binds expiry to the historical allocator command (`cmd.created_at <= auth.expires_at`). That historical behavior is preserved exactly, so a later expiry does not prevent reviewing legitimate compensation. The shared helper retains that historical check; the statement loader separately requires current approval. No policy switches or new public permissions were added. The initial LATER / SIMPLICITY extraction suggestion above is now implemented by this requested follow-up.
+
+The PostgreSQL regression attacks expiry at the exact historical command timestamp and revocation after posting/statement issue, asserts issue/approval/collection refusal and unchanged financial rows/download bytes, and confirms the 0489 historical-expiry behavior and source hashes remain intact. Existing recovery-18800 end figures, replay, reversal and catch tests are preserved. Upgrade coverage asserts the new helper's exact private ACL and direct runtime/shadow refusal. Both LP-0 inventories add only this owner identity and recorded helper/caller facts; SERIOUS-B5 unions only the exact helper identity with owner, search path and ACL checks. No migrations present on local main were edited (read-only `git ls-tree main` confirmed neither 0489 nor 0497 is present there).
+
+Local validation (installed Node v24.17.0 / Vitest 4.1.12; all Vitest invocations `--maxWorkers=1`):
+
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/withheld-payment-statement-source-catalog.test.ts test/simulation-money-run-catalog.test.ts test/lp-0-catalog.test.ts` — 33 passed.
+- From `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=1 src/issued-simulation-fee-statement.test.ts src/simulation-money-run.test.ts` — 17 passed.
+- Root `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `node tools/plpgsql-case-in-if-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, and `git diff --check` — passed.
+- A read-only source comparison confirmed unchanged catch validation/downstream catch code and the retained withheld validation predicates. Exact lane coverage checked locally.
+- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/simulation-money-run.integration.test.ts test/withheld-payment-statement-source-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts` — all 13 tests registered, including both new refusal cases. Collection is not database execution.
+
+The router must push for real PostgreSQL fresh/upgrade, recovery-18800, catch/recovery compensation and full CI checks, then obtain the independent Claude RED review. No PostgreSQL/browser, CI, independent-review, merge or release success is claimed. No git writes, downloads, real data, providers or external money actions were used.

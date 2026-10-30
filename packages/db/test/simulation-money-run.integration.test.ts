@@ -145,3 +145,31 @@ it("invalidated withheld proof prevents a new statement or collection approval",
  const result=await repo.command(x.context,x.jobId,x.auth.digest,{version,action:"run",commandId:randomUUID()});
  expect(result.report.differences.map(d=>d.code)).toContain("CURRENT_ELIGIBILITY_UNAVAILABLE");
 });
+
+it.each(["expired","revoked"] as const)("refuses %s withheld allocation approval before statement issue, approval or collection without money effects",async attack=>{
+ const {recoveryFeeFixture}=await import("./success-fee-recovery-fixture.js");
+ const x=await recoveryFeeFixture(f),statements=new SimulationFeeStatementRepository(f.runtime),collection=new SimulationFeeCollectionRepository(f.runtime);
+ await x.allocate(0);const posted=await x.approve(await x.review());
+ const issue=()=>statements.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()});
+ const saved=await issue(),bytes=await statements.download(x.context,x.jobId,x.auth.digest,saved.statementId);
+ const allocationApproval=posted.statement.sources[0]!.reviewAuthorizationId;
+ if(attack==="expired"){
+  // Simulate time passing for only this authorization, preserving the allocator's
+  // historical cmd.created_at <= expires_at boundary. Restore the guard in-transaction.
+  await finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+   await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER action_authorization_guard");
+   await db.query("UPDATE app.action_authorization a SET expires_at=c.created_at FROM app.recovery_allocation_command c JOIN app.recovery_case_allocation l ON (l.tenant_id,l.job_id,l.command_id)=(c.tenant_id,c.job_id,c.command_id) WHERE a.tenant_id=$1 AND a.id=$2 AND (a.tenant_id,a.id)=(l.tenant_id,l.authorization_id)",[x.context.tenantId,allocationApproval]);
+   await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER action_authorization_guard");
+  });
+  // 0489 continues to accept historically valid allocations with identical source hashes.
+  const review=await x.review(1);expect(review.statement.sources).toEqual(posted.statement.sources);
+  expect(review.statement).toMatchObject({feePence:3200,deltaPence:0});
+ }else await f.admin.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,allocationApproval]);
+ const tables=["success_fee_derivation","success_fee_journal","platform_fee_statement","platform_fee_attempt","platform_fee_attempt_event"].map(t=>`app.${t}`);
+ const before=await proofBefore(f.admin,tables);
+ await expect(issue()).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+ await expect(statements.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-statement-command.v1",action:"approve",commandId:randomUUID(),statementId:saved.statementId,statementHash:saved.documentHash})).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+ await expect(collection.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-collection-command.v1",action:"collect",commandId:randomUUID(),statementId:saved.statementId,statementHash:saved.documentHash,amountPence:3200})).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
+ expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
+ expect(await statements.download(x.context,x.jobId,x.auth.digest,saved.statementId)).toEqual(bytes);
+});
