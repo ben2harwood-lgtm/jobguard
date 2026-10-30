@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-4-audit"
       ],
-      "note": "LP-4 part 1 RED: dark synthetic-only database sealing. Full reserved-type enforcement and authority-consumer closure REFUSED / not built; no LP-2/LP-3 implementation changes.",
+      "note": "LP-4 part 1 RED: database sealing in every migrated database. Full reserved-type enforcement and authority-consumer closure REFUSED / not built; no LP-2/LP-3 implementation changes.",
       "allow": [
         "apps/api/src/contractor/contractor-practice-session.application.test.ts",
         "apps/api/src/contractor/practice-worker-switch.application.test.ts",

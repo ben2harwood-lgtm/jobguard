@@ -26,9 +26,9 @@ async function chain(t: string): Promise<AuditEvent[]> {
     occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
     FROM app.audit_event ORDER BY sequence`)).rows);
 }
-beforeAll(async () => { db = await jobDoorsDatabase(true); tenant = (await jobDoorsActor(db.owner)).tenant; }, 300_000);
+beforeAll(async () => { db = await jobDoorsDatabase(); tenant = (await jobDoorsActor(db.owner)).tenant; }, 300_000);
 afterAll(async () => { await db?.close(); });
-describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
+describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
   it("serializes competing batches and agrees with v2 canonicalization, clock and verifier", async () => {
     await Promise.all(Array.from({ length: 8 }, () => append(tenant, [statement(), statement()])));
     const events = await chain(tenant);

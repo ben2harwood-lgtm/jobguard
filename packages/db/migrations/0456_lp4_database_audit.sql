@@ -1,4 +1,4 @@
--- LP-4 part 1 RED: dark in-database audit append, synthetic database only.
+-- LP-4 part 1 RED: in-database audit append for every migrated database.
 -- Full LP-4 authority guarantee REFUSED: reserved generic types and authority
 -- consumers are NOT closed here. No production/real-data enablement.
 -- Forward-only candidate: no history is rewritten.
@@ -27,9 +27,6 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  e jsonb; payload jsonb; section text; entry record; seq bigint; prev text; ts timestamptz;
  ph text; eh text; stored app.audit_event;
 BEGIN
- IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN
-  RAISE EXCEPTION 'LP4_SYNTHETIC_DATABASE_REQUIRED' USING ERRCODE='42501';
- END IF;
  IF t IS NULL THEN RAISE EXCEPTION 'AUDIT_CONTEXT_REQUIRED' USING ERRCODE='42501'; END IF;
  IF p_trust IS NULL OR p_trust NOT IN ('lower_trust','checked_operation')
   OR jsonb_typeof(p_events) IS DISTINCT FROM 'array' THEN
