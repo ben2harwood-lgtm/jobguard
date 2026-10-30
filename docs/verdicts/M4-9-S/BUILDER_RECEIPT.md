@@ -687,3 +687,26 @@ must stage the resolved working files and renames before committing. No git writ
 command was run. GitHub CI, browser/database suites and the independent exact-head
 Claude RED review remain pending. Q2/Q3 and the wider M4-9-S card remain held as
 previously recorded; this receipt is not a claim that the full card is finished.
+
+
+## 30 October 2026: reserved identifier repair after DB verification
+
+DB verification at bc431e37 found the reserved identifier `authorization` in
+0406's writer declaration. Renamed only that variable to `auth_id` at its
+three sites (declaration and two INSERT values). A read-only comparison verifies
+reversing that rename reproduces HEAD exactly; 0405 is unchanged. Scanned both
+migrations' variable, argument, alias and column identifiers; no further reserved
+identifier issue was found. No test expectations or numeric strings changed.
+
+LP-0 tooling is packages/db/test/lp-0-catalog.ts (the supplied src path does not
+exist). It hashes UTF-8 pg_get_functiondef output. The sole changed routine,
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb), already has a null
+recorded definitionSha256. No hash was guessed or overwritten; PostgreSQL CI
+must capture that identity's hash and verify migration execution.
+
+Local checks: installed packages/db Vitest runner with --maxWorkers=2,
+src/success-fee-repository.test.ts and test/lp-0-catalog.test.ts: 36 tests passed
+in two files. PL/pgSQL CASE-in-IF lint passed (164 migrations); git diff --check
+passed; exact-three-site rename and unchanged-0405 assertions passed. These
+checks do not prove PostgreSQL parsing: database verification remains CI's job.
+No git write command was run. RED review and existing release gates remain.
