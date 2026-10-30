@@ -15,7 +15,7 @@ it("A3/A6: concurrent approvals cannot turn a held source into current facts", a
  const command = { version: "receipt-line-allocation-command.v1", action: "approve", commandId: randomUUID(), expectedSourceRevision: 1, reviewId: randomUUID(), approvalHash: "a".repeat(64) };
  const results = await Promise.allSettled([1, 2].map(() => repository.command(auth.context, auth, auth.digest, jobId, command)));
  expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
- for (const result of results) if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
+ for (const result of results) if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "23514", message: "RECEIPT_LINE_APPROVAL_CHANGED" });
  expect((await f.admin.query("SELECT count(*)::int n FROM app.receipt_allocation_fact_revision")).rows[0].n).toBe(0);
 });
 it.each(["hash", "revision"] as const)("A3: caller-owned transaction rejects a stale %s before dependent work", async field => {
