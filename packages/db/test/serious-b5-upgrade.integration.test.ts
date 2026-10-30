@@ -882,17 +882,17 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
-// 0478 adds only the shared dark reservation book, its primary key and tenant policy.
+// 0478/0499 add the dark reservation book and append-only archive, primary keys and tenant policies.
 async function feeReservationAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
- const names = ["fee_reservation_book", "fee_reservation_book_pkey"];
+ const names = ["fee_reservation_book", "fee_reservation_book_pkey", "fee_reservation_archive", "fee_reservation_archive_pkey"];
  const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
- const policies = after.policies.filter(p => p.schemaname === "app" && p.tablename === "fee_reservation_book");
- expect(policies.map(p => p.policyname)).toEqual(["tenant_isolation"]);
+ const policies = after.policies.filter(p => p.schemaname === "app" && ["fee_reservation_book", "fee_reservation_archive"].includes(p.tablename));
+ expect(policies.map(p => p.policyname)).toEqual(["tenant_isolation", "tenant_isolation"]);
  expect(Object.keys(before.rows)).not.toContain("app.fee_reservation_book");
  const position = (rows: unknown[], row: unknown) => rows.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, rows: { ...before.rows, "app.fee_reservation_book": [] },
+ return { ...before, rows: { ...before.rows, "app.fee_reservation_book": [], "app.fee_reservation_archive": [] },
   relations: [...before.relations, ...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies: [...before.policies, ...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b)) };
 }

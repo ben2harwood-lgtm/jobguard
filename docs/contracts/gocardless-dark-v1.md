@@ -87,3 +87,36 @@ use memory. Forward fix: stop new executor initiation and preserve the table and
 audit while repairing; never roll back by dropping or clearing unknown attempts.
 Database CI and the independent RED review must verify migration, row locking,
 RLS and durability before merge. No live capability is enabled by this addition.
+
+
+M4-12 reserve cleanup (RED, built ahead on reserve-pg): additive migration
+`0499_fee_reservation_archive.sql` uses the finish list's spare build-ahead range;
+the router must reconcile its number before integration. No earlier migration is
+edited. Compaction is lazy on the next successful store transaction, under the
+same tenant book lock. Released attempts, all event fingerprints and all book
+audit entries move to INSERT-only tenant-qualified archive records before the
+active book is rewritten. Released lifecycle snapshots are versioned append-only, including later failure
+status changes. The history remains readable to the adapter; it is not deleted. Unknown, pending, settled and reconciliation attempts stay active.
+Replays cannot create another release, reservation or chained audit entry.
+A late settlement of an archived release restores an active reconciliation hold,
+blocking an already reserved replacement. Refund replacements retain the original
+settled-principal cap. No new replacement command or provider behavior is needed:
+the executor already releases definite failures exactly once.
+
+This keeps released-retry/event/audit history out of the repeatedly rewritten JSON
+row. The existing whole-book callback interface still hydrates archived history
+inside the transaction for replay, balance and late-event checks; memory and read
+cost remain proportional to tenant history. Selective history reads would require
+a separate interface change. The archive is internal state, with runtime SELECT
+and INSERT only, FORCE RLS and no runtime UPDATE, DELETE or TRUNCATE. Existing
+LP-0, tenancy, entitlement and SERIOUS-B5 expectations include exactly the added
+table, primary key, grants and policy. No routine is recreated.
+
+Forward fix: stop executor initiation, preserve both tables and chain audit, and
+repair forward. Do not run the predecessor adapter on compacted books: it cannot
+read archived command/event identities. Rolling back requires a reviewed forward
+rehydration retaining active overrides, not dropping or clearing archive rows.
+PostgreSQL concurrency, populated upgrade, rollback, RLS and catalogue tests are
+added for CI; this sandbox cannot execute them. Independent RED review and green
+CI against current main remain required. Fake sources/adapters only; no live rail,
+real money, production source reader or release is enabled.
