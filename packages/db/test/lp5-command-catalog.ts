@@ -2,6 +2,7 @@
 export const lp5ReadTables = [
   "proposal_review",
   "imported_job_baseline",
+  "job_party_binding",
   "job_import_v3",
   "trial_admission",
   "membership",

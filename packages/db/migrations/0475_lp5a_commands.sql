@@ -56,7 +56,7 @@ REVOKE ALL ON app.command_lifecycle_claim FROM PUBLIC,jobguard_runtime,jobguard_
 
 -- Read-only proof adapters; no business locks are taken here or at completion.
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['proposal_review','imported_job_baseline','job_import_v3','trial_admission','membership','job','job_activation','job_activation_terms','cap_snapshot','synthetic_obligation',
+ FOREACH n IN ARRAY ARRAY['proposal_review','imported_job_baseline','job_party_binding','job_import_v3','trial_admission','membership','job','job_activation','job_activation_terms','cap_snapshot','synthetic_obligation',
  'simulated_settlement_event','quote_acceptance','acceptance_event','activation_acceptance_operation_use',
  'quote_send','quote_document_version','final_account_revision','customer_invoice','customer_credit_note','customer_payment','customer_payment_reversal',
  'purchase_order_placement','purchase_order_revision','recovery_case_terms_approval','recovery_message_approval',
@@ -101,7 +101,7 @@ CREATE FUNCTION app.begin_command(p_version text,p_command_id uuid,p_command_typ
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uuid;
  reg app.command_type_registry; prior app.command_receipt; found_count integer:=0;
- digest text; legacy_digest text; legacy_input jsonb; claimed uuid; dec uuid; res uuid; auth uuid; a jsonb; existing_dec uuid;
+ digest text; digest_input jsonb; legacy_digest text; legacy_input jsonb; claimed uuid; dec uuid; res uuid; auth uuid; a jsonb; existing_dec uuid;
 BEGIN
  actor:=(p_resource->>'actorMembershipId')::uuid;
  -- No membership lock upgrade: preserve the receipt FK KEY SHARE deadlock fix.
@@ -131,10 +131,17 @@ BEGIN
   legacy_input:=jsonb_set(legacy_input-ARRAY['commandId','decisionId','resolutionId','authorizationId'],'{action,expiresAt}','{}');
  END IF;
  legacy_digest:=encode(sha256(convert_to(app.final_lock_canonical(legacy_input),'UTF8')),'hex');
- -- Generated identifiers are deliberately excluded; principal/resource/action/revisions are not.
+ -- Preserve the historical exclusion of server-generated grant expiry. It
+ -- remains in the immutable authorization and is checked for fresh execution;
+ -- a replay neither renews that grant nor repeats its business effect.
+ digest_input:=p_significant_input-ARRAY['commandId','decisionId','resolutionId','authorizationId'];
+ IF p_version='command.v1' THEN
+  digest_input:=jsonb_set(digest_input,'{action,expiresAt}','{}');
+ END IF;
+ -- Principal/resource and every non-generated action term remain significant.
  digest:=encode(sha256(convert_to(app.final_lock_canonical(jsonb_build_object('version',p_version,'commandType',p_command_type,
   'semanticKey',p_semantic_key,'resource',p_resource,'expectedRevisions',p_expected_revisions,
-  'input',p_significant_input-ARRAY['commandId','decisionId','resolutionId','authorizationId'])),'UTF8')),'hex');
+  'input',digest_input)),'UTF8')),'hex');
  INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
  VALUES(p_command_id,t,p_command_type,p_semantic_key,digest,'processing',actor) ON CONFLICT DO NOTHING RETURNING command_id INTO claimed;
  IF claimed IS NULL THEN
@@ -245,6 +252,26 @@ BEGIN
    WHERE b.tenant_id=t AND b.job_id=subject::uuid AND b.attested_by_membership_id=c.actor_membership_id
     AND b.baseline_hash=a->>'contentHash' AND b.accepted_net_value_pence=(a->>'amountPence')::bigint
     AND b.import_terms_version=a->>'policyVersion' AND b.id=(c.effect_ref->>'baselineId')::uuid;
+  -- The parties-import API enriches the legacy mutation's base result. Treat
+  -- its two IDs only as references: rederive their relationship and source hash
+  -- from the immutable bindings and the baseline before returning the DTO.
+  IF value IS NOT NULL AND (p_outcome ? 'sourceJobId' OR p_outcome ? 'sourceBindingId') THEN
+   IF jsonb_typeof(p_outcome->'sourceJobId') IS DISTINCT FROM 'string'
+    OR jsonb_typeof(p_outcome->'sourceBindingId') IS DISTINCT FROM 'string'
+    OR NOT EXISTS(SELECT 1 FROM app.imported_job_baseline b
+     JOIN app.job_party_binding imported ON(imported.tenant_id,imported.job_id)=(b.tenant_id,b.job_id)
+     JOIN app.job_party_binding source ON source.tenant_id=b.tenant_id
+      AND source.id=(p_outcome->>'sourceBindingId')::uuid AND source.job_id=(p_outcome->>'sourceJobId')::uuid
+      AND source.customer_revision_id=imported.customer_revision_id
+      AND source.site_revision_id=imported.site_revision_id AND source.paying_party_revision_id=imported.paying_party_revision_id
+     WHERE b.tenant_id=t AND b.id=(c.effect_ref->>'baselineId')::uuid AND b.job_id=subject::uuid
+      AND b.baseline_hash=encode(sha256(convert_to(
+       '{"sourceJobId":'||to_jsonb(p_outcome->>'sourceJobId')::text||',"bindingId":'||to_jsonb(p_outcome->>'sourceBindingId')::text||
+       ',"baselineDescription":'||to_jsonb(b.baseline_description)::text||',"netPence":'||b.accepted_net_value_pence::text||'}','UTF8')),'hex'))
+   THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+   value:=value||jsonb_build_object('version','job-parties-import-result.v1','environment','synthetic_demo',
+    'sourceJobId',p_outcome->>'sourceJobId','sourceBindingId',p_outcome->>'sourceBindingId','realExternalActions',0);
+  END IF;
  WHEN 'import_v3' THEN
   SELECT i.result INTO value FROM app.job_import_v3 i WHERE i.tenant_id=t AND i.command_id=p_command_id
    AND i.job_id=subject::uuid AND i.xmin::text=pg_current_xact_id()::text;
@@ -277,7 +304,10 @@ BEGIN
     WHERE u.tenant_id=t AND u.command_id=p_command_id AND u.authorization_id=c.authorization_id
      AND u.actor_membership_id=c.actor_membership_id AND j.job_id=subject::uuid
      AND j.accepted_document_hash=a->>'contentHash' AND j.accepted_document_version=expected_revision;
-   -- Historical owner-connected transition fixture: prove an actual revision change in THIS transaction.
+   -- Owner-connected legacy transition/lock fixtures have no activation row.
+   -- Keep their narrow proof for the unchanged commands integration tests:
+   -- runtime cannot execute transition_job or become a superuser, and even the
+   -- fixture must prove a real live/revision change in this same transaction.
    IF value IS NULL AND a->>'actionType'='switch_live' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN
     SELECT jsonb_build_object('jobId',id,'revision',app.job.revision,'status',status) INTO value FROM app.job
      WHERE tenant_id=t AND id=subject::uuid AND status='live' AND app.job.revision=expected_revision+1
@@ -297,7 +327,8 @@ BEGIN
    JOIN app.acceptance_event e ON(e.tenant_id,e.acceptance_id)=(q.tenant_id,q.id)
    WHERE u.tenant_id=t AND u.command_id=p_command_id AND u.authorization_id=c.authorization_id
     AND q.actor_membership_id=c.actor_membership_id AND q.document_id=subject::uuid AND q.document_hash=a->>'contentHash'
-    AND q.document_version=expected_revision AND q.accepted_total_pence=(a->>'amountPence')::bigint AND e.kind='accepted';
+    AND q.document_version=expected_revision AND q.accepted_total_pence=(a->>'amountPence')::bigint AND e.kind='accepted'
+    AND e.id=(p_outcome->>'eventId')::uuid;
  WHEN 'disposition' THEN
   SELECT jsonb_build_object('eventId',e.id,'jobId',e.job_id,'documentId',e.document_id,'kind',e.kind,
    'state',CASE WHEN e.kind='declined' THEN 'lost' ELSE 'quoting' END) INTO value
@@ -361,7 +392,7 @@ CREATE FUNCTION app.complete_command(p_command_id uuid,p_outcome jsonb) RETURNS 
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
  r app.command_receipt; reg app.command_type_registry; value jsonb; refs jsonb; proof_ref jsonb;
 BEGIN
- IF jsonb_typeof(p_outcome) IS DISTINCT FROM 'object' OR p_outcome-ARRAY['eventId','placementId','invoiceId','locked','revision']<>'{}' THEN
+ IF jsonb_typeof(p_outcome) IS DISTINCT FROM 'object' OR p_outcome-ARRAY['eventId','placementId','invoiceId','locked','revision','sourceJobId','sourceBindingId']<>'{}' THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=p_command_id;
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command_id;
@@ -380,6 +411,8 @@ BEGIN
  value:=app.lp5_command_result(p_command_id,p_outcome);
  -- The argument is a reference hint only. Persist exclusively the adapter-derived result.
  proof_ref:=CASE reg.completion_adapter
+  WHEN 'import' THEN (CASE WHEN value ? 'sourceJobId' THEN jsonb_build_object('sourceJobId',value->'sourceJobId','sourceBindingId',value->'sourceBindingId') ELSE '{}'::jsonb END)
+  WHEN 'acceptance' THEN jsonb_build_object('eventId',value->'eventId')
   WHEN 'disposition' THEN jsonb_build_object('eventId',value->'eventId')
   WHEN 'purchase_order' THEN jsonb_build_object('placementId',value->'placementId')
   WHEN 'invoice' THEN jsonb_build_object('invoiceId',value->'invoiceId')
@@ -403,14 +436,18 @@ END $$;
 CREATE FUNCTION app.lp5_check_command_completion() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE c app.command_lifecycle_claim; r app.command_receipt; reg app.command_type_registry;
- value jsonb; outbox uuid; authorization uuid; a app.action_authorization;
+ value jsonb; outbox uuid; authorization uuid; a app.action_authorization; caller_tenant text:=current_setting('app.tenant_id',true);
 BEGIN
+ -- Deferred checks run after caller code may have changed or cleared context.
+ -- RLS and the result adapter must see the tenant of THIS receipt, not that setting.
+ PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
  -- LP-5b converts other writers; LP-5c closes their direct grants. This trigger
  -- proves managed dispatcher claims, without declaring the unconverted writers secure.
  IF NEW.status='processing' AND NOT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id AND status='succeeded') THEN
   RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23514'; END IF;
- IF c.command_id IS NULL THEN RETURN NULL; END IF;
+ IF c.command_id IS NULL THEN
+  PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true); RETURN NULL; END IF;
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
  SELECT * INTO reg FROM app.command_type_registry WHERE command_type=r.command_type AND version=c.version;
  IF r.status IS DISTINCT FROM 'succeeded' OR c.outcome IS NULL THEN
@@ -436,6 +473,7 @@ BEGIN
    AND b.amount_pence IS NOT DISTINCT FROM a.amount_pence AND b.currency IS NOT DISTINCT FROM a.currency
    AND b.policy_version=a.policy_version) THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  END IF;
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
  RETURN NULL;
 END $$;
 CREATE CONSTRAINT TRIGGER lp5_command_completion AFTER INSERT OR UPDATE ON app.command_receipt

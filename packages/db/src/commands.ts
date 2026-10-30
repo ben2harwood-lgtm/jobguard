@@ -69,7 +69,7 @@ async function requireOwner(database: TenantTransaction, tenantId: string, actor
 }
 function outcomeReference(result: Record<string, unknown>): Record<string, unknown> {
   // These are hints to checked adapters, never a caller-authored success value.
-  return Object.fromEntries(["eventId", "placementId", "invoiceId", "locked", "revision"]
+  return Object.fromEntries(["eventId", "placementId", "invoiceId", "locked", "revision", "sourceJobId", "sourceBindingId"]
     .filter(key => key in result).map(key => [key, result[key]]));
 }
 export class UserCommandDispatcher {

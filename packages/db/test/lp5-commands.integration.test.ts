@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
+import { ConfirmProposalReview } from "../src/review-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { adoptionFixture, reviewFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
@@ -104,4 +106,57 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
       await expect(withTenant(db.runtime, f.context, tx => tx.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
     }
   });
+  it("replays review confirmation with a fresh server-generated expiry and keeps the original result contract", async () => {
+    const f = await reviewFixture(db), dispatcher = new UserCommandDispatcher(db.runtime);
+    const mutation = new ConfirmProposalReview(f.review);
+    let calls = 0, expected: Record<string, unknown> | undefined;
+    const handler = { mutate: async (tx: Parameters<typeof mutation.mutate>[0], command: Parameters<typeof mutation.mutate>[1]) => {
+      calls++; expected = await mutation.mutate(tx, command); return expected;
+    } };
+    const first = await dispatcher.dispatch(f.context, f.command, handler);
+    expect(first).toEqual(expected);
+    expect(await dispatcher.dispatch(f.context, { ...f.command, action: { ...f.command.action, expiresAt: new Date("2099-01-01T00:01:00Z") } }, handler)).toEqual(first);
+    expect(calls).toBe(1);
+    expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, authorizations: 1 });
+  });
+  it("replays legacy adoption with a fresh server-generated expiry and retains its base result contract", async () => {
+    const f = await adoptionFixture(db), context = testTenantContext(f.actor.tenant), dispatcher = new UserCommandDispatcher(db.runtime);
+    const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
+    let calls = 0, expected: Record<string, unknown> | undefined;
+    const handler = { mutate: async (tx: Parameters<typeof mutation.mutate>[0], command: Parameters<typeof mutation.mutate>[1]) => {
+      calls++; expected = await mutation.mutate(tx, command); return expected;
+    } };
+    const first = await dispatcher.dispatch(context, f.command, handler);
+    expect(first).toEqual(expected);
+    expect(await dispatcher.dispatch(context, { ...f.command, action: { ...f.command.action, expiresAt: new Date("2099-01-01T00:01:00Z") } }, handler)).toEqual(first);
+    expect(calls).toBe(1);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.imported_job_baseline WHERE tenant_id=$1", [f.actor.tenant])).rows[0].n).toBe(1);
+  });
+  it("cannot bypass a completed receipt's proof by switching tenant before commit", async () => {
+    const f = await fixture(), other = await jobDoorsActor(db.owner), c = commercial(f, { commandType: "synthetic.lock" });
+    const first = await f.dispatcher.dispatch(f.context, c, { mutate: async () => ({ locked: f.job }) });
+    await expect(withTenant(db.runtime, f.context, async tx => {
+      await tx.$client.query("UPDATE app.command_receipt SET result='{\"forged\":true}' WHERE command_id=$1", [c.commandId]);
+      await tx.$client.query("SELECT set_config('app.tenant_id',$1,true)", [other.tenant]);
+    })).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
+    expect((await db.owner.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, c.commandId])).rows[0].result).toEqual(first);
+  });
+  it.each(["foreign", "", "not-a-uuid"])("checks the receipt tenant and restores the caller's %j setting", async setting => {
+    const f = await fixture(), other = await jobDoorsActor(db.owner), c = commercial(f, { commandType: "synthetic.lock" });
+    const callerSetting = setting === "foreign" ? other.tenant : setting;
+    await withTenant(db.runtime, f.context, async tx => {
+      await tx.$client.query("SELECT app.begin_command($1,$2,$3,$4,$5,$6,$7)", [c.version, c.commandId, c.commandType, c.semanticKey,
+        { tenantId: f.actor.tenant, actorMembershipId: f.actor.member, subjectType: c.subjectType, subjectRef: c.subjectRef }, { aggregateRevision: c.action.aggregateRevision }, c]);
+      await tx.$client.query("SELECT app.complete_command($1,$2)", [c.commandId, { locked: f.job }]);
+      await tx.$client.query("SELECT set_config('app.tenant_id',$1,true)", [callerSetting]);
+      await tx.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
+      expect((await tx.$client.query("SELECT current_setting('app.tenant_id',true) tenant")).rows[0].tenant).toBe(callerSetting);
+    });
+  });
+  it("keeps the legacy transition fixture unavailable to a runtime owner", async () => {
+    const f = await fixture();
+    await expect(withTenant(db.runtime, f.context, tx => tx.$client.query(
+      "SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)", [f.actor.tenant, f.job, randomUUID()]))).rejects.toMatchObject({ code: "42501" });
+  });
+
 });
