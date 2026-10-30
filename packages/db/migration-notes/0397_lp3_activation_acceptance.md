@@ -1,6 +1,6 @@
 # LP-3: activation and acceptance cutover (RED, dark)
 
-0411 adds checked overloads for the four legacy routes, closes runtime EXECUTE on
+0397 adds checked overloads for the four legacy routes, closes runtime EXECUTE on
 all four old signatures in the same transaction, and leaves owner-connected
 historical fixture calls available. New overloads refuse outside the trusted
 `jobguard_synthetic_demo` database, regardless of caller-set deployment flags.
@@ -81,3 +81,32 @@ merge, catch up with current main, and rerun lane/migration checks against the
 committed result. 0411 is the sole LP-3 migration and sorts above that main.
 PostgreSQL, migrations and browser execution remain NOT RUN locally (sandbox
 restriction); GitHub CI and a fresh exact-head RED review remain required.
+
+## PR #414 reserved-number catch-up — 30 October 2026
+
+Current main 042f7d39 (through migration 0386) is already merged at 48844c38.
+Renumbered this branch's sole migration 0382 to the router-reserved 0397 using
+tools/migration-renumber.mjs's exported planRenumber, reserving the intervening
+range in the planner input. Applied filesystem moves/reference rewrites only:
+the helper's CLI write mode stages files and is unavailable with read-only Git.
+SQL remains byte-identical to the reviewed ccf79c57 version, SHA-256
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+The migration note, lane paths, LP-0 source references and upgrade test use 0397.
+Earlier dated repair paragraphs above retain their historical migration numbers.
+
+Read-only comparisons confirmed all 160 main migration files, every main lane
+file and docs/contracts/lp-downstream-effects-v1.md are byte-identical to main.
+LP-0 main inventory entries remain intact except LP-3's explicit legacy-route
+replacements; no duplicate inventory identities exist. Shared SERIOUS-B5,
+entitlement and tenancy diffs retain main's expectations plus LP-3 additions.
+No routine body was recreated and no product behavior changed in this catch-up.
+
+Local validation: installed Vitest ran src/lp3-operation.test.ts,
+src/lp3-mutations.test.ts and test/lp-0-catalog.test.ts with --maxWorkers=2:
+3 files, 86 tests passed. Database TypeScript --noEmit passed. Core purity,
+money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF checks passed;
+git diff --check passed. Combined tools/lint.mjs stopped at the lane checker
+because the sandbox starts at detached HEAD; no lane rules were changed.
+PostgreSQL/migration/browser execution is deferred to GitHub CI under the issued
+sandbox constraint. Router must commit on the registered branch and rerun lane
+checking and CI; exact-head RED review remains a separate gate.

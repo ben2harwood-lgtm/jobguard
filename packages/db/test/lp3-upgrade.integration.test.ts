@@ -6,7 +6,7 @@ import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as 
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate } from "../src/migrate.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-const own="0382_lp3_activation_acceptance.sql",context=testTenantContext(T),environment=process.env.JOBGUARD_ENV;
+const own="0397_lp3_activation_acceptance.sql",context=testTenantContext(T),environment=process.env.JOBGUARD_ENV;
 let db:Awaited<ReturnType<typeof jobDoorsDatabase>>;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true,own);
@@ -16,7 +16,7 @@ beforeAll(async()=>{
   await db.owner.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[T,M,A,U]);
 },300_000);
 afterAll(async()=>{await db?.close();if(environment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=environment;});
-it("0382 alone preserves populated v1 commercial history, then repeat migrate succeeds",async()=>{
+it("0397 alone preserves populated v1 commercial history, then repeat migrate succeeds",async()=>{
   const job=await prepareActivationFixtureV3(db.owner,context,"Fictional before LP3",100100);
   const d=(await db.owner.query("SELECT j.revision,d.* FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.tenant_id=$1 AND j.id=$2",[T,job])).rows[0];
   await transaction(db.owner,T,c=>c.query(`SELECT app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,100100,1502,'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$10,clock_timestamp())`,[T,randomUUID(),randomUUID(),randomUUID(),job,d.id,d.document_version,d.content_hash,d.revision,M]));
