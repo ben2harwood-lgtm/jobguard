@@ -1,3 +1,132 @@
+# M4-10-S — immutable statement issuance (30 October 2026)
+
+Current status: built ahead on `codex/sandbox/m4-10-s-issue`, ready for router
+commit and CI after its posting base merges. RED: money. PostgreSQL/browser
+execution and the one exact-head Claude review remain required. No independent
+verification, merge, release, collection or task completion is claimed.
+
+This section supersedes the historical preparation/catch-up notes below.
+Current base is `51ce7389` on `codex/sandbox/m4-9-s-posting`. The reference-only
+old `origin/codex/sandbox/m4-10-s` branch was not merged. Migration 0490 is the
+only new migration; no predecessor migration was changed. No git write command,
+provider, live money, customer data or local database/browser service was used.
+The router owns the finish-list/Command Center line and commit/push/PR.
+
+## Implemented behavior and controls
+
+- Two private, tenant-qualified, FORCE-RLS immutable tables: numbered documents
+  and command receipts. Three exact routines: a private source loader and two
+  authenticated synthetic-only read/write entrypoints. Exact additions are
+  unioned into both LP inventories, SERIOUS-B5, tenancy and entitlement checks.
+- Tenant-wide `DEMO-FEE-000001` numbering under a durable transaction lock;
+  the success-fee documents share the `app.platform_*` namespace with separate
+  subscription documents. Existing subscription tables/0374 routines are
+  unchanged. M4-9-S positive/zero posting and its closed negative-journal boundary
+  are preserved.
+- Statements bind immutable derivation, posting approval, source assessment,
+  current assessment, allocation, reversal, customer-adjustment and evidence
+  invalidation identities. Current Q comes from the existing SV-6 source
+  validator and existing exact fee arithmetic; no new allocator is introduced.
+- SHA-256 covers canonical versioned JSON with saved number, policy v3, exact Q,
+  cumulative principal, signed document delta, source inputs, prior journals,
+  and previous-document identity/hash. The existing representation/formatter
+  remains compatible; its canonical encoder is reused by issued downloads.
+- Explicit issue/approve commands, current authenticated owner/job/session,
+  original receipt replay, changed-payload refusal, source fences, current-source
+  approval checks and atomic audit. Approval uses a nonnegative amount magnitude
+  to preserve the existing authorization invariant; the signed delta is hash-bound.
+  It is a statement approval, never collection authority.
+- Original bytes survive reversal. One changed source snapshot yields one linked
+  documentary correction even across concurrent issue IDs/replays. Corrections
+  do not post financial compensation. Settlement history explicitly remains
+  unavailable until M4-12-S; no customer receipt is relabelled as a fee settlement.
+- Nest/Next APIs, exact versioned JSON download, no-store responses, a workspace
+  panel with source/approval drill-down, separate cumulative/document principals,
+  historical postings and explicit synthetic/principal-only/VAT labels. Rendering,
+  reads, issuance, approval and downloads never post or collect.
+
+The private source helper avoids duplicating the attribution/source validator in
+issuance and approval. The existing posting lock order is retained before the
+per-tenant number lock and audit append. Job-level adjustment IDs deliberately
+invalidate a saved approval conservatively when another adjustment is recorded.
+
+## Executed local validation
+
+Runtime: Node v24.17.0; cached pnpm 10.28.1 via
+`PATH=/private/tmp/m4-5-pursuit-bin:$PATH`. Dependencies were already installed;
+no package installation or lockfile edit. The global pnpm launcher initially
+failed its self-version registry/signature check; all successful pnpm runs used
+the existing cached pinned executable. Tests use at most two workers and at
+most three named Vitest files per run.
+
+- `pnpm typecheck --concurrency=2`: all seven packages passed.
+- `pnpm turbo run lint --concurrency=2`: all seven package lint tasks passed.
+- `CIRCLE_NODE_TOTAL=2 pnpm build --concurrency=1`: all seven production builds
+  passed (Next uses one static worker). Final build log:
+  `/tmp/m4-10-s-issue-final-build.log`. Existing workspace-root, CSS `end`, Nest
+  optional `file-type`, and shared-cache permission warnings were nonfatal.
+- Core Vitest: `src/issued-simulation-fee-statement.test.ts`,
+  `src/simulation-fee-statement.test.ts`, `src/success-fee-catch-posting.test.ts`:
+  62 passed. Includes exact £282/Q £2,820 and −£250/£32 linked-document bytes,
+  original hash preservation, strict commands and download tampering refusal.
+- DB unit Vitest: `src/simulation-fee-statement-repository.test.ts`,
+  `src/success-fee-repository.test.ts`, `test/lp-0-catalog.test.ts`: 40 passed.
+  Scripted transaction tests prove wrapper behavior, not PostgreSQL guarantees.
+- `test/simulation-fee-statement-catalog.test.ts`: passed; both reviewed LP
+  inventories enumerate exactly the migration's three routine identities and
+  actual source calls/writes. This is a static check, not catalog execution.
+- API Vitest: `src/success-fee.application.test.ts`, `src/success-fee.http.test.ts`:
+  18 passed. Next Vitest: `app/api/jobs/[id]/success-fees/statements/route.test.ts`,
+  `app/api/jobs/[id]/success-fees/route.test.ts`: 9 passed.
+- `node --import tsx src/generate-openapi.ts` (API directory) regenerated only
+  the three new endpoint operations. Its `--check` passes. The normal tsx CLI
+  could not bind its IPC socket here. Compiled generation was not retained
+  because decorator metadata produces unrelated schema differences.
+- Money arithmetic, commercial boundary, PL/pgSQL CASE-in-IF and core purity
+  checks passed; `git diff --check` passed.
+- Playwright `e2e/simulation-fee-statements.spec.ts --list`: two journeys
+  discovered, mobile-360 and desktop. No browser execution is claimed.
+
+Full `pnpm lint` is NOT green in this pre-commit stack: its default lane check
+compares against current main and reports inherited M4-9-S/SV-6/receipt-producer
+files. A self-comparison override was correctly refused. No lane was broadened
+and no check was weakened; the router must let the parent merge before opening
+this PR. The own working-tree lane is separately checked against the exact
+changed path set. This does not substitute for the real post-commit CI gate.
+
+## CI and review handoff
+
+New real-PostgreSQL suites (not run in this sandbox):
+`simulation-fee-statement.integration.test.ts` and
+`simulation-fee-statement-upgrade.integration.test.ts`. They use genuine
+receipt/allocation/attribution/posting writers, then assert source-linked issuance,
+correction replay/concurrency, negative-document approval magnitude, unchanged
+original downloads, stale hashes and assessments, audit rollback, direct-write
+refusal, cross-tenant empty RLS reads, populated predecessor preservation and
+repeat migration safety. Their genuine existing F7 fixture is £80 -> £0; the
+exact £282 -> £32 figures have core representation and browser-response coverage.
+This distinction is intentional and is not a claim of an executed £282 SQL demo.
+
+CI must run the real database, migration, full test and browser gates against
+current main, including existing LP-0/SERIOUS-B5/entitlement/tenancy freezes.
+`simulation-fee-statements.spec.ts` supplies the £282/−£250/£32 browser journey
+with synthetic API responses; it is not live-provider proof. A different Claude
+session reviews the exact committed head before merge. All production,
+commercial, tax and live-collection gates remain closed.
+
+Migration/compatibility: 0490 is additive; no data backfill, new credentials,
+provider routes or operational alert is introduced. Existing v1 representations
+and subscription documents remain valid. Forward-fix any defect with a new
+migration; preserve issued documents/receipts and never delete/reset them.
+Suspend the new statement endpoints while repairing; do not change old bytes.
+Shared LP/tenancy/entitlement files serialize on the posting base; the router
+must preserve the union when integrating. Lane:
+`config/lanes/m4-10-s-issue.json` (its own path is implicitly owned).
+
+---
+
+## Historical preparation notes (superseded by the current section)
+
 # M4-10-S builder receipt
 
 Status: independent pure representation built; full server portion and complete plan card INCOMPLETE. This is not a completed money-chain issuance piece. No technical acceptance or independent model verdict is claimed.

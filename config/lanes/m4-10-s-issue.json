@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-10-s-issue": {
+      "branches": [
+        "codex/sandbox/m4-10-s-issue"
+      ],
+      "receipt": "docs/verdicts/M4-10-S/BUILDER_RECEIPT.md",
+      "note": "RED M4-10-S numbered immutable statement issuance and documentary corrections; migration 0490. Stacked on m4-9-s-posting; router owns commit/push/PR and exact-head Claude review. Own lane file is implicitly owned; allow lists exactly the other changed paths. PostgreSQL/browser suites run in CI.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/success-fee.application.test.ts",
+        "apps/api/src/success-fee.application.ts",
+        "apps/api/src/success-fee.controller.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/success-fees/statements/[statementId]/route.ts",
+        "apps/web/app/api/jobs/[id]/success-fees/statements/route.test.ts",
+        "apps/web/app/api/jobs/[id]/success-fees/statements/route.ts",
+        "apps/web/app/ui/simulation-fee-statements.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/simulation-fee-statements.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",
+        "docs/contracts/simulation-fee-statement-v1.md",
+        "docs/verdicts/M4-10-S/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/issued-simulation-fee-statement.test.ts",
+        "packages/core/src/issued-simulation-fee-statement.ts",
+        "packages/core/src/simulation-fee-statement.ts",
+        "packages/db/migrations/0490_simulation_fee_statement_issue.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/simulation-fee-statement-repository.test.ts",
+        "packages/db/src/simulation-fee-statement-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/simulation-fee-statement-catalog.test.ts",
+        "packages/db/test/simulation-fee-statement-upgrade.integration.test.ts",
+        "packages/db/test/simulation-fee-statement.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

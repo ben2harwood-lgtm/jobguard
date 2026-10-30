@@ -355,6 +355,163 @@
         ]
       }
     },
+    "/jobs/{id}/success-fees/statements": {
+      "get": {
+        "operationId": "SuccessFeeController_statements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned statement view with immutable source and approval links"
+          }
+        },
+        "summary": "Read immutable synthetic fee statements; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_issueStatement",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "issue"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue a simulation statement or approve its exact hash; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements/{statementId}": {
+      "get": {
+        "operationId": "SuccessFeeController_downloadStatement",
+        "parameters": [
+          {
+            "name": "statementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact versioned simulation statement JSON bytes",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",
