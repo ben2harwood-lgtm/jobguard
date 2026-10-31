@@ -1637,3 +1637,49 @@ two unmerged paths until the router stages their resolved working files;
 no Git-writing command was run here. PostgreSQL, migration execution and
 browser suites require GitHub CI after push. Independent exact-head RED
 review remains required. Neither demo journey was executed in this sandbox.
+
+## 31 October 2026 — PR #392 catch-up through main #451, unchanged 0503/0504
+
+CH-6 / CH6-J; RED. Resolved the router-prepared merge of origin/main
+8970e6e600346b76ce789edc8fbcdb426efe6e8f (#451, following #453/#454/#455)
+into reviewed HEAD 3d111b1c. No Git-writing command was run. Kept both
+CommercialIntegrityV3Controller and CustomerVariationController registrations,
+using the latest main module/provider body. Regenerated OpenAPI with the existing
+generator and verified every operation from both parents is unchanged. Resolved
+LP-0 as the exact recursive identity union, retaining latest main records.
+
+Deterministic verification passed: all main SERIOUS-B5, contractor entitlement
+and tenancy expectation lines retained; all 364 main migration/lane files
+byte-identical; 0503/0504 byte-identical to HEAD 3d111b1c; protected
+lp-downstream-effects-v1.md byte-identical to both parents; exact 56-path lane;
+migration ordering; no working-file conflict markers. All 11 CH-6 routine names
+are distinct from main's routines, so no main routine was recreated. No new
+behavior, dependencies or substantial complexity. Existing initial-review
+LATER / SIMPLICITY note remains; this catch-up adds no further review round.
+
+Checks actually run with installed Node 24.17.0 / Vitest 4.1.12:
+- packages/core and packages/db: ./node_modules/.bin/tsc -p tsconfig.json — PASS.
+- packages/db and apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: node --import tsx src/generate-openapi.ts, then --check — PASS.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 --testTimeout=120000 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.test.ts src/commercial-integrity-v3.boundaries.test.ts — PASS, 2 files / 22 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/lp-0-catalog.test.ts — PASS, 27 tests (comparator fixtures, not PostgreSQL execution).
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- /tmp/ch6-j-oct31-verify.mjs plus routine-name and OpenAPI parent-operation comparisons — PASS.
+- git diff --check — PASS.
+
+An initial command used the wrong package-relative paths and made no edits;
+corrected to the explicit repository root. Initial OpenAPI attempts encountered
+stale local compiled core/db exports; rebuilding those packages resolved this.
+The pnpm turbo wrapper produced no build output and was interrupted; installed
+package-local tsc executables completed the relevant builds instead. No package
+installation/download command was issued.
+
+Ready for router staging and commit. The read-only Git index still lists the
+three original conflicts until the router stages the resolved working files.
+PostgreSQL, migration execution and browser suites were not run because the
+sandbox cannot start PostgreSQL or bind localhost; GitHub CI must run them after
+push. Independent exact-head RED review remains required before merge. Neither
+demo journey was executed, and no commit, push, provider action or release was
+performed here.

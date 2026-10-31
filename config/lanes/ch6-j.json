@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392 renumber catch-up from reviewed 427c16cb through current main faa26359 (#455; highest migration 0490). Reserved 0503/0504 replace prior CH-6 migration stems with SQL bytes unchanged. Preserve main migrations, lane files and exact shared expectation unions. No new behavior or recreated main routines. PostgreSQL and browser suites require GitHub CI; independent RED review remains required.",
+      "note": "RED: CH-6 / PR #392 catch-up from reviewed 3d111b1c through current main 8970e6e6 (#451, after #453/#454/#455; highest migration 0502). Preserve 0503/0504 SQL bytes, main migrations, lane files and exact shared expectation unions. No new behavior or recreated main routines. PostgreSQL and browser suites require GitHub CI; independent exact-head RED review remains required.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",

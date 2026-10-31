@@ -65,7 +65,8 @@ async function freshInvoice(page: Page) {
 
 async function incompleteShadowReport(page: Page, jobId: string) {
   const report = await get(page, path(jobId, "shadow-demo"));
-  expect(report).toMatchObject({ status: "incomplete", customerApproval: "not_ready_yet", realExternalActions: 0, assessments: [] });
+  expect(report).toMatchObject({ status: "incomplete", realExternalActions: 0, assessments: [] });
+  expect(report.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] });
   expect(report.invoices.invoices).toEqual([]);
   await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
   await button(page, "Load saved J3 evidence").click();
