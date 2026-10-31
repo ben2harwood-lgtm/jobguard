@@ -50,3 +50,26 @@ it("preserves checked admin reads of an already-fresh stored projection", async 
  const f=fixture({view}); expect(await f.repository.read(context,digest)).toEqual(view);
  await expect(fixture({view:{...view,countedPlaces:-1}}).repository.read(context,digest)).rejects.toThrow("METER_PROJECTION_MISMATCH");
 });
+
+it("reads six Solo places after an unused job is closed, reopened and first photographed", async () => {
+ const raw=captured(); raw.stored.source.plan="Solo";
+ const sixth=structuredClone(raw.stored.source.jobs[0]!);
+ sixth.jobId=randomUUID();
+ sixth.activation={...sixth.activation,id:randomUUID(),termsId:randomUUID(),partyBindingId:randomUUID(),customerId:randomUUID(),siteId:randomUUID()};
+ const closedId=randomUUID();
+ Object.assign(sixth,{events:[
+  {version:"job-work-state-event.v1",id:closedId,jobId:sixth.jobId,sequence:1,kind:"closed",factAt:"2026-10-28T10:00:00.000000Z",recordedAt:"2026-10-28T10:00:00.000001Z",sourceReceiptId:null,commandId:randomUUID(),predecessorId:null,closeReason:"other",closeNote:"Fictional pause before grace"},
+  {version:"job-work-state-event.v1",id:randomUUID(),jobId:sixth.jobId,sequence:2,kind:"reopened",factAt:"2026-10-28T11:00:00.000000Z",recordedAt:"2026-10-28T11:00:00.000001Z",sourceReceiptId:null,commandId:randomUUID(),predecessorId:closedId,closeReason:null,closeNote:null},
+  {version:"job-work-state-event.v1",id:randomUUID(),jobId:sixth.jobId,sequence:3,kind:"first_site_evidence",factAt:"2026-10-28T12:00:00.000000Z",recordedAt:"2026-10-28T12:00:00.000000Z",sourceReceiptId:randomUUID(),commandId:null,predecessorId:null,closeReason:null,closeNote:null},
+ ]});
+ raw.stored.source.jobs.push(sixth);
+ expect(await fixture(raw).repository.read(context,digest)).toMatchObject({plan:"Solo",countedPlaces:6});
+});
+
+it("refuses a photo timestamp truncated to before its microsecond activation", async () => {
+ const raw=captured(),job=raw.stored.source.jobs[0]!;
+ job.activation.at="2026-10-28T12:00:00.000500Z";
+ // A later JS Date in this same millisecond still serializes .000Z.
+ // Evidence predating activation must remain invalid.
+ await expect(fixture(raw).repository.read(context,digest)).rejects.toThrow("METER_PROJECTION_MISMATCH");
+});

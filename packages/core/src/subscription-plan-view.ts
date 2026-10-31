@@ -15,7 +15,7 @@ const period = z.object({ ...row, period_start: londonMeterDateV1, period_end: l
   agreement_revision: z.number().int().positive(), principal_pence: pence, maximum_pence: maximum,
 }).refine(v => v.period_start < v.period_end && v.principal_pence <= v.maximum_pence);
 const statement = z.object({ ...row, period_id: id, namespace: z.literal("subscription.synthetic.v1"),
-  amount_pence: pence, currency: z.literal("GBP"), hypothetical: z.literal(true) });
+  amount_pence: pence, currency: z.literal("GBP"), hypothetical: z.literal(true), artifact_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional() });
 const work = z.object({ ...row, statement_id: id, amount_pence: pence, environment: z.literal("synthetic_demo") });
 const attempt = z.object({ ...row, work_id: id });
 const result = z.object({ ...row, work_id: id, outcome: z.enum(["redirect", "settled", "outcome_unknown", "failed"]),
@@ -23,6 +23,7 @@ const result = z.object({ ...row, work_id: id, outcome: z.enum(["redirect", "set
 /** Consumed projection of the C1 read. Other persisted fields are stripped, never displayed or used for money. */
 export const subscriptionPlanReadV1 = z.object({
   version: z.literal("subscription-persisted-read.v1"), environment: z.literal("synthetic_demo"), hypothetical: z.literal(true),
+  billingDay: z.number().int().min(1).max(31).optional(),
   agreements: z.array(agreement), periods: z.array(period), statements: z.array(statement),
   work: z.array(work), attempts: z.array(attempt), results: z.array(result),
 });
@@ -77,12 +78,14 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
     const payment = outcomes.has("settled") ? "settled" : outcomes.has("failed") ? "failed"
       : outcomes.has("outcome_unknown") ? "outcome_unknown" : outcomes.has("redirect") ? "redirect"
       : attempted ? "outcome_unknown" : w ? "approved" : "not_started";
-    return { id: p.id, plan: accepted.plan, startDate: p.period_start, endDateExclusive: p.period_end,
+    return { id: p.id, statementId: s.id, contentHash: s.artifact_hash, plan: accepted.plan, startDate: p.period_start, endDateExclusive: p.period_end,
       amount: money(p.principal_pence), amountLabel: subscriptionPounds(p.principal_pence),
       maximum: money(p.maximum_pence), maximumLabel: subscriptionPounds(p.maximum_pence),
       payment, paymentLabel: subscriptionPaymentLabels[payment] };
   }).sort((a, b) => b.startDate.localeCompare(a.startDate) || a.id.localeCompare(b.id));
   return { version: "subscription-plan-view.v1" as const, hypothetical: true as const,
+    billingDay: current?.anchor_day ?? data.billingDay ?? null,
+    revision: Math.max(0, ...data.agreements.map(a => a.revision)),
     annualAvailable: subscriptionAnnualAvailable,
     plans: getSubscriptionCatalogue({ version: "subscription-catalogue-request.v1", policyVersion: "subscription_pricing_policy_v4" })
       .map(p => ({ plan: p.plan, monthlyLabel: subscriptionPounds(p.monthlyPence), includedPlaces: p.included,
@@ -92,3 +95,6 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
     periods };
 }
 export type SubscriptionPlanView = ReturnType<typeof subscriptionPlanView>;
+
+/** Exact demonstration consent copy, rendered by the server and included in the approval hash. */
+export const subscriptionConsentText = "Made-up company demonstration only. No real payments are taken. Monthly principal excluding VAT: Solo £29.00, including 4 jobs, maximum £49.00; Builder £69.00, including 7 jobs, maximum £169.00. Annual plans are unavailable. The selected plan, billing anchor and monthly maximum apply. Upgrades apply today. Downgrades are requested for the next billing boundary and depend on available capacity. Issued periods cannot be changed.";

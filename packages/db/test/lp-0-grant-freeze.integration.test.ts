@@ -126,6 +126,24 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     }
   });
 
+  it("[LP0-meter-revoke] the retired reader is refused and re-granting it fails the freeze", async () => {
+    const signature = "app.mon1_counted_meter_today(uuid,text)";
+    expect((await db.admin.query(`SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).rows).toEqual([{ allowed: false }]);
+    const runtime = await db.runtimeClient();
+    try {
+      await expect(runtime.query("SELECT app.mon1_counted_meter_today(NULL::uuid,NULL::text)")).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    const result = await control(async c => {
+      await c.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${APPLICATION_ROLE}`);
+    }, async c => {
+      expect(await has(c, `SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).toBe(true);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ROUTINE_EXPOSED", object: `function:${signature}`, grantee: APPLICATION_ROLE, privilege: "EXECUTE" }),
+    ]));
+  });
+
   it("[LP0-03] dangerous column grant fails the freeze", async () => {
     for (const column of ["status", "accepted_net_value_pence", "recovery_cap_pence", "fee_policy_version", "accepted_quote_version_id"]) {
       const result = await control(
@@ -397,7 +415,11 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(find(key), key).toMatchObject({ disposition: "existing_exception", target: "revoke" });
       expect(find(key)!.cards, key).toContain("LP-1");
     }
-    expect(find(keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false))).toMatchObject({ disposition: "existing_exception", cards: ["LP-2"] });
+    const closedTransition = keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false);
+    expect(find(closedTransition)).toBeUndefined();
+    expect(exceptions.has(closedTransition)).toBe(false);
+    expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
+    expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
     // Reads are approved current capability, rebound at LP-11; they are not an exception.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
     // Target state is a separate section and names no live key.

@@ -13,11 +13,11 @@ describe("CH5-E source-only scripted boundary (not PostgreSQL proof)", () => {
   it("repository history/read cannot create authority, including after revocation", async () => {
     const f = scriptedImportPool(), repository = new ImportedEvidenceProvenanceRepository(f.pool);
     for (const command of [undefined, {}, { historyManifest: [], approved: true }, { historyManifest: [{ classification: "post_adoption_evidence" }] }])
-      await expect(repository.adoptWithHistory(f.context, D, J, command)).rejects.toMatchObject({ code: "IMPORTED_BASELINE_SOURCE_HANDOFF_HELD" });
-    await expect(repository.read(f.context, D, J)).rejects.toMatchObject({ code: "IMPORTED_BASELINE_SOURCE_HANDOFF_HELD" });
+      await expect(repository.adoptWithHistory({ context: f.context, sessionDigest: D }, J, command)).rejects.toMatchObject({ code: "IMPORTED_BASELINE_SOURCE_HANDOFF_HELD" });
+    await expect(repository.read({ context: f.context, sessionDigest: D }, J)).rejects.toMatchObject({ code: "IMPORTED_BASELINE_SOURCE_HANDOFF_HELD" });
     f.state.authenticated = false;
-    await expect(repository.adoptWithHistory(f.context, D, J, {})).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(repository.read(f.context, D, J)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(repository.adoptWithHistory({ context: f.context, sessionDigest: D }, J, {})).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(repository.read({ context: f.context, sessionDigest: D }, J)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|shadow_signal|adopt_in_flight/u.test(sql))).toBe(false);
   });
   it("checks scoped authority then refuses without a source or effects", async () => {

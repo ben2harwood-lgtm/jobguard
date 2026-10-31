@@ -151,6 +151,26 @@ BEGIN
   RAISE EXCEPTION 'METER_UPGRADE_REQUIRED' USING ERRCODE='P0001',
    DETAIL='Your Solo plan and grace place are full. Move to Builder before starting this site work.';
  END IF;
+ -- MON-1 Decisions begin
+ -- Capacity is serialized by the freshly rebuilt ledger's tenant lock. These
+ -- are unresolved proposals only: no authorization, plan change or charge.
+ IF after_count>before_count AND after_count>(CASE plan WHEN 'Solo' THEN 5 ELSE 12 END) THEN
+  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
+  SELECT (substr(h,1,12)||'4'||substr(h,14,3)||'8'||substr(h,18,15))::uuid,
+   t,'subscription',t::text,'subscription.upgrade'
+  FROM (SELECT encode(sha256(convert_to('mon1-grace-upgrade.v1:'||t::text||':'||ledger.agreement_id::text,'UTF8')),'hex') h) identity_hash
+  ON CONFLICT (tenant_id,id) DO NOTHING;
+  IF plan='Builder' AND after_count>13 THEN
+   INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
+   SELECT (substr(h,1,12)||'4'||substr(h,14,3)||'8'||substr(h,18,15))::uuid,
+    t,'subscription',t::text,'subscription.track_review'
+   FROM (SELECT encode(sha256(convert_to('mon1-track-review.v1:'||t::text,'UTF8')),'hex') h) identity_hash
+   WHERE NOT EXISTS(SELECT 1 FROM app.decision WHERE tenant_id=t AND subject_type='subscription'
+    AND subject_ref=t::text AND action_type='subscription.track_review')
+   ON CONFLICT (tenant_id,id) DO NOTHING;
+  END IF;
+ END IF;
+ -- MON-1 Decisions end
  -- Builder additions remain unblocked. This routine creates no obligation or charge.
 END $$;
 
