@@ -26,7 +26,7 @@
         "packages/core/src/simulation-fee-collection.test.ts",
         "packages/core/src/simulation-fee-collection.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0491_simulation_fee_collection.sql",
+        "packages/db/migrations/0519_simulation_fee_collection.sql",
         "packages/db/src/index.ts",
         "packages/db/src/simulation-fee-collection-repository.test.ts",
         "packages/db/src/simulation-fee-collection-repository.ts",

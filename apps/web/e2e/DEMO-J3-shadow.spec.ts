@@ -73,7 +73,7 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  expect(final.account.totals.net.pence).toBe(3360000);
  const before = await read("shadow-demo"); expect(before.account.captures.map((c: { netPence: number }) => c.netPence).sort()).toEqual([320000, 40000]);
  expect(before).not.toHaveProperty("finalCheck"); expect(before).not.toHaveProperty("assessments");
- expect(before.customerApproval).toBe("not_ready_yet"); expect(before.invoices.invoices).toEqual([]);
+ expect(before.customerApproval).toEqual({ state: "not_ready_yet", approvals: [] }); expect(before.invoices.invoices).toEqual([]);
  await page.goto(`/jobs/${jobId}#final-account-title`); await finishDispositionsAndTerms(page);
  await page.getByRole("button", { name: "Complete final account", exact: true }).click();
  await expect.poll(async () => (await read("shadow-demo")).account.lock?.finalAccountRevisionId).toBe(final.account.id);
@@ -106,7 +106,7 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  expect(after.account.account.id).toBe(final.account.id);
  expect(after.assessments).toEqual([]); // Q/£80/£720 remain targets until MON-5 and verified settlement.
  expect(after.invoices.invoices).toEqual([]);
- expect(after.customerApproval).toBe("not_ready_yet"); expect(after.realExternalActions).toBe(0);
+ expect(after.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] }); expect(after.realExternalActions).toBe(0);
  // A fresh post-lock note is refused; exact earlier command can still replay.
  const late = await page.request.post(`/api/jobs/${jobId}/diary`, { data: { ...diary, commandId: randomUUID() } });
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);

@@ -136,3 +136,4 @@ export * from "./issued-simulation-fee-statement.js";
 
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+export * from "./customer-variation-approval.js";
