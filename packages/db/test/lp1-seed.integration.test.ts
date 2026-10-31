@@ -87,7 +87,7 @@ describe("LP-1 explicit owner bootstrap", () => {
         { table: "membership", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
       ]);
       const jobs = trace.filter(row => row.table === "job"); expect(jobs.length).toBeGreaterThan(0);
-      expect(jobs.every(row => row.role === "jobguard_runtime" && row.login === "lp1_bootstrap_owner")).toBe(true);
+      expect(jobs.every(row => row.role === "jobguard_migration" && row.login === "lp1_bootstrap_owner")).toBe(true);
     }
     runtime = new Pool({ connectionString: runtimeUrl });
     await expect(runtime.query("SET ROLE jobguard_migration")).rejects.toMatchObject({ code: "42501" });

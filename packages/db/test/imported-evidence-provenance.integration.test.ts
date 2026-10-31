@@ -21,9 +21,10 @@ describe("CH5-E source-only history bridge isolation", () => {
   });
   it.each(["read", "adoptWithHistory"] as const)("%s preserves original scope and dependency denials", async method => {
     const failure = new Error("fresh scope denied"); baseline.mockRejectedValue(failure);
-    const repository = new ImportedEvidenceProvenanceRepository(db);
-    await expect(method === "read" ? repository.read(context, sessionDigest, jobId) : repository.adoptWithHistory(context, sessionDigest, jobId, { approved: true })).rejects.toBe(failure);
+    const repository = new ImportedEvidenceProvenanceRepository(db), scope = { context, sessionDigest };
+    await expect(method === "read" ? repository.read(scope, jobId) : repository.adoptWithHistory(scope, jobId, { approved: true })).rejects.toBe(failure);
     expect(baseline).toHaveBeenCalledExactlyOnceWith(db, { context, sessionDigest }, jobId, undefined);
     expect(baseline.mock.calls[0]?.[1].context).toBe(context);
+    expect(baseline.mock.calls[0]?.[1]).toBe(scope);
   });
 });

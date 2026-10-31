@@ -84,9 +84,6 @@ export async function withTenant<T>(
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
-    // Capacity is a company-wide invariant. Acquire its serializer before any
-    // business/source/audit lock, including implicit site-activity writers.
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,184))", [context.tenantId]);
     const database = drizzle(client, { schema }) as TenantTransaction;
     const result = await work(database);
     await client.query("COMMIT");

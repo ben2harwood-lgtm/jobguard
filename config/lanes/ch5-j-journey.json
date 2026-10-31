@@ -5,13 +5,39 @@
       "branches": [
         "codex/sandbox/ch5-j-journey"
       ],
-      "note": "CH5-A/CH5-J RED, stacked on ch5-p2. Persisted capacity notices, overlapping-job links, API authority and reload journeys. No migration. Historical catch adapter remains unavailable; Builder threshold clarification pending.",
+      "note": "CH5-A/CH5-J RED NOPR catch-up on current main, including inherited CH-5 part 2. Preserve current main authority and exact import permits. Migration 0328 remains reserved for router renumbering when the PR opens. PostgreSQL, browser CI and independent RED review remain required; historical catch adapter remains unavailable.",
       "allow": [
+        "apps/api/openapi.json",
         "apps/api/src/job-import-v3.application.test.ts",
+        "apps/api/src/job-import-v3.application.ts",
+        "apps/api/src/job-import-v3.controller.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/parties/import-v3/catch/route.ts",
+        "apps/web/app/api/jobs/[id]/parties/import-v3/route.test.ts",
+        "apps/web/app/api/jobs/[id]/parties/import-v3/source/route.ts",
         "apps/web/app/api/meter/jobs/[id]/import-v3/[action]/route.test.ts",
+        "apps/web/app/api/meter/jobs/[id]/import-v3/[action]/route.ts",
+        "apps/web/app/lib/job-import-v3-error.ts",
+        "apps/web/app/meter/jobs/[id]/imports/page.tsx",
         "apps/web/app/ui/job-import-v3.tsx",
         "apps/web/e2e/CH-5.spec.ts",
-        "apps/web/e2e/CH5-part2.spec.mts"
+        "apps/web/e2e/CH5-part2.spec.mts",
+        "docs/contracts/job-import-v3.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/meter-place-admission-v1.md",
+        "packages/core/src/job-import-v3.ts",
+        "packages/db/migration-notes/0328_import_work_admission.md",
+        "packages/db/migrations/0328_import_work_admission.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/test/job-import-v3-admission-upgrade.integration.test.ts",
+        "packages/db/test/job-import-v3-admission.integration.test.ts",
+        "packages/db/test/job-import-v3-admission.test.ts",
+        "packages/db/test/job-import-v3-fixtures.ts",
+        "packages/db/test/job-import-v3-invoiced-upgrade.integration.test.ts",
+        "packages/db/test/job-import-v3.integration.test.ts",
+        "packages/db/test/meter-import-refresh.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }

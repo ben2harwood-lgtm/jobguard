@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { VerifiedTenantContext } from "./tenant-context.js";
+import type { ImportedBaselineReadScope } from "./imported-baseline-sources.js";
 import { readImportedObservationBundle } from "./imported-observation-reader.js";
 
 /**
@@ -10,11 +10,11 @@ import { readImportedObservationBundle } from "./imported-observation-reader.js"
 export class ImportedEvidenceProvenanceRepository {
   constructor(private readonly pool: Pool) {}
 
-  async adoptWithHistory(context: VerifiedTenantContext, digest: string, sourceJobId: string, _command: unknown): Promise<never> {
-    return readImportedObservationBundle(this.pool, { context, sessionDigest: digest }, sourceJobId);
+  async adoptWithHistory(scope: ImportedBaselineReadScope, sourceJobId: string, _command: unknown): Promise<never> {
+    return readImportedObservationBundle(this.pool, scope, sourceJobId);
   }
 
-  async read(context: VerifiedTenantContext, digest: string, jobId: string): Promise<never> {
-    return readImportedObservationBundle(this.pool, { context, sessionDigest: digest }, jobId);
+  async read(scope: ImportedBaselineReadScope, jobId: string): Promise<never> {
+    return readImportedObservationBundle(this.pool, scope, jobId);
   }
 }

@@ -98,12 +98,29 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
         scopeItemId: randomUUID(), netPence: line.netPence, origin: "builder_baseline" })) } };
     const publicHash = importPublicRequestHashV3(T, D, J, input);
     f.query.mockImplementation(async (sql, values) => {
+      // Runtime has no job UPDATE privilege: a direct row lock must fail here too.
+      if (/FROM app\.job WHERE.*FOR UPDATE/u.test(sql)) throw new Error("permission denied for table job");
+      if (sql === "SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))") return { rows: [], rowCount: 1 };
       if (sql.includes("app.adopt_invoiced_job_v3")) return { rows: [{ result }], rowCount: 1 };
       if (sql.includes("FROM app.job_import_v3")) return { rows: [{ result, snapshot: value, public_request_hash: publicHash, adopted_at: new Date("2026-10-28T18:00:00Z") }], rowCount: 1 };
       return originalQuery(sql, values);
     });
     const mutation = new AdoptInFlightJobV3Mutation(T, D, J, input, value);
-    await withTenant(f.pool, f.context, async db => expect(await mutation.mutate(db, exactCommand)).toEqual(result));
+    await withTenant(f.pool, f.context, async db => {
+      await mutation.lock(db, exactCommand);
+      expect(await mutation.mutate(db, exactCommand)).toEqual(result);
+    });
+    const lock = f.query.mock.calls.findIndex(([sql]) => sql === "SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))");
+    expect(lock).toBeGreaterThan(-1);
+    expect(f.query.mock.calls[lock]?.[1]).toEqual([T, `import-v3:${J}`]);
+    expect(lock).toBeLessThan(f.query.mock.calls.findIndex(([sql]) => sql.includes("app.adopt_invoiced_job_v3")));
+    const lockCount = f.query.mock.calls.filter(([sql]) => sql.includes("pg_advisory_xact_lock")).length;
+    f.state.authenticated = false;
+    await withTenant(f.pool, f.context, async db => {
+      await expect(mutation.lock(db, exactCommand)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    });
+    expect(f.query.mock.calls.filter(([sql]) => sql.includes("pg_advisory_xact_lock"))).toHaveLength(lockCount);
+    f.state.authenticated = true;
     expect(f.query.mock.calls.find(([sql]) => sql.includes("app.adopt_invoiced_job_v3"))?.[1]).toEqual([
       T, J, D, input.commandId, exactCommand.authorizationId, JSON.stringify(value), publicHash,
     ]);

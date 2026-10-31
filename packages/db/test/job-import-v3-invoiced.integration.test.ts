@@ -22,6 +22,8 @@ describe("CH-5 positive invoiced import — PostgreSQL CI", () => {
     expect(p.availability).toEqual({ status: "available", reason: "imported_at_invoiced_stage", countedPlaces: 0 });
     const [a, b] = await Promise.all([repo.adopt(auth.context, auth.digest, f.practice.jobId, input), repo.adopt(auth.context, auth.digest, f.practice.jobId, input)]);
     expect(b).toEqual(a);
+    // The private adoption permit is consumed in the job insert, including duplicate replay.
+    expect((await f.admin.query("SELECT count(*)::int n FROM app.lp_job_insert_permit WHERE tenant_id=$1 AND job_id=$2", [auth.context.tenantId, a.jobId])).rows[0].n).toBe(0);
     expect(a).toMatchObject({ version: "job-import-result.v3", lifecyclePoint: "invoiced", linkedJobIds: [f.practice.jobId], lineageStrength: "builder_attested_weaker" });
     const read = await repo.read(auth.context, auth.digest, String(a.jobId));
     expect(read.result).toEqual(a); expect(read.snapshot).toEqual(p.snapshot);

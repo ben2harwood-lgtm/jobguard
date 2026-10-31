@@ -5,16 +5,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
+import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { migrate } from "../src/migrate.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
-export async function createWorkFixture(install = true) {
+// Ruling 103 (Q4): suites that issue a practice session need the trusted practice database; every other caller keeps the default.
+export async function createWorkFixture(install = true, database = "jobguard_synthetic_demo") {
  const directory = await mkdtemp(join(tmpdir(), "ch4-pg16-")), port = await freePort(59000, 400), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database, user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start();
+ await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);
@@ -29,14 +31,20 @@ export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: Poo
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
-export async function seedWorkJob(f: WorkFixture, tenantId = randomUUID()) {
+export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID()) {
  const userId = randomUUID(), actorId = randomUUID(), accountId = randomUUID(), jobId = randomUUID(), scopeId = randomUUID();
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenantId]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
  await workTenant(f.admin, tenantId, async db => {
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4')", [accountId, tenantId]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [actorId, tenantId, accountId, userId]);
-  await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional CH-4 site','live')", [jobId, tenantId]);
+  await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional CH-4 site','draft')", [jobId, tenantId]);
+  // Bind explicit fictional parties before entering live, including browser clusters
+  // that deliberately do not install the legacy fixture trigger.
+  await seedSyntheticPartyFixture(db, tenantId, jobId);
+  // Explicit synthetic authority: current main no longer infers a track from status.
+  await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [tenantId, jobId]);
+  await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenantId, jobId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
  });
  return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
