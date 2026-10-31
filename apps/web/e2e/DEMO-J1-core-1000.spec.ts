@@ -36,6 +36,9 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   }
   await page.getByLabel(/Answer Confirm disposal/).fill("Builder removes fictional waste");
   await click(page, "Confirm scope");
+  // A click completes before the async review save and confirmation commit.
+  await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+  await expect(page.getByTestId("confirmed-line-count")).toHaveText("5");
   const captured = await read(page, `${root}/proposal`);
   const scopeIds = captured.review.lines.filter((line: { disposition: string }) => line.disposition === "accepted").map((line: { scopeItemId: string }) => line.scopeItemId);
   expect(new Set(scopeIds).size).toBe(5);
@@ -87,6 +90,7 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   }
   await click(page, "Accept final check terms");
   await click(page, "Complete final account");
+  await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);
   const issue = { version: "practice-customer-invoice.issue.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedSourceHash: account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-29" };
   expect((await page.request.post(`${root}/customer-invoices`, { data: issue })).ok()).toBe(false);
