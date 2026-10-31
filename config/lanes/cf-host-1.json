@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/cf-host-1"
       ],
-      "note": "RED CF-HOST-1: Worker hosting, explicit trusted origins and single-use database connections; no deployment or migrations. pg-cloudflare workerd export tracing repaired through serverExternalPackages. Cloudflare build/dry run measured 9357.34 KiB gzip, above the 3 MiB Free-plan budget; hosted journeys and exact-head review remain outstanding.",
+      "note": "RED CF-HOST-1: Worker hosting, explicit trusted origins and single-use database connections; no deployment or migrations. Cloudflare-only webpack build shares server chunks: dry run measures 2619.53 KiB gzip, 452.47 KiB under the 3 MiB budget. Normal Vercel build keeps Turbopack; hosted journeys and exact-head review remain outstanding.",
       "allow": [
         ".env.example",
         ".github/workflows/cloudflare-build.yml",
