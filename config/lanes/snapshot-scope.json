@@ -5,7 +5,6 @@
       "branches": ["codex/sandbox/snapshot-scope"],
       "note": "Tests only: bind the 0502/0505 upgrade snapshots to their migration boundaries (split from CH-6 d1a3ab86).",
       "allow": [
-        "config/lanes/snapshot-scope.json",
         "packages/db/test/customer-variation-upgrade.integration.test.ts",
         "packages/db/test/onsite-diary-upgrade.integration.test.ts"
       ]
