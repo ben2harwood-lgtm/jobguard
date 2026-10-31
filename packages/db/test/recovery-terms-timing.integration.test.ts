@@ -1,3 +1,4 @@
+import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 // PostgreSQL suites are NOT RUN locally by dispatcher instruction. No mocked database proof.
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
@@ -18,8 +19,8 @@ async function start(){
  process.env.JOBGUARD_ENV="synthetic_demo";
  const directory=await mkdtemp(join(tmpdir(),"jg-dw3-")),port=await freePort(62000,100),value=randomUUID();
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:value,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();
- adminConfig={host:"127.0.0.1",port,database:"postgres",user:"postgres",password:value};admin=new Pool(adminConfig);
+ await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");
+ adminConfig={host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:value};admin=new Pool(adminConfig);
  await admin.query(`CREATE ROLE dw3_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  runtimeConfig={...adminConfig,user:"dw3_login"};runtime=new Pool(runtimeConfig);
 }
@@ -33,7 +34,11 @@ afterAll(async()=>{await closeTestPools(runtime,admin);if(postgres)await postgre
 beforeAll(async()=>{await start();await migrate(admin);await identity();});
 async function fixture(type="withheld_customer_payment",before=false){
  const sessionId=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,sessionId),jobId=randomUUID();
- await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence)VALUES($1,$2,'Explicit new v3 DW3 fixture',$3,'capture','imported',100000,'reference_fee_policy_v3',1500)",[jobId,T,auth.digest]);
+ await withTenant(admin,ctx,async db=>{
+  await permitImportedJob(db.$client,{tenantId:T,jobId,actorMembershipId:M,title:"Explicit new v3 DW3 fixture",
+   feePolicyVersion:"reference_fee_policy_v3",netPence:100000,capPence:1500,practiceSessionDigest:auth.digest,practiceScenario:"capture"});
+  await db.$client.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence)VALUES($1,$2,'Explicit new v3 DW3 fixture',$3,'capture','imported',100000,'reference_fee_policy_v3',1500)",[jobId,T,auth.digest]);
+ });
  const cases=new RecoveryCaseRepository(practiceMaterialPool(runtime,auth.digest)),feed=new PracticeFeedRepository(runtime,"synthetic_demo");
  // Facts commands (including interest) share this feed's revision sequence.
  const advance=async(movement:string,step="settled")=>{const {revision}=await feed.view(ctx,actor,auth.digest,jobId);await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});};
