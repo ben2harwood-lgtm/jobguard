@@ -2,16 +2,18 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { mapValueReceipt } from "@jobguard/core";
 import { extractCaptureFixture } from "@jobguard/ai";
 import { ShadowJourney, ShadowSavedReport } from "./journey";
 import { parseShadowReport, shadowCaptureText, shadowSteps } from "./journey-model";
 vi.stubGlobal("React", React);
 const jobId = randomUUID();
 function report() { return {
- version: "shadow-demo-report.v1", environment: "synthetic_demo", jobId, status: "incomplete", realExternalActions: 0, customerApproval: "not_ready_yet",
+ version: "shadow-demo-report.v2", environment: "synthetic_demo", jobId, status: "incomplete", realExternalActions: 0, customerApproval: { state: "not_ready_yet", approvals: [] },
  account: { jobId, account: null, captures: [], lock: null },
  invoices: { version: 1, environment: "synthetic_demo", jobId, invoices: [] },
- value: { status: "incomplete", reason: "producer_bindings_held" },
+ value: { version: "job-value.v3", environment: "synthetic_demo", jobId,
+  status: "incomplete", reason: "producer_bindings_held", producers: { sources: "HELD", derivation: "HELD", subscription: "HELD", postedMoney: "HELD" }, asOf: null, receipt: null },
 }; }
 it("has nine guided steps, source-only £30,000 input and no saved success before a read", async () => {
  expect(shadowSteps).toHaveLength(9);
@@ -38,4 +40,35 @@ it("rejects another job, pre-lock reveal/count/history/pack leaks and client com
 it("rejects a reveal from a different locked bill", () => {
  const raw = report();
  expect(() => parseShadowReport({ ...raw, account: { ...raw.account, lock: { id: randomUUID(), finalAccountRevisionId: randomUUID(), lockedAt: "2026-10-29T00:00:00Z", digest: "a".repeat(64) } }, finalCheck: { state: "completed", lockId: randomUUID(), items: [] } }, jobId)).toThrow("Wrong lock report");
+});
+
+it.each(["not_ready_yet", "awaiting_customer", "approved"])("accepts the v2 customer approval state %s", state => {
+ const customerApproval = { state, approvals: state === "approved"
+  ? [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "customer_portal" }] : [] };
+ expect(parseShadowReport({ ...report(), customerApproval }, jobId).customerApproval).toEqual(customerApproval);
+});
+it("accepts the full mapped v3 value receipt for the same locked job", () => {
+ const raw = report(), lockId = randomUUID();
+ const lock = { id: lockId, finalAccountRevisionId: randomUUID(), lockedAt: "2026-10-31T04:00:00Z", digest: "a".repeat(64) };
+ const value = { version: "job-value.v3", environment: "synthetic_demo", jobId, status: "mapped",
+  receipt: mapValueReceipt({ tenantId: randomUUID(), jobId, lockId, lockedRevisionId: lock.finalAccountRevisionId,
+   lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt,
+   checked: [], tracked: [], assessments: [] }) };
+ const saved = { ...raw, account: { ...raw.account, lock }, value };
+ expect(parseShadowReport(saved, jobId).value).toEqual(value);
+ expect(() => parseShadowReport({ ...saved, value: { ...value, jobId: randomUUID() } }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...saved, value: { ...value, receipt: { ...value.receipt,
+  sources: { ...value.receipt.sources, lockId: randomUUID() } } } }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...saved, account: raw.account }, jobId)).toThrow();
+});
+it("rejects stale v1 reports, unbound value shortcuts and unknown approval fields or methods", () => {
+ const raw = report();
+ for (const patch of [
+  { version: "shadow-demo-report.v1" }, { customerApproval: "not_ready_yet" },
+  { customerApproval: { state: "unknown", approvals: [] } },
+  { customerApproval: { ...raw.customerApproval, attested: true } },
+  { customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "builder_attestation" }] } },
+  { value: { status: "incomplete", reason: "producer_bindings_held" } },
+  { value: { ...raw.value, hiddenCount: 0 } },
+ ]) expect(() => parseShadowReport({ ...raw, ...patch }, jobId)).toThrow();
 });

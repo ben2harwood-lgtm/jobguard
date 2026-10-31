@@ -19,7 +19,10 @@ import {testTenantContext} from "./tenant-context-test-utils.js";
 import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
-export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7", baselineNetPence=3360000, mixedFinalCheck=false,protocol="receipt-line-facts-command.v1"){
+// Preserve protocol callers from the producer lane and numeric-baseline callers from CH-8.
+export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number=3360000,mixedFinalCheck=false,protocol="receipt-line-facts-command.v1"){
+ const baselineNetPence=typeof protocolOrBaseline==="number"?protocolOrBaseline:3360000;
+ if(typeof protocolOrBaseline==="string")protocol=protocolOrBaseline;
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
