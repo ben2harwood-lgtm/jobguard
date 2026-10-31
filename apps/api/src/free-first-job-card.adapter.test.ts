@@ -45,3 +45,19 @@ describe("MON-3 stateless simulated hosted setup fixture", () => {
     expect(simulateFreeFirstJobCardSetup(input())).not.toHaveProperty("paid");
   });
 });
+
+// Persisted attempt identity, not browser redirect state, binds the fixture proposal.
+describe("persisted setup fixture",()=>{
+ beforeEach(()=>vi.stubEnv("JOBGUARD_ENV","synthetic_demo"));
+ afterEach(()=>vi.unstubAllEnvs());
+ it("binds result proposals to the stored attempt and rejects supplied fingerprints",async()=>{
+  const {simulatePersistedTrialCardResult}=await import("./free-first-job-card.adapter.js");
+  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+  const attempt={version:"trial-card-attempt.v1",environment:"synthetic_demo",hypothetical:true,attemptId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",verificationId:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",status:"requested"};
+  const scenario={version:"trial-card-scenario.v1",fixtureCard:"card_a",outcome:"completed"};
+  expect(simulatePersistedTrialCardResult(attempt,scenario)).toEqual({version:"trial-card-fixture.v1",attemptId:attempt.attemptId,fixtureCard:"card_a",outcome:"completed"});
+  expect(()=>simulatePersistedTrialCardResult(attempt,{...scenario,fingerprint:"sim_fp_browser"})).toThrow();
+  vi.stubEnv("JOBGUARD_ENV","production");
+  expect(()=>simulatePersistedTrialCardResult(attempt,scenario)).toThrow("FREE_FIRST_JOB_SYNTHETIC_ONLY");
+ });
+});

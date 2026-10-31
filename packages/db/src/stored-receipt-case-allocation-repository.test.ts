@@ -38,18 +38,20 @@ describe("neutral no-amount producer boundary",()=>{
   expect(neutralReceiptFactCommandV1.safeParse(reverse).success).toBe(true);
   expect(neutralReceiptFactCommandV1.safeParse({...reverse,grossPence:96000}).success).toBe(false);
  });
- it("starts SSI before any tenant/session query, supplies a NULL artifact and refuses fabricated database success",async()=>{
+ it.each(["receipt-line-facts-command.v1","receipt-line-allocation-command.v1"])("%s starts SSI before tenant/session queries and refuses fabricated database success",async version=>{
   const queries:Array<{sql:string;values?:unknown[]}>=[];
   const client={release:vi.fn(),query:vi.fn(async(sql:string,values?:unknown[])=>{queries.push({sql,...(values?{values}:{})});return sql.includes("SELECT m.id")?{rowCount:1,rows:[]}:{rowCount:1,rows:[{result:{forged:true}}]};})};
   const pool={connect:vi.fn(async()=>client)};
   const old=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
   try{
-   await expect(new RecoveryLineAllocationRepository(pool as unknown as Pool,"synthetic_demo").command(verifiedTenantContextForQueuedJob(randomUUID()),{membershipId:randomUUID(),identityUserId:randomUUID()},"a".repeat(64),randomUUID(),raw)).rejects.toMatchObject({code:"INVALID_RECEIPT_LINE_RESULT"});
+   await expect(new RecoveryLineAllocationRepository(pool as unknown as Pool,"synthetic_demo").command(verifiedTenantContextForQueuedJob(randomUUID()),{membershipId:randomUUID(),identityUserId:randomUUID()},"a".repeat(64),randomUUID(),{...raw,version})).rejects.toMatchObject({code:"INVALID_RECEIPT_LINE_RESULT"});
    expect(queries[0]?.sql).toBe("BEGIN ISOLATION LEVEL SERIALIZABLE");
    expect(queries[1]?.sql).toBe("SELECT set_config('app.practice_material_digest', $1, true)");
    expect(queries[1]?.values).toEqual(["a".repeat(64)]);
    expect(queries[2]?.sql).toBe("SELECT set_config('app.tenant_id', $1, true)");
-   expect(queries.find(q=>q.sql.includes("write_receipt_allocation_facts"))?.sql).toContain("NULL::jsonb");
+   const write=queries.find(q=>q.sql.includes("write_receipt_allocation_facts"));
+   expect(write?.sql).toContain("NULL::jsonb");
+   expect(JSON.parse(write?.values?.[3] as string)).toEqual({...raw,version});
    expect(queries.at(-1)?.sql).toBe("ROLLBACK");
    expect(client.release).toHaveBeenCalledOnce();
   }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}

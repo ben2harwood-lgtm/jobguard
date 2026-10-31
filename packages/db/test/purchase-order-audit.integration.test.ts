@@ -25,8 +25,8 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic",
     persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  const connection = { host: "127.0.0.1", port, database: "postgres" };
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo" };
   admin = new Pool({ ...connection, user: "postgres", password: "synthetic" });
   // Install current main first, retain a real synthetic PO, then apply this branch's
   // migration through the normal runner. Fresh install is covered by tenancy's runner.

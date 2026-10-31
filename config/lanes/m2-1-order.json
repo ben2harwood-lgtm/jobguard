@@ -6,6 +6,7 @@
         "codex/sandbox/m2-1-order"
       ],
       "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/src/index.ts",
         "packages/db/src/tenant-context.ts",
         "packages/db/src/outbox.ts",
