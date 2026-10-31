@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { mobileAccessV1, mobileAuthPolicySpecimenV1, mobileExchangeV1, mobilePartitionV1, mobileRefreshV1, type MobilePartitionV1 } from "@jobguard/core";
+import { mobileAccessV1, mobileAuthPolicySpecimenV1, mobileExchangeV1, mobilePartitionV1, mobileRefreshV1, type SyntheticMobileAuthStore, type MobileAuthStateV1 } from "@jobguard/core";
 import { MemoryAuthProvider, type AuthPrincipal } from "./auth-provider.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./principal-bridge.js";
 
@@ -12,33 +12,29 @@ const access = z.object({ version: z.literal("mobile-reconnect.v1"), deviceInsta
 const lifecycle = z.object({ version: z.literal("mobile-device-command.v1"), commandId: command, deviceInstanceId: device, action: z.enum(["logout", "revoke", "tenant_switch"]), requestedTenantId: z.guid(), nextTenantId: z.guid().optional() }).strict().refine(x => (x.action === "tenant_switch") === (x.nextTenantId !== undefined));
 type Policy = z.infer<typeof mobileAuthPolicySpecimenV1>;
 type Reason = "logout" | "revoke" | "tenant_switch" | "reuse";
-interface DeviceRecord { userId: string; tenantId: string; deviceDigest: string; revokedAtMs?: number; reason?: Reason }
-interface Family {
- partition: MobilePartitionV1; sourceSessionId: string; deviceKey: string; expiresAtMs: number;
- accessDigest: string; accessExpiresAtMs: number; refreshDigest: string; refreshExpiresAtMs: number;
- usedRefresh: Set<string>; leaseId: string; leaseIssuedAtMs: number; leaseExpiresAtMs: number; revokedAtMs?: number; reason?: Reason;
-}
+type DeviceRecord = MobileAuthStateV1["devices"][number][1];
+type Family = Omit<MobileAuthStateV1["families"][number][1], "usedRefresh"> & { usedRefresh: Set<string> };
 export class MobileServerError extends Error {
  constructor(readonly code: "MOBILE_DISABLED" | "MOBILE_INVALID_INPUT" | "MOBILE_DENIED" | "MOBILE_REPLAY" | "MOBILE_COMMAND_CONFLICT") { super(code); this.name = "MobileServerError"; }
 }
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
-/** DARK, process-local fake only. Not registered in Nest, web, sync or the principal bridge.
+/** DARK synthetic fake only. Not registered in Nest, web, sync or the principal bridge.
  * Auth.js is not installed. This seam deliberately accepts only the existing memory AuthProvider.
- * No persistence, provider transport, production policy or cross-process guarantees are claimed.
+ * Optional synthetic persistence serializes state across instances. No live provider or production policy.
  */
 export class SyntheticMobileAuthApplication {
- readonly #devices = new Map<string, DeviceRecord>();
- readonly #families = new Map<string, Family>();
- readonly #commands = new Map<string, string>();
+ #devices = new Map<string, DeviceRecord>();
+ #families = new Map<string, Family>();
+ #commands = new Map<string, string>();
  #tail: Promise<unknown> = Promise.resolve();
  readonly #policy: Policy;
  readonly #source: MemoryAuthProvider;
- readonly #options: Readonly<{ environment?: string; enabled?: boolean; allowedOrigin: string; now: () => number; token?: () => string; uuid?: () => string }>;
+ readonly #options: Readonly<{ environment?: string; enabled?: boolean; allowedOrigin: string; now: () => number; token?: () => string; uuid?: () => string; store?: SyntheticMobileAuthStore }>;
  constructor(
   source: MemoryAuthProvider,
   policy: unknown,
-  options: { environment?: string; enabled?: boolean; allowedOrigin: string; now: () => number; token?: () => string; uuid?: () => string },
+  options: { environment?: string; enabled?: boolean; allowedOrigin: string; now: () => number; token?: () => string; uuid?: () => string; store?: SyntheticMobileAuthStore },
  ) {
   this.#source = source;
   this.#options = Object.freeze({ ...options });
@@ -109,6 +105,12 @@ export class SyntheticMobileAuthApplication {
     commit();
     return next;
    }
+   for (const [deviceKey, record] of this.#devices) {
+    if (record.userId === principal.identityUserId && record.deviceDigest === digest(input.deviceInstanceId))
+     this.revokeDevice(deviceKey, record.userId, record.tenantId, input.deviceInstanceId, input.action);
+   }
+   // All-tenant tombstone also prevents exchange into a tenant not previously registered.
+   this.revokeDevice(this.deviceKey(principal.identityUserId, "*", input.deviceInstanceId), principal.identityUserId, input.requestedTenantId, input.deviceInstanceId, input.action);
    this.revokeDevice(key, principal.identityUserId, input.requestedTenantId, input.deviceInstanceId, input.action);
    commit();
    return { version: "mobile-device-revoked.v1" as const, environment: "synthetic_demo" as const };
@@ -117,17 +119,39 @@ export class SyntheticMobileAuthApplication {
 
  /** Fixture inspection contains no bearer credentials, source secrets, email or free text. */
  fixtureRecords() {
-  this.assertEnabled();
-  return structuredClone({ devices: [...this.#devices.values()], families: [...this.#families.values()].map(f => ({ partition: f.partition, expiresAtMs: f.expiresAtMs, revokedAtMs: f.revokedAtMs, reason: f.reason, lease: this.lease(f) })) });
+  return this.run(async () => structuredClone({ devices: [...this.#devices.values()], families: [...this.#families.values()].map(f => ({ partition: f.partition, expiresAtMs: f.expiresAtMs, revokedAtMs: f.revokedAtMs, reason: f.reason, lease: this.lease(f) })) }));
  }
 
  private async run<T>(work: () => Promise<T>): Promise<T> {
   this.assertEnabled();
   // All state transitions, including async authority checks, serialize in this fake instance.
-  const pending = this.#tail.then(work);
+  const pending = this.#tail.then(async () => {
+   if (!this.#options.store) return work();
+   return this.#options.store.transaction<{ ok: true; value: T } | { ok: false; error: unknown }>(async state => {
+    this.restore(state);
+    // A denied refresh replay must COMMIT its family revocation before reporting denial.
+    // Other failures restore their pre-command snapshot, avoiding partial issue/switch state.
+    try { const value = await work(); return { state: this.snapshot(), result: { ok: true as const, value } }; }
+    catch (error) {
+     const revoked = [...this.#families.values()].filter(f => f.reason === "reuse" && f.revokedAtMs !== undefined);
+     this.restore(state);
+     for (const f of revoked) this.#families.set(f.partition.mobileSessionId, f);
+     return { state: this.snapshot(), result: { ok: false as const, error } };
+    }
+   }).then(result => { if (!result.ok) throw result.error; return result.value; });
+  });
   this.#tail = pending.catch(() => undefined);
   try { return await pending; }
   catch (error) { if (error instanceof MobileServerError) throw error; throw new MobileServerError("MOBILE_DENIED"); }
+ }
+ private snapshot(): MobileAuthStateV1 {
+  return { version: "mobile-auth-state.v1", environment: "synthetic_demo", devices: [...this.#devices],
+   families: [...this.#families].map(([id, f]) => [id, { ...f, usedRefresh: [...f.usedRefresh] }]), commands: [...this.#commands] };
+ }
+ private restore(state: MobileAuthStateV1) {
+  this.#devices = new Map(state.devices.map(([id, d]) => [id, { ...d }]));
+  this.#families = new Map(state.families.map(([id, f]) => [id, { ...f, partition: { ...f.partition }, usedRefresh: new Set(f.usedRefresh) }]));
+  this.#commands = new Map(state.commands);
  }
  private assertEnabled() {
   if (this.#options.enabled !== true || this.#options.environment !== "synthetic_demo" || !(this.#source instanceof MemoryAuthProvider)) throw new MobileServerError("MOBILE_DISABLED");
@@ -167,7 +191,7 @@ export class SyntheticMobileAuthApplication {
  }
  private issue(principal: AuthPrincipal, tenantId: string, instance: string, pair = this.makePair()) {
   const key = this.deviceKey(principal.identityUserId, tenantId, instance);
-  if (this.#devices.get(key)?.revokedAtMs !== undefined) throw new MobileServerError("MOBILE_DENIED");
+  if (this.#devices.get(key)?.revokedAtMs !== undefined || this.#devices.get(this.deviceKey(principal.identityUserId, "*", instance))?.revokedAtMs !== undefined) throw new MobileServerError("MOBILE_DENIED");
   const member = this.#source.fixtureMemberships().find(m => m.identityUserId === principal.identityUserId && m.tenantId === tenantId && m.revokedAt === undefined);
   if (!member) throw new MobileServerError("MOBILE_DENIED");
   const now = this.time();

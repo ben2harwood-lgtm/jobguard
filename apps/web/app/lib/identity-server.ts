@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createIdentityApplication, identityStatus, type IdentityApplication } from "@jobguard/api/identity";
 const registry=globalThis as typeof globalThis & {__jobguardIdentityApplication?:IdentityApplication};
-export function identityApplication() { return registry.__jobguardIdentityApplication??=createIdentityApplication(process.env); }
+export function identityApplication() {
+  // Never retain a Worker socket between requests; release closes the connection.
+  if (process.env.JOBGUARD_HOSTING === "cloudflare") return createIdentityApplication(process.env,{max:1,maxUses:1});
+  return registry.__jobguardIdentityApplication??=createIdentityApplication(process.env);
+}
 export async function identityReply(work:()=>Promise<unknown>) {
   try {return NextResponse.json(await work(),{headers:{"Cache-Control":"no-store"}});}
   catch(error) {const {code,status}=identityStatus(error);return NextResponse.json({code},{status,headers:{"Cache-Control":"no-store"}});}
