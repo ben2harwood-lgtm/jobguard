@@ -30,18 +30,32 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   expect(signedIn.status, "Read signed-in link issuer through the browser session").toBe(200);
   const session = signedIn.body;
   expect(session.principal.id).toBe(await issuer.getByTestId("identity-id").innerText());
+  expect(session.memberships.some((membership: { tenantId: string }) => membership.tenantId === tenantId)).toBe(false);
   // The practice job's tenant is fixed by the existing demo bootstrap, whereas
   // code sign-in creates a fresh fictional business. Establish only the test
   // issuer's owner membership; do not move or recreate the captured job.
+  const issuerMembershipId = randomUUID();
   const db = await admin.connect();
   try {
    await db.query("BEGIN");
    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
    const account = (await db.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, "d1500000-0000-4000-8000-000000000003"])).rows[0];
    expect(account, "Demo bootstrap must provide its owner account").toBeDefined();
-   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [randomUUID(), tenantId, account.account_id, session.principal.id]);
+   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [issuerMembershipId, tenantId, account.account_id, session.principal.id]);
+   // current_memberships discovers members through this identity index, not by
+   // scanning app.membership. Match the normal identity provisioning contract.
+   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [session.principal.id, tenantId, issuerMembershipId]);
    await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+  const authorized = await issuer.evaluate(async () => {
+   const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+   return { status: response.status, body: await response.json() };
+  });
+  expect(authorized.status, "Read issuer's discoverable membership through the signed-in browser").toBe(200);
+  expect(authorized.body.principal.id).toBe(session.principal.id);
+  expect(authorized.body.memberships.filter((membership: { tenantId: string }) => membership.tenantId === tenantId)).toEqual([
+   expect.objectContaining({ id: issuerMembershipId, tenantId, role: "owner" }),
+  ]);
   const parties = await jsonResult(page.request.get(`/api/jobs/${jobId}/parties`), "Read captured customer");
   const customerId = parties.currentIds.customerId;
   const customer = await customerContext.newPage();
@@ -52,9 +66,9 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   // One review link contains both priced catches. Reissuing a second link in
   // the same minute is correctly rate-limited and would revoke the first.
   const issued = await issuer.evaluate(async input => {
-    const response = await fetch("/api/customer-portal/issue", { method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": input.csrfToken }, body: JSON.stringify({ version: "customer-link-issue.v1", tenantId: input.tenantId, jobId: input.jobId, customerId: input.customerId }) });
+    const response = await fetch("/api/customer-portal/issue", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-csrf-token": input.csrfToken }, body: JSON.stringify({ version: "customer-link-issue.v1", tenantId: input.tenantId, jobId: input.jobId, customerId: input.customerId }) });
     return { status: response.status, body: await response.json() };
-   }, { csrfToken: session.csrfToken, tenantId, jobId, customerId });
+   }, { csrfToken: authorized.body.csrfToken, tenantId, jobId, customerId });
    expect(issued.status, "Builder authorizes the customer link through the real route").toBe(200);
    // Fake delivery transport: read the exact durable outbox artifact, as the
    // existing customer-extra-approval journey does. No provider is contacted.
