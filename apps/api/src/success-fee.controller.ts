@@ -18,15 +18,17 @@ export class SuccessFeeController {
   catch(error){const failure=successFeeFailure(error);if(failure)throw new HttpException(failure.body,failure.status);throw error;}
  }
  @Get() @Header("Cache-Control","no-store")
- @ApiOperation({summary:"Read synthetic success-fee availability; source-backed calculation dependency-bound"})
- @ApiResponse({status:200,schema:{type:"object",additionalProperties:false,required:["version","jobId","environment","state","dependency","productionEnabled","realExternalActions"],properties:{
+ @ApiOperation({summary:"Read synthetic catch-fee review availability after final-account lock"})
+ @ApiResponse({status:200,schema:{type:"object",additionalProperties:false,required:["version","jobId","environment","state","productionEnabled","realExternalActions"],properties:{
   version:{type:"string",enum:["success-fee-availability.v1"]},jobId:{type:"string",format:"uuid"},environment:{type:"string",enum:["synthetic_demo"]},
-  state:{type:"string",enum:["dependency_bound"]},dependency:{type:"string",enum:["accepted_attribution_source_adapter"]},productionEnabled:{type:"boolean",enum:[false]},realExternalActions:{type:"integer",enum:[0]},
+  state:{type:"string",enum:["dependency_bound","catch_review_available"]},dependency:{type:"string",enum:["accepted_attribution_source_adapter"]},productionEnabled:{type:"boolean",enum:[false]},realExternalActions:{type:"integer",enum:[0]},
  }}})
  get(@Param("id")id:string,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.view(id,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
  @Post() @Header("Cache-Control","no-store")
- @ApiOperation({summary:"Validate synthetic fee review/approval intent; posting dependency-bound"})
+ @ApiOperation({summary:"Review an exact source-backed catch fee statement or approve its local posting"})
  @ApiBody({schema:{oneOf:commands}})
- @ApiResponse({status:503,description:"No business effects; accepted attribution source adapter is missing"})
+ @ApiResponse({status:201,description:"Immutable synthetic statement review or approved derivation; includes statement sources, statementHash, reviewId, derivationId, journalId, postingRevision and replayed"})
+ @ApiResponse({status:409,description:"Statement/source/revision changed, review missing, or command identity conflict"})
+ @ApiResponse({status:503,description:"No qualifying catch adapter/lock; Q2 and Q3 remain dependency-bound"})
  post(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.command(id,body,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
 }
