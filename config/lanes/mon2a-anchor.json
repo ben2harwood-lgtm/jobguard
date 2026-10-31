@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon2a-anchor": {
+      "branches": [
+        "codex/sandbox/mon2a-anchor"
+      ],
+      "note": "MON-2A first-period safety (RED: money); own lane file is authorized implicitly by lane policy.",
+      "allow": [
+        "apps/api/src/subscription.access.test.ts",
+        "apps/api/src/subscription.application.test.ts",
+        "apps/api/src/subscription.application.ts",
+        "apps/api/src/subscription.authority.ts",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/e2e/subscription-period-fixture.ts",
+        "docs/contracts/subscription-plan-read-v1.md",
+        "docs/contracts/subscription-v1.md",
+        "packages/core/src/subscription-plan-view.ts",
+        "packages/db/migration-notes/0374_subscription_first_period_safety.md",
+        "packages/db/migrations/0374_subscription_first_period_safety.sql",
+        "packages/db/src/subscription-repository.ts",
+        "packages/db/test/subscription-first-period-upgrade.integration.test.ts",
+        "packages/db/test/subscription-first-period.integration.test.ts",
+        "packages/db/test/subscription-persistence-fixtures.ts"
+      ]
+    }
+  }
+}
