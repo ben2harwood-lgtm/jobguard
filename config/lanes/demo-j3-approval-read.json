@@ -16,7 +16,9 @@
         "packages/db/test/customer-variation-approval.integration.test.ts",
         "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
         "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts",
-        "packages/db/src/shadow-demo-approval-reader.test.ts"
+        "packages/db/src/shadow-demo-approval-reader.test.ts",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
       ]
     }
   }
