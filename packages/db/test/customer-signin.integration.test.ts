@@ -16,7 +16,8 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
+  const successors = { ...expected, "app.variation_approval": (before["app.variation_approval"] as Record<string, unknown>[]).map(row => ({ ...row, customer_session_id: null, customer_command_hash: null })) };
+  expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {

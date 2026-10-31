@@ -1,0 +1,29 @@
+// Populated predecessor upgrade and migration replay, real PostgreSQL CI only.
+import { randomUUID } from "node:crypto";
+import { beforeAll, afterAll, expect, it } from "vitest";
+import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { snapshot } from "./contractor-entitlement-fixtures.js";
+import { migrate } from "../src/migrate.js";
+const own="0410_customer_variation_approval.sql";
+let c:Cluster;
+beforeAll(async()=>{c=await startBeforeMigration(own);},120000);
+afterAll(async()=>c?.close());
+it("preserves every historical approval field, privileges and policy while adding nullable customer provenance",async()=>{
+ const old=(await c.admin.query("SELECT v.*,m.id actor FROM app.variation v JOIN app.membership m ON m.tenant_id=v.tenant_id AND m.role='owner' LIMIT 1")).rows[0];
+ expect(old).toBeDefined();
+ const revision=randomUUID(),approval=randomUUID(),hash="a".repeat(64);
+ await c.admin.query("SELECT set_config('app.tenant_id',$1,false)",[old.tenant_id]);
+ await c.admin.query("INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional predecessor','1','item',5000,5000,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[revision,old.tenant_id,old.job_id,old.id,old.scope_item_id,hash,old.actor]);
+ await c.admin.query("UPDATE app.variation SET current_revision_id=$3,state='approved' WHERE tenant_id=$1 AND id=$2",[old.tenant_id,old.id,revision]);
+ await c.admin.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,approved_at) VALUES($1,$2,$3,$4,$5,1,$6,5000,'builder_attestation',$7,clock_timestamp())",[approval,old.tenant_id,old.job_id,old.id,revision,hash,old.actor]);
+ const before=await snapshot(c.admin);
+ const catalogue=()=>c.admin.query("SELECT relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.variation_approval'::regclass");
+ const privileges=(await catalogue()).rows;
+ await applyMigration(c,own);
+ const expected={...before,"app.variation_approval":(before["app.variation_approval"] as Record<string,unknown>[]).map(row=>({...row,customer_session_id:null,customer_command_hash:null}))};
+ expect(await snapshot(c.admin)).toEqual(expected);expect((await catalogue()).rows).toEqual(privileges);
+ await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
+ const constraints=(await c.admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.variation_approval'::regclass")).rows.map(r=>r.definition).join("\n");
+ expect(constraints).toContain("FOREIGN KEY (tenant_id, customer_session_id) REFERENCES app.customer_portal_session(tenant_id, id)");
+ expect(constraints).toContain("customer_authenticated");
+});
