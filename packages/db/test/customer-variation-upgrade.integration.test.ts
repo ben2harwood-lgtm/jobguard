@@ -4,7 +4,7 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 import { migrate } from "../src/migrate.js";
-const own="0410_customer_variation_approval.sql";
+const own="0502_customer_variation_approval.sql";
 let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(own);},120000);
 afterAll(async()=>c?.close());

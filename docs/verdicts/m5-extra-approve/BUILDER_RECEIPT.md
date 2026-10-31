@@ -92,7 +92,7 @@ historical approval fields. Tenancy already matches main exactly. The sign-in
 successor snapshot now also expects those two nullable fields; its own-migration
 snapshot remains unchanged. No product behavior was added during this catch-up.
 
-Renamed this branch's migration to 0410_customer_variation_approval.sql and replaced
+Renamed this branch's migration to 0502_customer_variation_approval.sql and replaced
 only the full filename stem in references. No old stem occurs in MIGRATIONS.md or
 this existing receipt. Historical bare-number references above remain historical.
 Ran the existing renumber helper's syntax check and read-only planner. It proposed
