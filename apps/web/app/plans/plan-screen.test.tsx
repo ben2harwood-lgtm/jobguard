@@ -122,3 +122,12 @@ it("shows the server billing day before acceptance without an anchor input", asy
   expect(html).not.toContain('<input');
   expect(subscriptionPlanView(empty, "2026-06-01").billingDay).toBeNull();
 });
+
+it("preserves a separate executor warning without rejecting a saved approval", async () => {
+  const answer = { workId: "saved", paymentStatus: "pending", executionStatus: "unavailable" };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json(answer, {status: 201}));
+  const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
+  expect(result).toEqual(answer);
+  expect(subscriptionActionMessage(result)).toContain("Approval saved. Simulated payment is pending.");
+});
