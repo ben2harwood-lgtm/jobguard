@@ -343,6 +343,97 @@ passed. Both conflicted upgrade test files also passed a TypeScript syntax-only
 transpile check; this is explicitly not their database acceptance. The index still
 reports seven UU paths until the dispatcher stages and commits the resolved files.
 
+## r1 — C250 repair, 25 October 2026
+
+Issued repair round 1 of 2, RED lane (shadow disclosure and evidence). Builder:
+Codex, issued gpt-6.1-sol / medium. Branch `codex/sandbox/ch8-v`; clean on entry,
+HEAD `fce9c7be615d4e9f6c5840fb9f501f011480b694` (CH8-V-CATCHUP, accepted
+SV-5 `7e139e0b` port bound). This receipt describes the uncommitted repair delta
+against that exact HEAD, not a new independently reviewed or accepted commit.
+Dispatcher owns staging, commit, push and the exact-commit independent recheck.
+
+Read the full independent REPAIR verdict for
+`18cc6867f857e24fe6eebe1a5e006f0151f53813` at
+`/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch8-v-claude-A-18cc6867-20261025.md`
+(the relative `jg-runs/` path is absent in this checkout). Also read AGENTS.md,
+BUILD_PLAN CH-8, the v3 contract, source/fixture/tests, tenant context and the
+existing recovery-case integration command examples.
+
+Repairs:
+
+- Blocking 1: fixture opening and handoff-time claim amendment now call the
+  repository's public `command` path, as existing recovery integrations do.
+  Opening uses the returned view's `id`; amendment reads the authorized member
+  view's revision before issuing the command. `commandInTransaction` and its
+  landing-only action restriction are unchanged.
+- Blocking 2: a local `withEvidencePackV3Snapshot` helper adapts the pool's exact
+  `BEGIN` to `BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY`, following the
+  existing `practiceMaterialPool` connect/query wrapper pattern and the existing
+  BEGIN-time isolation syntax in `test/lock-observer.ts`. Source snapshots and
+  fixture ordinary reads use that helper. `withTenant` still validates the
+  original stamped context and owns parameterized transaction-local tenant
+  setup, commit/rollback and release. No shared tenant-context edit was needed.
+- Added three unit checks for snapshot commit/rollback/release and rejection of
+  copied tenant context before connecting. Added one real-PostgreSQL assertion
+  for isolation/read-only settings, tenant setting and actual BEGIN-before-context
+  SQL order, for the reviewer/CI to execute. Existing assertions remain intact.
+
+No schema, migration, grants, provider settings, commercial policy or operational
+alerts change. Ordinary source shapes and public APIs remain compatible; no new
+barrel export. SV-5 binding is preserved. Sections/must-surface/writer and other
+aggregate CH-8 holds remain; this repair does not enable v3 exports, hidden source
+reads, sends, charges or fee qualification. Affected invariants: §5.1 tenant
+context, §5.8 original evidence integrity and §5.14 pre-lock non-disclosure.
+
+Commands actually run with Node 24.17.0 and cached pnpm 10.28.1 through
+`PATH=/private/tmp/ch8-a-bin:$PATH` (no install/download). Logs are
+`/private/tmp/ch8-v-r1-*.log`:
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core --filter @jobguard/db typecheck` | PASS, both packages |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=1` | FAIL at lane gate: comparison includes inherited stacked changes outside CH8-V; no lane policy bypass/edit |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same inherited-path failure; local origin/main is `cdd1b29b75fcdc206e43e66dbd68d9f03c9b38fe` |
+| `pnpm turbo run lint --concurrency=1` | PASS, all 7 package checks |
+| `pnpm exec vitest run --maxWorkers=2 src/*.test.ts` in packages/core | PASS, 112 files / 2,537 tests |
+| `pnpm exec vitest run --maxWorkers=2 src/*.test.ts test/final-check-c239.test.ts test/recovery-case-join.test.ts test/recovery-case-outcome.test.ts test/verify-evidence-pack-cli.test.ts` in packages/db | Final run after dependency builds PASS, 30 files / 250 tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/evidence-pack.application.test.ts src/evidence-pack-v3.application.test.ts src/evidence-pack-v3.controller.test.ts` | PASS, 3 files / 35 tests, including 3 new snapshot lifecycle negatives/positives |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/recovery-cases/[id]/evidence-packs/route-v3.test.ts'` | PASS, 1 file / 2 tests |
+| `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs` | All PASS |
+| `pnpm openapi:check` | FAIL before checker execution: tsx CLI IPC listen EPERM |
+| `node --import tsx src/generate-openapi.ts --check` in apps/api, after dependency builds | PASS; same repository checker without the CLI IPC server |
+| `pnpm build --concurrency=1` | PASS, all 7 tasks; 1m27.617s |
+| `git diff --check` | PASS, including the r1 receipt |
+
+Diagnostics, not passing evidence: the initial unfiltered core command selected
+generated dist tests and failed two source-inspection checks against emitted JS;
+stopped and reran explicit source paths, all green. The first db command used
+Vitest's substring filter `src`, unintentionally selecting four `dbsrc`-named
+integration files. Their cluster setup failed before PostgreSQL started (18 tests
+skipped); stopped the run and switched to explicit source filenames. PostgreSQL
+assertions did not execute. The first explicit db unit run, concurrent with
+dependency builds, had 4 C239 failures from stale built exports and 1 existing
+audit reachability timeout at its unchanged 5s limit. The same complete selection
+passed after dependency builds, with no test or timeout weakened. The first direct
+OpenAPI attempt also hit stale db exports; the post-build checker passed.
+
+The three CH8-V PostgreSQL files, database/migration/RLS/catalogue suites and
+browser suites are NOT RUN here. Reviewer/CI must rerun all three CH8-V files
+(now 17 assertions, including the added isolation regression), with API build
+available for the command test's dist import. Green unit doubles do not prove
+PostgreSQL isolation or hidden-world noninterference. No acceptance is claimed.
+No git-writing commands, commit, push, PR, package download or live provider action.
+Intended conventional commit subject/body: `/private/tmp/jg-msg-ch8-v.txt`.
+
+Final r1 handoff: 2,537 core + 250 db-package unit + 35 API + 2 Next transport =
+2,824 passing tests. Six tracked repair paths changed, all within the CH8-V lane's
+allowlist. Full build and package lint passed; existing Next workspace-root/CSS
+warnings and nonfatal Turbo cache-write EPERM are retained in the logs. Required
+origin/main lane checks remain failed on inherited changes, not waived. Both
+blocking fixes are source-inspected and unit-tested where applicable; their
+real-PostgreSQL verdict remains for the independent reviewer after dispatcher
+commit/push. No aggregate acceptance, independent r1 verdict or release is claimed.
+
 ## 28 October 2026 — CH-8 catch-up onto current main
 
 Plan piece: **RED — BUILD_PLAN.md §10.4 CH-8, finish-list row 11**, evidence
@@ -499,3 +590,57 @@ Local validation with installed tools and maxWorkers=2:
 PostgreSQL and browser execution remain for GitHub CI after the router pushes.
 No package download, PostgreSQL start, localhost binding or git write occurred.
 Ready message: /tmp/ch8-v-catchup-20261028T192818Z-commit-msg.txt.
+
+
+## 31 October 2026 — CH8-V NOPR catch-up
+
+READY for the router to stage and commit this merge of origin/main
+`87b5dd4e5a7180c380ed5bf4571875d3e1461b02`. Plan piece: **RED — CH-8,
+BUILD_PLAN.md §10.4, finish-list row 11**. This is a catch-up of the existing
+branch, not completion or acceptance of the whole CH-8 journey.
+
+Resolved the three working-file conflicts. Kept both receipt histories and both
+distinct isolation regressions, including main's SB-02 activation checks. The
+source-change test preserves main's single equivalent public-command amendment.
+Removed the automatically merged duplicate snapshot helper: the production
+source now matches the latest main implementation exactly. No runtime behavior,
+SQL routine, migration, provider, or commercial-policy change is introduced.
+LP-0, tenancy, shared expectation lists, existing lanes and migration files match
+main; docs/contracts/lp-downstream-effects-v1.md is untouched. Added the branch's
+own config/lanes/ch8-v.json for its exact remaining payload paths.
+
+Local validation uses installed Node v24.17.0, TypeScript 5.8.3 and Vitest 4.1.12,
+at most two workers and at most three named Vitest files per invocation:
+
+- Core evidence-pack-v3.test.ts, evidence-pack.test.ts and
+  evidence-pack-v3-assembly.test.ts: PASS, 100 tests.
+- API evidence-pack-v3.application.test.ts and evidence-pack-v3.controller.test.ts:
+  PASS, 24 tests, including all retained snapshot lifecycle regressions.
+- Database `tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- Core `tsc -p packages/core/tsconfig.json`: PASS.
+- Both conflicted integration files: TypeScript transpilation syntax PASS.
+- Lane policy load/validation: PASS, exact codex/sandbox/ch8-v branch.
+
+The first API run could not collect tests because stale ignored core dist still
+used the removed double unwrap. A core-only source-alias rerun exposed stale db
+dist missing EvidencePackV3Repository. The passing v3 API rerun uses a temporary
+Vitest config at /tmp/ch8-v-vitest-20261031.mjs resolving core/db/config/storage
+to their current workspace source (as the database suite already does for db and
+config). No repository test config, assertions, timeout, or package pin changed.
+These earlier dependency-artifact failures are not claimed as passing runs.
+
+PostgreSQL, migration, catalog/RLS and browser suites are not executed here;
+they remain for GitHub CI after router push, followed by the required independent
+RED review at the exact head. The .git index remains unmerged until the router
+stages these resolved working files. No git write, fetch, package download,
+localhost binding, real customer data, provider action, release, or PR occurred.
+
+Final checks: API evidence-pack.application.test.ts PASS, 14 tests with the same
+source aliases; API `tsc -p apps/api/tsconfig.json --noEmit` PASS. Thus 138 unit
+tests passed across the five named core/API files plus the legacy API file.
+Vitest list for the three v3 integration files PASS: 20 tests collected, not
+executed. Typechecks and the dependency build were slow but completed; no stalled
+check remains. Final conflict-marker scan and git diff --check PASS.
+
+Ready commit message: /tmp/ch8-v-20261031T104444Z-commit-msg.txt. NOPR remains;
+the router stages and commits the resolved merge and opens a PR when CI has room.
