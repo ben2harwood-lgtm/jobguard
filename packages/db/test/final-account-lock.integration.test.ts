@@ -19,9 +19,9 @@ export const LOCK_HASH = "a".repeat(64);
 export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
 export async function createLockFixture(install = true): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv4-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start(); const admin = new Pool(connection);
+ await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); const admin = new Pool(connection);
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  const pools: Pool[] = [];
  for (const role of ["jobguard_runtime", "jobguard_shadow", "jobguard_migration"]) {

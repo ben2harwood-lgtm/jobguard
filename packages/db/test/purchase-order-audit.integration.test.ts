@@ -19,8 +19,8 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic",
     persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  const connection = { host: "127.0.0.1", port, database: "postgres" };
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo" };
   admin = new Pool({ ...connection, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
