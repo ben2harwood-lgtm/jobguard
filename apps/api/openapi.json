@@ -638,6 +638,142 @@
         ]
       }
     },
+    "/jobs/{id}/success-fees/collection": {
+      "get": {
+        "operationId": "SuccessFeeController_collection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read fake-rail fee collection reservations and reconciled principal",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_collect",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash",
+                      "amountPence"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-collection-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "collect",
+                          "refund"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "amountPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "attemptId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-collection-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "redirect",
+                          "unknown"
+                        ]
+                      },
+                      "attemptId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve exact synthetic collection/refund or record a redirect/unknown outcome",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",

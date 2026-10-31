@@ -51,4 +51,15 @@ export class SuccessFeeController {
   return new StreamableFile(file.bytes,{type:"application/json; charset=utf-8",disposition:`attachment; filename="${file.filename}"`});
  }
 
+ @Get("collection") @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Read fake-rail fee collection reservations and reconciled principal"})
+ collection(@Param("id")id:string,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.collection(id,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
+ @Post("collection") @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Approve exact synthetic collection/refund or record a redirect/unknown outcome"})
+ @ApiBody({schema:{oneOf:[
+  {type:"object",additionalProperties:false,required:["version","commandId","action","statementId","statementHash","amountPence"],properties:{version:{type:"string",enum:["simulation-fee-collection-command.v1"]},commandId:{type:"string",format:"uuid"},action:{type:"string",enum:["collect","refund"]},statementId:{type:"string",format:"uuid"},statementHash:{type:"string",pattern:"^[a-f0-9]{64}$"},amountPence:{type:"integer",minimum:1,maximum:1000000000000}}},
+  {type:"object",additionalProperties:false,required:["version","commandId","action","attemptId"],properties:{version:{type:"string",enum:["simulation-fee-collection-command.v1"]},commandId:{type:"string",format:"uuid"},action:{type:"string",enum:["redirect","unknown"]},attemptId:{type:"string",format:"uuid"}}},
+ ]}})
+ collect(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.collect(id,body,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
+
 }

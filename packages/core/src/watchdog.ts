@@ -44,6 +44,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/success-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees/statements": "post_live_billing",
   "nest:/jobs/:id/success-fees/statements": "post_live_billing",
+  "/api/jobs/[id]/success-fees/collection": "post_live_billing",
+  "nest:/jobs/:id/success-fees/collection": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
   "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.

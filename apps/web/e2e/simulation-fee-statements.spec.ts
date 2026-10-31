@@ -39,6 +39,6 @@ test("immutable statement download and linked reversal correction retain exact h
  await panel.getByRole("button",{name:"Save current simulation statement or correction"}).click();
  await expect(panel.getByTestId("statement-document-principal").last()).toHaveText("−£250.00");await expect(panel.getByTestId("statement-success-fee-principal").last()).toHaveText("£32.00");
  await expect(panel.locator("article").first().getByText(originalHash,{exact:true})).toBeVisible();
- await panel.getByRole("button",{name:"Approve this exact simulation statement"}).click();await expect(panel.getByRole("alert")).toBeVisible();
+ await panel.getByRole("button",{name:"Approve this exact simulation statement"}).click();await expect(panel.getByRole("alert",{name:"Simulation statement error"})).toHaveText("This statement could not be saved or approved. Refresh the source review and try again.");
  expect(writes.at(-1)).toMatchObject({action:"approve",statementId:allocation,statementHash:record(true).documentHash});
 });

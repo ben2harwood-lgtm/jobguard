@@ -20,9 +20,10 @@ import {finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js"
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 // Preserve protocol callers from the producer lane and numeric-baseline callers from CH-8.
-export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number=3360000,mixedFinalCheck=false,protocol="receipt-line-facts-command.v1"){
+export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number=3360000,mixedFinalCheck=false,collectionOrProtocol:boolean|string=false){
+ const collection282=typeof collectionOrProtocol==="boolean"?collectionOrProtocol:false;
+ const protocol=typeof protocolOrBaseline==="string"?protocolOrBaseline:typeof collectionOrProtocol==="string"?collectionOrProtocol:"receipt-line-facts-command.v1";
  const baselineNetPence=typeof protocolOrBaseline==="number"?protocolOrBaseline:3360000;
- if(typeof protocolOrBaseline==="string")protocol=protocolOrBaseline;
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
@@ -52,19 +53,20 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const feed=new PracticeFeedRepository(f.runtime,"synthetic_demo");
  let feedRevision=(await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"connect",commandId:randomUUID(),expectedRevision:0})).revision;
  // The additive facts catalogue owns F5's deposit and later receipt.
- const feedCommand=async(action:"advance"|"match_receipt",movement:"receipt-12000"|"receipt-14640"|"receipt-960",paymentId?:string)=>{
-  const raw={version:movement==="receipt-960"?"practice-feed-command.v1":"practice-facts-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement,...(action==="advance"?{step:"settled"}:{paymentId})};
-  const view=movement==="receipt-960"?await feed.command(context,actor,auth.digest,jobId,raw):await feed.factsCommand(context,actor,auth.digest,jobId,raw);
+ const feedCommand=async(action:"advance"|"match_receipt",movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000",paymentId?:string)=>{
+  const coreMovement=movement!=="receipt-12000"&&movement!=="receipt-14640";
+  const raw={version:coreMovement?"practice-feed-command.v1":"practice-facts-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement,...(action==="advance"?{step:"settled"}:{paymentId})};
+  const view=coreMovement?await feed.command(context,actor,auth.digest,jobId,raw):await feed.factsCommand(context,actor,auth.digest,jobId,raw);
   feedRevision=view.revision;
  };
- const advance=(movement:"receipt-12000"|"receipt-14640"|"receipt-960")=>feedCommand("advance",movement);
+ const advance=(movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000")=>feedCommand("advance",movement);
  if(kind==="F5")await advance("receipt-12000");
  const assembly=new FinalAccountCommandService(scoped),locks=new FinalAccountLockRepository(scoped),variations=new VariationRepository(scoped);
  let variationId:string=randomUUID();const variationScope=randomUUID(),workId=randomUUID();
  const price=async(id:string,description:string)=>{
   const v=(await f.admin.query("SELECT scope_item_id FROM app.variation WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,id])).rows[0];
   const proposal={version:"variation-proposal.v1" as const,id,jobId,scopeItemId:v.scope_item_id as string,existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text" as const,captureText:description,description,suggestion:null};
-  const priced=priceVariation({id:randomUUID(),variationId:id,previous:null,proposal,description,contentHash:hash,confirmed:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition",confirmedByMembershipId:actor.membershipId,rateProvenance:{kind:"human_entered",sourceRef:"synthetic-builder-price",sourceHash:hash,rateVersion:"synthetic.v1"}}});
+  const priced=priceVariation({id:randomUUID(),variationId:id,previous:null,proposal,description,contentHash:hash,confirmed:{quantity:"1",unit:"item",unitRatePence:collection282?282000:80000,direction:"addition",confirmedByMembershipId:actor.membershipId,rateProvenance:{kind:"human_entered",sourceRef:"synthetic-builder-price",sourceHash:hash,rateVersion:"synthetic.v1"}}});
   await withTenant(scoped,context,db=>insertPricedVariation(db,DEMO_TENANT_ID,priced));
   await withTenant(scoped,context,db=>approvePricedVariation(db,DEMO_TENANT_ID,id,{id:randomUUID(),revisionId:priced.id,revision:priced.revision,contentHash:priced.contentHash,signedDeltaPence:priced.signedDeltaPence,method:"builder_attestation",actorMembershipId:actor.membershipId,evidenceId:null,approvedAt:new Date()}));
   return priced;
@@ -103,7 +105,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  }
  const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation'",[DEMO_TENANT_ID,jobId,drafted.id])).rows[0].id as string;
  const invoices=new PracticeInvoiceRepository(scoped);
- const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960",alreadySettled=false)=>{
+ const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000",alreadySettled=false)=>{
   const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:"Fictional matched receipt"});
   if(!alreadySettled)await advance(movement);
   await feedCommand("match_receipt",movement,payment.paymentId);return payment.paymentId;
@@ -116,7 +118,9 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  };
  let deposit:string|null=null;
  if(kind==="F5"){deposit=await receipt(1200000,"receipt-12000",true);await produce(deposit);}
- const paymentId=await receipt(kind==="F5"?1464000:96000,kind==="F5"?"receipt-14640":"receipt-960"),produced=await produce(paymentId);
+ const firstPaymentId=collection282?await receipt(38400,"receipt-384"):null;
+ if(firstPaymentId)await produce(firstPaymentId);
+ const paymentId=await receipt(collection282?300000:kind==="F5"?1464000:96000,collection282?"receipt-3000":kind==="F5"?"receipt-14640":"receipt-960"),produced=await produce(paymentId);
  let caseId:string;
  if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
