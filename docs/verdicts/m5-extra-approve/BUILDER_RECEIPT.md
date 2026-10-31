@@ -136,3 +136,69 @@ commit, push and PR. PostgreSQL, migration replay, browser journeys, full CI and
 an independent RED review of the resulting exact head remain required. The prior
 RED PASS at e179592c was supplied in the order; it is not a review of this catch-up.
 DEMO-S and ENT-11b end-to-end results have not been established by this local run.
+
+
+31 October 05:06 order — CI repair 3: preserve fingerprinted approval rows
+
+This entry supersedes the earlier description of widening variation_approval.
+Rewrote only this PR's unmerged 0410 migration. It now keeps the exact original
+ordered column list and never rewrites historical row values. Customer session
+and command-hash provenance live in app.customer_variation_approval, a private
+1:1 table keyed by tenant and approval ID with tenant-qualified approval/session
+foreign keys, migration ownership, FORCE RLS, no runtime/identity/infrastructure
+access, and UPDATE/DELETE/TRUNCATE refusal triggers.
+
+The approval FK is deferred so the writer can insert provenance before inserting
+the approval: its existing BEFORE guard and AFTER catch-claim trigger both need
+the provenance immediately. Both records, catch claim, state and audit commit in
+the same transaction. Orphan provenance cannot commit. Replay still resolves the
+current session and compares its stored exact command. The approval guard checks
+that the side-table session belongs to the approval's job. No route or public
+method changed; the customer method remains customer_authenticated.
+
+Keeping actor_membership_id NOT NULL is incompatible with a customer actor on the
+existing approval row: assigning a builder membership would misstate who approved.
+The smallest compatible choice retains DROP NOT NULL, with a CHECK requiring a
+nonnull member for legacy methods and a NULL member/evidence for the customer
+method. This metadata change preserves every old row and its fingerprint; customer
+inserts additionally require the migration-owned session/provenance guard.
+
+LP-0 retains all earlier entries and adds the exact side-table policy and immutable
+triggers, plus the writer's side-table write metadata. A private same-schema-owner
+table derives no new owner/grant fact or non-owner RLS record; tenancy tests assert
+its forced RLS and ownership directly. Tenancy, serious-B5, customer-signin and
+contractor upgrade expectations add only the new private table (and its index and
+policy where catalogued), and stop inventing new columns on historical approvals.
+The upgrade test now compares pre/post approval column order and whole-row JSON
+fingerprints. Integration cases add orphan-commit refusal, private access, foreign
+tenant RLS, duplicate-side-row refusal and immutable provenance checks; the raw
+runtime approval INSERT still asserts exact 42501/CUSTOMER_REFUSED.
+
+The browser seed retains repair 1's parties-before-live order. It explicitly binds
+the fictional job's commercial track using the existing customer-invoice fixture
+pattern, because the legacy AFTER INSERT track trigger does not run on its later
+status UPDATE. Its variation copies that bound track and uses builder_logged origin,
+matching main's variation fixtures. Browser assertions remain unchanged.
+
+Local validation (installed binaries, no downloads):
+- DB and web tsc --noEmit: pass.
+- packages/db: vitest run --maxWorkers=2 test/lp-0-catalog.test.ts:
+  27 tests pass.
+- apps/api: vitest run --maxWorkers=1 --testTimeout=15000
+  src/auth/customer-variation.test.ts: 13 tests pass. The initial default-timeout
+  run failed on a 5-second dynamic-import timeout, then a shared-mock call count;
+  rerunning with a larger CLI timeout passed without any test/code/config change.
+- PL/pgSQL CASE-in-IF, money-arithmetic, commercial-boundary lints and standard
+  agent-lane-boundary-lint: pass. git diff --check: pass.
+- All 166 migrations on origin/main, the fingerprint guard, evidence-pack source
+  consumer and approval route are byte-for-byte unchanged. 0410 is not on main.
+- LP-0 prior entries preserved exactly; recorded lists remain in byte order.
+- Vitest list collects 45 cases in the three customer sign-in/approval/upgrade
+  integration files. Playwright list collects the two phone/desktop approval
+  cases. Collection is not execution.
+
+No PostgreSQL or browser journey was run in this sandbox. Coordinator must run the
+WHOLE PostgreSQL suite, including MIG-ORDER-2, recovery-message-upgrade and
+recovery-pursuit-terms-upgrade, plus required CI/browser checks and independent RED
+review of this rewritten migration before merge. No previous RED PASS is claimed
+for this repair. No push, merge, provider, live-money or release action performed.

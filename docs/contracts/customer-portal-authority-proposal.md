@@ -23,10 +23,13 @@ Here target `id` is the variation identity; revision/hash/signed amount bind its
 immutable priced revision. Unknown fields, including actor and method, are refused.
 The review screen displays the exact description, revision, hash and signed amount.
 
-Migration 0389 resolves the 0387 customer session again in the approval transaction,
+Migration 0410 resolves the 0387 customer session again in the approval transaction,
 locks the variation, checks the current job/revision, and records one immutable
-`variation_approval` with method `customer_authenticated`, a session reference and
-canonical command hash. Member actor and evidence are null for this method;
+`variation_approval` with method `customer_authenticated`. The session reference
+and canonical command hash live in the private, immutable 1:1
+`customer_variation_approval` side table, written in the same transaction.
+The approval row keeps its fingerprinted column list and historical row hashes.
+Member actor and evidence are null for this method;
 legacy approvals retain their fields and require member actors as before.
 A runtime insert cannot manufacture customer provenance. Replays reauthenticate,
 return only the same session's exact stored command, and create no second effect.
