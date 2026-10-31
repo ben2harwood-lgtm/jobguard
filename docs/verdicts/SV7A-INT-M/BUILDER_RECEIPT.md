@@ -181,3 +181,48 @@ install the absent POST or satisfy M acceptance. Final disk remains 86 GiB free.
 Final `git diff --check` exit 0; status contains only the two intended new files.
 No background checks remain. Builder outcome: **DEPENDENCY-BOUND / incomplete**;
 reviewable dependency evidence, not a completed UI or technically accepted task.
+
+## 31 October 2026 — NOPR current-main catch-up
+
+The launcher completed merge bb76ff52 before this run. Its second parent is
+origin/main 87b5dd4e5a7180c380ed5bf4571875d3e1461b02; read-only ancestry and
+unmerged-index checks passed. No conflict resolution, Git write, migration change
+or renumber was needed. All functional code, LP-0, tenancy and shared expectations
+match that main. The eight inherited branch-only files are lane registrations and
+historical dependency records. The protected lp-downstream-effects-v1 contract
+was not touched.
+
+Historical dependency statements above describe the October 25 source pin only.
+Current main supplies POST intake through workspaceApplication().jobSources.intake
+on the existing diary/customer-messages routes. This catch-up does not implement
+the four missing INT-M UI/browser files or claim M01–M06 completion. No new
+behavior, authority, money or hidden-data access was added. RED review applies
+to the eventual source/tenant/hidden-data implementation; this catch-up supplies
+no independent verdict. NOPR remains requested; the router owns Git writes.
+
+Local verification uses installed Node v24.17.0 and Vitest 4.1.12. The installed
+core runner, with --maxWorkers=2 and exactly three named files, passed
+src/job-source-intake.test.ts, src/job-sources.test.ts and src/watchdog.test.ts:
+23 tests passed. Initial web route tests failed during imports before executing
+assertions: stale packages/core/dist/activation-v3.js calls unwrap() twice while
+the current source calls it once. A core rebuild and route retry are recorded
+below. Typecheck uses Turbo --concurrency=1 and cached pinned pnpm 10.28.1 through
+a temporary /tmp wrapper (the global pnpm points at a different version).
+No packages downloaded. Database and browser suites remain CI-only in this
+sandbox. Read-only git diff --check passed.
+
+The installed core TypeScript build (`packages/core/node_modules/.bin/tsc -p
+ tsconfig.json`, run from packages/core) passed, refreshing ignored dist output.
+Retrying the same installed web Vitest runner with --maxWorkers=2 and only
+app/api/jobs/[id]/diary/route.test.ts and
+app/api/jobs/[id]/customer-messages/route.test.ts passed: 12 tests / 2 files.
+The stale-output import failure is resolved; no tracked source fix was required.
+
+Full typecheck was stopped after several minutes under Mac load averages above
+90. It advanced through core, storage, config and AI to DB without reporting a
+TypeScript error; it did not complete and is not a pass. Turbo also reported
+sandbox cache-write EPERM warnings. Per the issued stall instruction, this is
+READY for the router's NOPR catch-up commit; GitHub CI must complete full
+typecheck before merge. Final focused result: 35 tests passed across five files,
+in separate runs of at most three named files and at most two workers.
+No database/browser execution or independent review is claimed.
