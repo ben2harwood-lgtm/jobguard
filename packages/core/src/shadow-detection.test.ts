@@ -58,3 +58,31 @@ describe("SV-3 deterministic detection and SV-1 reuse", () => {
       expect(detectShadowObservations([{ ...o, facts: { ...o.facts, status } }], [], at)).toEqual([]);
   });
 });
+
+it('SB-08: A draft, rejected or withdrawn Log an extra treated as a catch', () => {
+ const observation = parseObservation(observationFixture());
+ expect(detectShadowObservations([observation], [], at)).toHaveLength(1);
+ for (const state of ["draft", "rejected", "withdrawn"] as const) {
+  expect(detectShadowObservations([observation], [capture(state)], at)).toEqual([]);
+  const proposal = proposalFromObservation(observation, "ai_proposal", "fixture.v1", at, timing);
+  const group = groupShadowProposals([proposal], [observation], [capture(state)])[0]!;
+  expect(group.match.outcome).toBe("builder_captured");
+ }
+});
+
+it('SB-09: One extra found in three sources', () => {
+ const observations = ["supplier_line", "completion_photo", "note_or_voice"].map((kind, n) =>
+  parseObservation({ ...observationFixture({ kind }), evidence: { ...observationFixture().evidence,
+   id: `10000000-0000-4000-8000-${String(n + 1).padStart(12, "0")}` } }));
+ const proposals = detectShadowObservations(observations, [], at);
+ expect(proposals).toHaveLength(3);
+ const groups = groupShadowProposals(proposals, observations, []);
+ expect(groups).toHaveLength(1);
+ expect(groups[0]!.primary.evidence).toHaveLength(3);
+ expect(groups[0]!.duplicates.every(p => p.outcome === "duplicate_signal")).toBe(true);
+ expect(groupShadowProposals([...proposals].reverse(), observations, [])).toEqual(groups);
+ // Independent work must remain a separate catch, rather than over-coalescing.
+ const other = parseObservation({ ...observations[0], evidence: { ...observationFixture().evidence, id: "10000000-0000-4000-8000-000000000099" }, facts: { ...observations[0]!.facts, workReference: "garden-gate", description: "garden gate" } });
+ const all = [...observations, other];
+ expect(groupShadowProposals(detectShadowObservations(all, [], at), all, [])).toHaveLength(2);
+});
