@@ -1,4 +1,6 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
+import { lp3NewSignatures } from "./lp3-catalog-fixtures.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,10 +21,10 @@ beforeAll(async () => {
   const port = await freePort(57500, 200);
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+  admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1550000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1550000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "rq_login", password: "synthetic", max: 6 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "rq_login", password: "synthetic", max: 6 });
   acceptance = new QuoteAcceptanceRepository(runtime);
 }, 90_000);
 afterAll(async () => {
@@ -180,10 +182,20 @@ describe("quote re-acceptance after cancellation", () => {
     expect((await accept(clean)).jobStatus).toBe("accepted");
   });
 
-  it("the routine and catalog hold: same signature, owner and ACL; side table is RLS-forced, owned by the migration role, read-only to runtime", async () => {
-    const fns = (await admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,p.proacl::text acl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('record_builder_attested_acceptance','record_quote_disposition') ORDER BY 1`)).rows;
-    expect(fns).toHaveLength(2);
-    for (const f of fns) { expect(f.owner).toBe("jobguard_migration"); expect(f.prosecdef).toBe(true); expect(f.proconfig).toEqual(["search_path=pg_catalog, app"]); expect(f.acl).toMatch(/jobguard_runtime=X/); expect(f.acl).not.toMatch(/^\{=X/); }
+  it("the routine and catalog hold: checked and owner-only signatures retain exact ACLs; side table is RLS-forced, migration-owned and read-only to runtime", async () => {
+    const fns = (await admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,p.proacl::text acl,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid)) checked FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('record_builder_attested_acceptance','record_quote_disposition') ORDER BY 1`, [lp3NewSignatures])).rows;
+    expect(fns).toHaveLength(4);
+    for (const name of ["record_builder_attested_acceptance", "record_quote_disposition"]) {
+      expect(fns.filter(f => f.proname === name).map(f => f.checked).sort()).toEqual([false, true]);
+    }
+    for (const f of fns) {
+      expect(f.owner).toBe("jobguard_migration"); expect(f.prosecdef).toBe(true);
+      expect(f.proconfig).toEqual(["search_path=pg_catalog, app, pg_temp"]);
+      expect(f.runtime).toBe(f.checked);
+      expect(f.acl).toBe(f.checked
+        ? "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}"
+        : "{jobguard_migration=X/jobguard_migration}");
+    }
     const t = (await admin.query(`SELECT pg_get_userbyid(relowner) owner,relrowsecurity,relforcerowsecurity,relacl::text acl FROM pg_class WHERE oid='app.quote_acceptance_sequence'::regclass`)).rows[0];
     expect(t).toMatchObject({ owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true });
     expect(t.acl).toMatch(/jobguard_runtime=r\//);

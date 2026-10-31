@@ -1,3 +1,4 @@
+import { beginRecoveryCommand, withRecoveryCommands } from "./recovery-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -59,6 +60,9 @@ const GUARD_CODES: Readonly<Record<string, RecoveryFollowUpErrorCode>> = {
 function translate(error: unknown): unknown {
   if (error instanceof RecoveryFollowUpError || error instanceof RecoveryMessageError) return error;
   const pg = error as { code?: string; message?: string; constraint?: string };
+  if (pg.message === "RECOVERY_CASE_NOT_FOUND") return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_NOT_FOUND");
+  if ((pg.code === "23514" || pg.code === "23505") && pg.message === "COMMAND_CONFLICT") return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+  if(pg.message==="FORBIDDEN")return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_FORBIDDEN");
   if (pg.code === "23514") { const code = GUARD_CODES[pg.message ?? ""]; if (code) return new RecoveryFollowUpError(code); }
   if (pg.code === "23505" && /recovery_follow_up(_event)?_(tenant_id_command_id|tenant_id_follow_up_id_revision|event_scheduled|event_became_due|event_cancelled|event_command)/u.test(pg.constraint ?? "")) return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_STALE_REVISION");
   return error;
@@ -89,7 +93,7 @@ export class RecoveryFollowUpRepository {
     caseId = uuidArg(caseId);
     // M4-5-S settles any history a direct worker run left behind and is the one authority on a message's status.
     const messages = await guarded(() => this.messages.read(ctx, caseId));
-    return guarded(() => withTenant(this.pool, ctx, async db => {
+    return guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.settleDueAudits(db, ctx.tenantId);
       return this.state(db, ctx.tenantId, caseId, messages);
     }));
@@ -100,9 +104,9 @@ export class RecoveryFollowUpRepository {
   async schedule(ctx: VerifiedTenantContext, caseId: string, raw: unknown, actor: RecoveryMessageActor): Promise<RecoveryFollowUpState> {
     caseId = uuidArg(caseId);
     const input = recoveryFollowUpScheduleCommandV1.parse(raw), sourceMessageId = uuidArg(input.sourceMessageId);
-    const requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, sourceMessageId });
-    await guarded(() => withTenant(this.pool, ctx, async db => {
-      const began = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, "schedule", requestHash);
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, sourceMessageId }), requestHash = requestHashOf(JSON.parse(requestJson));
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const began = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, "schedule", requestHash, requestJson);
       if (began.replayed) return;
       const jobId = began.jobId;
       const run = began.run;
@@ -136,13 +140,15 @@ export class RecoveryFollowUpRepository {
     const input = recoveryFollowUpCommandV1.parse(raw);
     if (input.action !== "advance_time") throw new z.ZodError([{ code: "custom", path: ["action"], message: "advance_time expected" }]);
     const followUpId = uuidArg(input.followUpId);
-    const requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, followUpId });
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, followUpId }), requestHash = requestHashOf(JSON.parse(requestJson));
     // 1. Recognise a replay, and find the run, before any clock is touched.
-    const plan = await guarded(() => withTenant(this.pool, ctx, async db => {
+    const plan = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCommand(db, ctx.tenantId, input.commandId);
+      if (!(await db.$client.query("SELECT 1 FROM app.recovery_case WHERE tenant_id=$1 AND id=$2",[ctx.tenantId,caseId])).rowCount) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
+      await this.requireOwner(db, ctx.tenantId, actor);
       const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
       if (recorded) { if (recorded.request_hash !== requestHash || recorded.follow_up_id !== followUpId) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT"); return { replayed: true as const }; }
-      if (await this.isReplay(db, ctx.tenantId, input.commandId, "advance", requestHash)) return { replayed: true as const };
+      if (await this.isReplay(db, ctx.tenantId, input.commandId, "advance", requestHash, requestJson)) return { replayed: true as const };
       await this.refuseEvidencePackCommand(db, ctx.tenantId, input.commandId);
       const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);
       const run = (await db.$client.query<{ tick: number; archived: boolean }>(
@@ -166,15 +172,17 @@ export class RecoveryFollowUpRepository {
         }
       }
       // 3. Record the command; the clock already saved the due audit in its own transaction.
-      await guarded(() => withTenant(this.pool, ctx, async db => {
+      await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
         await this.lockCommand(db, ctx.tenantId, input.commandId);
-        const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
+        if (!(await db.$client.query("SELECT 1 FROM app.recovery_case WHERE tenant_id=$1 AND id=$2",[ctx.tenantId,caseId])).rowCount) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
+      await this.requireOwner(db, ctx.tenantId, actor);
+      const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
         if (recorded) { if (recorded.request_hash !== requestHash || recorded.follow_up_id !== followUpId) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT"); return; }
         const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);
         const tickAfter = Number((await db.$client.query<{ n: number }>("SELECT app.recovery_follow_up_run_tick($1,$2) AS n", [ctx.tenantId, row.run_id])).rows[0]!.n);
         const moved = (await db.$client.query<{ fake_clock_tick: number }>("SELECT fake_clock_tick FROM app.sandbox_run_event WHERE tenant_id=$1 AND run_id=$2 AND command_id=$3 AND kind='advanced'", [ctx.tenantId, row.run_id, input.commandId])).rows[0];
         const tickBefore = moved ? Math.max(0, Number(moved.fake_clock_tick) - 1) : tickAfter;
-        const claimed = await this.claim(db, ctx.tenantId, input.commandId, "advance", requestHash, actor);
+        const claimed = await this.claim(db, ctx.tenantId, input.commandId, "advance", requestHash, requestJson);
         if (!claimed) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
         await db.$client.query(
           `INSERT INTO app.recovery_follow_up_advance(tenant_id,command_id,run_id,follow_up_id,request_hash,tick_before,tick_after,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'synthetic_demo')`,
@@ -197,7 +205,7 @@ export class RecoveryFollowUpRepository {
    */
   async signalDue(ctx: VerifiedTenantContext, runId: string): Promise<number> {
     runId = uuidArg(runId);
-    return guarded(() => withTenant(this.pool, ctx, async db => {
+    return guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       const made = Number((await db.$client.query<{ n: number }>("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [ctx.tenantId, runId])).rows[0]!.n);
       await this.settleDueAudits(db, ctx.tenantId);
       return made;
@@ -211,12 +219,12 @@ export class RecoveryFollowUpRepository {
     const input = recoveryFollowUpCommandV1.parse(raw);
     if (input.action !== "open_review") throw new z.ZodError([{ code: "custom", path: ["action"], message: "open_review expected" }]);
     const followUpId = uuidArg(input.followUpId), packId = uuidArg(input.packId);
-    const requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, followUpId, packId });
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, followUpId, packId }), requestHash = requestHashOf(JSON.parse(requestJson));
     const previewCommandId = derivedId(`recovery-follow-up-preview:${input.commandId}`);
     // 1. Validate, without claiming the command, so a refusal leaves nothing behind.
-    const gate = await guarded(() => withTenant(this.pool, ctx, async db => {
+    const gate = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCommand(db, ctx.tenantId, input.commandId);
-      if (await this.isReplay(db, ctx.tenantId, input.commandId, "open_review", requestHash)) return { replayed: true as const };
+      if (await this.isReplay(db, ctx.tenantId, input.commandId, "open_review", requestHash, requestJson)) return { replayed: true as const };
       await this.requireOwner(db, ctx.tenantId, actor);
       const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);
       const facts = await this.factsOf(db, ctx.tenantId, row);
@@ -231,12 +239,12 @@ export class RecoveryFollowUpRepository {
     // 2. The reminder is a message previewed by the M4-5-S path itself: its case, pack, source and one-effect rules apply to it unchanged.
     const afterPreview = await guarded(() => this.messages.preview(ctx, caseId, { version: "recovery-message-preview.v1", commandId: previewCommandId, expectedCaseRevision: input.expectedCaseRevision, packId }, actor));
     // 3. Link that exact message to this follow-up, in the transaction that claims the command.
-    await guarded(() => withTenant(this.pool, ctx, async db => {
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCommand(db, ctx.tenantId, input.commandId);
-      if (await this.isReplay(db, ctx.tenantId, input.commandId, "open_review", requestHash)) return;
+      if (await this.isReplay(db, ctx.tenantId, input.commandId, "open_review", requestHash, requestJson)) return;
       const created = (await db.$client.query<{ id: string }>("SELECT id FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2 AND command_id=$3", [ctx.tenantId, caseId, previewCommandId])).rows[0];
       if (!created || created.id !== afterPreview.latest?.id) fail("RECOVERY_FOLLOW_UP_CHANGED");
-      await this.beginClaim(db, ctx.tenantId, caseId, input.commandId, actor, "open_review", requestHash);
+      await this.beginClaim(db, ctx.tenantId, caseId, input.commandId, actor, "open_review", requestHash, requestJson);
       const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);
       const attempt = Number((await db.$client.query<{ n: number }>("SELECT coalesce(max(attempt),0)::int+1 AS n FROM app.recovery_follow_up_reminder WHERE tenant_id=$1 AND follow_up_id=$2", [ctx.tenantId, followUpId])).rows[0]!.n);
       await db.$client.query("INSERT INTO app.recovery_follow_up_reminder(tenant_id,job_id,case_id,follow_up_id,period,attempt,message_id,environment) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic_demo')",
@@ -254,15 +262,15 @@ export class RecoveryFollowUpRepository {
     const input = recoveryFollowUpCommandV1.parse(raw);
     if (input.action !== "approve_reminder") throw new z.ZodError([{ code: "custom", path: ["action"], message: "approve_reminder expected" }]);
     const followUpId = uuidArg(input.followUpId), messageId = uuidArg(input.messageId);
-    const requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, followUpId, messageId });
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, followUpId, messageId }), requestHash = requestHashOf(JSON.parse(requestJson));
     // A replay is recognised before any freshness check: the first success already moved every revision on.
-    const pre = await guarded(() => withTenant(this.pool, ctx, async db => {
+    const pre = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCommand(db, ctx.tenantId, input.commandId);
+      await this.requireOwner(db, ctx.tenantId, actor);
       // The dispatcher owns this command's receipt (with its own request hash), so a replay is recognised by the event the first success wrote.
       const prior = (await db.$client.query<{ request_hash: string }>("SELECT request_hash FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND command_id=$2 AND kind='reminder_approved'", [ctx.tenantId, input.commandId])).rows[0];
       if (prior) { if (prior.request_hash !== requestHash) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT"); return { replayed: true as const }; }
       if ((await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [ctx.tenantId, input.commandId])).rowCount) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
-      await this.requireOwner(db, ctx.tenantId, actor);
       return { replayed: false as const, ...await this.reminderFor(db, ctx.tenantId, caseId, followUpId, messageId, input) };
     }));
     if (pre.replayed) return this.read(ctx, caseId);
@@ -302,7 +310,7 @@ export class RecoveryFollowUpRepository {
     };
     await guarded(() => new UserCommandDispatcher(this.pool).dispatch(ctx, command, mutation));
     // Shared semantic idempotency can return a different command's completed approval: only this exact command is a replay; another client's is stale.
-    await guarded(() => withTenant(this.pool, ctx, async db => {
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       const owned = await db.$client.query("SELECT 1 FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND command_id=$3 AND request_hash=$4 AND kind='reminder_approved'", [ctx.tenantId, followUpId, input.commandId, requestHash]);
       if (!owned.rowCount) fail("RECOVERY_FOLLOW_UP_STALE_REVISION");
     }));
@@ -316,9 +324,9 @@ export class RecoveryFollowUpRepository {
     const input = recoveryFollowUpCommandV1.parse(raw);
     if (input.action !== "cancel") throw new z.ZodError([{ code: "custom", path: ["action"], message: "cancel expected" }]);
     const followUpId = uuidArg(input.followUpId);
-    const requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, followUpId });
-    await guarded(() => withTenant(this.pool, ctx, async db => {
-      const began = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, "cancel", requestHash);
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, followUpId }), requestHash = requestHashOf(JSON.parse(requestJson));
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const began = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, "cancel", requestHash, requestJson);
       if (began.replayed) return;
       const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);
       const facts = await this.factsOf(db, ctx.tenantId, row);
@@ -352,44 +360,41 @@ export class RecoveryFollowUpRepository {
     if (!owner.rowCount || actor.actorRef !== `membership:${actor.membershipId}`) fail("RECOVERY_FOLLOW_UP_FORBIDDEN");
   }
   /** Claims a new command id in the shared receipt table, in the same transaction as its first effect. A foreign family's receipt can never be replayed here. */
-  private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor): Promise<boolean> {
-    const claimed = await db.$client.query(
-      `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-       VALUES($1,$2,$3,$4,$5,'succeeded',$6::jsonb,$7,clock_timestamp()) ON CONFLICT DO NOTHING RETURNING command_id`,
-      [commandId, tenantId, `recovery.follow_up.${action}`, commandId, requestHash, JSON.stringify({ recoveryFollowUpCommand: action }), actor.membershipId]);
-    return !!claimed.rowCount;
+  private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, _requestHash: string, requestJson: string): Promise<boolean> {
+    try { return await beginRecoveryCommand(db,tenantId,commandId,`recovery.follow_up.${action}`,requestJson); }
+    catch(error) { if(error instanceof Error && error.message==="COMMAND_CONFLICT")fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+      if(error instanceof Error && error.message==="FORBIDDEN")fail("RECOVERY_FOLLOW_UP_FORBIDDEN");throw error; }
   }
-  /** A recorded command of this family with this exact request is a replay; any other use of the id, of any family, is a conflict. */
-  private async isReplay(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string): Promise<boolean> {
-    const receipt = (await db.$client.query<{ command_type: string; request_hash: string }>("SELECT command_type,request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenantId, commandId])).rows[0];
-    if (!receipt) return false;
-    if (receipt.command_type !== `recovery.follow_up.${action}` || receipt.request_hash !== requestHash) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
-    return true;
+  /** A replay goes back through the checked authority and both-key lookup. */
+  private async isReplay(db: TenantTransaction, tenantId: string, commandId: string, action: string, _requestHash: string, requestJson: string): Promise<boolean> {
+    if(!(await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[tenantId,commandId])).rowCount)return false;
+    return !(await this.claim(db,tenantId,commandId,action,_requestHash,requestJson));
   }
+
   /**
    * Lock order matches the M4-5-S commands: command identity, owner, shared receipt, pack command identity, then (scheduling only) run fence, case; rows after; audit last.
    * Returns the case's job, and whether this command id had already been recorded (an exact replay).
    */
-  private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string): Promise<{ replayed: boolean; jobId: string; run?: { id: string; tick: number } | null }> {
+  private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string, requestJson: string): Promise<{ replayed: boolean; jobId: string; run?: { id: string; tick: number } | null }> {
     await this.lockCommand(db, tenantId, commandId);
     const found = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId])).rows[0];
     if (!found) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
     await this.requireOwner(db, tenantId, actor);
-    if (await this.isReplay(db, tenantId, commandId, action, requestHash)) return { replayed: true, jobId: found.job_id };
-    await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor);
+    if (await this.isReplay(db, tenantId, commandId, action, requestHash, requestJson)) return { replayed: true, jobId: found.job_id };
+    await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor, requestJson);
     await this.refuseEvidencePackCommand(db, tenantId, commandId);
     // A scheduler must not hold the case while waiting on the clock: clock evaluation takes intent locks.
     const run = action === "schedule" ? await this.activeRun(db, tenantId, found.job_id) : null;
     await lockRecoveryCase(db, tenantId, caseId);
     return { replayed: false, jobId: found.job_id, run };
   }
-  private async claimAfterChecks(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor) {
-    if (!(await this.claim(db, tenantId, commandId, action, requestHash, actor))) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+  private async claimAfterChecks(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor, requestJson: string) {
+    if (!(await this.claim(db, tenantId, commandId, action, requestHash, requestJson))) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
   }
   /** begin() for a command whose validation already ran in an earlier transaction. */
-  private async beginClaim(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string) {
+  private async beginClaim(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string, requestJson: string) {
     await this.requireOwner(db, tenantId, actor);
-    await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor);
+    await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor, requestJson);
     await this.refuseEvidencePackCommand(db, tenantId, commandId);
     await lockRecoveryCase(db, tenantId, caseId);
   }

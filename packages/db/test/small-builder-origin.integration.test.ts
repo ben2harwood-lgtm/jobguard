@@ -71,8 +71,8 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   const repo=new VariationRepository(runtime),input=capture();
   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,M]);
   try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"FORBIDDEN"})}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M])}
-  await admin.query("REVOKE INSERT ON app.audit_event FROM jobguard_runtime");
-  try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"42501"})}finally{await admin.query("GRANT INSERT ON app.audit_event TO jobguard_runtime")}
+  await admin.query("REVOKE EXECUTE ON FUNCTION app.append_audit(jsonb) FROM jobguard_runtime");
+  try{await expect(repo.logBuilderExtra(context(),input)).rejects.toMatchObject({code:"42501"})}finally{await admin.query("GRANT EXECUTE ON FUNCTION app.append_audit(jsonb) TO jobguard_runtime")}
   expect((await admin.query("SELECT * FROM app.variation WHERE id=$1",[input.proposal.id])).rowCount).toBe(0);
   expect((await admin.query("SELECT * FROM app.extra_origin WHERE variation_id=$1",[input.proposal.id])).rowCount).toBe(0);
   expect((await admin.query("SELECT * FROM app.command_receipt WHERE command_id=$1",[input.proposal.id])).rowCount).toBe(0);
@@ -232,6 +232,7 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
     await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'reserved')",[p.scopeItemId,T,J]);
     await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional capture','Synthetic',$5)",[p.id,T,J,p.scopeItemId,kind]);
     await client.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id) VALUES($1,$2,$3,'small_builder',$4,$5,$6,'owner','command',$7)",[T,J,p.id,kind,command,M,source]);
+    await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [T, command]);
     await client.query("COMMIT");return p.id;
    }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
   };
@@ -239,7 +240,12 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   await expect(insert("builder_logged",existing)).rejects.toMatchObject({code:"23514"});
   await expect(insert("final_review",existing)).rejects.toMatchObject({code:"23514"});
   for(const id of [wrongJob,wrongTenant,randomUUID()])await expect(insert("jobguard_catch",id)).rejects.toMatchObject({code:"23503"});
-  const id=await insert("jobguard_catch",existing);await expect(admin.query("INSERT INTO app.extra_origin SELECT * FROM app.extra_origin WHERE variation_id=$1",[id])).rejects.toMatchObject({code:"23505"});expect((await admin.query("SELECT source_signal_id FROM app.extra_origin WHERE variation_id=$1",[id])).rows[0].source_signal_id).toBe(existing);
+  const id=await insert("jobguard_catch",existing);await expect(asTenant(T,async client=>{
+   // Isolate the duplicate-key backstop with an open unmanaged receipt in this
+   // same (ultimately rolled-back) transaction; committed setup stays terminal.
+   await client.query("UPDATE app.command_receipt SET status='processing',result=NULL,completed_at=NULL WHERE tenant_id=$1 AND command_id=(SELECT command_id FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2)",[T,id]);
+   await client.query("INSERT INTO app.extra_origin SELECT * FROM app.extra_origin WHERE variation_id=$1",[id]);
+  })).rejects.toMatchObject({code:"23505"});expect((await admin.query("SELECT source_signal_id FROM app.extra_origin WHERE variation_id=$1",[id])).rows[0].source_signal_id).toBe(existing);
   await insert("final_review",null);
   await expect(insert("site_user",null)).rejects.toMatchObject({code:"23514"});
  });

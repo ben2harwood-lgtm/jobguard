@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { readSmallTrip } from "../src/meter-small-trip.js";
 import { withTenant } from "../src/tenant-context.js";
@@ -56,7 +57,7 @@ async function observations(f: WorkFixture, a: WorkJob) {
 
 describe("MON1-T private trip foundation (source integration held MON1-I)", () => {
   let f: WorkFixture;
-  beforeAll(async () => { f = await createWorkFixture(); }, 60000);
+  beforeAll(async () => { f = await createWorkFixture(true, "jobguard_synthetic_demo"); }, 60000);
   afterAll(async () => closeWorkFixture(f));
 
   it.each([399999,400000,400001])("M1T-01 exact authoritative net %i crosses only above 400000p", async net => {
@@ -73,6 +74,7 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
     expect(await trip(f,a,revised.approval)).toBeNull();
     const other = await priced(f,a,100000,"2026-10-04T12:00:00Z");
     expect(await trip(f,a,other.approval)).toEqual(expect.any(String));
+ await assertLp4SealedEvents(f.admin, a.tenantId, "meter.small_trip_observed");
     expect(await observations(f,a)).toEqual([expect.objectContaining({net_pence:"400001",source_id:other.approval,effective_at:"2026-10-04T12:00:00.000000Z"})]);
   });
 

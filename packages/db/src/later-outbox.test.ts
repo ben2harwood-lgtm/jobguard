@@ -1,3 +1,5 @@
+import type { AuditEvent } from "./audit.js";
+import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -14,7 +16,7 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     amount_pence: null, currency: null, policy_version: "synthetic.v1",
     authorization_expires_at: new Date("2099-01-01"), created_at: new Date(),
     next_attempt_at: new Date(0), claimed_at: new Date(0), updated_at: new Date(0) };
-  let audit: unknown[][] = [], snapshot: { row: typeof row; audit: unknown[][] };
+  let audit: AuditEvent[] = [], snapshot: { row: typeof row; audit: AuditEvent[] };
   let inTransaction = false, failAudit = false;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit] }; inTransaction = true; }
@@ -28,10 +30,12 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }], rowCount: 1 };
     if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [], rowCount: 1 };
     if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: tenant }], rowCount: 1 };
-    if (sql.includes("app.lock_audit_head")) return { rows: [], rowCount: 0 };
-    if (sql.startsWith("SELECT clock_timestamp")) return { rows: [{ occurred_at: new Date() }], rowCount: 1 };
-    if (sql.includes("app.advance_audit_head")) return { rows: [], rowCount: 1 };
-    if (sql.startsWith("INSERT INTO app.audit_event")) { if (failAudit) throw new Error("synthetic audit failure"); audit.push(values); }
+    if (sql.includes("FROM app.append_audit(")) {
+      if (failAudit) throw new Error("synthetic audit failure");
+      const events = fakeAuditAppend(String(values[0]), tenant);
+      audit.push(...events);
+      return { rows: events, rowCount: events.length };
+    }
     if (sql.startsWith("UPDATE app.action_outbox")) {
       if (sql.includes("AND status='outcome_unknown'") && row.status !== "outcome_unknown") return { rows: [], rowCount: 0 };
       row.status = sql.includes("SET status=$2") ? String(values[1]) : /SET status='([^']+)'/u.exec(sql)![1]!;
@@ -61,7 +65,7 @@ describe("LATER-B9 synthetic outcome protocol", () => {
   it.each<FakeDeliveryResult>([{ kind: "succeeded", providerReference: "synthetic" }, { kind: "retryable", code: "temporary" }, { kind: "outcome_unknown", code: "timeout" }])("L020 each committed outcome has one audit event: $kind", async result => {
     const f = fixture("pending", result); await f.execute();
     expect(f.row.status).toBe(result.kind); expect(f.audit()).toHaveLength(1);
-    expect(f.audit()[0]![5]).toBe(`outbox.${result.kind}`);
+    expect(f.audit()[0]!.eventType).toBe(`outbox.${result.kind}`);
   });
   it("L020 expired authorization refusal has one audit event", async () => {
     const f = fixture(); f.row.authorization_expires_at = new Date(0); await f.execute();
@@ -80,7 +84,7 @@ describe("LATER-B9 synthetic outcome protocol", () => {
   it("L019 L020 durable reconciliation permits retry and records provider evidence once", async () => {
     const f = fixture("outcome_unknown"); await reconcileOutbox(f.pool, f.context, f.id, f.adapter);
     expect(f.row.status).toBe("retryable"); expect(f.audit()).toHaveLength(1);
-    expect(JSON.parse(String(f.audit()[0]![9])).references.reconciliation).toBe("not_found");
+    expect(f.audit()[0]!.payload).toMatchObject({ references: { reconciliation: "not_found" } });
     await expect(reconcileOutbox(f.pool, f.context, f.id, f.adapter)).rejects.toThrow("NOT_RECONCILABLE");
     expect(f.audit()).toHaveLength(1);
   });

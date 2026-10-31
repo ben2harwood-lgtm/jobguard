@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { rethrowJobWorkState, checkPostLockSourceLifecycle } from "./job-work-state-sources.js";
 import { FinalAccountLockError } from "@jobguard/core";
 import { createHash } from "node:crypto";
@@ -85,6 +86,13 @@ const withdrawalV1 = z.object({
 export class BuilderCaptureError extends Error {
  constructor(readonly code: "INVALID_BUILDER_CAPTURE" | "FORBIDDEN" | "COMMAND_CONFLICT") { super(code); }
 }
+function captureCommandFailure(error: unknown): never {
+ // Existing controlled final-review routines expose their PostgreSQL refusal.
+ // Do not turn those into a different application-level code.
+ if((error as {code?:string})?.code==="42501")throw error;
+ if(error instanceof Error && ["COMMAND_CONFLICT","FORBIDDEN"].includes(error.message))throw new BuilderCaptureError(error.message as "COMMAND_CONFLICT"|"FORBIDDEN");
+ throw error;
+}
 const captureCanonical = (value: unknown): string => value === null || typeof value !== "object" ? JSON.stringify(value) : Array.isArray(value)
  ? `[${value.map(captureCanonical).join(",")}]`
  : `{${Object.entries(value as Record<string, unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>`${JSON.stringify(key)}:${captureCanonical(child)}`).join(",")}}`;
@@ -97,25 +105,28 @@ export class VariationRepository{
   if(!checked.success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
   const p=variationProposalV1.parse(checked.data.proposal),price=confirmedVariationPriceV1.nullable().parse(checked.data.price),c=checked.data;
   if(!instantV1.nullable().safeParse(c.deviceCapturedAt).success || (price && price.confirmedByMembershipId!==c.actorMembershipId))throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
-  const requestHash=createHash("sha256").update(captureCanonical({...c,proposal:p,price})).digest("hex");
+  const legacyJson=captureCanonical({...c,proposal:p,price});
   return withTenant(this.pool,context,async db=>{
    const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,c.actorMembershipId])).rows[0];
    if(!member)throw new BuilderCaptureError("FORBIDDEN");
-   const prior=(await db.$client.query<{request_hash:string;command_type:string;status:string;result:{variationId:string}}>(`SELECT request_hash,command_type,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id])).rows[0];
-   if(prior){if(prior.command_type!=="AddFinalReviewExtra"||prior.request_hash!==requestHash||prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");return prior.result;}
+   const begin=()=>beginRepositoryCommand<{variationId:string}>(db,{tenantId:context.tenantId,actorMembershipId:c.actorMembershipId,
+    commandId:p.id,commandType:"AddFinalReviewExtra",semanticKey:`extra-origin:${p.jobId}:${p.id}`,jobId:p.jobId,legacyJson});
+   // A replay precedes final-review state checks, as before. No claim is made in
+   // a separate transaction: absent receipts still follow the original lock order.
+   if((await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,p.id])).rowCount){
+    const prior=await begin();if(prior.kind==="replay")return prior.result;
+   }
    await db.$client.query(`SELECT app.prepare_final_review_extra($1,$2,$3)`,[context.tenantId,p.jobId,c.actorMembershipId]);
-   const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'AddFinalReviewExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,c.actorMembershipId]);
-   if(!claimed.rowCount){const twin=(await db.$client.query<{request_hash:string;command_type:string;status:string;result:{variationId:string}}>(`SELECT request_hash,command_type,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id])).rows[0];if(!twin||twin.command_type!=="AddFinalReviewExtra"||twin.request_hash!==requestHash||twin.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");return twin.result;}
+   const claimed=await begin();if(claimed.kind==="replay")return claimed.result;
    // Same proposal writer, with a server-selected origin; no human/AI origin is trusted.
    if(!p.existingScopeItemId){await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'reserved') ON CONFLICT DO NOTHING`,[p.scopeItemId,context.tenantId,p.jobId]);if(p.lineageParentScopeItemId)await db.$client.query(`INSERT INTO app.scope_lineage(tenant_id,job_id,parent_scope_item_id,child_scope_item_id,kind)VALUES($1,$2,$3,$4,'variation') ON CONFLICT DO NOTHING`,[context.tenantId,p.jobId,p.lineageParentScopeItemId,p.scopeItemId]);}
    await db.$client.query(`INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,lineage_parent_scope_item_id,capture_kind,capture_text,description,origin)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'final_review')`,[p.id,context.tenantId,p.jobId,p.scopeItemId,p.existingScopeItemId,p.lineageParentScopeItemId,p.captureKind,p.captureText,p.description]);
    await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,device_id,device_captured_at,provenance) VALUES($1,$2,$3,'small_builder','final_review',$3,$4,'owner',$5,$6,'command')`,[context.tenantId,p.jobId,p.id,c.actorMembershipId,c.deviceId,c.deviceCapturedAt]);
    if(price)await writePricedRevision(db,context.tenantId,priceVariation({id:randomUUID(),variationId:p.id,previous:null,proposal:p,description:p.description,contentHash:createHash("sha256").update(captureCanonical({description:p.description,price})).digest("hex"),confirmed:price}),false);
-   const result={variationId:p.id};
-   await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id,JSON.stringify(result)]);
+
    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${c.actorMembershipId}`,eventType:"variation.final_review_added",subjectType:"variation",subjectRef:p.id,payload:{references:{jobId:p.jobId,commandId:p.id,origin:"final_review"},hashes:{capture:createHash("sha256").update(p.captureText).digest("hex")}}}]);
-   return result;
-  }).catch(rethrowJobWorkState).catch((error:unknown)=>{if(error instanceof Error && error.message==="FINAL_REVIEW_CLOSED")throw new FinalAccountLockError("FINAL_REVIEW_CLOSED");throw error;});
+   return completeRepositoryCommand<{variationId:string}>(db,p.id);
+  }).catch(rethrowJobWorkState).catch(captureCommandFailure).catch((error:unknown)=>{if(error instanceof Error && error.message==="FINAL_REVIEW_CLOSED")throw new FinalAccountLockError("FINAL_REVIEW_CLOSED");throw error;});
  }
 
  /** Non-commercial capture: same receipt/origin contract as SH-1, without send or fee authority. */
@@ -127,7 +138,7 @@ export class VariationRepository{
   if(!proposalResult.success || !priceResult.success || !instantV1.nullable().safeParse(parsed.data.deviceCapturedAt).success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
   const input={...parsed.data,proposal:proposalResult.data,price:priceResult.data},p=input.proposal;
   if(input.price && input.price.confirmedByMembershipId!==input.actorMembershipId)throw new BuilderCaptureError("FORBIDDEN");
-  const requestHash=createHash("sha256").update(captureCanonical(input)).digest("hex");
+  const legacyJson=captureCanonical(input);
   return withTenant(this.pool,context,async db=>{
    const membershipSql=`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`;
    let member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
@@ -137,13 +148,9 @@ export class VariationRepository{
    await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`final-review-command:${context.tenantId.toLowerCase()}:${p.id.toLowerCase()}`]);
    member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
    if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
-   const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-    VALUES($1,$2,'LogBuilderExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,input.actorMembershipId]);
-   if(!claimed.rowCount){
-    const prior=(await db.$client.query<{request_hash:string;status:string;result:{variationId:string}}>(`SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type='LogBuilderExtra' AND semantic_key=$3))`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`])).rows[0];
-    if(!prior || prior.request_hash!==requestHash || prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");
-    return prior.result;
-   }
+   const claimed=await beginRepositoryCommand<{variationId:string}>(db,{tenantId:context.tenantId,actorMembershipId:input.actorMembershipId,
+    commandId:p.id,commandType:"LogBuilderExtra",semanticKey:`extra-origin:${p.jobId}:${p.id}`,jobId:p.jobId,legacyJson});
+   if(claimed.kind==="replay")return claimed.result;
    // No direct row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
    // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
    // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
@@ -163,11 +170,9 @@ export class VariationRepository{
      contentHash:createHash("sha256").update(captureCanonical({description:p.description,price:input.price})).digest("hex"),confirmed:input.price});
     await writePricedRevision(db,context.tenantId,revision,false);
    }
-   const result={variationId:p.id};
    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"variation.builder_logged",subjectType:"variation",subjectRef:p.id,payload:{references:{jobId:p.jobId,commandId:p.id,origin:"builder_logged"},hashes:{capture:createHash("sha256").update(p.captureText).digest("hex")}}}]);
-   await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,p.id,JSON.stringify(result)]);
-   return result;
-  }).catch(rethrowJobWorkState);
+   return completeRepositoryCommand<{variationId:string}>(db,p.id);
+  }).catch(rethrowJobWorkState).catch(captureCommandFailure);
  }
  /** Persistence seam only; SV-2 adds no Withdraw command, route or screen. */
  async recordWithdrawal(context: VerifiedTenantContext, raw: unknown): Promise<void> {

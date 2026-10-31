@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { JobPartiesApplication } from "./job-parties.application.js";
 import { JobPartiesController, JobPartiesListController } from "./job-parties.controller.js";
-import { JobPartiesRepository, PracticeAccessError, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "@jobguard/db";
+import { JobPartiesRepository, PracticeAccessError, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, AdoptInFlightJobMutation } from "@jobguard/db";
+import { jobPartiesImportResultV1, IMPORT_LINEAGE_LABEL } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import type { ArgumentsHost } from "@nestjs/common";
@@ -78,7 +79,7 @@ describe("CH-3a per-session ownership", () => {
           return action === "view" ? controller.view(request, job) : controller[action](request, job, {});
         };
         const code = scenario === "stranger" ? "NOT_FOUND" : "UNAUTHENTICATED";
-        const error = await Promise.resolve().then(run).catch((failure: unknown) => failure);
+        const error = await Promise.resolve().then((): unknown => run()).catch((failure: unknown) => failure);
         expect(error).toBeInstanceOf(PracticeAccessError);
         expect(error).toMatchObject({ code });
         if (scenario !== "stranger") expect(connect).not.toHaveBeenCalled();
@@ -101,4 +102,48 @@ describe("CH-3a per-session ownership", () => {
       expect(connect).not.toHaveBeenCalled();
     });
   }
+});
+
+describe("LP-5a parties-import result contract", () => {
+  it("returns the full public result on first import and exact replay without another mutation", async () => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const binding = "21000000-0000-4000-8000-000000000001", baselineId = "22000000-0000-4000-8000-000000000001";
+    const revision = "23000000-0000-4000-8000-000000000001", commandId = "24000000-0000-4000-8000-000000000001";
+    const source = { bindingId: binding, customerRevisionId: revision, siteRevisionId: revision, payingPartyRevisionId: revision };
+    vi.spyOn(JobPartiesRepository.prototype, "view").mockResolvedValue({ current: source } as Awaited<ReturnType<JobPartiesRepository["view"]>>);
+    let business: Awaited<ReturnType<AdoptInFlightJobMutation["mutate"]>> | undefined, stored: Record<string, unknown> | undefined;
+    const mutate = vi.spyOn(AdoptInFlightJobMutation.prototype, "mutate").mockImplementation(async (_db, command) => {
+      business = { jobId: command.subjectRef, baselineId, provenance: "imported", lifecyclePoint: "live", acceptedNetValuePence: 100000,
+        recoveryCapPence: 1500, lineageStrength: "builder_attested_weaker", lineageLabel: IMPORT_LINEAGE_LABEL, billing: "none", historicFeesCreated: 0 };
+      return business;
+    });
+    vi.spyOn(AdoptInFlightJobMutation.prototype, "auditEvents").mockReturnValue([]);
+    // Database boundary double; CI exercises the actual SQL projection and proof.
+    const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+      if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql) || sql.includes("set_config")) return { rows: [] };
+      if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }] };
+      if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: job }] };
+      if (sql.includes("SELECT status,result FROM app.command_receipt")) return { rows: stored ? [{ status: "succeeded", result: stored }] : [] };
+      if (sql.includes("SELECT 1 FROM app.membership")) return { rows: [{ owner: true }] };
+      if (sql.includes("app.begin_command(")) return { rows: [{ result: { kind: "claim", decisionId: commandId, resolutionId: commandId, authorizationId: commandId } }] };
+      if (sql.includes("app.require_current_job_parties(")) return { rows: [{ snapshot: source }] };
+      if (sql.includes("app.complete_command(")) {
+        const refs = JSON.parse(values[1] as string);
+        if (refs.sourceJobId !== job || refs.sourceBindingId !== binding) throw new Error("verified import source references required");
+        stored = jobPartiesImportResultV1.parse({ ...business, version: "job-parties-import-result.v1", environment: "synthetic_demo",
+          sourceJobId: refs.sourceJobId, sourceBindingId: refs.sourceBindingId, realExternalActions: 0 });
+        return { rows: [{ result: stored }] };
+      }
+      throw new Error(`Unexpected import query: ${sql}`);
+    });
+    const pool = { query, connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
+    const app = new JobPartiesApplication(pool), request = { version: "job-parties-import.v1", commandId, expectedBindingId: binding };
+    const first = await app.adopt({ sessionId: token }, job, request);
+    expect(jobPartiesImportResultV1.parse(first)).toEqual(stored);
+    expect(first).toMatchObject({ version: "job-parties-import-result.v1", environment: "synthetic_demo", sourceJobId: job, sourceBindingId: binding, realExternalActions: 0 });
+    expect(await app.adopt({ sessionId: token }, job, request)).toEqual(first);
+    expect(await app.adopt({ sessionId: token }, job, request)).toEqual(first);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls.filter(([sql]) => sql.includes("app.begin_command("))).toHaveLength(1);
+  });
 });

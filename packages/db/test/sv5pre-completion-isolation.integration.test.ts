@@ -50,7 +50,7 @@ it("r8 zero and 25 hidden signals leave every non-shadow table byte-identical af
      await expect(runtime.query(`SELECT * FROM app.shadow_final_check_${name}`)).rejects.toMatchObject({code:"42501"});
     const audit=(await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='final_check.completed'",[a.tenantId])).rows;
     const check=(await admin.query("SELECT id,run_id,lock_id FROM app.final_account_lock_check WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
-    expect(audit).toEqual([{payload:{references:{checkId:check.id,runId:check.run_id,lockId:check.lock_id}}}]);
+    expect(audit).toEqual([{payload:{references:{auditTrust:"checked_operation",checkId:check.id,runId:check.run_id,lockId:check.lock_id}}}]);
     const gate=await asFixtureTenant(admin,a.tenantId,async db=>(await db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId])).rows);
     expect(gate).toEqual([{complete:true,check_id:check.id,run_id:check.run_id,lock_id:check.lock_id}]);
     await expect(runtime.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId])).rejects.toMatchObject({code:"42501"});

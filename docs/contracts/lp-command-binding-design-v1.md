@@ -1,8 +1,8 @@
 # LP-4 to LP-6 design note: commands, audit and the actor binding, version 1
 
-**Status: PROPOSED — needs review.** Design preparation required by BUILD_PLAN section 11.8 ("Design and inventory before cutover"), written by the LP-0 builder. **It is not an implementation, not a settled mechanism and not yet independently reviewed.** Independent review of this note must be recorded **before LP-5's interface is fixed and before LP-6a is coded** (LP0-20). Passing the LP-0 catalogue guard says nothing about whether this design is right.
+**Status: LP-5 design APPROVED WITH CHANGES; LP-6 proposals remain pending.** Design preparation required by BUILD_PLAN section 11.8 ("Design and inventory before cutover"), written by the LP-0 builder. **It is not implementation evidence.** The linked independent review clears LP-5 interface construction subject to its eight findings; LP-6a still requires its separate decisions (LP0-20). Passing the LP-0 catalogue guard says nothing about whether this design is right.
 
-**Review record:** *none yet.* (To be filled by the reviewing actor, bound to the exact commit of this file. A builder cannot fill it in.)
+**Review record:** [Independent design review, 30 October 2026](../review/LP-5-DESIGN-REVIEW-2026-10-30.md), APPROVED WITH CHANGES, bound to `5ce8a8c901d54c4a462dd16dadae85379dd2ba2a`. The following LP-5 clarifications apply findings 1–8; implementation still requires its RED review and the design delta check.
 
 **Authority:** this note proposes contracts and recommends table-backed storage for review; it approves no interface, mechanism or policy. Where a choice remains open it is listed under "Unresolved decisions". No fee, tax, owner-creation/removal, safety or revocation policy is proposed or changed.
 
@@ -82,7 +82,7 @@ from source order alone.
 
 ## 5. Checked command lifecycle (LP-5a)
 
-Sketch only: `begin_command(p_actor, p_tenant, command_type, idempotency_key, input_digest)` and `complete_command(receipt, result_ref)`.
+The sole signature set is specified in §17. No caller supplies an input digest.
 
 - **Begin** claims the receipt, or returns a permitted replay, or refuses. Unknown command types are refused. The per-command role rule is the decided one, not a new one.
 - **Replay** is permitted only to a caller who still has current access, returns the first result (never current state), and discloses nothing belonging to another actor. The same key with a different payload, or on another job, conflicts. A successful no-op keeps its identity.
@@ -252,7 +252,7 @@ nor the truth of site evidence.
 
 ## 17. Proposed begin/complete contract (LP-5a–LP-5c)
 
-Candidate inputs to `begin_command` are version, command ID, command type,
+`begin_command(version, command_id, command_type, semantic_key, resource, expected_revisions, significant_input jsonb)` returns claim, replay or refusal. `complete_command(command_id, outcome)` accepts an adapter-derived result reference or defined no-op. These are the sole signatures. Resource includes the transitional actor and tenant. Inputs to `begin_command` are version, command ID, command type,
 semantic key, resource identity, expected revisions and strictly validated
 significant input. Transitional `p_actor`/`p_tenant` come from the server principal;
 LP-6 compares them to the binding rather than accepting them as authority. The
@@ -297,7 +297,9 @@ pre-established facts as described in section 4.
 
 Proposed failure disposition: synchronous claims, effects and completion live in
 one transaction. Cancellation, validation error or failure before completion rolls
-all of them back; retry may claim afresh. A concurrent duplicate waits for the
+all of them back; retry may claim afresh. Both unique keys are resolved: if command ID and (type, semantic key) identify different receipts, or any matching digest differs, refuse COMMAND_CONFLICT. Never select an arbitrary first row. The digest excludes generated commandId, decisionId, resolutionId and authorizationId, but binds actor, tenant, resource and full action terms.
+
+A concurrent duplicate waits for the
 claiming transaction then rechecks current access and either returns its first
 committed result or claims after rollback. A pre-existing committed processing
 receipt is **not** permission to resume or mark success: refuse/conflict until its
@@ -307,6 +309,20 @@ cross-transaction workflow needs its own documented existing reconciliation and
 revocation rules before conversion. Unknown external outcomes reconcile; they do
 not trigger blind network retries. Business network calls stay outside the
 transaction.
+
+The database registry is keyed by (command_type, version), writable only by its narrow owner, and records permission, lock-phase adapter, completion adapter, required audit and outbox classes. Its command keys reconcile with watchdog.ts; it seeds today's dispatcher rules as owner-only, including finding.resolve without authorization. The registry-coverage test covers both registries.
+
+Fix two named defects first: dispatch without handler.lock currently permits revoked/expired-member replay, and dismissDecision replays before checking its owner. Replay checks current access without upgrading the membership FK KEY SHARE lock. begin_command takes no business locks; the route's authority-first lock phase precedes begin. Preserve the unchanged watchdog and commands integration lock tests, existing route assertions and FORBIDDEN / COMMAND_CONFLICT / AUTHORIZATION_INVALID codes.
+
+The deferred command_receipt constraint trigger binds its RLS reads and proof adapter to the receipt's own tenant, restoring the caller setting after successful validation. It refuses a touched processing receipt and verifies adapter-proven business row, actor/type/resource/revision, command-referencing audit and all required outbox rows at commit. Adapter-built stored results never come from handler JSON. A succeeded_noop outcome requires a verified no-change reason. Completion updates only its already-held receipt after audit, without acquiring new business locks. Until LP-6 binding enforcement, p_actor and p_tenant remain trusted server inputs: LP-5 makes no forged-actor resistance claim.
+
+The stacked LP-3 implementation also carries an independently checked operation digest in a semantic-key suffix. This is retained for its existing checked operations; it is never accepted as the receipt digest. Database begin derives that digest from the principal, resource and significant input.
+
+Quote-delivery and payment-reversal grant expiries are server-generated. Their route lock phases serialize retries and recover the original exact grant expiry before begin computes its digest. Grant expiry stays in the immutable checked authorization, but is excluded from replay identity just as the historical Date codec excluded it. This also preserves review-confirmation and legacy-adoption retries; replay never renews a grant.
+
+For the v3 activation, proposal review and legacy import routines, a private migration-owner handoff binds the effect to its processing claim. It is unavailable to runtime. Completion derives its stored result and a bounded private proof reference from those business rows; it never persists handler JSON. Existing server-proven activation, invoice and order no-ops retain their first effects and record a no-op reason. The historical synthetic lock-test command is explicitly registered as an operational no-op and cannot create a commercial authorization.
+
+Implementation source map (31 October 2026): LP-5a is `packages/db/migrations/0535_lp5a_commands.sql`; LP-5b is `packages/db/migrations/0536_lp5b_writers.sql`. The filename-only move puts both after main's 0505 source-intake admission definition. It changes no command signature, stored format or release gate.
 
 LP-5a converts dispatcher creation, dismiss/reject and completion. LP-5b traces
 all TypeScript and owner-side SQL writers, including later contractor wrappers,
@@ -361,6 +377,4 @@ validate index coverage, references, lane scope and existing pure comparator/
 context regressions; they do not establish SQL refusal, locks, signatures,
 financial correctness or independent review. PostgreSQL/browser suites cannot run
 in this sandbox. All implementation, migration, cutover, RED implementation
-reviews and whole-track real-data gates remain outstanding. Review of this note
-must be recorded against its exact head before LP-5's interface is fixed or LP-6a
-is coded. No migration or dependency is required for this slice.
+reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a decisions and implementation review remain outstanding. No migration or dependency is required for this slice.

@@ -31,7 +31,10 @@ beforeEach(() => {
     if (sql.includes("FROM app.audit_export_checkpoint")) return { rows: handed ? [{ sequence: "1", event_hash: headHash, event_sequence: "1", actual_hash: headHash }] : [] };
     if (sql.includes("current_setting")) return { rows: [{ tenant_id: tenant }] };
     if (sql.includes("clock_timestamp")) return { rows: [{ occurred_at: new Date("2026-10-11T22:30:00.000Z") }] };
-    if (sql.startsWith("INSERT INTO app.audit_event")) operatorEvent = values;
+    if (sql.includes("FROM app.append_audit(")) {
+      operatorEvent = JSON.parse(values[0] as string);
+      return { rows: [{ sequence: 2, eventHash: "b".repeat(64), occurredAt: new Date("2026-10-11T22:30:00.000Z") }] };
+    }
     if (sql.startsWith("INSERT INTO audit_control.checkpoint")) return { rows: [{ recorded_at: new Date("2026-10-11T22:30:00.001Z") }] };
     if (sql.startsWith("INSERT INTO app.audit_export_checkpoint") && failure) throw Object.assign(new Error("driver detail omitted"), { code: failure });
     return { rows: [], rowCount: 1 };
@@ -78,10 +81,10 @@ it("[A13] connected target and unknown tenant fail without inserts", async () =>
 it("[A14] trace locks before reads, uses only local settings and commits after copy", async () => {
   expect(await runAuditCheckpointHandoff(options)).toMatchObject({ outcomes: [{ outcome: "handed_off", sequence: 2 }] });
   const lock = queries.findIndex(q => q.sql.includes("app.lock_audit_head()"));
-  expect(queries.slice(lock - 2, lock).map(q => q.sql)).toEqual(["SELECT set_config('app.tenant_id', $1, true)", "SET LOCAL ROLE jobguard_runtime"]);
+  expect(queries.slice(lock - 2, lock).map(q => q.sql)).toEqual(["SELECT set_config('app.tenant_id', $1, true)", "SET LOCAL ROLE jobguard_migration"]);
   expect(queries.findIndex(q => q.sql.includes("FROM app.audit_event"))).toBeGreaterThan(lock);
   expect(queries.filter(q => /^SET ROLE/u.test(q.sql))).toEqual([]);
-  const append = queries.findIndex(q => q.sql.startsWith("INSERT INTO app.audit_event"));
+  const append = queries.findIndex(q => q.sql.includes("FROM app.append_audit("));
   const checkpoint = queries.findIndex(q => q.sql.startsWith("INSERT INTO audit_control.checkpoint"));
   const copy = queries.findIndex(q => q.sql.startsWith("INSERT INTO app.audit_export_checkpoint"));
   expect(append).toBeLessThan(checkpoint); expect(checkpoint).toBeLessThan(copy);
@@ -101,8 +104,8 @@ it("[C-OPS-4] requires a bounded plain operator label and records session user a
   }
   expect(connect).not.toHaveBeenCalled();
   await runAuditCheckpointHandoff(options);
-  expect(operatorEvent[8]).toEqual(new Date("2026-10-11T22:30:00.000Z"));
-  expect(JSON.parse(operatorEvent[9] as string).references).toEqual({ environment: "synthetic_demo", priorSequence: "1", operator: "ben.ops-1", sessionUser: "fixture_owner" });
+  expect(operatorEvent[0]).not.toHaveProperty("occurredAt");
+  expect((operatorEvent[0] as { payload: unknown }).payload).toMatchObject({ references: { environment: "synthetic_demo", priorSequence: "1", operator: "ben.ops-1", sessionUser: "fixture_owner" } });
 });
 it("[C-OPS-4] CLI requires operator, refuses duplicate/unknown flags and says nothing to do", async () => {
   for (const args of [[], ["--operator"], ["--operator", "bad label"], ["--operator", "ben", "--operator", "ben"], ["--operator", "ben", "--unknown", tenant], ["--operator", "ben", "--tenant", "invalid"]]) {

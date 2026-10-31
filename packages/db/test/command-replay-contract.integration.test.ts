@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { jobMutationRegistry, watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
+import { readFileSync } from "node:fs";
+import { lp5RegistryRows } from "./lp5-command-catalog.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 Done-when, applied to EVERY watchdog_live_only command: once a command succeeds, replaying its id returns the first
@@ -13,6 +15,14 @@ beforeAll(() => h.boot(), 120000);
 afterAll(() => h.stop());
 
 describe("every watchdog_live_only command is covered by this contract", () => {
+  it("reconciles every dispatcher database registry key with watchdog.ts", () => {
+    const seeds = ["0535_lp5a_commands.sql", "0536_lp5b_writers.sql"].map(file =>
+      readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8").split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!).join("\n");
+    const keys = [...seeds.matchAll(/\('([^']+)','([^']+)'/g)].map(m => `${m[1]}:${m[2]}`).sort();
+    expect(keys).toEqual(lp5RegistryRows.map(r => `${r.command_type}:${r.version}`).sort());
+    for (const row of lp5RegistryRows) expect(jobMutationRegistry[`command:${row.command_type}`]).toBeDefined();
+  });
+
   it("has a case for every guarded command (the registry's command list)", () => {
     expect(caseKeys.slice().sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
   });

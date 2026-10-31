@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -75,20 +76,15 @@ export class ExtraApprovalRepository {
   /** One transaction: claim the receipt, run the checked routine, append the audit chain last, complete the receipt. A failure leaves nothing behind. */
   private async run(context: VerifiedTenantContext, actor: AuthenticatedMembership, type: string, commandId: string, semantic: string, content: unknown,
     work: (db: TenantTransaction, tenant: string, member: string) => Promise<{ result: Result; audits: AuditEventInput[] }>): Promise<Result> {
-    const member = this.checkActor(context, actor), tenant = lc(context.tenantId), requestHash = sha256Hex(canonicalJson({ type, actor: member, content }));
+    const member = this.checkActor(context, actor), tenant = lc(context.tenantId), legacyJson = canonicalJson({ type, actor: member, content });
     try {
       return await withTenant(this.pool, context, async db => {
-        const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-          VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, requestHash, member]);
-        if (!inserted.rowCount) {
-          const rows = (await db.$client.query<{ request_hash: string; status: string; result: Result }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
-          if (rows.length !== 1 || rows[0]!.request_hash !== requestHash || rows[0]!.status !== "succeeded") throw new ExtraApprovalError("COMMAND_CONFLICT");
-          return rows[0]!.result;
-        }
-        const { result, audits } = await work(db, tenant, member);
+        const claimed=await beginRepositoryCommand<Result>(db,{tenantId:tenant,actorMembershipId:member,commandId,
+          commandType:type,semanticKey:semantic,jobId:(content as {jobId:string}).jobId,legacyJson});
+        if(claimed.kind==="replay")return claimed.result;
+        const { audits } = await work(db, tenant, member);
         await appendAuditBatch(db, audits);
-        await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId, canonicalJson(result)]);
-        return result;
+        return completeRepositoryCommand<Result>(db,commandId);
       });
     } catch (error) { failure(error); }
   }

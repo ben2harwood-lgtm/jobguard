@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -47,15 +48,34 @@ function fixture() {
     if (sql.startsWith("SELECT *,to_char")) return result(state.revisions.filter(r => r.id === values[2] && r.revision === values[3]));
     if (sql.startsWith("SELECT id,outbox_action_id")) return result(state.placements);
     if (sql.startsWith("INSERT INTO app.purchase_order_placement")) {
-      state.placements.push({ id: values[0], revision_id: values[4], outbox_action_id: values[6] }); return result();
+      state.placements.push({ id: values[0], revision_id: values[4], authorization_id: values[5], outbox_action_id: values[6] }); return result();
     }
-    if (sql.startsWith("SELECT role FROM app.membership")) return result([{ role: "owner" }]);
+    if (sql.startsWith("SELECT role FROM app.membership") || sql.startsWith("SELECT 1 FROM app.membership")) return result([{ role: "owner" }]);
     if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return result([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
     if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
       sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return result([]);
     if (sql.startsWith("SELECT 1 FROM app.command_receipt c") || sql.includes("UNION ALL")) return result();
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return result([{ command_id: values[1] }]);
     if (sql.startsWith("INSERT INTO app.watchdog_command_result")) return result();
+    // Dispatcher SQL double: the actual database proof lives in lp5-commands.integration.test.ts.
+    if (sql.startsWith("SELECT app.begin_command(")) {
+      const input=JSON.parse(values[6]), {commandId:_id,authorizationId:_auth,resolutionId:_res,decisionId:_dec,...facts}=input;
+      const digest=JSON.stringify(facts), matches=state.receipts.filter(r=>r.command_id===values[1]||r.semantic_key===values[3]);
+      if(matches.length){
+        if(matches.length!==1||matches[0].request_hash!==digest)throw new Error("COMMAND_CONFLICT");
+        return result([{result:{kind:"replay",result:matches[0].result}}]);
+      }
+      const authorizationId=randomUUID();state.authorizations.push([authorizationId]);
+      state.receipts.push({command_id:values[1],semantic_key:values[3],request_hash:digest,status:"processing",authorizationId});
+      return result([{result:{kind:"claim",decisionId:randomUUID(),resolutionId:randomUUID(),authorizationId}}]);
+    }
+    if (sql.startsWith("SELECT app.complete_command(")) {
+      const hints=JSON.parse(values[1]), placement=state.placements.find(p=>p.id===hints.placementId);
+      if(!placement)throw new Error("AUTHORIZATION_INVALID");
+      const stored={placementId:placement.id,outboxActionId:placement.outbox_action_id,reused:placement.authorization_id!==state.receipts.find(r=>r.command_id===values[0]).authorizationId};
+      Object.assign(state.receipts.find(r=>r.command_id===values[0]),{status:"succeeded",result:stored});
+      state.audits.push({eventType:"command.succeeded"});return result([{result:stored}]);
+    }
     if (sql.startsWith("INSERT INTO app.command_receipt")) {
       if (state.receipts.some(r => r.command_id === values[0] || r.semantic_key === values[3])) return result();
       state.receipts.push({ command_id: values[0], semantic_key: values[3], request_hash: values[4] }); return result([{}]);
@@ -68,6 +88,7 @@ function fixture() {
     if (sql.startsWith("INSERT INTO app.action_authorization")) { state.authorizations.push(values); return result(); }
     if (sql.startsWith("INSERT INTO app.action_outbox")) { state.effects.push(values); return result(); }
     if (sql.includes("current_setting('app.tenant_id'")) return result([{ tenant_id: tenant }]);
+    if (sql.includes("FROM app.append_audit(")) { state.audits.push(...JSON.parse(values[0] as string)); return result(fakeAuditAppend(values[0] as string, tenant)); }
     if (sql.includes("lock_audit_head")) return result();
     if (sql.includes("clock_timestamp() AS occurred_at")) return result([{ occurred_at: new Date("2026-10-13T12:00:00Z") }]);
     if (sql.startsWith("INSERT INTO app.audit_event")) { state.audits.push(values); return result(); }
@@ -151,7 +172,7 @@ describe("purchase-order blocking audit regressions", () => {
     expect(lock).toBeGreaterThan(-1);
     expect(lock).toBeLessThan(at(q => q.sql.startsWith("INSERT INTO app.watchdog_command_identity")));
     expect(lock).toBeLessThan(at(q => q.sql.includes("max(revision)")));
-    expect(lock).toBeLessThan(at(q => q.sql.includes("lock_audit_head")));
+    expect(lock).toBeLessThan(at(q => q.sql.includes("FROM app.append_audit(")));
   });
   it("refuses an unknown pack size instead of recording a fabricated comparison", async () => {
     const f = fixture(); Object.assign(f.rates[0]!, { price_pence: 20000, price_unit: "box" });

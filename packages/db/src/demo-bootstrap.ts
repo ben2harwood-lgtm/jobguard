@@ -1,5 +1,6 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
+import type { TenantTransaction } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
-import { createHash } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { migrate } from "./migrate.js";
 import {
@@ -35,7 +36,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -54,7 +55,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -120,8 +121,12 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
   } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
-  await client.query("SET ROLE jobguard_migration");
+  // Only the administrator can grant owner membership; migrations remain
+  // NOCREATEROLE. Remove the temporary capability on success and failure.
+  await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
   try {
+    await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+    await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
     return result.rows[0]!.count;
@@ -130,6 +135,8 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
+    try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+    finally { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
   }
 }
 async function seedDatabase(client: PoolClient) {
@@ -160,16 +167,19 @@ async function seedDatabase(client: PoolClient) {
       ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
     await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
+    const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
-      const result = await client.query(
-        `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-         VALUES($1,$2,'synthetic_demo.seed',$3,$4,'succeeded',$5::jsonb,$6,transaction_timestamp())
-         ON CONFLICT(tenant_id,command_type,semantic_key) DO NOTHING RETURNING command_id`,
-        [command.commandId, command.tenantId, command.semanticKey,
-          createHash("sha256").update(JSON.stringify(command)).digest("hex"), JSON.stringify({ checkpoint: command.checkpoint }), DEMO_MEMBERSHIP_ID],
-      );
-      return result.rowCount === 1 ? "created" : "replayed";
+      const db = { $client: client } as TenantTransaction;
+      const claim = await beginRepositoryCommand(db,{tenantId:command.tenantId,actorMembershipId:DEMO_MEMBERSHIP_ID,
+        commandId:command.commandId,commandType:"synthetic_demo.seed",semanticKey:command.semanticKey,
+        jobId:command.jobId,legacyJson:JSON.stringify(command)});
+      if(claim.kind==="replay")return "replayed";
+      await client.query("SELECT app.record_repository_command($1)",[command.commandId]);
+      pendingSeedCommands.push(command.commandId);
+      return "created";
+
     }});
+    for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }

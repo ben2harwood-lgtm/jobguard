@@ -44,6 +44,33 @@ describe("SV-7A on-site admission attacks", () => {
   expect(await events(a)).toHaveLength(2);
   const offsiteBefore = await events(a); await intake(a, diary(false)); expect(await events(a)).toEqual(offsiteBefore);
  });
+ it.each(["diary", "customer_message"] as const)("LP-5 source %s stores one checked lifecycle result and refuses revoked replay", async kind => {
+  const a = await company(), commandId = randomUUID();
+  const input = kind === "diary" ? { ...diary(), commandId } : { version: "customer-message-input.v1", commandId, fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional customer" }, text: "Please fit an outside tap." };
+  const call = (raw = input) => repo.intake(a.context, a.jobId, a.actorId, kind, raw);
+  const first = await call(); expect(await call()).toEqual(first);
+  const lifecycle = (await f.admin.query("SELECT c.version,c.outcome,r.status,r.result FROM app.command_lifecycle_claim c JOIN app.command_receipt r USING(tenant_id,command_id) WHERE c.tenant_id=$1 AND c.command_id=$2", [a.tenantId, commandId])).rows;
+  expect(lifecycle).toEqual([{ version: "repository-command.v1", outcome: {}, status: "succeeded", result: first }]);
+  await expect(call({ ...input, text: "Changed fictional note." })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  const before = await counts(a);
+  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId]);
+  await expect(call()).rejects.toEqual(new JobSourceError("JOB_SOURCE_FORBIDDEN"));
+  expect(await counts(a)).toEqual(before);
+ });
+ it.each(["JobSource.diary", "JobSource.customer_message", "IssueLockBoundInvoice", "unknown.lp5.main.writer"])("LP-5 %s cannot complete without its effect", async commandType => {
+  const a = await company(), commandId = randomUUID(), before = await counts(a);
+  let completionReached = false;
+  await expect(workTenant(f.runtime, a.tenantId, async db => {
+   const claim = (await db.query("SELECT app.begin_command('repository-command.v1',$1::uuid,$2::text,$1::uuid::text,$3::jsonb,'{}'::jsonb,$4::jsonb) result", [commandId, commandType,
+    JSON.stringify({ tenantId: a.tenantId, actorMembershipId: a.actorId, subjectType: "job", subjectRef: a.jobId }),
+    JSON.stringify({ version: "repository-command.v1", actorMembershipId: a.actorId, input: {}, legacyJson: "{}" })])).rows[0].result;
+   expect(claim.kind).toBe("claim");
+   completionReached = true;
+   await db.query("SELECT app.complete_command($1::uuid,'{}'::jsonb)", [commandId]);
+  })).rejects.toThrow("AUTHORIZATION_INVALID");
+  expect(completionReached).toBe(commandType !== "unknown.lp5.main.writer");
+  expect(await counts(a)).toEqual(before);
+ });
  it("a cap refusal has no source, receipt, event, audit or ledger effect", async () => {
   const a = await company();
   // Explicit historical fixture: this job's day-31 start and subsequent quiet period have expired.

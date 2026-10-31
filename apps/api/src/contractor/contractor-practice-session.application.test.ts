@@ -54,7 +54,7 @@ it("[PH17] passes the real stamped context whole through withTenant and returns 
 it.each([null, {}, { unexpected: true }])("[PH17] refuses an invalid database answer and rolls back", async result => {
  const f = fixture(); f.client.query.mockImplementation(async sql => sql.includes("revoke_contractor") ? { rows: [{ result }] } : { rows: [] });
  await expect(f.app.revoke(f.principal, body)).rejects.toMatchObject({ code: "PRACTICE_SESSION_UNAVAILABLE" });
- expect(f.client.query.mock.calls.some(call => call[0].includes("INSERT INTO app.audit_event"))).toBe(false);
+ expect(f.client.query.mock.calls.some(call => (call[0].includes("INSERT INTO app.audit_event") || call[0].includes("FROM app.append_audit(")))).toBe(false);
  expect(f.client.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
 });
 it("[PH17] strips all unexpected PostgreSQL text from thrown errors and public failures", async () => {

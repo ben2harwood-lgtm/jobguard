@@ -261,7 +261,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   }
   for(const signature of ['read_final_account_lock_sources(uuid,uuid,uuid)','guard_final_account_lock_check()','guard_final_account_invoiced_line()','final_lock_canonical(jsonb)','final_lock_hash(jsonb)','final_lock_require_owner(uuid,uuid)','append_final_lock_audit(uuid,uuid,uuid,text,jsonb,jsonb)','serialize_final_account_source()','serialize_final_review_receipt()']){
    const rows=(await f.admin.query("SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END grantee FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=$1::regprocedure AND a.privilege_type='EXECUTE' ORDER BY grantee",[`app.${signature}`])).rows;
-   expect(rows).toEqual([{grantee:'jobguard_migration'}]);
+   expect(rows).toEqual([...(signature==='final_lock_canonical(jsonb)' ? [{grantee:'jobguard_audit_writer'},{grantee:'jobguard_command_writer'}] : []),{grantee:'jobguard_migration'}]);
   }
  });
  it("C4 minimal grants, FORCE RLS, owner and append-only posture on all six new tables",async()=>{

@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +57,24 @@ class BillingSql {
           const previous = this.lockTail, gate = deferred(); this.lockTail = gate.promise;
           await previous; unlock = gate.resolve; return rows([]);
         }
+        if (sql.startsWith("SELECT app.begin_command(")) {
+          const input = JSON.parse(values[6]), requestHash = JSON.stringify(input);
+          const prior = this.receipts.get(values[1]);
+          if (prior) {
+            if (prior.request_hash !== requestHash || prior.status !== "succeeded") throw new Error("COMMAND_CONFLICT");
+            return rows([{ result: { kind: "replay", result: prior.result } }]);
+          }
+          const authorizationId = randomUUID();
+          this.receipts.set(values[1], { command_id: values[1], command_type: values[2], semantic_key: values[3], request_hash: requestHash, status: "processing", authorizationId });
+          claimed.push(values[1]);
+          return rows([{ result: { kind: "claim", decisionId: randomUUID(), resolutionId: randomUUID(), authorizationId } }]);
+        }
+        if (sql.startsWith("SELECT app.complete_command(")) {
+          const receipt = this.receipts.get(values[0])!, credit = pendingCredits.find(c => c.authorization_id === receipt.authorizationId);
+          if (!credit) throw new Error("AUTHORIZATION_INVALID");
+          const result = { creditNoteId: credit.id, creditNumber: credit.credit_number, originalInvoiceUnchanged: true };
+          Object.assign(receipt, { status: "succeeded", result }); return rows([{ result }]);
+        }
         if (sql.includes("INSERT INTO app.command_receipt")) {
           const prior = [...this.receipts.values()].find(r => r.command_id === values[0] || (r.command_type === values[2] && r.semantic_key === values[3]));
           if (prior) return rows([]);
@@ -84,10 +103,10 @@ class BillingSql {
         }
         if (sql.includes("FROM app.audit_event")) return rows(this.auditedPayments.has(values[1]) ? [{}] : []);
         if (sql.includes("SELECT authorization_id FROM app.customer_payment")) return rows([...pendingPayments, ...this.payments].filter(p => p.id === values[1]));
-        if (sql.includes("INSERT INTO app.audit_event")) {
-          const payload = JSON.parse(values[9]);
-          if (payload.references?.paymentId) this.auditedPayments.add(payload.references.paymentId);
-          return rows([]);
+        if (sql.includes("FROM app.append_audit(")) {
+          const events = fakeAuditAppend(values[0], this.fixture.tenantId);
+          for (const event of events) if (event.payload.references?.paymentId) this.auditedPayments.add(event.payload.references.paymentId);
+          return rows(events);
         }
         if (sql.includes("FROM app.customer_invoice")) {
           const credited = this.credits.reduce((n, c) => n + c.amount_pence, 0);
@@ -165,7 +184,7 @@ describe("dbsrc-03 audit reproductions with query doubles", () => {
     await expect(service.credit(testTenantContext(f.tenantId), creditInput(f, 3))).rejects.toThrow("INVALID_CREDIT_AMOUNT");
     expect(sql.credits).toHaveLength(0);
     expect(sql.receipts.size).toBe(0);
-    expect(sql.calls.some(call => call.includes("lock_audit_head"))).toBe(false);
+    expect(sql.calls.some(call => (call.includes("lock_audit_head") || call.includes("FROM app.append_audit(")))).toBe(false);
   });
 
   it("allows separate receipts sharing a bank reference", async () => {

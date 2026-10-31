@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -77,6 +78,7 @@ it("L065 same check ID replays and changed job/payload conflicts; concurrent rep
   const other = (await admin.query("SELECT id FROM app.job WHERE practice_session_digest=$1 AND id<>$2 LIMIT 1", [f.auth.digest, f.job])).rows[0]!.id;
   await expect(f.app.evaluate({ ...f.command, jobId: other })).rejects.toMatchObject({ code: "CONFLICT" });
   await expect(f.app.evaluate({ ...f.command, extra: true })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+ await assertLp4SealedEvents(admin, DEMO_TENANT_ID, "finding.checked");
   expect((await admin.query("SELECT 1 FROM app.audit_event WHERE event_type='finding.checked' AND payload->'references'->>'commandId'=$1", [f.command.commandId])).rowCount).toBe(1);
 });
 it("L065 audit and receipt roll back with a failed check transaction", async () => {

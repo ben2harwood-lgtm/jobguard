@@ -8,7 +8,7 @@ import {
 } from "../src/index.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import {
- cluster, fixture, raise, linkInput, orderInput, laterRevision, ownerTx, receipt,
+ cluster, fixture, raise, linkInput, orderInput, laterRevision, ownerTx, receipt, terminalizeFixtureReceipt,
  noteCanary, descriptionCanary, type Cluster, type Fixture,
 } from "./extra-fixtures.js";
 
@@ -88,6 +88,7 @@ async function exported(f: Fixture, variation: string) {
  await ownerTx(c, f.p.tenantId, async db => {
   const commandId = await receipt(db, f.p.tenantId, f.jobId, variation, f.p.membershipId, "FinaliseExportBatch");
   await db.$client.query("INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id) VALUES($1,$2,$3,$4,'exported',$5,$6)", [f.p.tenantId, randomUUID(), f.jobId, variation, commandId, f.p.membershipId]);
+  await terminalizeFixtureReceipt(db,f.p.tenantId,commandId,{variationId:variation,exported:true});
  });
 }
 async function secondJob(f: Fixture) {
@@ -143,7 +144,7 @@ async function allowedRefusals(f: Fixture, startingRevision = 0, orderRevision?:
 }
 
 describe("ENT-4c un-link command", () => {
- it("[D1] an owner un-links an active link: one un-link row, one completed command receipt, one audit event, nothing else", async () => {
+ it("[D1] an owner un-links an active link: one un-link row, one completed command receipt, one domain and one checked terminal audit, nothing else", async () => {
   const f = await organisation(), l = await linked(f), raw = input(f, l.linkId), before = await snapshot(f);
   let fact: Parameters<ExtraTransactionSeam>[1] | undefined;
   const result = await repo.unlinkDuplicate(f.ctx, raw, async (_db, value) => { fact = value; });
@@ -157,10 +158,14 @@ describe("ENT-4c un-link command", () => {
   expect(stored[0].semantic_key).toBe(semantic(f.jobId, l.linkId, raw.commandId));
   const events = (await c.admin.query("SELECT *,xmin::text transaction_id FROM app.audit_event WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, result.unlinkId])).rows;
   expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ event_type: "contractor.extra.duplicate_unlinked", subject_type: "extra", subject_ref: l.duplicate, actor_ref: `membership:${f.p.membershipId}`, transaction_id: row.transaction_id });
-  expect(events[0].payload).toEqual({ references: { command: raw.commandId, job: f.jobId, duplicate: l.duplicate, canonical: l.canonical, link: result.unlinkId, reverses: l.linkId, environment: "synthetic_demo" } });
+  expect(events[0].payload).toEqual({ references: { auditTrust: "lower_trust", command: raw.commandId, job: f.jobId, duplicate: l.duplicate, canonical: l.canonical, link: result.unlinkId, reverses: l.linkId, environment: "synthetic_demo" } });
+  const terminal=(await c.admin.query("SELECT *,xmin::text transaction_id FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2",[f.p.tenantId,raw.commandId])).rows;
+  expect(terminal).toHaveLength(1);
+  expect(terminal[0]).toMatchObject({actor_ref:`membership:${f.p.membershipId}`,subject_type:"job",subject_ref:f.jobId,transaction_id:row.transaction_id,
+   payload:{references:{commandId:raw.commandId,auditTrust:"checked_operation"},classifications:{action:"operational"}}});
   const after = await snapshot(f);
-  expect(Object.fromEntries(Object.keys(after.counts).map(table => [table, after.counts[table]! - before.counts[table]!]))).toEqual({ command_receipt: 1, extra_duplicate_link: 1, audit_event: 1 });
-  expect(Number(after.head[0].sequence) - Number(before.head[0].sequence)).toBe(1); expect(after.protected).toEqual(before.protected);
+  expect(Object.fromEntries(Object.keys(after.counts).map(table => [table, after.counts[table]! - before.counts[table]!]))).toEqual({ command_receipt: 1, extra_duplicate_link: 1, audit_event: 2 });
+  expect(Number(after.head[0].sequence) - Number(before.head[0].sequence)).toBe(2); expect(after.protected).toEqual(before.protected);
   const group = await repo.readDuplicateGroup(f.ctx, f.jobId, l.duplicate); expect(group.members).toHaveLength(1); expect(group.canonicalId).toBe(l.duplicate);
   expect(await repo.readDuplicateLinks(f.ctx, f.jobId)).toEqual({ version: "extra-duplicate-links.v1", jobId: f.jobId, revision: 2, activeLinks: [] });
  }, 60_000);
@@ -333,15 +338,19 @@ describe("ENT-4c un-link command", () => {
  it("[D14] the audit event commits or rolls back with the command", async () => {
   const f = await organisation(), l = await linked(f);
   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId), async () => { throw new Error(noteCanary); }), "DATABASE_UNAVAILABLE");
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.extra_duplicate_link", "INSERT INTO app.audit_event", "UPDATE app.command_receipt", "COMMIT"]) {
-   await spyQueries((sql, result) => { if (sql.includes(fragment)) throw new Error(descriptionCanary); return result; }, async () => {
+  for (const fragment of ["SELECT app.begin_command(", "INSERT INTO app.extra_duplicate_link", "FROM app.append_audit(", "SELECT app.complete_command(", "COMMIT"]) {
+   let reached = 0;
+   await spyQueries((sql, result) => { if (sql.includes(fragment)) { reached++; throw new Error(descriptionCanary); } return result; }, async () => {
     await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId)), "DATABASE_UNAVAILABLE");
    });
+   expect(reached, fragment).toBe(1);
   }
   const before = await snapshot(f);
   await expect(withTenant(c.runtime, f.ctx, async db => {
    const commandId = randomUUID(); await receipt(db, f.p.tenantId, f.jobId, l.duplicate, f.p.membershipId, "UnlinkDuplicate", commandId, { semanticKey: semantic(f.jobId, l.linkId, commandId) });
    await db.$client.query("INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,reverses_link_id,reason_code,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,'unlink',$6,$7,$8,$9)", [f.p.tenantId, randomUUID(), f.jobId, l.duplicate, l.canonical, l.linkId, "linked_in_error", commandId, f.p.membershipId]);
+   // Isolate the missing unlink audit with a terminal unmanaged receipt.
+   await terminalizeFixtureReceipt(db, f.p.tenantId, commandId, { linkId: l.linkId, variationId: l.duplicate });
   })).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
   expect(await snapshot(f)).toEqual(before);
  }, 120_000);

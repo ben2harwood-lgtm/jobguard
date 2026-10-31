@@ -148,11 +148,11 @@ describe("ENT-3a governed path", () => {
    await refused(f, sample.member, { ...sample.raw, commandId: sample.raw.commandId.toUpperCase() }, sample.code);
    const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.refused' AND subject_ref=$2", [f.p.tenantId, sample.raw.commandId])).rows;
    expect(rows).toHaveLength(1); expect(rows[0]!.id).toBe(derivedUuid(`extra-refusal:${f.p.tenantId}:${sample.raw.commandId}:${sample.reason}`));
-   expect(rows[0]).toMatchObject({ actor_ref: sample.member === foreign.members.supervisor.member ? "security:unverified-member" : `membership:${sample.member.membershipId}`, subject_type: "extra-command", payload: { references: { command: sample.raw.commandId, command_type: "LogSiteExtra", reason: sample.reason, environment: "synthetic_demo", ...(sample.raw.jobId === f.jobId ? { job: f.jobId } : {}) }, classifications: { action: "security" } } });
-   expect(Object.keys(rows[0]!.payload.references).sort()).toEqual(["command", "command_type", "environment", "reason", ...(sample.raw.jobId === f.jobId ? ["job"] : [])].sort());
+   expect(rows[0]).toMatchObject({ actor_ref: sample.member === foreign.members.supervisor.member ? "security:unverified-member" : `membership:${sample.member.membershipId}`, subject_type: "extra-command", payload: { references: { auditTrust: "lower_trust", command: sample.raw.commandId, command_type: "LogSiteExtra", reason: sample.reason, environment: "synthetic_demo", ...(sample.raw.jobId === f.jobId ? { job: f.jobId } : {}) }, classifications: { action: "security" } } });
+   expect(Object.keys(rows[0]!.payload.references).sort()).toEqual(["auditTrust", "command", "command_type", "environment", "reason", ...(sample.raw.jobId === f.jobId ? ["job"] : [])].sort());
   }
   await smallTrack(c, f); const raw = input(f); for (let i = 0; i < 3; i++) await refused(f, supervisor, raw, "TRACK_FORBIDDEN");
-  expect((await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.refused'", [f.p.tenantId, raw.commandId])).rows).toEqual([{ payload: { references: { command: raw.commandId, command_type: "LogSiteExtra", reason: "track_not_contractor", environment: "synthetic_demo", job: f.jobId }, classifications: { action: "security" } } }]);
+  expect((await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.refused'", [f.p.tenantId, raw.commandId])).rows).toEqual([{ payload: { references: { auditTrust: "lower_trust", command: raw.commandId, command_type: "LogSiteExtra", reason: "track_not_contractor", environment: "synthetic_demo", job: f.jobId }, classifications: { action: "security" } } }]);
   const all = JSON.stringify((await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows); expect(all).not.toContain(note); expect(all).not.toContain(description);
  });
  it("[A12] concurrent refusal writers coalesce; audit append failure retains identical typed refusal", async () => {
@@ -160,8 +160,11 @@ describe("ENT-3a governed path", () => {
   const errors = await Promise.all([refused(f, member, raw, "EXTRA_FORBIDDEN"), refused(f, member, raw, "EXTRA_FORBIDDEN")]); expect(errors[0]).toEqual(errors[1]);
   expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.refused'", [f.p.tenantId, raw.commandId])).rowCount).toBe(1);
   const connect = c.runtime.connect.bind(c.runtime), wrapped = new WeakSet<object>();
-  vi.spyOn(c.runtime, "connect").mockImplementation((async () => { const client = await connect(); if (wrapped.has(client)) return client; wrapped.add(client); const original = client.query.bind(client); vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => { if (String(sql).includes("INSERT INTO app.audit_event")) throw new Error(note); return original(sql, params); }) as any); return client; }) as any);
-  const error = await refused(f, member, input(f), "EXTRA_FORBIDDEN"); expect(error).toEqual(errors[0]); expect(JSON.stringify(error)).not.toContain(note);
+  let reached = 0;
+  vi.spyOn(c.runtime, "connect").mockImplementation((async () => { const client = await connect(); if (wrapped.has(client)) return client; wrapped.add(client); const original = client.query.bind(client); vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => { if (String(sql).includes("FROM app.append_audit(")) { reached++; throw new Error(note); } return original(sql, params); }) as any); return client; }) as any);
+  const failed = input(f), error = await refused(f, member, failed, "EXTRA_FORBIDDEN"); expect(error).toEqual(errors[0]); expect(JSON.stringify(error)).not.toContain(note);
+  expect(reached, "the refusal audit append must be reached").toBe(1);
+  expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.refused'", [f.p.tenantId, failed.commandId])).rowCount).toBe(0);
  });
 });
 

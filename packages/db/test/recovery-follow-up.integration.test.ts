@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -48,7 +49,9 @@ async function activatePursuitFixture(client: import("pg").PoolClient, tenant: s
   await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
   await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
   await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
-  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  return result;
 }
 
 /** The practice demo tenant's invoiced job, owned by one practice session, exactly as the persisted recovery journey leaves it. */
@@ -1019,7 +1022,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const base = await scheduled(), commandId = randomUUID();
     const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
     const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
-    const repair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const historicalRepair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const sealedMigration = await readFile(new URL("../migrations/0456_lp4_database_audit.sql", import.meta.url), "utf8");
+    const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
+    // Restore the repaired semantics with the currently installed sealed writer,
+    // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
+    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, () => sealedEvaluator);
     const owner = await admin.connect();
     try {
       // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
@@ -1109,11 +1117,11 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();
@@ -1167,6 +1175,72 @@ it("ReminderUsesSameGuard: a due reminder cannot preview after its terms prerequ
   await expect(repo.openReview(ctx, base.caseId, input, actor)).rejects.toMatchObject({ code: "RECOVERY_TERMS_NOT_APPROVED" });
   expect(await tenantCounts()).toEqual(before);
   expect((await messages.read(ctx, base.caseId)).sinkCount).toBe(1);
+});
+
+describe("LP-5b recovery follow-up marker lifecycle",()=>{
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s stores one checked marker, preserves exact replay, conflicts and refuses revoked replay",async action=>{
+    let caseId:string,run:(changed?:boolean)=>Promise<RecoveryFollowUpState>;
+    const commandId=randomUUID();
+    if(action==="schedule"){
+      const base=await deliveredCase();caseId=base.caseId;await newRun();
+      const input=scheduleCommand(base.message,base.state.readiness.caseRevision,commandId);
+      run=(changed=false)=>repo.schedule(ctx,caseId,changed?{...input,expectedCaseRevision:input.expectedCaseRevision+1}:input,actor);
+    }else if(action==="advance"){
+      const base=await scheduled();caseId=base.caseId;
+      const input={version:V,action:"advance_time" as const,commandId,followUpId:base.followUp.id};
+      run=(changed=false)=>repo.advanceTime(ctx,caseId,changed?{...input,followUpId:randomUUID()}:input,actor,
+        (runId,command)=>sandbox.advance(token,runId,command));
+    }else if(action==="open_review"){
+      const base=await due();caseId=base.caseId;
+      const input=reviewCommand(base.followUp,await messages.read(ctx,caseId),commandId);
+      run=(changed=false)=>repo.openReview(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }else{
+      const base=await scheduled();caseId=base.caseId;
+      const input=cancelCommand(base.followUp,commandId);
+      run=(changed=false)=>repo.cancel(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }
+    const first=await run();
+    const marker=()=>admin.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId]).then(r=>r.rows);
+    expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+    expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(1);
+    const before=await tenantCounts(),auditBefore=await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID]);
+    expect(await run()).toEqual(first);
+    expect(await tenantCounts()).toEqual(before);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID])).toBe(auditBefore);
+    expect(await code(()=>run(true))).toBe("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>run())).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s cannot complete without its business effect and refuses unknown types",async action=>{
+    const caseId=await newCase();
+    for(const commandType of [`recovery.follow_up.${action}`,"unknown.recovery.follow_up"]){
+      const commandId=randomUUID();
+      await expect(withTenant(runtime,ctx,async db=>{
+        const claim=await beginRepositoryCommand(db,{tenantId:DEMO_TENANT_ID,actorMembershipId:actor.membershipId,commandId,commandType,
+          semanticKey:commandId,jobId:fixture.jobId,legacyJson:JSON.stringify({caseId,membershipId:actor.membershipId,commandId,
+            action,followUpId:randomUUID(),sourceMessageId:randomUUID()})});
+        expect(claim.kind).toBe("claim");
+        await completeRepositoryCommand(db,commandId);
+      })).rejects.toMatchObject({message:"AUTHORIZATION_INVALID"});
+      expect(await count("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+      expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+    }
+  });
+  it("approveReminder rechecks the current owner before inspecting a prior approval on replay",async()=>{
+    const base=await previewed(),input=approveReminderCommand(base.followUp,base.reminder);
+    await repo.approveReminder(ctx,base.caseId,input,actor);
+    const before=await tenantCounts();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,input,actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,{...input,body:"Changed fictional replay body"},actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
 });
 
 // M4-6-store: real history, actual permission bridge and actual due/cancel application commands.
@@ -1265,6 +1339,9 @@ describe("M4-6 PostgreSQL timeline history", () => {
       await Promise.all([timeline(restarted).signal(signal), timeline().signal(signal)]);
       await expect(timeline(restarted).signal({ ...signal, version: "recovery-timeline-signal.v2" })).resolves.toBe("review");
       await expect(timeline(restarted).signal({ ...signal, kind: "cancel" })).rejects.toThrow("CONFLICT");
+      expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='cancelled'", [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
+      expect(await count(`SELECT count(*) n FROM app.command_lifecycle_claim c JOIN app.command_receipt r USING(tenant_id,command_id)
+        WHERE c.tenant_id=$1 AND r.command_type='recovery.follow_up.cancel' AND c.significant_input->'input'->>'followUpId'=$2`, [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
     } finally { await closeTestPools(restarted); }
     expect(await dueDecisions(base.followUp.id)).toBe(1);
     expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(1);
@@ -1292,6 +1369,17 @@ describe("M4-6 PostgreSQL timeline history", () => {
   it("cancel persists across restart; delayed timer and response never create a Decision", async () => {
     const base = await scheduled();
     await expect(timeline().signal(event(base, "cancel"))).resolves.toBe("stopped");
+    // Real timeline savepoints create subtransaction tuples. The private INSERT
+    // handoff, not equality with the top xid, proves this exact business effect.
+    expect((await admin.query(`SELECT r.status,r.result,
+      (c.effect_ref->>'followUpEventId'=e.id::text) event_bound,
+      (e.xmin::text<>c.transaction_id::text) subtransaction_effect
+      FROM app.recovery_follow_up_event e JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(e.tenant_id,e.command_id)
+      JOIN app.command_lifecycle_claim c ON(c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)
+      WHERE e.tenant_id=$1 AND e.follow_up_id=$2 AND e.kind='cancelled'`, [DEMO_TENANT_ID,base.followUp.id])).rows)
+      .toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:"cancel"},event_bound:true,subtransaction_effect:true}]);
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("SELECT app.lp5b_bind_follow_up_cancel()"))).rejects.toMatchObject({code:"42501"});
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.command_lifecycle_claim SET effect_ref='{}' WHERE tenant_id=$1",[DEMO_TENANT_ID]))).rejects.toMatchObject({code:"42501"});
     await missedClock(base);
     await expect(timeline().signal(event(base))).resolves.toBe("stopped");
     await expect(timeline().signal(event(base, "builder_response"))).resolves.toBe("stopped");

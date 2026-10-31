@@ -1,3 +1,4 @@
+import { lp5RegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { own,startBeforeMigration,applyMigration,startSession,status,snapshot,predecessorCatalogue,unchanged,type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -32,6 +33,9 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.payment_fee_command":[],
  "app.payment_fee_statement":[],
  "app.lp_job_insert_permit":[],
+ "app.command_lifecycle_claim":[],
+ "app.repository_operational_record":[],
+ "app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data,
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
  "app.small_builder_demo_run":[],
@@ -100,6 +104,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.recovery_attribution_revision":[],
  "app.recovery_attribution_command":[],
  "app.recovery_attribution_reassessment":[],
+ "app.activation_acceptance_operation_use":[],
  ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
