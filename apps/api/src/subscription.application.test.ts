@@ -1,5 +1,5 @@
 import { subscriptionConsentText } from "@jobguard/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubscriptionApplication, subscriptionFailure } from "./subscription.application.js";
 const command = { consentText: subscriptionConsentText, version: "subscription-command.v1", kind: "accept", plan: "Solo", cadence: "monthly", anchorDay: 1, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", maximumPence: 4900, expectedRevision: 0 };
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -99,7 +99,22 @@ describe("MON-2A tidy approval failure boundaries", () => {
    if(input.kind === "execute_simulation" && failure !== "claim") return {workId:id, statementId:id, environment:"synthetic_demo", amountPence:4900, contentHash:"a".repeat(64),currency:"GBP"};
    throw new Error("private failure");
   });
+  expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending",executionStatus:"unavailable"});
+ });
+ it("does not retry execution after a result-recording failure left a durable attempt", async () => {
+  const f=fixture();const snapshot={attempts:[] as {work_id:string}[],results:[]};
+  f.repository.read.mockResolvedValue(snapshot);
+  f.repository.command.mockImplementation(async(_context,_digest,_id,input)=> {
+   if(input.kind === "approve_simulation") return {workId:id};
+   if(input.kind === "execute_simulation") {
+    snapshot.attempts.push({work_id:id});
+    return {workId:id,statementId:id,environment:"synthetic_demo",amountPence:4900,contentHash:"a".repeat(64),currency:"GBP"};
+   }
+   throw new Error("private result-recording failure");
+  });
+  expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending",executionStatus:"unavailable"});
   expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending"});
+  expect(f.repository.command.mock.calls.map(call=>call[3].kind)).toEqual(["approve_simulation","execute_simulation","record_simulation","approve_simulation"]);
  });
  it("does not present a failed approval as saved", async () => {
   const f=fixture();f.repository.command.mockRejectedValue(new Error("approval rolled back"));
@@ -127,4 +142,11 @@ describe("MON-2A tidy approval failure boundaries", () => {
   expect(f.authority.provider.findMembership).toHaveBeenCalledWith(expect.anything(),foreign);
   expect(f.repository.read).not.toHaveBeenCalled();expect(f.repository.command).not.toHaveBeenCalled();
  });
+});
+
+// The displayed first anchor comes from the server clock, including London midnight.
+afterEach(() => vi.useRealTimers());
+it.each([["2026-06-14T23:30:00Z",15],["2026-01-31T12:00:00Z",31],["2024-02-29T12:00:00Z",29]] as const)("returns the server London billing day for %s",async (instant,day)=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date(instant));
+ expect(await fixture().app.read("session")).toMatchObject({billingDay:day});
 });
