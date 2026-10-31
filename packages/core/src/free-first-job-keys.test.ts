@@ -31,3 +31,11 @@ describe("MON-3-P-A all available keys", () => {
   }
  });
 });
+
+it('SB-21: A second trial for the same company, or the same phone and card', () => {
+ expect(preview(identity, []).trial).toBe("candidate");
+ const consumed = freeFirstJobKeys(identity);
+ expect(preview({ ...identity, normalizedPhone: "another", cardFingerprint: "sim_fp_another" }, consumed).trial).toBe("already_consumed");
+ expect(preview({ ...identity, companyNumber: "ANOTHER" }, consumed).trial).toBe("already_consumed");
+ expect(preview({ ...identity, companyNumber: "ANOTHER", normalizedPhone: "another", cardFingerprint: "sim_fp_another" }, consumed).trial).toBe("candidate");
+});

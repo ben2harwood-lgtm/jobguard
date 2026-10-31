@@ -6,6 +6,15 @@ it("both LP inventories enumerate exactly the two 0491 routines and their actual
  const sql=await readFile(new URL("../migrations/0491_simulation_fee_collection.sql",import.meta.url),"utf8");
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1]).sort()).toEqual(["read_platform_fee_collection","write_platform_fee_collection"]);
+ // Keep the runtime entry points within the shadow-catalog boundary. The private
+ // helper holds the identical source locks without granting protected-table access.
+ for(const [_,,body] of definitions){
+  expect(body).not.toMatch(/\bapp\.shadow_\w+/u);
+ }
+ const writer=definitions.find(m=>m[1]==="write_platform_fee_collection")![2]!;
+ expect(writer).toContain("PERFORM app.lock_success_fee_sources();");
+ expect(writer.indexOf("PERFORM app.lock_success_fee_sources();")).toBeGreaterThan(writer.indexOf("LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;"));
+ expect(writer.indexOf("PERFORM app.lock_success_fee_sources();")).toBeLessThan(writer.indexOf("FOR c IN SELECT id FROM app.recovery_case"));
  for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
   const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
   const knownRoutines=new Set<string>(raw.recorded.routines.map((r:{identity:string})=>r.identity.slice("function:".length).split("(")[0]));

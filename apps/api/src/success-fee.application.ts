@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { parseSuccessFeeCommand, SuccessFeeError } from "@jobguard/core";
+import { parseSuccessFeeCommand, simulationFeeCollectionCommandV1, SuccessFeeError } from "@jobguard/core";
 import { PracticeAccessError, SuccessFeeRepository, SimulationFeeStatementRepository, SimulationFeeCollectionRepository, SimulationMoneyRunRepository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 import { successFeeQueryV1 } from "./success-fee.contracts.js";
@@ -56,7 +56,10 @@ export class SuccessFeeApplication {
   let body:unknown;
   try{body=typeof raw==="function"?await (raw as ()=>Promise<unknown>)():raw;}
   catch(error){if(error instanceof SyntaxError)throw new SuccessFeeError();throw error;}
-  return new SimulationFeeCollectionRepository(this.pool).command(auth.context,jobId,auth.digest,body);
+  const parsed=simulationFeeCollectionCommandV1.safeParse(body);
+  if(!parsed.success)throw new SuccessFeeError();
+  if(parsed.data.action==="settle" || parsed.data.action==="fail")throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
+  return new SimulationFeeCollectionRepository(this.pool).command(auth.context,jobId,auth.digest,parsed.data);
  }
 
  async reconcileMoney(jobId:string,raw:unknown|(()=>Promise<unknown>),query:unknown={},tenantSelection=false){

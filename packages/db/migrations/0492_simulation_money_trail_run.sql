@@ -62,7 +62,7 @@ BEGIN
    IF EXISTS(SELECT 1 FROM app.success_fee_review r JOIN app.success_fee_derivation d
     ON(d.tenant_id,d.job_id,d.review_id)=(r.tenant_id,r.job_id,r.id)
     WHERE d.tenant_id=t AND d.job_id=j AND d.revision=(SELECT max(revision) FROM app.success_fee_derivation WHERE tenant_id=t AND job_id=j)
-     AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.statement->'sources') x WHERE x ? 'recoveryAllocationId')) THEN
+     AND EXISTS(SELECT 1 FROM jsonb_array_elements((r.statement->'sources')) x WHERE x ? 'recoveryAllocationId')) THEN
     live:=jsonb_build_object('unavailable',true,'dependency','withheld_payment_statement_source_adapter');
    ELSE
     live:=app.platform_fee_statement_sources(t,j,actor);
@@ -75,25 +75,26 @@ BEGIN
 END $$;
 CREATE FUNCTION app.simulation_money_run(p_job uuid,p_session text,p_command jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid; actor record; availability jsonb; action text:=p_command->>'action'; cid uuid;
+DECLARE t uuid; actor record; availability jsonb; action text:=(p_command->>'action'); cid uuid;
  r app.simulation_money_run; review app.simulation_money_review; source jsonb; digest text;
 BEGIN
  availability:=app.read_success_fee_v3(p_job,p_session);
  t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  -- This branch precedes all hidden-source reads, even for supplied run IDs.
- IF availability->>'state'<>'catch_review_available' THEN
+ IF (availability->>'state')<>'catch_review_available' THEN
   RAISE EXCEPTION 'SUCCESS_FEE_DEPENDENCY_BOUND' USING ERRCODE='0A000';
  END IF;
- IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR p_command->>'version' IS DISTINCT FROM 'simulation-money-command.v1'
+ IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR (p_command->>'version') IS DISTINCT FROM 'simulation-money-command.v1'
  OR action IS NULL OR action NOT IN('run','read','review','restore')
- OR NOT coalesce(pg_input_is_valid(p_command->>'commandId','uuid'),false)
+ OR NOT coalesce(pg_input_is_valid((p_command->>'commandId'),'uuid'),false)
  OR (p_command - (CASE WHEN action='run' THEN ARRAY['version','action','commandId'] ELSE ARRAY['version','action','commandId','runId','sourceHash'] END))<>'{}'
- OR (action<>'run' AND (NOT coalesce(pg_input_is_valid(p_command->>'runId','uuid'),false) OR coalesce(p_command->>'sourceHash','') !~ '^[a-f0-9]{64}$'))
+ OR (action<>'run' AND (NOT coalesce(pg_input_is_valid((p_command->>'runId'),'uuid'),false) OR coalesce((p_command->>'sourceHash'),'') !~ '^[a-f0-9]{64}$'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
  cid:=(p_command->>'commandId')::uuid;
  -- Synthetic coarse fence: all source writers finish before snapshot collection.
  -- All business locks are acquired before the audit head. No provider call.
- LOCK TABLE app.customer_invoice,app.customer_credit_note,app.customer_payment,app.customer_payment_reversal,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_source,app.receipt_allocation_fact_line,app.stored_receipt_case_allocation,app.success_fee_derivation,app.success_fee_journal,app.success_fee_journal_line,app.platform_fee_statement,app.platform_fee_attempt,app.platform_fee_attempt_event,app.subscription_period,app.subscription_period_line,app.platform_statement,app.platform_statement_line,app.subscription_simulated_work,app.subscription_simulated_result,app.action_authorization,app.recovery_attribution_revision,app.recovery_attribution_command,app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,app.recovery_case,app.recovery_claim_revision,app.recovery_case_event,app.practice_feed_event,app.practice_feed_command,app.practice_feed_receipt_match IN SHARE MODE;
+ PERFORM app.lock_success_fee_sources();
+ LOCK TABLE app.customer_invoice,app.customer_payment,app.success_fee_derivation,app.success_fee_journal,app.success_fee_journal_line,app.platform_fee_statement,app.platform_fee_attempt,app.platform_fee_attempt_event,app.subscription_period,app.subscription_period_line,app.platform_statement,app.platform_statement_line,app.subscription_simulated_work,app.subscription_simulated_result,app.action_authorization,app.practice_feed_receipt_match IN SHARE MODE;
  PERFORM pg_advisory_xact_lock(hashtextextended('simulation-money:'||t::text,0));
  SELECT * INTO actor FROM app.final_check_builder(t,p_job,p_session,action<>'read');
  PERFORM app.read_success_fee_v3(p_job,p_session);
@@ -116,7 +117,7 @@ BEGIN
  END IF;
  IF action<>'run' THEN
   SELECT * INTO r FROM app.simulation_money_run WHERE tenant_id=t AND job_id=p_job AND id=(p_command->>'runId')::uuid;
-  IF r.id IS NULL OR r.source_hash<>p_command->>'sourceHash'
+  IF r.id IS NULL OR r.source_hash<>(p_command->>'sourceHash')
   THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF action='review' AND review.id IS NULL THEN
    source:=app.simulation_money_sources(t,p_job,actor.member_id);

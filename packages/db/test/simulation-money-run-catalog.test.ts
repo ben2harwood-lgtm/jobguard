@@ -6,9 +6,12 @@ it("0492 adds exactly its checked run, private loader, private immutable tables 
  expect([...sql.matchAll(/CREATE TABLE app\.(\w+)/gu)].map(m=>m[1])).toEqual(["simulation_money_run","simulation_money_review"]);
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1])).toEqual(["simulation_money_sources","simulation_money_run"]);
+ // The downstream design snapshot deliberately excludes later dependency objects.
+ // Calls are scanned against the live inventory; only this piece's rows are unioned into each snapshot.
+ const live=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+ const known=new Set<string>(live.recorded.routines.map((r:{identity:string})=>r.identity.slice(9).split("(")[0]));
  for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
   const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
-  const known=new Set<string>(raw.recorded.routines.map((r:{identity:string})=>r.identity.slice(9).split("(")[0]));
   const tables=new Set<string>(raw.recorded.routines.flatMap((r:{staticWrites:string[]})=>r.staticWrites));
   for(const [_,name,body] of definitions){
    const facts=raw.recorded.routines.filter((r:{identity:string})=>r.identity.startsWith(`function:app.${name}(`));expect(facts).toHaveLength(1);
@@ -17,7 +20,12 @@ it("0492 adds exactly its checked run, private loader, private immutable tables 
   }
  }
  expect(sql).not.toMatch(/CREATE OR REPLACE|DELETE FROM|UPDATE app\.|greatest\(/iu);
- expect(sql.indexOf("IF availability->>'state'")).toBeLessThan(sql.indexOf('LOCK TABLE'));
+ const closed=sql.indexOf("IF (availability->>'state')"),fence=sql.indexOf("PERFORM app.lock_success_fee_sources()");
+ expect(closed).toBeGreaterThan(0);expect(fence).toBeGreaterThan(closed);
+ expect(fence).toBeLessThan(sql.indexOf("hashtextextended('simulation-money:"));
+ const body=definitions.find(m=>m[1]==="simulation_money_run")![2]!;
+ expect(body).not.toMatch(/shadow_(commercial_signal|signal_|reconciliation_run|disclosure_event|break_glass_access)/u);
+ expect(body).toContain("r.source_hash<>(p_command->>'sourceHash')");
 });
 it("0492 copies the exact predecessor policy quoting and every other SQL format string contains complete quoted literals",async()=>{
  const read=(name:string)=>readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");

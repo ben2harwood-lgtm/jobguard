@@ -17,11 +17,19 @@ async function setup(collection282=false){
  await x.execute({version:"success-fee-command.v1",action:"approve",commandId:randomUUID(),expectedPostingRevision:0,reviewId:review.reviewId,statementHash:review.statementHash});
  const issue=()=>statements.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()});
  const saved=await issue();
- const run=(raw:unknown)=>repo.command(x.context,x.jobId,x.auth.digest,raw);
+ // Only the CI fake-rail operator connection supplies terminal outcomes. No HTTP path.
+ const rail=(raw:unknown)=>finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+  await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);
+  return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[x.jobId,x.auth.digest,raw])).rows[0].result;
+ });
+ const run=(raw:unknown)=> {
+  const action=(raw as {action:string}).action;
+  return action==="settle"||action==="fail"?rail(raw):repo.command(x.context,x.jobId,x.auth.digest,raw);
+ };
  const view=()=>repo.view(x.context,x.jobId,x.auth.digest);
  const reserve=(action="collect",statement=saved,amountPence=8000)=>({version,commandId:randomUUID(),action,statementId:statement.statementId,statementHash:statement.documentHash,amountPence});
  const event=(attemptId:string,action="settle")=>({version,commandId:randomUUID(),action,attemptId});
- return {...x,saved,issue,run,view,reserve,event};
+ return {...x,saved,issue,run,rail,view,reserve,event};
 }
 it("atomically reserves once across concurrent clicks, retries and new IDs; redirect never settles; terminal replays are unique",async()=>{
  const x=await setup(),c=x.reserve();
@@ -164,4 +172,18 @@ it("collects GBP282, then a genuine GBP3000 receipt reversal refunds GBP250 and 
  expect(await x.view()).toMatchObject({settledPrincipal:28200,refundedPrincipal:25000,retainedPrincipal:3200,refundDue:0,refundReserved:0,outstandingPrincipal:0});
  await expect(x.run(x.reserve("refund",correction,25000))).rejects.toThrow("SUCCESS_FEE_STALE");
  expect(await statements.download(x.context,x.jobId,x.auth.digest,x.saved.statementId)).toEqual(original);
+});
+
+it.each(["settle","fail"])("builder connections cannot submit or replay %s even by direct SQL",async action=>{
+ const x=await setup(),a=await x.run(x.reserve()),c=x.event(a.attemptId,action);
+ const direct=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>{
+  await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);
+  return db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,c]);
+ });
+ await expect(repo.command(x.context,x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+ await expect(direct()).rejects.toMatchObject({code:"42501",message:"SUCCESS_FEE_FORBIDDEN"});
+ expect(await x.view()).toMatchObject({settledPrincipal:0,collectionReserved:8000});
+ await x.rail(c);
+ await expect(direct()).rejects.toMatchObject({code:"42501",message:"SUCCESS_FEE_FORBIDDEN"});
+ expect(await x.view()).toMatchObject({settledPrincipal:action==="settle"?8000:0,collectionReserved:0});
 });

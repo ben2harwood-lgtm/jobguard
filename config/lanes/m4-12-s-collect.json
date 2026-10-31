@@ -6,7 +6,7 @@
         "codex/sandbox/m4-12-s-collect"
       ],
       "receipt": "docs/verdicts/M4-12-S/BUILDER_RECEIPT.md",
-      "note": "RED M4-12-S fake collection/refund; migration 0491. Built ahead on m4-10-s-issue; router owns commit/push/PR and fresh Claude RED review. Own lane file is implicitly owned. PostgreSQL/browser suites run in CI.",
+      "note": "RED M4-12-S fake collection/refund; migration 0491. Built ahead on m4-10-s-issue; router owns commit/push/PR and fresh Claude RED review. Own lane file is implicitly owned. PostgreSQL/browser suites run in CI. Terminal settle/fail now require the internal migration/operator connection; session application/repository refuse them and builder controls are removed. No new routine, privilege or inventory entry.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/success-fee.application.test.ts",

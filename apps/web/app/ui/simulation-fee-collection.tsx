@@ -7,7 +7,7 @@ export function SimulationFeeCollection({jobId,statementId,statementHash}:{jobId
  const url=`/api/jobs/${jobId}/success-fees/collection`;
  async function load(){const r=await fetch(url,{cache:"no-store"});if(!r.ok)throw new Error();setView(simulationFeeCollectionViewV1.parse(await r.json()));}
  useEffect(()=>{setView(null);setError("");void load().catch(()=>setError("Collection records could not be loaded."));},[jobId,statementId,statementHash]);
- async function command(action:"collect"|"refund"|"redirect"|"unknown"|"settle"|"fail",attemptId?:string){
+ async function command(action:"collect"|"refund"|"redirect"|"unknown",attemptId?:string){
   setBusy(true);setError("");
   try{
    const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:"simulation-fee-collection-command.v1",commandId:crypto.randomUUID(),action,...(attemptId?{attemptId}:{statementId,statementHash,amountPence:action==="collect"?view?.outstandingPrincipal:view?.refundDue})})});
@@ -29,8 +29,6 @@ export function SimulationFeeCollection({jobId,statementId,statementHash}:{jobId
     {(a.state==="pending"||a.state==="outcome_unknown")&&<>
      <button disabled={busy} onClick={()=>void command("redirect",a.id)}>Simulate redirect (no settlement)</button>
      <button disabled={busy} onClick={()=>void command("unknown",a.id)}>Simulate unknown outcome</button>
-     <button disabled={busy} onClick={()=>void command("settle",a.id)}>Reconcile fake settled event</button>
-     <button disabled={busy} onClick={()=>void command("fail",a.id)}>Reconcile fake definite failure</button>
     </>}
    </article>)}
   </>}
