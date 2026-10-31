@@ -117,6 +117,8 @@ export * from "./meter-persistence.js";
 export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
+export { OidcRepository, type StoredOidcRequest } from "./oidc-repository.js";
+
 export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
@@ -127,12 +129,17 @@ export * from "./enterprise-live-prompt-repository.js";
 
 export * from "./contractor-entitlement-authority-repository.js";
 
+export * from "./free-first-job-repository.js";
+export * from "./free-first-job-card-repository.js";
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export * from "./free-first-job-eligibility-repository.js";
+
+export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
-export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
 export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
 export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
 export * from "./evidence-pack-v3-repository.js";
@@ -142,5 +149,13 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
+export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
+
+export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./recovery-billability-repository.js";
+
+export * from "./practice-photo-observation.js";
+export * from "./practice-proof-image.js";
+export * from "./value-business-reader.js";
+export * from "./simulation-fee-statement-repository.js";

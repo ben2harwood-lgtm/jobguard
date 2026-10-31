@@ -6,6 +6,8 @@
         "codex/sandbox/m4-2-integrate"
       ],
       "allow": [
+        "apps/api/src/recovery-case.contracts.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/recovery-billability-policy-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/recovery-billability-policy.test.ts",

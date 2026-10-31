@@ -1,8 +1,10 @@
 // Real PostgreSQL acceptance. NOT RUN in the builder sandbox: localhost/PostgreSQL unavailable.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { dashboardFactsV1, projectEnterpriseDashboard } from "@jobguard/core";
 import { ExtraApprovalRepository, ExtraRepository, SiteExtraRepository, SiteVisitRepository, contractorSessionContext, withTenant } from "../src/index.js";
 import { EnterpriseDashboardRepository } from "../src/enterprise-dashboard-repository.js";
+import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from "../src/enterprise-dashboard-queries.js";
 import { chainWorld, submitted, approveInput, cluster, command, type Cluster } from "./extra-approval-chain-fixtures.js";
 import { world as billingWorld } from "./contractor-billing-fixtures.js";
 import { direct } from "./site-extra-fixtures.js";
@@ -135,6 +137,17 @@ describe("ENT-9B scoped persisted reads", () => {
 });
 
 // ENT-9E: real command-created stored facts, not owner-inserted billing rows. Runs in CI.
+it("[E9E] a billed variation matched to a JobGuard extra has no missing-extra advisory", async () => {
+  const own = await billingWorld(c), s = await session(own.w);
+  await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([await own.invoice()]));
+  const context = await contractorSessionContext(c.runtime, s), repo = new EnterpriseDashboardRepository(c.runtime);
+  const before = await repo.readBilling(context, s, query);
+  expect(before.totals.billed.known.pence).toBe(24000);
+  const activity = await read(s);
+  expect(activity.signals.billing.status).toBe("supplied_stored_facts");
+  expect(activity.signals.observations.filter(o => o.kind === "billed_variation_without_extra")).toEqual([]);
+  expect(await repo.readBilling(context, s, query)).toEqual(before);
+});
 it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and removed by current credits/rejections", async () => {
   const a = await billingWorld(c), b = await billingWorld(c);
   const sa = await session(a.w), sb = await session(b.w);
@@ -149,7 +162,9 @@ it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and 
     imported.push({ own, invoice });
   }
   const first = (await read(sa)).signals;
-  const observation = first.observations.find(o => o.kind === "billed_variation_without_extra")!;
+  const missingExtras = first.observations.filter(o => o.kind === "billed_variation_without_extra");
+  expect(missingExtras).toHaveLength(1);
+  const observation = missingExtras[0]!;
   expect(observation).toMatchObject({ jobId: a.s.jobId, extraIds: [] });
   expect(observation.sourceIds).toHaveLength(2);
   expect(JSON.stringify(first)).not.toContain(b.s.jobId);
@@ -158,7 +173,21 @@ it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and 
   expect((await read(sa)).signals.observations).toEqual(first.observations);
   // The advisory never changes the authoritative matched-extra billing, fee base or job state.
   const authoritative = await a.repo.read(a.ctx, a.session, a.s.jobId);
-  await read(sa);
+  const context = await contractorSessionContext(c.runtime, sa), repo = new EnterpriseDashboardRepository(c.runtime);
+  const activityFacts = await withTenant(c.runtime, context, async db => {
+    await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+    const row = (await db.$client.query(enterpriseDashboardSourceSql, [sa, context.tenantId])).rows[0];
+    expect(row.authorized).toBe(true);
+    return dashboardFactsV1.parse(row.facts);
+  });
+  const billed = await repo.readBilling(context, sa, query), activity = await read(sa);
+  expect(billed.totals.billed.known.pence).toBe(24000); // The unmatched 100p never enters this total.
+  expect(billed.contributions.filter(row => row.stage === "billed").map(row => row.extraId)).toEqual([a.s.extraId]);
+  expect(await repo.readBilling(context, sa, query)).toEqual(billed);
+  // Each SELECT has a fresh cutoff, which legitimately changes both report hashes.
+  // Compare every field against the original facts at that read's cutoff instead.
+  for (const report of [activity.report, (await read(sa)).report])
+    expect(report).toEqual(projectEnterpriseDashboard({ ...activityFacts, cutoff: report.cutoff }, query));
   expect(await a.repo.read(a.ctx, a.session, a.s.jobId)).toEqual(authoritative);
   for (const [i, type] of ["credited", "rejected"].entries()) {
     const { own, invoice } = imported[i]!;
