@@ -128,3 +128,41 @@ After a successful binding, preparation still refuses with internal
 the existing ordinary-only and held must-surface path is unchanged. The HTTP
 writer, must-surface producer, section bindings and downstream consumer gates
 remain held. No database, grant, worker registration or external action changes.
+
+## CH-8 part 2 preparation (28 October 2026)
+
+The ch8-rest implementation prepares an additive `?version=3` read and queued v3 generation/approval. Runtime
+requests never obtain shadow credentials. Existing held preparation APIs remain compatibility-only;
+the new worker repository owns the assembled path. The checked writer binds exact database material,
+canonical envelope, source bytes and hashes. An order made before lock remains ordinary-only even
+if the lock completes before processing. The worker runs the deterministic must-surface reader/sink
+before issuing a completion receipt; failures produce no artifact. A later source change refuses the
+write/approval. Post-lock sections come from persisted producer records via the worker login only.
+
+Part 2 is ready as preparation with runtime creation refused. The public SV-6 attribution producer
+is still dependency-bound on this base; the required fresh shadow-30000 settled-catch/browser journey
+is missing. See `docs/verdicts/CH8-REST/BUILDER_RECEIPT.md`. Specimens, storage fixtures and a matching
+externally supplied digest do not replace producer acceptance or independent RED review.
+
+## Router-scoped part 2 activation boundary (28 October 2026)
+
+This supersedes the earlier draft readiness wording: part 2 is preparatory implementation; the
+fresh shadow-30000 source-to-settlement/UI/verifier journey belongs to part 3 after the SV-6
+runtime hookup. While assessment is unbound, v3 generation and approval refuse with
+EVIDENCE_PACK_V3_DEPENDENCY_HELD in the authenticated application, SQL request and SQL writer
+boundaries. No runtime pack is created with absent or invented attribution/settlement sections.
+Queued work from an older deployment cannot bypass the writer refusal. Pure assembly specimens
+and source preparation do not activate runtime creation. v1 behaviour is preserved.
+
+## CH-8 part 3 activation candidate
+
+After 0375, authenticated synthetic owners can queue v3 generation and exact-hash approval from the
+existing lock/reveal pack panel. The existing worker discovers identifier-only requests and builds
+from current private material. The synthetic database/session/track/terms checks still apply.
+The older preparation-only APIs above retain their held compatibility behavior.
+
+The fresh shadow-30000 CI journey uses controlled source/classifier fixtures and actual commercial
+writers, then UI requests, worker execution, download and the offline verifier. No settled end-state
+or pack is seeded. Its unsupplied checkpoint remains untrusted in both UI and CLI. SQL byte-parity,
+upgrade, isolation and browser execution are CI evidence still required before independent RED review.
+No new alerts, providers, environment keys, external sends or fee collection are introduced.

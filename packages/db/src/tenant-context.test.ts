@@ -56,7 +56,7 @@ describe("stamped tenant context boundary", () => {
     await expect(tenantContext.withTenant(pool, context, async () => "done")).resolves.toBe("done");
     expect(connect).toHaveBeenCalledOnce();
     expect(query.mock.calls).toEqual([
-      ["BEGIN"], ["SELECT set_config('app.tenant_id', $1, true)", [TENANT]], ["SELECT pg_advisory_xact_lock(hashtextextended($1,184))", [TENANT]], ["COMMIT"],
+      ["BEGIN"], ["SELECT set_config('app.tenant_id', $1, true)", [TENANT]], ["COMMIT"],
     ]);
     expect(release).toHaveBeenCalledOnce();
   });

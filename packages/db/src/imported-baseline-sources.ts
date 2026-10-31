@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { ImportedBaselineSourceError, requireImportedBaselineSource } from "../../core/dist/imported-baseline-sources.js";
+import { ImportedBaselineSourceError, requireImportedBaselineSource } from "@jobguard/core";
 import { practiceOwnedJobsSql } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 

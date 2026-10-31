@@ -1,3 +1,338 @@
+## Ben-authorized CI round 4 and reserved renumber — 29 October 2026
+
+CH-5 / CH5-E, PR #386, RED. Round 4 is explicitly authorized in the supplied
+29 October brief. Failure trace: `~/.local/share/full-steam/codex-runs/ch5-e-ci-traces-0604.txt`.
+Starting HEAD 3fbede8f96d886402b1fbf121706d63d5c338293, incoming main
+fe80add539fc9f97028b90420918d16759f636ee. This is builder verification,
+not a new independent RED review.
+
+Failures repaired:
+
+- Desktop and mobile CH-5 reached the final live-import refusal assertion, where
+  the global alert locator also selected Next.js's route announcer. Scope the
+  locator to the existing main landmark. Keep the exact expected refusal text,
+  all preceding import/reload/isolation/forged-lock assertions and all timeouts.
+  No UI behavior or browser assertion is relaxed.
+- CH-2 discovered two unclassified Next mutations, the corresponding Nest routes
+  and the new dispatcher command. Add all five exact keys to jobMutationRegistry
+  as pre_live_allowed, matching ordinary adoption's existing classification.
+  No scanner, guard, exception or allowlist in the tests is changed.
+- M0-6L correctly refused context wrappers in the internal provenance repository.
+  Its two methods now accept the existing ImportedBaselineReadScope whole and
+  forward that exact scope to the held observation reader. The context stamp,
+  session digest, authority checks and dependency refusals are preserved. Caller
+  tests use the same internal scope and additionally verify scope object identity.
+  Public import application methods already use PracticeAccess.job, the existing
+  reviewed persisted-session bridge; they continue to do so. No context minting,
+  principal bridge, source fingerprint or constructor allowance was changed.
+
+Resolved eight working-file merge conflicts, retaining incoming business-value
+composition/providers, small-builder demo and evidence-pack exports, CH-5 import
+composition, and both sides' catalogue additions. Generated OpenAPI preserves
+every main path and both import paths exactly. LP-0 entries are the exact parent
+union; routine identities are unioned with current main's newer definitions and
+group metadata preserved. Group source/test lists retain both sides. SERIOUS-B5
+keeps the complete invoiced-import and stored-receipt additions, and both calls;
+entitlement/tenancy retain main's rows plus only the existing job_import_v3 rows.
+
+Renumbered 0323 -> 0349 and 0324 -> 0350 in the same order. Used the actual
+exported planRenumber from tools/migration-renumber.mjs with the brief's reserved
+ceiling 0348, then its filesystem move/stem-rewrite behavior through
+/tmp/ch5-e-round4-renumber.mjs. The tool's ordinary --write requires a clean tree
+and runs git add, incompatible with this pending merge and read-only .git; the
+adapter runs only read-only Git and leaves staging to the router. It passed a
+syntax check before execution. SQL files were moved, not edited. Both new SQL
+files equal the original HEAD bytes exactly; every migration in the before
+inventory has the identical SHA-256 afterward. Migration notes, full-stem
+references, active test labels, LP-0 sources and lane paths follow the new numbers.
+The 0349 upgrade test asserts exact predecessor 0337_enterprise_fee_posting_tidy.sql.
+Actual MIGRATION_URLS confirms 0337 -> 0349 -> 0350. No PL/pgSQL IF/CASE edits
+were needed; no SQL logic, privilege or stored format changed.
+
+Actual relevant local checks (Node v24.17.0; installed pnpm 10.28.1 via cached
+pnpm.cjs; at most two workers):
+
+- API Vitest src/auth/context-boundary.test.ts and src/watchdog-registry.test.ts,
+  --maxWorkers=1: 270 passed, including all three previously failing assertions.
+- DB Vitest test/imported-observation-reader.integration.test.ts,
+  test/imported-evidence-provenance.integration.test.ts and
+  test/job-import-v3.integration.test.ts, --maxWorkers=1 -t source-only:
+  25 passed; 5 PostgreSQL cases deselected locally, unchanged and mandatory in CI.
+  The initial run caught two old-signature read calls in the test; both were
+  updated to forward the existing scope and the same assertions pass on rerun.
+- DB Vitest test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts, --maxWorkers=1: 45 passed.
+- API Vitest src/job-import-v3.application.test.ts and
+  src/value/value-composition.test.ts, --maxWorkers=1: 3 passed.
+  Total final scoped Vitest results: 343 passed.
+- Core build and DB build: passed. API tsc --noEmit: passed.
+- tsc with /tmp/ch5-e-round4-tests-tsconfig.json: passed; compiles both renumbered
+  upgrade suites, merged SERIOUS-B5/entitlement suites and modified provenance
+  caller suites. Compilation log: /tmp/ch5-e-round4-test-compilation.log.
+- OpenAPI generation and generated-contract check: passed.
+- Playwright --list e2e/CH-5.spec.ts: both desktop and mobile-360 collected;
+  collection only, not browser execution.
+- Node test MC-6 migration order: passed (1 test); only this pure test selected,
+  no Git-writing fixture tests run.
+- Actual migrationOrderViolations against incoming main: no violations;
+  composed lane-policy load passed. Direct worktree/main inventory is exactly
+  53 allowed payload paths plus the own lane file, including untracked renames.
+- Exact parent/main catalogue union, SQL hashes, generated OpenAPI union,
+  conflict-marker scan and git diff --check: passed.
+
+The prior temporary pnpm wrapper had expired; no package install/download was
+attempted. No Git writes, local database startup, listener, real data, live money,
+provider or release actions. No tests skipped in source, weakened or loosened.
+Router must stage the eight resolved index entries, new migration/note names and
+other changes, complete this pending merge, and rerun the normal lane check and
+GitHub CI. Stock ancestry-based lane comparison cannot establish the final merge
+until the router records it; exact filesystem payload/lane inventory is verified.
+PostgreSQL/migrations and actual desktop/mobile browser execution remain CI gates.
+Ready commit message: /tmp/ch5-e-20261029T060451Z-commit-msg.txt.
+
+## CI repair try 3 (last) — 28 October 2026, 23:30 UTC run
+
+CH-5 / CH5-E, PR #386, RED. Trace source:
+`~/.local/share/full-steam/codex-runs/ch5-e-ci-traces-2330.txt`.
+Started clean at e66cf8778f756948e6cbe45c099c8df590f0dba8, with main
+199f9f54542ed44139c175836e8796bd03dfad1d already merged; no pending
+conflicts. Shared LP-0, SERIOUS-B5, entitlement and tenancy expectations remain
+byte-identical to that merged HEAD, retaining both sides' rows and assertions.
+
+Failures and repairs:
+
+1. PostgreSQL positive invoiced import failed in mutation.lock with permission
+   denied for app.job. Runtime intentionally lacks UPDATE permission required
+   for SELECT FOR UPDATE. Use the existing transaction advisory-lock pattern,
+   scoped to tenant and import source job, before command receipt/audit locks.
+   Keep all authentication/snapshot checks and the definer SQL writer's row lock.
+   No grants or exception lists changed. The existing duplicate/replay and
+   permission/isolation PostgreSQL test remains unchanged and mandatory in CI.
+2. Desktop and mobile CH-5 browser journeys never found the Imported job receipt.
+   Both invoke that same invoiced adoption path; repair its permission failure
+   above. No UI, browser assertions or timeouts were changed. Browser verification
+   must run in CI; these traces alone do not prove the repaired journeys pass.
+3. The 0323 upgrade test named 0301 as its predecessor although merged SV-7A
+   introduced 0303. Assert the exact current predecessor basename
+   0303_job_source_intake.sql. All row/type/security assertions and successor
+   migrations remain enforced; no broader regex or relaxed assertion added.
+4. Clean DB typecheck failed TS2307 on three relative core/dist imports, with a
+   cascading any-to-never error. Use @jobguard/core's existing source-types /
+   built-runtime package contract. Job import symbols were already exported;
+   add only the two existing baseline refusal symbols needed by its internal
+   DB reader. No successful projection, new DTO or provider behavior added.
+
+Strengthened the existing source-only invoiced mutation/replay regression to
+execute lock before mutate, emulate the runtime row-lock permission boundary,
+assert scoped advisory-lock arguments/order, and deny revoked sessions before
+locking. Restoring the original row-lock line temporarily makes this regression
+fail with the original permission error (mutation exit 1); source restored in
+finally. Log: /tmp/ch5-e-try3-lock-mutation.log. This scripted check is not
+PostgreSQL concurrency or privilege proof.
+
+Checks actually run with installed pnpm 10.28.1, at most two workers:
+
+- DB Vitest test/job-import-v3.integration.test.ts, --maxWorkers=1, name filter
+  'source-only application boundary': 12 passed; 3 PostgreSQL cases deselected.
+- DB Vitest test/imported-baseline-sources.integration.test.ts, --maxWorkers=1,
+  name filter 'scripted': 9 passed; 2 PostgreSQL cases deselected.
+- Core Vitest src/job-import-v3.test.ts and src/imported-baseline-sources.test.ts,
+  --maxWorkers=1: 20 passed.
+- API Vitest src/job-import-v3.application.test.ts,
+  src/imported-shadow-source-adapter.test.ts and src/job-source.controller.test.ts,
+  --maxWorkers=1: 12 passed. Total focused local passes: 53.
+- DB tsc -p tsconfig.json --noEmit: passed.
+- Core build (tsc): passed.
+- API tsc -p tsconfig.json --noEmit: passed.
+- DB source and both modified test suites compile via existing repository tsc
+  with /tmp/ch5-e-try3-typecheck.json: passed. Compiler file inventory confirms
+  core/src/job-import-v3.ts and core/src/imported-baseline-sources.ts resolve
+  from source declarations, not generated dist declarations. Log:
+  /tmp/ch5-e-try3-typecheck.log.
+- LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs: passed.
+- Exact shared-list/main LP-0 union, 52-path lane payload plus own lane,
+  migration predecessor, conflict-marker and git diff --check checks: passed.
+
+All 137 migration SQL files match starting HEAD byte-for-byte, including
+0323/0324; no SQL bug was implicated. No CASE inside a PL/pgSQL IF condition
+occurs in those two migrations, so no SQL edit is needed. No test weakened,
+skipped in source or exception widened. No Git writes, dependency downloads,
+PostgreSQL startup, listener, real data, provider, money or release actions.
+
+Router owns commit/push and the final CI run. PostgreSQL/migration and desktop /
+mobile CH-5 browser suites are unexecuted here and remain required CI gates.
+This is a RED repair and builder verification, not an independent review.
+Ready commit message: /tmp/ch5-e-20261028T233042Z-commit-msg.txt.
+
+## SV-7A intake catch-up — 28 October 2026, 22:49 UTC run
+
+CH-5 / CH5-E, PR #386, RED. Catch-up only; no new behavior.
+HEAD: e47c694f3ce1c0324dd62bb29ac764deba90c33a.
+MERGE_HEAD / origin/main: d461c00839d5b431e442706f8a03ec1c5b713bd5
+(SV-7A intake, PR #354). Existing RED-pass is reported by the task brief;
+these checks are builder verification, not a new independent review.
+
+Resolved both working-file conflict blocks: workspace composition retains the
+CH-5 imports application and main's SV-7A intake method; SERIOUS-B5 applies both
+invoicedImportAdditions and sourceIntakeAdditions, preserving their complete
+existing assertions and the 0323 routine assertions. LP-0 already merged cleanly:
+verified exact entries and recorded routines from both parents, with group lists
+unioned. Entitlement and tenancy remain byte-identical to HEAD and differ from
+main only by the existing job_import_v3 expectations. No SQL edits: all 136
+existing migration SQL files match HEAD byte-for-byte (including 0323/0324),
+and incoming 0303 matches main exactly. Lane allowlist remains exactly the 52
+PR payload paths relative to main; its own lane file is implicitly allowed.
+Updated the existing lane note without widening its allowlist. No substantial
+new complexity or worthwhile simplification within this conflict-only catch-up.
+
+Local checks actually run with installed pnpm 10.28.1, Node v24.17.0:
+
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lp-0-catalog.test.ts test/audit-export-privilege-comparator.test.ts`: 44 passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/job-import-v3.application.test.ts src/imported-shadow-source-adapter.test.ts src/job-source.controller.test.ts`: 12 passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/api exec tsc -p tsconfig.json --noEmit`: passed.
+- `/private/tmp/jg-ch5-p-bin/pnpm --filter @jobguard/db exec tsc -p /tmp/ch5-e-r2-test-typecheck.json --noEmit`: passed (existing config targets SERIOUS-B5 upgrade suite; compilation only).
+- From apps/api, `node --import tsx src/generate-openapi.ts --check`: passed.
+- Read-only parent inventory comparisons, exact lane inventory, SQL byte checks,
+  conflict-marker scan and `git diff --check`: passed.
+- Initial PATH `pnpm --version` emitted a configuration warning and stalled;
+  interrupted it, then used the installed pinned wrapper for all checks above.
+
+At most two test/check workers ran at once. No package downloads, Git writes,
+PostgreSQL startup, listeners, real data, providers, money or release actions.
+Router must stage the two resolved files and lane/receipt updates and finish the
+pending merge; read-only .git leaves the two index entries marked unmerged here.
+Rerun the normal lane check after recording the merge. Database, migration,
+browser and full required suites remain GitHub CI gates after router push.
+Commit message: /tmp/ch5-e-20261028T224959Z-commit-msg.txt.
+
+## Pending main merge conflict resolution — 28 October 2026, 22:21 UTC run
+
+CH-5 / CH5-E, PR #386, RED; catch-up only, no new behavior.
+HEAD is f35be1f8cf90df43cfe937ef80cda950b1566edf; MERGE_HEAD and
+origin/main are 6329be99619e3795da6d2e07d832296269748ee1 (M4-9-S #380).
+Resolved all four conflicted working files, keeping both pieces' controller
+registration, application composition, OpenAPI endpoints and LP-0 entries.
+Each resolved file equals its existing HEAD content: the preceding catch-up had
+already prepared the combined content before this actual Git merge was begun.
+
+Verified every incoming-main LP-0 entry and recorded privilege fact remains
+exactly present. Group source/test lists retain main entries plus CH-5 entries.
+SERIOUS-B5 retains main's exact two M4-9-S routine identities and adds only
+CH-5's existing 0323/0324 expectations; entitlement and tenancy differences from
+main are only the existing job_import_v3 expectations. Both migration filenames
+and bytes match HEAD exactly; no SQL was edited. The lane lists exactly the 52
+PR payload paths against origin/main, with its own lane file implicitly allowed.
+No worthwhile simplification applies to this conflict-only catch-up.
+
+Actual local checks (installed tools, no package downloads):
+
+- Pinned pnpm 10.28.1 DB Vitest, maxWorkers=2: lp-0-catalog.test.ts and
+  audit-export-privilege-comparator.test.ts: 44 passed.
+- Pinned pnpm API Vitest, maxWorkers=2: job-import-v3.application.test.ts,
+  imported-shadow-source-adapter.test.ts, success-fee.application.test.ts:
+  19 passed.
+- Installed tsc: apps/api/tsconfig.json --noEmit and existing
+  /tmp/ch5-e-r2-test-typecheck.json --noEmit: passed.
+- From apps/api, node --import tsx src/generate-openapi.ts --check: passed.
+- Exact main inventory/lane comparisons, SQL byte comparison and conflict-marker
+  scan: passed. git diff --check: passed.
+- Stock LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs:
+  failed while merge is pending because its committed ancestry still counts
+  incoming M4-9-S files as CH-5 changes. No lane widening; the direct comparison
+  against origin/main matches the lane exactly. Router must rerun after recording
+  this merge.
+- The initial PATH pnpm command emitted an incompatible-version warning and was
+  interrupted before tests started; the successful suites used the existing
+  pinned /private/tmp/jg-ch5-p-bin/pnpm instead.
+
+Router handoff: stage the four resolved files and lane/receipt updates, finish
+this existing merge, then rerun the stock lane check and GitHub CI. Git still
+reports four unmerged index entries because .git is read-only here; all working
+file conflict markers are resolved. Database and browser execution remain for
+GitHub CI. Existing RED-pass is reported by the brief, not a new builder review.
+No Git writes, PostgreSQL startup, listener, real data, provider or money action.
+
+## Catch-up to M4-9-S / PR #380 — 28 October 2026
+
+CH-5 / CH5-E, PR #386, RED. Catch-up only; no new product behavior.
+The supplied brief reports the existing head RED-passed; this entry is builder
+verification, not a new independent review.
+
+Observed HEAD d058cef4 had merged main only through 9a298d4d, whereas
+origin/main was already 6329be99 (PR #380). No unresolved Git entries existed.
+Integrated the exact incoming main content using read-only Git reads and
+stdout-only three-way comparisons; kept both controller/application exports,
+OpenAPI paths, LP-0 privilege entries and recorded routines. Restored main's
+exact M4-9-S read/write routine identities in SERIOUS-B5. Entitlement and tenancy
+expectations already retained main plus the CH-5 import aggregate. Preserved
+the pre-existing uncommitted policy-role assertion repair and receipt.
+
+Migrations 0323 and 0324, including filenames and SQL bytes, match HEAD exactly.
+Every non-overlapping incoming-main file matches origin/main byte for byte.
+The existing config/lanes/ch5-e.json lists exactly the 52 CH-5 payload paths
+against 6329be99; its own lane file is implicitly allowed. Updated its note;
+no additional lane grants. No worthwhile simplification within this catch-up.
+
+Checks actually run with installed tools (no package downloads):
+
+- DB Vitest: test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts, --maxWorkers=2: 44 passed.
+- API Vitest: src/job-import-v3.application.test.ts,
+  src/imported-shadow-source-adapter.test.ts and
+  src/success-fee.application.test.ts, --maxWorkers=2: 19 passed.
+- node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit: passed.
+- node_modules/.bin/tsc -p /tmp/ch5-e-r2-test-typecheck.json --noEmit: passed.
+- Installed tsc builds of packages/core and packages/db: passed.
+- From apps/api, node --import tsx src/generate-openapi.ts --check: passed.
+  The tsx CLI could not bind its IPC pipe; direct Node import avoided that.
+- Exact working-tree comparison with origin/main: lane paths match, all main
+  LP-0 entries/recorded routines retained, migrations unchanged; passed.
+- git diff --check and changed-file conflict-marker scan: passed.
+
+Router action before committing/pushing: record the actual merge of
+origin/main 6329be99 into this branch. This sandbox cannot write .git, so only
+the resolved file content is prepared here. The stock lane command currently
+fails because Git ancestry still treats incoming M4-9-S files as CH-5 edits;
+do not widen the CH-5 lane to hide that. After recording the merge, rerun the
+stock lane command. PostgreSQL and browser suites remain for GitHub CI.
+No Git writes, PostgreSQL startup, browser binding, providers, customer data,
+live money or release action occurred.
+
+## Repair round 2 for PR #386 — 28 October 2026
+
+RED; source/test-expectation repair only. Current main was already merged and
+there were no conflict markers or unmerged entries when this round began.
+
+Diagnosed SERIOUS-B5's policy assertion: pg_policies.roles has PostgreSQL type
+name[]. The installed pg driver exposes that type as a string rather than a
+JavaScript array. Reused this test file's existing SELECT $1::name[]::text[] cast
+and compared the sorted exact pair jobguard_migration/jobguard_runtime. Added
+explicit PERMISSIVE, USING and WITH CHECK assertions for precisely the policy
+installed by 0324. No SQL, permissions, routine body or grants changed. No test
+was weakened or disabled.
+
+Checks actually run:
+
+- Installed pg driver parser assertion: reproduced name[] as a string, verified
+  text[] as the exact two-role array, and verified an extra shadow role remains
+  detectable. This is a local driver check, not PostgreSQL verification.
+- TypeScript check of serious-b5-upgrade.integration.test.ts and its imports via
+  /tmp/ch5-e-r2-test-typecheck.json: passed.
+- node tools/agent-lane-boundary-lint.mjs --lane=ch5-e: passed against current
+  origin/main. The existing lane already covers this branch's exact payload;
+  no lane-register or directory-wide grant was added.
+- git diff --check: passed.
+
+Remaining hold: the supplied summary still omits the positive-import test's
+actual error and both browser assertions/stacks. GitHub CLI cannot connect to
+the API. Read-only Chrome inspection reached CI run 40770431788 at a5d4cc0,
+confirming the failed jobs; GitHub requires sign-in to view their logs. No
+credentials were entered. Requested the first browser assertion/trace and the
+positive-import error. Those causes remain undiagnosed, so no speculative
+production or journey changes and no claim that the round is ready. Real
+PostgreSQL/browser suites require CI; no such local suites were run. No Git
+write, push, live provider, customer-data or release action was performed.
+
 ## Repair round 1 for PR #386 — 28 October 2026
 
 RED; synthetic data only. This entry supersedes the earlier renumber-only state.
@@ -67,8 +402,8 @@ verification or independent RED review.
 
 ## Renumber-only catch-up for PR #386 — 28 October 2026
 
-Renamed 0224_job_import_v3 to 0323_job_import_v3 and
-0312_job_import_v3_invoiced to 0324_job_import_v3_invoiced, preserving the
+Renamed 0224_job_import_v3 to 0361_job_import_v3 and
+0312_job_import_v3_invoiced to 0362_job_import_v3_invoiced, preserving the
 private-refusal-before-invoiced-writer order and both SQL files byte for byte.
 Used the exported `planRenumber` from `tools/migration-renumber.mjs` with the
 reserved 0323/0324 range; applied filesystem moves because its CLI write mode
@@ -438,3 +773,193 @@ All eight files remain unstaged/uncommitted. Dispatcher owns commit/push, review
 CI, exact-head reviews and separate acceptance; parent must be accepted and merged
 before this piece merges. This handoff completes the available bounded work, not
 CH5-E's dependency-bound positive acceptance or the CH-5 journey.
+
+## PR #386 catch-up — 29 October 2026
+
+CH-5 part 1, RED. Entry HEAD `2198b35c` already contains the merge of main
+`32411c4e`; the worktree had no unresolved conflicts or conflict markers. Both
+shared JSON catalogues (OpenAPI and effective privileges) retain all object keys
+from both merge parents. No production behavior changed in this catch-up.
+
+Replaced the stale `0337` predecessor assertion with a filesystem-only Vitest
+case: enumerate migration SQL filenames below `0349`, sort them, and check that
+0349's immediate predecessor in `MIGRATION_URLS` is the highest one. It currently
+resolves to `0340_recovery_attribution_hookup.sql` and follows later predecessors
+without another hard-coded pin. The existing PostgreSQL upgrade proof still
+installs all predecessors and preserves its row/type/security/replay assertions.
+The existing lane file records this catch-up and retains the combined PR paths.
+
+Actual local checks (installed dependencies, Node v24.17.0, no package downloads):
+
+- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/job-import-v3-upgrade.integration.test.ts -t 'orders 0349 immediately'`
+  passed: 1 filesystem assertion; 1 PostgreSQL test deselected, not executed.
+- From `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+- `node tools/agent-lane-boundary-lint.mjs` passed against merged main.
+- `git diff --check` passed.
+- Read-only Python byte comparison against RED-reviewed `84171946` passed for
+  both migrations: 0349 SHA-256 `f2e6cc28139d25adfcd7279ffb8aad965d05ad615823ab96beed5e5495a4f932`;
+  0350 SHA-256 `ec760547c2e313dbbe4ed65a7f5fe834cf55f69ed8240af06ef8be7fb8295798`.
+- Read-only Python comparison confirmed both shared catalogues retain both merge
+  parents' object keys. No catalogue edit was needed.
+
+PostgreSQL/browser suites and full required checks remain GitHub CI duties under
+the issued sandbox constraint. No database/listener started; no git write,
+commit, push, provider call or release performed. This is builder validation,
+not a new independent review. Router owns commit/push and CI/review disposition.
+
+## PR #386 catch-up 2 — 29 October 2026
+
+CH-5 / ch5-e, RED. Resolved the router-started merge of current main
+`7eef37d694d98e95eb76baae95169e089e3b98e5` (through migration 0358)
+into entry HEAD `db63aa538dbabfc965a894ae871937d05e72a2e6`.
+The local `main` ref is older; `origin/main` and MERGE_HEAD identify the incoming
+main used here. Git metadata remains untouched; the router must stage the resolved
+files and finalize the merge commit.
+
+Resolved LP-0 with main's exact newer legacy-adoption definitions, including the
+job-insert permit dependency and withdrawn legacy execution, plus the CH-5
+entries. Preserved every main catalogue field/list member; group sources/tests
+retain the union. Entitlement retains both job_import_v3 and lp_job_insert_permit.
+SERIOUS-B5, privilege and tenancy expectations keep main plus the existing CH-5
+additions. No routine was re-created or behavior changed.
+
+Used the exported planRenumber from tools/migration-renumber.mjs with reserved
+ceiling 0360 to move 0349 -> 0361 and 0350 -> 0362. Its --write CLI requires a
+clean worktree and writes git metadata, so the filesystem-only adapter used its
+planner and move/stem-rewrite approach, leaving staging to the router. SQL bytes
+are unchanged: 0361 SHA-256
+f2e6cc28139d25adfcd7279ffb8aad965d05ad615823ab96beed5e5495a4f932;
+0362 SHA-256 ec760547c2e313dbbe4ed65a7f5fe834cf55f69ed8240af06ef8be7fb8295798.
+All 147 migrations already on origin/main match its bytes exactly. Active
+upgrade-test labels, migration-note headings, catalogue sources and lane paths
+follow 0361/0362; historical receipt prose retains its original numbers.
+
+Actual local checks (installed dependencies; no downloads; at most two workers):
+
+- node --check tools/migration-renumber.mjs: passed.
+- DB Vitest --maxWorkers=1 test/lp-0-catalog.test.ts
+  test/audit-export-privilege-comparator.test.ts: 45 passed.
+- DB Vitest --maxWorkers=1 test/job-import-v3-upgrade.integration.test.ts
+  -t 'orders 0361 immediately': 1 passed, PostgreSQL case deselected.
+- DB tsc -p tsconfig.json --noEmit: passed.
+- git diff --check: passed.
+- Read-only structured comparison: all main LP-0 values retained, with only
+  additive CH-5 list entries; no duplicate catalogue identities.
+- Exported lanePathAllowed and migrationOrderViolations against origin/main and
+  the actual working-tree paths: passed. Ordinary node tools/lint.mjs passes
+  core purity but its lane step fails on the still-pending merge/index: it sees
+  incoming main paths and removed old migration names against pre-merge HEAD.
+  The lane register was not widened to absorb main's files. Router must finalize
+  the merge and rerun the normal lane check.
+- node --test --test-concurrency=1 tools/lp-downstream-inventory.test.mjs:
+  2 passed, 3 failed for LP-0-generated document drift. A temporary comparison
+  using origin/main's generator/catalogue/document confirms main already drifts;
+  CH-5 adds only its three LP-0-derived object rows. Left generator/document/tests
+  unchanged as explicitly instructed; the main fix is expected separately.
+
+Database/browser suites, final normal lane lint and all required CI remain with
+the router/GitHub CI after staging and pushing. No PostgreSQL/listener, git write,
+commit, push, provider call or release. This is builder verification, not an
+independent RED review.
+
+## Catch-up 2 continuation — CI traces 1109, 29 October 2026
+
+CH-5 / ch5-e, PR #386, RED. This continues catch-up 2, not a new repair round.
+Read the full supplied ch5-e-ci-traces-1109.txt. Entry HEAD c74daded already
+contains current main 959da0d2; the worktree was clean and had no merge conflicts.
+
+Root causes and focused fixes:
+
+- Upgrade test `CH-5 0362 preserves existing job rows...` inserted a historical
+  capped import after LP-2's 0356 guard replaced the old GUC protocol, causing
+  JOB_INSERT_PERMIT_REQUIRED at line 27. Seed that historical row before 0356,
+  then apply every remaining predecessor before taking the existing 0362 proof.
+  No predecessor is omitted. Row/type preservation, repeat migration, cap-shape
+  rejection and privilege/RLS assertions are unchanged.
+- Positive PostgreSQL test `stores v3 terms, stable scope, linked overlap...`
+  fails inside the real SQL writer with JOB_INSERT_PERMIT_REQUIRED. The same
+  failed import leaves the browser without its receipt on desktop and mobile
+  (`CH-5.spec.ts:18`), rather than proving a stale locator or expected count.
+  The SQL bug is in this branch's own new 0362 migration: it had not adopted
+  main's private LP-2 permit protocol. Under the brief's explicit SQL-bug
+  exception, add the exact insert-shape/transaction/backend-bound adoption
+  permit immediately after the existing authorization checks and before the
+  existing job insert. Reuse main's lp_job_insert_shape and permit columns;
+  bind the checked actor, command and authorization. The main guard consumes
+  the permit; no guard, grant, exception or runtime table privilege changes.
+  The existing duplicate/replay test additionally checks no permit survives.
+  No browser expectation, selector, timeout or behavior was changed.
+- LP-0's existing new-writer effect row now lists the permit table and shape
+  helper. All other catalogue rows remain intact. Updated the migration's
+  existing operational note to describe this compatibility fix.
+
+SQL exception disclosure: 0362 SQL bytes changed by one six-line additive permit
+block, because the failure is in the SQL. Removing that block reproduces entry
+HEAD exactly. 0361 is unchanged. All 147 migrations already on origin/main are
+byte-for-byte unchanged. No CASE occurs inside an IF condition in these two own
+migrations, so no parenthesization edit is applicable.
+
+Actual local checks, installed dependencies, no downloads, at most two workers:
+
+- DB Vitest `run --maxWorkers=1 test/job-import-v3.integration.test.ts -t source-only`:
+  12 passed, 3 PostgreSQL cases deselected locally, still mandatory in CI.
+- DB Vitest catalogue/comparator run (selected the two files via --exclude of
+  the upgrade file): 45 passed. Exact invocation:
+  `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts test/audit-export-privilege-comparator.test.ts test/job-import-v3-upgrade.integration.test.ts -t 'orders 0361 immediately|.' --exclude test/job-import-v3-upgrade.integration.test.ts`.
+- DB `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- `node tools/lint.mjs`: passed, including core purity, normal lane boundary
+  against current main and money arithmetic (computed imports reported only).
+- `git diff --check`: passed.
+- Read-only byte comparisons and catalogue uniqueness assertions: passed.
+
+PostgreSQL and browser suites were NOT RUN under the supplied sandbox constraint;
+CI must execute both failing DB tests and both browser projects after router push.
+No tests weakened/skipped in source, no exceptions widened, no Git writes, provider
+calls or release. Router owns commit/push and CI; independent RED review remains
+separate from these builder checks.
+
+
+## Catch-up 3 — merge main after MON-4A / DEMO-J3, 29 October 2026
+
+CH-5 / ch5-e, PR #386, RED. Entry HEAD 2d385e05; router already started
+merging origin/main db2aff37b1207ba0c543c3e6bd32f2a26f8a9af8. Resolved the
+five working-file conflicts by keeping both registrations/catalogue entries:
+PaymentFeeController plus JobImportV3Controller; paymentFees plus imports in the
+workspace; both DB exports; all LP-0 privilege entries; all entitlement expected
+tables. SERIOUS-B5, tenancy and the incoming main lane files retain both sides.
+Kept main's existing meter-today export position. Updated only this lane's note.
+No routine re-created, no behavior or test assertions changed beyond the union.
+
+Read-only byte comparisons passed: all 148 SQL migrations on main are identical
+to origin/main; CH-5 0361/0362 are identical to entry HEAD; the pinned
+lp-downstream-effects-v1.md is identical to both entry HEAD and origin/main.
+Main's lane files are exact and every main LP-0 list entry is retained (the
+existing CH-5 adoption group extends its source/test arrays only).
+
+Actual local checks, installed binaries, at most two concurrent workers and no
+more than two named Vitest files per invocation:
+
+- API Vitest: src/job-import-v3.application.test.ts and
+  src/imported-shadow-source-adapter.test.ts --maxWorkers=1: 8 passed.
+- DB Vitest: test/lp-0-catalog.test.ts and
+  test/audit-export-privilege-comparator.test.ts --maxWorkers=1: 45 passed.
+- DB Vitest: test/job-import-v3.integration.test.ts -t source-only
+  --maxWorkers=1: 12 passed, 3 database cases deselected locally.
+- DB Vitest: test/job-import-v3-upgrade.integration.test.ts
+  -t 'orders 0361 immediately' --maxWorkers=1: 1 passed, 1 database case deselected.
+- Core Vitest: src/imported-baseline-sources.test.ts and
+  src/job-import-v3.test.ts --maxWorkers=1: 20 passed.
+- API and DB: ./node_modules/.bin/tsc -p tsconfig.json --noEmit: passed.
+- node tools/lint.mjs: core purity passed; normal lane step reports incoming
+  main paths against pre-merge HEAD because the index is still unmerged.
+  Direct working-tree delta vs origin/main using the existing lanePathAllowed
+  and migrationOrderViolations helpers passed (54 paths before this receipt
+  append; all paths still within CH-5). Money-arithmetic and commercial-boundary
+  lint run separately: passed. Router must stage/finish the merge and rerun
+  normal lane lint; the lane allowlist was not widened to absorb main's files.
+- git diff --check: passed; no conflict markers remain in the working files.
+
+Ready for router staging/merge commit and push, not merge/release acceptance.
+The read-only Git index still has its five unmerged entries; no Git write was
+attempted. PostgreSQL, browser journeys, full required CI and exact-head RED
+review remain for router/CI. No real data, downloads, provider calls or release.

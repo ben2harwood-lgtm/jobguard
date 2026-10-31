@@ -23,8 +23,10 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
   baselineHash:hash,baselineDescription:"Fictional baseline",acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation",attestedByMembershipId:a.actorId,attestedAt:new Date(0),importTermsVersion:policy,feePolicyVersion:"reference_fee_policy_v1",mode:"synthetic_candidate",parties:{customerRevisionId:parties.customer,siteRevisionId:parties.site},
  }));
  expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation_terms WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,imported])).rows[0].n).toBe(0);
- const accepted=await subscription(f,a,terms(a,"Solo")); expect(accepted.revision).toBe(1);
- const upgraded=await subscription(f,a,{...terms(a,"Builder",1),kind:"change"}); expect(upgraded.revision).toBe(2);
+ const acceptedTerms=terms(a,"Solo");
+ const accepted=await subscription(f,a,acceptedTerms); expect(accepted.revision).toBe(1);
+ // Upgrade the plan without requesting a billing re-anchor (held by MON-2A).
+ const upgraded=await subscription(f,a,{...terms(a,"Builder",1,acceptedTerms.anchorDay),kind:"change"}); expect(upgraded.revision).toBe(2);
  expect((await f.admin.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 ORDER BY revision",[a.tenantId])).rows).toEqual([{plan:"Solo"},{plan:"Builder"}]);
  const importedScope=randomUUID();
  await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[importedScope,a.tenantId,imported]));

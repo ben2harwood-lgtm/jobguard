@@ -46,8 +46,10 @@ No executor exports this routine; the DB module exposes only a strict held value
 
 Coordinator STOP: confirm complete lock order against LOCK-ORDER-1 and deliver
 checked source kinds/expected revisions/current authority and immutable binding
-before admission can replace refusal. Lock 184 must precede receipts, job/source
-locks and audit; no business lock after audit. Never acquire 184 late in a trigger.
+before admission can replace refusal. The implemented remainder below preserves
+LOCK-ORDER-1: job first, then command identity where applicable, then capacity
+and source serialization, with audit last. The old proposed capacity-before-job
+order is superseded; no business lock may be introduced after audit.
 Actual admission/mutation must be one transaction and recheck authority/plan after
 wait and on replay, with exact-payload conflict detection. Grace Decision and
 operations card deduplication remain unimplemented, not implied by oracle labels.
@@ -57,7 +59,7 @@ consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
 
 
-## MON-1 remainder, migration 0305
+## MON-1 remainder, migration 0367
 
 The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
 Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
@@ -113,8 +115,8 @@ not exposed as an API. Source keys bind the tenant, London date, agreement and
 builder lifecycle facts. Identical repeated reads reuse the checked capture;
 a changed event, lock, trip, observation, link, activation or agreement creates
 a new one. A new London date also refreshes midnight deadlines. The public
-final-account lock routine acquires tenant lock 184 before its business locks,
-including when called without withTenant. No fee or payment authority is added.
+final-account lock routine acquires tenant lock 184 after its job/variation
+locks and before its receipt, refresh and audit, including without withTenant. No fee or payment authority is added.
 
 Grace upgrade Decision delivery and immediate Builder track-review Decision
 creation remain unimplemented follow-up; this repair does not claim them.
@@ -128,3 +130,39 @@ make admission unavailable; classified imports no longer block unrelated starts.
 The checked v3 writer invokes the existing MON-1 admission routine atomically.
 This does not enable the independent imported counted-day/period source reader,
 which continues to refuse rather than zero-fill unsupported bill inputs.
+
+## CI repair: scope the capacity serializer to source commands
+
+`withTenant` only installs verified tenant context; it does not acquire lock 184.
+Unrelated reads, financial preflight/execute transactions and contractor authority
+gates keep their existing locks and concurrency. The generic live and source
+job guards retain only their existing job SHARE and authority checks; they never
+acquire 184. This keeps concurrent evidence writers' live guards compatible and
+lets legacy confirmation/evaluation transactions overlap.
+
+Checked work commands take their existing job lock, then the tenant-wide command
+identity lock, then 184 before per-job event lock 144 and audit. This prevents a
+cross-kind command-ID loser from holding capacity while its winner waits for it.
+Actual classified site-source capture takes 184 before 144; the general source
+guard does not serialize unrelated invoice/confirmation traffic. Final-account
+locking takes its existing job UPDATE and variation locks before 184, receipt and
+audit. Builder capture and final locking first share an exact tenant/command-ID
+advisory gate (`final-review-command`, seed 0) before claiming a receipt or job
+lock. Capture rechecks current owner authority after that wait, then claims its
+receipt. It takes no capacity lock while waiting for the source job guard;
+actual site-source capture joins 184 before 144 and its work event. Stored
+capture replays return the first result without requiring a currently live job.
+The checked final-lock routine acquires the same command gate for direct SQL
+callers, verifies owner authority again, then retains job/variation-before-capacity
+ordering. This prevents capture/lock receipt collisions without introducing a
+capacity-before-job cycle. A term-less import still returns an unavailable meter
+snapshot; only a new place admission refuses it, not unrelated company actions.
+No business lock is introduced after an audit append.
+
+CH-4 fixtures explicitly insert their synthetic small-builder commercial track
+before entering live; status alone supplies no track or environment authority.
+
+The commitment replay uses the core clock's `(fact_at, id)` order. Sequence is
+only a final tie-break for its synthetic cutoff sentinel, not a replacement for
+the canonical fact order. Simultaneous finish/evidence therefore agrees with the
+independent core comparator, including reversed UUID and sequence order.

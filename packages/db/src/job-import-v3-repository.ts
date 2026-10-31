@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { adoptJobV3, assertImportIntentV3, assertImportResultV3, importActionHashV3, jobPartiesImportV3, jobImportSourceV1, type AdoptJobV3 } from "../../core/dist/job-import-v3.js";
+import { adoptJobV3, assertImportIntentV3, assertImportResultV3, importActionHashV3, jobPartiesImportV3, jobImportSourceV1, type AdoptJobV3 } from "@jobguard/core";
 import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
 import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
@@ -172,8 +172,9 @@ export class AdoptInFlightJobV3Mutation implements CommandMutation<Record<string
   async lock(db: TenantTransaction, command: ConsequentialCommand): Promise<void> {
     await this.check(db, command);
     if (adoptJobV3.parse(this.approvedSnapshot).lifecyclePoint === "live" && this.tenantId === sharedPracticeTenant) return admissionUnavailable();
-    // Serialize duplicate imports before receipt and audit locks. SQL reuses this row lock.
-    await db.$client.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [this.tenantId, this.sourceJobId]);
+    // Serialize imports for this source before receipt/audit locks without UPDATE privileges.
+    // The checked definer writer takes the job row lock before mutating the aggregate.
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [this.tenantId, `import-v3:${this.sourceJobId}`]);
   }
   async mutate(db: TenantTransaction, command: ConsequentialCommand): Promise<Record<string, unknown>> {
     await this.check(db, command);

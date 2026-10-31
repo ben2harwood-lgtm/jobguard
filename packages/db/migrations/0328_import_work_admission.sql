@@ -151,6 +151,26 @@ BEGIN
   RAISE EXCEPTION 'METER_UPGRADE_REQUIRED' USING ERRCODE='P0001',
    DETAIL='Your Solo plan and grace place are full. Move to Builder before starting this site work.';
  END IF;
+ -- MON-1 Decisions begin
+ -- Capacity is serialized by the freshly rebuilt ledger's tenant lock. These
+ -- are unresolved proposals only: no authorization, plan change or charge.
+ IF after_count>before_count AND after_count>(CASE plan WHEN 'Solo' THEN 5 ELSE 12 END) THEN
+  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
+  SELECT (substr(h,1,12)||'4'||substr(h,14,3)||'8'||substr(h,18,15))::uuid,
+   t,'subscription',t::text,'subscription.upgrade'
+  FROM (SELECT encode(sha256(convert_to('mon1-grace-upgrade.v1:'||t::text||':'||ledger.agreement_id::text,'UTF8')),'hex') h) identity_hash
+  ON CONFLICT (tenant_id,id) DO NOTHING;
+  IF plan='Builder' AND after_count>13 THEN
+   INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
+   SELECT (substr(h,1,12)||'4'||substr(h,14,3)||'8'||substr(h,18,15))::uuid,
+    t,'subscription',t::text,'subscription.track_review'
+   FROM (SELECT encode(sha256(convert_to('mon1-track-review.v1:'||t::text,'UTF8')),'hex') h) identity_hash
+   WHERE NOT EXISTS(SELECT 1 FROM app.decision WHERE tenant_id=t AND subject_type='subscription'
+    AND subject_ref=t::text AND action_type='subscription.track_review')
+   ON CONFLICT (tenant_id,id) DO NOTHING;
+  END IF;
+ END IF;
+ -- MON-1 Decisions end
  -- Builder additions remain unblocked. This routine creates no obligation or charge.
 END $$;
 
@@ -222,6 +242,12 @@ BEGIN
  JOIN app.job_party_current c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
  JOIN app.job_party_binding p ON(p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.binding_id)
  WHERE j.tenant_id=t AND (j.practice_session_digest=d OR (t<>'11111111-1111-4111-8111-111111111111'::uuid AND j.practice_session_digest IS NULL)) AND j.status='live' AND p.customer_id=b.customer_id AND p.site_id=b.site_id;
+ -- LP-2's guard consumes this exact, transaction-bound permit. Authorization was checked above.
+ INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id,command_id,authorization_id)
+ VALUES(t,target,pg_backend_pid(),pg_current_xact_id(),'adoption',
+  app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',t,'id',target,
+   'title','Fictional imported job','status','draft','revision',1,'provenance','imported',
+   'accepted_net_value_pence',300000,'fee_policy_version','reference_fee_policy_v3'))),actor,cmd,auth);
  PERFORM set_config('app.import_command','enabled',true);
  INSERT INTO app.job(tenant_id,id,title,status,revision,provenance,accepted_net_value_pence,fee_policy_version)
  VALUES(t,target,'Fictional imported job','draft',1,'imported',300000,'reference_fee_policy_v3');

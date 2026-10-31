@@ -5,12 +5,12 @@ import { ExtraApprovalRepository } from "../src/index.js";
 import { ContractorBillingRepository } from "../src/contractor-billing-repository.js";
 import { chainWorld, cluster, submitted, approveInput, type Cluster } from "./extra-approval-chain-fixtures.js";
 export { cluster };
-export async function world(c: Cluster) {
+export async function world(c: Cluster, approvedNetPence = 24000) {
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  const w = await chainWorld(c), ctx = await w.ctx, repo = new ContractorBillingRepository(c.runtime);
  const session = randomUUID();
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '7 days' FROM (SELECT clock_timestamp() t) r", [session,w.p.tenantId,w.members.finance.member.membershipId,w.members.finance.member.identityUserId,digestOf(session)]);
- const s = await submitted(c,w,24000);
+ const s = await submitted(c,w,approvedNetPence);
  await new ExtraApprovalRepository(c.runtime).approveExtraStep(ctx,w.members.supervisor.member,approveInput(s,0));
  const contract = w.demo.contractId;
  const exportInput = () => ({ version:"billing-finalise.v1" as const, commandId:randomUUID(), clientContractId:contract });

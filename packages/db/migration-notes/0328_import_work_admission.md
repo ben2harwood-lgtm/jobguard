@@ -4,6 +4,10 @@ Synthetic only. Company v3 live imports now execute the existing checked writer
 and `ch4_admit_place` under the tenant capacity serializer in one command
 transaction. The original invoiced writer signature is retained for compatibility;
 its live result envelope is internal, and its public immutable result is unchanged.
+The replacement retains main's transaction-bound LP-2 adoption permit, matched
+to the exact inserted draft shape, and MON-1's immediate upgrade/track-review
+Decisions. Existing main migrations are unchanged; the router renumbers this
+built-ahead migration when opening the PR.
 
 MON-1's committed ledger classifies legacy imports from their immutable baseline,
 recorded receive time and party binding, and v3 imports from their stored adoption
