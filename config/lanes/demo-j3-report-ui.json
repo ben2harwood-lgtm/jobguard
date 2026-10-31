@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-report-ui": {
+      "branches": [
+        "codex/sandbox/demo-j3-report-ui"
+      ],
+      "note": "DEMO-J3-REPORT-UI: synthetic v2 saved evidence presentation. Depends on demo-s-chooser #452 and the v2 report producer; no migration.",
+      "allow": [
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/page.tsx"
+      ]
+    }
+  }
+}
