@@ -11,6 +11,7 @@
         "apps/web/app/demo-s/chooser.test.tsx",
         "apps/web/app/demo-s/chooser.tsx",
         "apps/web/app/demo-s/meter-preview.tsx",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
         "docs/contracts/small-builder-demo-run-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/small-builder-demo-lifecycle.ts",
