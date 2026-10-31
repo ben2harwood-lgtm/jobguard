@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-drive-6-9": {
+      "branches": [
+        "codex/sandbox/demo-j3-drive-6-9"
+      ],
+      "note": "RED DEMO-S step 4 steps 6-9 end-to-end; CI repair 1. Browser-authenticated issuer session, duplicate customer approval refused with one immutable approval row. Named value and approval-read assertions remain fixme pending J3-VALUE-COMBINED and DEMO-J3-APPROVAL-READ. No migration or product changes.",
+      "allow": [
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/helpers/j3-customer-approval.ts",
+        "apps/web/e2e/helpers/j3-settlement.ts"
+      ]
+    }
+  }
+}
