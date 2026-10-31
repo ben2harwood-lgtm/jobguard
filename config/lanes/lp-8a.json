@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8a": {
+      "branches": ["codex/sandbox/lp-8a-billing-revokes"],
+      "note": "LP-8a RED; incomplete staged cutover. Serialize with LP-6c and LP-8b. Predecessor catch-up, legacy service/restore conversion, whole PostgreSQL CI and exact-head independent review are required before opening this piece.",
+      "allow": [
+        "config/lanes/lp-8a.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0529_lp8a_billing_revokes.sql",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/test/lp8a-billing-revokes.integration.test.ts",
+        "packages/db/test/lp8a-billing-revokes.test.ts"
+      ]
+    }
+  }
+}

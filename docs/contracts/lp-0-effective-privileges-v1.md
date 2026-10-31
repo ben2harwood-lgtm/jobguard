@@ -547,3 +547,35 @@ membership temporarily and revokes it on both success and failure, then checks
 the catalogue again. This adds no runtime capability or LP-0 baseline membership
 in the superuser-created fixture. Environment identity uses postmaster start time
 and database OID directly; there is no control-file grant or environment helper.
+
+## LP-8a staged billing cutover (0529)
+
+Migration 0529 withdraws the five direct billing INSERT grants, INSERT/UPDATE/DELETE
+on the two number-allocation tables, and runtime EXECUTE on
+`reserve_customer_invoice_number(uuid)`. SELECT on both allocation tables remains.
+The reviewed inventory removes exactly those eight installed runtime capabilities;
+the owner role additionally receives EXECUTE on the two binding projections
+needed by the checked pointer routine. No scanner definitions or source pins change.
+
+`advance_final_account_draft` keeps its four-argument signature but derives its
+owner from the protected request binding. It checks active owner membership, the
+revision's exact tenant/job/draft, its number and previous pointer; exact retries
+are allowed, while skipped numbers and rewinds fail. Assembly also compares its
+supplied actor to the binding before creating any records. Direct final-account
+INSERT closure remains LP-8b.
+
+Actual grants in this base still include job and job_activation_terms INSERT.
+LP-2's shape/permit guard and LP-3's controlled activation-terms trigger constrain
+those writes; these are not claimed as revoked by LP-8a. The six M4-8-S allocation
+tables retain their existing SELECT-only runtime grants.
+
+This is an incomplete staged cutover: LP-6c's branch currently has no changes
+beyond this base. Both surviving invoice signatures need the predecessor's actor
+binding verified, and the legacy CustomerBillingCommandService direct writers and
+restore rehearsal still require conversion together before this branch is ready.
+Do not apply this staged migration to a shared environment in isolation.
+
+The two closed capability groups keep their existing IDs for authority-path
+continuity and now classify only the existing owner facts. They contain no
+runtime write/EXECUTE exception. This preserves the inventory's rule that every
+group must have a concrete fact without permitting withdrawn runtime grants.
