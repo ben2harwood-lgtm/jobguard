@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/cf-host-1"
       ],
-      "note": "RED CF-HOST-1: Worker hosting, explicit trusted origins and single-use database connections; no deployment or migrations. Coordinator resolved the pinned lockfile; minimal default Next config fixes OpenNext config discovery. Bundle verification and exact-head review remain with the router/CI.",
+      "note": "RED CF-HOST-1: Worker hosting, explicit trusted origins and single-use database connections; no deployment or migrations. pg-cloudflare workerd export tracing repaired through serverExternalPackages. Cloudflare build/dry run measured 9357.34 KiB gzip, above the 3 MiB Free-plan budget; hosted journeys and exact-head review remain outstanding.",
       "allow": [
         ".env.example",
         ".github/workflows/cloudflare-build.yml",

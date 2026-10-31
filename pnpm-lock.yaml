@@ -141,6 +141,9 @@ importers:
       pg:
         specifier: 8.16.3
         version: 8.16.3
+      pg-cloudflare:
+        specifier: 1.4.1
+        version: 1.4.1
       react:
         specifier: 19.1.9
         version: 19.1.9
@@ -153,7 +156,7 @@ importers:
     devDependencies:
       '@opennextjs/cloudflare':
         specifier: 1.20.12
-        version: 1.20.12(next@15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))
+        version: 1.20.12(next@16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))
       '@playwright/test':
         specifier: 1.55.1
         version: 1.55.1
@@ -3042,8 +3045,8 @@ packages:
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
-  pg-cloudflare@1.4.0:
-    resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
+  pg-cloudflare@1.4.1:
+    resolution: {integrity: sha512-6PQbsFWZcp9EmJEwy5cGQ2La+AMWpP46lgbb8X+U/XsHIUweYDNCpeuKck5RxL2MdVFi7krbbEi5nX4Zh7JhrQ==}
 
   pg-connection-string@2.14.0:
     resolution: {integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==}
@@ -5177,7 +5180,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/aws@4.1.11(next@15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))':
+  '@opennextjs/aws@4.1.11(next@16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -5193,24 +5196,24 @@ snapshots:
       cookie: 1.1.1
       esbuild: 0.28.2
       express: 5.2.1
-      next: 15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+      next: 16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.9.1
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.12(next@15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))':
+  '@opennextjs/cloudflare@1.20.12(next@16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@dotenvx/dotenvx': 2.38.2
-      '@opennextjs/aws': 4.1.11(next@15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))
+      '@opennextjs/aws': 4.1.11(next@16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))
       ci-info: 4.4.0
       cloudflare: 4.5.0
       comment-json: 4.6.2
       enquirer: 2.4.1
       glob: 14.0.2
-      next: 15.5.28(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+      next: 16.4.2(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       ts-tqdm: 0.8.6
       wrangler: 4.151.1(@types/node@24.0.3)
       yargs: 18.2.0
@@ -6678,8 +6681,7 @@ snapshots:
 
   pathe@2.0.3: {}
 
-  pg-cloudflare@1.4.0:
-    optional: true
+  pg-cloudflare@1.4.1: {}
 
   pg-connection-string@2.14.0: {}
 
@@ -6707,7 +6709,7 @@ snapshots:
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
-      pg-cloudflare: 1.4.0
+      pg-cloudflare: 1.4.1
 
   pgpass@1.0.5:
     dependencies:

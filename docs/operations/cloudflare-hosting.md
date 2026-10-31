@@ -61,8 +61,9 @@ jobs only. This host change does not approve real customers, live providers or m
 
 8. Check the Workers Free limits before switching: the current documentation lists
    100,000 requests/day, 10 ms CPU per invocation, 128 MB memory, six simultaneous
-   outgoing connections, 50 subrequests per request and a 64 MiB uncompressed Worker
-   bundle limit. `wrangler deploy --dry-run` reports bundle size without deploying.
+   outgoing connections and 50 subrequests per request. For this Free-plan switch,
+   require a Worker bundle within 3 MiB compressed. `wrangler deploy --dry-run`
+   reports total upload and gzip size without deploying; compare gzip to that budget.
    Limits can change: confirm them in the linked documentation and account dashboard.
    Network waiting differs from CPU time. Next.js rendering and cryptography may
    exceed 10 ms; a successful build does not prove Free runtime suitability. Run both
