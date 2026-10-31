@@ -153,3 +153,18 @@ The earlier main-comparison lane failure includes inherited M4-12/M4-13/M4-15
 changes; this lane is not broadened to absorb those predecessor changes. All new
 paths are explicitly listed in config/lanes/mon-4b.json. No acceptance or live
 MON-4B completion is inferred from source inspection, local unit tests or discovery.
+
+Catch-up verification (31 October 2026): merged current main in the worktree and
+resolved only the core/DB export conflicts by retaining both sides' exports.
+Shared LP inventories, tenancy/serious-b5 expectations, watchdog registry and
+customer-signin tests match main; no unions were necessary. No routines, routes,
+migrations or collection behaviour changed. Targeted installed Vitest runs passed
+140 tests: executor, success-fee-direct-debit and success-fee-composition (94),
+fake-gocardless (37), and payment-fee-collection-repository (9), each with at most
+two workers and three named files. Installed TypeScript builds passed for core,
+storage, config and DB; API TypeScript --noEmit passed. Money arithmetic,
+commercial boundary and whitespace checks passed. PostgreSQL/browser suites remain for GitHub CI; this
+sandbox cannot start PostgreSQL or bind localhost. The router must stage the two
+resolved export files because the Git index is read-only here. Existing RED
+review evidence predates this merged head; exact-head review and green CI remain
+required before merge. No live capability or approval is inferred.
