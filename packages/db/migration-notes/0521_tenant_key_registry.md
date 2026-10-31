@@ -1,6 +1,6 @@
 M5-8 registry — RED (key custody / tenant isolation)
 
-0486 adds append-only tenant_key_version and tenant_key_revocation metadata. No
+0521 adds append-only tenant_key_version and tenant_key_revocation metadata. No
 private key bytes, external KMS references, live provider or business runtime
 capabilities are introduced. Both tables have tenant-qualified keys and forced
 RLS; only the migration/assurance role can access them. The immutable helper and

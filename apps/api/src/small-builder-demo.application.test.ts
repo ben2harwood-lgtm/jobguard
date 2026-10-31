@@ -103,13 +103,19 @@ describe("DEMO-I company authority",()=>{
   await f.app.execute("first-login","read",id,{});
   const original=f.authority.resolve.mock.results[0]!;
   const {credentials}=await original.value;
-  f.authority.resolve.mockResolvedValue({credentials,digest:"b".repeat(64)});
-  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:credentials.csrfToken});
+  const freshCredentials={...credentials,sessionToken:"t".repeat(32),csrfToken:"d".repeat(24)};
+  f.authority.resolve.mockResolvedValue({credentials:freshCredentials,digest:"b".repeat(64)});
+  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:freshCredentials.csrfToken});
   await f.app.execute("fresh-login","read",id,{});
   expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
   expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(2);
+  expect(f.authority.provider.authenticate).toHaveBeenNthCalledWith(1,credentials.sessionToken);
+  expect(f.authority.provider.authenticate).toHaveBeenNthCalledWith(2,freshCredentials.sessionToken);
   expect(f.repository.execute).toHaveBeenNthCalledWith(1,expect.objectContaining({tenantId:id}),"a".repeat(64),"read",id,{});
   expect(f.repository.execute).toHaveBeenNthCalledWith(2,expect.objectContaining({tenantId:id}),"b".repeat(64),"read",id,{});
+  f.authority.resolve.mockResolvedValue({credentials:{...freshCredentials,csrfToken:credentials.csrfToken},digest:"b".repeat(64)});
+  await expect(f.app.execute("stale-csrf","read",id,{})).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(f.repository.execute).toHaveBeenCalledTimes(2);
  });
  it("re-authenticates resume, reset and report reads; a revoked session cannot replay",async()=>{
   const f=lifecycleFixture();

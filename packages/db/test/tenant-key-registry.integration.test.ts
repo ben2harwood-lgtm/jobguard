@@ -6,7 +6,7 @@ import { migrate } from "../src/migrate.js";
 import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 
-const own = "0486_tenant_key_registry.sql";
+const own = "0521_tenant_key_registry.sql";
 let c: Cluster, owner: Pool;
 let before: Awaited<ReturnType<typeof snapshot>>;
 const t = randomUUID(), other = randomUUID();
