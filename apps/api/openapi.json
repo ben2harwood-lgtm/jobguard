@@ -272,7 +272,6 @@
                     "jobId",
                     "environment",
                     "state",
-                    "dependency",
                     "productionEnabled",
                     "realExternalActions"
                   ],
@@ -296,7 +295,8 @@
                     "state": {
                       "type": "string",
                       "enum": [
-                        "dependency_bound"
+                        "dependency_bound",
+                        "catch_review_available"
                       ]
                     },
                     "dependency": {
@@ -323,7 +323,7 @@
             }
           }
         },
-        "summary": "Read synthetic success-fee availability; source-backed calculation dependency-bound",
+        "summary": "Read synthetic catch-fee review availability after final-account lock",
         "tags": [
           "synthetic success fees"
         ]
@@ -429,11 +429,174 @@
           }
         },
         "responses": {
+          "201": {
+            "description": "Immutable synthetic statement review or approved derivation; includes statement sources, statementHash, reviewId, derivationId, journalId, postingRevision and replayed"
+          },
+          "409": {
+            "description": "Statement/source/revision changed, review missing, or command identity conflict"
+          },
           "503": {
-            "description": "No business effects; accepted attribution source adapter is missing"
+            "description": "No qualifying catch adapter/lock; Q2 and Q3 remain dependency-bound"
           }
         },
-        "summary": "Validate synthetic fee review/approval intent; posting dependency-bound",
+        "summary": "Review an exact source-backed catch fee statement or approve its local posting",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements": {
+      "get": {
+        "operationId": "SuccessFeeController_statements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned statement view with immutable source and approval links"
+          }
+        },
+        "summary": "Read immutable synthetic fee statements; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_issueStatement",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "issue"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue a simulation statement or approve its exact hash; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements/{statementId}": {
+      "get": {
+        "operationId": "SuccessFeeController_downloadStatement",
+        "parameters": [
+          {
+            "name": "statementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact versioned simulation statement JSON bytes",
         "tags": [
           "synthetic success fees"
         ]
