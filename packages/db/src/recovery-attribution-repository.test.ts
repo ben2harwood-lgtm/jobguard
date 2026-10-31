@@ -52,3 +52,17 @@ it("runtime assessment forwards only parsed intent and refuses a foreign returne
  await expect(repo.assess(context,randomUUID(),"a".repeat(64),command)).rejects.toThrow("NOT_FOUND");
  await expect(repo.assess(context,document.jobId,"a".repeat(64),{...command,remainingPrincipal:80000})).rejects.toThrow("Invalid recovery attribution command");
 });
+it("exact review forwards parsed intent and rejects a mismatched checked receipt",async()=>{
+ const context=verifiedTenantContextForQueuedJob(randomUUID()),jobId=randomUUID();
+ const command={version:"recovery-attribution-command.v1",action:"approve_review",commandId:randomUUID(),caseId:randomUUID(),workId:randomUUID(),lineId:randomUUID(),lockId:randomUUID(),expectedCaseRevision:1,expectedAttributionRevision:1,assessmentId:randomUUID(),expectedSourceHash:"a".repeat(64),reviewArtifactHash:"b".repeat(64)};
+ const receipt={version:"recovery-attribution-review-result.v1",environment:"synthetic_demo",productionEnabled:false,realExternalActions:0,reviewId:randomUUID(),assessmentId:command.assessmentId,assessmentRevision:1,sourceRevision:"a".repeat(64),sourceHash:command.expectedSourceHash,reviewAuthorizationId:randomUUID(),reviewArtifactHash:command.reviewArtifactHash,commandId:command.commandId,effect:"review_recorded"};
+ let result:unknown=receipt;
+ const query=vi.fn(async(sql:string)=>({rows:sql.includes("assess_recovery_attribution")?[{result}]:[]}));
+ const pool={connect:async()=>({query,release:vi.fn()})} as unknown as Pool,repo=new RecoveryAttributionRepository(pool);
+ expect(await repo.approveReview(context,jobId,"a".repeat(64),command)).toEqual(receipt);
+ expect(query).toHaveBeenCalledWith("SELECT app.assess_recovery_attribution($1,$2,$3::jsonb) result",[jobId,"a".repeat(64),command]);
+ for(const patch of [{assessmentId:randomUUID()},{commandId:randomUUID()},{assessmentRevision:2},{sourceHash:"c".repeat(64)},{reviewArtifactHash:"c".repeat(64)}]){
+  result={...receipt,...patch};await expect(repo.approveReview(context,jobId,"a".repeat(64),command)).rejects.toThrow("NOT_FOUND");
+ }
+ await expect(repo.approveReview(context,jobId,"a".repeat(64),{...command,reviewAuthorizationId:randomUUID()})).rejects.toThrow("Invalid recovery attribution command");
+});
