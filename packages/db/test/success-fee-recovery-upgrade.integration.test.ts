@@ -10,7 +10,7 @@ import {catchFeeFixture} from "./success-fee-catch-fixture.js";
 it("0489 preserves posted catch and allocation history, RLS and closed ACLs",async()=>{
  const f=await createFinalCheckFixture(false);
  try{
-  const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0507_success_fee_recovery_compensation.sql'));expect(own).toBeGreaterThan(0);
+  const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0522_success_fee_recovery_compensation.sql'));expect(own).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,own)){
    const name=url.pathname.split('/').at(-1)!,sql=await readFile(url,"utf8");

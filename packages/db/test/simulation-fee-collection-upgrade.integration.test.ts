@@ -12,7 +12,7 @@ let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 it("0491 preserves posted predecessor rows/types, repeats safely and issues from the genuine pre-upgrade approval",async()=>{
- const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0491_simulation_fee_collection.sql'));expect(own).toBeGreaterThan(0);
+ const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0519_simulation_fee_collection.sql'));expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,own)){
   const name=url.pathname.split('/').at(-1)!,sql=await readFile(url,"utf8");

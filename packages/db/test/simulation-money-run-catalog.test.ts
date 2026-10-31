@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { expect,it } from "vitest";
 import { parseInventory,staticScan } from "./lp-0-catalog.js";
 it("0492 adds exactly its checked run, private loader, private immutable tables and recorded privilege facts",async()=>{
- const sql=await readFile(new URL("../migrations/0492_simulation_money_trail_run.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0521_simulation_money_trail_run.sql",import.meta.url),"utf8");
  expect([...sql.matchAll(/CREATE TABLE app\.(\w+)/gu)].map(m=>m[1])).toEqual(["simulation_money_run","simulation_money_review"]);
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1])).toEqual(["simulation_money_sources","simulation_money_run"]);
@@ -29,7 +29,7 @@ it("0492 adds exactly its checked run, private loader, private immutable tables 
 });
 it("0492 copies the exact predecessor policy quoting and every other SQL format string contains complete quoted literals",async()=>{
  const read=(name:string)=>readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
- const sql=await read("0492_simulation_money_trail_run.sql"),predecessor=await read("0491_simulation_fee_collection.sql");
+ const sql=await read("0521_simulation_money_trail_run.sql"),predecessor=await read("0519_simulation_fee_collection.sql");
  const policy=(text:string)=>text.split("\n").find(l=>l.includes("EXECUTE format('CREATE POLICY success_fee_tenant"));
  expect(policy(sql)).toBe(policy(predecessor));
  // Decode each SQL string exactly as the outer PL/pgSQL parser does. This
@@ -42,7 +42,7 @@ it("0492 copies the exact predecessor policy quoting and every other SQL format 
  expect(sql).not.toMatch(/current_setting\(app\.|,\)::uuid/u);
 });
 it("0489-0492 do not overwrite each other's routines; compensation is the latest writer and journal/derivation guard",async()=>{
- const files=["0507_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0491_simulation_fee_collection.sql","0492_simulation_money_trail_run.sql"];
+ const files=["0522_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0519_simulation_fee_collection.sql","0521_simulation_money_trail_run.sql"];
  const definitions=new Map<string,string>();
  for(const file of files){const sql=await readFile(new URL(`../migrations/${file}`,import.meta.url),"utf8");for(const match of sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)\(/gu)){expect(definitions.has(match[1]!)).toBe(false);definitions.set(match[1]!,file);}}
  for(const name of ["write_success_fee_v3","check_success_fee_journal","check_success_fee_derivation"])expect(definitions.get(name)).toBe(files[0]);

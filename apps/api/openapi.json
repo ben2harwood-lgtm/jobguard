@@ -1,6 +1,42 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/variations/read": {
+      "post": {
+        "operationId": "CustomerVariationController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read current extra revisions for this authenticated customer's job",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/variation-approvals": {
+      "post": {
+        "operationId": "CustomerVariationController_approve",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Customer explicitly approves one exact signed variation revision",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/customer-portal/issue": {
       "post": {
         "operationId": "CustomerSigninController_issue",
