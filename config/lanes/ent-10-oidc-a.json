@@ -3,6 +3,7 @@
   "lanes": {
     "ent-10-oidc-a": {
       "branches": [
+        "codex/sandbox/ent-10-oidc-a",
         "codex/sandbox/ent-10-oidc-a3",
         "codex/sandbox/ent-10-oidc-a2"
       ],
