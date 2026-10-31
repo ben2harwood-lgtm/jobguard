@@ -74,11 +74,12 @@ describe("DEMO-P1 documentation and fixture contract only", () => {
     };
     const input = fixture.parse(inputs).recipes.find(r => r.family === family)!;
     const result = parseCaptureFixture(input.id, input.source.text);
-    expect(result.lines.map(line => line.description.value)).toEqual([
-      "Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site", "Replace shelves",
-    ]);
+    const descriptions = ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"];
+    expect(result.lines.map(line => line.description.value)).toEqual(family === "shadow-30000" ? descriptions : [...descriptions, "Replace shelves"]);
     expect(result.questions.map(q => q.question.value)).toEqual(["Confirm disposal and waste allowance"]);
-    expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
+    expect(result.lines.map(line => line.unitPricePence.value)).toEqual(
+      family === "shadow-30000" ? Array(5).fill(600000) : Array(6).fill(null),
+    );
     expect(input.source.text).not.toMatch(/Customer:|recipient:|@/iu);
   });
   it("DP1-02 rejects hidden end states at every source-input level", () => {
