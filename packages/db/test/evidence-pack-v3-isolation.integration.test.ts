@@ -1,11 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { prepareEvidencePackV3Sources } from "../src/evidence-pack-v3-sources.js";
+import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
 import { asFixtureTenant } from "./recovery-attribution-fixture.js";
 import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, recordingPool, type V3Fixture } from "./evidence-pack-v3-fixture.js";
 let f: V3Fixture;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture(); }, 90_000);
 afterAll(async () => { if (f) await closeEvidencePackV3Fixture(f); vi.unstubAllEnvs(); });
+it("establishes read-only repeatable-read before tenant setup in PostgreSQL", async () => {
+  const statements: Array<{ sql: string; values: unknown[] | undefined }> = [];
+  await withEvidencePackV3Snapshot(recordingPool(f.runtime, statements), f.auth.context, async tx => {
+    expect((await tx.$client.query("SHOW transaction_isolation")).rows[0].transaction_isolation).toBe("repeatable read");
+    expect((await tx.$client.query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
+    expect((await tx.$client.query("SELECT current_setting('app.tenant_id') tenant_id")).rows[0].tenant_id).toBe(f.source.tenantId);
+  });
+  expect(statements.slice(0, 2)).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+    { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [f.source.tenantId] },
+  ]);
+  expect(statements.at(-1)?.sql).toBe("COMMIT");
+});
 
 it("SB-02 activation: completed pre-lock artifacts, source revision and runtime statement shape stay identical with zero/many hidden signals", async () => {
   const { EvidencePackV3Repository, EvidencePackV3WorkerRepository } = await import("../src/evidence-pack-v3-repository.js");
