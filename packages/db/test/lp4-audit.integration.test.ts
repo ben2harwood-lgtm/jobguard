@@ -26,9 +26,9 @@ async function chain(t: string): Promise<AuditEvent[]> {
     occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
     FROM app.audit_event ORDER BY sequence`)).rows);
 }
-beforeAll(async () => { db = await jobDoorsDatabase(true); tenant = (await jobDoorsActor(db.owner)).tenant; }, 300_000);
+beforeAll(async () => { db = await jobDoorsDatabase(); tenant = (await jobDoorsActor(db.owner)).tenant; }, 300_000);
 afterAll(async () => { await db?.close(); });
-describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
+describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
   it("serializes competing batches and agrees with v2 canonicalization, clock and verifier", async () => {
     await Promise.all(Array.from({ length: 8 }, () => append(tenant, [statement(), statement()])));
     const events = await chain(tenant);
@@ -52,6 +52,14 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
       config: [expected[0].searchPath], digest: expected[0].definitionSha256, runtime: expected[0].runtimeExecute });
     expect(rows[0].source).toContain("app.lp4_seal_audit(");
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
+  });
+  it.each(["app.append_audit", "app.lp4_seal_audit", "app.ch4_append_fact_audit"])("%s matches its recorded database definition", async name => {
+    const inventory=JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+    const expected=inventory.recorded.routines.filter((r: {identity:string})=>r.identity.startsWith(`function:${name}(`));
+    expect(expected).toHaveLength(1);
+    const actual=(await db.owner.query(`SELECT encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex') digest
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname||'.'||p.proname=$1`,[name])).rows;
+    expect(actual).toEqual([{digest:expected[0].definitionSha256}]);
   });
   it("refuses structured and null references even from checked operations", async () => {
     for (const exclusions of [null, [], [{ uploadId: randomUUID(), state: "rejected", reason: "verification_invalid" }], {}]) {
@@ -86,6 +94,11 @@ describe("LP-4 actual runtime audit boundary (synthetic PostgreSQL)", () => {
     }
     const role = (await db.owner.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_audit_writer'")).rows[0];
     expect(role).toEqual({ rolcanlogin: false, rolsuper: false, rolbypassrls: false });
+    expect((await db.owner.query(`SELECT has_schema_privilege('jobguard_audit_writer','app','CREATE') can_create,
+      pg_has_role('jobguard_migration','jobguard_audit_writer','USAGE') can_use,
+      pg_has_role('jobguard_migration','jobguard_audit_writer','SET') can_set`)).rows).toEqual([
+      { can_create: false, can_use: false, can_set: false },
+    ]);
   });
   it("refuses forged metadata, reserved collisions and private content without echoing it", async () => {
     const before = (await chain(tenant)).length;

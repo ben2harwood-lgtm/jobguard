@@ -264,7 +264,7 @@ it("fresh-key accrual replays append one bound audit per command; same-key retri
   for (const command of commands) {
     expect(after.slice(1).filter(event => event.payload.references.command === command)).toEqual([
       expect.objectContaining({ event_type: "enterprise_fee.statement_post_replayed", actor_ref: original[0]!.actor_ref,
-        payload: { references: { statement: approved.statementId, command, authorization: approved.authorizationId, environment: "synthetic_demo" },
+        payload: { references: { auditTrust: "checked_operation", statement: approved.statementId, command, authorization: approved.authorizationId, environment: "synthetic_demo" },
           hashes: { content: approved.statement.contentHash } } }),
     ]);
     expect(await t.post(approved.statementId, approved.authorizationId, command)).toMatchObject({ replayed: true, journals: 1 });

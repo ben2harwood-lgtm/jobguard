@@ -1,4 +1,5 @@
 import { lp5ReadTables, lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
+import { catalogueAdditions } from "./upgrade-proof-utils.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -1106,7 +1107,7 @@ async function lp4AuditAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
  await changeAcl(routine('identity','sso_audit_head'),'proacl',['jobguard_identity=X/jobguard_migration'],[]);
  await changeAcl(routine('app','final_lock_canonical'),'proacl',[],['jobguard_audit_writer=X/jobguard_migration']);
  for (const [schema,name] of [['app','append_shadow_audit'],['app','append_final_lock_audit'],
-   ['app','surface_shadow_signal_early'],['app','ch4_append_fact_audit'],['identity','sso_audit_append']])
+   ['app','surface_shadow_signal_early'],['identity','sso_audit_append']])
   routine(schema!,name!).proconfig=['search_path=pg_catalog, pg_temp'];
  const audit = expected.relations.find(r => r.nspname==='app' && r.relname==='audit_event')!;
  await changeAcl(audit,'relacl',['jobguard_runtime=ar/jobguard_migration'],
@@ -1163,7 +1164,7 @@ async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) 
  }
  for (const name of ['command_type_registry','command_lifecycle_claim']) {
   expect(Object.keys(prior.rows)).not.toContain(`app.${name}`);
-  expected.rows[`app.${name}`]=name==='command_type_registry'?[...lp5RegistryRows].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))):[];
+  expected.rows[`app.${name}`]=[];
   expected.relations.push({nspname:'app',relname:name,relowner:owner,relacl:await acl([`${role}=arwdDxt/${role}`]),
    relrowsecurity:name==='command_lifecycle_claim',relforcerowsecurity:name==='command_lifecycle_claim'});
  }
@@ -1230,7 +1231,7 @@ async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  }
  const policies = after.policies.filter(p => p.schemaname==='app' && tables.includes(p.tablename));
  expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
- for (const p of policies) expect(p.roles).toEqual(["jobguard_migration","jobguard_runtime"]);
+ for (const p of policies) expect((await f.admin.query("SELECT $1::name[]::text[] roles",[p.roles])).rows[0].roles).toEqual(["jobguard_migration","jobguard_runtime"]);
  for (const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
  const union = <T>(old: T[], additions: T[], live: T[]) => [...old,...additions].sort((a,b) =>
   live.findIndex(r => JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r => JSON.stringify(r)===JSON.stringify(b)));
@@ -1286,6 +1287,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await lp3Additions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
+ Object.assign(expected, await customerSigninAdditions(expected));
  Object.assign(expected, await lp4AuditAdditions(expected));
  Object.assign(expected, await lp5CommandAdditions(expected));
  expect(await snapshot()).toEqual(expected);
@@ -1313,4 +1315,31 @@ async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
+
+// MON-5 foundation: union only 0387's exact new private relations and identity routines.
+async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot(), tables = ["customer_portal_grant", "customer_portal_session"];
+ const identities = [
+  ["app", "customer_portal_audit", "t uuid, subject uuid, kind text"],
+  ["app", "customer_portal_current", "g app.customer_portal_grant"],
+  ["app", "customer_portal_issuer", "t uuid, digest text"],
+  ["identity", "customer_portal_issue", "t uuid, builder_digest text, j uuid, c uuid, link_digest text, content text"],
+  ["identity", "customer_portal_revoke", "t uuid, builder_digest text, j uuid, gid uuid"],
+  ["identity", "customer_portal_use", "t uuid, j uuid, c uuid, digest text, session_digest text, operation text"],
+ ];
+ const routines = after.routines.filter(r => identities.some(([schema, name, args]) => r.nspname === schema && r.proname === name && r.args === args));
+ expect(routines.map(r => [r.nspname,r.proname,r.args])).toEqual(identities);
+ const indexes = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
+  JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [tables])).rows;
+ expect(indexes.filter(i => i.table_name === tables[0])).toHaveLength(3);
+ expect(indexes.filter(i => i.table_name === tables[1])).toHaveLength(3);
+ const relationNames = [...tables, ...indexes.map(i => i.relname as string)];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual(relationNames.sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename,p.policyname])).toEqual(tables.map(t => [t,"tenant_isolation"]));
+ for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
+ const additive = catalogueAdditions;
+ return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
 }

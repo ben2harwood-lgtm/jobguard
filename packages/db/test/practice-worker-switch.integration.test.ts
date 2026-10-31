@@ -157,7 +157,7 @@ it("[PW10] no business lock is acquired after the audit append", async () => {
  const f = await company(c), observed = new ObservedPool(c.runtime, c.admin), repository = new PracticeWorkerSwitchRepository(observed.pool), mutable = await mutableTables(c.admin);
  for (const work of [() => repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative }), () => repository.switchOff(f.context, f.p, f.session, off())]) {
   const { transactions } = await observed.record(work); expect(transactions).toHaveLength(1);
-  const statements = transactions[0]!.statements, index = statements.findIndex(s => s.sql.includes("FROM app.append_audit(")); expect(index).toBeGreaterThanOrEqual(0);
+  const statements = transactions[0]!.statements, index = statements.findIndex(s => [...s.footprint.rows.keys()].some(key => key.startsWith("audit_control.audit_head#"))); expect(index).toBeGreaterThanOrEqual(0);
   const head = statements[index]!.footprint;
   for (const statement of statements.slice(index + 1)) {
    expect([...statement.footprint.advisory].every(k => head.advisory.has(k))).toBe(true);

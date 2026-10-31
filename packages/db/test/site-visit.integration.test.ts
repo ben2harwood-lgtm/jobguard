@@ -59,9 +59,9 @@ describe("ENT-3b success paths", () => {
   const events = (await c.admin.query("SELECT id,event_type,subject_type,subject_ref,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'contractor.visit.%' ORDER BY sequence", [f.p.tenantId])).rows;
   expect(events).toHaveLength(2);
   expect(events[0]).toMatchObject({ id: started.visitId, event_type: "contractor.visit.started", subject_type: "site-visit", subject_ref: started.visitId, actor_ref: `membership:${a.member.membershipId}` });
-  expect(events[0]!.payload).toEqual({ references: { command: expect.any(String), job: f.jobId, visit: started.visitId, environment: "synthetic_demo" } });
+  expect(events[0]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: expect.any(String), job: f.jobId, visit: started.visitId, environment: "synthetic_demo" } });
   expect(events[1]).toMatchObject({ id: stored[0]!.id, event_type: "contractor.visit.completed", subject_type: "site-visit", subject_ref: started.visitId, actor_ref: `membership:${a.member.membershipId}` });
-  expect(events[1]!.payload).toEqual({ references: { command: stored[0]!.command_id, job: f.jobId, visit: started.visitId, closeoutAnswer: stored[0]!.id, environment: "synthetic_demo" } });
+  expect(events[1]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: stored[0]!.command_id, job: f.jobId, visit: started.visitId, closeoutAnswer: stored[0]!.id, environment: "synthetic_demo" } });
   expect(JSON.stringify(events[1]!.payload)).not.toContain(`"${answer}"`);
   const receipts = (await c.admin.query("SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_type IN('StartSiteVisit','CompleteSiteVisit') ORDER BY command_type", [f.p.tenantId])).rows;
   expect(receipts).toEqual([{ command_type: "CompleteSiteVisit", status: "succeeded" }, { command_type: "StartSiteVisit", status: "succeeded" }]);
@@ -574,7 +574,7 @@ describe("ENT-3b the refusal record", () => {
    const events = await refusalEvents(c, fx.p.tenantId), mine = events.filter(e => e.subject_ref === raw.commandId);
    expect(mine, reason).toHaveLength(1);
    expect(mine[0]).toMatchObject({ id: derivedUuid(`visit-refusal:${fx.p.tenantId}:${raw.commandId}:${reason}`), actor_ref: `membership:${who.member.membershipId}`, subject_type: "visit-command" });
-   expect(mine[0]!.payload).toEqual({ references: { command: raw.commandId, command_type: "StartSiteVisit", reason, environment: "synthetic_demo", job }, classifications: { action: "security" } });
+   expect(mine[0]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: raw.commandId, command_type: "StartSiteVisit", reason, environment: "synthetic_demo", job }, classifications: { action: "security" } });
   }
   for (const job of [foreign.jobId, randomUUID()]) {
    const raw = startInput(f, { jobId: job });

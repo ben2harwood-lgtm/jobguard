@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { ConfirmProposalReview } from "../src/review-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
-import { withTenant } from "../src/tenant-context.js";
+import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { adoptionFixture, reviewFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
@@ -43,6 +43,9 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     const results = await Promise.all([f.command, f.command, { ...f.command, commandId: randomUUID() }].map(c => f.dispatcher.dismissDecision(f.context, c)));
     expect(results).toEqual(Array(3).fill({ decisionId: f.command.decisionId, resolution: "dismissed", authorizedAction: false }));
     expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, resolutions: 1, authorizations: 0, audits: 2 });
+    const audits = (await db.owner.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded'", [f.actor.tenant])).rows;
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: f.command.commandId, auditTrust: "checked_operation" } } });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, resolution: "rejected" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, expectedSnapshotRevision: 2 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   });
@@ -81,14 +84,19 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     await expect(f.dispatcher.dispatch(f.context, commercial(f, { commandType: "unknown.command", actorMembershipId: randomUUID() }), handler)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(await counts(f.actor.tenant)).toEqual(before);
   });
-  it.each(["recovery.message.approve", "other.family"])("preserves an unconverted %s processing receipt for shared conflict detection", async commandType => {
+  it.each(["recovery.message.approve", "other.family"])("requires an unconverted %s receipt to finish before commit", async commandType => {
     const f = await fixture(), commandId = randomUUID();
-    await withTenant(db.owner, f.context, tx => tx.$client.query(`INSERT INTO app.command_receipt
+    const insert = (tx: TenantTransaction) => tx.$client.query(`INSERT INTO app.command_receipt
       (command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-      VALUES($1,$2,$3,$1::text,repeat('a',64),'processing',$4)`, [commandId, f.actor.tenant, commandType, f.actor.member]));
+      VALUES($1,$2,$3,$1::text,repeat('a',64),'processing',$4)`, [commandId, f.actor.tenant, commandType, f.actor.member]);
+    await expect(withTenant(db.owner, f.context, insert)).rejects.toMatchObject({ code: "23514", message: "COMMAND_CONFLICT" });
+    await withTenant(db.owner, f.context, async tx => {
+      await insert(tx);
+      await tx.$client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId]);
+    });
     const receipt = await withTenant(db.runtime, f.context, tx => tx.$client.query(
       "SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId]));
-    expect(receipt.rows).toEqual([{ command_type: commandType, status: "processing" }]);
+    expect(receipt.rows).toEqual([{ command_type: commandType, status: "succeeded" }]);
     expect((await db.owner.query("SELECT count(*)::int n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId])).rows)
       .toEqual([{ n: 0 }]);
   });

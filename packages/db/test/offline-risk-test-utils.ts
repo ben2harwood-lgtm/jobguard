@@ -51,7 +51,7 @@ export async function committed(c: Cluster, f: Fixture, actor: AuthenticatedMemb
  expect(origin.origin_hash).toBe(extraOriginHashV1(originHashInput(origin)));
  expect((await c.admin.query("SELECT v.job_id,v.capture_text,v.description,s.id scope FROM app.variation v JOIN app.scope_identity s ON(s.tenant_id,s.job_id,s.id)=(v.tenant_id,v.job_id,v.scope_item_id) WHERE v.tenant_id=$1 AND v.id=$2", [f.p.tenantId, first.variationId])).rows).toEqual([{ job_id: raw.jobId, capture_text: raw.body.note, description: raw.body.description, scope: expect.any(String) }]);
  expect((await c.admin.query("SELECT kind,command_id,actor_membership_id FROM app.extra_event WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, first.variationId])).rows).toEqual([{ kind: "logged", command_id: raw.body.commandId, actor_membership_id: actor.membershipId }]);
- expect((await c.admin.query("SELECT version,actor_ref FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.raised'", [f.p.tenantId, first.variationId])).rows).toEqual([{ version: "audit.v1", actor_ref: `membership:${actor.membershipId}` }]);
+ expect((await c.admin.query("SELECT version,actor_ref FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.raised'", [f.p.tenantId, first.variationId])).rows).toEqual([{ version: "audit.v2", actor_ref: `membership:${actor.membershipId}` }]);
  return origin;
 }
 export async function revise(c: Cluster, f: SiteFixture, assigned: string[], expectedRevision = 1) {

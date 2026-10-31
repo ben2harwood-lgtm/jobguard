@@ -139,7 +139,7 @@ describe("previous-schema writers and claimed ids", () => {
     // Its own kind on its own job is admitted only from the claiming transaction; afterwards it would be a second effect of a
     // command that already completed (Codex P2 4199348149).
     const own = randomUUID(), claiming = await claimOpen(own, job, "inbox.seed");
-    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("COMMIT"); } finally { claiming.release(); }
+    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, own]); await claiming.query("COMMIT"); } finally { claiming.release(); }
     const laterJob = await live(), completed = randomUUID(); await claim(completed, laterJob, "inbox.seed");
     await expect(legacySeed(h.admin, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
     // Claim ownership comes from the database, not from anything a session can set (Codex P2 4199535957): neither a forged
@@ -182,6 +182,7 @@ describe("previous-schema writers and claimed ids", () => {
     await writer.query("BEGIN"); await legacySeed(writer, second, job);
     const claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
     expect(await stillWaiting(claimed)).toBe(true);
+    await writer.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, second]);
     await writer.query("COMMIT"); writer.release();
     expect(await claiming).toBe("conflict");
   });

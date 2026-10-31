@@ -75,6 +75,7 @@ describe("CH-4 verified proof and stage command sources",()=>{
    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,command,CH4_HASH,a.actorId]);
    await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')",[link,a.tenantId,photo,a.jobId,a.scopeId]);
    await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id,completed_at) VALUES($1,$2,$3,$4,'r8-binding',$5,$6,'2026-10-14T10:00:00.123456Z')",[stage,a.tenantId,a.jobId,a.scopeId,link,command]);
+   await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, command]);
   });
   const before=await workEvents(f,a);
   // The table owner cannot see this source under its unchanged FORCE RLS.

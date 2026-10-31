@@ -157,7 +157,7 @@ describe("ENT-4c un-link command", () => {
   expect(stored[0].semantic_key).toBe(semantic(f.jobId, l.linkId, raw.commandId));
   const events = (await c.admin.query("SELECT *,xmin::text transaction_id FROM app.audit_event WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, result.unlinkId])).rows;
   expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ event_type: "contractor.extra.duplicate_unlinked", subject_type: "extra", subject_ref: l.duplicate, actor_ref: `membership:${f.p.membershipId}`, transaction_id: row.transaction_id });
-  expect(events[0].payload).toEqual({ references: { command: raw.commandId, job: f.jobId, duplicate: l.duplicate, canonical: l.canonical, link: result.unlinkId, reverses: l.linkId, environment: "synthetic_demo" } });
+  expect(events[0].payload).toEqual({ references: { auditTrust: "lower_trust", command: raw.commandId, job: f.jobId, duplicate: l.duplicate, canonical: l.canonical, link: result.unlinkId, reverses: l.linkId, environment: "synthetic_demo" } });
   const after = await snapshot(f);
   expect(Object.fromEntries(Object.keys(after.counts).map(table => [table, after.counts[table]! - before.counts[table]!]))).toEqual({ command_receipt: 1, extra_duplicate_link: 1, audit_event: 1 });
   expect(Number(after.head[0].sequence) - Number(before.head[0].sequence)).toBe(1); expect(after.protected).toEqual(before.protected);

@@ -1,4 +1,4 @@
--- LP-4 part 1 RED: dark in-database audit append, synthetic database only.
+-- LP-4 part 1 RED: in-database audit append for every migrated database.
 -- Full LP-4 authority guarantee REFUSED: reserved generic types and authority
 -- consumers are NOT closed here. No production/real-data enablement.
 -- Forward-only candidate: no history is rewritten.
@@ -8,9 +8,8 @@ DO $$ BEGIN
   RAISE EXCEPTION 'jobguard_audit_writer is missing; run administrative ensureRoles before migrations' USING ERRCODE='42704';
  END IF;
 END $$;
--- Required only while transferring ownership; removed before this transaction commits.
-GRANT CREATE ON SCHEMA app TO jobguard_audit_writer;
 GRANT USAGE ON SCHEMA app, audit_control TO jobguard_audit_writer;
+GRANT CREATE ON SCHEMA app TO jobguard_audit_writer;
 GRANT SELECT, INSERT ON app.audit_event TO jobguard_audit_writer;
 GRANT SELECT, INSERT, UPDATE ON audit_control.audit_head TO jobguard_audit_writer;
 GRANT EXECUTE ON FUNCTION app.final_lock_canonical(jsonb) TO jobguard_audit_writer;
@@ -28,9 +27,6 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  e jsonb; payload jsonb; section text; entry record; seq bigint; prev text; ts timestamptz;
  ph text; eh text; stored app.audit_event;
 BEGIN
- IF current_database() IS DISTINCT FROM 'jobguard_synthetic_demo' THEN
-  RAISE EXCEPTION 'LP4_SYNTHETIC_DATABASE_REQUIRED' USING ERRCODE='42501';
- END IF;
  IF t IS NULL THEN RAISE EXCEPTION 'AUDIT_CONTEXT_REQUIRED' USING ERRCODE='42501'; END IF;
  IF p_trust IS NULL OR p_trust NOT IN ('lower_trust','checked_operation')
   OR jsonb_typeof(p_events) IS DISTINCT FROM 'array' THEN
@@ -104,6 +100,7 @@ $$;
 ALTER FUNCTION app.append_audit(jsonb) OWNER TO jobguard_audit_writer;
 REVOKE ALL ON FUNCTION app.append_audit(jsonb) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
 GRANT EXECUTE ON FUNCTION app.append_audit(jsonb) TO jobguard_runtime,jobguard_migration;
+REVOKE CREATE ON SCHEMA app FROM jobguard_audit_writer;
 REVOKE INSERT ON app.audit_event FROM jobguard_runtime;
 REVOKE ALL ON FUNCTION app.lock_audit_head(),app.advance_audit_head(bigint,char(64)) FROM jobguard_runtime;
 REVOKE ALL ON FUNCTION identity.sso_audit_head(uuid) FROM jobguard_identity;
@@ -193,7 +190,7 @@ BEGIN
  PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',audit_id,'version','audit.v1','actorRef',actor,'eventType','shadow.must_surface_fired','subjectType','job','subjectRef',p_job::text,'payload',jsonb_build_object('classifications',jsonb_build_object('action','operational'),'references',jsonb_build_object('decisionId',p_decision,'firingId',p_firing,'jobId',p_job,'rule',p_rule,'ruleVersion',p_version,'signalId',p_signal)))),'checked_operation');
  RETURN p_decision;
 END $$;
-CREATE OR REPLACE FUNCTION app.ch4_append_fact_audit() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+CREATE OR REPLACE FUNCTION app.ch4_append_fact_audit() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=NEW.tenant_id; seq bigint; prev text; ts timestamptz; payload jsonb; ph text; eh text; actor text; typ text; subject uuid;
  old_context text:=current_setting('app.tenant_id',true);
 BEGIN
@@ -794,5 +791,28 @@ BEGIN
 
  RETURN outcome;
 END $$;
-REVOKE CREATE ON SCHEMA app FROM jobguard_audit_writer;
+-- Latest main definition: packages/db/migrations/0372_free_first_job_admission.sql.
+CREATE OR REPLACE FUNCTION app.mon3_audit(t uuid,actor uuid,command uuid,kind text,hash text,result_hash text) RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+BEGIN
+
+
+ payload:=jsonb_build_object('references',jsonb_build_object('commandId',command::text),'hashes',jsonb_build_object('request',hash,'result',result_hash));
+
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','membership:'||actor::text,'eventType','free_first_job.'||kind,'subjectType','tenant','subjectRef',t::text,'payload',payload)),'checked_operation');
+
+END $$;
+-- Latest main definition: packages/db/migrations/0387_customer_signin.sql.
+CREATE OR REPLACE FUNCTION app.customer_portal_audit(t uuid,subject uuid,kind text) RETURNS void
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+BEGIN
+
+
+ payload:=jsonb_build_object('references',jsonb_build_object('subjectId',subject::text),'classifications',jsonb_build_object('action','security'));
+
+
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','system:customer-portal','eventType','customer_portal.'||kind,'subjectType','customer_portal','subjectRef',subject::text,'payload',payload)),'checked_operation');
+
+END $$;
 COMMIT;

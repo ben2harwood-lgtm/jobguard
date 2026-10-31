@@ -2,14 +2,14 @@
   {
     "file": "packages/db/src/commands.ts",
     "line": 109,
-    "fingerprint": "26b3bfbfb069fc2d67354cf044999c232a717f791cf6d0415fadf89a73c2a266",
+    "fingerprint": "bc95e99bd86f6c82a73e21edad515945861916b987fc118f1e22d0ff9be0a1c0",
     "reason": "Dismissal replay has a different literal family on only one OR branch; the command-id branch is not constrained.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/commands.ts",
     "line": 81,
-    "fingerprint": "1de5d688dfc6c8cd637e250e296e899d9fd4a6ff9aa53fcfda7d5144171020b8",
+    "fingerprint": "2d3e6bfc3eb77abc9473fba7dc574f16473027052ff666574e67389fcc350671",
     "reason": "Generic replay reads result using a runtime command family and an OR command-id branch; no non-advisory proof.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -23,7 +23,7 @@
   {
     "file": "packages/db/src/demo-seed.ts",
     "line": 94,
-    "fingerprint": "aee71a57a2756c911266f42700e1c0afe84d2d6d107f003759caca7ebdd5146e",
+    "fingerprint": "6452587a177430d30e266983504305f1dae4ebbcea3f42215b7ba39bb46ebefb",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },

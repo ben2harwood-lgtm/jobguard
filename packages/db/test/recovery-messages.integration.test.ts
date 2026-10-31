@@ -38,7 +38,9 @@ async function activatePursuitFixture(client: import("pg").PoolClient, tenant: s
   await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
   await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
   await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
-  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  return result;
 }
 
 /** Select v3 through its checked routine at the primary fixture's first live
@@ -1304,6 +1306,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string; message?: string }) => error.code ?? error.message);
       await new Promise(resolve => setTimeout(resolve, 500)); // the preview is now waiting on the receipt
       await dispatcher.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, caseId]);
+      await dispatcher.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [fixture.tenantId, command.commandId]);
       await dispatcher.query('COMMIT');
       expect(await outcome).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
     } finally { dispatcher.release(); }
@@ -1318,6 +1321,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
         [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string }) => error.code);
       await new Promise(resolve => setTimeout(resolve, 1000)); // without the claim, the preview commits here while the other family is still open
+      await holder.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [fixture.tenantId, command.commandId]);
       await holder.query('COMMIT');
       expect(await outcome).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
     } finally { holder.release(); }
