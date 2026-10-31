@@ -4,12 +4,15 @@
     "m2-2-intake": {
       "branches": ["codex/sandbox/m2-2-intake"],
       "allow": [
+        "config/lanes/m2-2-intake.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/decisions/d04-providers-residency.md",
+        "packages/db/migrations/0465_dark_merchant_order.sql",
         "packages/db/src/index.ts",
         "packages/db/src/merchant-intake-port.ts",
         "packages/db/test/merchant-intake-port.test.ts"
       ],
-      "note": "M2-2 DARK in-memory intake contract on M2-1; no live routes, business writes, providers or migration. M5-4 shared supplier-intake hardening left for merge."
+      "note": "M2-2 DARK in-memory intake contract on M2-1; no live routes, business writes, providers or new migration. Main catch-up preserves WorkState.resume in inherited migration 0465 and records its manual-attestation table in LP-0. M5-4 shared supplier-intake hardening left for merge."
     }
   }
 }

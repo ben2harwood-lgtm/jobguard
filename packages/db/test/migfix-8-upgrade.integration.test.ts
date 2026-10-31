@@ -1,3 +1,4 @@
+import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -63,8 +64,8 @@ beforeAll(async () => {
   clusterPort = port;
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"] });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential , database: "jobguard_synthetic_demo"});
   process.env.JOBGUARD_ENV = "synthetic_demo";
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); });
@@ -127,7 +128,7 @@ async function historicalFixture() {
   state = await messages.command(ctx, caseId, { version: "recovery-message-command.v1", action: "approve", commandId: randomUUID(), messageId: view.id, expectedRevision: view.revision,
     recipient: view.message.recipient, body: view.message.body, amountPence: view.message.amountPence, packId: view.message.packId, contentHash: view.message.contentHash }, actor);
   state = await messages.command(ctx, caseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: state.latest!.id, expectedRevision: state.latest!.revision, outcome: "success" }, actor);
-  const sandbox = new SandboxRepository(runtime), runId = (await sandbox.create(session, randomUUID())).id;
+  const sandbox = new SandboxRepository(runtime), runId = await seedLegacySandbox(admin, session);
   await new RecoveryFollowUpRepository(runtime).schedule(ctx, caseId, { version: "recovery-follow-up-command.v1", action: "schedule", commandId: randomUUID(), sourceMessageId: state.latest!.id, expectedCaseRevision: state.readiness.caseRevision }, actor);
   await sandbox.advance(session, runId, randomUUID()); // Pre-existing due Decision, event, and audit as well as waiting intent history.
   return { tenantId: f.tenantId, jobId: f.jobId, runId };
@@ -149,7 +150,7 @@ describe("MIGFIX-8 upgrade", () => {
       await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Clock upgrade fixture')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
       await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
       await db.query(`CREATE ROLE migfix_8_upgrade_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO migfix_8_upgrade_runtime`);
-      runtime = new Pool({ host: "127.0.0.1", port: clusterPort, user: "migfix_8_upgrade_runtime", password: credential, database: "postgres" });
+      runtime = new Pool({ host: "127.0.0.1", port: clusterPort, user: "migfix_8_upgrade_runtime", password: credential, database: "jobguard_synthetic_demo" });
       await installLegacySyntheticPartyFixtures(admin);
       const { tenantId, runId } = await historicalFixture();
       const tables = await populatedTables(db);

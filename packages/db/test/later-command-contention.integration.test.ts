@@ -1,3 +1,5 @@
+import { reviewFixture } from "./lp-job-doors-fixtures.js";
+import { ConfirmProposalReview } from "../src/review-repository.js";
 // LATER-B11: made-up data only. NOT RUN locally: the builder cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -7,34 +9,19 @@ import {
   type AuditEvent, type CommandMutation,
 } from "../src/index.js";
 import { cluster, type Cluster } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
 
 let c: Cluster;
 beforeAll(async () => { c = await cluster(); }, 60_000);
 afterAll(async () => { await c?.close(); });
 
-async function acceptedJob() {
-  const tenant = randomUUID(), user = randomUUID(), account = randomUUID();
-  const member = randomUUID(), job = randomUUID(), quote = randomUUID();
-  const hash = "a".repeat(64), context = testTenantContext(tenant);
-  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
-  await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
-  await c.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional contention builder')", [account, tenant]);
-  await c.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [member, tenant, account, user]);
-  await c.admin.query("INSERT INTO app.job(id,tenant_id,title,status,revision) VALUES($1,$2,'Fictional contention job','accepted',1)", [job, tenant]);
-  await c.admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [quote, tenant, job, hash]);
-  await c.admin.query("UPDATE app.job SET accepted_quote_version_id=$3 WHERE tenant_id=$1 AND id=$2", [tenant, job, quote]);
-  await withTenant(c.runtime, context, db => appendAuditBatch(db, [{
+async function draftJob() {
+  const f = await reviewFixture({ owner: c.admin, runtime: c.runtime });
+  const { tenant, member } = f.actor, job = f.review.jobId;
+  await withTenant(c.runtime, f.context, db => appendAuditBatch(db, [{
     id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`,
     eventType: "synthetic.contention.fixture", subjectType: "job", subjectRef: job, payload: {},
   }]));
-  const command = {
-    version: "command.v1", commandId: randomUUID(), commandType: "job.switch_live",
-    semanticKey: `job:${job}:switch_live`, actorMembershipId: member, subjectType: "job", subjectRef: job,
-    action: { actionType: "switch_live", recipient: null, contentHash: hash, aggregateRevision: 1,
-      amountPence: 10000, currency: "GBP", policyVersion: "pilot-no-charge-v1", expiresAt: new Date("2099-01-01T00:00:00Z") },
-  };
-  return { tenant, job, quote, context, command };
+  return { tenant, job, context: f.context, command: f.command, review: f.review };
 }
 
 async function auditChain(tenant: string): Promise<AuditEvent[]> {
@@ -59,20 +46,21 @@ async function observeBlocking(pool: Pool, waiter: () => number | undefined, blo
 }
 
 it("[L022] business-row contention is observed before command completion", async () => {
-  const f = await acceptedJob(), before = await auditChain(f.tenant);
+  const f = await draftJob(), before = await auditChain(f.tenant);
   expect(before).toHaveLength(1);
   // Runtime cannot lock app.job directly; only the competing test fixture uses admin.
   const blocker = await c.admin.connect();
   let pending: ReturnType<UserCommandDispatcher["dispatch"]> | undefined;
   let settled = false, waiterPid: number | undefined, mutations = 0;
   const transition: CommandMutation<{ jobId: string; revision: number; status: string }> = {
-    async mutate(db) {
+    async mutate(db, command) {
       mutations++;
       const backend = (await db.$client.query("SELECT pg_backend_pid() pid, current_user AS role")).rows[0]!;
       waiterPid = backend.pid;
       expect(backend.role).toBe("ent4b_login");
-      const row = (await db.$client.query(`SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)`, [f.tenant, f.job, f.quote])).rows[0]!;
-      return { jobId: f.job, revision: row.revision, status: row.status };
+      // Exercise the supported runtime transition while preserving the real business-row wait.
+      const row = await new ConfirmProposalReview(f.review).mutate(db, command);
+      return { jobId: f.job, revision: row.jobRevision, status: row.status };
     },
   };
   try {
@@ -88,15 +76,15 @@ it("[L022] business-row contention is observed before command completion", async
       await observeBlocking(c.admin, () => waiterPid, blockerPid);
       expect(waiterPid).not.toBe(blockerPid);
       expect(settled).toBe(false);
-      expect((await c.admin.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ status: "accepted", revision: 1 }]);
+      expect((await c.admin.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ status: "draft", revision: 0 }]);
       expect(await auditChain(f.tenant)).toEqual(before);
     } finally {
       await blocker.query("ROLLBACK");
     }
-    await expect(pending).resolves.toEqual({ jobId: f.job, status: "live", revision: 2 });
-    await expect(new UserCommandDispatcher(c.runtime).dispatch(f.context, f.command, transition)).resolves.toEqual({ jobId: f.job, status: "live", revision: 2 });
+    await expect(pending).resolves.toEqual({ jobId: f.job, status: "quoting", revision: 1 });
+    await expect(new UserCommandDispatcher(c.runtime).dispatch(f.context, f.command, transition)).resolves.toEqual({ jobId: f.job, status: "quoting", revision: 1 });
     expect(mutations).toBe(1);
-    expect((await c.admin.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ status: "live", revision: 2 }]);
+    expect((await c.admin.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ status: "quoting", revision: 1 }]);
     const receipts = await c.admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.tenant, f.command.commandId]);
     expect(receipts.rows).toEqual([{ status: "succeeded" }]);
     const after = await auditChain(f.tenant);
@@ -115,7 +103,7 @@ it("[L022] business-row contention is observed before command completion", async
 }, 30_000);
 
 it("[L022] blocking observer refuses a SELECT-only substitute while the same business row is locked", async () => {
-  const f = await acceptedJob(), blocker = await c.admin.connect(), reader = await c.runtime.connect();
+  const f = await draftJob(), blocker = await c.admin.connect(), reader = await c.runtime.connect();
   try {
     await blocker.query("BEGIN");
     await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
