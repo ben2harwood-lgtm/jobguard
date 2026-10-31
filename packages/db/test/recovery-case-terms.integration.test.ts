@@ -165,7 +165,7 @@ it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's sa
  expect(await repo.read(ctx,job,id)).toBeNull();expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT * FROM app.recovery_case_terms_approval"))).rows).toEqual([]);
  expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[b,bj,id]))).rows[0].ok).toBe(false);
  await expect(repo.approve(ctx,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});
- await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});
+ await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
  await expect(repo.approve(context,job,command(fresh),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
  await expect(repo.approve(context,bj,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  expect((await runtime.query("SELECT * FROM app.recovery_case_terms_approval")).rows).toEqual([]);

@@ -125,7 +125,7 @@ const cases: Case[] = [
     prepare: async job => { await pre.requirement(job); },
     run: async (job, id, variant) => po.revise(ctx, job, orderInput(st(job).requirement, 0, id, variant === "changed" ? "11" : "10")),
     later: async job => { await po.revise(ctx, job, orderInput(st(job).requirement, 1, randomUUID(), "12")); } },
-  { key: "purchase-order-repository.ts#place", registry: ["/api/jobs/[id]/purchase-orders/placement", "nest:/jobs/:id/purchase-orders/placement", "command:purchase_order.simulate"],
+  { key: "purchase-order-repository.ts#place", registry: ["/api/jobs/[id]/purchase-orders/placement", "nest:/jobs/:id/purchase-orders/placement", "command:purchase_order.simulate", "command:purchase_order.place"],
     prepare: async job => { await pre.order(job); },
     run: async (job, id, variant) => po.place(ctx, job, placeCommand(job, id, variant) as any),
     later: async job => { await po.revise(ctx, job, orderInput(st(job).requirement, 1, randomUUID(), "12")); },

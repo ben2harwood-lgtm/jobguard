@@ -1,3 +1,4 @@
+import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
@@ -8,7 +9,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { adoptionFixture, reviewFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
-beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
+beforeAll(async () => { db = await jobDoorsDatabase(true); await installLegacySyntheticPartyFixtures(db.owner); }, 300_000);
 afterAll(async () => { await db?.close(); });
 async function fixture() {
   const actor = await jobDoorsActor(db.owner), context = testTenantContext(actor.tenant);
@@ -142,7 +143,7 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     const f = await adoptionFixture(db), context = testTenantContext(f.actor.tenant), dispatcher = new UserCommandDispatcher(db.runtime);
     const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
     let calls = 0, expected: Record<string, unknown> | undefined;
-    const handler = { mutate: async (tx: Parameters<typeof mutation.mutate>[0], command: Parameters<typeof mutation.mutate>[1]) => {
+    const handler = { auditEvents: mutation.auditEvents.bind(mutation), mutate: async (tx: Parameters<typeof mutation.mutate>[0], command: Parameters<typeof mutation.mutate>[1]) => {
       calls++; expected = await mutation.mutate(tx, command); return expected;
     } };
     const first = await dispatcher.dispatch(context, f.command, handler);

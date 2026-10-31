@@ -1,3 +1,4 @@
+import { lp5Policies } from "./lp5-catalog-fixture.js";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -56,7 +57,7 @@ describe("CH-4 own-migration upgrade",()=>{
   expect((await policies(f.admin)).filter(r=>policyNames.has(r.name))).toEqual(originalPolicies);
   const oldPolicyTables=new Set(originalPolicies.map(r=>r.name.split('.').slice(0,2).join('.')));
   const compareOldPolicies=async(db:Pick<PoolClient,"query">,additions:typeof originalPolicies=[])=>{
-   const byName=(a:typeof originalPolicies[number],b:typeof originalPolicies[number])=>a.name.localeCompare(b.name);
+   const byName=(a:typeof originalPolicies[number],b:typeof originalPolicies[number])=>a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
    expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.'))).sort(byName)).toEqual([...originalPolicies,...additions].sort(byName));
   };
   await compareOldPolicies(f.admin);
@@ -79,7 +80,7 @@ describe("CH-4 own-migration upgrade",()=>{
    name:`app.${table}.meter_lifecycle_source_read`,permissive:"PERMISSIVE",roles:["jobguard_meter_owner"],cmd:"SELECT",
    qual:"(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",with_check:null,
   }));
-  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,[...meterSourcePolicies,{
+  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,[...meterSourcePolicies,...lp5Policies().filter(policy=>oldPolicyTables.has(policy.name.split(".").slice(0,2).join("."))),{
    ...originalPolicies.find(policy=>policy.name==="app.audit_event.tenant_isolation")!,
    name:"app.audit_event.lp4_audit_writer",roles:["jobguard_audit_writer"],
   }]);

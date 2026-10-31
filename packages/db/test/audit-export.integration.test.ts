@@ -1,3 +1,4 @@
+import { lp5ReadTables } from "./lp5-command-catalog.js";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -252,7 +253,21 @@ describe("ENT-10b PostgreSQL audit exports", () => {
       `table ${table}: + grant jobguard_meter_owner SELECT`,
       `policy ${table}.meter_lifecycle_source_read: permissive policy added`,
     ]).sort();
-    expect(upgrade.afterAllDifferences, "[MO5-e] only reviewed meter source additions to older permission facts").toEqual(reviewedMeterSources);
+    const oldTables = new Set(upgrade.before.filter(subject => subject.kind === 'table').map(subject => subject.name));
+    const writerFacts = lp5ReadTables.filter(table => oldTables.has(`app.${table}`)).flatMap(table => [
+      `table app.${table}: + grant jobguard_command_writer SELECT`,
+      `policy app.${table}.lp5_command_read: permissive policy added`,
+    ]);
+    for (const table of ['decision','decision_resolution','action_authorization','command_receipt']) if (oldTables.has(`app.${table}`)) writerFacts.push(
+      `table app.${table}: + grant jobguard_command_writer INSERT`, `policy app.${table}.lp5_command_insert: permissive policy added`);
+    if (oldTables.has('app.command_receipt')) writerFacts.push(
+      ...['status','result','completed_at'].map(column => `table app.command_receipt: + column ${column} grant jobguard_command_writer UPDATE`),
+      'policy app.command_receipt.lp5_command_complete: permissive policy added');
+    if (oldTables.has('app.audit_event')) writerFacts.push('table app.audit_event: + grant jobguard_audit_writer SELECT',
+      'table app.audit_event: + grant jobguard_audit_writer INSERT', 'policy app.audit_event.lp4_audit_writer: permissive policy added');
+    if (oldTables.has('audit_control.audit_head')) for (const privilege of ['SELECT','INSERT','UPDATE']) writerFacts.push(`table audit_control.audit_head: + grant jobguard_audit_writer ${privilege}`);
+    expect(upgrade.afterAllDifferences, "[MO5-e] exact reviewed meter, LP-4 and LP-5a additions on predecessor objects")
+      .toEqual([...reviewedMeterSources, ...writerFacts].sort());
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();

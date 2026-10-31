@@ -127,7 +127,7 @@ describe("r10 scripted source projections",()=>{
   const client={release(){},async query(sql:string,values:unknown[]=[]){
    calls.push(sql);valuesSeen.push(values);
    const rows=(items:unknown[]=[])=>({rows:items,rowCount:items.length});
-   if(sql.startsWith("SELECT role FROM app.membership"))return rows([{role:"owner"}]);
+   if((sql.startsWith("SELECT role FROM app.membership") || sql.startsWith("SELECT 1 FROM app.membership")))return rows([{role:"owner"}]);
    if(sql.includes("require_watchdog_live")&&notLive)throw new Error("JOB_NOT_LIVE");
    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return rows([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||

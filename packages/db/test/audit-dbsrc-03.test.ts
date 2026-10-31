@@ -57,6 +57,24 @@ class BillingSql {
           const previous = this.lockTail, gate = deferred(); this.lockTail = gate.promise;
           await previous; unlock = gate.resolve; return rows([]);
         }
+        if (sql.startsWith("SELECT app.begin_command(")) {
+          const input = JSON.parse(values[6]), requestHash = JSON.stringify(input);
+          const prior = this.receipts.get(values[1]);
+          if (prior) {
+            if (prior.request_hash !== requestHash || prior.status !== "succeeded") throw new Error("COMMAND_CONFLICT");
+            return rows([{ result: { kind: "replay", result: prior.result } }]);
+          }
+          const authorizationId = randomUUID();
+          this.receipts.set(values[1], { command_id: values[1], command_type: values[2], semantic_key: values[3], request_hash: requestHash, status: "processing", authorizationId });
+          claimed.push(values[1]);
+          return rows([{ result: { kind: "claim", decisionId: randomUUID(), resolutionId: randomUUID(), authorizationId } }]);
+        }
+        if (sql.startsWith("SELECT app.complete_command(")) {
+          const receipt = this.receipts.get(values[0])!, credit = pendingCredits.find(c => c.authorization_id === receipt.authorizationId);
+          if (!credit) throw new Error("AUTHORIZATION_INVALID");
+          const result = { creditNoteId: credit.id, creditNumber: credit.credit_number, originalInvoiceUnchanged: true };
+          Object.assign(receipt, { status: "succeeded", result }); return rows([{ result }]);
+        }
         if (sql.includes("INSERT INTO app.command_receipt")) {
           const prior = [...this.receipts.values()].find(r => r.command_id === values[0] || (r.command_type === values[2] && r.semantic_key === values[3]));
           if (prior) return rows([]);
