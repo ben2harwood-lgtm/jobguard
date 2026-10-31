@@ -195,3 +195,44 @@ new deliverables, with no tracked-file modifications. Disk remains 98 GiB free.
 No background check remains, no Git metadata writes performed. Outcome:
 **DEPENDENCY-BOUND / incomplete**, ready as a dispatcher dependency handoff,
 not ready for technical acceptance.
+
+## 31 October 2026 — NOPR main catch-up
+
+This entry records the merge catch-up only; the 25 October implementation and
+acceptance statements above are historical, not current dependency findings.
+At entry, HEAD `51fa03fd01d66a08d321f931ecdc48d7f4e99aec` already contained the
+completed merge of fetched main `87b5dd4e5a7180c380ed5bf4571875d3e1461b02`.
+Read-only Git checks confirmed main is an ancestor, a clean working tree and
+no unmerged paths. No conflict resolution or source edit was needed. All apps
+and packages match fetched main; no migration was changed or renumbered, and
+`docs/contracts/lp-downstream-effects-v1.md` remains identical to main.
+
+Read the current SIMPLE_LOOP, simplicity rule, repository AGENTS and SV-7 plan
+section. This is a RED source-intake/tenant/non-disclosure piece; this catch-up
+does not supply its independent review or implementation acceptance. No new
+behaviour, UI, provider, data or release action was added. No PR opened.
+
+Verification used installed Node v24.17.0, cached pinned pnpm 10.28.1 at
+`/private/tmp/jg-r1-pnpm-bin/pnpm`, and Vitest 4.1.12 with explicit maxWorkers=2:
+
+- Core: `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2
+  src/job-source-intake.test.ts src/job-sources.test.ts src/watchdog.test.ts`:
+  PASS, 23 tests across 3 files.
+- Web: `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2
+  'app/api/jobs/[id]/diary/route.test.ts'
+  'app/api/jobs/[id]/customer-messages/route.test.ts'`: PASS, 12 tests across
+  2 files after refreshing stale generated core output.
+- `PATH=/private/tmp/jg-r1-pnpm-bin:$PATH pnpm typecheck --concurrency=1`:
+  PASS, all 7 package tasks, exit 0 (2m52s).
+- Read-only `git diff --check`: PASS before this receipt update; repeated at
+  handoff. No Git metadata writes, fetch, database or browser execution.
+
+The global pnpm launcher stalled and was interrupted before Vitest started.
+The first web attempt failed at import because old ignored core dist output
+still called `unwrap()` twice; current source calls it once. An installed-only
+dependency build completed storage/config/core/AI before being interrupted as
+the database build began. The rerun above passed without source changes. The
+first typecheck attempt was interrupted to put pinned pnpm on child PATH; the
+final complete run passed. Turbo reported sandbox cache IO warnings. No checks
+remain running. Database/browser proof and independent RED review remain with
+GitHub CI/router. READY for the requested NOPR catch-up commit only.
