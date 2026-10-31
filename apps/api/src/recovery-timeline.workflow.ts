@@ -1,3 +1,4 @@
+import type { Pool } from "pg";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -33,8 +34,9 @@ export type RecoveryTimelineSignal = z.infer<typeof signalSchema>;
 export type TimelineState = "waiting" | "review" | "stopped";
 export type TimelineActivity = Readonly<{ ref: RecoveryTimelineRef; kind: RecoveryTimelineSignal["kind"]; commandId: string }>;
 export interface RecoveryTimelineActivities {
-  /** Recheck current session, membership, scope and consent, including on a replay after a crash. */
-  execute(activity: TimelineActivity): Promise<TimelineState>;
+  /** Recheck current session, membership, scope and consent, including on replay.
+   * When supplied, use transactionPool for all database work, sequentially; the store owns its commit. */
+  execute(activity: TimelineActivity, transactionPool?: Pool): Promise<TimelineState>;
 }
 export interface RecoveryWorkflowRuntime {
   signal(raw: unknown): Promise<TimelineState>;
@@ -58,42 +60,50 @@ export function recoveryTimelineTransition(previous: TimelineState, kind: Recove
   return observed;
 }
 type Run = { state: TimelineState };
+export interface RecoveryWorkflowStore {
+  apply(signal: RecoveryTimelineSignal, update: (state: TimelineState, transactionPool?: Pool) => Promise<TimelineState>): Promise<TimelineState>;
+}
 /** Test history only. Retain this store across fake-worker restarts; it is NOT a durable production host. */
-export class InMemoryRecoveryWorkflowStore {
+export class InMemoryRecoveryWorkflowStore implements RecoveryWorkflowStore {
   readonly runs = new Map<string, Run>();
   readonly signals = new Map<string, string>();
   tail: Promise<unknown> = Promise.resolve();
+  apply(signal: RecoveryTimelineSignal, update: (state: TimelineState, transactionPool?: Pool) => Promise<TimelineState>): Promise<TimelineState> {
+    const pending = this.tail.then(async () => {
+      const fingerprint = JSON.stringify(signal), previous = this.signals.get(signal.signalId);
+      if (previous && previous !== fingerprint) throw new RecoveryTimelineError("CONFLICT");
+      const runKey = key(signal.ref);
+      const state = await update(this.runs.get(runKey)?.state ?? "waiting");
+      this.signals.set(signal.signalId, fingerprint);
+      this.runs.set(runKey, { state });
+      return state;
+    });
+    this.tail = pending.catch(() => undefined);
+    return pending;
+  }
 }
 
 /** DARK: no startup registration, endpoints, wall clock, provider calls or production runtime. */
-export class InMemoryRecoveryWorkflowRuntime implements RecoveryWorkflowRuntime {
+export class StoredRecoveryWorkflowRuntime implements RecoveryWorkflowRuntime {
   constructor(private readonly activities: RecoveryTimelineActivities,
-    private readonly store = new InMemoryRecoveryWorkflowStore(), private readonly environment = "disabled") {}
+    private readonly store: RecoveryWorkflowStore = new InMemoryRecoveryWorkflowStore(), private readonly environment = "disabled") {}
 
   signal(raw: unknown): Promise<TimelineState> {
     requireSyntheticTimeline(this.environment);
     const signal = parseSignal(raw);
-    const pending = this.store.tail.then(() => this.apply(signal));
-    this.store.tail = pending.catch(() => undefined);
-    return pending;
+    return this.store.apply(signal, (state, transactionPool) => this.apply(signal, state, transactionPool));
   }
 
-  private async apply(signal: RecoveryTimelineSignal): Promise<TimelineState> {
+  private async apply(signal: RecoveryTimelineSignal, state: TimelineState, transactionPool?: Pool): Promise<TimelineState> {
     const action = { timer: "reminder_review", builder_response: "builder_response", evidence_complete: "evidence_completion", cancel: "recovery_closure", close: "recovery_closure" } as const;
     assertRecoverySchedulingOwner(action[signal.kind], "recovery_timeline");
-    const runKey = key(signal.ref), fingerprint = JSON.stringify(signal);
-    // Signal IDs cannot be reused for another tenant/job/intent or another payload.
-    const previous = this.store.signals.get(signal.signalId);
-    if (previous && previous !== fingerprint) throw new RecoveryTimelineError("CONFLICT");
-    const run = this.store.runs.get(runKey) ?? { state: "waiting" };
     const command = commandId(signal.ref, signal.kind, signal.eventId);
     // Even a duplicate rechecks access; an old signal can never return data after revocation.
     let observed: TimelineState;
-    try { observed = await this.activities.execute({ ref: signal.ref, kind: run.state === "stopped" ? "builder_response" : signal.kind, commandId: command }); }
+    try { observed = await this.activities.execute({ ref: signal.ref, kind: state === "stopped" ? "builder_response" : signal.kind, commandId: command }, transactionPool); }
     catch { throw new RecoveryTimelineError("ACTIVITY_FAILED"); }
-    run.state = recoveryTimelineTransition(run.state, signal.kind, observed);
-    this.store.signals.set(signal.signalId, fingerprint);
-    this.store.runs.set(runKey, run);
-    return run.state;
+    return recoveryTimelineTransition(state, signal.kind, observed);
   }
 }
+/** Compatibility name for existing fake-runtime callers. */
+export { StoredRecoveryWorkflowRuntime as InMemoryRecoveryWorkflowRuntime };
