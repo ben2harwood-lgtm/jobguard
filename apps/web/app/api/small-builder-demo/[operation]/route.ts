@@ -1,16 +1,16 @@
+import { identityStatus } from "@jobguard/api/identity";
+import { smallBuilderDemoHttpFailure } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { SmallBuilderDemoError } from "@jobguard/db";
-import { smallBuilderDemoHttpCommandV1, smallBuilderDemoReadRunV1, smallBuilderDemoReadReportV1 } from "@jobguard/core";
+import { trialDemoCommandV1, smallBuilderDemoHttpCommandV1, smallBuilderDemoReadRunV1, smallBuilderDemoReadReportV1 } from "@jobguard/core";
 import { identityApplication, identityCredentials } from "../../../lib/identity-server";
-import { smallBuilderDemoApplication } from "../../../lib/small-builder-demo-server";
+import { smallBuilderDemoApplication, smallBuilderTrialDemoApplication } from "../../../lib/small-builder-demo-server";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
 type Context = { params: Promise<{ operation: string }> };
-function failure(error: unknown) {
-  const code = error instanceof SmallBuilderDemoError ? error.code : "DEMO_UNAVAILABLE";
-  const status = code === "INVALID_DEMO_INPUT" ? 400 : code === "DEMO_FORBIDDEN" || code === "DEMO_SYNTHETIC_ONLY" ? 403
-    : code === "DEMO_NOT_FOUND" ? 404 : ["DEMO_STALE_REVISION", "DEMO_ARCHIVED", "DEMO_COMMAND_CONFLICT"].includes(code) ? 409 : 503;
-  return NextResponse.json({ version: "small-builder-demo-error.v1", code }, { status, headers });
+function failure(error:unknown) {
+  const result=smallBuilderDemoHttpFailure(error);
+  return NextResponse.json(result.body,{status:result.status,headers});
 }
 export async function GET(request: Request, context: Context) {
   try {
@@ -29,6 +29,16 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   try {
     const { operation } = await context.params;
+    if(operation === "trial") {
+      const credentials=await identityCredentials(request);
+      try {await identityApplication().context(credentials);} catch(error) {
+        const failure=identityStatus(error);
+        return NextResponse.json({code:failure.code},{status:failure.status,headers});
+      }
+      const input=trialDemoCommandV1.safeParse(await request.json().catch(()=>null));
+      if(!input.success || new URL(request.url).search)throw new SmallBuilderDemoError("INVALID_DEMO_INPUT");
+      return NextResponse.json(await smallBuilderTrialDemoApplication().execute(credentials,input.data),{headers});
+    }
     const parsed = smallBuilderDemoHttpCommandV1.safeParse(await request.json().catch(() => null));
     if (!parsed.success || parsed.data.operation !== operation || new URL(request.url).search) throw new SmallBuilderDemoError("INVALID_DEMO_INPUT");
     const command = parsed.data;

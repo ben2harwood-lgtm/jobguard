@@ -143,6 +143,7 @@ export function DemoChooser() {
         <button disabled={busy || !membership} type="submit">Resume</button></form>
       {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : "Not ready yet"}: {run.reason}</p>
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
+        {run.scenario === "trial" && <p><a href={`/demo-s/trial?${new URLSearchParams({tenantId,runId:run.runId})}`}>Open guided first-job trial</a></p>}
         <p>Saved revision {run.revision}. No product journey completion is recorded.</p>
         {run.successorId && <p><a href={demoLink(tenantId, run.successorId)}>Open replacement selection</a></p>}
         {run.predecessorId && <p><a href={demoLink(tenantId, run.predecessorId)}>Open archived selection</a></p>}

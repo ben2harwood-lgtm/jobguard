@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j5-trial": {
+      "branches": [
+        "codex/sandbox/demo-j5-trial"
+      ],
+      "note": "RED DEMO-S trial guide, immutable source bindings/reports, existing MON-3 commands and controlled deadline projection. Real capacity/Final Check/billing producers stay visibly incomplete. PostgreSQL/browser suites and independent Claude review required in CI.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/small-builder-demo.application.test.ts",
+        "apps/api/src/small-builder-demo.application.ts",
+        "apps/api/src/small-builder-trial-demo.controller.ts",
+        "apps/api/src/subscription.access.test.ts",
+        "apps/web/app/api/small-builder-demo/[operation]/route.test.ts",
+        "apps/web/app/api/small-builder-demo/[operation]/route.ts",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/trial/journey-model.ts",
+        "apps/web/app/demo-s/trial/journey.test.tsx",
+        "apps/web/app/demo-s/trial/journey.tsx",
+        "apps/web/app/demo-s/trial/page.tsx",
+        "apps/web/app/lib/small-builder-demo-server.ts",
+        "apps/web/e2e/DEMO-J5-trial.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/small-builder-trial-demo.ts",
+        "packages/db/migrations/0394_small_builder_trial_demo.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/small-builder-trial-demo-repository.test.ts",
+        "packages/db/src/small-builder-trial-demo-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/lp-0-catalog.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-trial-demo-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-trial-demo.integration.test.ts"
+      ]
+    }
+  }
+}

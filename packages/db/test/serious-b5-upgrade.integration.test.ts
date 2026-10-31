@@ -1126,6 +1126,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await demoTrialAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
@@ -1155,6 +1156,22 @@ async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
+
+// DEMO-J5 exact additive union. Existing rows, grants, policies and routines stay compared.
+async function demoTrialAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="demo_trial"&&r.args==="t uuid, digest text, v jsonb");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog"],proacl:"{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}"});
+ const names=["demo_trial_binding","demo_trial_binding_pkey"];
+ const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual(names);
+ const policies=after.policies.filter(r=>r.schemaname==="app"&&r.tablename==="demo_trial_binding");
+ expect(policies.map(r=>r.policyname)).toEqual(["tenant_scope"]);
+ expect(before.rows["app.demo_trial_binding"]).toBeUndefined();
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,"app.demo_trial_binding":[]},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 
 // MON-5 foundation: union only 0387's exact new private relations and identity routines.

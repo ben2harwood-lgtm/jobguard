@@ -71,3 +71,52 @@ and £33,600 lock in both browser projects; execution is deferred to CI in the
 restricted builder environment. Existing SV-6 integration tests remain the
 real-PostgreSQL allocation/amount/reversal/locked-bill gate. Independent RED
 review and two builder observations are still missing.
+
+### DEMO-J5 first-job trial guide
+
+The trial selection links `/demo-s/trial?tenantId=…&runId=…`. Bind two existing
+fictional company jobs; the signed-in owning company and approved reference
+identity fixture are required. This does not create accepted quotes or pretend
+that practice-cookie jobs belong to a company session. The guide calls the
+existing MON-3 card request, fictional completion and exact switch-live commands.
+It offers first-only Skip, and permits the second-job attempt only after the
+first job has a stored trial start. A refused capacity producer is visibly
+incomplete; no bypass or successful activation seed is installed.
+
+Migration 0394 adds only `app.demo_trial_binding`, with tenant-qualified run/job
+foreign keys, FORCE RLS, no runtime table grants and immutable rows. Its single
+runtime entry point `app.demo_trial(uuid,text,jsonb)` checks current owner/session
+before lookup and replay, and checks again after acquiring the company lock.
+The existing immutable receipt table stores binding receipts and source-report
+snapshots. The versioned `trial-demo-command.v1` accepts bind/read/snapshot/report
+only; callers cannot supply source facts, clock values, terms or balances. The
+Next POST `/api/small-builder-demo/trial` and Nest POST
+`/small-builder-demo/trial` require company authentication and use the same strict
+command schema and failure mapping. Practice cookies alone confer no access.
+
+Reports bind run and both job identities to the public MON-3 lifecycle and
+eligibility readers and MON-2 subscription records, preserving trial IDs,
+activation IDs, source-event IDs, accepted agreement revisions and actual period,
+statement and simulated-result records. Snapshot links retain their original
+sources. Lock/close/second-activation outcomes come from stored events. The day-90
+clock is a pure projection at the deadline derived from the immutable start and
+approved London convention; it cannot drive commands, accept retrospective terms
+or issue a subscription period. Missing starts and downstream producers remain
+incomplete. Prices and customer-facing legal wording remain **[BEN TO SUPPLY]**.
+
+Resume reads current sources. Browser request intents are scoped to company,
+membership and run, validated against closed same-origin paths, and retain exact
+command IDs for retries. A pending card request also survives tab reload.
+Archive-and-reset uses the existing chooser; replacement runs must bind the same
+jobs, and cannot restore eligibility, erase identity claims or reset subscription
+records. A historical report cannot enable mutations on an archived run.
+
+0394 changes no predecessor routine or row and needs no backfill. Forward-fix any
+schema issue in a new migration; retain bindings and receipts. CI must run
+`small-builder-trial-demo.integration.test.ts` (binding, cross-company/stale
+session/refusal/replay/reset/identity/terms/privileges),
+`small-builder-trial-demo-upgrade.integration.test.ts` (populated predecessors and
+repeat migration), existing MON-3 lifecycle/keys and MON-2 first-period suites,
+LP-0, SERIOUS-B5, entitlement, and `DEMO-J5-trial.spec.ts` in both browser projects.
+The browser fixture suite is intercepted UI-contract evidence, not database or
+successful capacity/admission proof. Full DEMO-S acceptance remains outstanding.
