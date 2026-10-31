@@ -17,7 +17,11 @@ statement identity/hash are included in the document's SHA-256.
 
 Sources come from approved M4-9-S derivations and the existing SV-6 current-source
 validator. The statement does not allocate receipts or qualify new positive
-principal. It cannot expand the latest posted entitlement. The snapshot also binds immutable payment-reversal, customer-adjustment and
+principal. It cannot expand the latest posted entitlement. Each live source is also
+bounded by its own immutable reviewed remaining principal: exact cross-multiplication
+compares the fractions before any fee rounding. Growth returns
+`SUCCESS_FEE_SOURCE_CHANGED`, requiring a new source review/posting rather than
+allowing another source's reversal to offset unreviewed principal. The snapshot also binds immutable payment-reversal, customer-adjustment and
 evidence-invalidation IDs, and the latest stored assessment identity. Lost eligibility is
 recorded as zero qualifying principal. A reversal can reduce the documentary
 balance before M4-9-S's negative journal execution is available; it does not

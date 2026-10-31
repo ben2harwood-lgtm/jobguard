@@ -8,6 +8,7 @@ import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
 import { createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture } from "./final-check-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { rolledBack } from "./upgrade-proof-utils.js";
 let f:FinalCheckFixture,repo:SimulationFeeStatementRepository;
 beforeAll(async()=>{f=await createFinalCheckFixture();repo=new SimulationFeeStatementRepository(f.runtime);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
@@ -151,4 +152,42 @@ it("renewal rechecks changed sources before creating any new Decision or authori
  const before=await counts();
  await expect(repo.command(x.context,x.jobId,x.auth.digest,{...command,commandId:randomUUID()})).rejects.toThrow("SUCCESS_FEE_STALE");
  expect(await counts()).toEqual(before);
+});
+
+
+// PostgreSQL projection-seam attack: start with genuine posted authority, then use
+// rollback-only owner fixtures for two reviewed principals and a controlled live
+// source adapter. This proves the statement routine's own per-source guard;
+// the real-writer reversal test above separately proves the complete source path.
+it.each([10000,30000])("A £500 reversal with live B=%ip cannot offset B's reviewed £100 limit",async liveB=>{
+ const x=await posted();
+ const run=()=>rolledBack(f.admin,async db=>{
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  const bId=randomUUID(),bWork=randomUUID();
+  await db.query("ALTER TABLE app.recovery_attribution_revision DISABLE TRIGGER USER");
+  await db.query(`UPDATE app.recovery_attribution_revision SET document=jsonb_set(document,'{remainingPrincipal}','{"numerator":"50000","denominator":"1"}') WHERE tenant_id=$1 AND id=$2`,[x.context.tenantId,x.assessment.assessmentId]);
+  await db.query(`INSERT INTO app.recovery_attribution_revision(tenant_id,job_id,id,case_id,work_id,line_id,lock_id,revision,previous_id,case_revision,source_hash,document)
+   SELECT tenant_id,job_id,$3,case_id,$4,line_id,lock_id,1,NULL,case_revision,source_hash,jsonb_set(document,'{remainingPrincipal}','{"numerator":"10000","denominator":"1"}')
+   FROM app.recovery_attribution_revision WHERE tenant_id=$1 AND id=$2`,[x.context.tenantId,x.assessment.assessmentId,bId,bWork]);
+  await db.query("ALTER TABLE app.recovery_attribution_revision ENABLE TRIGGER USER");
+  await db.query("ALTER TABLE app.success_fee_review DISABLE TRIGGER USER");
+  await db.query(`UPDATE app.success_fee_review SET statement=jsonb_set(statement,'{sources}',jsonb_build_array(statement->'sources'->0,jsonb_set(statement->'sources'->0,'{assessmentId}',to_jsonb($3::text)))) WHERE tenant_id=$1 AND job_id=$2`,[x.context.tenantId,x.jobId,bId]);
+  await db.query("ALTER TABLE app.success_fee_review ENABLE TRIGGER USER");
+  await db.query("ALTER TABLE app.success_fee_derivation DISABLE TRIGGER USER");
+  await db.query("UPDATE app.success_fee_derivation SET fee_pence=6000,delta_pence=6000 WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);
+  await db.query("ALTER TABLE app.success_fee_derivation ENABLE TRIGGER USER");
+  await db.query("CREATE TEMP TABLE fs_live_source(work_id uuid PRIMARY KEY,document jsonb) ON COMMIT DROP");
+  for(const [workId,principal] of [[x.workId,0],[bWork,liveB]] as const){
+   await db.query("INSERT INTO fs_live_source VALUES($1,$2::jsonb)",[workId,JSON.stringify({remainingPrincipal:{numerator:String(principal),denominator:"1"},reasonCodes:[],sourceHash:"a".repeat(64),previousAssessmentId:x.assessment.assessmentId})]);
+  }
+  const definition=(await db.query("SELECT pg_get_functiondef('app.recovery_attribution_sources(uuid,uuid,jsonb,uuid)'::regprocedure) definition")).rows[0].definition as string;
+  await db.query(definition.replace(/\$function\$[\s\S]*\$function\$/u,()=>`$function$ DECLARE result jsonb; BEGIN SELECT document INTO STRICT result FROM pg_temp.fs_live_source WHERE work_id=(p->>'workId')::uuid; RETURN result; END $function$`));
+  return (await db.query("SELECT app.platform_fee_statement_sources($1,$2,$3) snapshot",[x.context.tenantId,x.jobId,x.actor.membershipId])).rows[0].snapshot;
+ });
+ if(liveB===30000)await expect(run()).rejects.toMatchObject({code:"40001",message:"SUCCESS_FEE_SOURCE_CHANGED"});
+ else {
+  const snapshot=await run();
+  expect(snapshot).toMatchObject({feePence:1000,qualifyingPrincipal:{numerator:"10000",denominator:"1"}});
+  expect(snapshot.feePence-6000).toBe(-5000); // £50 correction; reviewed B retains exactly £10.
+ }
 });
