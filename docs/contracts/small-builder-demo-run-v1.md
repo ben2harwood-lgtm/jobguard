@@ -71,3 +71,33 @@ and £33,600 lock in both browser projects; execution is deferred to CI in the
 restricted builder environment. Existing SV-6 integration tests remain the
 real-PostgreSQL allocation/amount/reversal/locked-bill gate. Independent RED
 review and two builder observations are still missing.
+
+### DEMO-J3 part 2: executable source recipe (dark)
+
+`DEMO-J3-shadow.spec.ts` now drives the source-to-reveal slice in mobile-360 and
+desktop. All job, variation, proof, supplier and diary originals are created
+through the existing product routes. The new `j3-drainage-photo` is a generated
+PNG with an exact fictional caption (£500 proposed work); the exact fictional
+loft-hatch diary supplies £300. The existing £320 material invoice is examined
+as a zero-result source: a supplier bill alone does not assert extra work.
+The photo caption decoder is shared by the source recipe and Final Check.
+Unknown photo hashes and arbitrary diary text remain unsupported.
+
+The executable pre-lock worker leg is `e2e/helpers/shadow-source-recipe.ts`.
+It invokes the real ordinary-runtime source reader, pure detector and restricted
+shadow sink, twice to exercise replay. It checks the two held rows through the
+shadow login; no end-state row is inserted. This is an explicit worker invocation
+by the test driver, not a claim that saving a source schedules pre-lock detection
+in the UI. Holding/replaying those rows leaves the public report unchanged.
+The post-lock leg requests the existing scheduled practice worker, waits for its
+published completion and confirms/prices the two genuine revealed drafts.
+The £33,600 account and its lock remain unchanged. The £3,600 captures remain
+fee-free. No migration is needed; reserved 0451 is unused. No dependency added.
+
+MON-5 is still **not ready yet**. The recipe does not attest to customer approval
+of the catches, issue an invoice, create payment/allocation facts or produce a
+positive SV-6 assessment. Exactly £800 of priced catches is prepared for that
+producer chain; Q £800 / fee £80 / kept £720 remain targets, as do the invoice,
+verified settlement, CH-8 pack and CH-9 value completion. Existing SV-6 tests
+exercise its separate genuine settled-source chain; they are not evidence of
+settlement for this J3 run. No live provider, personal data or release is enabled.
