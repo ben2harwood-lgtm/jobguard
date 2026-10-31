@@ -29,7 +29,7 @@ describe("local family and architecture checks",()=>{
  });
  it("read/review source contains no business DML and SQL helpers contain no financial writes",async()=>{
   for(const name of ["commercial-integrity-v3-repository.ts","commercial-integrity-v3-sources.ts"]){const text=await readFile(new URL(`../src/${name}`,import.meta.url),"utf8");expect(text).not.toMatch(/\b(?:INSERT INTO|UPDATE app\.|DELETE FROM)\b/iu);}
-  const sql=await readFile(new URL("../migrations/0503_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0506_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
   const writes=[...sql.matchAll(/\bINSERT INTO\s+([a-z_.]+)/giu)].map(m=>m[1]);expect(writes.sort()).toEqual(["app.audit_event","app.command_receipt"]);
   expect(sql).not.toMatch(/\b(?:UPDATE|DELETE FROM)\s+app\./iu);
  });

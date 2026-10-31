@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0503_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0506_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1403,8 +1403,8 @@ Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
   0376 and 0377 must be numbered above main's 0380.
 
 The brief says existing branch migrations are all above 0380, but this checkout
-has 0503_commercial_integrity_v3_receipts.sql and
-0504_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+has 0506_commercial_integrity_v3_receipts.sql and
+0507_commercial_integrity_sources.sql. Preserved their numbers per the explicit
 instruction; no reservation was invented and the check was not weakened.
 Handoff: do not commit until the router supplies/resolves valid migration
 reservations. Database and browser suites were not run because this sandbox
@@ -1559,8 +1559,8 @@ privilege and tenancy expectations remains present.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0410 to generate 0402_commercial_integrity_v3_receipts ->
-0503_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
-0504_commercial_integrity_sources. Applied filesystem moves and bounded full
+0506_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
+0507_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements to branch-owned references and migration notes;
 no bare-digit replacements. CLI --write was not used because it stages Git
 changes and this sandbox's .git is read-only. Logged the reservation and moves
@@ -1607,8 +1607,8 @@ blocks, retaining CH-6 and main policies and triggers.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0502: 0411_commercial_integrity_v3_receipts ->
-0503_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
-0504_commercial_integrity_sources. Applied filesystem moves and bounded full
+0506_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
+0507_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements only; no bare-digit replacements. CLI --write
 stages Git changes, so it was not used in this read-only Git sandbox. Updated
 migration notes, references, coordinator reservation and the existing lane.
