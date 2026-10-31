@@ -35,6 +35,17 @@ END $$;
 -- start even when delivery is later cancelled, fails or has an unknown outcome.
 CREATE FUNCTION app.mon9_pursuit_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ -- Track only cases eligible for MON-9. Legacy recovery and owner fixture
+ -- writes without a tenant command context must keep their existing behavior.
+ IF current_database()<>'jobguard_synthetic_demo' OR
+  NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RETURN NEW; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.recovery_case r
+  JOIN app.job j ON(j.tenant_id,j.id)=(r.tenant_id,r.job_id)
+  JOIN app.job_commercial_track track ON(track.tenant_id,track.job_id)=(r.tenant_id,r.job_id)
+  WHERE (r.tenant_id,r.job_id,r.id)=(NEW.tenant_id,NEW.job_id,NEW.case_id)
+   AND r.synthetic AND r.environment='synthetic_demo' AND r.case_type='withheld_customer_payment'
+   AND j.fee_policy_version='reference_fee_policy_v3'
+   AND track.job_track='small_builder' AND track.environment='synthetic_demo') THEN RETURN NEW; END IF;
  PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.case_id::text));
  INSERT INTO app.managed_recovery_pursuit(tenant_id,job_id,case_id)
  VALUES(NEW.tenant_id,NEW.job_id,NEW.case_id) ON CONFLICT DO NOTHING;
@@ -59,7 +70,13 @@ DO $$ DECLARE t uuid; BEGIN
     UNION ALL SELECT job_id,case_id,created_at FROM app.recovery_message_approval WHERE tenant_id=t
     UNION ALL SELECT job_id,case_id,created_at FROM app.recovery_message_sink WHERE tenant_id=t
     UNION ALL SELECT job_id,id,created_at FROM app.recovery_case WHERE tenant_id=t AND state NOT IN('identified','evidence_assembled')
-   ) x GROUP BY x.job_id,x.case_id ON CONFLICT DO NOTHING;
+   ) x JOIN app.recovery_case r ON(r.tenant_id,r.job_id,r.id)=(t,x.job_id,x.case_id)
+    JOIN app.job j ON(j.tenant_id,j.id)=(r.tenant_id,r.job_id)
+    JOIN app.job_commercial_track track ON(track.tenant_id,track.job_id)=(r.tenant_id,r.job_id)
+   WHERE current_database()='jobguard_synthetic_demo' AND r.synthetic AND r.environment='synthetic_demo'
+    AND r.case_type='withheld_customer_payment' AND j.fee_policy_version='reference_fee_policy_v3'
+    AND track.job_track='small_builder' AND track.environment='synthetic_demo'
+   GROUP BY x.job_id,x.case_id ON CONFLICT DO NOTHING;
  END LOOP;
  PERFORM set_config('app.tenant_id','',true);
 END $$;
@@ -95,6 +112,12 @@ BEGIN
  SELECT * INTO prior FROM app.managed_recovery_election e WHERE e.tenant_id=t AND e.case_id=c;
  IF prior.case_id IS NOT NULL THEN RAISE EXCEPTION 'MANAGED_RECOVERY_CONFLICT' USING ERRCODE='40001'; END IF;
  IF EXISTS(SELECT 1 FROM app.managed_recovery_pursuit p WHERE p.tenant_id=t AND p.case_id=c)
+  -- Owner/legacy writes outside a tenant command do not create a MON-9 marker.
+  -- Their immutable pursuit history must still prevent a later election.
+  OR EXISTS(SELECT 1 FROM app.recovery_case_event e WHERE e.tenant_id=t AND e.job_id=j AND e.case_id=c AND e.event_type NOT IN('opened','claim_amended','assemble_evidence'))
+  OR EXISTS(SELECT 1 FROM app.recovery_message m WHERE m.tenant_id=t AND m.job_id=j AND m.case_id=c)
+  OR EXISTS(SELECT 1 FROM app.recovery_message_approval a WHERE a.tenant_id=t AND a.job_id=j AND a.case_id=c)
+  OR EXISTS(SELECT 1 FROM app.recovery_message_sink s WHERE s.tenant_id=t AND s.job_id=j AND s.case_id=c)
   OR EXISTS(SELECT 1 FROM app.recovery_case r WHERE r.tenant_id=t AND r.job_id=j AND r.id=c AND r.state<>'identified')
   OR EXISTS(SELECT 1 FROM app.recovery_case_current r WHERE r.tenant_id=t AND r.job_id=j AND r.id=c AND r.state NOT IN('identified','evidence_assembled'))
  THEN RAISE EXCEPTION 'PURSUIT_ALREADY_STARTED' USING ERRCODE='23514'; END IF;

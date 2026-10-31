@@ -40,11 +40,31 @@ it("refuses changed terms, altered service replay and caller tenant/principal be
  await expect(repo().elect(f.context,f.job,{...input,selection:{service:'solicitor_letter',points:10}},f.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_CONFLICT'});
  expect(await counts(c)).toEqual(before);
 });
+it("preserves ordinary merchant pursuit inserts without creating a MON-9 marker", async () => {
+ const id=await newCase(c,f,'merchant_overcharge');
+ await start(c,f,id);
+ expect((await c.admin.query('SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:1}]);
+ expect((await c.admin.query('SELECT count(*)::int n FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:0}]);
+ await expect(repo().elect(f.context,f.job,command(id),f.actor)).rejects.toMatchObject({code:'MANAGED_RECOVERY_FORBIDDEN'});
+});
+it("preserves normal owner recovery inserts without a MON-9 tenant command context", async () => {
+ const id=await newCase(c,f),db=await c.admin.connect();
+ try {
+  await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id','',true)");
+  await start(c,f,id,db);
+  expect((await db.query('SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:1}]);
+  expect((await db.query('SELECT count(*)::int n FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:0}]);
+  await db.query('COMMIT');
+ } finally {await db.query('ROLLBACK');db.release();}
+ // The existing history still forbids a late managed election.
+ await expect(repo().elect(f.context,f.job,command(id),f.actor)).rejects.toMatchObject({code:'PURSUIT_ALREADY_STARTED'});
+});
 it("pursuit before opt-in is permanently refused, including races; a replay remains one effect", async () => {
  const id = await newCase(c,f), db = await c.runtime.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.tenant]);
   await start(c,f,id,db);
+  expect((await db.query('SELECT count(*)::int n FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:1}]);
   const pending = repo().elect(f.context,f.job,command(id),f.actor);
   // Attach rejection before releasing the lock, without a timer or sleep.
   const refused = expect(pending).rejects.toMatchObject({code:'PURSUIT_ALREADY_STARTED'});

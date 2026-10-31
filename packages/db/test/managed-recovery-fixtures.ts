@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { cluster, type Cluster } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { withTenant } from "../src/tenant-context.js";
+import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 export { cluster };
 export type { Cluster };
 export async function fixture(c: Cluster) {
@@ -16,6 +17,8 @@ export async function fixture(c: Cluster) {
  await withTenant(c.admin, context, async db => {
   await db.$client.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MON-9')", [tenant,account]);
   await db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant,membershipId,account,user]);
+  await permitImportedJob(db.$client, {tenantId:tenant,jobId:job,actorMembershipId:membershipId,title:'Fictional MON-9',
+   feePolicyVersion:'reference_fee_policy_v3',netPence:100000,capPence:1500});
   await db.$client.query("INSERT INTO app.job(tenant_id,id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional MON-9','imported',100000,'reference_fee_policy_v3',1500)", [tenant,job]);
   await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','adoption_import')", [tenant,job]);
  });
@@ -23,11 +26,12 @@ export async function fixture(c: Cluster) {
  return { tenant, job, context, sessionDigest, actor: { membershipId, identityUserId: user } };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
-export async function newCase(c: Cluster, f: Fixture) {
+export async function newCase(c: Cluster, f: Fixture, caseType: 'withheld_customer_payment' | 'merchant_overcharge' = 'withheld_customer_payment') {
  const id = randomUUID();
  await withTenant(c.admin, f.context, db => db.$client.query(`INSERT INTO app.recovery_case
   (tenant_id,id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs)
-  VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional customer','builder_customer','customer_invoice','[]')`, [f.tenant,id,f.job]));
+  VALUES($1,$2,$3,32000,'GBP','identified',0,true,$4,'Fictional customer',$5,$6,'[]')`,
+  [f.tenant,id,f.job,caseType,caseType==='merchant_overcharge'?'supplier_cost':'builder_customer',caseType==='merchant_overcharge'?'supplier_documents':'customer_invoice']));
  return id;
 }
 export const command = (caseId: string) => ({ version: "managed-recovery-election-command.v1", commandId: randomUUID(), caseId,
