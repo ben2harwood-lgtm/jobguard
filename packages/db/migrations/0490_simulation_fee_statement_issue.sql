@@ -107,14 +107,9 @@ BEGIN
   OR p_command-ARRAY['version','action','commandId','statementId','statementHash']<>'{}'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
  cid:=(p_command->>'commandId')::uuid;
- -- Same source fence and lock order as 0393; acquire all business locks before audit.
+ -- Reuse the catch posting writer's private source fence; acquire business locks before audit.
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
- LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
- app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
- app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
- app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
- app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
- app.recovery_case,app.recovery_claim_revision,app.recovery_case_event IN SHARE MODE;
+ PERFORM app.lock_success_fee_sources();
  FOR c IN SELECT id FROM app.recovery_case WHERE tenant_id=t AND job_id=p_job ORDER BY id LOOP
   PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(c.id::text));
  END LOOP;

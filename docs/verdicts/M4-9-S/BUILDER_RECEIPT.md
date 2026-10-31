@@ -1,6 +1,6 @@
 # M4-9-S builder receipt
 
-Status: catch-only positive/zero source-backed posting is implemented in 0392–0393; PostgreSQL CI and exact-head RED review are pending. The full card, Q2/Q3 and UI remain incomplete. The 29 October section records the current slice; earlier boundary-only entries are historical. No independent verdict or acceptance is recorded.
+Status: catch-only positive/zero source-backed posting is implemented in 0405–0406; PostgreSQL CI and exact-head RED review are pending. The full card, Q2/Q3 and UI remain incomplete. The 29 October section records the current slice; earlier boundary-only entries are historical. No independent verdict or acceptance is recorded.
 
 ## Session
 
@@ -459,7 +459,7 @@ M4-9-S card, UI, Q2 and Q3 are not claimed complete. No independent review or
 merge is claimed. Branch `codex/sandbox/m4-9-s-posting`, stacked on the issued
 M4-8-S producer and SV-6 review branches; their merge is not inferred.
 
-Implemented in reserved **0392–0393**:
+Implemented in reserved **0405–0406**:
 
 - Six owner-only, FORCE RLS, append-only tables: command, review, derivation,
   source, journal and journal line. Exact assessment-subject and allocation FKs;
@@ -549,7 +549,7 @@ unit invocation lacked the unbuilt storage package; after compiling existing
 workspace dependencies the complete named group passed.
 
 LATER / SIMPLICITY (initial source review):
-`packages/db/migrations/0393_success_fee_catch_posting.sql` and SV-6's approved
+`packages/db/migrations/0406_success_fee_catch_posting.sql` and SV-6's approved
 review guard repeat some exact-review predicates. In a separately scoped follow-up,
 a private shared validator could retain one authoritative set of these checks;
 maintenance benefit is fewer opportunities for the two consumers to drift.
@@ -564,7 +564,7 @@ No git-writing command, database startup, localhost listener, provider call,
 real customer data, live money, deployment or release was attempted.
 
 Final deterministic handoff checks: exact 22-path lane (21 explicit non-lane paths),
-0392/0393 above observed origin/main 0375, no tracked migration changed, and
+0405/0406 above observed origin/main 0375, no tracked migration changed, and
 `git diff --check`: PASS. These compare the working tree, not a committed PR head.
 Commit message: `/tmp/m4-9-s-posting-20261029T154217Z-commit-msg.txt`.
 
@@ -626,7 +626,158 @@ content with the other pending main-merge files, commit and push. Intended commi
 message: `/tmp/m4-9-s-posting-20261030T155255Z-commit-msg.txt`.
 
 Final repair-only path check: all four changed repair paths are admitted by the
-existing lane; no conflict markers remain in either changed test file; 0392 and
-0393 match HEAD bytes exactly; `git diff --check` passes. The index-only unmerged
+existing lane; no conflict markers remain in either changed test file; 0405 and
+0406 match HEAD bytes exactly; `git diff --check` passes. The index-only unmerged
 entry is retained for the router to stage. No new simplicity finding was added
 on this repair; the initial-review advisory above remains unchanged.
+
+
+## 30 October 2026: catch-up onto merged parents and migration renumber
+
+RED M4-9-S catch-up only; no additional posting behaviour or test expectations.
+The former catch-facts/posting migrations are now 0405/0406, each byte-identical
+to its previous HEAD SQL. No migration present on origin/main was edited.
+All active references, including the upgrade test and lane, use the new numbers.
+Earlier migration-number references above have been updated to those names.
+
+Resolved live LP-0 conflicts by retaining both sides' routine, policy and trigger
+entries. SERIOUS-B5 retains main's complete upgrade union plus only the exact six
+private catch-ledger tables, indexes, policies and two trigger routines. Restored
+the frozen downstream LP-0 recorded input to origin/main: modifying that historical
+snapshot without regenerating its companion made three inventory checks fail;
+all five now pass. Its path is removed from this piece's lane.
+
+The shared receipt fixture preserves third-argument protocol strings, numeric
+baseline/mixed-check callers, and main's fifth-argument protocol override. No
+caller or expectation needed changing. The piece's lane exactly matches its
+paths against origin/main (its own lane file is implicitly owned).
+
+Source inspection against merged 0383 confirms the approved-review receipt still
+uses recovery_attribution_command.assessment_id/payload/first_result. The posting
+routine joins that command to the exact approved action_authorization, selects
+the latest assessment and reconstructs current sources before review/approval.
+The existing forged-authorization-without-command, superseded-assessment and
+refund-after-review PostgreSQL regressions are unchanged. They were NOT executed
+locally: this sandbox cannot start PostgreSQL. CI must confirm them, the migration
+upgrade suites, LP-0 catalogue and SERIOUS-B5. Latest main routine bodies remain
+0302 for the two re-created success-fee functions; 0406 adds only this piece's
+existing catch posting change.
+
+Local checks actually run (installed repository runners, at most two workers):
+
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2
+  src/success-fee-repository.test.ts src/receipt-line-command-producer.test.ts
+  — 2 files, 14 tests passed.
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee-catch-posting.test.ts — 6 tests passed.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee.application.test.ts — 15 tests passed.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — passed,
+  including the merged integration-test fixture callers.
+- node --test tools/lp-downstream-inventory.test.mjs — 5 tests passed after
+  restoring the frozen snapshot.
+- node tools/plpgsql-case-in-if-lint.mjs — passed.
+- git diff --check — passed. Read-only assertions verified SQL bytes, no changed
+  main migration, exact lane paths and no conflict markers in piece files.
+
+The pnpm launcher stalled before running tests and was interrupted; the commands
+above used the already-installed package binaries without downloading packages.
+The index still records two unmerged paths because .git is read-only; the router
+must stage the resolved working files and renames before committing. No git write
+command was run. GitHub CI, browser/database suites and the independent exact-head
+Claude RED review remain pending. Q2/Q3 and the wider M4-9-S card remain held as
+previously recorded; this receipt is not a claim that the full card is finished.
+
+
+## 30 October 2026: reserved identifier repair after DB verification
+
+DB verification at bc431e37 found the reserved identifier `authorization` in
+0406's writer declaration. Renamed only that variable to `auth_id` at its
+three sites (declaration and two INSERT values). A read-only comparison verifies
+reversing that rename reproduces HEAD exactly; 0405 is unchanged. Scanned both
+migrations' variable, argument, alias and column identifiers; no further reserved
+identifier issue was found. No test expectations or numeric strings changed.
+
+LP-0 tooling is packages/db/test/lp-0-catalog.ts (the supplied src path does not
+exist). It hashes UTF-8 pg_get_functiondef output. The sole changed routine,
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb), already has a null
+recorded definitionSha256. No hash was guessed or overwritten; PostgreSQL CI
+must capture that identity's hash and verify migration execution.
+
+Local checks: installed packages/db Vitest runner with --maxWorkers=2,
+src/success-fee-repository.test.ts and test/lp-0-catalog.test.ts: 36 tests passed
+in two files. PL/pgSQL CASE-in-IF lint passed (164 migrations); git diff --check
+passed; exact-three-site rename and unchanged-0405 assertions passed. These
+checks do not prove PostgreSQL parsing: database verification remains CI's job.
+No git write command was run. RED review and existing release gates remain.
+
+
+## 30 October 2026: DB repair 2 after PostgreSQL run of 471782e6
+
+The supplied real-PostgreSQL run migrated successfully with 121 passing and
+three failing tests. This repair changes test fixtures/ordering only:
+
+- In both tenancy catalogue lists, move the six success_fee rows immediately
+  before supplier_bill_supersession. A read-only comparison confirms every
+  pre-existing row is retained unchanged and the block is in byte order.
+- The unsettled-source attack now inserts a constraint-valid pending movement
+  copied from the settled movement, then changes the receipt fact source's
+  movement_id to that pending row. Its event kind, event ID, identity and
+  representation satisfy the existing feed checks; all CHECKs and foreign keys
+  remain enabled. Only user triggers on the two deliberately corrupted fixture
+  tables are disabled temporarily and restored before calling the writer.
+  Everything is rollback-only. The exact SUCCESS_FEE_SOURCE_CHANGED expectation
+  and unchanged-effect assertions remain intact.
+
+No migration, production behaviour, LP-0 hash or other expectation changed.
+Local checks: installed packages/db tsc --noEmit passed; installed Vitest with
+--maxWorkers=2 on src/success-fee-repository.test.ts and
+src/receipt-line-command-producer.test.ts passed 14 tests in two files;
+git diff --check passed. Database execution is unavailable in this sandbox:
+the three repaired PostgreSQL cases still require CI verification. This is not
+an independent RED review. No git write commands were run.
+
+
+## 31 October 2026: CI repair 1 at 87996900 — private source fence
+
+SV-2's runtime routine scan matched write_success_fee_v3.prosrc because its
+LOCK TABLE batch directly named app.shadow_signal_evidence,
+app.shadow_commercial_signal, app.shadow_disclosure_event and
+app.shadow_signal_ineligibility. No composite type or inlined SQL was needed
+for that match. Moved the complete source-lock batch, byte-for-byte, into
+app.lock_success_fee_sources(): migration-owned SECURITY DEFINER with pinned
+search_path=pg_catalog,app and all PUBLIC/runtime/infrastructure/shadow/emergency
+EXECUTE revoked. The writer calls it at precisely the prior position, after
+command validation and the authorization-table lock and before case/advisory/
+audit locks. The protected tables remain behind the private migration-owned
+path; no dynamic SQL, matching-name disguise or allow-list addition was used.
+The existing source reconstruction still uses recovery_attribution_sources.
+
+Added an actual-role regression to success-fee-access.integration.test.ts for
+the helper's owner, pinned path, exact owner-only grants and refused runtime
+call. Extended SERIOUS-B5's exact additive routine union by this helper only;
+its existing signature, SECURITY DEFINER, pinned-path and exact ACL assertions
+also apply to the new helper. The original shadow-catalog test is unchanged.
+No migration on main was edited; only branch-owned 0406 changed.
+
+LP-0 gains the private helper's owner/definition row and the writer's helper
+call edge. The writer's stored hash was already null; both affected/new bodies
+remain null pending PostgreSQL pg_get_functiondef capture, never source-hashed.
+Exact capture identities:
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)
+function:app.lock_success_fee_sources()
+
+Local verification: packages/db installed tsc --noEmit passed; installed Vitest
+--maxWorkers=2 src/success-fee-repository.test.ts test/lp-0-catalog.test.ts passed
+36 tests in two files; node --test tools/lp-downstream-inventory.test.mjs passed
+all five tests; PL/pgSQL CASE-in-IF lint passed (166 migrations); git diff --check
+passed. Read-only assertions verified an identical source-lock batch, preserved
+lock-order position, no protected SV-2 pattern in the writer body, unchanged SV-2
+test, unique null LP-0 rows and changed files within this piece's lane.
+
+PostgreSQL is unavailable in this sandbox. No database/catalogue pass or journey
+pass is claimed. The router commit message includes the complete source-found
+success-fee/shadow-catalog test inventory (including related upgrade/catalogue
+coverage) for coordinator rerun, plus the exact hash-capture identities.
+Independent exact-head RED review and existing release gates remain required.
+No git write command was run.

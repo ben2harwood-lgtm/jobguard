@@ -131,3 +131,5 @@ export * from "./meter-today.js";
 export * from "./small-builder-demo-lifecycle.js";
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
+
+export * from "./customer-approval-method.js";

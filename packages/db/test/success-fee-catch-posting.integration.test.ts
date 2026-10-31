@@ -104,13 +104,21 @@ it("Q2 and Q3 stay closed, and journal history cannot be edited or truncated",as
   await expect(f.runtime.query(`TRUNCATE app.success_fee_${name}`)).rejects.toMatchObject({code:"42501"});
  }
 });
-it.each(["movement_hash","allocation_limit","locked_bill"] as const)("writer independently refuses %s source corruption",async attack=>{
+it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer independently refuses %s source corruption",async attack=>{
  const x=await catchFeeFixture(f),review=await x.execute(),p=approve(review),before=await counts(x);
  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
-  if(attack==="movement_hash"){
+  if(attack==="unsettled"){
+   // A valid pending tuple keeps CHECKs/FKs enabled; corrupt only the source's
+   // movement reference so the writer, rather than a table CHECK, must refuse it.
+   const pendingId=randomUUID();
    await db.query("ALTER TABLE app.practice_feed_event DISABLE TRIGGER USER");
-   await db.query("UPDATE app.practice_feed_event SET source_hash=CASE WHEN source_hash=repeat('0',64) THEN repeat('1',64) ELSE repeat('0',64) END WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.fact.movementId]);
+   await db.query(`INSERT INTO app.practice_feed_event(id,tenant_id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash)
+    SELECT $4,tenant_id,job_id,account_id,command_id,'pending',movement_key,'pending-'||movement_key,'identified','feed',gross_pence,currency,'pending',environment,version,source_hash
+    FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[x.context.tenantId,x.jobId,x.fact.movementId,pendingId]);
    await db.query("ALTER TABLE app.practice_feed_event ENABLE TRIGGER USER");
+   await db.query("ALTER TABLE app.receipt_allocation_fact_source DISABLE TRIGGER USER");
+   await db.query("UPDATE app.receipt_allocation_fact_source SET movement_id=$3 WHERE tenant_id=$1 AND job_id=$2 AND movement_id=$4",[x.context.tenantId,x.jobId,pendingId,x.fact.movementId]);
+   await db.query("ALTER TABLE app.receipt_allocation_fact_source ENABLE TRIGGER USER");
   }else if(attack==="allocation_limit"){
    await db.query("ALTER TABLE app.stored_receipt_case_allocation DISABLE TRIGGER USER");
    await db.query("UPDATE app.stored_receipt_case_allocation SET net_numerator='80001' WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId]);

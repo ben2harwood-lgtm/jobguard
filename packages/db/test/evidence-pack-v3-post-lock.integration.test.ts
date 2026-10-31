@@ -1,7 +1,8 @@
 // CI-only real PostgreSQL. Fresh source fixture inputs; all commercial effects use real writers.
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
-import { assembleEvidencePackV3, evidencePackMaterialV3, verifyStandalonePackV3 } from "@jobguard/core";
+import { assembleEvidencePackV3, buildEvidenceManifestV3, canonicalManifestV3, evidencePackMaterialV3, evidencePackSpecimenInputV3, manifestDigestV3, renderStandalonePackV3, sha256, verifyStandalonePackV3 } from "@jobguard/core";
+import fixtures from "../../../docs/fixtures/evidence-pack-v3.json" with { type: "json" };
 import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
 import { shadowPackCatch } from "./evidence-pack-v3-catch-fixture.js";
 import { EvidencePackV3Repository, EvidencePackV3WorkerRepository } from "../src/evidence-pack-v3-repository.js";
@@ -13,6 +14,22 @@ let f: FinalCheckFixture;
 const previous = process.env.JOBGUARD_ENV;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; f = await createFinalCheckFixture(); }, 120000);
 afterAll(async () => { await closeFinalCheckFixture(f); if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; });
+it.each(fixtures.specimens)("SQL/TypeScript canonical bytes and golden digests agree: $name", async ({ input, expected }) => {
+  const manifest = buildEvidenceManifestV3(input);
+  const sources = evidencePackSpecimenInputV3.parse(input).sources;
+  const artifact = renderStandalonePackV3(manifest, sources);
+  const sql = await f.admin.query(`SELECT app.canonical_evidence_pack_v3($1::jsonb) artifact,
+    app.canonical_evidence_pack_v3($2::jsonb) manifest,
+    encode(sha256(convert_to(app.canonical_evidence_pack_v3($1::jsonb),'UTF8')),'hex') artifact_hash,
+    encode(sha256(convert_to(app.canonical_evidence_pack_v3($2::jsonb),'UTF8')),'hex') manifest_hash`,
+  [artifact, JSON.stringify(manifest)]);
+  expect(Buffer.from(sql.rows[0].artifact, "utf8")).toEqual(Buffer.from(artifact, "utf8"));
+  expect(Buffer.from(sql.rows[0].manifest, "utf8")).toEqual(Buffer.from(canonicalManifestV3(manifest), "utf8"));
+  expect(sql.rows[0].artifact_hash).toBe(sha256(artifact));
+  expect(sql.rows[0].manifest_hash).toBe(manifestDigestV3(manifest));
+  expect(sql.rows[0].artifact_hash).toBe(expected.artifactHash);
+  expect(sql.rows[0].manifest_hash).toBe(expected.manifestHash);
+});
 it("shadow-30000 traces exact source, lock, catch revision, supplementary invoice and settled allocation; approvals go stale on reversal", async () => {
   const x = await shadowPackCatch(f), runtime = new EvidencePackV3Repository(f.runtime), worker = new EvidencePackV3WorkerRepository(f.shadow);
   expect(x.attribution.assessmentOutcome).toBe("eligible_for_review");
