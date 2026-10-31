@@ -1,6 +1,6 @@
 # M4-9-S — synthetic catch success-fee posting
 
-## 29 October 2026: migrations 0392–0393 (current)
+## 29 October 2026: migrations 0405–0406 (current)
 
 The current stacked SV-6 review and M4-8-S v1 producer replace the historical
 source dependency described below for **catch-only positive/zero posting**.

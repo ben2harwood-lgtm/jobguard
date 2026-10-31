@@ -30,7 +30,7 @@ export async function submitSubscriptionAction(tenantId: string, commandId: stri
     headers: { "content-type": "application/json", "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId },
     body: JSON.stringify({ version: "subscription-http-command.v1", commandId, command }) });
   if (!response.ok) throw new Error("The subscription action could not be completed. Reload to check the saved result before trying again.");
-  return await response.json() as { status?: string; effectiveDate?: string; paymentStatus?: string };
+  return await response.json() as { status?: string; effectiveDate?: string; paymentStatus?: string; executionStatus?: "unavailable" };
 }
 export function PlanDetails({ view }: { view: SubscriptionPlanView }) {
   return <>
@@ -74,6 +74,7 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
       saved = true;
       setConsent(false);
       setMessage(subscriptionActionMessage(result));
+      if (result.executionStatus === "unavailable") setActionError("The simulation executor could not complete or confirm its result. Your approval is saved. Reload to check progress; do not approve it again.");
       const next = await loadSubscriptionWorkspace(fetch, tenantId);
       if (next.tenantId !== tenantId) throw new Error("Company access changed. Reload before continuing.");
       setView(next.view);

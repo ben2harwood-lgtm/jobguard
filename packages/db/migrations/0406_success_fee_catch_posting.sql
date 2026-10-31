@@ -31,6 +31,22 @@ BEGIN
   'environment','synthetic_demo','state','dependency_bound',
   'dependency','accepted_attribution_source_adapter','productionEnabled',false,'realExternalActions',0);
 END $$;
+-- Private source fence: runtime cannot access the protected Final Check tables.
+-- Called only after authentication, the final-account lock and command validation,
+-- at the existing lock-order position before any case/advisory/audit head lock.
+CREATE FUNCTION app.lock_success_fee_sources() RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
+ app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
+ app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
+ app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
+ app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
+ app.recovery_case,app.recovery_claim_revision,app.recovery_case_event IN SHARE MODE;
+END $$;
+ALTER FUNCTION app.lock_success_fee_sources() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lock_success_fee_sources() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
+
 -- Latest body: 0302. Preserve its authentication call and closed Q2/Q3 boundary;
 -- add only synthetic, exact-statement catch review/approval and local posting.
 CREATE OR REPLACE FUNCTION app.write_success_fee_v3(p_job uuid,p_session text,p_command jsonb,p_artifact jsonb) RETURNS jsonb
@@ -69,12 +85,7 @@ BEGIN
  -- Contending source writers may deadlock and must retry their whole command;
  -- no stale source can commit as qualifying proof. No production throughput claim.
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
- LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
- app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
- app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
- app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
- app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
- app.recovery_case,app.recovery_claim_revision,app.recovery_case_event IN SHARE MODE;
+ PERFORM app.lock_success_fee_sources();
  FOR c IN SELECT id FROM app.recovery_case WHERE tenant_id=t AND job_id=p_job ORDER BY id LOOP
   PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(c.id::text));
  END LOOP;

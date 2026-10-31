@@ -38,7 +38,7 @@ DECLARE t uuid; actor record; availability jsonb; attempts jsonb:='[]'; snapshot
  collected bigint:=0; refunded bigint:=0; cr bigint:=0; rr bigint:=0; fee bigint:=0; unknown_outcome boolean:=false;
 BEGIN
  availability:=app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
- IF availability->>'state'='catch_review_available' THEN
+ IF (availability->>'state')='catch_review_available' THEN
   SELECT * INTO actor FROM app.final_check_builder(t,p_job,p_session,false);
   snapshot:=app.platform_fee_statement_sources(t,p_job,actor.member_id); fee:=(snapshot->>'feePence')::bigint;
   SELECT coalesce(jsonb_agg(jsonb_build_object('id',a.id,'statementId',a.statement_id,'kind',a.kind,'amountPence',a.amount_pence,'state',e.state) ORDER BY a.id),'[]'),
@@ -69,15 +69,15 @@ BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=p_job)
  THEN RAISE EXCEPTION 'SUCCESS_FEE_DEPENDENCY_BOUND' USING ERRCODE='0A000'; END IF;
- IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR p_command->>'version' IS DISTINCT FROM 'simulation-fee-collection-command.v1'
+ IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR (p_command->>'version') IS DISTINCT FROM 'simulation-fee-collection-command.v1'
  OR action IS NULL OR action NOT IN('collect','refund','redirect','unknown','settle','fail')
  OR NOT(p_command ?& ARRAY['version','action','commandId']) OR NOT coalesce(pg_input_is_valid(p_command->>'commandId','uuid'),false)
  OR (action IN('collect','refund') AND (NOT(p_command ?& ARRAY['statementId','statementHash','amountPence'])
   OR NOT coalesce(pg_input_is_valid(p_command->>'statementId','uuid'),false) OR jsonb_typeof(p_command->'amountPence') IS DISTINCT FROM 'number' OR NOT coalesce(pg_input_is_valid(p_command->>'amountPence','bigint'),false)
   OR coalesce(p_command->>'statementHash','') !~ '^[a-f0-9]{64}$'
-  OR p_command-ARRAY['version','action','commandId','statementId','statementHash','amountPence']<>'{}'))
+  OR (p_command-ARRAY['version','action','commandId','statementId','statementHash','amountPence'])<>'{}'))
  OR (action NOT IN('collect','refund') AND (NOT coalesce(pg_input_is_valid(p_command->>'attemptId','uuid'),false)
-  OR p_command-ARRAY['version','action','commandId','attemptId']<>'{}'))
+  OR (p_command-ARRAY['version','action','commandId','attemptId'])<>'{}'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
  -- session_user is the connection identity, unaffected by this SECURITY DEFINER owner
  -- or by caller-controlled settings. Only the internal migration/operator connection
@@ -86,12 +86,7 @@ BEGIN
  THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  cid:=(p_command->>'commandId')::uuid;
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
- LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
- app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
- app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
- app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
- app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
- app.recovery_case,app.recovery_claim_revision,app.recovery_case_event IN SHARE MODE;
+ PERFORM app.lock_success_fee_sources();
  FOR c IN SELECT id FROM app.recovery_case WHERE tenant_id=t AND job_id=p_job ORDER BY id LOOP
   PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(c.id::text));
  END LOOP;

@@ -1,3 +1,4 @@
+import { customerActions } from "../customer-signin.js";
 import { BaseExceptionFilter, HttpAdapterHost } from "@nestjs/core";
 import { Body, Controller, Post, Param, Req, Res, HttpException, Inject, Catch, BadRequestException, type ExceptionFilter, type ArgumentsHost } from "@nestjs/common";
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
@@ -42,6 +43,11 @@ export class OidcParseExceptionFilter implements ExceptionFilter {
  constructor(@Inject(OIDC_APPLICATION) private readonly application:()=>OidcApplication,@Inject(HttpAdapterHost) private readonly adapter:HttpAdapterHost) {}
  async catch(error:BadRequestException,host:ArgumentsHost):Promise<void> {
   const http=host.switchToHttp(),request=http.getRequest<{path:string}>();
+  if(customerActions.some(action=>request.path===`/customer-portal/${action}`)) {
+   const response=http.getResponse<{setHeader:(name:string,value:string)=>void;status:(status:number)=>{json:(body:unknown)=>void}}>();
+   response.setHeader("Cache-Control","no-store");response.setHeader("Referrer-Policy","no-referrer");
+   response.status(401).json({code:"CUSTOMER_REFUSED"});return;
+  }
   const route=/^\/auth\/oidc\/([^/]+)\/(?:start|callback)$/u.exec(request.path);
   if(!route){new BaseExceptionFilter(this.adapter.httpAdapter).catch(error,host);return;}
   try {await this.application().refuseInput(route[1]!);}catch { /* Always return the redacted boundary, including audit outages. */ }
