@@ -29,4 +29,9 @@ describe("SV-7A Nest read adapter",()=>{
   expect(jobSourceFailure(new JobWorkStateError("POST_LOCK_WORK_REQUIRES_LINKED_JOB"))).toMatchObject({status:422,body:{code:"POST_LOCK_WORK_REQUIRES_LINKED_JOB",message:"Start a linked job for this customer and site"}});
   expect(jobSourceFailure(new JobSourceError("JOB_SOURCE_UNAVAILABLE")).status).toBe(503);
  });
+ it.each(["METER_UPGRADE_REQUIRED","METER_PROJECTION_MISMATCH","JOB_WORK_CLOSED"] as const)("on-site %s refusal is a typed conflict",code=>{
+  expect(jobSourceFailure(new JobWorkStateError(code))).toMatchObject({status:409,body:{environment:"synthetic_demo",realExternalActions:0}});
+  if(code!=="JOB_WORK_CLOSED")expect(jobSourceFailure(new JobWorkStateError(code)).body.code).toBe(code);
+ });
+
 });

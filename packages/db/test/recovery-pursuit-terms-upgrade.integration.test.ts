@@ -1,3 +1,4 @@
+import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 // Written before 0207. Real PostgreSQL only; CI execution required, NOT RUN locally.
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -59,7 +60,7 @@ beforeAll(async () => {
   const f = await seedEvidencePackFixture(admin, { practice: true }), initial = await preview(f, f.customerCaseId), repo = new RecoveryMessageRepository(runtime), v = initial.state.latest!;
   const delivered = await repo.command(initial.ctx, f.customerCaseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, outcome: "success" }, initial.actor);
   const sandbox = new SandboxRepository(runtime), follow = new RecoveryFollowUpRepository(runtime);
-  await sandbox.create(f.sessionToken!, randomUUID());
+  await seedLegacySandbox(admin, f.sessionToken!);
   const scheduled = await follow.schedule(initial.ctx, f.customerCaseId, { version: "recovery-follow-up-command.v1", action: "schedule", commandId: randomUUID(), sourceMessageId: v.id, expectedCaseRevision: delivered.readiness.caseRevision }, initial.actor);
   let due = scheduled;
   for (let tick = 0; tick < 3; tick++) due = await follow.advanceTime(initial.ctx, f.customerCaseId, { version: "recovery-follow-up-command.v1", action: "advance_time", commandId: randomUUID(), followUpId: scheduled.latest!.id }, initial.actor, (run, command) => sandbox.advance(f.sessionToken!, run, command));

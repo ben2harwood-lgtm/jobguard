@@ -1,7 +1,8 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { smallBuilderDemoRunV1, smallBuilderDemoReportV1 } from "@jobguard/core";
+import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, previewDemoMeter } from "@jobguard/core";
+import { MeterPreview } from "./meter-preview";
 import { DemoChooser, LifecycleReport } from "./chooser";
 import { demoLink, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
 vi.stubGlobal("React", React);
@@ -20,6 +21,19 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     expect(html).toContain("The product journey has not run"); expect(html).toContain("DEMO-A1 is not ready yet");
     expect(html).toContain("0 of 2"); expect(html).toContain("snapshotId="); expect(html).toContain("Revision");
     expect(html).not.toMatch(/£800|£80|£720|£34,400|PASS|settled|signals found/);
+  });
+  it("renders actual producer amounts, grace crossing and plain unavailable reasons without a settlement claim",()=>{
+    const html=renderToStaticMarkup(<MeterPreview preview={previewDemoMeter({tenantId:id,runId:id})} />);
+    for(const amount of ["£348.00","£828.00","£89.00","£79.00","£169.00","£49.00","£62.33","£69.65"])expect(html).toContain(amount);
+    expect(html).toContain("track_review_due immediately");expect(html).toContain("MON-3 trial prelude");
+    expect(html).toContain("Not ready yet");expect(html).toContain("not issued statements or settled payments");
+    expect(html).toContain("2026-04-02");
+  });
+  it("accepts the saved meter run with a preview-unavailable note without changing lifecycle facts", () => {
+    const saved = { ...facts, scenario: "meter", meterPreviewNote: "Preview unavailable." };
+    expect(smallBuilderDemoRunV1.parse(saved)).toEqual(saved);
+    expect(smallBuilderDemoRunV1.safeParse({ ...saved, meterPreviewNote: "private error" }).success).toBe(false);
+    expect(smallBuilderDemoReportV1.safeParse({ version: "small-builder-demo-report.v1", snapshotId: id, facts: saved }).success).toBe(false);
   });
   it("renders no saved company or hidden data before authentication", () => {
     const html = renderToStaticMarkup(<DemoChooser />);

@@ -18,7 +18,7 @@ describe("CH-3a application boundary", () => {
       site: { version: "site.v1", addressLines: ["First line", line], town: "London", postcode: "SW1A 1AA" },
     });
     await expect(run()).rejects.toMatchObject({ code: "INVALID_PARTIES" });
-    for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+    expectAccessQueries(query.mock.calls);
   });
   it("rejects unauthenticated, non-member and production callers before business persistence", async () => {
     const { pool, query } = accessPool("owner"), app = new JobPartiesApplication(pool);
@@ -27,7 +27,7 @@ describe("CH-3a application boundary", () => {
     expect(query).not.toHaveBeenCalled();
     await expect(app.view({ sessionId: token, requestedTenantId: "33333333-3333-4333-8333-333333333333" }, job)).rejects.toThrow("FORBIDDEN");
     await expect(app.command({ sessionId: token }, "wrong", {})).rejects.toThrow("NOT_FOUND");
-    for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+    expectAccessQueries(query.mock.calls);
     query.mockClear();
     vi.stubEnv("JOBGUARD_ENV", "production_billing");
     await expect(app.command({ sessionId: token }, job, { environment: "synthetic_demo" })).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
@@ -35,10 +35,16 @@ describe("CH-3a application boundary", () => {
   });
 });
 
+function expectAccessQueries(calls: Array<[string, (unknown[] | undefined)?]>) {
+  for (const [sql] of calls) {
+    expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+  }
+}
+
 const token = "18000000-0000-4000-8000-000000000001";
 const actions = ["view", "command", "adopt"] as const;
 function accessPool(scenario: "missing" | "invalid" | "invented" | "stranger" | "owner") {
-  const query = vi.fn(async (sql: string) => ({ rows:
+  const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows:
     sql.includes("authenticate_practice_session") && (scenario === "stranger" || scenario === "owner")
       ? [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }]
       : sql.includes("practice_session_digest=$3") && scenario === "owner" ? [{ id: job }] : [],
@@ -76,7 +82,7 @@ describe("CH-3a per-session ownership", () => {
         expect(error).toBeInstanceOf(PracticeAccessError);
         expect(error).toMatchObject({ code });
         if (scenario !== "stranger") expect(connect).not.toHaveBeenCalled();
-        for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+        expectAccessQueries(query.mock.calls);
         // Exercise the same global filter installed by AppModule, without binding a socket.
         const response = { status: vi.fn().mockReturnThis(), json: vi.fn() };
         new PracticeErrorsFilter().catch(error as PracticeAccessError, { switchToHttp: () => ({ getResponse: () => response }) } as ArgumentsHost);

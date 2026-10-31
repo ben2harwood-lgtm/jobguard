@@ -184,12 +184,12 @@ beforeAll(async () => {
   const port = await freePort(60900, 200);
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
-  try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
-  admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
+  try { await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
+  admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'jobguard_synthetic_demo' });
   // CH-3a: every job needs fictional parties before its quote document and live switch; the shared fixture recipe supplies them.
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
-  runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
+  runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'jobguard_synthetic_demo', max: 12 });
   context = testTenantContext(fixture.tenantId);
   otherContext = testTenantContext(fixture.otherTenantId);
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);

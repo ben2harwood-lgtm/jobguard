@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-browser-o": {
+      "branches": ["codex/sandbox/sv5-browser-o"],
+      "note": "RED SV-5 browser Test O: zero-result wording, reload persistence and real worker replay. Stacked on sv5-worker PR #404; shared SV-5 spec requires serialized integration. Own lane file is implicitly allowed. No migration or runtime change.",
+      "allow": ["apps/web/e2e/SV-5.spec.ts"]
+    }
+  }
+}

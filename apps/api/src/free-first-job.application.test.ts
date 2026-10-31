@@ -60,3 +60,19 @@ describe("MON-3 application port contract (no database composition)", () => {
     expect(source.authorizeAndRead).toHaveBeenNthCalledWith(2, session, jobId);
   });
 });
+
+describe("card request application",()=>{
+ it("rechecks authority on every call and never accepts browser completion",async()=>{
+  const {FreeFirstJobCardApplication}=await import("./free-first-job.application.js");
+  let reads=0;
+  const app=new FreeFirstJobCardApplication({environment:()=>"synthetic_demo",authorizeAndRequest:async()=>{reads++;return null;}});
+  for(let i=0;i<2;i++)await expect(app.request("session","command",{version:"trial-card-request.v1",status:"completed"})).rejects.toThrow("FREE_FIRST_JOB_ACCESS_DENIED");
+  expect(reads).toBe(2);
+ });
+ it("denies a server mode change across the awaited request",async()=>{
+  const {FreeFirstJobCardApplication}=await import("./free-first-job.application.js");
+  let mode="synthetic_demo";
+  const app=new FreeFirstJobCardApplication({environment:()=>mode,authorizeAndRequest:async()=>{mode="production";return null;}});
+  await expect(app.request("session","command",{})).rejects.toThrow("FREE_FIRST_JOB_SYNTHETIC_ONLY");
+ });
+});

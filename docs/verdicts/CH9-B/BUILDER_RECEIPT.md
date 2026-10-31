@@ -1,3 +1,258 @@
+# CH-9 part 2 — CI repair try 2 (RED), 29 October 2026
+
+Fixed the branch-owned A8 upgrade failure from `ch9-p2-ci-traces-0855.txt`:
+the predecessor assertion still used 342 after the migration moved to 0358.
+Updated that bound to 358, the test label and the migration-note heading.
+All data/type/PK preservation, negative controls, grants and replay checks remain
+unchanged. No SQL, exceptions, comparator rules or known-main-failure files changed.
+No unmerged index entries were present.
+
+Actual local validation:
+
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `node tools/agent-lane-boundary-lint.mjs`: PASS.
+- Native Node import of the actual `MIGRATION_URLS` with assertions against
+  the test's filename, bound, insert and label: PASS (347 < 358).
+- All 145 tracked SQL migration files compared byte-for-byte with HEAD: PASS.
+- `git diff --check`: PASS.
+- The first registry-check invocation used `--import tsx`, unavailable at the
+  repository root; reran successfully with Node 24 native TypeScript support.
+
+The PostgreSQL integration suite cannot run in this sandbox and remains for CI.
+The two known main failures in downstream document generation/classification
+are explicitly outside this repair. Their generator and document are untouched.
+Ready for router commit/push, required CI and independent RED review.
+No Git-writing commands, downloads, live providers or real customer data used.
+
+# CH-9 part 2 — CI repair try 1 (RED), 29 October 2026
+
+This repair supersedes earlier migration-number and 0335 syntax-change statements.
+Ready for router commit/push; GitHub CI and independent RED review remain required.
+
+- Lane failure: removed the explicit self-grant; the lane tool implicitly permits
+  its own file. Added the exact shared upgrade-test path changed by this repair.
+- LP0-02: removed the stale owner fact for the migration-owned private
+  `recovery_attribution_sources` helper. The comparator records owner facts only
+  for externally executable routines or differing schema/routine owners. Its
+  routine inventory and all access restrictions remain intact.
+- SERIOUS-B5: added the two exact CH-9 reader signatures to the additive upgrade
+  snapshot, asserting migration ownership, SECURITY DEFINER, exact runtime-only
+  EXECUTE ACL and exact search-path/timezone settings. All predecessor rows,
+  privileges, policies and replay assertions remain compared.
+- Renumbered this branch's migration/note and upgrade-test/lane references from
+  0342 to the router-reserved 0358 using `planRenumber` from the existing helper
+  and filesystem moves (CLI write mode stages Git, forbidden in this sandbox).
+  SQL SHA-256 remains
+  `42fd422e39b4fca39531142dd1a35234f5ea3b863ec1359cd735736e67cc68a3`.
+  No SQL bug or CASE expression inside an IF condition was found in this new
+  migration. All 144 migrations on origin/main retain their exact bytes.
+- No unresolved index entries or conflict markers in the affected shared files.
+
+Local validation actually run:
+
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/value-business-reader.test.ts test/lp-0-catalog.test.ts`: 31 tests PASS.
+- `git diff --check`: PASS.
+- Read-only prospective PR path check using existing `loadLanePolicy`,
+  `selectLane`, `lanePathAllowed` and `migrationOrderViolations`: PASS.
+- Default `node tools/agent-lane-boundary-lint.mjs`: fails pre-commit because
+  local mode unions HEAD's old 0342 paths with the uncommitted rename. No rule
+  was changed or exception added; rerun after router commit. The prospective
+  path check above is distinct from this default check and from CI.
+
+PostgreSQL upgrade/grant-freeze and browser suites were not run: PostgreSQL
+cannot start in this sandbox. CI must execute them after router push.
+No Git-writing commands, package downloads, real data or providers were used.
+
+# CH-9 part 2 — main catch-up (RED), 29 October 2026
+
+Ready for the router to stage the resolved merge and commit this catch-up on
+`codex/sandbox/ch9-p2`. Git's index remains unmerged because this sandbox cannot
+write `.git`. Required GitHub CI and independent RED review precede merge.
+This section supersedes the historical readiness statements below.
+
+- Retained main's SV-6/#400 migration 0340 and #383 migration 0335, notes,
+  repositories and tests; the duplicate old migration paths are absent.
+  Unioned all three export lists and both sides of this receipt. Kept main's
+  existing recovery-attribution routine entry once in the privilege inventory.
+- Renumbered this piece's migration 0326 to the explicitly issued **0342**,
+  including its note, lane and upgrade-test references/bound. Used the exported
+  `planRenumber` from `tools/migration-renumber.mjs`, respecting the issued 0342
+  reservation. The helper's CLI write mode requires a clean tree and stages
+  files, so filesystem changes were applied without Git writes.
+  SQL SHA-256 before/after:
+  `42fd422e39b4fca39531142dd1a35234f5ea3b863ec1359cd735736e67cc68a3`.
+- Parenthesised the two CASE expressions inside PL/pgSQL IF subqueries in 0335.
+  No predicate, action, allocation rule or other reviewed behavior changed.
+- The piece's lane lists exactly 34 changed paths against current main,
+  including the new migration/note and the syntax-only 0335 fix.
+
+Actual local checks, Node 24.17.0 / installed Vitest 4.1.12; no downloads:
+
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Installed TypeScript compiler: core and DB builds, API and web `--noEmit`: PASS.
+- Core: `src/value-source-receipt.test.ts src/cumulative-fee.test.ts`: **113 passed**.
+- DB: `src/value-business-reader.test.ts src/stored-receipt-migration.test.ts
+  test/lp-0-catalog.test.ts`: **33 passed** (no PostgreSQL execution).
+- API: `src/value/value-v3.application.test.ts
+  src/value/company-value.application.test.ts src/value/value-composition.test.ts`:
+  **41 passed**.
+- Web: `app/api/jobs/[id]/value/v3/route.test.ts app/api/value/route.test.ts
+  app/ui/mapped-value-receipt.test.tsx`: **28 passed**.
+- All four Vitest runs used `node node_modules/vitest/vitest.mjs run
+  --maxWorkers=2` in their package directories, at most three named files per run,
+  with no overlapping Vitest runs: **215 tests passed** in total.
+- `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`,
+  `node tools/commercial-boundary-lint.mjs`: PASS.
+- API `node --import tsx src/generate-openapi.ts --check`: PASS. The initial
+  tsx CLI attempt could not bind its IPC pipe (sandbox EPERM); the Node loader
+  completed the same check without that CLI pipe.
+- `git diff --check origin/main`: PASS. No conflict markers remain in the four
+  resolved files. Direct current-main path/migration-order assertions using the
+  lane checker's exported predicates: PASS, 34 exact paths.
+- Official `node tools/agent-lane-boundary-lint.mjs`: FAIL while the merge is
+  uncommitted, because it unions pre-merge HEAD ancestry and the incoming staged
+  main files. No gate was weakened or inherited paths added to the lane. The
+  router must rerun it after staging and committing the merge.
+
+PostgreSQL installation, migration upgrade/replay, isolation and browser suites
+remain GitHub CI checks: this sandbox cannot start PostgreSQL or bind localhost.
+No database/browser execution, independent review, live provider, real customer
+data, live money or release is claimed. No Git write command was run.
+
+Commit message: `/tmp/ch9-p2-20261029T063615Z-commit-msg.txt`.
+
+---
+
+## Historical handoff before this catch-up
+
+# CH-9 part 2 — current builder handoff (RED)
+
+28 October 2026. Branch `codex/sandbox/ch9-p2`. Source implemented locally;
+PostgreSQL/browser CI and the independent RED review remain to run.
+**Not commit-ready on this combined parent tree:** the inherited lane footprint
+and the protected practice-session source-pin gate still fail. No commit,
+push, PR, merge, provider, real data, live money or release action was performed.
+The historical part-1 record below is preserved as history.
+
+## Change and scope
+
+- Resolved both supplied conflicts by retaining both sides' exports. The Git index
+  remains unmerged/read-only until the router stages these resolved files.
+- Added migration **0342**, two controlled read functions, source DTO/projection,
+  mapped job and company receipt views, source-reproduced business totals and
+  separate MON-1/MON-2A subscription periods/statements. Existing candidate
+  illustrative DTOs, fixtures and v1 recorded-money views remain separate.
+- Original-bill captures join their actual variation **revision** source IDs and
+  belong to the locked revision and original invoice. The existing receipt-line
+  binding helper checks the completed check, invoice and exact line identity.
+- Found figures reuse SV-6's persisted assessments and current source resolver,
+  including #346, #356 and corrected #368. Revisions replace balances; explicit
+  signed movements retain reversals. Stale sources, unassessed cases and fractional
+  pence refuse current figures. No second allocator, writer or qualification
+  policy was introduced. Fees reuse SV-6's cumulative v3 kernel and remain proposed
+  policy illustrations, with “yours before VAT and tax”.
+- Company access uses the existing MON-1/MON-2A identity bridge. A shared practice
+  cookie never grants company billing access, including alongside a revoked company
+  cookie. Private/no-store reads authenticate before selection or source details.
+  Company job links use that same bridge on the exact read endpoint. Per-job practice ownership is rechecked. No hidden query occurs before lock.
+- Optional half-open windows use exact server-recorded instants (including
+  PostgreSQL microseconds). Original invoice creation, completed check availability
+  and attribution recording supply the clocks. Subscription selection is by saved
+  period ID; job windows never prorate a subscription or place it on a job.
+- The public phrase is “mapped, inspectable”. Supplier and withheld-payment
+  sections stay explicitly unavailable because this branch has no accepted
+  producer for their figures. No capture or catch amount is relabelled into them.
+
+The additional company read boundary is necessary because the old practice-session
+boundary cannot authorize MON-1/MON-2A's company ledger. It reuses that producer's
+existing authentication; it does not relax shared-practice isolation. The source
+contract is distinct because the old illustrative contract is deliberately unbound.
+This is the substantial complexity added by this piece; no new orchestration,
+provider layer, framework or reporting system was introduced.
+
+## Local evidence (actual execution)
+
+Node 24.17.0; installed TypeScript 5.8.3 and Vitest 4.1.12. No packages downloaded.
+The pnpm wrapper stalled before running checks and was interrupted; checks below
+use the installed compiler/test-runner entrypoints directly.
+
+- `node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json` — PASS.
+- Same compiler for `packages/db/tsconfig.json` and `apps/api/tsconfig.json` — PASS;
+  `apps/web/tsconfig.json --noEmit` — PASS (rerun after final view edits).
+- Core Vitest: `src/value-source-receipt.test.ts src/cumulative-fee.test.ts`,
+  `--maxWorkers=2` — **111 passed**. Includes the reused attribution fixture's
+  registered tests; this is not 111 newly added tests.
+- API Vitest: job/business application + composition — **52 passed** before the
+  additional positive-source regression; job/business/company application
+  run — **60 passed**; final job/company/composition run — **41 passed**. Company/subscription-access/controller run — **20 passed**.
+- DB scripted adapter + catalogue comparator: `src/value-business-reader.test.ts
+  test/lp-0-catalog.test.ts`, `--maxWorkers=2` — **30 passed**. These are deterministic
+  adapter/comparator tests, not PostgreSQL permission or settlement proof.
+- Web value routes + static receipt rendering, three named files,
+  `--maxWorkers=2` — **24 passed** after repeated-window-selector and company job-link regressions.
+- OpenAPI generation ran without sockets. Its checked-in diff changes only the
+  two value-read summaries. OpenAPI consistency is checked again on the final tree.
+- Core-purity, money-arithmetic and commercial-boundary scripts — PASS. Lane
+  checking is reported separately below because this is a build-ahead branch.
+- An optional standalone typecheck of the new integration files reached the
+  existing `packages/db/test/job-work-state-fixtures.ts:45` error: the default
+  proof-evidence option is typed `string | undefined`. That unrelated fixture was
+  preserved; Vitest's real PostgreSQL suite remains the required execution proof.
+
+## Lane gate on this build-ahead tree
+
+`node tools/agent-lane-boundary-lint.mjs` selects the new `ch9-p2` lane, then
+**FAILS** against local `origin/main`: it also sees inherited CH9-B and SV6-hookup
+parent changes (including their lane files and enterprise/allocator work). The
+new lane lists only the 32 exact paths edited by this piece; it does not absorb
+parent ownership, grant other lane files or weaken the checker. The router must
+integrate the parent branches into the comparison base before this piece can
+have green PR CI. This is not a local lane PASS or permission to merge.
+
+Initial builder source inspection (not an independent review): **LATER / SIMPLICITY**
+— `packages/core/src/recovery-attribution-persistence.test.ts`, exported `fixture`:
+move that factory to a shared test helper later. Both suites can reuse it without
+registering the persistence suite as an import side effect, keeping focused test
+counts and failures easier to maintain. Non-blocking; no adjacent refactor here.
+
+Additional security-boundary execution: `src/auth/context-boundary.test.ts`
+finishes **143 passed, 2 failed**. After correcting the new wrapper's type shape,
+its diagnostic names only inherited `packages/db/src/practice-session.ts:24` and
+that file's protected source identity. There is no unstaged change to that file;
+the supplied staged parent delta adds the optional serializable-transaction path
+to `practiceMaterialPool`. The protected checker/fingerprint and parent behavior
+were preserved. The parent's owner/reviewer must reconcile this gate before this
+combined tree is ready. `src/auth/identity.test.ts` separately passed 6 tests;
+final legacy value-controller/subscription-access regression passed 16 tests.
+The reviewed catalogue JSON parses with 1,375 entries and no path-completeness
+problems. None of this substitutes for live PostgreSQL grant inspection.
+
+## CI and review evidence still required
+
+`value-source.integration.test.ts` uses real synthetic writers for the catch,
+supplementary invoice, matched settled receipt, allocator and assessment chain.
+It tests replay/no read-side audit append, immediate stale-money refusal after a
+refund, explicit negative reassessment, original-bill fee-free capture, cross-
+session/job/tenant refusal, real subscription statement reproduction and session
+revocation. Disposable corruption tests attack allocation caps and wrong locked
+revisions through the read boundary. Grants are checked as real catalogue facts.
+`value-source-upgrade.integration.test.ts` populates the actual predecessor,
+preserves existing rows/types/keys through 0342, applies successors and repeats
+migration. These PostgreSQL tests were **not run locally**: this sandbox cannot
+start PostgreSQL or bind localhost.
+
+`CH-9-mapped.spec.ts` tests responsive source/period rendering and removal of stale
+figures on refresh with an explicitly mocked transport fixture. It is browser UI
+coverage, not database truth; PostgreSQL coverage is separate. Browser suites,
+full required CI, current-main comparison and one independent Claude RED review
+are still required before merge. No live-model evaluation applies: prompts,
+models, extraction schemas and provider routes did not change.
+
+---
+
 # CH9-B builder receipt — build-ahead, held
 
 Date: 24 October 2026. Builder: Codex. One initial build; no independent repair round, review, acceptance, commit, push or merge. C250's at-most-two review repair rounds remain with the dispatcher. RED money-display lane.
@@ -314,6 +569,42 @@ build, typecheck and 178 focused assertions remain the last code validation.
 No PostgreSQL/browser suites run here. The git-based lane tests use disposable
 fixture repositories; no git-writing command was issued against this worktree.
 
+
+## CH-9 part 2 cumulative job-fee rounding follow-up — 28 October 2026
+
+RED. Job totals now pass cumulative principal once through the existing v3
+`calculateCumulativeFee` kernel, matching MON-4A/M4-9-S rounding. Catch movement
+fee and remainder fields retain exact rational pence shares; the UI labels fee
+shares as unrounded and preserves a third decimal in pounds when needed. This
+changes those two movement fields from integer Money to exact rational pence in
+the still-unmerged mapped receipt contract; job totals remain integer Money.
+Window fees are differences between rounded cumulative job balances, preserving
+adjacent-window reconciliation and explicit negative reversals. No migration,
+financial posting, policy, eligibility, authorization or real provider change.
+
+Regression: three catches of 101p, 105p and 105p produce a 31p job fee, rather
+than the 30p sum of individually rounded fees. Their exact fee shares remain
+10.1p, 10.5p and 10.5p. Separate windows give 10p, 11p and 10p, and reversing
+the first catch gives -10p. Existing replay, foreign scope, lock, stale-source
+and fractional-principal refusals remain covered.
+
+Local checks (installed Node 24.17.0, cached pnpm 10.28.1; no downloads):
+
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/value-source-receipt.test.ts src/cumulative-fee.test.ts src/fee-statement.test.ts`: PASS, 122 tests (includes imported attribution fixture tests).
+- `pnpm --filter @jobguard/core build`: PASS (TypeScript compilation).
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/ui/mapped-value-receipt.test.tsx`: PASS, 5 tests.
+- `pnpm --filter @jobguard/web typecheck`: PASS.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/value/value-v3.application.test.ts src/value/company-value.application.test.ts`: PASS, 40 tests.
+- Core purity, money arithmetic and commercial boundary lints: PASS. Core purity reports existing computed-import notices.
+- `git diff --check`: PASS.
+- Default lane boundary lint: FAIL on inherited committed branch paths outside ch9-p2, including MON-1 and SV-6 hookup paths and their lane files. None of the repair's changed paths is in its refusal list. The gate was not weakened; the router must reconcile ancestry/current main before CI can be green.
+
+Database/browser suites and full root checks were not run, per sandbox/task
+constraints. Existing database reversal assertion was updated to the exact share
+shape for CI. Migration 0342 is unchanged. This is ready for the router's repair
+commit; it is not a CI pass, review of the changed head, merge or release claim.
+One independent RED review of the new head remains required. No git writes.
+Commit message: `/tmp/ch9-p2-20261028T215114Z-commit-msg.txt`.
 ## Catch-up resolution — 28 October 2026, 21:28 UTC
 
 This section supersedes the earlier catch-up observations above. Scope remains

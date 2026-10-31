@@ -140,3 +140,15 @@ it.each([["NOT_FOUND",404],["SYNTHETIC_MODE_REQUIRED",403]] as const)("SBOX refu
  expect(retry.message).toContain("may or may not have been saved");
  expect(commandOutcome({status:status===404?403:404,body:{code}})).toEqual({kind:"unknown",message:unreadableAnswer});
 });
+
+// Server-confirmed Final Check catches are readable but cannot be opened by a client.
+it("reads a confirmed final-check catch without allowing a catch creation command", async () => {
+ const { recoveryCaseCommandV1 } = await import("@jobguard/api/recovery-case-contracts");
+ const caught = { ...view(CASE_A), caseType: "missed_variation_final_account" };
+ expect(readList({ ...envelope, cases: [caught] })?.cases).toEqual([caught]);
+ expect(readList({ ...envelope, cases: [{ ...caught, caseType: "unapproved_case_type" }] })).toBeUndefined();
+ expect(recoveryCaseCommandV1.safeParse({ version: "recovery-case-command.v1", action: "open",
+  commandId: CASE_B, caseType: caught.caseType, claimedNetPence: 80000, counterparty: "Synthetic customer",
+  book: "builder_customer", sourceType: "customer_invoice", sourceRefs: [CASE_A], expectedRevision: 0,
+ }).success).toBe(false);
+});

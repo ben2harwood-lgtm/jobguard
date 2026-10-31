@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-design-note-fix": {
+      "branches": ["codex/sandbox/lp-design-note-fix"],
+      "note": "LP-DESIGN-NOTE-FIX: pin the design inventory migration boundary and retain exact reproducibility checks. Docs/tooling only.",
+      "allow": [
+        "tools/lp-downstream-inventory.py",
+        "tools/lp-downstream-inventory.test.mjs",
+        "docs/contracts/lp-downstream-effects-v1.md"
+      ]
+    }
+  }
+}

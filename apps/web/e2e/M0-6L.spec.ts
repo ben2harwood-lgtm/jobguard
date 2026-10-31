@@ -44,6 +44,9 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  // MON-2A C2/C3: the same entered-code company session explicitly accepts terms and changes plans.
  const consent=page.getByRole("checkbox",{name:/I accept these monthly terms/});
  await expect(page.getByRole("button",{name:"Accept monthly terms"})).toBeDisabled();
+ await expect(page.getByLabel("Billing anchor day")).toHaveCount(0);
+ const serverBillingDay=(await api(page,"/api/subscriptions/current",{headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":tenant!}})).body.billingDay;
+ await expect(page.getByRole("region",{name:"Your subscription",exact:true})).toContainText(`Your billing day: the ${serverBillingDay}`);
  const shownConsent=await page.getByTestId("subscription-consent").textContent();
  const consentRequest=page.waitForRequest(request=>request.url().endsWith("/api/subscriptions/commands") && request.method()==="POST");
  await consent.check();await page.getByRole("button",{name:"Accept monthly terms"}).click();
@@ -55,7 +58,7 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  await expect(subscription).toContainText("Builder · monthly");await expect(subscription).toContainText("£169.00");
  await page.getByLabel("Plan",{exact:true}).selectOption("Solo");await consent.check();
  await page.getByRole("button",{name:"Request downgrade to Solo"}).click();
- await expect(page.getByRole("status")).toContainText("Downgrade requested for");
+ await expect(page.getByRole("main").getByRole("status").filter({hasText:"Downgrade requested for"})).toContainText("Downgrade requested for");
  await expect(subscription).toContainText("Builder · monthly");
  await seedSubscriptionPeriod(tenant!,cookie.value);await page.reload();
  const payment=page.getByRole("button",{name:/Approve simulated payment of/});
@@ -70,7 +73,7 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  await page.route("**/api/subscriptions/commands",route=>route.fulfill({status:201,json:{paymentStatus:"pending"}}),{times:1});
  await page.route("**/api/subscriptions/current",route=>route.fulfill({status:503,json:{code:"SUBSCRIPTION_UNAVAILABLE"}}),{times:1});
  await payment.click();
- await expect(page.getByRole("status")).toContainText("Approval saved. Simulated payment is pending.");
+ await expect(page.getByRole("main").getByRole("status").filter({hasText:"Approval saved."})).toContainText("Approval saved. Simulated payment is pending.");
  await expect(page.getByRole("main").getByRole("alert")).toContainText("Subscription details are unavailable");
  await expect(payment).toHaveCount(0);
  await page.reload();

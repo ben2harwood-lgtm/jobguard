@@ -13,6 +13,7 @@ import {
 } from "../src/index.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 
 // Real PostgreSQL 16, the real migrations applied as the migration owner, the real non-owner runtime role, and the real SBOX-2 and M4-5-S
 // repositories: no mock stands in for a guarantee here. Every number below is read back from the database.
@@ -56,6 +57,7 @@ async function seedDemoFixture(db: Pool, sessionDigest: string) {
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    await permitPracticeHomeJob(client, { tenantId, jobId, title: "Recovery follow-up fixture job", practiceSessionDigest: sessionDigest, actorMembershipId: memberId });
     await client.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery follow-up fixture job',$3,'home')", [jobId, tenantId, sessionDigest]);
     await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
     await client.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, tenantId, jobId]);

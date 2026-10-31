@@ -1,3 +1,5 @@
+import { customerVariationActions } from "./customer-variation.js";
+import { customerActions, customerToken } from "./customer-signin.js";
 import { Inject, Injectable, UnauthorizedException, ForbiddenException, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import { IDENTITY_APPLICATION, cookieToken, identityStatus, type IdentityHttpRequest } from "./identity-http.js";
 import type { IdentityApplication } from "./identity.application.js";
@@ -9,10 +11,12 @@ export class ApplicationAuthGuard implements CanActivate {
   constructor(@Inject(IDENTITY_APPLICATION) private readonly application:()=>IdentityApplication) {}
   async canActivate(context:ExecutionContext):Promise<boolean> {
     const request=context.switchToHttp().getRequest<IdentityHttpRequest & {path:string;method?:string}>();
+    if(request.method==="POST" && [...customerActions,...customerVariationActions].some(action=>request.path===`/customer-portal/${action}`))return true;
+    if(customerToken(request)!==undefined)throw new UnauthorizedException({code:"UNAUTHENTICATED"});
     if(request.path==="/healthz" || request.path.startsWith("/auth/"))return true;
-    // MON-2A (Ben, 28 Oct): exact subscription paths take a real company session with Origin and CSRF, checked
-    // before the practice shortcut; a practice cookie never reaches them. Every other money path is unchanged.
-    if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`)){
+    // MON-2A subscription paths and CH-9 exact GET value paths use the company bridge
+    // before the practice shortcut. All other money paths retain their existing refusal.
+    if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`) || (request.method==="GET" && (request.path==="/value" || /^\/jobs\/[a-f0-9-]{36}\/value\/v3$/iu.test(request.path)) && cookieToken(request))){
       try {
         await this.application().context({sessionToken:cookieToken(request),requestedTenantId:request.body?.requested_tenant_id,tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin??(request.method==="GET"?this.application().allowedOrigin:undefined)});
       }catch(error){const {code}=identityStatus(error);if(code==="TENANT_FORBIDDEN"||code==="ORIGIN_FORBIDDEN")throw new ForbiddenException({code});throw new UnauthorizedException({code:"UNAUTHENTICATED"});}
@@ -23,6 +27,8 @@ export class ApplicationAuthGuard implements CanActivate {
     try {
       await this.application().context({sessionToken:cookieToken(request),requestedTenantId:request.body?.requested_tenant_id,tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin});
     }catch(error){const {code}=identityStatus(error);if(code==="TENANT_FORBIDDEN"||code==="ORIGIN_FORBIDDEN")throw new ForbiddenException({code});throw new UnauthorizedException({code:"UNAUTHENTICATED"});}
+    // MON-3 independently rechecks the current synthetic company owner/session in SQL.
+    if(/^\/jobs\/[^/]+\/(?:trial|quotes\/activation)$/u.test(request.path)&&process.env.JOBGUARD_ENV==="synthetic_demo")return true;
     // Existing commercial modules are synthetic projections: never run them as a real principal.
     throw new ForbiddenException({code:"SYNTHETIC_WORKFLOW_ONLY"});
   }

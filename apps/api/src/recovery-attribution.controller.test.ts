@@ -17,7 +17,7 @@ it("controller maps nondisclosing access and dependency failures",async()=>{
 });
 
 it("source, stale and replay conflicts are typed; unknown errors are not disguised",()=>{
- for(const code of ["RECOVERY_ATTRIBUTION_SOURCE_REQUIRED","RECOVERY_ATTRIBUTION_STALE","RECOVERY_ATTRIBUTION_IDEMPOTENCY_CONFLICT","RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED"])
+ for(const code of ["RECOVERY_ATTRIBUTION_REVIEW_EXCLUDED","RECOVERY_ATTRIBUTION_REVIEW_ARTIFACT_CHANGED","RECOVERY_ATTRIBUTION_REVIEW_ALREADY_RECORDED","RECOVERY_ATTRIBUTION_SOURCE_REQUIRED","RECOVERY_ATTRIBUTION_STALE","RECOVERY_ATTRIBUTION_IDEMPOTENCY_CONFLICT","RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED"])
   expect(recoveryAttributionFailure(new Error(code))).toEqual({status:409,body:{code}});
  expect(recoveryAttributionFailure(new Error("FINAL_CHECK_FORBIDDEN"))).toEqual({status:404,body:{code:"NOT_FOUND"}});
  expect(recoveryAttributionFailure(new Error("network failure"))).toBeNull();

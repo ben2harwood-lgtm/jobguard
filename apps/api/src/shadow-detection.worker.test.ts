@@ -64,7 +64,7 @@ describe("SV-3 actual shared worker composition",()=>{
   const registered=vi.fn(async(..._arguments:unknown[])=>({stop:vi.fn()})),execute=vi.fn(async()=>undefined);
   const queries=vi.fn(async(sql:string)=>sql.includes("pg_auth_members")?{rows:[{safe:true}]}:sql.includes("to_regclass")?{rows:[{available}]}:sql.includes("final_check_terms_acceptance")?{rows:[],rowCount:0}:{rows:[]});
   vi.doMock("pg",()=>({Pool:class{query=queries;connect=async()=>({query:queries,release:vi.fn()});end=async()=>undefined;}}));
-  vi.doMock("graphile-worker",()=>({run:registered}));
+  vi.doMock("graphile-worker",async()=>({...await vi.importActual<Record<string,unknown>>("graphile-worker"),run:registered}));
   vi.doMock("@jobguard/db",async()=>({...await vi.importActual<Record<string,unknown>>("@jobguard/db"),ActionExecutor:class{execute=execute;}}));
   const listener=vi.spyOn(process,"once").mockReturnValue(process);
   vi.stubEnv("GRAPHILE_DATABASE_URL","postgresql://localhost/graphile");

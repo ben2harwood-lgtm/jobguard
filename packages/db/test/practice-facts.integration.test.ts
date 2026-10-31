@@ -112,8 +112,8 @@ beforeAll(async()=>{
   directory=await mkdtemp(join(tmpdir(),"jobguard-practice-facts-"));
   const port=await freePort(60700,200);
   postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
-  await postgres.initialise(); await postgres.start();
-  admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password});
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password});
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   const index=MIGRATION_URLS.findIndex(u=>fileURLToPath(u).endsWith("0131_practice_feed_facts.sql"));
   if(index<0)throw new Error("0131 missing");
@@ -124,7 +124,7 @@ beforeAll(async()=>{
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE practice_feed_test_login LOGIN PASSWORD 'synthetic-feed-test-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO practice_feed_test_login");
-  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"practice_feed_test_login",password,max:4});
+  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"practice_feed_test_login",password,max:4});
   upgraded=await connected(); let v=await view(upgraded);
   for(const entry of practiceMovementCatalogueV1)v=await cmd(repo(),upgraded,advance(v.revision,entry.movement,"settled"));
   const inv=await invoice(upgraded.jobId), paymentId=await receipt(upgraded,inv,38400);

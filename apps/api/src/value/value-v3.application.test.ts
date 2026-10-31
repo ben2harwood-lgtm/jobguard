@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
+import { mapValueReceipt } from "@jobguard/core";
 import { PracticeAccess } from "../practice-access.js";
 import { ValueV3Application, heldJobValueV3, valueJobResponseV3 } from "./value-v3.application.js";
 
@@ -28,7 +29,7 @@ it.each(["foreign session", "foreign tenant", "foreign job", "foreign imported d
  await expect(app.readJob(jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect(readJob).not.toHaveBeenCalled();
 });
-it.each([{ from: "2026-01-01T00:00:00Z" }, { toExclusive: "2026-02-01T00:00:00Z" }, { fee: 0 }, { periodId: randomUUID() }, null, []])("unbound time/authority selections are rejected: %j", async query => {
+it.each([{from:["2026-10-01T00:00:00Z","2026-10-02T00:00:00Z"],toExclusive:"2026-11-01T00:00:00Z"}, { from: "2026-01-01T00:00:00Z" }, { toExclusive: "2026-02-01T00:00:00Z" }, { fee: 0 }, { periodId: randomUUID() }, null, []])("unbound time/authority selections are rejected: %j", async query => {
  const { app, readJob } = fixture();
  await expect(app.readJob(jobId, query)).rejects.toMatchObject({ code: "VALUE_V3_QUERY_UNBOUND" });
  expect(readJob).not.toHaveBeenCalled();
@@ -92,4 +93,16 @@ it.each([
  const { app, readJob } = fixture();
  readJob.mockResolvedValue({ ...heldJobValueV3(jobId), ...extra });
  await expect(app.readJob(jobId)).rejects.toMatchObject({ code: "VALUE_V3_SOURCE_REJECTED" });
+});
+
+it("mapped receipt figures reproduce their source list and bind the authorized tenant",async()=>{
+ const {app,authority,readJob}=fixture(),tenantId=randomUUID(),revisionId=randomUUID();
+ authority.mockResolvedValue({context:{tenantId}} as Awaited<ReturnType<PracticeAccess["job"]>>);
+ const receipt=mapValueReceipt({tenantId,jobId,lockId:randomUUID(),lockedRevisionId:revisionId,lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:randomUUID(),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[{id:randomUUID(),sourceId:randomUUID(),revisionId,invoiceId:randomUUID(),checkId:randomUUID(),netPence:360000,at:"2026-10-03T00:00:00Z"}],assessments:[]});
+ const value={version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt};readJob.mockResolvedValue(value);
+ expect(await app.readJob(jobId)).toMatchObject({status:"mapped",receipt:{tracked:{pence:360000},trackedFee:{pence:0}}});
+ readJob.mockResolvedValue({...value,receipt:{...receipt,tracked:{pence:999999,currency:"GBP"}}});
+ await expect(app.readJob(jobId)).rejects.toMatchObject({code:"VALUE_V3_SOURCE_REJECTED"});
+ readJob.mockResolvedValue(value);authority.mockResolvedValue({context:{tenantId:randomUUID()}} as Awaited<ReturnType<PracticeAccess["job"]>>);
+ await expect(app.readJob(jobId)).rejects.toMatchObject({code:"VALUE_V3_SOURCE_REJECTED"});
 });
