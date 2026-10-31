@@ -4,6 +4,7 @@ import { z } from "zod";
 import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, smallBuilderDemoReadRunV1,
   type SmallBuilderDemoRun, type SmallBuilderDemoReport, type SmallBuilderDemoHttpCommand } from "@jobguard/core";
 import { demoLink, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { MeterPreview } from "./meter-preview";
 import styles from "./chooser.module.css";
 const sessionV1 = z.object({ version: z.literal("identity-session.v1"), environment: z.literal("synthetic_demo"),
   csrfToken: z.string().min(24), memberships: z.array(z.object({ id: z.string().uuid(), tenantId: z.string().uuid(), name: z.string() })) });
@@ -135,7 +136,7 @@ export function DemoChooser() {
         <button disabled={busy} onClick={() => void send(pending)}>Retry saved request</button></section>}
       <section aria-labelledby="journey-title"><h2 id="journey-title">Choose a journey</h2><div className={styles.choices}>
         {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>Not ready yet. {choice.reason}</p>
-          {choice.scenario === "meter" && <details><summary>Meter profiles — all not ready yet</summary><ul>{meterProfiles.map(profile => <li key={profile}>{profile}</li>)}</ul></details>}
+          {choice.scenario === "meter" && <details><summary>Meter profiles — reference previews available</summary><ul>{meterProfiles.map(profile => <li key={profile}>{profile}</li>)}</ul></details>}
           <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>Save {choice.scenario} selection</button>
         </article>)}
       </div></section>
@@ -143,6 +144,8 @@ export function DemoChooser() {
         <input id="demo-resume" value={resumeId} onChange={event => setResumeId(event.target.value)} required />
         <button disabled={busy || !membership} type="submit">Resume</button></form>
       {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : "Not ready yet"}: {run.reason}</p>
+        {run.meterPreviewNote && <p role="status">{run.meterPreviewNote}</p>}
+        {run.meterPreview && <MeterPreview preview={run.meterPreview} />}
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
         <p>Saved revision {run.revision}. No product journey completion is recorded.</p>
         {run.successorId && <p><a href={demoLink(tenantId, run.successorId)}>Open replacement selection</a></p>}
