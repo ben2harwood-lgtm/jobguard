@@ -6,13 +6,14 @@ async function seedJob(admin: Pool, tenant: string) {
  const db = await admin.connect();
  try {
   await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
-  await db.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional customer job','live')", [tenant, job]);
+  await db.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional customer job')", [tenant, job]);
   await db.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenant, customer]);
   await db.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4)", [tenant, cr, customer, { version: "customer.v1", name: "Fictional customer", type: "person", email: "portal@example.invalid" }]);
   await db.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [tenant, site]);
   await db.query("INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key) VALUES($1,$2,$3,1,$4,'[]')", [tenant, sr, site, { version: "site.v1", addressLines: ["1 Fictional Road"], town: "London", postcode: "SW1A 1AA" }]);
   await db.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) VALUES($1,$2,$3,0,$4,$5,$4,$5,$6,$7,'backfilled_synthetic_fixture')", [tenant, binding, job, customer, cr, site, sr]);
   await db.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [tenant, job, binding]);
+  await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, job]);
   await db.query("COMMIT"); return { job, customer };
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
