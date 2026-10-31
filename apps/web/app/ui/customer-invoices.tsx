@@ -4,6 +4,7 @@ import { practiceInvoiceResponseV1, type PracticeInvoiceResponse } from "@jobgua
 import { CustomerCreditNotes } from "./customer-credit-notes";
 import { CustomerReceipts } from "./customer-receipts";
 import { notifyInvoiceChanged } from "./customer-payment-status";
+import { CustomerInvoicePayNow } from "./pay-now-synthetic";
 const pounds=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 type LockInvoiceGuard = { code: "FINAL_ACCOUNT_LOCK_REQUIRED" | "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED" | null; kind: "final" | "supplementary"; lockedRevision?:{id:string;sourceHash:string;issueBlocked:boolean} };
 export function CustomerInvoices({jobId,finalAccount,lockGuard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};lockGuard?:LockInvoiceGuard}) {
@@ -52,6 +53,7 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    <p>Issue date {invoice.issuedOn} · Fictional issuer/run identity <code>{view?.jobId}</code></p>
    <p>Artifact hash <code data-testid="invoice-artifact-hash">{invoice.pdfSha256}</code></p>
    <a href={`/api/jobs/${jobId}/customer-invoices/${invoice.id}`}>Download synthetic invoice PDF</a>
+   <CustomerInvoicePayNow/>
    <p>Need to change it? Issue a correction; this snapshot and number cannot be edited.</p>
    <CustomerCreditNotes jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
    <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>

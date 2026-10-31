@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-6-pay-now-synthetic": {
+      "branches": ["codex/sandbox/mon-6-pay-now-synthetic"],
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/pay-now-synthetic.ts",
+        "packages/core/src/pay-now-synthetic.test.ts",
+        "apps/web/app/lib/pay-now-fake-provider.ts",
+        "apps/web/app/lib/pay-now-fake-provider.test.ts",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/pay-now-synthetic.tsx",
+        "apps/web/app/ui/pay-now-synthetic.test.tsx"
+      ],
+      "note": "MON-6 RED: dark synthetic invoice options and in-memory fake only. No migrations, real money, live provider or production authority."
+    }
+  }
+}
