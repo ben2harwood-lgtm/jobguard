@@ -71,7 +71,7 @@ async function incompleteShadowReport(page: Page, jobId: string) {
   await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
   await button(page, "Load saved J3 evidence").click();
   const saved = page.getByRole("region", { name: "Saved shadow journey report" });
-  await expect(saved).toContainText("Customer approval is not ready yet (MON-5)");
+  await expect(saved.getByText("Incomplete. Step 6: awaiting customer approval. No fee is charged.", { exact: true })).toBeVisible();
   await expect(saved).toContainText("No fee is charged");
   await expect(saved).toContainText("No invoice issued");
 }
