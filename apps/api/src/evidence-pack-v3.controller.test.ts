@@ -7,7 +7,7 @@ import { EvidencePackController } from "./evidence-pack.controller.js";
 import { evidencePackFailure } from "./evidence-pack.errors.js";
 const id = "ab000000-0000-4000-8000-000000000001", digest = "a".repeat(64);
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
-it("real controller refuses v3 creation and approval with a uniform 409 before queue dispatch", async () => {
+it("real controller maps a worker dependency refusal uniformly after authenticated dispatch", async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const auth = vi.spyOn(PracticeAccess.prototype, "case").mockResolvedValue({ context: { tenantId: id }, digest, membershipId: id } as never);
   const writer = vi.spyOn(EvidencePackRepository.prototype, "generate");
@@ -23,7 +23,7 @@ it("real controller refuses v3 creation and approval with a uniform 409 before q
     expect(error.getResponse()).toEqual({ code: "EVIDENCE_PACK_V3_DEPENDENCY_HELD" });
   }
   expect(auth).toHaveBeenCalledWith(id); expect(writer).not.toHaveBeenCalled();
-  expect(queued).not.toHaveBeenCalled();
+  expect(queued).toHaveBeenCalledTimes(2);
 });
 it("failure mapping never includes producer details or hidden-state hints", () => {
   expect(evidencePackFailure(new Error("EVIDENCE_PACK_V3_DEPENDENCY_HELD"))).toEqual({ status: 409, code: "EVIDENCE_PACK_V3_DEPENDENCY_HELD" });

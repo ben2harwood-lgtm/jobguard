@@ -130,7 +130,7 @@ describe("dark Claude fetch adapter", () => {
   ])("fails without retry, secret reflection or global fallback %#", async fake => {
     const transport = vi.fn(async () => fake());
     const gateway = new AiGateway(createDarkClaudeProvider(config, transport), fixtureAiSession);
-    await expect(gateway.generate(request, schema)).rejects.toMatchObject({ code: "invalid_provider_response", message: "Claude contract transport or response failed" });
+    await expect(gateway.generate(request, schema)).rejects.toMatchObject({ code: "invalid_provider_response", message: "AI provider failed" });
     expect(transport).toHaveBeenCalledOnce();
   });
 });

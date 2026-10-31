@@ -18,7 +18,7 @@ export class FixtureAiProvider implements AiProvider {
   async execute(request: AiGatewayRequest, signal?: AbortSignal): Promise<unknown> {
     if (signal?.aborted) throw new AiGatewayError("cancelled", "AI fixture request was cancelled");
     const fixture = this.fixtures[request.fixtureId];
-    if (!fixture) throw new AiGatewayError("fixture_not_found", `Unknown AI fixture: ${request.fixtureId}`);
+    if (!fixture) throw new AiGatewayError("fixture_not_found", "Unknown AI fixture");
     return {
       ...fixture,
       provider: "recorded-fixture",
