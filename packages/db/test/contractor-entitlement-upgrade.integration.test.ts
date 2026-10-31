@@ -35,6 +35,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.contractor_receipt_line_allocation":[],
  "app.customer_portal_grant":[],
  "app.customer_portal_session":[],
+ "app.customer_variation_approval":[],
  "app.enterprise_agreement_version":[],
  "app.enterprise_baseline_batch":[],
  "app.enterprise_baseline_team":[],
@@ -67,6 +68,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.payment_fee_statement":[],
  "app.platform_enterprise_fee":[],
  "app.platform_enterprise_fee_line":[],
+ "app.platform_fee_statement":[],
+ "app.platform_fee_statement_command":[],
  "app.receipt_allocation_fact_command":[],
  "app.receipt_allocation_fact_line":[],
  "app.receipt_allocation_fact_review":[],
@@ -82,6 +85,12 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.stored_receipt_case_allocation":[],
  "app.stored_receipt_case_binding":[],
  "app.stored_receipt_case_command":[],
+ "app.success_fee_command":[],
+ "app.success_fee_derivation":[],
+ "app.success_fee_journal":[],
+ "app.success_fee_journal_line":[],
+ "app.success_fee_review":[],
+ "app.success_fee_source":[],
  "app.trial_admission":[],
  "app.trial_business_verification":[],
  "app.trial_card_attempt":[],
@@ -91,7 +100,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.trial_subscription_source":[],
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
- ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
+ ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))
+};expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
