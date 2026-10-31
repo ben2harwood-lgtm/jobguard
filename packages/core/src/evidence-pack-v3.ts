@@ -103,10 +103,10 @@ function declaredIssues(manifest: ManifestShape): string[] {
   if (manifest.lifecycle.state === "pre_lock") {
     if (manifest.sections.length || manifest.entries.some((entry) => entry.kind !== "ordinary")) issues.push("Pre-lock section forbidden");
   } else {
-    if (manifest.lifecycle.evidenceCutoff > manifest.lifecycle.lockedAt) issues.push("Contradictory lock/cutoff");
+    const { evidenceCutoff, lockedAt } = manifest.lifecycle;
+    if (evidenceCutoff > lockedAt) issues.push("Contradictory lock/cutoff");
     if (manifest.sections.length !== evidenceSectionKindV3.options.length) issues.push("Missing section lifecycle declaration");
-    if (manifest.entries.some((entry) => entry.kind === "source_observations" && entry.recordedAt >
-      (manifest.lifecycle.state === "post_lock" ? manifest.lifecycle.evidenceCutoff : ""))) issues.push("Observation after cutoff");
+    if (manifest.entries.some((entry) => entry.kind === "source_observations" && entry.recordedAt > evidenceCutoff)) issues.push("Observation after cutoff");
   }
   for (const entry of manifest.entries) {
     if (!sameOwner(manifest, entry)) issues.push("Wrong tenant/job/case");
