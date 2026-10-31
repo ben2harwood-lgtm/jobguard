@@ -14,6 +14,7 @@ async function seedJob(admin: Pool, tenant: string) {
   await db.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) VALUES($1,$2,$3,0,$4,$5,$4,$5,$6,$7,'backfilled_synthetic_fixture')", [tenant, binding, job, customer, cr, site, sr]);
   await db.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [tenant, job, binding]);
   await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, job]);
+  await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING", [tenant, job]);
   await db.query("COMMIT"); return { job, customer };
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
@@ -31,7 +32,7 @@ test("customer reviews and approves one exact signed extra; builder history reco
   try {
    await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
    await db.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'reserved')",[tenant,fixture.job,scope]);
-   await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,'text','Fictional extra socket','Fictional extra socket')",[tenant,fixture.job,variation,scope]);
+   await db.query("INSERT INTO app.variation(tenant_id,job_id,id,scope_item_id,capture_kind,capture_text,description,job_track,origin) SELECT $1,$2,$3,$4,'text','Fictional extra socket','Fictional extra socket',job_track,'builder_logged' FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2",[tenant,fixture.job,variation,scope]);
    await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional extra socket','1','item',5000,5000,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[tenant,fixture.job,revision,variation,scope,contentHash,actor]);
    await db.query("UPDATE app.variation SET current_revision_id=$3,state='priced' WHERE tenant_id=$1 AND id=$2",[tenant,variation,revision]);await db.query("COMMIT");
   }catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}

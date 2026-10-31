@@ -4,11 +4,11 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 import { migrate } from "../src/migrate.js";
-const own="0410_customer_variation_approval.sql";
+const own="0502_customer_variation_approval.sql";
 let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(own);},120000);
 afterAll(async()=>c?.close());
-it("preserves every historical approval field, privileges and policy while adding nullable customer provenance",async()=>{
+it("preserves every historical approval field, privileges and policy and exact row fingerprints while adding separate customer provenance",async()=>{
  const old=(await c.admin.query("SELECT v.*,m.id actor FROM app.variation v JOIN app.membership m ON m.tenant_id=v.tenant_id AND m.role='owner' LIMIT 1")).rows[0];
  expect(old).toBeDefined();
  const revision=randomUUID(),approval=randomUUID(),hash="a".repeat(64);
@@ -19,11 +19,18 @@ it("preserves every historical approval field, privileges and policy while addin
  const before=await snapshot(c.admin);
  const catalogue=()=>c.admin.query("SELECT relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.variation_approval'::regclass");
  const privileges=(await catalogue()).rows;
+ const fingerprints=()=>c.admin.query("SELECT id,md5(to_jsonb(a)::text) hash FROM app.variation_approval a ORDER BY tenant_id,id");
+ const columns=()=>c.admin.query("SELECT attname FROM pg_attribute WHERE attrelid='app.variation_approval'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum");
+ const priorFingerprints=(await fingerprints()).rows, priorColumns=(await columns()).rows;
  await applyMigration(c,own);
- const expected={...before,"app.variation_approval":(before["app.variation_approval"] as Record<string,unknown>[]).map(row=>({...row,customer_session_id:null,customer_command_hash:null}))};
+ const expected={...before,"app.customer_variation_approval":[]};
  expect(await snapshot(c.admin)).toEqual(expected);expect((await catalogue()).rows).toEqual(privileges);
  await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
+ expect((await fingerprints()).rows).toEqual(priorFingerprints);
+ expect((await columns()).rows).toEqual(priorColumns);
+ const sideConstraints=(await c.admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.customer_variation_approval'::regclass")).rows.map(r=>r.definition).join("\n");
+ expect(sideConstraints).toContain("FOREIGN KEY (tenant_id, customer_session_id) REFERENCES app.customer_portal_session(tenant_id, id)");
+ expect(sideConstraints).toContain("FOREIGN KEY (tenant_id, variation_approval_id) REFERENCES app.variation_approval(tenant_id, id) DEFERRABLE INITIALLY DEFERRED");
  const constraints=(await c.admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.variation_approval'::regclass")).rows.map(r=>r.definition).join("\n");
- expect(constraints).toContain("FOREIGN KEY (tenant_id, customer_session_id) REFERENCES app.customer_portal_session(tenant_id, id)");
  expect(constraints).toContain("customer_authenticated");
 });

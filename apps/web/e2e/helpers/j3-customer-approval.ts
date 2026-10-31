@@ -11,7 +11,8 @@ export type PricedCatch = { id: string; description: string; currentRevisionId: 
  * enter the builder context. No approval/claim/settlement rows are seeded. */
 export async function approveJ3Catches(page: Page, browser: Browser, jobId: string, catches: PricedCatch[]) {
  const admin = new Pool({ connectionString: process.env.E2E_ADMIN_DATABASE_URL, max: 1 });
- const issuer = await page.context().newPage();
+ const issuerContext = await browser.newContext({ baseURL: new URL(page.url()).origin, viewport: page.viewportSize() });
+ const issuer = await issuerContext.newPage();
  const customerContext = await browser.newContext({ baseURL: new URL(page.url()).origin, viewport: page.viewportSize() });
  try {
   await issuer.goto("/sign-in");
@@ -20,7 +21,7 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   await issuer.getByLabel("Eight-digit code").fill((await issuer.getByTestId("fixture-code").innerText()).trim());
   await issuer.getByRole("button", { name: "Verify code", exact: true }).click();
   await expect(issuer.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
-  const session = await jsonResult(page.request.get("/api/auth/session"), "Read signed-in link issuer");
+  const session = await jsonResult(issuer.request.get("/api/auth/session"), "Read signed-in link issuer");
   // The practice job's tenant is fixed by the existing demo bootstrap, whereas
   // code sign-in creates a fresh fictional business. Establish only the test
   // issuer's owner membership; do not move or recreate the captured job.
@@ -63,8 +64,11 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
    await expect(section.getByText("Approved · authenticated customer", { exact: true })).toBeVisible();
   }
   const view = await jsonResult(page.request.get(`/api/jobs/${jobId}/variations`), "Read customer-approved catches");
-  for (const item of catches) expect(view.variations.find((row: { id: string }) => row.id === item.id).revisions.at(-1)).toMatchObject({ approved: true, approvalMethod: "customer_authenticated" });
-  expect((await page.context().cookies()).some(cookie => cookie.name === "jobguard_customer")).toBe(false);
+  for (const item of catches) {
+   const revision = view.variations.find((row: { id: string }) => row.id === item.id).revisions.at(-1);
+   expect({ approved: revision.approved, approvalMethod: revision.approvalMethod }).toEqual({ approved: true, approvalMethod: "customer_authenticated" });
+  }
+  expect((await page.context().cookies()).some(cookie => cookie.name === "jobguard_customer" || cookie.name === "jobguard_session")).toBe(false);
   expect((await customerContext.cookies()).some(cookie => cookie.name === "jg_session" || cookie.name === "jobguard_session")).toBe(false);
- } finally { await customerContext.close(); await issuer.close(); await admin.end(); }
+ } finally { await customerContext.close(); await issuerContext.close(); await admin.end(); }
 }

@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
+import { ValueV3Reader } from "@jobguard/db";
 import { recoveryAttributionRevisionV1 } from "@jobguard/core";
 import { PracticeAccess } from "./practice-access.js";
 import { FinalAccountLockApplication } from "./final-account-lock.application.js";
@@ -7,7 +8,7 @@ import { FinalCheckApplication } from "./final-check.application.js";
 import { RecoveryAttributionApplication } from "./recovery-attribution.application.js";
 import { attributionValueReceipt } from "./recovery-attribution-value.js";
 import { CustomerInvoiceApplication } from "./customer-invoice.application.js";
-import { ValueV3Application } from "./value/value-v3.application.js";
+import { heldJobValueV3, ValueV3Application } from "./value/value-v3.application.js";
 import { EvidencePackApplication } from "./evidence-pack.application.js";
 
 export class ShadowDemoQueryError extends Error {
@@ -28,17 +29,24 @@ export class ShadowDemoApplication {
   if (!z.object({}).strict().safeParse(query).success) throw new ShadowDemoQueryError();
   const account = await new FinalAccountLockApplication(this.pool, this.sessionId).get(jobId);
   const invoices = await new CustomerInvoiceApplication(this.pool, this.sessionId).get(jobId);
-  const value = await new ValueV3Application(this.pool, this.sessionId).readJob(jobId);
+  const value = account.lock
+   ? await new ValueV3Application(this.pool, this.sessionId, new ValueV3Reader(this.pool, this.sessionId)).readJob(jobId)
+   : heldJobValueV3(jobId);
+  if (value.status === "mapped" && value.receipt.sources.lockId !== account.lock?.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
   // These are builder-visible records. Holding a signal cannot alter them.
   const visible = {
-   version: "shadow-demo-report.v1" as const, environment: "synthetic_demo" as const,
+   version: "shadow-demo-report.v2" as const, environment: "synthetic_demo" as const,
    jobId, status: "incomplete" as const, realExternalActions: 0 as const,
-   customerApproval: "not_ready_yet" as const, account, invoices, value,
+   customerApproval: { state: "not_ready_yet" as "not_ready_yet" | "awaiting_customer" | "approved",
+    approvals: [] as { variationId: string; approvedAt: string; method: "customer_portal" }[] }, account, invoices, value,
   };
   if (!account.lock) return visible;
   const finalCheck = await new FinalCheckApplication(this.pool, this.sessionId).get(jobId);
   if (finalCheck.lockId !== account.lock.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
   if (finalCheck.state !== "completed") return { ...visible, finalCheck };
+  // Portal approval rows are bound in the catch-up after #451 lands. Builder
+  // attestation (including an approved variation) cannot establish customer consent.
+  if (finalCheck.items.length > 0) visible.customerApproval.state = "awaiting_customer";
   const history = await new RecoveryAttributionApplication(this.pool, this.sessionId).get(jobId);
   const latest = new Map<string, z.infer<typeof recoveryAttributionRevisionV1>>();
   for (const raw of history.revisions) {

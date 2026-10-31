@@ -35,7 +35,7 @@ async function fixture() {
 }
 type Fixture=Awaited<ReturnType<typeof fixture>>;
 const run=(a:Fixture,command:unknown=a.command,overrides:Partial<Fixture>={})=>{const x={...a,...overrides};return identity("SELECT identity.customer_variation($1,$2,$3,$4,$5::jsonb) result",[x.tenantId,x.jobId,x.customer,x.sessionDigest,command===null?null:JSON.stringify(command)]);};
-const approvals=async(a:Fixture)=>(await f.admin.query("SELECT * FROM app.variation_approval WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
+const approvals=async(a:Fixture)=>(await f.admin.query("SELECT a.*,p.customer_session_id,p.customer_command_hash FROM app.variation_approval a LEFT JOIN app.customer_variation_approval p ON(p.tenant_id,p.variation_approval_id)=(a.tenant_id,a.id) WHERE a.tenant_id=$1 AND a.job_id=$2",[a.tenantId,a.jobId])).rows;
 const claims=async(a:Fixture)=>(await f.admin.query("SELECT revision,claimed_net_pence,reviewer_ref FROM app.recovery_claim_revision WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
 const refused={code:"42501",message:"CUSTOMER_REFUSED"};
 it("concurrent replay records one customer approval and 0282 claim revision 1 at exactly the approved amount",async()=>{
@@ -76,7 +76,8 @@ it("a newly priced revision makes the displayed old revision stale",async()=>{
 });
 it("raw runtime INSERT cannot manufacture customer provenance; identity has only the checked routine",async()=>{
  const a=await fixture();const sid=(await f.admin.query("SELECT id FROM app.customer_portal_session WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].id;
- await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,approved_at,customer_session_id,customer_command_hash) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,1,$6::text,50000,'customer_authenticated',clock_timestamp(),$7::uuid,$6::text)",[randomUUID(),a.tenantId,a.jobId,a.variationId,a.priced.id,a.priced.contentHash,sid]))).rejects.toMatchObject(refused);
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,approved_at) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,1,$6::text,50000,'customer_authenticated',clock_timestamp())",[randomUUID(),a.tenantId,a.jobId,a.variationId,a.priced.id,a.priced.contentHash]))).rejects.toMatchObject(refused);
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.customer_variation_approval(tenant_id,variation_approval_id,customer_session_id,customer_command_hash) VALUES($1::uuid,$2::uuid,$3::uuid,$4::text)",[a.tenantId,randomUUID(),sid,a.priced.contentHash]))).rejects.toMatchObject({code:"42501"});
  for(const role of ["jobguard_runtime","jobguard_infrastructure"])expect((await f.admin.query("SELECT has_function_privilege($1,'identity.customer_variation(uuid,uuid,uuid,text,jsonb)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(false);
  expect((await f.admin.query("SELECT has_table_privilege('jobguard_identity','app.variation_approval','SELECT,INSERT,UPDATE,DELETE') allowed")).rows[0].allowed).toBe(false);
 });
@@ -115,4 +116,29 @@ it("expiry while waiting for the source-effect lock cannot approve or create a c
   await new Promise(resolve=>setTimeout(resolve,2100));
  }finally{await blocker.query("ROLLBACK");blocker.release();}
  expect(await pending).toMatchObject({error:refused});expect(await approvals(a)).toEqual([]);expect(await claims(a)).toEqual([]);
+});
+
+it("customer provenance is private, immutable, one-to-one and cannot commit without its approval",async()=>{
+ const a=await fixture();await run(a);
+ const side=(await f.admin.query("SELECT * FROM app.customer_variation_approval WHERE tenant_id=$1 AND variation_approval_id=$2",[a.tenantId,a.command.commandId])).rows[0];
+ expect(side).toMatchObject({tenant_id:a.tenantId,variation_approval_id:a.command.commandId,customer_command_hash:expect.stringMatching(/^[a-f0-9]{64}$/)});
+ for(const role of ["jobguard_runtime","jobguard_identity","jobguard_infrastructure"]){
+  expect((await f.admin.query("SELECT has_table_privilege($1,'app.customer_variation_approval','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed",[role])).rows[0].allowed).toBe(false);
+ }
+ const db=await f.admin.connect();
+ try {
+  await db.query("BEGIN");await db.query("SET LOCAL ROLE jobguard_migration");
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);
+  expect((await db.query("SELECT * FROM app.customer_variation_approval")).rows).toEqual([]);
+  await db.query("ROLLBACK");
+  await db.query("BEGIN");
+  await db.query("INSERT INTO app.customer_variation_approval(tenant_id,variation_approval_id,customer_session_id,customer_command_hash) VALUES($1,$2,$3,$4)",[a.tenantId,randomUUID(),side.customer_session_id,side.customer_command_hash]);
+  await expect(db.query("COMMIT")).rejects.toMatchObject({code:"23503"});await db.query("ROLLBACK");
+ } finally {await db.query("ROLLBACK");db.release();}
+ await expect(f.admin.query("INSERT INTO app.customer_variation_approval SELECT * FROM app.customer_variation_approval WHERE tenant_id=$1 AND variation_approval_id=$2",[a.tenantId,a.command.commandId])).rejects.toMatchObject({code:"23505"});
+ for(const sql of ["UPDATE app.customer_variation_approval SET customer_command_hash=customer_command_hash WHERE tenant_id=$1 AND variation_approval_id=$2","DELETE FROM app.customer_variation_approval WHERE tenant_id=$1 AND variation_approval_id=$2"]){
+  await expect(f.admin.query(sql,[a.tenantId,a.command.commandId])).rejects.toMatchObject({code:"55000"});
+ }
+ await expect(f.admin.query("TRUNCATE app.customer_variation_approval")).rejects.toMatchObject({code:"55000"});
+ expect(await approvals(a)).toHaveLength(1);
 });
