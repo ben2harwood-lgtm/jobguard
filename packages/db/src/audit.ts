@@ -13,7 +13,7 @@ export const auditPayloadV1Schema = z.object({
   classifications: z.record(identifier, z.enum(["operational", "commercial", "financial", "security"])).optional(),
 }).strict();
 export const auditEventInputV1Schema = z.object({
-  id: z.string().uuid(), version: z.literal("audit.v1"), actorRef: identifier,
+  id: z.guid({ error: "Invalid uuid" }), version: z.literal("audit.v1"), actorRef: identifier,
   eventType: identifier.max(100), subjectType: identifier.max(100), subjectRef: identifier,
   payload: auditPayloadV1Schema,
 });

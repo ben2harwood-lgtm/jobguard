@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-const sql = readFileSync(new URL('../migrations/0205_final_check.sql', import.meta.url), 'utf8');
+const sql = readFileSync(new URL('../migrations/0238_final_check.sql', import.meta.url), 'utf8');
 it('C204 processing inventory excludes terminal uploads using the prerequisite manifest exclusion', () => {
  expect(sql).toContain('ms.excluded_state IS NULL');
  expect(sql).toContain('app.shadow_final_check_run_binding');

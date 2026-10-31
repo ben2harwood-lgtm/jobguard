@@ -1,3 +1,5 @@
+import { assignedJobsQuery } from "../src/site-visit-repository.js";
+import { SiteVisitRepository } from "../src/index.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ContractorRepository, northsideFacts, northsideTargets, northsideName, seedNorthsideDemo, type NorthsideSeed } from "../src/index.js";
@@ -5,7 +7,7 @@ import { cluster, type Cluster } from "./extra-fixtures.js";
 import { siteExtraContentSha256V1 } from "@jobguard/core";
 import { startSession } from "./contractor-practice-session-fixtures.js";
 import { photo } from "./site-extra-evidence-fixtures.js";
-import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideApprovalArtifact, northsideExtras, northsideRun, northsideLocalLinks, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
+import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideApprovalArtifact, northsideExtras, northsideRun, northsideLocalLinks, northsideSwitchTargets, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
 
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
@@ -28,6 +30,8 @@ it("ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40
   expect(facts).toMatchObject({ companyName: northsideName, clients: northsideTargets.clients, operatives: northsideTargets.operatives, ordersThisMonth: northsideTargets.ordersPerMonth, extras: 0 });
   expect(facts.orderValuePence).toBeGreaterThan(0);
   expect(seed.clientIds).toHaveLength(3);
+  expect(await northsideSwitchTargets(c.runtime, owner, session.context)).toContainEqual({ role: "finance", membershipId: seed.financeMembershipId });
+  expect((await c.admin.query("SELECT role FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 ORDER BY role", [owner.tenantId, seed.financeMembershipId])).rows.map(r => r.role)).toEqual(["finance", "read_only"]);
   // Practice data only: every stored address ends in .invalid, and nothing is queued to go out.
   const emails = (await c.admin.query("SELECT email FROM app.contractor_member WHERE tenant_id=$1", [owner.tenantId])).rows.map(r => r.email as string);
   expect(emails.length).toBeGreaterThan(40); expect(emails.every(e => e.endsWith(".invalid"))).toBe(true);
@@ -36,6 +40,72 @@ it("ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40
   const audits = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [owner.tenantId])).rows[0].n;
   expect(await seedNorthsideDemo(c.runtime, owner, session.context)).toEqual(seed);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [owner.tenantId])).rows[0].n).toBe(audits);
+}, 600_000);
+
+
+// Frozen pre-repair query, rather than a baseline derived from the optimized SQL.
+const legacyAssignedJobsQuery = `SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM app.work_order w
+     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+     JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id)
+     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;
+it("FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seeded jobs", async () => {
+  const { session, seed } = await seeded();
+  const switches = new PracticeWorkerSwitchRepository(c.runtime);
+  await switches.switchOn(session.context, session.p, session.session, { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: seed.journey.operativeMembershipId });
+  try {
+    const context = await contractorSessionContext(c.runtime, session.session);
+    const actor = await new ContractorRepository(c.runtime).resolveSession(session.session);
+    const expected = await withTenant(c.runtime, context, async db => {
+      const args = [actor.tenantId, actor.membershipId];
+      // Run and print the baseline first. Actual plans/timings are CI evidence,
+      // not a brittle wall-clock threshold on a shared runner.
+      const authorityLoops: number[] = [];
+      for (const [label, query] of [["legacy", legacyAssignedJobsQuery], ["assigned-first", assignedJobsQuery]]) {
+        const plan = (await db.$client.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`, args)).rows;
+        console.log(`FLAKE-DIAG-1 ${label} EXPLAIN`, JSON.stringify(plan));
+        type Plan = { "Node Type": string; "Function Name"?: string; "Actual Loops": number; Plans?: Plan[] };
+        const loops = (node: Plan): number =>
+          (node["Node Type"] === "Function Scan" && node["Function Name"] === "ent3b_visit_authority" ? node["Actual Loops"] : 0)
+          + (node.Plans ?? []).reduce((sum, child) => sum + loops(child), 0);
+        authorityLoops.push(loops(plan[0]!["QUERY PLAN"][0].Plan as Plan));
+      }
+      const assignedOrderCount = (await db.$client.query(`SELECT count(*)::int n
+        FROM app.work_order w
+        JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+        WHERE w.tenant_id=$1 AND EXISTS (
+          SELECT 1 FROM app.job_assignment assignment
+          WHERE (assignment.tenant_id,assignment.revision_id)=(c.tenant_id,c.revision_id) AND assignment.membership_id=$2
+        )`, args)).rows[0].n as number;
+      expect(authorityLoops[0]).toBe(2000);
+      expect(assignedOrderCount).toBeGreaterThan(0);
+      expect(authorityLoops[1]).toBe(assignedOrderCount);
+      expect(authorityLoops[1]).toBeLessThan(authorityLoops[0]!);
+      const legacy = (await db.$client.query(legacyAssignedJobsQuery, args)).rows;
+      const optimized = (await db.$client.query(assignedJobsQuery, args)).rows;
+      expect(optimized).toEqual(legacy); // includes order, all fields and caller's visit
+      const decisions = (await db.$client.query(`SELECT w.job_id,a.decision,a.reason_code
+        FROM app.work_order w CROSS JOIN LATERAL app.ent3b_visit_authority($2,w.job_id) a
+        WHERE w.tenant_id=$1 ORDER BY w.job_id`, args)).rows;
+      expect(decisions).toHaveLength(2000);
+      const allowed = decisions.filter(row => row.decision === "allowed");
+      const denied = decisions.filter(row => row.decision !== "allowed");
+      expect(allowed.length).toBeGreaterThan(0);
+      expect(allowed.length).toBeLessThan(200); // compare every row, no truncation hides differences
+      expect(denied.length).toBeGreaterThan(0);
+      for (const row of decisions) {
+        expect(optimized.some(job => job.job_id === row.job_id), JSON.stringify(row)).toBe(row.decision === "allowed");
+      }
+      return legacy;
+    });
+    const actual = await new SiteVisitRepository(c.runtime).assignedJobs(context, actor);
+    expect(actual).toEqual({ truncated: false, jobs: expected.map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })) });
+  } finally {
+    await switches.switchOff(session.context, session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
+  }
 }, 600_000);
 
 async function reworkWorld() {

@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -21,6 +21,6 @@
     "vitest": "4.1.12"
   },
   "dependencies": {
-    "zod": "3.25.67"
+    "zod": "4.6.6"
   }
 }

@@ -6,7 +6,7 @@ import { FixtureAiProvider, type RecordedFixture } from "./fixture-provider.js";
 import { AiGateway, type RepairOutput } from "./gateway.js";
 import { aiCitationSchema, type AiGatewayRequest, type AiGatewayResponse } from "./types.js";
 
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const name = z.string().min(1).max(200);
 const unique = (values: readonly string[]) => new Set(values).size === values.length;
 const citationV1 = z.object({ sourceId: uuid, sha256: hash, objectVersion: name,
@@ -28,7 +28,7 @@ const sourceV1 = z.object({ evidenceId: uuid, tenantId: uuid, jobId: uuid,
 const caseV1 = z.object({ id: name, tenantId: uuid, jobId: uuid,
   baseline: z.object({ revisionId: uuid, orderedWork: z.array(z.string().min(1).max(4000)).max(1000) }).strict(),
   sources: z.array(sourceV1).min(1).max(100).refine(values => unique(values.map(value => value.evidenceId))),
-  response: z.object({ output: z.record(z.unknown()), citations: z.array(aiCitationSchema.strict()).max(400) }).strict(),
+  response: z.object({ output: z.record(z.string(), z.unknown()), citations: z.array(aiCitationSchema.strict()).max(400) }).strict(),
 }).strict();
 export const enterpriseFixtureCorpusV1 = z.object({ version: z.literal("enterprise-ai-corpus.v1"),
   cases: z.array(caseV1).min(1).max(1000).refine(values => unique(values.map(value => value.id))),

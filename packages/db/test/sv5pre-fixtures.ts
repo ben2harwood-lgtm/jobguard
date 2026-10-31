@@ -17,9 +17,9 @@ export const LOCK_HASH = "a".repeat(64);
 export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
 export async function createLockFixture(install = true): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv5pre-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start(); const admin = new Pool(connection);
+ await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); const admin = new Pool(connection);
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  const pools: Pool[] = [];
  for (const role of ["jobguard_runtime", "jobguard_shadow", "jobguard_migration"]) {
@@ -131,7 +131,7 @@ export async function createHistoricalInvoice() {
   const { MIGRATION_URLS }=await import('../src/migrate.js'),{readFile}=await import('node:fs/promises');
   await fixture.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS) {
-   const name=url.pathname.split('/').at(-1)!;if(name==='0204_final_check_prerequisites.sql') break;
+   const name=url.pathname.split('/').at(-1)!;if(name==='0237_final_check_prerequisites.sql') break;
    await fixture.admin.query(await readFile(url,'utf8'));
    await fixture.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
   }

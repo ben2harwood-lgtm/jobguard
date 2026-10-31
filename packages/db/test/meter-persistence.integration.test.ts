@@ -106,14 +106,46 @@ describe("MON-1B real PostgreSQL synthetic persistence",()=>{
    await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
   }
  });
- it("MON1-A28 MON1-A29 no dedicated meter role exists and runtime cannot access shadow data or load fixture facts",async()=>{
+ it("MON1-A28 MON1-A29 meter roles retain safe posture and cannot access shadow data; runtime cannot assume them or load fixture facts",async()=>{
   for(const table of ["meter_input_event","meter_computation","meter_day_ledger","meter_correction","meter_projection_alert"]){
    expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed",[`app.${table}`])).rows[0].allowed).toBe(false);
    expect((await f.admin.query("SELECT relrowsecurity AND relforcerowsecurity guarded FROM pg_class WHERE oid=$1::regclass",[`app.${table}`])).rows[0].guarded).toBe(true);
   }
   expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_store_fixture(uuid,text,uuid,jsonb)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
-  expect((await f.admin.query("SELECT rolname FROM pg_roles WHERE rolname='jobguard_meter'")).rows).toEqual([]);
+  const owner=(await f.admin.query("SELECT current_user")).rows[0].current_user;
+  for(const role of ["jobguard_meter","jobguard_meter_owner"]){
+   expect((await f.admin.query(`SELECT rolcanlogin,rolinherit,rolbypassrls,rolsuper,rolcreatedb,rolcreaterole,rolreplication,
+    EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid) AS member
+    FROM pg_roles WHERE rolname=$1`,[role])).rows).toEqual([{rolcanlogin:false,rolinherit:false,rolbypassrls:false,rolsuper:false,rolcreatedb:false,rolcreaterole:false,rolreplication:false,member:false}]);
+   // Match bootstrap: PostgreSQL 16 may retain only its creator's ADMIN-only membership, with no INHERIT or SET.
+   const holders=(await f.admin.query(`SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
+    FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`,[role])).rows;
+   for(const holder of holders)expect(holder).toEqual({member:owner,admin_option:true,inherit_option:false,set_option:false});
+   expect((await f.admin.query("SELECT pg_has_role('jobguard_runtime',$1,'USAGE') AS usage,pg_has_role('jobguard_runtime',$1,'SET') AS set",[role])).rows).toEqual([{usage:false,set:false}]);
+   expect((await f.admin.query(`SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='app' AND c.relname LIKE 'shadow_%' AND c.relkind IN ('r','p','v','m','f','S')
+    AND CASE WHEN c.relkind='S' THEN has_sequence_privilege($1,c.oid,'USAGE,SELECT,UPDATE')
+     ELSE has_table_privilege($1,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege($1,c.oid,'SELECT,INSERT,UPDATE,REFERENCES') END`,[role])).rows).toEqual([]);
+  }
   const shadow=(await f.admin.query("SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname LIKE 'shadow_%' AND c.relkind='r'")).rows;
   expect(shadow.length).toBeGreaterThan(0);for(const row of shadow)expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1::oid,'SELECT,INSERT,UPDATE,DELETE') allowed",[row.oid])).rows[0].allowed).toBe(false);
  });
+
+it('SB-17: A cached or mutated count changes a charge', async () => {
+ const a=await meterCompany(f), input=meterInput(a.tenantId,7);
+ await storeMeter(f,a,input);const id=await refreshMeter(f,a);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+ await f.admin.query('ALTER TABLE app.meter_day_ledger DISABLE TRIGGER immutable');
+ try { await f.admin.query("UPDATE app.meter_day_ledger SET day=jsonb_set(day,'{countedPlaces}','99') WHERE tenant_id=$1",[a.tenantId]); }
+ finally { await f.admin.query('ALTER TABLE app.meter_day_ledger ENABLE TRIGGER immutable'); }
+ expect(await refreshMeter(f,a)).toBe(id);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+ expect((await f.admin.query('SELECT count(*)::int n FROM app.meter_projection_alert WHERE tenant_id=$1',[a.tenantId])).rows[0].n).toBe(1);
+ // A genuine late source change is recorded as a later correction, never an edited bill.
+ input.days.forEach(day=>day.jobs.push({tenantId:a.tenantId,jobId:randomUUID(),customerId:randomUUID(),siteId:randomUUID(),small:false}));
+ await storeMeter(f,a,input);await refreshMeter(f,a);
+ expect((await f.admin.query('SELECT delta_pence::int,apply_start::text FROM app.meter_correction WHERE tenant_id=$1',[a.tenantId])).rows).toEqual([{delta_pence:2000,apply_start:'2026-10-01'}]);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+});
 });

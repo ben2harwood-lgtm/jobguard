@@ -38,6 +38,7 @@ export * from "./evidence-pack.js";
 export * from "./job-parties.js";
 export * from "./cumulative-fee.js";
 export * from "./receipt-allocation.js";
+export * from "./receipt-line-allocation-source.js";
 export * from "./extra-origin.js";
 export * from "./enterprise-domain/index.js";
 export * from "./shadow-domain/index.js";
@@ -78,6 +79,7 @@ export * from "./enterprise-live-prompts.js";
 export * from "./mobile-auth.js";
 export * from "./mobile-device-lifecycle.js";
 export * from "./job-sources.js";
+export * from "./job-source-intake.js";
 export * from "./subscription.js";
 export * from "./subscription-period.js";
 export * from "./subscription-track-review.js";
@@ -85,6 +87,7 @@ export * from "./free-first-job.js";
 
 export * from "./plan-entitlements.js";
 export * from "./contractor-billing.js";
+export * from "./contractor-billing-commands.js";
 export * from "./enterprise-fee-statement.js";
 export * from "./enterprise-dashboard.js";
 export * from "./enterprise-signal.js";
@@ -97,7 +100,39 @@ export * from "./subscription-allocation.js";
 
 export * from "./enterprise-live-prompt-persistence.js";
 
+export * from "./job-work-timing.js";
+
 export * from "./contractor-entitlement-authority.js";
 
+export * from "./free-first-job-persistence.js";
+export { utcDatetimeV1 } from "./datetime.js";
+
+export * from "./free-first-job-calendar.js";
+export * from "./free-first-job-conversion.js";
 export * from "./recovery-attribution-persistence.js";
+export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
+export * from "./payment-fee-authority.js";
 export * from "./final-check.js";
+
+export * from "./meter-lifecycle.js";
+
+export * from "./enterprise-dashboard-stored-billing.js";
+export * from "./subscription-plan-view.js";
+export * from "./job-import-v3.js";
+
+export { ImportedBaselineSourceError, requireImportedBaselineSource } from "./imported-baseline-sources.js";
+
+export * from "./payment-fee-statements.js";
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
+export * from "./meter-today.js";
+
+export * from "./small-builder-demo-lifecycle.js";
+export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
+
+export * from "./value-source-receipt.js";
+export * from "./issued-simulation-fee-statement.js";
+
+export * from "./customer-approval-method.js";
+export * from "./customer-variation-approval.js";

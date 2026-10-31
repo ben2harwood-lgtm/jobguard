@@ -12,30 +12,6 @@ import {
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
 // A binding is valid only for its issuing transaction; a copied object is not authority.
 const bindings = new WeakMap<object, TenantTransaction>();
-
-/**
- * Keep withTenant's context validation, local settings and cleanup unchanged.
- * Like practiceMaterialPool, adapt only its exact BEGIN; isolation must precede
- * even the tenant set_config query. This pool is local to the read snapshot.
- */
-export function withEvidencePackV3Snapshot<T>(
-  pool: Pool, context: VerifiedTenantContext, work: (tx: TenantTransaction) => Promise<T>,
-): Promise<T> {
-  const snapshotPool = new Proxy(pool, { get(target, key) {
-    if (key === "connect") return async () => {
-      const client = await target.connect();
-      return new Proxy(client, { get(connection, property) {
-        if (property === "query") return (sql: string, values?: unknown[]) =>
-          connection.query(sql === "BEGIN" ? "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY" : sql, values);
-        const value = Reflect.get(connection, property);
-        return typeof value === "function" ? value.bind(connection) : value;
-      } });
-    };
-    const value = Reflect.get(target, key);
-    return typeof value === "function" ? value.bind(target) : value;
-  } });
-  return withTenant(snapshotPool, context, work);
-}
 export type EvidencePackV3VerifiedBinding = Readonly<{
   tenantId: string; caseId: string; jobId: string; locked: boolean;
 }>;
@@ -80,6 +56,26 @@ export type EvidencePackV3OrdinarySources = EvidencePackSources & {
   scope: EvidencePackV3Scope; lifecycle: "pre_lock";
   producerBindings: "held"; complete: false;
 };
+
+/** Set snapshot mode on BEGIN, before withTenant's transaction-local RLS query. */
+export function withEvidencePackV3Snapshot<T>(
+  pool: Pool, context: VerifiedTenantContext, work: (tx: TenantTransaction) => Promise<T>,
+): Promise<T> {
+  const snapshotPool = new Proxy(pool, { get(target, key) {
+    if (key === "connect") return async () => {
+      const client = await target.connect();
+      return new Proxy(client, { get(connection, property) {
+        if (property === "query") return (sql: string, values?: unknown[]) =>
+          connection.query(sql === "BEGIN" ? "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY" : sql, values);
+        const value = Reflect.get(connection, property);
+        return typeof value === "function" ? value.bind(connection) : value;
+      } });
+    };
+    const value = Reflect.get(target, key);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  return withTenant(snapshotPool, context, work);
+}
 
 /**
  * Reads only existing ordinary sources. It cannot query hidden relations, run

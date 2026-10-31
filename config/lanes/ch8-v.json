@@ -6,34 +6,11 @@
         "codex/sandbox/ch8-v"
       ],
       "receipt": "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
-      "note": "Issued build-ahead CH8-V. SV-5 lock/reveal and must-surface producer bindings HELD; no enablement or acceptance.",
+      "note": "RED \u2014 CH-8 current-main catch-up only. Retains snapshot regressions; no runtime or migration changes.",
       "allow": [
-        "packages/db/src/evidence-pack-v3-sources.ts",
-        "packages/db/src/evidence-pack-v3-ports.ts",
-        "packages/db/src/evidence-pack-v3-command.ts",
-        "packages/db/src/evidence-pack-repository.ts",
-        "apps/api/src/evidence-pack.contracts.ts",
-        "apps/api/src/evidence-pack.application.ts",
-        "apps/api/src/evidence-pack.controller.ts",
-        "apps/api/src/evidence-pack.errors.ts",
         "apps/api/src/evidence-pack-v3.application.test.ts",
-        "apps/api/src/evidence-pack-v3.controller.test.ts",
-        "apps/web/app/api/recovery-cases/[id]/evidence-packs/route.ts",
-        "apps/web/app/api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval/route.ts",
-        "apps/web/app/api/recovery-cases/[id]/evidence-packs/[packId]/inspect/route.ts",
-        "apps/web/app/api/recovery-cases/[id]/evidence-packs/[packId]/download/route.ts",
-        "apps/web/app/api/recovery-cases/[id]/evidence-packs/route-v3.test.ts",
-        "apps/web/app/ui/evidence-packs.tsx",
-        "apps/web/app/ui/evidence-packs-v3.test.tsx",
-        "apps/web/e2e/CH-8.spec.ts",
-        "packages/db/test/evidence-pack-v3-sources.integration.test.ts",
-        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
-        "packages/db/test/evidence-pack-v3-fixture.ts",
-        "packages/db/test/evidence-pack-v3-commands.integration.test.ts",
-        "packages/db/test/evidence-pack-v3-upgrade.integration.test.ts",
-        "packages/db/test/evidence-pack-v3-consumers.integration.test.ts",
-        "docs/operations/evidence-pack-v3.md",
-        "docs/verdicts/CH8-V/BUILDER_RECEIPT.md"
+        "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts"
       ]
     }
   }

@@ -3,7 +3,8 @@
   "lanes": {
     "sv5-0205-renumber": {
       "branches": [
-        "codex/sandbox/sv5-0205-renumber"
+        "codex/sandbox/sv5-0205-renumber",
+        "codex/sandbox/sv5-0205-metadata-20261026"
       ],
       "receipt": "docs/verdicts/SV-5/BUILDER_RECEIPT.md",
       "note": "Source-only reserved 0205 mechanical renumber under C216; no runtime checks or acceptance. No web workflow introduced.",
