@@ -42,6 +42,7 @@ export default function Page() {
     <Link className="audit-export-action" href="/">Back to Jobs</Link><Link className="audit-export-action" href="/admin/contractor">Contractor organisation practice</Link>
     <h1>Audit exports</h1><p>Use the generated fictional contractor only. Do not enter real people or documents.</p>
     <p>The signature proves export integrity only</p><p>It does not prove that a commercial claim is true. A bundled public key needs independent trust. Checkpoints come from the restricted assurance path; no external timestamp is asserted.</p>
+    <p>Actor attribution is authenticated only for audit.v3 entries: bound_member identifies the bound session member; system identifies database work, never a person. Earlier actor names are historical claims. Lower-trust statements do not establish commercial facts.</p>
     <p>Creation in other modes is HELD until a founder key decision. Key rotation and long-term verification remain HELD under M5-9.</p>
     <p role="status">{status}</p>{error && <p ref={alert} role="alert" tabIndex={-1}>{error === "AUDIT_EXPORT_CHECKPOINT_REQUIRED" ? "AUDIT_EXPORT_CHECKPOINT_REQUIRED: the restricted assurance path must hand off a trusted checkpoint before export creation." : error}</p>}
     <button className="audit-export-action" disabled={busy} onClick={() => void load()}>Reload persisted exports</button>

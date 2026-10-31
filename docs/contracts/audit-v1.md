@@ -88,3 +88,34 @@ references. `append_final_check_audit` strips null references, including the
 unassigned allocation/revision IDs on stored-receipt and receipt-facts reviews.
 The existing stored-event reader remains compatible with the prior candidate's
 structured exclusion receipt; no writer can emit that shape through the sealer.
+
+LP-6e candidate (migration 0527, RED; depends on LP-6d)
+----------------------------------------------------
+
+New seals use `audit.v3`, the v2 canonical envelope with its version changed.
+The private sealer obtains the actor and tenant from the protected request binding,
+compares the tenant with its RLS context, and replaces the submitted actor reference
+with `membership:<bound UUID>`. A missing/expired binding fails closed for every
+login inheriting the runtime role, including calls nested in checked operations.
+The database adds `references.auditActorKind=bound_member` to the hashed payload.
+Owner-connected workers, seeds and restore without a binding instead receive the
+explicit `system:database:<session_user>` actor and `auditActorKind=system`; supplied
+human names never become authenticated attribution. These system stamps identify
+an execution principal, not the individual administrator controlling it.
+
+The generic append cannot emit authority-bearing approval, payment, acceptance,
+issuance, lock or command-completion names. Its error is
+`AUDIT_CHECKED_OPERATION_REQUIRED`; private checked domain operations must establish
+those facts. A bound identity alone never grants EXECUTE on the private sealer.
+Payload keys `actor`, `tenant`, `type` and `auditActorKind` join the existing reserved
+fields and are refused in every section. No caller text is merged into those fields.
+Verifier/export attribution distinguishes v3 bound members, v3 system work and old
+unverified actor claims. v1/v2 history, hashes and checkpoint semantics stay intact.
+
+Landing remains held for predecessor integration, authorized source-pin/inventory
+refresh and whole-PostgreSQL regression checks. Existing generic authority writers
+must be converted to their checked domain operation, never merely relabelled as
+checked. Existing LP-4 version-specific tests must be run at their historical schema
+boundary while retaining their original assertions. No production authority-consumer
+closure or release is claimed by this built-ahead candidate. Forward fix only; do not
+rewrite old history or restore direct runtime audit writes on failure.

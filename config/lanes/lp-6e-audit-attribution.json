@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6e-audit-attribution": {
+      "branches": [
+        "codex/sandbox/lp-6e-audit-attribution"
+      ],
+      "note": "LP-6e RED candidate; predecessor integration and protected inventory/pins held for authorized coordinator.",
+      "allow": [
+        "apps/web/app/admin/contractor/audit-exports/page.tsx",
+        "config/lanes/lp-6e-audit-attribution.json",
+        "docs/contracts/audit-v1.md",
+        "packages/db/migrations/0527_lp6e_audit_attribution.sql",
+        "packages/db/src/audit-export-repository.ts",
+        "packages/db/src/audit.ts",
+        "packages/db/src/lp6e-audit.test.ts",
+        "packages/db/test/lp6e-audit.integration.test.ts"
+      ]
+    }
+  }
+}
