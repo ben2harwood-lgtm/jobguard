@@ -1,5 +1,5 @@
 import { createServer } from "node:net";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 
 const canListen = (host: string, port: number) => new Promise<boolean>(resolve => {
   const server = createServer();
@@ -58,4 +58,12 @@ export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<
   END $$;
   CREATE TRIGGER aaa_explicit_quote_fixture BEFORE INSERT ON app.quote_document_version FOR EACH ROW EXECUTE FUNCTION app.test_fixture_document_context();
   CREATE TRIGGER aaa_explicit_invoice_fixture BEFORE INSERT ON app.customer_invoice FOR EACH ROW EXECUTE FUNCTION app.test_fixture_document_context();`);
+}
+
+/** LP-3 dark routines require the trusted practice database, including in tests. */
+export async function syntheticOwnerPool(options: import("pg").PoolConfig): Promise<Pool> {
+  const control = new Pool({ ...options, database: "postgres" });
+  try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); }
+  finally { await control.end(); }
+  return new Pool({ ...options, database: "jobguard_synthetic_demo" });
 }

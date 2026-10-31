@@ -4,7 +4,6 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { QuoteRepository } from "./quote-repository.js";
 import { QuoteDeliveryRepository } from "./quote-delivery-repository.js";
-import { QuoteAcceptanceRepository } from "./acceptance-repository.js";
 import { PracticeActivationRepository } from "./activation-repository.js";
 import { createHash } from "node:crypto";
 import { money, type Money } from "@jobguard/core";
@@ -92,7 +91,13 @@ export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTena
   const preview=await delivery.preview(context,jobId,recipient);
   await delivery.issue(context,jobId,{commandId:randomUUID(),documentId:preview.documentId,contentHash:preview.hash,recipient});
   await delivery.execute(context,jobId,preview.documentId,"success");
-  if(index===values.length-1)await new QuoteAcceptanceRepository(runtime).accept(context,jobId,{commandId:randomUUID(),documentId:preview.documentId,documentHash:preview.hash,documentVersion:preview.document.documentVersion,statedCustomerName:"Practice Customer",statedMethod:"email",acceptedAt:new Date().toISOString()});
+  if(index===values.length-1)await withTenant(owner,context,async db=>{
+   // Owner-only synthetic fixture setup preserves historical-schema upgrade tests.
+   // Runtime application callers use the hardened LP-3 signature exclusively.
+   const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[context.tenantId,jobId])).rows[0];
+   await db.$client.query(`SELECT app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Practice Customer','email',clock_timestamp(),NULL)`,
+    [context.tenantId,randomUUID(),randomUUID(),jobId,preview.documentId,preview.document.documentVersion,preview.hash,preview.document.totalPence,row.revision,DEMO_MEMBERSHIP_ID]);
+  });
  }
  return jobId;
 }

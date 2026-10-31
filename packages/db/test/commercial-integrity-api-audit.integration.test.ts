@@ -1,3 +1,4 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -23,7 +24,7 @@ beforeAll(async () => {
   pg = new EmbeddedPostgres({ databaseDir: join(dir, "db"), port, user: "postgres", password: "synthetic",
     persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo"); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" , database: "jobguard_synthetic_demo"});
+  await pg.initialise(); await pg.start(); admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [T]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]);
