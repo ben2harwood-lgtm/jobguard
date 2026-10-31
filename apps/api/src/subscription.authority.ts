@@ -19,6 +19,6 @@ export function subscriptionAuthority(identity: IdentityApplication): Subscripti
 }
 /** Stable codes only; a forbidden or foreign request never learns whether a company exists. */
 export function subscriptionHttpStatus(code: string): number {
-  return code === "INVALID_SUBSCRIPTION_INPUT" ? 400 : code === "SUBSCRIPTION_FORBIDDEN" || code === "SUBSCRIPTION_SYNTHETIC_ONLY" ? 403 : code === "SUBSCRIPTION_PROJECTION_MISMATCH" ? 409 : 503;
+  return code === "INVALID_SUBSCRIPTION_INPUT" ? 400 : code === "SUBSCRIPTION_FORBIDDEN" || code === "SUBSCRIPTION_SYNTHETIC_ONLY" ? 403 : ["SUBSCRIPTION_PROJECTION_MISMATCH", "SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY", "SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE"].includes(code) ? 409 : 503;
 }
 export const subscriptionHttpCommandV1 = z.object({ version: z.literal("subscription-http-command.v1"), commandId: z.string().uuid(), command: z.unknown() }).strict();

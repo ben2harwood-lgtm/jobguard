@@ -30,7 +30,8 @@ const transition={mutate:async(d:any)=>{const row=(await d.$client.query(`SELECT
 
 describe("consequential command authorization",()=>{
  it("keeps aggregate locking before audit while two competing commands produce one atomic inline approval, mutation, audit, and receipt",async()=>{
-  const dispatcher=new UserCommandDispatcher(runtime), first=command("87000000-0000-4000-8000-000000000001");
+  // Ruling 103: the legacy mutation stays inside this owner fixture command transaction.
+  const dispatcher=new UserCommandDispatcher(admin), first=command("87000000-0000-4000-8000-000000000001");
   await expect(Promise.all([dispatcher.dispatch(context,first,transition),dispatcher.dispatch(context,command("87000000-0000-4000-8000-000000000003"),transition)])).resolves.toEqual([
    expect.objectContaining({status:"live",revision:2}),expect.objectContaining({status:"live",revision:2})]);
   await expect(dispatcher.dispatch(context,first,transition)).resolves.toMatchObject({status:"live",revision:2});
@@ -80,14 +81,14 @@ describe("consequential command authorization",()=>{
  });
  it("is observed in PostgreSQL: the job aggregate is locked for update before the audit append, and no contending lock follows it",async()=>{
   // CH-2 extends this M0-8 lock-order test to the guarded commands (watchdog-lock-order.integration.test.ts); here the same observer reads the consequential
-  // command layer itself: every statement of the real dispatcher transaction, as the real runtime role, with what the backend holds after each.
+  // command layer itself: every statement of the real dispatcher transaction, as an explicit owner fixture (ruling 103), with what the backend holds after each.
   const job="85000000-0000-4000-8000-000000000002",quote="86000000-0000-4000-8000-000000000002";
   await admin.query(`INSERT INTO app.job(id,tenant_id,title,status,revision) VALUES('${job}','${TENANT}','Observed','accepted',1);
    INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES('${quote}','${TENANT}','${job}',1,'${HASH}',10000,'accepted');
    UPDATE app.job SET accepted_quote_version_id='${quote}' WHERE tenant_id='${TENANT}' AND id='${job}';
    UPDATE app.membership SET revoked_at=NULL,expires_at=NULL WHERE tenant_id='${TENANT}' AND id='${MEMBER}'`);
   const jobRow=`app.job#${(await admin.query<{c:string}>("SELECT ctid::text c FROM app.job WHERE id=$1",[job])).rows[0]!.c}`;
-  const observed=new ObservedPool(runtime,admin),ownership={mutable:await mutableTables(admin)};
+  const observed=new ObservedPool(admin,admin),ownership={mutable:await mutableTables(admin)};
   const switching={mutate:async(d:any)=>{const row=(await d.$client.query(`SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)`,[TENANT,job,quote])).rows[0];return{jobId:job,revision:row.revision,status:row.status}}};
   const {value,transactions}=await observed.record(()=>new UserCommandDispatcher(observed.pool).dispatch(context,command("87000000-0000-4000-8000-000000000020",{semanticKey:`job:${job}:switch_live`,subjectRef:job}),switching));
   expect(value).toMatchObject({status:"live"});

@@ -1,3 +1,4 @@
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 // Synthetic parent fixtures only. No source qualification or financial authority is implied.
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -47,6 +48,8 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
  await asFixtureTenant(admin, tenantId, async db => {
+  if (practiceDigest !== null && (await db.query("SELECT to_regclass('app.lp_job_insert_permit') IS NOT NULL installed")).rows[0].installed) await permitPracticeHomeJob(db, {tenantId,jobId,actorMembershipId:LOCK_OWNER,
+   title:"Fictional final account",status:"live",practiceSessionDigest:practiceDigest});
   await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final account','live',$3::text,CASE WHEN $3::text IS NULL THEN NULL ELSE 'home' END)", [jobId, tenantId, practiceDigest]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
   await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,$5,'accepted')", [baselineId, tenantId, jobId, LOCK_HASH, net]);
