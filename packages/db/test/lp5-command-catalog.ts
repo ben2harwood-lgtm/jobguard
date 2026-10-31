@@ -284,10 +284,15 @@ export const lp5bReadTables = [
   "inbox_preference_revision",
   "inbox_outcome_event",
   "watchdog_command_identity",
-  "variation_revision"
+  "variation_revision",
+  "job_diary_entry", "customer_message_source", "final_account_invoice_binding"
 ];
 export const lp5ReadTables = [...lp5aReadTables, ...lp5bReadTables];
 export const lp5bRegistryRows = [
+  {"command_type": "JobSource.diary", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "source_intake", "audit_class": "operational", "outbox_class": null},
+  {"command_type": "JobSource.customer_message", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "source_intake", "audit_class": "operational", "outbox_class": null},
+  {"command_type": "IssueLockBoundInvoice", "version": "repository-command.v1", "permission_rule": "owner", "lock_adapter": "route_before_begin", "completion_adapter": "lock_invoice", "audit_class": "commercial", "outbox_class": "fake_invoice_delivery"},
+
   {
     "command_type": "StartSiteVisit",
     "version": "repository-command.v1",

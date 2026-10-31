@@ -125,3 +125,31 @@ it('C241b expiry between freezes and later upload state changes follow exactly t
   await f.admin.query('DROP TRIGGER a_c241_test_expiry ON app.final_check_manifest; DROP FUNCTION app.c241_test_expiry()');
  }
 });
+
+it('SB-05: Backdated evidence, or evidence received after lock', async () => {
+ const a = await seedFinalCheckJob(f), before = await insertFinalCheckEvidence(f,a);
+ await a.lock();
+ // Both evidence rows use the same old device capture date; only server receipt differs.
+ const after = await insertFinalCheckEvidence(f,a,'diary','application/pdf');
+ const repo = new FinalCheckRepository(f.shadow), manifest = await repo.begin(a.context,a.jobId);
+ expect(manifest.sources.map(s=>s.evidenceId)).toContain(before);
+ expect(manifest.sources.map(s=>s.evidenceId)).not.toContain(after);
+ const { finalCheckProposal } = await import('./final-check-fixture.js');
+ const signalId = await finalCheckProposal(f,a,after);
+ expect((await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).postLockItems)
+  .toContainEqual(expect.objectContaining({ signalId, evidenceAfterLock: true }));
+});
+
+it('SB-06: Double lock, replayed lock, or a later revision edits the lock', async () => {
+ const a=await seedFinalCheckJob(f);
+ const { FinalAccountLockRepository } = await import('../src/final-account-lock-repository.js');
+ const { FINAL_CHECK_ACTOR } = await import('./final-check-fixture.js');
+ const repo=new FinalAccountLockRepository(f.runtime), input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
+ const first=await repo.lock(a.context,input);
+ expect(await repo.lock(a.context,input)).toEqual(first);
+ const read=async()=> (await f.admin.query('SELECT row_to_json(l)::text bytes FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows;
+ const before=await read();expect(before).toHaveLength(1);
+ await expect(repo.lock(a.context,{...input,commandId:randomUUID(),expectedRevision:2})).rejects.toThrow();
+ await expect(f.admin.query('UPDATE app.final_account_lock SET final_account_revision_id=$1 WHERE tenant_id=$2 AND job_id=$3',[randomUUID(),a.tenantId,a.jobId])).rejects.toMatchObject({code:'55000'});
+ expect(await read()).toEqual(before);
+});

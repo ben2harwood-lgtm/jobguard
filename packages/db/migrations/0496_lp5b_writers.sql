@@ -6,6 +6,9 @@ GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
 ALTER TABLE app.command_type_registry DROP CONSTRAINT command_type_registry_permission_rule_check;
 ALTER TABLE app.command_type_registry ADD CONSTRAINT command_type_registry_permission_rule_check CHECK(permission_rule IN('owner','active_member','contractor'));
 INSERT INTO app.command_type_registry VALUES
+ ('JobSource.diary','repository-command.v1','owner','route_before_begin','source_intake','operational',NULL),
+ ('JobSource.customer_message','repository-command.v1','owner','route_before_begin','source_intake','operational',NULL),
+ ('IssueLockBoundInvoice','repository-command.v1','owner','route_before_begin','lock_invoice','commercial','fake_invoice_delivery'),
  ('StartSiteVisit','repository-command.v1','contractor','route_before_begin','site_visit','operational',NULL),
  ('CompleteSiteVisit','repository-command.v1','contractor','route_before_begin','site_visit','operational',NULL),
  ('SubmitExtra','repository-command.v1','contractor','route_before_begin','extra_chain','operational',NULL),
@@ -39,7 +42,7 @@ INSERT INTO app.command_type_registry VALUES
  ('proof.complete','repository-command.v1','active_member','route_before_begin','proof','operational',NULL),
  ('job.parties','repository-command.v1','owner','route_before_begin','job_parties','operational',NULL);
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['variation','extra_origin','customer_revision','site_revision','stage_completion','evidence_link','evidence_object','scope_progress','recovery_message_event','recovery_follow_up','recovery_follow_up_event','recovery_follow_up_advance','site_visit','closeout_answer','extra_approval_request','extra_approval_revision_binding','extra_approval_outcome','extra_approval_step_fact','extra_duplicate_link','extra_order_line_link','property_constraint_fact','counterparty_check','job_party_current','inbox_finding_revision','inbox_decision_revision','inbox_preference_revision','inbox_outcome_event','watchdog_command_identity','variation_revision'] LOOP
+ FOREACH n IN ARRAY ARRAY['variation','extra_origin','customer_revision','site_revision','stage_completion','evidence_link','evidence_object','scope_progress','recovery_message_event','recovery_follow_up','recovery_follow_up_event','recovery_follow_up_advance','site_visit','closeout_answer','extra_approval_request','extra_approval_revision_binding','extra_approval_outcome','extra_approval_step_fact','extra_duplicate_link','extra_order_line_link','property_constraint_fact','counterparty_check','job_party_current','inbox_finding_revision','inbox_decision_revision','inbox_preference_revision','inbox_outcome_event','watchdog_command_identity','variation_revision','job_diary_entry','customer_message_source','final_account_invoice_binding'] LOOP
   EXECUTE format('GRANT SELECT ON app.%I TO jobguard_command_writer',n);
   EXECUTE format('CREATE POLICY lp5b_command_read ON app.%I FOR SELECT TO jobguard_command_writer USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
  END LOOP;
@@ -577,10 +580,16 @@ BEGIN
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command;
  SELECT completion_adapter INTO adapter FROM app.command_type_registry WHERE command_type=r.command_type AND version=c.version;
  IF r.status IS DISTINCT FROM 'processing' OR c.transaction_id IS DISTINCT FROM pg_current_xact_id()
-  OR c.authorization_id IS DISTINCT FROM p_authorization OR adapter IS DISTINCT FROM p_adapter OR c.effect_ref IS NOT NULL
-  OR p_adapter NOT IN('activation','review','import','site_visit','extra_chain','contractor_extra') OR jsonb_typeof(p_reference) IS DISTINCT FROM 'object' THEN
+  OR (c.authorization_id IS DISTINCT FROM p_authorization AND NOT(p_adapter='lock_invoice' AND c.authorization_id IS NULL
+   AND p_authorization IS NOT NULL AND EXISTS(SELECT 1 FROM app.customer_invoice invoice
+    JOIN app.action_authorization grant_row ON(grant_row.tenant_id,grant_row.id)=(invoice.tenant_id,invoice.authorization_id)
+    WHERE invoice.tenant_id=t AND invoice.job_id=(c.resource->>'subjectRef')::uuid AND invoice.id=(p_reference->>'invoiceId')::uuid
+     AND invoice.authorization_id=p_authorization AND grant_row.actor_membership_id=c.actor_membership_id
+     AND invoice.xmin::text=pg_current_xact_id()::text)))
+  OR adapter IS DISTINCT FROM p_adapter OR c.effect_ref IS NOT NULL
+  OR p_adapter NOT IN('activation','review','import','site_visit','extra_chain','contractor_extra','source_intake','lock_invoice') OR jsonb_typeof(p_reference) IS DISTINCT FROM 'object' THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
- UPDATE app.command_lifecycle_claim SET effect_ref=p_reference WHERE tenant_id=t AND command_id=p_command;
+ UPDATE app.command_lifecycle_claim SET effect_ref=p_reference,authorization_id=p_authorization WHERE tenant_id=t AND command_id=p_command;
 END $$;
 
 -- Integrate into complete_command after current-authority/grant checks and before
@@ -901,7 +910,7 @@ BEGIN
   OR c.transaction_id IS DISTINCT FROM pg_current_xact_id() THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  subject:=(c.resource->>'subjectRef'); a:=(c.significant_input->'action'); expected_revision:=(c.expected_revisions->>'aggregateRevision')::integer;
- effect_table:=CASE adapter WHEN 'invoice' THEN 'customer_invoice' WHEN 'credit' THEN 'customer_credit_note'
+ effect_table:=CASE adapter WHEN 'invoice' THEN 'customer_invoice' WHEN 'lock_invoice' THEN 'customer_invoice' WHEN 'credit' THEN 'customer_credit_note'
   WHEN 'payment' THEN 'customer_payment' WHEN 'payment_reversal' THEN 'customer_payment_reversal'
   WHEN 'quote_send' THEN 'quote_send' WHEN 'purchase_order' THEN 'purchase_order_placement'
   WHEN 'message' THEN 'recovery_message_approval' WHEN 'client_link' THEN 'extra_client_link' END;
@@ -912,6 +921,46 @@ BEGIN
  END IF;
 
  CASE adapter
+ WHEN 'source_intake' THEN
+  -- The DTO is handed off only by the private checked source routine. Prove its
+  -- exact command, job, actor and freshly registered original before accepting it.
+  value:=(c.effect_ref->'result');
+  IF NOT EXISTS(
+   SELECT 1 FROM (
+    SELECT tenant_id,job_id,id,command_id,actor_membership_id,evidence_id,object_version_id,sha256,xmin::text transaction_id,'JobSource.diary' command_type FROM app.job_diary_entry
+    UNION ALL SELECT tenant_id,job_id,id,command_id,actor_membership_id,evidence_id,object_version_id,sha256,xmin::text,'JobSource.customer_message' FROM app.customer_message_source
+   ) source_fact JOIN app.evidence_object evidence ON(evidence.tenant_id,evidence.job_id,evidence.id)=(source_fact.tenant_id,source_fact.job_id,source_fact.evidence_id)
+   WHERE source_fact.tenant_id=t AND source_fact.job_id=subject::uuid AND source_fact.command_id=p_command_id
+    AND source_fact.command_type=r.command_type AND source_fact.actor_membership_id=c.actor_membership_id
+    AND source_fact.transaction_id=pg_current_xact_id()::text AND evidence.xmin::text=pg_current_xact_id()::text
+    AND source_fact.id=(value->'record'->>'id')::uuid AND source_fact.evidence_id=(value->'record'->'evidence'->>'id')::uuid
+    AND source_fact.object_version_id=(value->'record'->'evidence'->>'objectVersionId') AND source_fact.sha256=(value->'record'->'evidence'->>'sha256')
+    AND evidence.object_version_id=source_fact.object_version_id AND evidence.sha256=source_fact.sha256
+  ) THEN value:=NULL; END IF;
+ WHEN 'lock_invoice' THEN
+  -- Preserve the latest combined-invoice body. Bind its exact invoice, approval,
+  -- locked revision and immutable fake outbox, including deferred validation.
+  SELECT jsonb_build_object('invoiceId',invoice.id,'invoiceNumber',invoice.invoice_number,'pdfSha256',invoice.pdf_sha256,
+   'netPence',invoice.net_pence,'taxPence',invoice.tax_pence,'totalPence',invoice.total_pence,'sourceHash',invoice.source_hash,
+   'invoiceKind',binding.invoice_kind,'lockId',binding.lock_id) INTO value
+  FROM app.customer_invoice invoice JOIN app.final_account_invoice_binding binding
+   ON(binding.tenant_id,binding.job_id,binding.invoice_id)=(invoice.tenant_id,invoice.job_id,invoice.id)
+  JOIN app.action_authorization grant_row ON(grant_row.tenant_id,grant_row.id)=(invoice.tenant_id,invoice.authorization_id)
+  JOIN app.decision_resolution resolution_row ON(resolution_row.tenant_id,resolution_row.id)=(grant_row.tenant_id,grant_row.resolution_id)
+  JOIN app.action_outbox outbox_row ON(outbox_row.tenant_id,outbox_row.authorization_id)=(grant_row.tenant_id,grant_row.id)
+  WHERE invoice.tenant_id=t AND invoice.job_id=subject::uuid AND invoice.id=(c.effect_ref->>'invoiceId')::uuid AND invoice.authorization_id=c.authorization_id
+   AND invoice.xmin::text=pg_current_xact_id()::text AND binding.xmin::text=pg_current_xact_id()::text
+   AND invoice.final_account_revision_id=(c.significant_input->'input'->>'revision')::uuid
+   AND binding.revision_id=invoice.final_account_revision_id AND binding.invoice_kind=(c.significant_input->'input'->>'kind')
+   AND invoice.source_hash=(c.significant_input->'input'->>'sourceHash') AND grant_row.actor_membership_id=c.actor_membership_id
+   AND resolution_row.actor_membership_id=c.actor_membership_id AND resolution_row.resolution='approved' AND grant_row.revoked_at IS NULL
+   AND grant_row.action_type='final_account.issue' AND grant_row.content_hash=invoice.pdf_sha256
+   AND grant_row.recipient=(c.significant_input->'input'->>'recipient') AND grant_row.amount_pence=invoice.total_pence AND grant_row.currency=invoice.currency
+   AND outbox_row.adapter='fake_invoice_delivery' AND outbox_row.action_type=grant_row.action_type
+   AND outbox_row.content_hash=grant_row.content_hash AND outbox_row.recipient=grant_row.recipient
+   AND outbox_row.aggregate_revision=grant_row.aggregate_revision AND outbox_row.amount_pence=grant_row.amount_pence
+   AND outbox_row.currency=grant_row.currency AND outbox_row.policy_version=grant_row.policy_version
+   AND outbox_row.authorization_expires_at=grant_row.expires_at AND outbox_row.immutable_content=convert_from(invoice.pdf_bytes,'UTF8');
  WHEN 'prevention' THEN value:=app.lp5b_projection_result(p_command_id);
  WHEN 'inbox_seed' THEN value:=app.lp5b_projection_result(p_command_id);
  WHEN 'site_visit' THEN value:=app.lp5b_contractor_result(p_command_id,p_outcome);
@@ -1242,5 +1291,253 @@ BEGIN
   'classifications',jsonb_build_object('action',reg.audit_class)))),'checked_operation');
  RETURN value;
 END $$;
+-- Main catch-up: latest 0413 combined invoice and 0505 on-site admission bodies.
+CREATE OR REPLACE FUNCTION app.issue_lock_bound_customer_invoice(p_tenant uuid,p_job uuid,p_revision uuid,p_actor uuid,p_command uuid,p_kind text,p_recipient text,p_issued_on date,p_source_hash text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE lock_row app.final_account_lock; check_row record; final_row app.final_account_revision; prior app.command_receipt;
+ lp5_claim jsonb; lp5_input jsonb;
+ request_digest text; party_snapshot jsonb; n bigint; number text; artifact text; digest text; invoice_id uuid:=gen_random_uuid();
+ decision_id uuid:=gen_random_uuid(); resolution_id uuid:=gen_random_uuid(); authorization_id uuid:=gen_random_uuid(); audit_id uuid:=gen_random_uuid();
+ net bigint; tax bigint; gross bigint; selected_lines jsonb; result jsonb; item jsonb;
+
+ -- ASCII PDF 1.4 objects: offsets and lengths below are byte counts of the stored artifact.
+ pdf_rows text[]:=ARRAY[]::text[]; pdf_objects text[]; pdf_offsets bigint[]:=ARRAY[0::bigint];
+ pdf_raw text; pdf_line text; pdf_stream text; pdf_kids text:=''; pdf_xref bigint;
+ pdf_page integer; pdf_pages integer; pdf_i integer; pdf_j integer; pdf_content integer; pdf_font integer;
+BEGIN
+ PERFORM app.final_lock_require_owner(p_tenant,p_actor);
+ PERFORM 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM app.final_lock_require_owner(p_tenant,p_actor);
+ PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text||':'||p_job::text,130));
+ IF p_kind IS NULL OR p_kind NOT IN ('final','supplementary') OR p_command IS NULL OR p_issued_on IS NULL OR p_issued_on NOT BETWEEN '0001-01-01'::date AND '9999-12-31'::date OR p_recipient IS NULL OR p_recipient !~ '^[^@ ]+@example\.invalid$' OR p_source_hash IS NULL OR p_source_hash !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
+ lp5_input:=jsonb_build_object('command','IssueLockBoundInvoice','job',p_job,'revision',p_revision,'actor',p_actor,'kind',p_kind,'recipient',p_recipient,'issuedOn',p_issued_on,'sourceHash',p_source_hash);
+ request_digest:=app.final_lock_hash(jsonb_build_object('command','IssueLockBoundInvoice','job',p_job,'revision',p_revision,'actor',p_actor,'kind',p_kind,'recipient',p_recipient,'issuedOn',p_issued_on,'sourceHash',p_source_hash));
+ SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=p_tenant AND command_id=p_command;
+ IF FOUND THEN
+ BEGIN
+  lp5_claim:=app.begin_command('repository-command.v1',p_command,'IssueLockBoundInvoice',p_revision::text,
+   jsonb_build_object('tenantId',p_tenant,'actorMembershipId',p_actor,'subjectType','job','subjectRef',p_job),'{}'::jsonb,
+   jsonb_build_object('version','repository-command.v1','actorMembershipId',p_actor,'input',lp5_input,'legacyJson',app.final_lock_canonical(lp5_input)));
+ EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'IDEMPOTENCY_PAYLOAD_CONFLICT' USING ERRCODE='23505'; END;
+ PERFORM app.final_check_require_invoice_actor(p_tenant,p_job,p_actor); RETURN (lp5_claim->'result'); END IF;
+ -- Preserve CH-4-C refusal order for owners; session scope still gates replay and every new issue.
+ PERFORM app.ch4_require_open(p_tenant,p_job);
+ SELECT * INTO lock_row FROM app.final_account_lock WHERE tenant_id=p_tenant AND job_id=p_job;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_ACCOUNT_LOCK_REQUIRED'; END IF;
+ SELECT * INTO check_row FROM app.require_authoritative_final_check(p_tenant,p_job);
+ PERFORM app.final_check_require_invoice_actor(p_tenant,p_job,p_actor);
+ SELECT * INTO final_row FROM app.final_account_revision WHERE tenant_id=p_tenant AND job_id=p_job AND id=p_revision AND source_hash=p_source_hash AND NOT issue_blocked;
+ IF NOT FOUND THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
+ IF final_row.baseline_quote_version_id<>lock_row.baseline_quote_version_id THEN RAISE EXCEPTION 'FINAL_INVOICE_REVISION_MISMATCH'; END IF;
+ IF p_kind='final' AND p_revision<>lock_row.final_account_revision_id THEN
+  IF NOT EXISTS(SELECT 1 FROM app.final_account_draft WHERE tenant_id=p_tenant AND job_id=p_job AND current_revision_id=p_revision) THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT'; END IF;
+  PERFORM app.j3_require_combined_revision(p_tenant,p_job,p_revision,lock_row.id);
+ END IF;
+ IF p_kind='final' AND EXISTS(SELECT 1 FROM app.customer_invoice i LEFT JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id) WHERE i.tenant_id=p_tenant AND i.job_id=p_job AND coalesce(b.invoice_kind,'final')='final') THEN RAISE EXCEPTION 'FINAL_INVOICE_ALREADY_ISSUED'; END IF;
+ IF p_kind='supplementary' THEN
+  IF p_revision=lock_row.final_account_revision_id OR NOT EXISTS(SELECT 1 FROM app.customer_invoice i LEFT JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id) WHERE i.tenant_id=p_tenant AND i.job_id=p_job AND coalesce(b.invoice_kind,'final')='final') THEN RAISE EXCEPTION 'SUPPLEMENTARY_INVOICE_BASE_REQUIRED'; END IF;
+  IF NOT EXISTS(WITH RECURSIVE ancestors AS (SELECT id,previous_revision_id FROM app.final_account_revision WHERE tenant_id=p_tenant AND job_id=p_job AND id=p_revision
+   UNION ALL SELECT r.id,r.previous_revision_id FROM app.final_account_revision r JOIN ancestors a ON r.id=a.previous_revision_id WHERE r.tenant_id=p_tenant AND r.job_id=p_job) SELECT 1 FROM ancestors WHERE id=lock_row.final_account_revision_id) THEN RAISE EXCEPTION 'FINAL_INVOICE_REVISION_MISMATCH'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.final_account_draft WHERE tenant_id=p_tenant AND job_id=p_job AND current_revision_id=p_revision) THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT'; END IF;
+  -- A replacement/removal is a correction, not a newly added catch line. Fail closed until explicitly corrected.
+  IF EXISTS(SELECT 1 FROM app.customer_invoice i JOIN app.final_account_line old ON(old.tenant_id,old.job_id,old.final_account_revision_id)=(i.tenant_id,i.job_id,i.final_account_revision_id)
+   LEFT JOIN app.final_account_invoice_binding binding ON(binding.tenant_id,binding.job_id,binding.invoice_id)=(i.tenant_id,i.job_id,i.id)
+   WHERE i.tenant_id=p_tenant AND i.job_id=p_job AND coalesce(binding.invoice_kind,'final') IN ('final','supplementary')
+   AND NOT EXISTS(SELECT 1 FROM app.final_account_line current_line WHERE current_line.tenant_id=p_tenant AND current_line.job_id=p_job AND current_line.final_account_revision_id=p_revision
+    AND (current_line.line_kind,current_line.source_id,current_line.commercial_revision_id,current_line.scope_item_id,current_line.net_pence)=(old.line_kind,old.source_id,old.commercial_revision_id,old.scope_item_id,old.net_pence))) THEN RAISE EXCEPTION 'INVOICE_SOURCE_CORRECTION_REQUIRED'; END IF;
+ END IF;
+ -- Account lines retain immutable commercial source identity across account revisions.
+ SELECT coalesce(jsonb_agg(to_jsonb(l) ORDER BY l.id),'[]'),coalesce(sum(l.net_pence),0) INTO selected_lines,net FROM app.final_account_line l
+ WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_revision AND (
+ p_kind='final' OR (NOT EXISTS(SELECT 1 FROM app.final_account_invoiced_line b WHERE b.tenant_id=p_tenant AND b.job_id=p_job AND b.line_kind=l.line_kind AND b.source_id=l.source_id AND b.commercial_revision_id=l.commercial_revision_id)
+ AND NOT EXISTS(SELECT 1 FROM app.customer_invoice i JOIN app.final_account_line old ON(old.tenant_id,old.job_id,old.final_account_revision_id)=(i.tenant_id,i.job_id,i.final_account_revision_id)
+ WHERE i.tenant_id=p_tenant AND i.job_id=p_job AND NOT EXISTS(SELECT 1 FROM app.final_account_invoice_binding b WHERE(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id))
+ AND old.line_kind=l.line_kind AND old.source_id=l.source_id AND old.commercial_revision_id=l.commercial_revision_id)));
+ IF jsonb_array_length(selected_lines)=0 OR net<0 OR net>1000000000000 THEN RAISE EXCEPTION 'INVOICE_AMOUNT_INVALID'; END IF;
+ -- Same exact positive standard-rate candidate expression as merged 0028; no float arithmetic.
+ tax:=(net+2)/5; gross:=net+tax;
+ IF gross>1000000000000 THEN RAISE EXCEPTION 'INVOICE_AMOUNT_INVALID'; END IF;
+ IF p_kind='final' AND ROW(net,tax,gross) IS DISTINCT FROM ROW(final_row.net_pence,final_row.tax_pence,final_row.total_pence) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_TOTAL_MISMATCH'; END IF;
+ party_snapshot:=app.require_current_job_parties(p_tenant,p_job);
+ BEGIN
+  lp5_claim:=app.begin_command('repository-command.v1',p_command,'IssueLockBoundInvoice',p_revision::text,
+   jsonb_build_object('tenantId',p_tenant,'actorMembershipId',p_actor,'subjectType','job','subjectRef',p_job),'{}'::jsonb,
+   jsonb_build_object('version','repository-command.v1','actorMembershipId',p_actor,'input',lp5_input,'legacyJson',app.final_lock_canonical(lp5_input)));
+ EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'IDEMPOTENCY_PAYLOAD_CONFLICT' USING ERRCODE='23505'; END;
+ IF (lp5_claim->>'kind')='replay' THEN PERFORM app.final_check_require_invoice_actor(p_tenant,p_job,p_actor); RETURN (lp5_claim->'result'); END IF;
+ INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number) VALUES(gen_random_uuid(),p_tenant,2) ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;
+ number:='DEMO-CUST-'||lpad(n::text,6,'0');
+ artifact:='Number: '||number||chr(10)||'Issue date: '||p_issued_on::text||chr(10)||
+  'Issuer: Fictional Builder Ltd ['||p_tenant::text||']'||chr(10)||'Recipient: '||p_recipient||chr(10)||
+  'Reference tax version: '||final_row.tax_policy_version||chr(10)||'Frozen final account: '||final_row.id::text||chr(10)||
+  'Source hash: '||final_row.source_hash||chr(10)||
+  'Lock: '||lock_row.id::text||chr(10)||'Kind: '||p_kind||chr(10)||
+  'Net GBP: '||to_char(net::numeric/100,'FM999999999990.00')||chr(10)||
+  'VAT GBP: '||to_char(tax::numeric/100,'FM999999999990.00')||chr(10)||
+  'Total GBP: '||to_char(gross::numeric/100,'FM999999999990.00')||chr(10)||
+  coalesce((SELECT string_agg((l->>'description')||' | Net GBP: '||to_char((l->>'net_pence')::numeric/100,'FM999999999990.00'),chr(10) ORDER BY (l->>'ordinal')::integer,l->>'id')
+   FROM jsonb_array_elements(selected_lines) l),'')||chr(10)||party_snapshot::text;
+
+ -- Convert the exact approved snapshot to printable, wrapped rows (same ASCII fallback as quote PDFs).
+ FOREACH pdf_raw IN ARRAY string_to_array(artifact,chr(10)) LOOP
+  pdf_raw:=regexp_replace(pdf_raw,'[^ -~]','?','g');
+  IF length(pdf_raw)=0 THEN pdf_rows:=array_append(pdf_rows,''); END IF;
+  pdf_i:=1;
+  WHILE pdf_i<=length(pdf_raw) LOOP
+   pdf_rows:=array_append(pdf_rows,substr(pdf_raw,pdf_i,90)); pdf_i:=pdf_i+90;
+  END LOOP;
+ END LOOP;
+ pdf_pages:=greatest(1,(cardinality(pdf_rows)+53)/54); pdf_font:=3+pdf_pages*2;
+ pdf_objects:=ARRAY['<< /Type /Catalog /Pages 2 0 R >>',''];
+ FOR pdf_page IN 1..pdf_pages LOOP
+  pdf_i:=3+(pdf_page-1)*2; pdf_content:=pdf_i+1;
+  pdf_kids:=pdf_kids||pdf_i::text||' 0 R ';
+  pdf_stream:='BT /F1 8 Tf 40 790 Td 12 TL'||chr(10)||
+   '(SYNTHETIC - NOT A REAL INVOICE) Tj'||chr(10)||
+   'T* (Practice sandbox - synthetic data; nothing is sent or charged) Tj'||chr(10)||
+   'T* (Not a real tax invoice) Tj';
+  FOR pdf_j IN ((pdf_page-1)*54+1)..least(pdf_page*54,cardinality(pdf_rows)) LOOP
+   pdf_line:=replace(replace(replace(pdf_rows[pdf_j],chr(92),chr(92)||chr(92)),'(',chr(92)||'('),')',chr(92)||')');
+   pdf_stream:=pdf_stream||chr(10)||'T* ('||pdf_line||') Tj';
+  END LOOP;
+  pdf_stream:=pdf_stream||chr(10)||'ET';
+  pdf_objects:=array_append(pdf_objects,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '||pdf_font||' 0 R >> >> /Contents '||pdf_content||' 0 R >>');
+  pdf_objects:=array_append(pdf_objects,'<< /Length '||octet_length(pdf_stream)||' >>'||chr(10)||'stream'||chr(10)||pdf_stream||chr(10)||'endstream');
+ END LOOP;
+ pdf_objects[2]:='<< /Type /Pages /Kids ['||pdf_kids||'] /Count '||pdf_pages||' >>';
+ pdf_objects:=array_append(pdf_objects,'<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+ artifact:='%PDF-1.4'||chr(10);
+ FOR pdf_i IN 1..cardinality(pdf_objects) LOOP
+  pdf_offsets:=array_append(pdf_offsets,octet_length(artifact)::bigint);
+  artifact:=artifact||pdf_i||' 0 obj'||chr(10)||pdf_objects[pdf_i]||chr(10)||'endobj'||chr(10);
+ END LOOP;
+ pdf_xref:=octet_length(artifact);
+ artifact:=artifact||'xref'||chr(10)||'0 '||(cardinality(pdf_objects)+1)||chr(10)||'0000000000 65535 f '||chr(10);
+ FOR pdf_i IN 2..cardinality(pdf_offsets) LOOP
+  artifact:=artifact||lpad(pdf_offsets[pdf_i]::text,10,'0')||' 00000 n '||chr(10);
+ END LOOP;
+ artifact:=artifact||'trailer << /Size '||(cardinality(pdf_objects)+1)||' /Root 1 0 R >>'||chr(10)||'startxref'||chr(10)||pdf_xref||chr(10)||'%%EOF';
+ digest:=encode(sha256(convert_to(artifact,'UTF8')),'hex');
+ INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision_id,p_tenant,'job',p_job::text,'final_account.issue');
+ INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution_id,p_tenant,decision_id,'approved',p_actor);
+ INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
+ VALUES(authorization_id,p_tenant,decision_id,resolution_id,p_actor,'final_account.issue',p_recipient,digest,final_row.revision,gross,'GBP','candidate_m1_standard_v1',transaction_timestamp()+interval '5 minutes');
+ INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+ VALUES(invoice_id,p_tenant,p_job,p_revision,authorization_id,number,p_issued_on,jsonb_build_object('legalName','Fictional Builder Ltd','runIdentity',p_tenant),final_row.tax_policy_version,'GBP',net,tax,gross,final_row.source_hash,digest,convert_to(artifact,'UTF8'),true,'SYNTHETIC - NOT A REAL INVOICE');
+ INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,lock_id,revision_id,check_id) VALUES(p_tenant,p_job,invoice_id,p_kind,lock_row.id,p_revision,check_row.check_id);
+ -- Largest-remainder display allocation of the one group tax; tie-break by line ID, as core allocation.
+ -- Display tax follows merged absolute-net weights; invoice totals use the one group calculation.
+ FOR item IN WITH weights AS(SELECT value,abs((value->>'net_pence')::numeric) weight FROM jsonb_array_elements(selected_lines)),
+ parts AS(SELECT value,CASE WHEN sum(weight) OVER()=0 THEN 0 ELSE floor(tax::numeric*weight/sum(weight) OVER()) END base,
+ CASE WHEN sum(weight) OVER()=0 THEN 0 ELSE mod(tax::numeric*weight,sum(weight) OVER()) END remainder FROM weights),
+ ranked AS(SELECT *,row_number() OVER(ORDER BY remainder DESC,value->>'id') rank,tax-sum(base) OVER() left_over FROM parts)
+ SELECT value||jsonb_build_object('allocated_tax',base+CASE WHEN rank<=left_over THEN 1 ELSE 0 END) FROM ranked LOOP
+  INSERT INTO app.final_account_invoiced_line(tenant_id,job_id,invoice_id,final_account_line_id,revision_id,scope_item_id,commercial_revision_id,line_kind,source_id,net_pence,tax_pence,gross_pence)
+  VALUES(p_tenant,p_job,invoice_id,(item->>'id')::uuid,p_revision,(item->>'scope_item_id')::uuid,(item->>'commercial_revision_id')::uuid,item->>'line_kind',(item->>'source_id')::uuid,(item->>'net_pence')::bigint,(item->>'allocated_tax')::bigint,(item->>'net_pence')::bigint+(item->>'allocated_tax')::bigint);
+ END LOOP;
+ INSERT INTO app.customer_invoice_evidence(id,tenant_id,job_id,invoice_id,evidence_id,object_version_id,sha256,scope_item_id)
+ SELECT gen_random_uuid(),p_tenant,p_job,invoice_id,evidence_id,object_version_id,sha256,scope_item_id FROM app.final_account_proof WHERE tenant_id=p_tenant AND job_id=p_job AND final_account_revision_id=p_revision;
+ INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at,status,completed_at)
+ VALUES(gen_random_uuid(),p_tenant,authorization_id,'fake_invoice_delivery','lock-invoice:'||invoice_id,'final_account.issue',p_recipient,digest,artifact,final_row.revision,gross,'GBP','candidate_m1_standard_v1',transaction_timestamp()+interval '5 minutes','succeeded',transaction_timestamp());
+ result:=jsonb_build_object('invoiceId',invoice_id,'invoiceNumber',number,'pdfSha256',digest,'netPence',net,'taxPence',tax,'totalPence',gross,'sourceHash',p_source_hash,'invoiceKind',p_kind,'lockId',lock_row.id);
+ PERFORM app.lp5_bind_effect(p_command,authorization_id,'lock_invoice',jsonb_build_object('invoiceId',invoice_id));
+ PERFORM app.append_final_lock_audit(audit_id,p_actor,p_job,'customer_invoice.lock_bound_issued',jsonb_build_object('invoiceId',invoice_id,'lockId',lock_row.id,'checkId',check_row.check_id,'commandId',p_command),jsonb_build_object('pdf',digest));
+ RETURN app.complete_command(p_command,'{}'::jsonb);
+END $$;
+
+CREATE OR REPLACE FUNCTION app.sv7a_intake_job_source(t uuid,j uuid,digest text,source text,input jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE actor uuid; cid uuid; request_digest text; prior app.command_receipt; allowed text[]; txt text; raw bytea; h text;
+ sid uuid:=gen_random_uuid(); ev uuid:=gen_random_uuid(); ver text:=gen_random_uuid()::text; audit_id uuid:=gen_random_uuid();
+ lp5_claim jsonb; lp5_input jsonb;
+ at_time timestamptz; ref text; okey text; ctype text; rec_json jsonb; out_result jsonb;
+BEGIN
+ IF t IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Strict versioned shape; server selects tenant, actor, time, hashes and fixture reference.
+ IF source IS NULL OR source NOT IN('diary','customer_message') OR jsonb_typeof(input) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_JOB_SOURCE_INPUT'; END IF;
+ allowed:=CASE WHEN source='diary' THEN ARRAY['version','commandId','entryMode','onSite','text'] ELSE ARRAY['version','commandId','fictionalCustomer','text'] END;
+ IF EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE NOT k=ANY(allowed)) OR EXISTS(SELECT 1 FROM unnest(allowed) k WHERE NOT input ? k)
+  OR input->>'version' IS DISTINCT FROM (CASE WHEN source='diary' THEN 'job-diary-input.v1' ELSE 'customer-message-input.v1' END)
+  OR jsonb_typeof(input->'commandId') IS DISTINCT FROM 'string' OR jsonb_typeof(input->'text') IS DISTINCT FROM 'string'
+  OR (source='diary' AND (input->>'entryMode' IS NULL OR input->>'entryMode' NOT IN('typed','dictated_text') OR jsonb_typeof(input->'onSite') IS DISTINCT FROM 'boolean'))
+  OR (source='customer_message' AND (jsonb_typeof(input->'fictionalCustomer') IS DISTINCT FROM 'object'
+   OR (SELECT count(*) FROM jsonb_object_keys(input->'fictionalCustomer'))<>2 OR input->'fictionalCustomer'->>'kind' IS DISTINCT FROM 'named_fictional_customer'
+   OR jsonb_typeof(input->'fictionalCustomer'->'name') IS DISTINCT FROM 'string' OR length(btrim(input->'fictionalCustomer'->>'name')) NOT BETWEEN 1 AND 160 OR char_length(input->'fictionalCustomer'->>'name')>160))
+ THEN RAISE EXCEPTION 'INVALID_JOB_SOURCE_INPUT'; END IF;
+ txt:=input->>'text';
+ IF char_length(txt) NOT BETWEEN 1 AND 8000 OR octet_length(convert_to(txt,'UTF8'))>32000 OR length(btrim(txt,E' \t\r\n'))=0 THEN RAISE EXCEPTION 'INVALID_JOB_SOURCE_INPUT'; END IF;
+ BEGIN cid:=(input->>'commandId')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'INVALID_JOB_SOURCE_INPUT'; END;
+ ctype:=CASE WHEN source='diary' THEN 'JobSource.diary' ELSE 'JobSource.customer_message' END;
+ -- Authority before any informative read; rechecked after every wait (same seam as CH-4 commands).
+ BEGIN actor:=app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+ -- Evidence registration holds SHARE on the job, matching the merged watchdog live guard.
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+ PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||t::text||':'||cid::text,0));
+ BEGIN actor:=app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+ lp5_input:=jsonb_build_object('jobId',j,'actor',actor,'sessionDigest',digest,'source',source,'input',input);
+ request_digest:=app.final_lock_hash(jsonb_build_object('jobId',j,'actor',actor,'sessionDigest',digest,'source',source,'input',input));
+ IF EXISTS(SELECT 1 FROM app.watchdog_command_identity WHERE tenant_id=t AND command_id=cid AND (job_id<>j OR command_type<>ctype OR request_hash<>request_digest))
+ THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+ SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=t AND command_id=cid;
+ IF FOUND THEN
+ BEGIN
+  lp5_claim:=app.begin_command('repository-command.v1',cid,ctype,cid::text,
+   jsonb_build_object('tenantId',t,'actorMembershipId',actor,'subjectType','job','subjectRef',j),'{}'::jsonb,
+   jsonb_build_object('version','repository-command.v1','actorMembershipId',actor,'input',lp5_input,'legacyJson',app.final_lock_canonical(lp5_input)));
+ EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501';
+ WHEN unique_violation THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END;
+  RETURN (lp5_claim->'result');
+ END IF;
+ -- New writes only below. Holds precede every effect.
+ IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
+ PERFORM app.require_watchdog_live(j);
+ IF source='diary' AND (input->>'onSite')::boolean THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));
+  PERFORM app.ch4_require_open(t,j);
+  PERFORM app.ch4_admit_place(t,j,'restart');
+ END IF;
+ IF app.ch4_legacy_command_owned(t,cid) THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+ BEGIN
+  lp5_claim:=app.begin_command('repository-command.v1',cid,ctype,cid::text,
+   jsonb_build_object('tenantId',t,'actorMembershipId',actor,'subjectType','job','subjectRef',j),'{}'::jsonb,
+   jsonb_build_object('version','repository-command.v1','actorMembershipId',actor,'input',lp5_input,'legacyJson',app.final_lock_canonical(lp5_input)));
+ EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501';
+ WHEN unique_violation THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END;
+ IF (lp5_claim->>'kind')='replay' THEN RETURN (lp5_claim->'result'); END IF;
+ INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash) VALUES(t,cid,j,ctype,request_digest);
+ at_time:=clock_timestamp(); raw:=convert_to(txt,'UTF8'); h:=encode(pg_catalog.sha256(raw),'hex'); okey:='synthetic/job-sources/'||sid::text;
+ -- Only the reviewed fictional originals carry a decoder reference; exact text and kind, chosen by the server.
+ ref:=CASE WHEN source='diary' AND txt='Fitted outside tap.' THEN 'job-source:outside-tap.v1' WHEN source='customer_message' AND txt='Please fit an outside tap.' THEN 'job-source:request-tap.v1' END;
+ INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
+ VALUES(ev,t,j,okey,h,'text/plain; charset=utf-8',32000,'standard_evidence',at_time+interval '1 day','verified',ver,at_time,clock_timestamp());
+ INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+ VALUES(ev,t,ev,j,'original',CASE WHEN source='diary' THEN 'job_diary_text' ELSE 'customer_message_text' END,okey,ver,h,octet_length(raw),'text/plain; charset=utf-8','standard_evidence',at_time,clock_timestamp());
+ INSERT INTO app.job_source_original(tenant_id,job_id,evidence_id,source_kind,source_id,object_key,object_version_id,bytes,sha256,byte_length,source_received_at,verified_at,synthetic_fixture_ref)
+ VALUES(t,j,ev,source,sid,okey,ver,raw,h,octet_length(raw),at_time,clock_timestamp(),ref);
+ IF source='diary' THEN
+  INSERT INTO app.job_diary_entry(tenant_id,job_id,id,command_id,actor_membership_id,entry_mode,on_site,evidence_id,object_version_id,sha256,source_received_at)
+  VALUES(t,j,sid,cid,actor,input->>'entryMode',(input->>'onSite')::boolean,ev,ver,h,at_time);
+ ELSE
+  INSERT INTO app.customer_message_source(tenant_id,job_id,id,command_id,actor_membership_id,fictional_role_name,evidence_id,object_version_id,sha256,source_received_at)
+  VALUES(t,j,sid,cid,actor,input->'fictionalCustomer'->>'name',ev,ver,h,at_time);
+ END IF;
+ rec_json:=jsonb_build_object('id',sid,'commandId',cid,'text',txt,'actualTesterMembershipId',actor,
+  'evidence',jsonb_build_object('id',ev,'objectVersionId',ver,'sha256',h,'serverReceivedAt',to_char(at_time AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')))
+  ||CASE WHEN source='diary' THEN jsonb_build_object('entryMode',input->>'entryMode','onSite',(input->>'onSite')::boolean)
+   ELSE jsonb_build_object('fictionalCustomer',jsonb_build_object('kind','named_fictional_customer','name',input->'fictionalCustomer'->>'name')) END;
+ out_result:=jsonb_build_object('version','job-source-intake-receipt.v1','jobId',j,'sourceKind',source,'record',rec_json,'environment','synthetic_demo','realExternalActions',0)
+  ||CASE WHEN source='diary' THEN jsonb_build_object('notice','Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.','noticeVersion','job-diary-notice.v1') ELSE '{}'::jsonb END;
+ PERFORM app.lp5_bind_effect(cid,NULL,'source_intake',jsonb_build_object('result',out_result));
+ -- Identifiers and hashes only in the audit chain; never the note text.
+ -- Same per-tenant chain as other lock/check events; this helper takes any event type (append_final_lock_audit allows only four).
+ PERFORM app.append_final_check_audit(audit_id,'membership:'||actor::text,j,CASE WHEN source='diary' THEN 'job_source.diary_recorded' ELSE 'job_source.customer_message_recorded' END,
+  jsonb_build_object('commandId',cid,'sourceId',sid,'evidenceId',ev,'sha256',h));
+ BEGIN out_result:=app.complete_command(cid,'{}'::jsonb);
+ EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+ BEGIN PERFORM app.ch4_require_command_owner(t,j,digest); EXCEPTION WHEN insufficient_privilege THEN RAISE EXCEPTION 'JOB_SOURCE_FORBIDDEN' USING ERRCODE='42501'; END;
+ RETURN out_result;
+END $$;
+
 REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
 COMMIT;

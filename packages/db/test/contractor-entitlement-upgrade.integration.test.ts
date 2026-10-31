@@ -24,6 +24,7 @@ it("actual catalogs retain least privilege",async()=>{
 // C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
 const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
+ "app.customer_variation_approval":[],
  "app.customer_portal_grant":[],
  "app.customer_portal_session":[],
  "app.job_import_v3":[],
@@ -77,6 +78,14 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.receipt_allocation_fact_review":[],
  "app.receipt_allocation_fact_revision":[],
  "app.receipt_allocation_fact_source":[],
+ "app.platform_fee_statement":[],
+ "app.platform_fee_statement_command":[],
+ "app.success_fee_command":[],
+ "app.success_fee_derivation":[],
+ "app.success_fee_journal":[],
+ "app.success_fee_journal_line":[],
+ "app.success_fee_review":[],
+ "app.success_fee_source":[],
  "app.stored_receipt_case_allocation":[],
  "app.stored_receipt_case_binding":[],
  "app.stored_receipt_case_command":[],
@@ -94,7 +103,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.recovery_attribution_command":[],
  "app.recovery_attribution_reassessment":[],
  "app.activation_acceptance_operation_use":[],
- ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin)).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
+ ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
  // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
  expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

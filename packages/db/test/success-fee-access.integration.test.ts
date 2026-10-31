@@ -45,7 +45,7 @@ it("SF-15 ended session and revoked/expired owner cannot read or replay via SQL"
  }
  expect(await protectedSnapshot(f)).toEqual(before);
 });
-it("SF-17 catalogue has exactly two narrow new EXECUTE grants and no table changes",async()=>{
+it("SF-17 catalogue retains exactly two narrow public EXECUTE grants and six private tables",async()=>{
  const rows=(await f.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
  has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
@@ -54,11 +54,11 @@ it("SF-17 catalogue has exactly two narrow new EXECUTE grants and no table chang
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
  WHERE n.nspname='app' AND p.proname IN('read_success_fee_v3','write_success_fee_v3') ORDER BY 1`)).rows;
  expect(rows).toEqual(['read_success_fee_v3','write_success_fee_v3'].map(proname=>({proname,owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime:true,infrastructure:false,shadow:false,public:false})));
- expect((await f.admin.query("SELECT tablename FROM pg_tables WHERE schemaname='app' AND tablename LIKE 'success_fee_%'")).rows).toEqual([]);
+ expect((await f.admin.query("SELECT tablename FROM pg_tables WHERE schemaname='app' AND tablename LIKE 'success_fee_%' ORDER BY tablename")).rows).toEqual([{"tablename": "success_fee_command"}, {"tablename": "success_fee_derivation"}, {"tablename": "success_fee_journal"}, {"tablename": "success_fee_journal_line"}, {"tablename": "success_fee_review"}, {"tablename": "success_fee_source"}]);
  await expect(f.runtime.query("SET ROLE jobguard_migration")).rejects.toMatchObject({code:"42501"});
 });
-it("SF-21 no source or shadow relation is queried by either boundary",async()=>{
- const defs=(await f.admin.query("SELECT pg_get_functiondef(oid) definition FROM pg_proc WHERE oid=ANY(ARRAY['app.read_success_fee_v3(uuid,text)'::regprocedure,'app.write_success_fee_v3(uuid,text,jsonb,jsonb)'::regprocedure])")).rows.map(r=>r.definition).join('\n');
+it("SF-21 availability reads no hidden source, and pre-lock write refuses before source reads",async()=>{
+ const defs=(await f.admin.query("SELECT pg_get_functiondef('app.read_success_fee_v3(uuid,text)'::regprocedure) definition")).rows[0].definition as string;
  expect(defs).not.toMatch(/\bapp\.(?:shadow_|recovery_attribution|receipt_line_allocation|evidence_object|audit_event)/u);
  const before=await protectedSnapshot(f);await expect(raw(a.p.jobId,a.auth.digest,a.p.tenantId,true)).rejects.toThrow("SUCCESS_FEE_DEPENDENCY_BOUND");expect(await protectedSnapshot(f)).toEqual(before);
 });
@@ -120,4 +120,17 @@ it("post-live billing availability also permits invoiced and paid jobs with the 
    expect((await db.query('SELECT app.read_success_fee_v3($1,$2) result',[a.p.jobId,a.auth.digest])).rows[0].result).toMatchObject({state:'dependency_bound'});
   }finally{await db.query('ROLLBACK');db.release();}
  }
+});
+
+it("the source fence is migration-owned and cannot be called by runtime or worker roles",async()=>{
+ const sig="app.lock_success_fee_sources()";
+ const row=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END
+   FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE' ORDER BY 1)::text[] grantees
+  FROM pg_proc p WHERE p.oid=$1::regprocedure`,[sig])).rows[0];
+ expect(row).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog, app"],grantees:["jobguard_migration"]});
+ for(const role of ["jobguard_runtime","jobguard_infrastructure","jobguard_shadow","jobguard_shadow_emergency_access"]){
+  expect((await f.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,sig])).rows[0].allowed).toBe(false);
+ }
+ await expect(f.runtime.query("SELECT app.lock_success_fee_sources()")).rejects.toMatchObject({code:"42501"});
 });

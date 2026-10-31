@@ -25,7 +25,15 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   expect(run).toMatchObject({scenario,status:"blocked",revision:1,reason:expect.any(String)});
   expect(await new SmallBuilderDemoRepository(c.runtime).execute(a.context,a.digest,"read",id,{})).toEqual(run);
   expect(await call(a,"create",null,cmd)).toEqual(run);
-  expect(JSON.stringify(run)).not.toMatch(/pence|settled|completed|hidden|signal/i);
+  if(scenario==="meter") {
+   expect(run).toMatchObject({meterPreview:{tenantId:a.tenantId,runId:id,hypothetical:true}});
+   if(!("meterPreview" in run)||!run.meterPreview)throw new Error("Expected meter preview");
+   expect(run.meterPreview.profiles.map(p=>p.principalPence)).toEqual([34800,82800,8900,7900,16900,4900,4900,6233,6965,16900]);
+   const other=await company();
+   await expect(call(other,"read",id)).rejects.toThrow("DEMO_NOT_FOUND");
+   const saved=await call(a,"snapshot",id,snapshot());
+   expect(saved).not.toHaveProperty("facts.meterPreview");
+  } else expect(JSON.stringify(run)).not.toMatch(/pence|settled|completed|hidden|signal/i);
  });
  it("archives once, preserves snapshots, rejects stale writes and replays exactly one successor",async()=>{
   const a=await company(),run=await call(a,"create",null,create()),id=runId(run),snap=snapshot();

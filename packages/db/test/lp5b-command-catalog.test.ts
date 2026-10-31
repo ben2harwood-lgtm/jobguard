@@ -19,7 +19,7 @@ describe("LP-5b draft catalogue additions", () => {
   });
   it("keeps exact routine inventory and checked writer grants, with no business lock at begin", () => {
     expect([...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.([a-z0-9_]+)/g)].map(match => match[1]).sort())
-      .toEqual(["begin_command","lp5_command_result","complete_command","lp5_bind_effect","xa_submit","xa_price","xa_approve","xa_withdraw","xa_mark_duplicate","xa_revoke_link","xa_client_decide","ent3b_start_visit","ent3b_complete_visit"].sort());
+      .toEqual(["begin_command","lp5_command_result","complete_command","lp5_bind_effect","xa_submit","xa_price","xa_approve","xa_withdraw","xa_mark_duplicate","xa_revoke_link","xa_client_decide","ent3b_start_visit","ent3b_complete_visit","issue_lock_bound_customer_invoice","sv7a_intake_job_source"].sort());
     expect([...sql.matchAll(/CREATE FUNCTION app\.([a-z0-9_]+)/g)].map(match=>match[1]).sort())
       .toEqual(lp5bRoutines.map(r=>r.signature.split("(")[0]!.replace("app.","")).sort());
     const begin = sql.split("CREATE OR REPLACE FUNCTION app.begin_command")[1]!.split("END $$;")[0]!;

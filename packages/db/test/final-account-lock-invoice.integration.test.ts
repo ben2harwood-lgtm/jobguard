@@ -59,6 +59,17 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   expect((await f.admin.query("SELECT final_account_line_id,net_pence FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,supplementary.id])).rows).toEqual([{final_account_line_id:line,net_pence:'80000'}]);
   expect(supplemental).toBeDefined();
  });
+ it("LP-5 lock invoice binds its checked lifecycle, conflicts and revoked-member replay",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);await appendCheck(f,a,'completed');
+  const input=invoiceInput(a),first=await repo.issueInvoice(a.context,input);expect(await repo.issueInvoice(a.context,input)).toEqual(first);
+  const lifecycle=(await f.admin.query("SELECT c.version,c.outcome,r.status,r.result FROM app.command_lifecycle_claim c JOIN app.command_receipt r USING(tenant_id,command_id) WHERE c.tenant_id=$1 AND c.command_id=$2",[a.tenantId,input.commandId])).rows;
+  expect(lifecycle).toEqual([{version:'repository-command.v1',outcome:{},status:'succeeded',result:first}]);
+  await expect(repo.issueInvoice(a.context,{...input,recipient:'other-fictional@example.invalid'})).rejects.toMatchObject({code:'IDEMPOTENCY_PAYLOAD_CONFLICT'});
+  const invoiceCount=(await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[a.tenantId])).rows[0].n;
+  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER]);
+  await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FORBIDDEN'});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(invoiceCount);
+ });
  it("latest append-only check fact overrides an older completion; shadow cannot read or rewrite checks",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);
   await appendCheck(f,a,'completed');await appendCheck(f,a,'failed');

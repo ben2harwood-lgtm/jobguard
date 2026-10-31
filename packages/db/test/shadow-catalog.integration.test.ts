@@ -146,4 +146,15 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Signal state/revision alone are the shadow role's mutable projection columns.
   for(const table of tables.filter(t=>t!=="shadow_commercial_signal"))await expect(admin.query(`DELETE FROM app.${table}`)).rejects.toMatchObject({code:"55000"});
  });
+
+it('SB-01: Builder runtime role reads a shadow table directly or through a view', async () => {
+ const id = await signal();
+ for (const table of tables) {
+  expect((await admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
+  await expect(runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({ code: "42501" });
+ }
+ // Positive control: the authorized shadow login can read that same row in its tenant.
+ const rows = await withTenant(shadow, context(), db => db.$client.query("SELECT id FROM app.shadow_commercial_signal WHERE id=$1", [id]));
+ expect(rows.rows).toEqual([{ id }]);
+});
 });
