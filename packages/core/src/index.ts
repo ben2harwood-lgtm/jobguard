@@ -138,3 +138,4 @@ export * from "./customer-approval-method.js";
 export * from "./customer-variation-approval.js";
 export * from "./interim-applications.js";
 export * from "./retention-balances.js";
+export * from "./vat-treatments.js";

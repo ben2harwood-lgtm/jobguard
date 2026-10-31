@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-21": {
+      "branches": ["codex/sandbox/m4-21"],
+      "allow": [
+        "packages/core/src/vat-treatments.ts",
+        "packages/core/src/vat-treatments.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/vat-treatments-dark-v1.md"
+      ],
+      "note": "M4-21 RED: dark, unapproved synthetic VAT matrix and reconciliation; no real issue, migrations or changes to M1."
+    }
+  }
+}
