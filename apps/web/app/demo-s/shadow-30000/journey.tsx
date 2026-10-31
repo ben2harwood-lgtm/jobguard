@@ -9,7 +9,11 @@ const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "curre
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
  const view = report.account, account = view.account;
  return <section aria-label="Saved shadow journey report">
-  <h2>Saved job evidence</h2><p>Incomplete. Customer approval is not ready yet (MON-5). No fee is charged.</p>
+  <h2>Saved job evidence</h2><p>Incomplete. No fee is charged.</p>
+  <p>Customer approval: {report.customerApproval.state === "not_ready_yet" ? "Not ready yet (MON-5)" : report.customerApproval.state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal"}.</p>
+  <ul>{report.customerApproval.approvals.map(approval => <li key={approval.variationId}>
+   <a href={`/jobs/${report.jobId}#final-check`}>Variation {approval.variationId}</a> · approved {approval.approvedAt} · customer portal
+  </li>)}</ul>
   <p><a href={`/jobs/${report.jobId}`}>Open the same saved job</a></p>
   <dl><dt>Final account</dt><dd>{account ? `${pounds(account.totals.net.pence)} net · revision ${account.revision}` : "Not built yet"}</dd>
    <dt>Lock</dt><dd>{view.lock ? `${view.lock.id} · ${view.lock.lockedAt}` : "Not locked"}</dd>
@@ -27,7 +31,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
    <ul>{report.assessments.map(({ assessment: a, illustrationAsAssessed: illustration }) => <li key={a.assessmentId}>Revision {a.revision} · {a.assessmentOutcome} · illustration as assessed: recovered {illustration.display.recovered ?? "Exact fraction; inspect source"}, proposed fee {illustration.display.fee}, yours {illustration.display.yoursBeforeVatAndTax ?? "Exact fraction; inspect source"} before VAT and tax
     <a href={`/api/jobs/${report.jobId}/success-fee-attribution`}> Inspect saved source manifest {a.assessmentId}</a></li>)}</ul></section>}
   <p>CH-8 evidence-pack generation: not ready yet; producer binding held.</p>
-  <p>CH-9 value report: {report.value.status}; producer bindings held.</p>
+  <p>CH-9 value report: {report.value.status}{report.value.status === "incomplete" ? "; producer bindings held" : "; source-linked receipt saved"}.</p>
   <p>Independent verdict: missing. Non-technical builder observations: 0 of 2 recorded here.</p>
   <p><a href={`/api/jobs/${report.jobId}/shadow-demo`}>Inspect this report's persisted source references</a></p>
  </section>;

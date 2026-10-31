@@ -29,7 +29,7 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
     await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
     await page.reload(); await expect(saved).toBeVisible();
   }
-  await page.getByText("Meter profiles — all not ready yet", { exact: true }).click();
+  await page.getByText("Meter profiles — reference previews available", { exact: true }).click();
   await expect(page.getByText("DM-10 · Builder 13–17 places and track review")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -113,10 +113,15 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
   await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
   await page.goto(selectionUrl);
+  const savedResponse = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/shadow-demo`) && response.request().method() === "GET");
   await page.getByRole("button", { name: "Create or resume and read saved results", exact: true }).click();
+  const response = await savedResponse;
+  expect(response.ok()).toBe(true);
+  expect(await response.json()).toMatchObject({ version: "shadow-demo-report.v2", jobId,
+    customerApproval: { state: "not_ready_yet", approvals: [] } });
   const results = page.getByRole("region", { name: "Saved shadow journey report" });
   await expect(results).toContainText("Not built yet"); await expect(results).toContainText("Not locked");
-  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("MON-5");
+  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready yet (MON-5)");
   await expect(results.getByRole("link", { name: "Open the same saved job" })).toHaveAttribute("href", `/jobs/${jobId}`);
   await expect(results).not.toContainText("£80.00");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();

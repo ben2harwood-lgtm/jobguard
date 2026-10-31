@@ -47,3 +47,32 @@ it("renders no invented results before a persisted read and disables archived la
   expect(html).toContain("archived"); expect(html.match(/disabled=""/g)).toHaveLength(2);
   expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("£80");
 });
+
+const savedReport = () => ({
+  version: "shadow-demo-report.v2", environment: "synthetic_demo", jobId, status: "incomplete", realExternalActions: 0,
+  customerApproval: { state: "not_ready_yet", approvals: [] },
+  account: { jobId, account: null, captures: [], lock: null },
+  invoices: { version: 1, environment: "synthetic_demo", jobId, invoices: [] },
+  value: { version: "job-value.v3", environment: "synthetic_demo", jobId, status: "incomplete", reason: "producer_bindings_held",
+    producers: { sources: "HELD", derivation: "HELD", subscription: "HELD", postedMoney: "HELD" }, asOf: null, receipt: null },
+});
+it("reads the same saved job through report v2 without substituting target outcomes", async () => {
+  const raw = savedReport();
+  const fetch = vi.fn().mockResolvedValue(reply(raw));
+  vi.stubGlobal("fetch", fetch);
+  expect(await readShadowResults(jobId)).toEqual(raw);
+  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/shadow-demo`, { cache: "no-store" });
+});
+it("rejects stale v1, cross-job and pre-lock hidden results on the chooser read path", async () => {
+  const raw = savedReport();
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  for (const patch of [
+    { version: "shadow-demo-report.v1", customerApproval: "not_ready_yet" },
+    { jobId: runId }, { account: { ...raw.account, jobId: runId } },
+    { invoices: { ...raw.invoices, jobId: runId } }, { value: { ...raw.value, jobId: runId } },
+    { assessments: [] }, { packs: [] }, { finalCheck: { state: "unlocked", items: [] } },
+  ]) {
+    fetch.mockResolvedValue(reply({ ...raw, ...patch }));
+    await expect(readShadowResults(jobId)).rejects.toThrow();
+  }
+});

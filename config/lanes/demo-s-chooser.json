@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/demo-s-chooser"
       ],
-      "note": "RED-lite: DEMO-S journey blockers 1 and 7. Fictional shadow capture launch/replay/reset and persisted public-source results. Other guides remain unavailable in this base. No migrations.",
+      "note": "RED: DEMO-S journey blockers 1 and 7. Preserve main chooser guides and meter previews; shadow capture launch/replay/reset and report-v2 persisted results. No new migrations.",
       "allow": [
         "apps/web/app/demo-s/chooser-state.ts",
         "apps/web/app/demo-s/chooser.test.tsx",
@@ -14,7 +14,8 @@
         "apps/web/app/demo-s/journey-launch.test.tsx",
         "apps/web/app/demo-s/journey-result.tsx",
         "apps/web/e2e/DEMO-S-chooser.spec.ts",
-        "apps/web/app/demo-s/shadow-30000/journey.tsx"
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
       ]
     }
   }

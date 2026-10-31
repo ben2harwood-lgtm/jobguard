@@ -9,10 +9,10 @@ export function demoLink(tenantId: string, runId: string, snapshotId?: string) {
   return `/demo-s?${new URLSearchParams({ tenantId, runId, ...(snapshotId ? { snapshotId } : {}) })}`;
 }
 export const journeyChoices = [
-  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "The guided capture-to-correction journey and approved correction binding are not ready yet." },
+  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "The separate core-1000 guide is available. Selection-linked launch and end-to-end completion are not ready yet." },
   { scenario: "recovery-18800", journey: "DEMO-J2", title: "Recovery £18,800 job", reason: "The guided recovery journey, collection, refund and money reconciliation bindings are not ready yet." },
   { scenario: "shadow-30000", journey: "DEMO-J3", title: "Final Check £30,000 job", reason: "Available through the final-account lock. Customer approval and later steps are not ready yet." },
-  { scenario: "meter", journey: "DEMO-J4", title: "Jobs-on-the-go meter", reason: "The guided meter profiles and approved reference clock are not ready yet." },
+  { scenario: "meter", journey: "DEMO-J4", title: "Jobs-on-the-go meter", reason: "Reference producer previews are available after saving. Persisted billing and trial journeys are not ready yet." },
   { scenario: "trial", journey: "DEMO-J5", title: "First-job trial", reason: "The guided trial, identity, card setup and reference clock bindings are not ready yet." },
 ] as const;
 export const meterProfiles = [

@@ -1,7 +1,8 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { smallBuilderDemoRunV1, smallBuilderDemoReportV1 } from "@jobguard/core";
+import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, previewDemoMeter } from "@jobguard/core";
+import { MeterPreview } from "./meter-preview";
 import { DemoChooser, LifecycleReport } from "./chooser";
 import { demoLink, journeyChoices, meterProfiles, journeyAvailable, pendingKey, readPending } from "./chooser-state";
 vi.stubGlobal("React", React);
@@ -10,6 +11,7 @@ const facts = { version: "small-builder-demo-run.v1", environment: "synthetic_de
 describe("DEMO-S chooser and honest lifecycle report", () => {
   it("enables only the guide and report reader present on main", () => {
     expect(journeyChoices.map(item => item.journey)).toEqual(["DEMO-J1", "DEMO-J2", "DEMO-J3", "DEMO-J4", "DEMO-J5"]);
+    expect(new Set(journeyChoices.map(item => item.scenario)).size).toBe(5);
     expect(meterProfiles).toHaveLength(13); expect(meterProfiles[9]).toContain("13–17");
     expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["shadow-30000"]);
     for (const item of journeyChoices) expect(item.reason).toContain("not ready yet");
@@ -22,9 +24,24 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     expect(html).toContain("0 of 2"); expect(html).toContain("snapshotId="); expect(html).toContain("Revision");
     expect(html).not.toMatch(/£800|£80|£720|£34,400|PASS|settled|signals found/);
   });
+  it("renders actual producer amounts, grace crossing and plain unavailable reasons without a settlement claim",()=>{
+    const html=renderToStaticMarkup(<MeterPreview preview={previewDemoMeter({tenantId:id,runId:id})} />);
+    for(const amount of ["£348.00","£828.00","£89.00","£79.00","£169.00","£49.00","£62.33","£69.65"])expect(html).toContain(amount);
+    expect(html).toContain("track_review_due immediately");expect(html).toContain("MON-3 trial prelude");
+    expect(html).toContain("Not ready yet");expect(html).toContain("not issued statements or settled payments");
+    expect(html).toContain("2026-04-02");
+  });
+  it("accepts the saved meter run with a preview-unavailable note without changing lifecycle facts", () => {
+    const saved = { ...facts, scenario: "meter", meterPreviewNote: "Preview unavailable." };
+    expect(smallBuilderDemoRunV1.parse(saved)).toEqual(saved);
+    expect(smallBuilderDemoRunV1.safeParse({ ...saved, meterPreviewNote: "private error" }).success).toBe(false);
+    expect(smallBuilderDemoReportV1.safeParse({ version: "small-builder-demo-report.v1", snapshotId: id, facts: saved }).success).toBe(false);
+  });
   it("renders no saved company or hidden data before authentication", () => {
     const html = renderToStaticMarkup(<DemoChooser />);
     expect(html).toContain("Checking your signed-in business");
+    expect(html).toContain('href="/demo-s/core-1000"');
+    expect(html).toContain('href="/demo-s/shadow-30000"');
     expect(html).not.toContain("Saved selection report"); expect(html).not.toContain(id);
   });
   it("restores only exact metadata intents, keeping replay IDs and owner storage scopes separate", () => {
