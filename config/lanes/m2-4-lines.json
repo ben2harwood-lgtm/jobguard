@@ -7,6 +7,8 @@
       ],
       "allow": [
         "docs/contracts/supplier-line-matching-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/src/index.ts",
         "packages/core/src/index.ts",
         "packages/core/src/supplier-line-matching.ts",
         "packages/core/src/supplier-line-matching.test.ts",
