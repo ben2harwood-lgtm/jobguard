@@ -1,5 +1,10 @@
 import {expect,it} from "vitest";
 import {simulationFeeCollectionCommandV1} from "./simulation-fee-collection.js";
+import {jobMutationRegistry} from "./watchdog.js";
+it("classifies both collection transports as post-live billing without granting command authority",()=>{
+ expect(jobMutationRegistry["/api/jobs/[id]/success-fees/collection"]).toBe("post_live_billing");
+ expect(jobMutationRegistry["nest:/jobs/:id/success-fees/collection"]).toBe("post_live_billing");
+});
 const command={version:"simulation-fee-collection-command.v1",commandId:"10000000-0000-4000-8000-000000000001",action:"collect",statementId:"10000000-0000-4000-8000-000000000002",statementHash:"a".repeat(64),amountPence:28200};
 it("requires the exact statement and displayed GBP principal; rejects client authority, malformed money and missing fields",()=>{
  expect(simulationFeeCollectionCommandV1.parse(command)).toEqual(command);

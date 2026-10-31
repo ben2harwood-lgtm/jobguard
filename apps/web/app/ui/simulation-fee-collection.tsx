@@ -2,15 +2,26 @@
 import { useEffect,useState } from "react";
 import { simulationFeeCollectionViewV1,type SimulationFeeCollectionView } from "@jobguard/core";
 const pounds=(p:number)=>`£${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+// Navigation must not abandon the bounded request or its response body, including refusals.
+export async function readSimulationFeeCollection(jobId:string){
+ const response=await fetch(`/api/jobs/${jobId}/success-fees/collection`,{cache:"no-store",keepalive:true});
+ const body=await response.json();
+ if(!response.ok)throw new Error("Collection records could not be loaded.");
+ return simulationFeeCollectionViewV1.parse(body);
+}
+export async function writeSimulationFeeCollection(jobId:string,command:unknown){
+ const response=await fetch(`/api/jobs/${jobId}/success-fees/collection`,{method:"POST",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify(command)});
+ await response.json();
+ return response;
+}
 export function SimulationFeeCollection({jobId,statementId,statementHash}:{jobId:string;statementId:string;statementHash:string}){
  const [view,setView]=useState<SimulationFeeCollectionView|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const url=`/api/jobs/${jobId}/success-fees/collection`;
- async function load(){const r=await fetch(url,{cache:"no-store"});if(!r.ok)throw new Error();setView(simulationFeeCollectionViewV1.parse(await r.json()));}
+ async function load(){setView(await readSimulationFeeCollection(jobId));}
  useEffect(()=>{setView(null);setError("");void load().catch(()=>setError("Collection records could not be loaded."));},[jobId,statementId,statementHash]);
  async function command(action:"collect"|"refund"|"redirect"|"unknown",attemptId?:string){
   setBusy(true);setError("");
   try{
-   const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:"simulation-fee-collection-command.v1",commandId:crypto.randomUUID(),action,...(attemptId?{attemptId}:{statementId,statementHash,amountPence:action==="collect"?view?.outstandingPrincipal:view?.refundDue})})});
+   const r=await writeSimulationFeeCollection(jobId,{version:"simulation-fee-collection-command.v1",commandId:crypto.randomUUID(),action,...(attemptId?{attemptId}:{statementId,statementHash,amountPence:action==="collect"?view?.outstandingPrincipal:view?.refundDue})});
    if(!r.ok)setError("This attempt could not proceed. Refresh the statement and reconcile any pending or unknown attempt.");
    await load();
   }catch{setError("Collection outcome could not be loaded. Refresh before making another attempt.");}finally{setBusy(false);}
