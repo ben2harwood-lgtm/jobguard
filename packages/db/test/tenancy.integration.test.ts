@@ -406,10 +406,6 @@ describe("migration and privilege catalog", () => {
       { relname: "privacy_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "privacy_request", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "privacy_subject", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "privacy_artifact", owner: "jobguard_migration" },
-      { relname: "privacy_command", owner: "jobguard_migration" },
-      { relname: "privacy_request", owner: "jobguard_migration" },
-      { relname: "privacy_subject", owner: "jobguard_migration" },
       { relname: "prompt_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "property_constraint_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -787,6 +783,10 @@ describe("migration and privilege catalog", () => {
       { relname: "practice_feed_receipt_match", owner: "jobguard_migration" },
       { relname: "practice_supplier_credit_case_binding", owner: "jobguard_migration" },
       { relname: "practice_supplier_credit_review_payment", owner: "jobguard_migration" },
+      { relname: "privacy_artifact", owner: "jobguard_migration" },
+      { relname: "privacy_command", owner: "jobguard_migration" },
+      { relname: "privacy_request", owner: "jobguard_migration" },
+      { relname: "privacy_subject", owner: "jobguard_migration" },
       { relname: "prompt_resolution", owner: "jobguard_migration" },
       { relname: "proof_application_response", owner: "jobguard_migration" },
       { relname: "property_constraint_fact", owner: "jobguard_migration" },
@@ -967,4 +967,16 @@ it("SV5-GUARD catalogue retains a private migration-owned tenant-safe upload gua
  const triggers=(await admin.query(`SELECT tgname,tgenabled,pg_get_triggerdef(oid) definition FROM pg_trigger
   WHERE tgrelid='app.evidence_upload'::regclass AND tgname='b_final_check_upload_transition'`)).rows;
  expect(triggers).toEqual([{tgname:'b_final_check_upload_transition',tgenabled:'O',definition:'CREATE TRIGGER b_final_check_upload_transition BEFORE UPDATE ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.guard_post_lock_upload_transition()'}]);
+});
+// M5-11 adds no tables or runtime grants: only the exact private synthetic inventory fence.
+it("M5-11 keeps the inventory fence private, migration-owned and attached only to privacy inventory", async () => {
+ const rows=(await admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,
+  has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime_execute,
+  has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure_execute,
+  EXISTS(SELECT 1 FROM aclexplode(proacl) WHERE grantee=0) public_execute
+  FROM pg_proc WHERE oid='app.privacy_inventory_fence()'::regprocedure`)).rows;
+ expect(rows).toEqual([{owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime_execute:false,infrastructure_execute:false,public_execute:false}]);
+ const triggers=(await admin.query(`SELECT tgrelid::regclass::text relation,tgenabled FROM pg_trigger
+  WHERE tgfoid='app.privacy_inventory_fence()'::regprocedure ORDER BY tgrelid::regclass::text`)).rows;
+ expect(triggers).toEqual([{relation:'app.privacy_artifact',tgenabled:'O'},{relation:'app.privacy_subject',tgenabled:'O'}]);
 });

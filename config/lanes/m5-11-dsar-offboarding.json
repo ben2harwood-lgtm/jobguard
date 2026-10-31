@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-11-dsar-offboarding": {
+      "branches": [
+        "codex/sandbox/m5-11-dsar-offboarding"
+      ],
+      "note": "RED M5-11 dark synthetic expanded DSAR and tenant exit on M0-13c; no live providers, real erasure or charges.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/privacy-operations.md",
+        "packages/core/src/privacy-operations.test.ts",
+        "packages/core/src/privacy-operations.ts",
+        "packages/db/src/privacy-operations-repository.ts",
+        "packages/db/migration-notes/0546_dsar_offboarding.md",
+        "packages/db/migrations/0546_dsar_offboarding.sql",
+        "packages/db/test/dsar-offboarding.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

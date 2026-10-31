@@ -1,11 +1,11 @@
 import type { Pool } from "pg";
-import { privacyCommandV1, privacyQueryV1, privacyErrorCodes, PrivacyOperationsError } from "@jobguard/core";
+import { privacyCommand, privacyQueryV1, privacyErrorCodes, PrivacyOperationsError } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 export class PrivacyOperationsRepository {
   constructor(private readonly pool: Pool) {}
   async command(context: VerifiedTenantContext, digest: string, raw: unknown) {
-    const parsed = privacyCommandV1.safeParse(raw);
+    const parsed = privacyCommand.safeParse(raw);
     if (!parsed.success) throw new PrivacyOperationsError("PRIVACY_INVALID");
     return this.run(context, "SELECT app.privacy_command($1,$2,$3::jsonb) result", digest, JSON.stringify(parsed.data));
   }
