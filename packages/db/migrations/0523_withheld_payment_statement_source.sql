@@ -116,6 +116,11 @@ BEGIN
   END;
   -- Lost proof is recorded as lost eligibility, never silently retained as positive principal.
   IF live->'reasonCodes'<>'[]'::jsonb THEN live:=jsonb_set(live,'{remainingPrincipal}',jsonb_build_object('numerator','0','denominator','1')); END IF;
+  -- A loss on one source cannot fund unreviewed growth on another. Compare
+  -- exact fractions before cumulative fee rounding; growth requires a new review.
+  IF (live->'remainingPrincipal'->>'numerator')::numeric * (assessment.document->'remainingPrincipal'->>'denominator')::numeric
+   > (assessment.document->'remainingPrincipal'->>'numerator')::numeric * (live->'remainingPrincipal'->>'denominator')::numeric
+  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
   parts:=parts||jsonb_build_array(jsonb_build_array(live->'remainingPrincipal'->>'numerator',live->'remainingPrincipal'->>'denominator'));
   sources:=sources||jsonb_build_array(jsonb_build_object('assessmentId',assessment.id,'currentAssessmentId',live->>'previousAssessmentId','sourceHash',live->>'sourceHash',
    'reviewAuthorizationId',source->>'reviewAuthorizationId','allocationIds',

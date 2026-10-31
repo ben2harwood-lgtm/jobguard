@@ -129,9 +129,12 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
+
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
 export * from "./simulation-money-run.js";
+export * from "./customer-variation-approval.js";

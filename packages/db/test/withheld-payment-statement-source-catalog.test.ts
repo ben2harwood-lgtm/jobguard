@@ -3,11 +3,11 @@ import {expect,it} from "vitest";
 import {parseInventory,staticScan} from "./lp-0-catalog.js";
 const read=(name:string)=>readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
 it("0497 retains the private validator and five consumers with exact static privilege facts",async()=>{
- const sql=await read("0497_withheld_payment_statement_source.sql");
+ const sql=await read("0523_withheld_payment_statement_source.sql");
  const definitions=[...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1])).toEqual(["success_fee_withheld_source","platform_fee_statement_sources","simulation_money_sources","write_platform_fee_statement","write_platform_fee_collection","simulation_money_run"]);
  expect(sql).not.toMatch(/CREATE TABLE|GRANT |ALTER TABLE|DELETE FROM|UPDATE app\./u);
- const shared=await read("0507_success_fee_recovery_compensation.sql");
+ const shared=await read("0522_success_fee_recovery_compensation.sql");
  const sharedDefinitions=[...shared.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)]
   .filter(m=>m[1]==="write_success_fee_v3");
  expect(sharedDefinitions).toHaveLength(1);
@@ -22,7 +22,7 @@ it("0497 retains the private validator and five consumers with exact static priv
  }
 });
 it("fences withheld eligibility, allocation, terms and proof writers before all downstream audit writes",async()=>{
- const sql=await read("0497_withheld_payment_statement_source.sql");
+ const sql=await read("0523_withheld_payment_statement_source.sql");
  for(const name of ["write_platform_fee_statement","write_platform_fee_collection","simulation_money_run"]){
   const body=sql.slice(sql.indexOf(`CREATE OR REPLACE FUNCTION app.${name}(`)).split('END $$;')[0]!;
   for(const table of ["recovery_case_allocation","recovery_case_allocation_reversal","receipt_line_allocation","recovery_eligibility_revision","recovery_case_terms_approval","evidence_object","practice_feed_receipt_match"]){
@@ -36,7 +36,7 @@ it("fences withheld eligibility, allocation, terms and proof writers before all 
 });
 
 it("keeps the private adapter validator and checks current approval before either statement-source path",async()=>{
- const writer=await read("0507_success_fee_recovery_compensation.sql"),statement=await read("0497_withheld_payment_statement_source.sql");
+ const writer=await read("0522_success_fee_recovery_compensation.sql"),statement=await read("0523_withheld_payment_statement_source.sql");
  expect(writer).toContain("CREATE OR REPLACE FUNCTION app.write_success_fee_v3");
  expect(statement).toContain("live:=app.success_fee_withheld_source(t,j,(source->>'recoveryAllocationId')::uuid)");
  const body=statement.split('CREATE OR REPLACE FUNCTION app.platform_fee_statement_sources')[1]!.split('END $$;')[0]!;
@@ -53,13 +53,22 @@ it("keeps the private adapter validator and checks current approval before eithe
 });
 
 it("0497 keeps the reviewed consumer bodies, adding only the withheld-source lock fence",async()=>{
- const sql=await read("0497_withheld_payment_statement_source.sql");
+ const sql=await read("0523_withheld_payment_statement_source.sql");
  const definitions=(source:string)=>new Map([...source.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)].map(m=>[m[1],m[2]]));
  const current=definitions(sql);
- for(const [name,file] of [["write_platform_fee_statement","0490_simulation_fee_statement_issue.sql"],["write_platform_fee_collection","0491_simulation_fee_collection.sql"],["simulation_money_run","0492_simulation_money_trail_run.sql"]]){
+ for(const [name,file] of [["write_platform_fee_statement","0490_simulation_fee_statement_issue.sql"],["write_platform_fee_collection","0519_simulation_fee_collection.sql"],["simulation_money_run","0521_simulation_money_trail_run.sql"]]){
   const reviewed=definitions(await read(file!)).get(name!);
   const body=current.get(name!)!;
   const withoutFence=body.replace(/ LOCK TABLE app\.recovery_case_allocation,[\s\S]*? IN SHARE MODE;\n/u,"");
   expect(withoutFence).toBe(reviewed);
  }
+});
+
+it("0523 preserves the latest 0490 loader including its exact per-source growth refusal",async()=>{
+ const body=(sql:string)=>sql.split('CREATE OR REPLACE FUNCTION app.platform_fee_statement_sources')[1]?.split('END $$;')[0]
+  ??sql.split('CREATE FUNCTION app.platform_fee_statement_sources')[1]!.split('END $$;')[0]!;
+ const current=body(await read("0523_withheld_payment_statement_source.sql"));
+ const reviewed=body(await read("0490_simulation_fee_statement_issue.sql"));
+ const withoutAdapter=current.replace(/  IF source \? 'recoveryAllocationId' THEN[\s\S]*?(?=  SELECT \* INTO assessment)/u,"");
+ expect(withoutAdapter).toBe(reviewed);
 });

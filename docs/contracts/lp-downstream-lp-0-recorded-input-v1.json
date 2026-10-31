@@ -1476,11 +1476,7 @@
 {"key":"view|dependency|app.recovery_case_current|app.landing_reversal","group":"a-views-reviewed"},
 {"key":"view|dependency|app.recovery_case_current|app.recovery_case","group":"a-views-reviewed"},
 {"key":"view|dependency|app.recovery_case_current|app.recovery_case_event","group":"a-views-reviewed"},
-{"key":"view|dependency|app.recovery_case_current|app.recovery_claim_revision","group":"a-views-reviewed"},
-{"key":"acl|routine|function:app.read_platform_fee_collection(uuid,text)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
-{"key":"owner|routine|function:app.read_platform_fee_collection(uuid,text)|jobguard_migration","group":"a-owner-routines"},
-{"key":"acl|routine|function:app.write_platform_fee_collection(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
-{"key":"owner|routine|function:app.write_platform_fee_collection(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"}
+{"key":"view|dependency|app.recovery_case_current|app.recovery_claim_revision","group":"a-views-reviewed"}
 ],
 "authorityPaths":[
 {"id":"ap-demo-i-lifecycle","title":"DEMO-I practice run lifecycle","description":"The runtime-executable small_builder_demo(uuid,text,text,uuid,jsonb) checks the synthetic database, tenant context and persisted company session/member before reads or replay, rechecks after the company lock, and enforces exact owner membership. Only lifecycle metadata and command audit hashes are written; guard and audit helpers are owner-only.","cards":["LP-11","LP-12"],"responsibilities":{"LP-11":"Preserve authenticated company/member ownership, current session checks and synthetic database refusal.","LP-12":"Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."},"sources":["packages/db/migrations/0313_small_builder_demo_runs.sql","packages/db/src/small-builder-demo-repository.ts"],"tests":["packages/db/test/small-builder-demo.integration.test.ts","packages/db/test/small-builder-demo-upgrade.integration.test.ts"],"gaps":["No product journey execution or production capability is enabled."]},
@@ -1540,6 +1536,8 @@
 "recorded":{
 "note":"Routine, RLS policy and trigger protection facts recorded for review. They are NOT compared by any guard: comparison of reviewed routine and RLS definitions is held under the Q2 ruling (LP0-13). CH-4-C 0201: seven new routines and five changed definitions are source-inspected only; their null definitionSha256 values require exact PostgreSQL catalogue capture in CI. New public signatures are restricted to ch4_record_work_state(uuid,uuid,text,jsonb) and ch4_link_post_lock_job(uuid,uuid,text,jsonb); no other ACL is changed.",
 "routines":[
+{"identity":"function:app.read_platform_fee_collection(uuid,text)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_check_builder","app.platform_fee_statement_sources","app.read_success_fee_v3"]},
+{"identity":"function:app.write_platform_fee_collection(uuid,text,jsonb)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.action_authorization","app.decision","app.decision_resolution","app.platform_fee_attempt","app.platform_fee_attempt_event","app.platform_fee_collection_command"],"staticCalls":["app.append_final_check_audit","app.final_check_builder","app.lock_success_fee_sources","app.read_platform_fee_collection","app.read_success_fee_v3","app.write_platform_fee_statement"]},
 {"identity":"function:app.success_fee_withheld_source(uuid,uuid,uuid)","owner":"jobguard_migration","securityDefiner":false,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_lock_hash","app.recovery_job_payer_type"]},
 {"identity":"function:app.check_success_fee_journal()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.check_success_fee_derivation()","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog, app","returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.ef_round_half_even"]},
@@ -2037,9 +2035,7 @@
 {"identity":"function:public.pgp_sym_encrypt(text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:public.pgp_sym_encrypt(text,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
-{"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
-{"identity":"function:app.read_platform_fee_collection(uuid,text)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":["app.final_check_builder","app.platform_fee_statement_sources","app.read_success_fee_v3"]},
-{"identity":"function:app.write_platform_fee_collection(uuid,text,jsonb)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.action_authorization","app.decision","app.decision_resolution","app.platform_fee_attempt","app.platform_fee_attempt_event","app.platform_fee_collection_command"],"staticCalls":["app.append_final_check_audit","app.final_check_builder","app.lock_success_fee_sources","app.read_platform_fee_collection","app.read_success_fee_v3","app.write_platform_fee_statement"]}
+{"identity":"function:public.pgp_sym_encrypt_bytea(bytea,text,text)","owner":"postgres","securityDefiner":false,"searchPath":null,"returnsTrigger":false,"extension":"pgcrypto","reachable":true,"runtimeExecute":false,"publicExecute":true,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]}
 ],
 "rls":[
 "app.northside_run|rls=t|forced=t",
@@ -2588,10 +2584,7 @@
 "identity.sso_session_binding|session_lookup|PERMISSIVE|SELECT|jobguard_migration|b35318b48c97df63",
 "identity.sso_session_binding|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6",
 "identity.sso_subject|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6",
-"identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6",
-"app.platform_fee_attempt|success_fee_tenant|PERMISSIVE|ALL|jobguard_migration|3f99274c101ea942",
-"app.platform_fee_attempt_event|success_fee_tenant|PERMISSIVE|ALL|jobguard_migration|3f99274c101ea942",
-"app.platform_fee_collection_command|success_fee_tenant|PERMISSIVE|ALL|jobguard_migration|3f99274c101ea942"
+"identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|6fa387f2f629fba6"
 ],
 "triggers":[
 "app.simulation_money_review|success_fee_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O",
@@ -3003,10 +2996,7 @@
 "identity.verified_domain|immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O",
 "app.variation_revision|final_check_catch_case_open|app.final_check_open_catch_case|AFTER INSERT|O",
 "app.variation_approval|final_check_catch_case_claim|app.final_check_claim_catch_case|AFTER INSERT|O",
-"app.recovery_claim_revision|final_check_catch_claim_guard|app.final_check_refuse_catch_claim|BEFORE INSERT|O",
-"app.platform_fee_attempt|success_fee_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O",
-"app.platform_fee_attempt_event|success_fee_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O",
-"app.platform_fee_collection_command|success_fee_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+"app.recovery_claim_revision|final_check_catch_claim_guard|app.final_check_refuse_catch_claim|BEFORE INSERT|O"
 ]
 },
 "held":[

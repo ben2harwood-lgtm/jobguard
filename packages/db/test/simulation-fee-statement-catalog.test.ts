@@ -7,7 +7,7 @@ it("the live LP inventory enumerates exactly the three 0490 routines and their a
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1]).sort()).toEqual(["platform_fee_statement_sources","read_platform_fee_statements","write_platform_fee_statement"]);
  // Compare the fully migrated 0497 replacements with the current inventory.
- const replacementSql=await readFile(new URL("../migrations/0497_withheld_payment_statement_source.sql",import.meta.url),"utf8");
+ const replacementSql=await readFile(new URL("../migrations/0523_withheld_payment_statement_source.sql",import.meta.url),"utf8");
  const replacements=new Map([...replacementSql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)].map(m=>[m[1],m[2]]));
  for(const file of ["lp-0-effective-privileges-v1.json"]){
   const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
