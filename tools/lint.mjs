@@ -4,3 +4,4 @@ execFileSync(process.execPath, ["tools/agent-lane-boundary-lint.mjs"], { stdio: 
 execFileSync(process.execPath, ["tools/money-arithmetic-lint.mjs"], { stdio: "inherit" });
 execFileSync(process.execPath, ["tools/commercial-boundary-lint.mjs"], { stdio: "inherit" });
 execFileSync(process.execPath, ["tools/ai-provider-boundary-lint.mjs"], { stdio: "inherit" });
+execFileSync(process.execPath, ["tools/plpgsql-case-in-if-lint.mjs"], { stdio: "inherit" });
