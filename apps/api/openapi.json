@@ -1,6 +1,886 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/customer-portal/variations/read": {
+      "post": {
+        "operationId": "CustomerVariationController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read current extra revisions for this authenticated customer's job",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/variation-approvals": {
+      "post": {
+        "operationId": "CustomerVariationController_approve",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Customer explicitly approves one exact signed variation revision",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/issue": {
+      "post": {
+        "operationId": "CustomerSigninController_issue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Owner or finance requests a fictional customer sign-in email",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/revoke": {
+      "post": {
+        "operationId": "CustomerSigninController_revoke",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke a customer grant and its sessions",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signin": {
+      "post": {
+        "operationId": "CustomerSigninController_signin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Atomically consume a ten-minute link and set a browser-session cookie",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/signout": {
+      "post": {
+        "operationId": "CustomerSigninController_signout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Revoke the current customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/read": {
+      "post": {
+        "operationId": "CustomerSigninController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read only the authenticated customer job scope",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/jobs/{id}/trial": {
+      "get": {
+        "operationId": "FreeFirstJobLifecycleController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current company's synthetic first-job trial",
+        "tags": [
+          "trial"
+        ]
+      },
+      "post": {
+        "operationId": "FreeFirstJobLifecycleController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Request or explicitly simulate the company's card setup",
+        "tags": [
+          "trial"
+        ]
+      }
+    },
+    "/jobs/{id}/payment-fees": {
+      "get": {
+        "operationId": "PaymentFeeController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read verified synthetic receipt statements and current approval/dispute state",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentFeeController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare, approve the exact hash, or pause a synthetic receipt fee statement",
+        "tags": [
+          "synthetic payment fees"
+        ]
+      }
+    },
+    "/auth/oidc/{connectionId}/start": {
+      "post": {
+        "operationId": "OidcController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-start.v1",
+                      "oidc-admin.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "signin",
+                      "connection.create"
+                    ]
+                  },
+                  "linkExisting": {
+                    "type": "boolean"
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "connection": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Local fictional callback plus Secure HttpOnly browser binding; no verifier or tokens"
+          }
+        },
+        "summary": "Persist a synthetic OIDC request or administer its immutable connection",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/auth/oidc/{connectionId}/callback": {
+      "post": {
+        "operationId": "OidcController_callback",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "callback"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "oidc-callback.v1"
+                    ]
+                  },
+                  "callback": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "oidc-signed-in.v1; persisted session token only in Secure HttpOnly cookie"
+          }
+        },
+        "summary": "Consume a persisted OIDC request once and issue a bounded persisted session",
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees": {
+      "get": {
+        "operationId": "SuccessFeeController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "jobId",
+                    "environment",
+                    "state",
+                    "productionEnabled",
+                    "realExternalActions"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "success-fee-availability.v1"
+                      ]
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "synthetic_demo"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "dependency_bound",
+                        "catch_review_available"
+                      ]
+                    },
+                    "dependency": {
+                      "type": "string",
+                      "enum": [
+                        "accepted_attribution_source_adapter"
+                      ]
+                    },
+                    "productionEnabled": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "realExternalActions": {
+                      "type": "integer",
+                      "enum": [
+                        0
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read synthetic catch-fee review availability after final-account lock",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedPostingRevision",
+                      "action",
+                      "reviewId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "success-fee-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedPostingRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "reviewId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable synthetic statement review or approved derivation; includes statement sources, statementHash, reviewId, derivationId, journalId, postingRevision and replayed"
+          },
+          "409": {
+            "description": "Statement/source/revision changed, review missing, or command identity conflict"
+          },
+          "503": {
+            "description": "No qualifying catch adapter/lock; Q2 and Q3 remain dependency-bound"
+          }
+        },
+        "summary": "Review an exact source-backed catch fee statement or approve its local posting",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements": {
+      "get": {
+        "operationId": "SuccessFeeController_statements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned statement view with immutable source and approval links"
+          }
+        },
+        "summary": "Read immutable synthetic fee statements; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_issueStatement",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "issue"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue a simulation statement or approve its exact hash; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements/{statementId}": {
+      "get": {
+        "operationId": "SuccessFeeController_downloadStatement",
+        "parameters": [
+          {
+            "name": "statementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact versioned simulation statement JSON bytes",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3/preview": {
+      "post": {
+        "operationId": "JobImportV3Controller_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the server-selected fictional v3 import and its availability",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3": {
+      "post": {
+        "operationId": "JobImportV3Controller_adopt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      },
+      "get": {
+        "operationId": "JobImportV3Controller_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned immutable v3 imported baseline and zero-count exclusion",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/value": {
+      "get": {
+        "operationId": "BusinessValueController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read mapped, inspectable company value and subscription periods",
+        "tags": [
+          "value"
+        ]
+      }
+    },
+    "/jobs/{id}/value/v3": {
+      "get": {
+        "operationId": "ValueV3Controller_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read mapped, inspectable job value from locked bill and attribution sources",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fee-attribution": {
+      "get": {
+        "operationId": "RecoveryAttributionController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic proposed principal-only attribution history; current qualification held",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAttributionController_post",
+        "parameters": [],
+        "responses": {
+          "409": {
+            "description": "Stored sources, expected revisions or command replay conflict"
+          },
+          "503": {
+            "description": "Required runtime dependency unavailable"
+          }
+        },
+        "summary": "Assess a stored synthetic catch or approve its exact owner review",
+        "tags": [
+          "synthetic recovery attribution"
+        ]
+      }
+    },
+    "/subscriptions/current": {
+      "get": {
+        "operationId": "SubscriptionController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "subscription-persisted-read.v1"
+          }
+        },
+        "summary": "Read the signed-in made-up company's saved subscription facts (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/subscriptions/commands": {
+      "post": {
+        "operationId": "SubscriptionController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Stored command result; replays return the first result"
+          }
+        },
+        "summary": "Accept terms, change plan or approve a simulated payment for the signed-in made-up company (synthetic only)",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing": {
+      "get": {
+        "operationId": "BillingController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted immutable export artifacts, current allocation runs, quarantine history and delivery status"
+          }
+        },
+        "summary": "Read persisted synthetic contractor billing and reconciliation",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{batchId}/download": {
+      "get": {
+        "operationId": "BillingController_download",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact persisted CSV after approved fake download delivery",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/billing/{action}": {
+      "post": {
+        "operationId": "BillingController_write",
+        "parameters": [
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "export",
+                "import",
+                "approve-delivery",
+                "advance-delivery"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Versioned strict command: billing-finalise.v1, billing-import-request.v1, billing-approve-delivery.v1, or billing-advance-delivery.v1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Finance-only synthetic billing export, status import, exact delivery approval, or delivery retry/reconcile",
+        "tags": [
+          "contractor-billing"
+        ]
+      }
+    },
     "/jobs/{id}/final-check": {
       "get": {
         "operationId": "FinalCheckController_get",
@@ -26,6 +906,36 @@
           }
         },
         "summary": "Record a non-confirming synthetic final-check answer",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/catches": {
+      "post": {
+        "operationId": "FinalCheckController_catch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm a revealed item as extra work: creates only an unpriced catch variation",
+        "tags": [
+          "final check"
+        ]
+      }
+    },
+    "/jobs/{id}/final-check/runs": {
+      "post": {
+        "operationId": "FinalCheckController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Practice only: ask the worker to run the final check for this locked job",
         "tags": [
           "final check"
         ]

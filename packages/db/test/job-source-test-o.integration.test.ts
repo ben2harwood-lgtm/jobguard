@@ -10,14 +10,16 @@ import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,type Fi
 
 let f:FinalCheckFixture;beforeAll(async()=>{f=await createFinalCheckFixture()},60000);afterAll(async()=>closeFinalCheckFixture(f));
 
-it("Test O: an outside-tap diary note omitted from the locked bill is revealed after lock, with no variation or case",async()=>{
+it("SV7A-INT-O Test O: an outside-tap diary note omitted from the locked bill is revealed after lock, with no variation or case",async()=>{
  const {createFinalCheckWorker}=await import("./final-check-worker-factory.js");
  const a=await seedFinalCheckJob(f);
  const note=await new JobSourceRepository(f.runtime).intake(a.context,a.jobId,a.digest,"diary",{version:"job-diary-input.v1",commandId:randomUUID(),entryMode:"typed",onSite:false,text:"Fitted outside tap."});
  // No Log an extra exists for the tap: the builder never captured it.
  expect(Number((await f.admin.query("SELECT count(*) n FROM app.variation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n)).toBe(0);
+ const diaryBefore=await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary");
  await a.lock();
  const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
+ expect(m.sources.some(s=>s.sourceKind==="builder_capture_not_scanned")).toBe(false);
  const source=m.sources.find(s=>s.evidenceId===note.record.evidence.id)!;
  expect(source).toBeDefined();
  // The server set the decoder reference at intake; the test only reads it.
@@ -30,6 +32,7 @@ it("Test O: an outside-tap diary note omitted from the locked bill is revealed a
  const first=await worker.execute(a.context,task);
  expect(await worker.execute(a.context,task)).toEqual(first);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);
+ expect(await new JobSourceRepository(f.runtime).read(a.context,a.jobId,a.digest,"diary")).toEqual(diaryBefore);
  expect(view.state).toBe("completed");
  expect(view.items).toHaveLength(1);
  expect(view.items[0]!.description).toBe("outside tap");

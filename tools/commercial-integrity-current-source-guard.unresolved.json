@@ -23,7 +23,7 @@
   {
     "file": "packages/db/src/demo-seed.ts",
     "line": 94,
-    "fingerprint": "63a981c5b89ae57de99b9346ef9667b12931e9a85c55f8379cd20bec6c1f85be",
+    "fingerprint": "aee71a57a2756c911266f42700e1c0afe84d2d6d107f003759caca7ebdd5146e",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -65,14 +65,14 @@
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 197,
-    "fingerprint": "568e30c1c68a1ee855278672bb32cbbeb6ffcb0b4524c54690cd91b502f93902",
+    "fingerprint": "2f3cb0e62faed3b82ff56338a53feab87c817449c5019cdb2335100e411cefe8",
     "reason": "Business this.execute(context,...) dispatch is covered by terminal name; context is not static SQL.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/site-visit-repository.ts",
     "line": 205,
-    "fingerprint": "f9cbfa6d598c4fe18d630905db62ec35bd1e0c7a7c8d9cc09df520d4cacd529a",
+    "fingerprint": "a5c0f519aa9c536a6f29498b4957f6f2091ecb96cf7101ef96197a2ecb053039",
     "reason": "Second business this.execute(context,...) dispatch has the same unresolved boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -86,7 +86,7 @@
   {
     "file": "packages/db/src/subscription-executor.ts",
     "line": 14,
-    "fingerprint": "6d06ef4e1ea57f5eb65bf754153483bf36573d734ff96c44d4f53fe4a2668561",
+    "fingerprint": "e3022f3b698c45f3159149e4750bb539f49c66ad1de705035eb0a737ecb33852",
     "reason": "Adapter.execute(work) receives runtime authorized work; broad terminal execute detection cannot prove a SQL boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   }

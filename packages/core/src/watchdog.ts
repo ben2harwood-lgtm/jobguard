@@ -14,6 +14,38 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Customer commercial boundary: generic refusals and live status checked in 0389,
+  // rather than exposing the builder watchdog's status/409 diagnostics.
+  "/api/customer-portal/variations/read": "pre_live_allowed",
+  "/api/customer-portal/variation-approvals": "pre_live_allowed",
+  "nest:/customer-portal/variations/read": "pre_live_allowed",
+  "nest:/customer-portal/variation-approvals": "pre_live_allowed",
+  "/api/customer-portal/issue": "pre_live_allowed",
+  "/api/customer-portal/revoke": "pre_live_allowed",
+  "/api/customer-portal/signin": "pre_live_allowed",
+  "/api/customer-portal/signout": "pre_live_allowed",
+  "/api/customer-portal/read": "pre_live_allowed",
+  "nest:/customer-portal/issue": "pre_live_allowed",
+  "nest:/customer-portal/revoke": "pre_live_allowed",
+  "nest:/customer-portal/signin": "pre_live_allowed",
+  "nest:/customer-portal/signout": "pre_live_allowed",
+  "nest:/customer-portal/read": "pre_live_allowed",
+  // MON-3 card setup precedes switch-live; persisted company sessions require an owner.
+  // Classification grants no authority and does not enable non-live watchdog writes.
+  "/api/jobs/[id]/trial": "pre_live_allowed",
+  "nest:/jobs/:id/trial": "pre_live_allowed",
+  // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
+  "/api/contractor/jobs/[id]/billing/[action]": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/billing/:action": "pre_live_allowed",
+  // SV6-PERSIST-B: historical attribution intent is post-live; execution remains closed.
+  "/api/jobs/[id]/payment-fees": "post_live_billing",
+  "nest:/jobs/:id/payment-fees": "post_live_billing",
+  "/api/jobs/[id]/success-fees": "post_live_billing",
+  "nest:/jobs/:id/success-fees": "post_live_billing",
+  "/api/jobs/[id]/success-fees/statements": "post_live_billing",
+  "nest:/jobs/:id/success-fees/statements": "post_live_billing",
+  "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
+  "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.
   "/api/jobs/[id]/work-state#finish": "watchdog_live_only",
   "nest:/jobs/:id/work-state#finish": "watchdog_live_only",
@@ -72,6 +104,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Party setup/corrections and adoption are operational prerequisites, never watchdog inputs.
   "/api/jobs/[id]/parties": "pre_live_allowed",
   "/api/jobs/[id]/parties/import": "pre_live_allowed",
+  "/api/jobs/[id]/parties/import-v3": "pre_live_allowed",
+  "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
@@ -92,6 +126,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/recovery-cases/terms": "post_live_billing", "nest:/jobs/:id/recovery-cases/terms": "post_live_billing", "command:recovery.terms.approve": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/eligibility": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations": "post_live_billing",
+  "/api/jobs/[id]/receipt-case-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",
   "/api/jobs/[id]/recovery-cases": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]": "watchdog_live_only",
@@ -132,6 +167,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:finding.resolve": "pre_live_allowed",
   "command:inbox.seed": "watchdog_live_only",
   "command:job.adopt_in_flight": "pre_live_allowed",
+  "command:job.adopt_in_flight_v3": "pre_live_allowed",
   "command:job.switch_live": "pre_live_allowed",
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
@@ -157,7 +193,12 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/final-account/terms": "post_live_billing",
   "/api/jobs/[id]/final-account/review-extras": "post_live_billing",
   "nest:/jobs/:id/final-account/review-extras": "post_live_billing",
+  "/api/jobs/[id]/final-check/dispositions": "post_live_billing",
   "nest:/jobs/:id/final-check/dispositions": "post_live_billing",
+  "/api/jobs/[id]/final-check/catches": "post_live_billing",
+  "nest:/jobs/:id/final-check/catches": "post_live_billing",
+  "/api/jobs/[id]/final-check/runs": "post_live_billing",
+  "nest:/jobs/:id/final-check/runs": "post_live_billing",
   "command:RecordFinalCheckDisposition": "post_live_billing",
   "command:LockFinalAccount": "post_live_billing",
   "command:RecordFinalAccountDisposition": "post_live_billing",
@@ -169,6 +210,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/materials": "pre_live_allowed",
   "nest:/jobs/:id/parties": "pre_live_allowed",
   "nest:/jobs/:id/parties/import": "pre_live_allowed",
+  "nest:/jobs/:id/parties/import-v3": "pre_live_allowed",
+  "nest:/jobs/:id/parties/import-v3/preview": "pre_live_allowed",
   "nest:/jobs/:id/practice-feed": "pre_live_allowed",
   "nest:/jobs/:id/practice-facts": "pre_live_allowed",
   "nest:/jobs/:id/prevention-checks/:action": "pre_live_allowed",
@@ -231,4 +274,12 @@ export const watchdogCommandGuards = [
   { file: "evidence.ts", method: "beginUpload", calls: 1 },
   { file: "evidence.ts", method: "finalize", calls: 2 },
   { file: "proof-repository.ts", method: "complete", calls: 2 },
+] as const;
+
+/** Live-only commands whose one checked SQL routine owns the live check, after its own replay (SV-7A). The CH-2 harness gives
+ * them the same replay, changed-payload, other-job, cross-kind race, parallel-duplicate, previous-schema id and lock-order cases;
+ * only the TypeScript requireLiveJob source rule is replaced by a check that the routine calls app.require_watchdog_live before
+ * its first write. */
+export const watchdogRoutineGuards = [
+  { file: "job-source-repository.ts", method: "intake", routine: "app.sv7a_intake_job_source" },
 ] as const;

@@ -19,6 +19,9 @@ class RecordedSql {
   query = async (sql: string, values: unknown[] = []) => {
     this.calls.push({ sql, values });
     const rows = (items: unknown[]) => ({ rows: items, rowCount: items.length });
+    if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return rows([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
+    if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+      sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return rows([]);
     if (sql.includes("INSERT INTO app.watchdog_command_identity")) return rows([{ command_id: values[1] }]);
     if (sql.includes("FROM app.supplier_fact_proposal")) return rows([{ id: randomUUID(), document_type: "invoice", quantity_decimal: "10.000000", unit_price_pence: "2500", net_pence: "25000", issues: [] }]);
     if (sql.includes("SELECT count(*) n FROM app.supplier_fact_revision")) return rows([{ n: "0" }]);

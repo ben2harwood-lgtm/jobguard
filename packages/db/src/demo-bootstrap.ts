@@ -79,6 +79,9 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     "app.mon1_lifecycle_capture(uuid,text,uuid,date,integer)",
     "app.mon1_lifecycle_rebuild(uuid,text,uuid)",
     "app.mon1_lifecycle_read(uuid,text,uuid)",
+    "app.mon1_counted_meter_today(uuid,text)",
+    "app.mon1_fresh_counted_meter_today(uuid,text)",
+    "app.mon1_today_source(uuid,text)",
   ];
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   if (owner === "jobguard_migration") throw new Error("Meter ownership requires the administrative bootstrap principal");
@@ -102,6 +105,9 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
       await admin.query(`ALTER FUNCTION ${signature} OWNER TO jobguard_meter_owner`);
       await admin.query("SET LOCAL ROLE jobguard_meter_owner");
       await admin.query(`ALTER FUNCTION ${signature} SECURITY DEFINER`);
+      if (signature === "app.mon1_counted_meter_today(uuid,text)") {
+        await admin.query("REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime");
+      }
       await admin.query("RESET ROLE");
     }
     await admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
@@ -140,7 +146,8 @@ async function seedDatabase(client: PoolClient) {
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    await client.query("SET LOCAL ROLE jobguard_runtime");
+    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
+    await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
