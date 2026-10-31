@@ -1228,16 +1228,18 @@ async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
 }
 
-// MON-5 foundation: union only 0387's exact new private relations and identity routines.
+// MON-5: union 0387's sign-in foundation and 0410's private approval provenance.
 async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot(), tables = ["customer_portal_grant", "customer_portal_session"];
+ const after = await snapshot(), tables = ["customer_portal_grant", "customer_portal_session", "customer_variation_approval"];
  const identities = [
   ["app", "customer_portal_audit", "t uuid, subject uuid, kind text"],
   ["app", "customer_portal_current", "g app.customer_portal_grant"],
   ["app", "customer_portal_issuer", "t uuid, digest text"],
+  ["app", "customer_variation_guard", ""],
   ["identity", "customer_portal_issue", "t uuid, builder_digest text, j uuid, c uuid, link_digest text, content text"],
   ["identity", "customer_portal_revoke", "t uuid, builder_digest text, j uuid, gid uuid"],
   ["identity", "customer_portal_use", "t uuid, j uuid, c uuid, digest text, session_digest text, operation text"],
+  ["identity", "customer_variation", "t uuid, j uuid, c uuid, digest text, command jsonb"],
  ];
  const routines = after.routines.filter(r => identities.some(([schema, name, args]) => r.nspname === schema && r.proname === name && r.args === args));
  expect(routines.map(r => [r.nspname,r.proname,r.args])).toEqual(identities);
@@ -1245,6 +1247,7 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
   JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [tables])).rows;
  expect(indexes.filter(i => i.table_name === tables[0])).toHaveLength(3);
  expect(indexes.filter(i => i.table_name === tables[1])).toHaveLength(3);
+ expect(indexes.filter(i => i.table_name === tables[2])).toHaveLength(1);
  const relationNames = [...tables, ...indexes.map(i => i.relname as string)];
  const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual(relationNames.sort());
@@ -1252,5 +1255,5 @@ async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapsho
  expect(policies.map(p => [p.tablename,p.policyname])).toEqual(tables.map(t => [t,"tenant_isolation"]));
  for(const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
  const additive = catalogueAdditions;
- return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
+ return { rows: { ...before.rows, "app.customer_portal_grant": [], "app.customer_portal_session": [], "app.customer_variation_approval": [] }, routines: additive(before.routines,routines,after.routines), relations: additive(before.relations,relations,after.relations), policies: additive(before.policies,policies,after.policies) };
 }
