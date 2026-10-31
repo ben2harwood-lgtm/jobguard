@@ -84,7 +84,13 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   const rate = Number((await db.query("SELECT i.rate_pence n FROM app.sor_item i WHERE i.tenant_id=$1 AND i.code='CLEAR-VOID' LIMIT 1", [tenant])).rows[0].n);
   await switchTo("surveyor");
   const sv = { page };
-  await sv.page.goto("/approvals/extras");
+  // Role and rate controls settle only after this read; on a busy runner it can exceed the default 10 s.
+  const [approvals] = await Promise.all([
+    sv.page.waitForResponse(response => new URL(response.url()).pathname === "/api/northside/extras" && response.request().method() === "GET", { timeout: 60_000 }),
+    sv.page.goto("/approvals/extras"),
+  ]);
+  expect(approvals.ok()).toBe(true);
+  await approvals.finished();
   await expect(sv.page.getByTestId("approvals-role")).toHaveText("surveyor");
   await sv.page.getByLabel("Rate card item").selectOption("CLEAR-VOID");
   await sv.page.getByLabel("Quantity measured").fill("6");
