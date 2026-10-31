@@ -6,7 +6,8 @@ it("records the dark binding as an explicit authority path without broadening bu
   const {inventory}=await loadReviewedInventory();
   expect(pathCompleteness(inventory,repoFileExists).filter(p=>p.includes("lp6a"))).toEqual([]);
   const entries=inventory.entries.filter(e=>e.group==="a-lp6a-request-binding");
-  expect(entries).toHaveLength(18);
+  // LP-12 removes redundant session reads/SSO helper access and moves the private lookup owner.
+  expect(entries).toHaveLength(13);
   const runtime=entries.filter(e=>e.key.includes("|jobguard_runtime|"));
   expect(runtime.map(e=>e.key).sort()).toEqual([
     "acl|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_runtime|EXECUTE|-",

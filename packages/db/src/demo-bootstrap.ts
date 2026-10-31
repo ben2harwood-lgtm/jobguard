@@ -36,7 +36,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_binding_lookup_owner", "jobguard_money_owner"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -55,7 +55,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_binding_lookup_owner", "jobguard_money_owner"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -121,22 +121,24 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     await admin.query("COMMIT");
   } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
-// LP-6a: only the PostgreSQL 16 ADMIN-only creator row survives bootstrap.
+// LP-6a/LP-12: only the PG16 ADMIN-only creator row survives bootstrap.
+const lp12AdditionalOwners = ["jobguard_binding_lookup_owner", "jobguard_money_owner"] as const;
 async function assertBindingOwnerHolders(client: PoolClient, administrator: string): Promise<void> {
-  const holders = await client.query<{ role: string; member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean; super_grantor: boolean }>(
-    `SELECT pg_get_userbyid(m.roleid) AS role,pg_get_userbyid(m.member) AS member,
-      m.admin_option,m.inherit_option,m.set_option,g.rolsuper AS super_grantor
-     FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.grantor
-     WHERE m.roleid='jobguard_binding_owner'::regrole OR m.member='jobguard_binding_owner'::regrole`,
-  );
-  if (holders.rows.some(row => row.role !== "jobguard_binding_owner" || row.member !== administrator ||
-      !row.admin_option || row.inherit_option || row.set_option || !row.super_grantor)) {
-    throw new Error("jobguard_binding_owner has an invalid holder after provisioning");
+  for (const name of ["jobguard_binding_owner", ...lp12AdditionalOwners, "jobguard_command_writer", "jobguard_audit_writer"]) {
+    const holders = await client.query<{ role: string; member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean; super_grantor: boolean }>(
+      `SELECT pg_get_userbyid(m.roleid) AS role,pg_get_userbyid(m.member) AS member,
+        m.admin_option,m.inherit_option,m.set_option,g.rolsuper AS super_grantor
+       FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.grantor
+       WHERE m.roleid=$1::regrole OR m.member=$1::regrole`, [name]);
+    if (holders.rows.some(row => row.role !== name || row.member !== administrator ||
+        !row.admin_option || row.inherit_option || row.set_option || !row.super_grantor)) {
+      throw new Error(`${name} has an invalid holder after provisioning`);
+    }
+    const paths = await client.query(`SELECT rolname FROM pg_roles
+      WHERE rolname ~ '^jobguard_(runtime|identity|infrastructure|worker.*)$'
+      AND (pg_has_role(oid,$1::text,'USAGE') OR pg_has_role(oid,$1::text,'SET'))`, [name]);
+    if (paths.rows.length) throw new Error(`${name} is reachable by a service role`);
   }
-  const paths = await client.query(`SELECT rolname FROM pg_roles
-    WHERE rolname ~ '^jobguard_(runtime|identity|infrastructure|worker.*)$'
-    AND (pg_has_role(oid,'jobguard_binding_owner','USAGE') OR pg_has_role(oid,'jobguard_binding_owner','SET'))`);
-  if (paths.rows.length) throw new Error("jobguard_binding_owner is reachable by a service role");
 }
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
   const administrator = (await client.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
@@ -146,6 +148,9 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_binding_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+    for (const name of lp12AdditionalOwners) {
+      await client.query(`GRANT ${name} TO jobguard_migration WITH INHERIT TRUE, SET TRUE`);
+    }
     await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
@@ -155,14 +160,13 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
-    try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
-    finally {
-      try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
-      finally {
-        try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
-        finally { await assertBindingOwnerHolders(client, administrator); }
-      }
+    let cleanupError: unknown;
+    for (const name of [...lp12AdditionalOwners, "jobguard_binding_owner", "jobguard_command_writer", "jobguard_audit_writer"]) {
+      try { await client.query(`REVOKE ${name} FROM jobguard_migration`); }
+      catch (error) { cleanupError ??= error; }
     }
+    await assertBindingOwnerHolders(client, administrator);
+    if (cleanupError) throw cleanupError;
   }
 }
 

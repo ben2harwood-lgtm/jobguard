@@ -547,3 +547,58 @@ membership temporarily and revokes it on both success and failure, then checks
 the catalogue again. This adds no runtime capability or LP-0 baseline membership
 in the superuser-created fixture. Environment identity uses postmaster start time
 and database OID directly; there is no control-file grant or environment helper.
+
+## LP-12 bounded ownership candidate (0533)
+
+Built ahead on LP-6b; **LP-11 is still a landing dependency**. This candidate
+moves only `lp6_session_authority` to `jobguard_binding_lookup_owner`, and
+`assert_financial_authorization`, `post_plan_obligation`, `post_plan_settlement`
+and `reverse_journal` to `jobguard_money_owner`. It alters ownership and fixed
+search paths, preserving installed bodies and public signatures. The binding,
+command and audit entrypoints already have narrow owners on this base.
+
+The lookup owner has SELECT on the three credential tables, membership and
+contractor revocations; UPDATE on one column of each credential table permits
+PostgreSQL row locking. Its four helper grants are credential authentication,
+SSO membership resolution, the pure contractor digest and the read-only home
+deadline. Before binding, the private lookup role reads membership/revocation rows under
+role-specific SELECT policies; the credential helper checks the exact tenant
+and principal. It cannot depend on a bound tenant that it is establishing.
+The binding-store owner loses redundant credential SELECT and direct
+SSO helper execution; it receives no UPDATE or general membership access.
+
+The money owner has SELECT on membership, financial authorization, ledger
+accounts, journals and journal lines; INSERT on journals and journal lines; and
+UPDATE(id) on membership, financial authorization and journals for existing row
+locks. It receives no sequence grants. The three posting routines and their
+private authorization helper keep the authorization, tenant, duplicate,
+allocation-limit and reversal checks from their latest installed definitions.
+Money policies copy the installed canonical tenant policy, so the LP-11 bound
+tenant expression is preserved on catch-up. Other money routines remain outside
+this bounded migration.
+
+The command writer relinquishes `command_type_registry` ownership and retains
+only SELECT there. It also relinquishes protected `command_lifecycle_claim` ownership
+and retains SELECT, INSERT and UPDATE(effect_ref,outcome), under its existing
+forced RLS. The binding store remains the LP-6a private infrastructure ownership
+exception. The registry and audit head stay in migration custody, with no
+service table grants.
+Every owner is NOLOGIN/NOINHERIT, is never a member of another role, and has no
+holder except the permitted PG16 ADMIN-only creator row. Bootstrap's temporary
+migration memberships are removed on success and failure; owners retain no
+schema CREATE, protected-table ownership or migration-role inheritance.
+
+The machine inventory contains the source-derived ACL/ownership delta in
+`a-lp12-narrow-owners`. Local static tests do not prove PostgreSQL permissions.
+Whole PostgreSQL CI, the LP-11 catch-up and verification of copied tenant policies,
+and independent exact-head RED review remain required. **HELD-FOR-BEN:** scanner
+definitions, recorded protection/source pins and shared protected expectation
+changes remain coordinator-only under BUILD_PLAN.md R2/compatible landing rules;
+no such pin is refreshed here. The coordinator needs Ben's piece-specific typed
+yes before refreshing the moved functions' owner/search-path records and the
+new policies. The inherited LP-6a inventory still uses named argument identities
+where the scanner uses type-only identities; reconcile those existing entries
+during the authorized LP-chain inventory catch-up, without weakening the scanner.
+
+Forward-fix strategy: restore former owners and revoke these grants with a new
+reviewed migration if required. Do not edit a migration already on main.

@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-12-narrow-owner": {
+      "branches": [
+        "codex/sandbox/lp-12-narrow-owner"
+      ],
+      "note": "LP-12 RED built ahead; serialize LP-11 rebase, migration block and inventory. PostgreSQL CI and exact-head independent review required. Scanner/source pins HELD-FOR-BEN.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0533_lp12_narrow_owners.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/lp6a-binding.test.ts",
+        "packages/db/test/lp12-narrow-owners.ts",
+        "packages/db/test/lp12-narrow-owners.test.ts",
+        "packages/db/test/lp12-narrow-owners.integration.test.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts"
+      ]
+    }
+  }
+}
