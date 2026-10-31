@@ -108,7 +108,7 @@ it("0520 upgrades the previous supported schema without touching existing identi
  const admin = new Pool({ ...db.config, database: "mobile_auth_upgrade" });
  try {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("/0520_mobile_auth_store.sql"));
+  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("/0507_mobile_auth_store.sql"));
   expect(own).toBeGreaterThan(0);
   for (const url of MIGRATION_URLS.slice(0, own)) {
    await admin.query(await readFile(url, "utf8"));

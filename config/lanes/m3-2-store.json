@@ -15,7 +15,7 @@
         "packages/core/src/index.ts",
         "packages/core/src/mobile-auth-state.test.ts",
         "packages/core/src/mobile-auth-state.ts",
-        "packages/db/migrations/0520_mobile_auth_store.sql",
+        "packages/db/migrations/0507_mobile_auth_store.sql",
         "packages/db/src/index.ts",
         "packages/db/src/mobile-auth-store.ts",
         "packages/db/test/mobile-auth-store.integration.test.ts",
