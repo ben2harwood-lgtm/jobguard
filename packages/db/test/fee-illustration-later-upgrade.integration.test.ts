@@ -8,7 +8,7 @@ import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } fro
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
 let f: WorkFixture;
 const previousEnvironment = process.env.JOBGUARD_ENV;
-beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; f = await createWorkFixture(false); }, 120000);
+beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; f = await createWorkFixture(false, "jobguard_synthetic_demo"); }, 120000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
   await closeWorkFixture(f);

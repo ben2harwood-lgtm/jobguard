@@ -37,3 +37,13 @@ describe("MON-2A reference contracts", () => {
     expect(() => selectSubscriptionTerms({ ...selection, annualAvailable: true })).toThrow(SubscriptionError);
   });
 });
+
+it('SB-22: A track change without a signed agreement', () => {
+ const builder = { ...selection, plan: "Builder" };
+ expect(selectSubscriptionTerms(builder).plan).toBe("Builder");
+ for (const fields of [{ plan: "Contractor" }, { track: "contractor" }, { signedAgreement: true }, { maximumPence: 17000 }])
+  expect(() => selectSubscriptionTerms({ ...builder, ...fields })).toThrow(SubscriptionError);
+ const catalogue = getSubscriptionCatalogue(request);
+ expect(catalogue.find(row => row.plan === "Builder")!.maximumPence).toBe(16900);
+ expect(selectSubscriptionTerms(builder).plan).toBe("Builder");
+});
