@@ -10,12 +10,12 @@ END $$;
 GRANT USAGE ON SCHEMA app TO jobguard_worm_operator;
 -- PUBLIC execute would otherwise expose unrelated routines through app USAGE.
 -- Preserve access for the existing app-schema roles, without granting it to operators.
+-- LP-2 already made guard_imported_job private; do not re-grant that helper.
 DO $$ DECLARE signature text; BEGIN
  FOREACH signature IN ARRAY ARRAY[
   'app.assert_journal_balanced()',
   'app.guard_authorization_revocation()',
   'app.guard_fixed_baseline()',
-  'app.guard_imported_job()',
   'app.half_even_ratio(bigint,bigint,bigint)',
   'app.reference_recovery_cap(bigint)',
   'app.reject_audit_mutation()',

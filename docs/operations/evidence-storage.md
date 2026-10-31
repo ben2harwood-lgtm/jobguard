@@ -97,8 +97,9 @@ includes the separately provisioned operator login and its configured storage re
 readback confirms protection state, not the authenticity of the evidence's contents.
 
 Migration 0488 adds the operator role and two routines. It withdraws PUBLIC EXECUTE
-on the exact 17 legacy app predicates/trigger helpers, preserving their access for
-the existing app-schema roles through explicit grants. Reconciliation appends its audit
+on the exact 16 legacy app predicates/trigger helpers, preserving their access for
+the existing app-schema roles through explicit grants. LP-2's private imported-job
+trigger remains private. Reconciliation appends its audit
 event inside the restricted SQL routine; the operator cannot invoke general audit helpers.
 It does not replace old routine bodies or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
 audit and immutable versions. D07, production residency/store validation and RED review
