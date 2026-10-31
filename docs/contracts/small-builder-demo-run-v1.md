@@ -74,3 +74,39 @@ administrator-only backdating. This preview does not expose that fixture bypass
 or assert historical authorization. MON-3 and DM-11–DM-13 are plainly not ready
 yet in this journey. No new migration is needed for these reference projections;
 reserved migration 0406 is unused. Database and browser execution await CI.
+
+### DEMO-J3 shadow-30000 guide (built ahead on SV-6 hookup)
+
+`/demo-s/shadow-30000` creates or recovers a real capture using the shadow recipe
+in `small-builder-demo-inputs.json` (five £6,000 lines). It links the same job to
+the existing review, quote, activation, capture, proof, final-review, lock and
+Final Check controls. A saved job reference resumes the guide. Its nine fixed
+instructions are target figures, never server completion or settlement facts.
+The chooser's company selection report remains a separate lifecycle record.
+
+`GET /api/jobs/:id/shadow-demo` authenticates current practice ownership before
+reading public producers. Before lock it never calls the reveal, attribution or
+pack readers. After lock it reads SV-5; after completed reconciliation it reads
+SV-6 history, selects the latest immutable revision per case/work/line/lock and
+uses the inherited illustration producer. Duplicate historical rows do not add
+principal. New excluded assessments supersede older positive illustrations.
+The report never aggregates per-line rounded fees or promotes historical
+assessments into current eligibility. A refund/evidence change still requires
+a new SV-6 assessment; the old receipt remains explicitly historical.
+
+MON-5 customer approval is **not ready yet**. Builder attestation is not used to
+approve the revealed catches on behalf of a customer. The £34,400 / £41,280
+invoice, £800 Q, £80 fee and £720 retained are targets until their genuine
+producer chains exist. CH-8 v3 generation and CH-9's public value reader remain
+producer-bound on the inspected main; their holds remain visible. No migration,
+external action, fee obligation or release is introduced. This guide and source
+report do not complete the full no-step-skipped DEMO-J3 or DEMO-S acceptance.
+
+Verification: scripted application/route/renderer tests exercise pre-lock
+non-invocation, current-authority denial, foreign bindings, duplicate/reversal
+history and captures' fee-free states. `DEMO-J3-shadow.spec.ts` exercises real
+capture replay, £30,000 accepted baseline, £3,200 capture, £400 review capture
+and £33,600 lock in both browser projects; execution is deferred to CI in the
+restricted builder environment. Existing SV-6 integration tests remain the
+real-PostgreSQL allocation/amount/reversal/locked-bill gate. Independent RED
+review and two builder observations are still missing.

@@ -125,6 +125,7 @@ export function DemoChooser() {
   const disabled = busy || !!pending || !membership;
   return <main className={styles.main}><a href="/">JobGuard home</a><h1>Small-builder practice chooser</h1>
     <p>Made-up data only. Choose a journey to see whether it is ready and save your selection.</p>
+    <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}
