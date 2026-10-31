@@ -96,6 +96,24 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     expect(role).toMatchObject({ super: false, bypassrls: false, createrole: false, createdb: false, replication: false, inherit: false });
   });
 
+  it("[LP0-meter-revoke] the retired reader is refused and re-granting it fails the freeze", async () => {
+    const signature = "app.mon1_counted_meter_today(uuid,text)";
+    expect((await db.admin.query(`SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).rows).toEqual([{ allowed: false }]);
+    const runtime = await db.runtimeClient();
+    try {
+      await expect(runtime.query("SELECT app.mon1_counted_meter_today(NULL::uuid,NULL::text)")).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    const result = await control(async c => {
+      await c.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${APPLICATION_ROLE}`);
+    }, async c => {
+      expect(await has(c, `SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).toBe(true);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ROUTINE_EXPOSED", object: `function:${signature}`, grantee: APPLICATION_ROLE, privilege: "EXECUTE" }),
+    ]));
+  });
+
   it("[LP0-03] dangerous column grant fails the freeze", async () => {
     for (const column of ["status", "accepted_net_value_pence", "recovery_cap_pence", "fee_policy_version", "accepted_quote_version_id"]) {
       const result = await control(

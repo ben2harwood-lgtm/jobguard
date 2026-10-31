@@ -9,6 +9,14 @@ const tableIdent = (table: string) => {
   return parts.map(ident).join(".");
 };
 
+// Freeze the table set across upgrades; explicit names also make a dropped table fail.
+export async function snapshotRows(db: Queryable, names?: string[]) {
+  const tables = names ?? (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows.map(row => `${row.schemaname}.${row.tablename}`);
+  const rows: Record<string, unknown> = {};
+  for (const table of tables) rows[table] = (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') data FROM ${tableIdent(table)} t`)).rows[0].data;
+  return rows;
+}
+
 export async function proofRows(db: Queryable, table: string, names: string[], key: string[]) {
   const found = (await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${key.map(name => `t.${ident(name)}`).join(",")}) k) AS identity,
     (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name => `t.${ident(name)}`).join(",")}) s) AS bytes FROM ${tableIdent(table)} t) x ORDER BY identity COLLATE "C"`)).rows;
