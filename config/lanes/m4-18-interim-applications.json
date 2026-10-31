@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-18-interim-applications": {
+      "branches": ["codex/sandbox/m4-18-interim-applications"],
+      "allow": [
+        "packages/core/src/interim-applications.ts",
+        "packages/core/src/interim-applications.test.ts",
+        "packages/core/src/index.ts"
+      ],
+      "note": "M4-18 RED: dark synthetic draft model only; no database, runtime grants, issue/send or providers."
+    }
+  }
+}
