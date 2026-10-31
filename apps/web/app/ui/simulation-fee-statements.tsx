@@ -2,10 +2,18 @@
 import { useEffect, useState } from "react";
 import { simulationFeeStatementViewV1, type IssuedSimulationFeeStatement } from "@jobguard/core";
 const pounds=(p:number)=>`${p<0?"−":""}£${(Math.abs(p)/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+// Finish bounded reads and their response bodies even when navigation replaces the panel.
+export async function readSimulationFeeStatements(jobId:string){
+ const access=await fetch(`/api/jobs/${jobId}/success-fees`,{cache:"no-store",keepalive:true});
+ const available=access.ok && (await access.json()).state==="catch_review_available";
+ if(!available)return {available:false,statements:[]};
+ const response=await fetch(`/api/jobs/${jobId}/success-fees/statements`,{cache:"no-store",keepalive:true});
+ return {available,statements:response.ok?simulationFeeStatementViewV1.parse(await response.json()).statements:[]};
+}
 export function SimulationFeeStatements({jobId}:{jobId:string}) {
  const [available,setAvailable]=useState(false),[records,setRecords]=useState<{document:IssuedSimulationFeeStatement;documentHash:string}[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[approved,setApproved]=useState<string|null>(null);
  const url=`/api/jobs/${jobId}/success-fees/statements`;
- async function load(){const access=await fetch(`/api/jobs/${jobId}/success-fees`,{cache:"no-store"});setAvailable(access.ok && (await access.json()).state==="catch_review_available");const response=await fetch(url,{cache:"no-store"});if(response.ok)setRecords(simulationFeeStatementViewV1.parse(await response.json()).statements);}
+ async function load(){const view=await readSimulationFeeStatements(jobId);setAvailable(view.available);setRecords(view.statements);}
  useEffect(()=>{setRecords([]);setApproved(null);setError("");void load().catch(()=>setError("Statements could not be loaded."));},[jobId]);
  async function command(action:"issue"|"approve",record?:typeof records[number]){
   setBusy(true);setError("");
@@ -30,7 +38,7 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
     <p>Receipt reversals: {d.sourceSnapshot.adjustments.paymentReversalIds.join(", ")||"None"}; customer adjustments: {d.sourceSnapshot.adjustments.creditNoteIds.join(", ")||"None"}; evidence invalidations: {d.sourceSnapshot.adjustments.evidenceInvalidationIds.join(", ")||"None"}.</p>
     {d.sourceSnapshot.derivations.map(x=><p key={x.derivationId}>Derivation {x.derivationId}; posting approval {x.authorizationId}; review {x.reviewId}</p>)}</details>
    <details><summary>Prior postings and compensation history</summary>{d.postingHistory.map(h=><p key={h.journalId}>{h.journalId}: {pounds(h.principal.pence)}</p>)}<p>Fee settlement integration unavailable — M4-12-S.</p><p>Corrections are documentary; they do not post compensation or collect money.</p></details>
-   <a href={`${url}/${d.statementId}`} download>Download {d.number} (v1)</a>
+   <a href={`${url}/${d.statementId}`} download={`${d.number}.v1.json`}>Download {d.number} (v1)</a>
    {index===records.length-1&&<button disabled={busy} onClick={()=>void command("approve",record)}>Approve this exact simulation statement</button>}
    {approved===d.statementId&&<p role="status">Exact statement approved; no money collected.</p>}
   </article>;})}{error&&<p role="alert">{error}</p>}

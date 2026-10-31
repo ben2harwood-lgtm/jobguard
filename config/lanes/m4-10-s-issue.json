@@ -16,6 +16,7 @@
         "apps/web/app/api/jobs/[id]/success-fees/statements/[statementId]/route.ts",
         "apps/web/app/api/jobs/[id]/success-fees/statements/route.test.ts",
         "apps/web/app/api/jobs/[id]/success-fees/statements/route.ts",
+        "apps/web/app/ui/simulation-fee-statements.test.ts",
         "apps/web/app/ui/simulation-fee-statements.tsx",
         "apps/web/app/ui/workspace-shell.tsx",
         "apps/web/e2e/simulation-fee-statements.spec.ts",
