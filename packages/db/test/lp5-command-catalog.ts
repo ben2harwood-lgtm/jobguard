@@ -585,6 +585,12 @@ export const lp5bRegistryRows = [
 export const lp5RegistryRows = [...lp5aRegistryRows, ...lp5bRegistryRows];
 export const lp5bRoutines = [
   {
+    "signature": "app.lp5b_bind_follow_up_cancel()",
+    "owner": "jobguard_command_writer",
+    "securityDefiner": true,
+    "execute": []
+  },
+  {
     "signature": "app.record_repository_command(uuid)",
     "owner": "jobguard_command_writer",
     "securityDefiner": true,

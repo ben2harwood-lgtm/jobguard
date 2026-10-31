@@ -592,6 +592,32 @@ BEGIN
  UPDATE app.command_lifecycle_claim SET effect_ref=p_reference,authorization_id=p_authorization WHERE tenant_id=t AND command_id=p_command;
 END $$;
 
+-- A timeline activity uses savepoints: tuple xmin can be a subtransaction ID.
+-- Bind the actual cancellation INSERT to its current claim through this private
+-- owner trigger instead of treating a top-level xid comparison as effect proof.
+CREATE FUNCTION app.lp5b_bind_follow_up_cancel() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ UPDATE app.command_lifecycle_claim claim SET effect_ref=jsonb_build_object('followUpEventId',NEW.id)
+ FROM app.command_receipt receipt
+ WHERE claim.tenant_id=NEW.tenant_id AND claim.command_id=NEW.command_id
+  AND claim.version='repository-command.v1' AND claim.transaction_id=pg_current_xact_id()
+  AND claim.effect_ref IS NULL AND claim.outcome IS NULL
+  AND receipt.tenant_id=claim.tenant_id AND receipt.command_id=claim.command_id
+  AND receipt.status='processing' AND receipt.command_type='recovery.follow_up.cancel'
+  AND receipt.actor_membership_id=claim.actor_membership_id AND NEW.actor_membership_id=claim.actor_membership_id
+  AND (claim.resource->>'subjectType')='job' AND (claim.resource->>'subjectRef')::uuid=NEW.job_id
+  AND (claim.significant_input->'input'->>'caseId')::uuid=NEW.case_id
+  AND (claim.significant_input->'input'->>'followUpId')::uuid=NEW.follow_up_id
+  AND NEW.kind='cancelled'
+  AND NEW.request_hash=encode(sha256(convert_to((claim.significant_input->>'legacyJson'),'UTF8')),'hex');
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.lp5b_bind_follow_up_cancel() OWNER TO jobguard_command_writer;
+REVOKE ALL ON FUNCTION app.lp5b_bind_follow_up_cancel() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+CREATE TRIGGER lp5b_follow_up_cancel_effect AFTER INSERT ON app.recovery_follow_up_event
+ FOR EACH ROW WHEN (NEW.kind='cancelled') EXECUTE FUNCTION app.lp5b_bind_follow_up_cancel();
+
 -- Integrate into complete_command after current-authority/grant checks and before
 -- lp5_command_result: for adapter IN('prevention','inbox_seed'), call
 -- app.lp5b_prepare_projection(p_command_id), then reload c for noopReason.
@@ -990,7 +1016,8 @@ BEGIN
   IF EXISTS(SELECT 1 FROM app.recovery_follow_up_event e WHERE e.tenant_id=t AND e.command_id=p_command_id
    AND e.actor_membership_id=c.actor_membership_id AND e.case_id=(a->>'caseId')::uuid AND e.job_id=subject::uuid
    AND e.request_hash=encode(sha256(convert_to((c.significant_input->>'legacyJson'),'UTF8')),'hex')
-   AND e.xmin::text=pg_current_xact_id()::text
+   AND ((r.command_type='recovery.follow_up.cancel' AND e.id=(c.effect_ref->>'followUpEventId')::uuid)
+    OR (r.command_type<>'recovery.follow_up.cancel' AND e.xmin::text=pg_current_xact_id()::text))
    AND ((r.command_type='recovery.follow_up.schedule' AND e.kind='scheduled' AND EXISTS(
     SELECT 1 FROM app.recovery_follow_up f WHERE f.tenant_id=t AND f.id=e.follow_up_id AND f.command_id=p_command_id
      AND f.source_message_id=(a->>'sourceMessageId')::uuid AND f.actor_membership_id=c.actor_membership_id))

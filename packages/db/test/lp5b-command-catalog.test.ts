@@ -36,6 +36,17 @@ describe("LP-5b draft catalogue additions", () => {
       "app.lp5b_contractor_permission(text,uuid,uuid,jsonb) TO jobguard_command_writer",
     ]);
   });
+  it("keeps the cancellation effect trigger private to its lifecycle owner", () => {
+    expect(lp5bRoutines.find(r => r.signature === "app.lp5b_bind_follow_up_cancel()")).toEqual({
+      signature: "app.lp5b_bind_follow_up_cancel()", owner: "jobguard_command_writer", securityDefiner: true, execute: [],
+    });
+    const binding = sql.split("CREATE FUNCTION app.lp5b_bind_follow_up_cancel()")[1]!.split("END $$;")[0]!;
+    expect(binding).toMatch(/RETURNS trigger[\s\S]*SECURITY DEFINER/);
+    expect(binding).toContain("SET search_path=pg_catalog,pg_temp");
+    expect(sql).toContain("ALTER FUNCTION app.lp5b_bind_follow_up_cancel() OWNER TO jobguard_command_writer;");
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION app\.lp5b_bind_follow_up_cancel\(\) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;/);
+    expect(sql).toMatch(/CREATE TRIGGER lp5b_follow_up_cancel_effect AFTER INSERT ON app\.recovery_follow_up_event[\s\S]*?WHEN\s*\(NEW\.kind\s*=\s*'cancelled'\)[\s\S]*?EXECUTE FUNCTION app\.lp5b_bind_follow_up_cancel\(\);/);
+  });
   it("permits restricted ownership transfers only inside the migration transaction", () => {
     const grant = sql.indexOf("GRANT CREATE ON SCHEMA app TO jobguard_command_writer;");
     const transfer = sql.indexOf("ALTER TABLE app.repository_operational_record OWNER TO jobguard_command_writer;");

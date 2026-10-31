@@ -1339,6 +1339,9 @@ describe("M4-6 PostgreSQL timeline history", () => {
       await Promise.all([timeline(restarted).signal(signal), timeline().signal(signal)]);
       await expect(timeline(restarted).signal({ ...signal, version: "recovery-timeline-signal.v2" })).resolves.toBe("review");
       await expect(timeline(restarted).signal({ ...signal, kind: "cancel" })).rejects.toThrow("CONFLICT");
+      expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='cancelled'", [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
+      expect(await count(`SELECT count(*) n FROM app.command_lifecycle_claim c JOIN app.command_receipt r USING(tenant_id,command_id)
+        WHERE c.tenant_id=$1 AND r.command_type='recovery.follow_up.cancel' AND c.significant_input->'input'->>'followUpId'=$2`, [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
     } finally { await closeTestPools(restarted); }
     expect(await dueDecisions(base.followUp.id)).toBe(1);
     expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(1);
@@ -1366,6 +1369,17 @@ describe("M4-6 PostgreSQL timeline history", () => {
   it("cancel persists across restart; delayed timer and response never create a Decision", async () => {
     const base = await scheduled();
     await expect(timeline().signal(event(base, "cancel"))).resolves.toBe("stopped");
+    // Real timeline savepoints create subtransaction tuples. The private INSERT
+    // handoff, not equality with the top xid, proves this exact business effect.
+    expect((await admin.query(`SELECT r.status,r.result,
+      (c.effect_ref->>'followUpEventId'=e.id::text) event_bound,
+      (e.xmin::text<>c.transaction_id::text) subtransaction_effect
+      FROM app.recovery_follow_up_event e JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(e.tenant_id,e.command_id)
+      JOIN app.command_lifecycle_claim c ON(c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)
+      WHERE e.tenant_id=$1 AND e.follow_up_id=$2 AND e.kind='cancelled'`, [DEMO_TENANT_ID,base.followUp.id])).rows)
+      .toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:"cancel"},event_bound:true,subtransaction_effect:true}]);
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("SELECT app.lp5b_bind_follow_up_cancel()"))).rejects.toMatchObject({code:"42501"});
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.command_lifecycle_claim SET effect_ref='{}' WHERE tenant_id=$1",[DEMO_TENANT_ID]))).rejects.toMatchObject({code:"42501"});
     await missedClock(base);
     await expect(timeline().signal(event(base))).resolves.toBe("stopped");
     await expect(timeline().signal(event(base, "builder_response"))).resolves.toBe("stopped");
