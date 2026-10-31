@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "j3-value-combined": {
+      "branches": [
+        "codex/sandbox/j3-value-combined"
+      ],
+      "note": "RED: DEMO-S step 4 / DEMO-J3 combined-final tracked capture value projection. PostgreSQL CI and fresh independent RED review required.",
+      "allow": [
+        "packages/db/migrations/0506_read_value_job_combined_final.sql",
+        "packages/db/test/j3-landing-allocation.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}
