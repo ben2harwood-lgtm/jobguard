@@ -1683,3 +1683,54 @@ sandbox cannot start PostgreSQL or bind localhost; GitHub CI must run them after
 push. Independent exact-head RED review remains required before merge. Neither
 demo journey was executed, and no commit, push, provider action or release was
 performed here.
+
+## 31 October 2026 — CI repair round 1 after catch-up
+
+CH-6 / CH6-J, PR #392; RED. Read the supplied CI traces at
+~/.local/share/full-steam/codex-runs/ch6-j-ci-traces-0747.txt and inspected
+main's #438 and #445 fixes. Started from clean HEAD 02093f69 with current
+main already merged; no merge conflicts remained and no Git-writing command
+was run. This is a focused test-boundary repair, with no product changes.
+
+Failures and root-cause fixes:
+- onsite-diary-upgrade.integration.test.ts, "0505 preserves off-site receipts,
+  all predecessor privileges, rows and unrelated routine definitions on
+  upgrade/replay": the pre-0505 catalogue was compared with every successor,
+  so CH-6's later tables increased the received table count by two. Apply and
+  record only 0505 before every original catalogue/row/routine assertion.
+  Then apply successors, verify original predecessor rows/types, capture the
+  complete upgraded catalogue and tracked rows, and replay. Require exact
+  upgraded catalogue equality and unchanged tracked rows/types after replay.
+  This follows #438 and retains all original assertions, including unrelated
+  routine bodies, off-site receipt replay and the single migration record.
+- customer-variation-upgrade.integration.test.ts: after successors, dynamic
+  table discovery added the two CH-6 tables to the row snapshot (378 vs 376).
+  Keep the full own-step snapshot assertion, then reuse snapshot's existing
+  explicit table-list argument with Object.keys(expected), as in #445.
+  All predecessor tables plus customer approval provenance remain compared;
+  a dropped tracked table still errors. Fingerprints, columns, privileges
+  and both foreign-key/approval-method assertions remain unchanged.
+
+Updated only this lane's allow list for the two repaired tests. It exactly
+covers all 58 net branch paths (excluding its own lane file). No exception,
+assertion skip, migration or protected contract edit was introduced. Every
+migration is byte-identical to HEAD and every main migration is byte-identical
+to origin/main, including CH-6 0506/0507 against HEAD. The CASE expressions
+inside their review-validation IF conditions are already parenthesised.
+No new complexity requiring an additional reporting document.
+
+Local checks actually run with installed tools:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/contractor-entitlement-snapshot.test.ts test/upgrade-proof-utils.test.ts — PASS, 2 files / 10 tests. Existing regression fixtures cover later table additions, changed/inserted/deleted rows and missing tracked tables. This is helper evidence, not PostgreSQL execution.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS (source typecheck).
+- TypeScript transpileModule syntax diagnostics for both edited integration tests — PASS; this is syntax validation, not a full semantic test typecheck.
+- Deterministic migration/protected-contract byte comparisons against HEAD/main,
+  no-conflict check, already-parenthesised CASE inspection and exact lane-path
+  comparison — PASS. An initial overbroad CASE search also matched already
+  parenthesised CASE expressions; direct inspection confirmed no SQL change
+  was needed.
+- git diff --check — PASS.
+
+Ready for router commit/push and GitHub CI. The two PostgreSQL integration
+suites cannot execute in this sandbox and were not claimed as passed. Required
+CI and independent exact-head RED review remain before merge. No browser
+journey, commit, push or release was performed here.
