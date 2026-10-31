@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-13-low-value-batch": {
+      "branches": [
+        "codex/sandbox/lp-13-low-value-batch"
+      ],
+      "note": "LP-13 RED built ahead; serialize/restack after LP-12. HELD-FOR-BEN source-pin refresh; whole PostgreSQL CI and exact-head independent review required.",
+      "allow": [
+        "docs/contracts/lp13-downstream-effects-v1.md",
+        "packages/db/migrations/0534_lp13_low_value_batch.sql",
+        "packages/db/test/lp13-low-value-batch.integration.test.ts",
+        "packages/db/test/lp13-low-value-batch.test.ts",
+        "packages/db/test/lp13-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
