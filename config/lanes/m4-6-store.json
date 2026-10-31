@@ -15,7 +15,7 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/recovery-timeline-dark-v1.md",
         "packages/db/MIGRATIONS.md",
-        "packages/db/migrations/0519_recovery_timeline_store.sql",
+        "packages/db/migrations/0506_recovery_timeline_store.sql",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/recovery-follow-up.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
