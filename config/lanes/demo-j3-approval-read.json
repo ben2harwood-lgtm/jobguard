@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-approval-read": {
+      "branches": [
+        "codex/sandbox/demo-j3-approval-read"
+      ],
+      "note": "RED DEMO-S / DEMO-J3 customer portal approval read; no migration or new grants.",
+      "allow": [
+        "config/lanes/demo-j3-approval-read.json",
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/api/src/shadow-demo.application.test.ts",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "packages/db/src/index.ts",
+        "packages/db/src/shadow-demo-approval-reader.ts",
+        "packages/db/test/customer-variation-approval.integration.test.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
+      ]
+    }
+  }
+}
