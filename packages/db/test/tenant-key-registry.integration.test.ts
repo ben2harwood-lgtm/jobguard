@@ -103,7 +103,7 @@ it("immutable catalog and runtime privileges cannot bypass durable revocation", 
     for (const role of ["jobguard_runtime", "jobguard_infrastructure"]) {
       expect((await c.admin.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [role, `app.${table}`])).rows[0].allowed).toBe(false);
     }
-    for (const sql of [`UPDATE app.${table} SET version=version`, `DELETE FROM app.${table}`, `TRUNCATE app.${table}`]) {
+    for (const sql of [`UPDATE app.${table} SET version=version`, `DELETE FROM app.${table}`, `TRUNCATE app.${table} CASCADE`]) {
       await expect(c.admin.query(sql)).rejects.toThrow("TENANT_KEY_REGISTRY_IMMUTABLE");
     }
   }
