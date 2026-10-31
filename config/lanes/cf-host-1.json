@@ -22,6 +22,7 @@
         "apps/web/package.json",
         "apps/web/wrangler.jsonc",
         "docs/operations/cloudflare-hosting.md",
+        "package.json",
         "pnpm-lock.yaml"
       ]
     }
