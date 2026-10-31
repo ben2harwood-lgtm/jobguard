@@ -10,5 +10,7 @@ export function requestedWorkspaceSection(status:JobStatus,fragment:string):Work
  if(fragment==="#quote")return "quote";
  if(fragment==="#work-proof")return hasStartedWork(status)?"work":"quote";
  if(fragment==="#final-account-title")return hasStartedWork(status)?"final-account":"quote";
+ if(/^#variation-[a-f0-9-]{36}$/iu.test(fragment))return hasStartedWork(status)?"work":"quote";
+ if(/^#invoice-[a-f0-9-]{36}$/iu.test(fragment))return hasStartedWork(status)?"final-account":"quote";
  return "scope";
 }

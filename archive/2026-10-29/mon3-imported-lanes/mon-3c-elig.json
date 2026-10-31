@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3c-elig": {
+      "branches": [
+        "codex/sandbox/mon-3c-elig"
+      ],
+      "receipt": "docs/verdicts/MON-3C-ELIG/BUILDER_RECEIPT.md",
+      "note": "Issued 25 October; built ahead on B 1f73a07c. Advisory only, global key check unavailable, admission disabled. Shared additions assigned by dispatch.",
+      "allow": [
+        "packages/db/src/free-first-job-eligibility-repository.ts",
+        "packages/db/test/free-first-job-eligibility.integration.test.ts",
+        "packages/db/test/free-first-job-eligibility-upgrade.integration.test.ts",
+        "packages/db/migrations/0236_free_first_job_eligibility.sql",
+        "packages/db/migration-notes/0236_free_first_job_eligibility.md",
+        "packages/db/src/index.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "docs/verdicts/MON-3C-ELIG/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
