@@ -207,7 +207,7 @@ it("upgrades populated predecessors without changing stored rows, then retains t
  const {shadowPackCatch}=await import("./evidence-pack-v3-catch-fixture.js");
  const upgrade=await createFinalCheckFixture(false);
  try{
-  const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0411_j3_combined_invoice.sql"));expect(own).toBeGreaterThan(0);
+  const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0413_j3_combined_invoice.sql"));expect(own).toBeGreaterThan(0);
   await upgrade.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,own)){
    const name=url.pathname.split("/").at(-1)!,sql=await readFile(url,"utf8");
@@ -223,7 +223,7 @@ it("upgrades populated predecessors without changing stored rows, then retains t
   const tables=(await upgrade.admin.query("SELECT schemaname||'.'||tablename name FROM pg_tables WHERE schemaname='app' ORDER BY tablename")).rows.map(row=>row.name as string);
   const before=await proofBefore(upgrade.admin,tables);
   await upgrade.admin.query(await readFile(MIGRATION_URLS[own]!,"utf8"));
-  await upgrade.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0411_j3_combined_invoice.sql')");
+  await upgrade.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0413_j3_combined_invoice.sql')");
   expect(await proofDifferences(upgrade.admin,before)).toEqual({rows:[],types:[]});
   expect((await new RecoveryAttributionRepository(upgrade.runtime).history(original.context,original.jobId,original.auth.digest))[0]).toEqual(original.attribution);
   await migrate(upgrade.admin);await migrate(upgrade.admin);

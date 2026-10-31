@@ -13,7 +13,7 @@
         "apps/web/app/api/jobs/[id]/receipt-case-allocations/route.ts",
         "apps/web/app/api/jobs/[id]/receipt-case-allocations/route.test.ts",
         "packages/db/test/j3-landing-allocation.integration.test.ts",
-        "packages/db/migrations/0411_j3_combined_invoice.sql",
+        "packages/db/migrations/0413_j3_combined_invoice.sql",
         "docs/contracts/lp-0-effective-privileges-v1.json"
       ]
     }
