@@ -1,3 +1,4 @@
+import { beforeTermsCommitPool } from "./recovery-terms-timing-fixture.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 // PostgreSQL suites are NOT RUN locally by dispatcher instruction. No mocked database proof.
 import { createHash, randomUUID } from "node:crypto";
@@ -152,17 +153,10 @@ it.each(["commit","rollback"] as const)("TermsReviewConcurrency: authorized appr
  const f=await fixture();await f.advance("receipt-3000");
  let ready!:()=>void,rollback!:()=>void;
  const atCommit=new Promise<void>(resolve=>{ready=resolve;}),releaseCommit=new Promise<void>(resolve=>{rollback=resolve;});
- const intercepted=Object.create(runtime) as Pool;
- intercepted.connect=(async()=>{
-  const client=await runtime.connect();
-  return new Proxy(client,{get(target,key){
-   if(key==="query")return async(...args:unknown[])=>{
-    if(args[0]==="COMMIT"){ready();await releaseCommit;if(outcome==="rollback"){await target.query("ROLLBACK");throw new Error("DW3 injected rollback");}}
-    return Reflect.apply(target.query,target,args);
-   };
-   const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
-  }});
- }) as Pool["connect"];
+ const intercepted=beforeTermsCommitPool(runtime,async client=>{
+  ready();await releaseCommit;
+  if(outcome==="rollback"){await client.query("ROLLBACK");throw new Error("DW3 injected rollback");}
+ });
  const approval=new RecoveryCaseTermsRepository(practiceMaterialPool(intercepted,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor).then(()=>"committed",error=>(error as Error).message);
  await Promise.race([atCommit,approval.then(result=>{throw new Error(`Approval completed before barrier: ${result}`);})]);
  const reviewing=save(f).then(value=>value.result.qualifyingPrincipal.pence,error=>(error as Error).message);

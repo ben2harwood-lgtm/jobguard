@@ -21,6 +21,7 @@ const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisi
 const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
 function typed(error: unknown, uploadInFlight = false): never {
  const e = error as { message?: string; detail?: string };
+ if (e.message === "FORBIDDEN" && (error as { code?: string }).code === "42501") throw new FinalAccountLockError("FORBIDDEN");
  if (e.message === "JOB_WORK_CLOSED") throw new JobWorkStateError("JOB_WORK_CLOSED");
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
  // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.

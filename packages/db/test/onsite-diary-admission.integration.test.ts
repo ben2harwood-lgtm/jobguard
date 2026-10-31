@@ -59,13 +59,16 @@ describe("SV-7A on-site admission attacks", () => {
  });
  it.each(["JobSource.diary", "JobSource.customer_message", "IssueLockBoundInvoice", "unknown.lp5.main.writer"])("LP-5 %s cannot complete without its effect", async commandType => {
   const a = await company(), commandId = randomUUID(), before = await counts(a);
+  let completionReached = false;
   await expect(workTenant(f.runtime, a.tenantId, async db => {
-   const claim = (await db.query("SELECT app.begin_command('repository-command.v1',$1,$2,$1::text,$3::jsonb,'{}'::jsonb,$4::jsonb) result", [commandId, commandType,
+   const claim = (await db.query("SELECT app.begin_command('repository-command.v1',$1::uuid,$2::text,$1::uuid::text,$3::jsonb,'{}'::jsonb,$4::jsonb) result", [commandId, commandType,
     JSON.stringify({ tenantId: a.tenantId, actorMembershipId: a.actorId, subjectType: "job", subjectRef: a.jobId }),
     JSON.stringify({ version: "repository-command.v1", actorMembershipId: a.actorId, input: {}, legacyJson: "{}" })])).rows[0].result;
    expect(claim.kind).toBe("claim");
-   await db.query("SELECT app.complete_command($1,'{}'::jsonb)", [commandId]);
+   completionReached = true;
+   await db.query("SELECT app.complete_command($1::uuid,'{}'::jsonb)", [commandId]);
   })).rejects.toThrow("AUTHORIZATION_INVALID");
+  expect(completionReached).toBe(commandType !== "unknown.lp5.main.writer");
   expect(await counts(a)).toEqual(before);
  });
  it("a cap refusal has no source, receipt, event, audit or ledger effect", async () => {

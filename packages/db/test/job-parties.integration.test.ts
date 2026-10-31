@@ -716,13 +716,26 @@ describe("CH-3a round 13 generated practice entry", () => {
   it("refuses missing parties despite forged scenario, session and bypass settings on direct runtime INSERT and UPDATE", async () => {
     const owner = await session(), id = randomUUID();
     const quote = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs.find(job => job.status === "quoting")!;
+    // 0356's INVOKER permit guard runs before job_parties_live_guard on INSERT.
+    // Runtime cannot DELETE its private permit table, so that structural refusal
+    // necessarily precedes JOB_PARTIES_REQUIRED; require the exact door/error.
+    const guardOrder = (await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='app.job'::regclass
+      AND tgname IN ('imported_job_command_only','job_parties_live_guard') ORDER BY tgname`)).rows;
+    expect(guardOrder).toEqual([{ tgname: "imported_job_command_only" }, { tgname: "job_parties_live_guard" }]);
+    expect((await admin.query(`SELECT prosecdef,has_table_privilege('jobguard_runtime','app.lp_job_insert_permit','DELETE') can_delete
+      FROM pg_proc WHERE oid='app.guard_imported_job()'::regprocedure`)).rows).toEqual([{ prosecdef: false, can_delete: false }]);
     for (const insert of [true, false]) {
       await expect(withTenant(runtime, owner.context, async db => {
         await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
         if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
         else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
-      })).rejects.toMatchObject({ code: "42501" });
+      })).rejects.toMatchObject({ code: "42501", message: insert ? "permission denied for table lp_job_insert_permit" : "permission denied for table job" });
     }
+    // Keep the exact business refusal through the allowed runtime entrypoint too.
+    await expect(withTenant(runtime, owner.context, async db => {
+      await db.$client.query("SELECT set_config('app.skip_job_parties','true',true)");
+      await db.$client.query("SELECT app.require_current_job_parties($1,$2)", [DEMO_TENANT_ID, quote.id]);
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     // Runtime has no direct status UPDATE grant; the allowed migration-owner
     // path must independently reject the same attempted unbound promotion.
     await expect(withTenant(admin, owner.context, async db => {
