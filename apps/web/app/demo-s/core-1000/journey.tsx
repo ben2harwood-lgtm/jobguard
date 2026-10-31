@@ -26,7 +26,7 @@ export function Core1000Guide() {
       <li>Preview the immutable quote, simulate sending, continue the fake worker, record practice acceptance and start this practice job. New work uses v3: no v1 cap or activation obligation.</li>
       <li>Log Extra preparation +£125, Omit cabinet painting −£25 and Pending trim repair +£50. Approve only the first two exact revisions. The £50 remains pending.</li>
       <li>Attach the generated practice image, check file integrity and complete the stage. Build the final account: £1,100 net, £220 reference VAT, £1,320 gross.</li>
-      <li>Review the captures, set all five baseline dispositions to Done, accept Final Check terms and complete the final account. Run the final check (practice), then load its saved result after the worker finishes. Invoice issue must wait for completed Final Check.</li>
+      <li>Review the captures, set all five baseline dispositions to Done, accept Final Check terms if they have not already been accepted for this business, and complete the final account. Run the final check (practice), then load its saved result after the worker finishes. Invoice issue must wait for completed Final Check.</li>
       <li>Issue and simulate the £1,320 invoice. Record £500, then £820: expected balances £820 then £0. Reverse the second receipt with a reason: £820 becomes due again.</li>
       <li>Preview a £100 net credit note and approve that exact correction. The expected gross credit is £120 and remaining balance £700. The original £1,320 invoice and receipt history stay saved.</li>
       <li>Inspect job value and follow its source links. Manual practice receipts are not bank-confirmed settlement or fee-eligible recoveries.</li>

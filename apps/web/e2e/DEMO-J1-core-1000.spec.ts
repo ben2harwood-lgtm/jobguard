@@ -87,8 +87,15 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   for (const name of names) {
     await page.getByLabel(`Disposition ${name}`, { exact: true }).selectOption("done");
     await expect(page.getByLabel(`Disposition ${name}`, { exact: true })).toBeEnabled();
+    await expect(page.getByLabel(`Disposition ${name}`, { exact: true })).toHaveValue("done");
   }
-  await click(page, "Accept final check terms");
+  // Terms are tenant-wide and may already be accepted by another practice job.
+  const review = await read(page, `${root}/final-account/lock`);
+  expect(typeof review.termsAccepted).toBe("boolean");
+  if (!review.termsAccepted) await click(page, "Accept final check terms");
+  await expect(page.getByTestId("final-account-lock")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("button", { name: "Accept final check terms", exact: true })).toBeDisabled();
+  expect((await read(page, `${root}/final-account/lock`)).termsAccepted).toBe(true);
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);
