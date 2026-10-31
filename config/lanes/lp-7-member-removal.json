@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-7-member-removal": {
+      "branches": [
+        "codex/sandbox/lp-7-member-removal"
+      ],
+      "note": "LP-7 RED built ahead; router catches up through LP-6e, serializes migration numbering, arranges protected inventory updates after Ben approval, full PostgreSQL CI and independent exact-head review.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/auth/identity.application.ts",
+        "apps/api/src/auth/identity.controller.ts",
+        "apps/api/src/auth/member-administration.test.ts",
+        "apps/api/src/auth/member-administration.ts",
+        "docs/operations/member-administration.md",
+        "packages/db/migrations/0528_member_administration.sql",
+        "packages/db/test/lp7-member-administration.integration.test.ts"
+      ]
+    }
+  }
+}

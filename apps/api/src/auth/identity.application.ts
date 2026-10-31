@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memberAdministrationV1, memberAdministrationResultV1 } from "./member-administration.js";
 import { IdentityRepository, type VerifiedTenantContext } from "@jobguard/db";
 import { parseIdentityEnvironment } from "@jobguard/config";
 import { Pool } from "pg";
@@ -36,6 +37,20 @@ export class IdentityApplication {
   }
   context(request:TenantRequestCredentials):Promise<VerifiedTenantContext> {
     return resolveVerifiedTenantContext(this.provider,request,this.allowedOrigin);
+  }
+  async administerMember(raw:unknown,credentials:TenantRequestCredentials) {
+    const input=memberAdministrationV1.parse(raw);
+    await this.context({...credentials,requestedTenantId:input.requested_tenant_id});
+    const digest=this.provider.digest(`session:${credentials.sessionToken}`);
+    // Identity credential only. SQL derives the current owner from the session again
+    // under the tenant lock; stale application context never supplies an actor/role.
+    const sql=input.action==="remove"
+      ? "SELECT identity.member_remove($1,$2,$3) result"
+      : "SELECT identity.member_change_role($1,$2,$3,$4) result";
+    const values=input.action==="remove" ? [digest,input.requested_tenant_id,input.membershipId]
+      : [digest,input.requested_tenant_id,input.membershipId,input.role];
+    const result=await this.provider.repository.pool.query<{result:unknown}>(sql,values);
+    return memberAdministrationResultV1.parse(result.rows[0]?.result);
   }
   async invite(raw:unknown,credentials:TenantRequestCredentials) {
     const input=identityInvitationV1.parse(raw);
