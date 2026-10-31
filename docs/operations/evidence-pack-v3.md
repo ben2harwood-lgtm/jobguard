@@ -153,3 +153,16 @@ EVIDENCE_PACK_V3_DEPENDENCY_HELD in the authenticated application, SQL request a
 boundaries. No runtime pack is created with absent or invented attribution/settlement sections.
 Queued work from an older deployment cannot bypass the writer refusal. Pure assembly specimens
 and source preparation do not activate runtime creation. v1 behaviour is preserved.
+
+## CH-8 part 3 activation candidate
+
+After 0375, authenticated synthetic owners can queue v3 generation and exact-hash approval from the
+existing lock/reveal pack panel. The existing worker discovers identifier-only requests and builds
+from current private material. The synthetic database/session/track/terms checks still apply.
+The older preparation-only APIs above retain their held compatibility behavior.
+
+The fresh shadow-30000 CI journey uses controlled source/classifier fixtures and actual commercial
+writers, then UI requests, worker execution, download and the offline verifier. No settled end-state
+or pack is seeded. Its unsupplied checkpoint remains untrusted in both UI and CLI. SQL byte-parity,
+upgrade, isolation and browser execution are CI evidence still required before independent RED review.
+No new alerts, providers, environment keys, external sends or fee collection are introduced.
