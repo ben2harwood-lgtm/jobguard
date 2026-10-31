@@ -3,14 +3,15 @@
 //
 //  * JOBGUARD_ALLOWED_ORIGINS: comma-separated origins for custom domains or self-hosting (https://demo.example.org).
 //  * Vercel system variables VERCEL_URL, VERCEL_BRANCH_URL and VERCEL_PROJECT_PRODUCTION_URL (hostnames set by the platform).
-//  * Local development and the production-build browser tests, only when NOT running on Vercel: the loopback hosts on the port
+//  * CF_PAGES_URL: exact HTTPS deployment URL; Workers custom routes use JOBGUARD_ALLOWED_ORIGINS.
+//  * Local development and the production-build browser tests, only when NOT hosted: the loopback hosts on the port
 //    this server itself listens on (Next builds request.url from the server's own configuration, not from the Host header).
 type Env = Record<string, string | undefined>;
 
 const originOf = (value: string): string | null => {
   try {
     const url = new URL(value);
-    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password ? url.origin : null;
+    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && !url.hostname.includes("*") ? url.origin : null;
   } catch { return null; }
 };
 
@@ -26,7 +27,10 @@ export function trustedOrigins(env: Env, serverUrl: string): string[] {
     const origin = host && !/[\s/@]/u.test(host) ? originOf(`https://${host}`) : null;
     if (origin) origins.add(origin);
   }
-  if (!env.VERCEL) {
+  const cloudflareUrl = env.CF_PAGES_URL?.trim();
+  const cloudflareOrigin = cloudflareUrl ? originOf(cloudflareUrl) : null;
+  if (cloudflareOrigin?.startsWith("https://") && cloudflareUrl?.replace(/\/+$/u, "") === cloudflareOrigin) origins.add(cloudflareOrigin);
+  if (!env.VERCEL && env.JOBGUARD_HOSTING !== "cloudflare" && !env.CF_PAGES && !env.CF_PAGES_URL) {
     const port = new URL(serverUrl).port;
     for (const host of ["127.0.0.1", "localhost", "[::1]"]) origins.add(`http://${host}${port ? `:${port}` : ""}`);
   }

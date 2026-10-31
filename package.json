@@ -56,7 +56,8 @@
       "source-map-js@>=1.0.0 <1.2.2": "1.2.2",
       "vite@>=7.0.0 <=7.3.6": "7.3.7",
       "qs@>=6.7.0 <6.16.1": "6.16.1",
-      "@nestjs/cli>fork-ts-checker-webpack-plugin": "-"
+      "@nestjs/cli>fork-ts-checker-webpack-plugin": "-",
+      "undici@>=7.0.0 <7.30.1": "7.30.1"
     }
   }
 }
