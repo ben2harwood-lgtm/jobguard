@@ -23,6 +23,7 @@ const result = z.object({ ...row, work_id: id, outcome: z.enum(["redirect", "set
 /** Consumed projection of the C1 read. Other persisted fields are stripped, never displayed or used for money. */
 export const subscriptionPlanReadV1 = z.object({
   version: z.literal("subscription-persisted-read.v1"), environment: z.literal("synthetic_demo"), hypothetical: z.literal(true),
+  billingDay: z.number().int().min(1).max(31).optional(),
   agreements: z.array(agreement), periods: z.array(period), statements: z.array(statement),
   work: z.array(work), attempts: z.array(attempt), results: z.array(result),
 });
@@ -83,6 +84,7 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
       payment, paymentLabel: subscriptionPaymentLabels[payment] };
   }).sort((a, b) => b.startDate.localeCompare(a.startDate) || a.id.localeCompare(b.id));
   return { version: "subscription-plan-view.v1" as const, hypothetical: true as const,
+    billingDay: current?.anchor_day ?? data.billingDay ?? null,
     revision: Math.max(0, ...data.agreements.map(a => a.revision)),
     annualAvailable: subscriptionAnnualAvailable,
     plans: getSubscriptionCatalogue({ version: "subscription-catalogue-request.v1", policyVersion: "subscription_pricing_policy_v4" })
@@ -93,3 +95,6 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
     periods };
 }
 export type SubscriptionPlanView = ReturnType<typeof subscriptionPlanView>;
+
+/** Exact demonstration consent copy, rendered by the server and included in the approval hash. */
+export const subscriptionConsentText = "Made-up company demonstration only. No real payments are taken. Monthly principal excluding VAT: Solo £29.00, including 4 jobs, maximum £49.00; Builder £69.00, including 7 jobs, maximum £169.00. Annual plans are unavailable. The selected plan, billing anchor and monthly maximum apply. Upgrades apply today. Downgrades are requested for the next billing boundary and depend on available capacity. Issued periods cannot be changed.";

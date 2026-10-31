@@ -15,7 +15,13 @@
         "apps/web/app/ui/financial-reconciliation-report.tsx",
         "apps/web/e2e/M4-17-report.spec.ts",
         "apps/web/e2e/helpers/reconciliation-report.ts",
-        "packages/db/test/financial-reconciliation-queue.integration.test.ts"
+        "packages/db/test/financial-reconciliation-queue.integration.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }

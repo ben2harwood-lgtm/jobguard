@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
-import { BILLING_SANDBOX_LABEL, exactPenceV1 } from "@jobguard/core";
+import Link from "next/link";
+import { BILLING_SANDBOX_LABEL, exactPenceV1, parseExactPence, exactPence, sumExactPence, compareExactPence } from "@jobguard/core";
 import styles from "./work-orders.module.css";
 
 type Exact = z.infer<typeof exactPenceV1>;
@@ -36,6 +37,15 @@ export function exactPounds(value: Exact): string {
   if (n % d !== 0n) return `${value.numerator}/${value.denominator} pence`;
   const pence = n / d, abs = pence < 0n ? -pence : pence;
   return `${pence < 0n ? "−" : ""}£${(abs / 100n).toLocaleString("en-GB")}.${String(abs % 100n).padStart(2, "0")}`;
+}
+/** Display state follows imported exact balances, including credits and payment reversals. */
+export function billingLineState(line: z.infer<typeof projectionLineV1>): string {
+  if (line.rejected) return "Rejected";
+  const billed = parseExactPence(line.billedNet), credit = parseExactPence(line.creditedNet), paid = parseExactPence(line.paidNet);
+  const due = sumExactPence([billed, exactPence(-credit.numerator, credit.denominator)]);
+  if (paid.numerator > 0n) return compareExactPence(paid, due) >= 0 ? "Paid" : "Part-paid";
+  if (credit.numerator > 0n && due.numerator <= 0n) return "Credited";
+  return billed.numerator > 0n ? "Billed" : "Unbilled";
 }
 export type BillingAction = "export" | "import" | "approve-delivery" | "advance-delivery";
 type Command = { action: BillingAction; body: unknown };
@@ -111,8 +121,8 @@ export function BillingView({ jobId, view, send, busy = false }: { jobId: string
     <section aria-label="Invoices and payments">
       <h2>Invoices and payments</h2>
       {send && <fieldset data-testid="import-controls"><legend>Import invoice and payment status</legend>
-        <label>Format <select value={format} onChange={e => setFormat(e.target.value as "csv" | "json")}><option value="csv">CSV file</option><option value="json">JSON (billing-status.v1)</option></select></label>
-        <label>Status data <textarea rows={6} value={text} onChange={e => setText(e.target.value)}/></label>
+        <label htmlFor="billing-status-format">Format</label> <select id="billing-status-format" value={format} onChange={e => setFormat(e.target.value as "csv" | "json")}><option value="csv">CSV file</option><option value="json">JSON (billing-status.v1)</option></select>
+        <label htmlFor="billing-status-data">Status data</label> <textarea id="billing-status-data" rows={6} value={text} onChange={e => setText(e.target.value)}/>
         <label>Or choose a file <input type="file" accept=".csv,.json,text/csv,application/json" onChange={e => void e.target.files?.[0]?.text().then(setText)}/></label>
         <button type="button" disabled={busy || !text.trim()} onClick={submitImport}>Import status</button>
         {importError && <p role="alert">{importError}</p>}
@@ -121,7 +131,7 @@ export function BillingView({ jobId, view, send, busy = false }: { jobId: string
       {view.invoices.length ? view.invoices.map(i => <div key={`${i.source}/${i.invoiceNumber}`} data-testid={`invoice-${i.invoiceNumber}`}>
         <h3>Invoice {i.invoiceNumber} <small className={styles.muted}>from {i.source}</small></h3>
         <div className={styles.scroll}><table><thead><tr><th>Line</th><th>Billed net</th><th>Credited</th><th>Paid net</th><th>State</th></tr></thead><tbody>
-          {i.projection.lines.map(l => <tr key={l.lineId}><td>{l.lineId}</td><td>{exactPounds(l.billedNet)}</td><td>{exactPounds(l.creditedNet)}</td><td>{exactPounds(l.paidNet)}</td><td>{l.rejected ? "Rejected" : "Open"}</td></tr>)}
+          {i.projection.lines.map(l => <tr key={l.lineId}><td>{l.lineId}</td><td>{exactPounds(l.billedNet)}</td><td>{exactPounds(l.creditedNet)}</td><td>{exactPounds(l.paidNet)}</td><td>{billingLineState(l)}</td></tr>)}
           <tr><th>Total</th><th>{exactPounds(i.projection.totals.billedNet)}</th><th>{exactPounds(i.projection.totals.creditedNet)}</th><th>{exactPounds(i.projection.totals.paidNet)}</th><th></th></tr>
         </tbody></table></div>
         {i.projection.held.length > 0 && <p>Held until more detail arrives: {i.projection.held.map(h => <span key={h.sourceEventId}>{h.sourceEventId} ({h.reason}) </span>)}</p>}
@@ -161,6 +171,7 @@ export function ContractorBilling({ jobId }: { jobId: string }) {
   }, [jobId, load]);
   useEffect(() => { if (code) errorRef.current?.focus(); }, [code]);
   return <main className={styles.main}>
+    <Link href="/northside">Practice roles</Link>{" · "}<Link href="/contractor/statements">Monthly statement</Link>{" · "}<Link href="/contractor/dashboard">Dashboard</Link>
     <h1>Billing and reconciliation</h1>
     <p className={styles.muted}>{BILLING_SANDBOX_LABEL}</p>
     <p role="status">{status}</p>

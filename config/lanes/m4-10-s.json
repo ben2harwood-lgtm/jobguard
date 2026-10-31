@@ -2,15 +2,17 @@
   "version": 2,
   "lanes": {
     "m4-10-s": {
-      "branches": ["codex/sandbox/m4-10-s"],
+      "branches": [
+        "codex/sandbox/m4-10-s"
+      ],
       "receipt": "docs/verdicts/M4-10-S/BUILDER_RECEIPT.md",
-      "note": "C259 / 0219 reserved, not implemented. Decision 74 stacked preparation on 04fea7be. Pure representation only: Q1/Q2, source-backed persistence, settlement integration and UI remain held. No namespace, database or transport implementation.",
+      "note": "RED M4-10-S catch-up only: reconcile current main exports and exact additive privilege expectations. No new behaviour or migrations; inherited M4-9-S migration 0302 is unchanged. Pure representation scope and outstanding server work remain as recorded in the receipt.",
       "allow": [
-        "packages/core/src/simulation-fee-statement.ts",
-        "packages/core/src/simulation-fee-statement.test.ts",
-        "packages/core/src/index.ts",
         "docs/contracts/simulation-fee-statement-v1.md",
-        "docs/verdicts/M4-10-S/BUILDER_RECEIPT.md"
+        "docs/verdicts/M4-10-S/BUILDER_RECEIPT.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/simulation-fee-statement.test.ts",
+        "packages/core/src/simulation-fee-statement.ts"
       ]
     }
   }

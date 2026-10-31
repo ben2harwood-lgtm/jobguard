@@ -1,15 +1,73 @@
 # Free first job lifecycle v1 — contract and holds
 
 MON-3C-P0, coordinator family, ruling C264; issued 25 October 2026.
-Documentation preparation only. MON-3 remains OPEN. This contract issues no
-sibling implementation, trial activation, provider access or charging policy.
+Original P0 preparation is retained below as historical context. The 29 October
+rulings amend its named policy holds; MON-3 remains OPEN pending the enablement
+and evidence gates. This contract grants no provider access or live charging.
 
 Authority: `AGENTS.md` rev 3.0; `BUILD_PLAN.md` §§10.1.7 and MON-3;
 the 20 October corrected build-ahead draft, §7 MON-3C-P0 and sibling CAL,
 ELIG, END, CONV and WIRE cards, plus its DRAFT MON-3C inventory and
 §§2.2a–2.3b. The 25 October dispatch supersedes P0's DRAFT status only;
-its P0-01–P0-04 criteria and all dependent holds survive. Future leaf IDs
+its P0-01–P0-04 criteria and unruled dependent holds survive. Historical leaf IDs
 below are ownership/evidence obligations, not issued work or completed tests.
+
+## Ben's 29 October 2026 safest-choice rulings
+
+Ben ruled the following ten choices on 29 October 2026 (safest choice), adopting
+the named choices in commit `66a58bee`. These rulings resolve the corresponding
+clock, identity, practice and conversion policy slots below for this synthetic
+catch-up. Historical source-inspection and proposed-interface sections record
+P0 preparation; they do not describe the current implementation or reopen these
+rulings. H-ENABLE and Live/release remain **HOLD**. The real prerequisite refusal
+`CAPACITY_ADMISSION_UNAVAILABLE` remains unchanged; no capacity bypass is enabled.
+
+1. CLOCK: retain the existing approved London calendar clock and exclusive
+   midnight deadline; preserve six-digit server source times and all co-earliest
+   source IDs. Incoherent pre-start sources refuse rather than inventing times.
+2. CONVERSION: give the entire lock/close date free, charging from the following
+   London date. A successful second activation starts on its London date, as
+   the plan explicitly requires; the day-90 deadline starts on that date.
+   Co-earliest second/deadline sources use that explicit boundary.
+3. FIRST STUB: Initial unissued stub dates before trial start are free; use
+   the first accepted plan solely as their zero-money arithmetic label if
+   necessary. Never rewrite an earlier issued period or invent earlier debt.
+4. ANCHOR: Keep the original monthly anchor and actual calendar denominator.
+   Never reanchor or rewrite an issued period.
+5. TERMS / CARD: require accepted effective monthly terms for a paid second
+   job and a completed same-business card before every distinct second job,
+   including small/shared-place jobs. Requested/failed/redirect states do not
+   qualify. Do not auto-select annual terms or introduce standing charges.
+6. CORRECTIONS: preserve pinned statements. Refuse unsupported corrections and
+   stop affected positive collection after an earlier conversion source changes
+   its boundary; do not silently reprice, refund, offset or charge early.
+   Pending downgrades do not change issued inputs, and plan-change authority
+   remains independent of card-on-file.
+7. ELIGIBILITY: a new unassigned system-generated quote may show the first-only
+   advisory Skip offer because v3 freezes small-builder terms at activation.
+   Existing incompatible tracks, imports, stale quotes/parties, historical
+   targets, shared practice and unverified identities refuse. An offer is never
+   admission authority; global uniqueness is checked by the actual key claim.
+8. IDENTITY / REPLAY: attach a late phone/card key to the original snapshot,
+   never replace history. Same key with another company refuses; changed
+   document/job-revision payload on a reused command conflicts. Recheck current
+   authority even when returning an exact stored receipt.
+9. DEFERRED ISOLATION: the private commit-time activation guard derives tenant
+   scope from the inserted server row and restores the previous setting on
+   success and failure. Changing the caller's transaction context cannot hide
+   verification/admission rows under FORCE RLS.
+10. CAPACITY: preserve the real prerequisite refusal. This checkout's
+   ch4_admit_place raises CAPACITY_ADMISSION_UNAVAILABLE. Available origin/main
+   0a921c3eac5ae205708aee50fd7f31df049fd825 also explicitly refuses the MON-1
+   source handoff in 0244 (METER_PLACE_SOURCE_HANDOFF_HELD). Do not replace that
+   source/authority handoff with fixture counts or enable a bypass. A labelled
+   test-only substitute exercises the remaining real activation transaction;
+   it is not installed in runtime or presented as capacity integration proof.
+
+The practice ruling uses current normal-company owner/session authority and
+isolated synthetic company facts. Shared practice authority is refused; expiry,
+revocation and cross-company access remain subject to the current session checks.
+These rulings grant no live provider, release or collection authority.
 
 ## Source boundary inspected
 
@@ -149,11 +207,11 @@ changed actor/payload/job/source conflicts. No commercial network call occurs
 inside it. Tenant/job/session binding comes from authenticated server facts,
 never caller tenant, identity, trial flags, source success or requested times.
 
-## Decision and issue gates — every row remains HOLD
+## Decision and issue gates — ruled policy slots and retained holds
 
-No default money policy is proposed. A source read, fixture, arithmetic example,
-or this dispatch is not approval. The coordinator attaches versioned decision
-and exact predecessor evidence before issuing the dependent behavior.
+The 29 October rulings above resolve the marked policy slots. Other rows retain
+their holds; source inspection and fixtures do not supply enablement or release
+evidence. Historical review requirements below are subject to SIMPLE_LOOP.md.
 
 | Hold / decision slot | Required resolution or evidence | Blocking dependent leaf |
 | --- | --- | --- |
@@ -161,18 +219,18 @@ and exact predecessor evidence before issuing the dependent behavior.
 | H-ISSUE / H-NORMATIVE | Exact later leaf order, refs, actors and allowed files; any conflicting normative requirement resolved through the governing versioned decision/amendment process | Every affected implementation leaf; P0 issues none |
 | H-B | Final merged B source, both exact-head Claude PASSes, green required CI, separate acceptance and Ben merge; exact identity/card/admission signatures and tests | CAL, ELIG, END, CONV, WIRE |
 | H-CH4 | Final CH-4-C exact-head two PASSes, CI, separate acceptance, merge and public source handoff; existing source/repair ledger alone is insufficient | CAL, ELIG, END, WIRE; CONV transitively |
-| H-TRIAL-CLOCK / London day-count and deadline | Reconcile “90 days after” and “on day 90”; approve versioned origin/day inclusion, precise deadline instant and equal-time endpoint/attribution convention, coordinated with CH-4/MON-1 | CAL, END, CONV, WIRE |
-| H-TRIAL-CLOCK / DST gap | If wall-clock instant selected, approve explicit missing spring-time mapping or refusal; no JS/PostgreSQL coercion | CAL, END, CONV, WIRE |
-| H-TRIAL-CLOCK / DST overlap | If wall-clock instant selected, approve duplicated autumn-time mapping or refusal; no implicit earlier/later offset | CAL, END, CONV, WIRE |
-| H-IDENTITY / first-skip identity | Sufficient independently verified identity without card; incomplete phone/card fallback stays held. Identifier continuity/replacement/merge cannot reset claims without approved rule | ELIG, END, WIRE; CAL also retains inherited B gate |
-| H-PRACTICE / company versus practice authority | Explicit normal-company owner/admin policy and approved isolated-company or dedicated per-session synthetic authority for jobs, identity, cards and terms; expiry/revocation/reset and no cross-session summary | ELIG, END, CONV, WIRE |
+| H-TRIAL-CLOCK / London day-count and deadline — **RULED 29 Oct (safest choice)** | Reconcile “90 days after” and “on day 90”; approve versioned origin/day inclusion, precise deadline instant and equal-time endpoint/attribution convention, coordinated with CH-4/MON-1 | CAL, END, CONV, WIRE |
+| H-TRIAL-CLOCK / DST gap — **RULED 29 Oct (safest choice)** | If wall-clock instant selected, approve explicit missing spring-time mapping or refusal; no JS/PostgreSQL coercion | CAL, END, CONV, WIRE |
+| H-TRIAL-CLOCK / DST overlap — **RULED 29 Oct (safest choice)** | If wall-clock instant selected, approve duplicated autumn-time mapping or refusal; no implicit earlier/later offset | CAL, END, CONV, WIRE |
+| H-IDENTITY / first-skip identity — **RULED 29 Oct (safest choice)** | Sufficient independently verified identity without card; incomplete phone/card fallback stays held. Identifier continuity/replacement/merge cannot reset claims without approved rule | ELIG, END, WIRE; CAL also retains inherited B gate |
+| H-PRACTICE / company versus practice authority — **RULED 29 Oct (safest choice)** | Explicit normal-company owner/admin policy and approved isolated-company or dedicated per-session synthetic authority for jobs, identity, cards and terms; expiry/revocation/reset and no cross-session summary | ELIG, END, CONV, WIRE |
 | H-HTTP | Separately authorized normal-company method/route/CSRF/origin/current-membership composition; no global `SYNTHETIC_WORKFLOW_ONLY` removal | WIRE normal-company transport |
 | H-METER-CLOCK | Accepted finish/quiet/endpoints/cancel-after-stop rules and first evidence after a stop versus cap-checked restart; no guessed interval convention | Affected END/CONV/WIRE meter integration; MON-1 owns resolution |
-| H-CONVERSION / billing date | Exact London conversion day for each end, same-day inclusion and end/deadline boundary | CONV, WIRE |
-| H-CONVERSION / first-period stub | Approved short-first-period treatment or explicit supported-boundary refusal | CONV, WIRE |
-| H-CONVERSION / original anchor | Explicit original monthly anchor handling, including 29/30/31 and any requested reanchor; no inferred new anchor | CONV, WIRE |
-| H-CONVERSION / terms acceptance | Exact effective agreement revision, authorized actor, accepted terms/hash/version and route; no worker acceptance, annual auto-selection or retrospective trial | CONV, WIRE |
-| H-CONVERSION / late negative corrections | Approved handling of negative effects/refund/carry-forward and closed receiving periods. Positive correction still uses existing maximum, reconciliation and excess-uncollected alert | CONV, WIRE |
+| H-CONVERSION / billing date — **RULED 29 Oct (safest choice)** | Exact London conversion day for each end, same-day inclusion and end/deadline boundary | CONV, WIRE |
+| H-CONVERSION / first-period stub — **RULED 29 Oct (safest choice)** | Approved short-first-period treatment or explicit supported-boundary refusal | CONV, WIRE |
+| H-CONVERSION / original anchor — **RULED 29 Oct (safest choice)** | Explicit original monthly anchor handling, including 29/30/31 and any requested reanchor; no inferred new anchor | CONV, WIRE |
+| H-CONVERSION / terms acceptance — **RULED 29 Oct (safest choice)** | Exact effective agreement revision, authorized actor, accepted terms/hash/version and route; no worker acceptance, annual auto-selection or retrospective trial | CONV, WIRE |
+| H-CONVERSION / late negative corrections — **RULED 29 Oct (safest choice)** | Approved handling of negative effects/refund/carry-forward and closed receiving periods. Positive correction still uses existing maximum, reconciliation and excess-uncollected alert | CONV, WIRE |
 | H-EXTERNAL / source/lock/meter handoff | Accepted MON-1 lifecycle/place admission and integration, actual CH-4 historical reopen identity, exact successful activation/close/lock source references and lock order; final accepted CH-5/SV-7A/MON-2A journey/SV-5/SV-6 seams/tests from their owners | ELIG, END, CONV, WIRE as applicable; whole DEMO-S remains externally owned |
 | H-CH4-Q01/Q03 | Later accepted authority for running/completed Final Check and reopen/earlier-lock consequences, or new snagging/post-live exceptions; accepted C commands alone do not resolve these | Affected END/WIRE consumers; current closed-job new-lock/check refusal survives |
 | H-ENABLE | Separate exact synthetic activation order after all above prerequisites; complete active slice and positive runtime/browser proof required in that later candidate | WIRE; every preparatory leaf must retain refusal |
