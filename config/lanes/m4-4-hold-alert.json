@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-4-hold-alert": {
+      "branches": [
+        "codex/sandbox/m4-4-hold-alert"
+      ],
+      "note": "RED M4-4 operator alerts projected from stored audited refusal receipts; fake adapters only. Built on m4-4-recover; serialize shared WORM files.",
+      "allow": [
+        "docs/operations/evidence-storage.md",
+        "packages/db/migrations/0499_worm_operator_alerts.sql",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/test/worm-command.integration.test.ts",
+        "packages/storage/src/worm.ts",
+        "packages/storage/src/worm.test.ts",
+        "config/lanes/m4-4-hold-alert.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -125,6 +125,20 @@ describe("dark durable WORM application", () => {
 describe("read-only operator WORM recovery", () => {
   const request = () => ({ version: "worm.recovery.v1", commandId: row.id });
   const operator = () => new WormCommandRepository(pool, true, executorPool, operatorPool);
+  it("reads stored alerts only through the separately configured operator pool", async () => {
+    await expect(new WormCommandRepository(pool).operatorAlerts(context)).rejects.toThrow("DARK_ONLY");
+    await expect(repo().operatorAlerts(context)).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).not.toHaveBeenCalled();
+    const alert = { command_id: row.id, evidence_id: row.evidence_id, action: row.action,
+      code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: new Date() };
+    fake.query.mockResolvedValue({ rows: [alert] });
+    expect(await operator().operatorAlerts(context)).toEqual([alert]);
+    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT * FROM app.worm_operator_alerts()");
+    expect(fake.pools).toEqual([operatorPool]);
+    expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
+    fake.query.mockRejectedValue(new Error("secret database detail"));
+    await expect(operator().operatorAlerts(context)).rejects.toThrow(/^WORM_REFUSED$/);
+  });
   it("requires the dark switch, strict versioned input and separate operator credentials before reading", async () => {
     await expect(new WormCommandRepository(pool).recover(context, request(), storage)).rejects.toThrow("DARK_ONLY");
     await expect(repo().recover(context, request(), storage)).rejects.toThrow("WORM_REFUSED");

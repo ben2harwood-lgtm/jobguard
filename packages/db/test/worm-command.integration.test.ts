@@ -18,6 +18,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
 const context = testTenantContext(tenant);
+let upgradedRefusal: string;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository;
 let held = false;
 const storage = { retain: async () => undefined, hold: async (_v: unknown, value: boolean) => { held = value; },
@@ -68,6 +69,11 @@ beforeAll(async () => {
   const baseRepo = new WormCommandRepository(runtime, true, executor);
   const pending = command({ action: "request_anchor", subject: "manifest" });
   await baseRepo.submit(context, pending); await baseRepo.execute(context, pending.commandId, storage, tsa);
+  const refused = command(); upgradedRefusal = refused.commandId;
+  await baseRepo.submit(context, refused);
+  await baseRepo.execute(context, refused.commandId, { ...storage, hold: async () => {
+    throw new WormBoundaryError("NOT_AUTHORIZED");
+  } }, tsa);
   const proof = await proofBefore(admin, ["app.worm_command", "app.worm_attempt", "app.worm_synthetic_version", "app.evidence_object"]);
   const oldRoutines = async () => (await admin.query("SELECT proname,pg_get_functiondef(oid) body,proacl::text FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname IN ('worm_submit','worm_claim','worm_finish') ORDER BY proname")).rows;
   const before = await oldRoutines();
@@ -81,7 +87,14 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => { await closeTestPools(runtime, executor, operator, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 describe("durable synthetic WORM SQL", () => {
-  it("limits operators to the two recovery routines and no table authority", async () => {
+  it("exposes an existing audited refusal after upgrade without rewriting it", async () => {
+    const before = (await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows;
+    const alerts = await repo.operatorAlerts(context);
+    expect(alerts.filter(a => a.command_id === upgradedRefusal)).toHaveLength(1);
+    expect(await repo.operatorAlerts(context)).toEqual(alerts);
+    expect((await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows).toEqual(before);
+  });
+  it("limits operators to recovery and alert reads with no table authority", async () => {
     await expect(withTenant(operator, context, db => db.$client.query(
       "SELECT * FROM app.worm_submit($1::jsonb)", [JSON.stringify(command())]))).rejects.toMatchObject({ code: "42501" });
     for (const role of ["jobguard_runtime", "jobguard_worm_executor", "jobguard_migration"]) {
@@ -92,7 +105,7 @@ describe("durable synthetic WORM SQL", () => {
       has_function_privilege(current_user,p.oid,'EXECUTE') executable
       FROM pg_proc p WHERE p.pronamespace='app'::regnamespace ORDER BY 2`)).rows;
     expect(routines.filter(r => r.executable).map(r => r.signature).sort()).toEqual([
-      "app.worm_reconcile(uuid,integer,boolean)", "app.worm_recovery_target(uuid)",
+      "app.worm_operator_alerts()", "app.worm_reconcile(uuid,integer,boolean)", "app.worm_recovery_target(uuid)",
     ]);
     for (const r of routines.filter(r => !r.executable)) {
       const call = (await admin.query(`SELECT format('%I.%I(%s)',n.nspname,p.proname,
@@ -135,6 +148,8 @@ describe("durable synthetic WORM SQL", () => {
   });
   it("persists a refused attempt and audit, without retrying or blocking a fresh hold", async () => {
     const c = command();
+    const beforeEvidence = (await admin.query("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [tenant, evidence])).rows;
+    const beforeHeld = held;
     await repo.submit(context, c);
     let calls = 0;
     const refusing = { ...storage, hold: async () => { calls++; throw new WormBoundaryError("INVALID_INPUT"); } };
@@ -144,9 +159,34 @@ describe("durable synthetic WORM SQL", () => {
     expect(calls).toBe(1);
     expect((await admin.query("SELECT outcome FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "refused" }]);
     expect((await admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.refused' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows).toHaveLength(1);
+    const alert = (await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId);
+    expect(alert).toEqual([{ command_id: c.commandId, evidence_id: evidence, action: "apply_hold",
+      code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: expect.any(Date) }]);
+    expect(await repo.operatorAlerts(testTenantContext(other))).toEqual([]);
+    await expect(repo.execute(testTenantContext(other), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
+    expect(calls).toBe(1);
+    for (const credentials of [runtime, executor]) {
+      await expect(withTenant(credentials, context, db => db.$client.query("SELECT * FROM app.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
+    }
+    expect((await admin.query("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [tenant, evidence])).rows).toEqual(beforeEvidence);
+    expect(held).toBe(beforeHeld);
     const retry = command();
     await repo.submit(context, retry);
     expect((await repo.execute(context, retry.commandId, refusing, tsa)).status).toBe("refused");
+    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId)).toEqual(alert);
+    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === retry.commandId)).toHaveLength(1);
+  });
+  it("rolls back the alert and refusal when their audit cannot commit", async () => {
+    const c = command();
+    await repo.submit(context, c);
+    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    await expect(withTenant(executor, context, async db => {
+      await db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused',$2::jsonb)",
+        [c.commandId, JSON.stringify({ status: "refused", reason: "storage_refused" })]);
+      throw new Error("synthetic audit failure");
+    })).rejects.toThrow("synthetic audit failure");
+    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId)).toEqual([]);
+    expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("executing");
   });
   it("reconciles an unknown completed write once, audits the operator, and never rewrites storage", async () => {
     const c = command();

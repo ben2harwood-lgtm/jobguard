@@ -91,13 +91,25 @@ export class LocalMinioWormStorage implements WormStorage {
   }
   async retain(version: WormVersion, until: string) {
     if (!z.iso.datetime().safeParse(until).success) throw new WormBoundaryError("INVALID_INPUT");
-    await this.#client.send(new PutObjectRetentionCommand({ ...await this.#writeTarget(version),
+    await this.#write(new PutObjectRetentionCommand({ ...await this.#writeTarget(version),
       Retention: { Mode: "COMPLIANCE", RetainUntilDate: new Date(until) } }));
   }
   async hold(version: WormVersion, held: boolean) {
     if (typeof held !== "boolean") throw new WormBoundaryError("INVALID_INPUT");
-    await this.#client.send(new PutObjectLegalHoldCommand({ ...await this.#writeTarget(version),
+    await this.#write(new PutObjectLegalHoldCommand({ ...await this.#writeTarget(version),
       LegalHold: { Status: held ? "ON" : "OFF" } }));
+  }
+  async #write(command: PutObjectLegalHoldCommand | PutObjectRetentionCommand) {
+    try { await this.#client.send(command); }
+    catch (error) {
+      // An explicit access denial proves refusal. Other failures may follow an
+      // accepted write and must retain the existing unknown-outcome handling.
+      if (error instanceof Error && error.name === "AccessDenied" &&
+          "$metadata" in error && (error.$metadata as { httpStatusCode?: number })?.httpStatusCode === 403) {
+        throw new WormBoundaryError("NOT_AUTHORIZED");
+      }
+      throw error;
+    }
   }
 }
 

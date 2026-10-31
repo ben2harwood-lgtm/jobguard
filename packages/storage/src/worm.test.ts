@@ -131,6 +131,19 @@ describe("WORM exact-version preflight", () => {
       send.mockRestore();
     }
   });
+  it.each(writes)("classifies an explicit access denial of $name as a refusal without another mutation", async ({ write }) => {
+    const denied = Object.assign(new Error("sensitive provider details"), {
+      name: "AccessDenied", $metadata: { httpStatusCode: 403 },
+    });
+    const send = vi.spyOn(S3Client.prototype, "send").mockImplementation(async command => {
+      if (command instanceof HeadObjectCommand) return { ContentLength: 2, VersionId: version.versionId };
+      throw denied;
+    });
+    await expect(write(new LocalMinioWormStorage(config, true))).rejects.toMatchObject({
+      code: "NOT_AUTHORIZED", message: "NOT_AUTHORIZED",
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
   it("does not mutate when the size lookup fails", async () => {
     const send = vi.spyOn(S3Client.prototype, "send").mockRejectedValue(new Error("missing version"));
     await expect(new LocalMinioWormStorage(config, true).hold(version, true)).rejects.toMatchObject({ code: "INVALID_INPUT" });

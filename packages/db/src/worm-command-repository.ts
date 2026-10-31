@@ -23,6 +23,10 @@ export type WormReceipt = {
   status: "queued" | "executing" | "applied" | "pending" | "outcome_unknown" | "refused" | "cancelled";
   result: Record<string, unknown> | null;
 };
+export type WormOperatorAlert = {
+  command_id: string; evidence_id: string; action: "apply_hold" | "release_hold";
+  code: "WORM_STORAGE_REFUSED"; severity: "critical"; occurred_at: Date;
+};
 export class WormCommandError extends Error {
   constructor(readonly code: "DARK_ONLY" | "INVALID_INPUT" | "WORM_REFUSED" | "WORM_REPLAY_CONFLICT" | "D07_REQUIRED") {
     super(code); this.name = "WormCommandError";
@@ -46,6 +50,15 @@ export class WormCommandRepository {
   constructor(private readonly pool: Pool, private readonly enabled = false,
     private readonly executorPool?: Pool, private readonly operatorPool?: Pool) {}
   private requireDark() { if (!this.enabled) throw new WormCommandError("DARK_ONLY"); }
+
+  /** Stored refusal receipts are the alert source; no second mutable alert store. */
+  async operatorAlerts(context: VerifiedTenantContext): Promise<WormOperatorAlert[]> {
+    this.requireDark();
+    if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
+    return withTenant(this.operatorPool, context, async db =>
+      (await db.$client.query<WormOperatorAlert>("SELECT * FROM app.worm_operator_alerts()")).rows
+    ).catch(refuse);
+  }
 
   async submit(context: VerifiedTenantContext, input: unknown): Promise<WormReceipt> {
     this.requireDark();

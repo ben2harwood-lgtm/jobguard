@@ -103,3 +103,35 @@ event inside the restricted SQL routine; the operator cannot invoke general audi
 It does not replace old routine bodies or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
 audit and immutable versions. D07, production residency/store validation and RED review
 remain required before release. The fake-adapter tests are not live-provider proof.
+
+## M4-4 refused-write operator alerts (0499)
+
+In the synthetic durable harness, poll `WormCommandRepository.operatorAlerts` with
+a verified tenant context and the separately provisioned operator pool. Migration
+0499 grants that role only one additional read routine, `app.worm_operator_alerts()`.
+Runtime and storage executors cannot call it. It returns critical
+`WORM_STORAGE_REFUSED` alerts with command/evidence references, action and attempt
+time; it exposes no object keys, provider messages or other tenants' receipts.
+
+The stored refused command and its attempt are the alert record. Their composite
+keys yield exactly one alert per command, including across restarts and repeated
+polls/executions. A new, separately authorized command has its own alert if refused.
+The existing `worm.refused` event audits the refusal in the same transaction;
+failure to commit that transaction leaves neither the refusal nor its alert.
+Existing refused receipts become visible without backfilling or rewriting them.
+The alert has no acknowledgement/deletion lifecycle or external delivery action.
+Investigate the exact version and authorization; the alert never authorizes retry,
+release, overwrite or deletion. Unknown outcomes still require read-only recovery.
+
+An explicit `AccessDenied` HTTP 403 from a hold or retention PUT is classified as
+a known refusal; other provider write failures retain unknown-outcome handling.
+Durable commands currently cover hold/release and timestamp requests. Retention
+writes exist only in `SyntheticRetentionWorkflow`, whose refusal events are
+in-memory fixture evidence, not durable operator alerts. Wiring retention commands
+into durable execution remains a before-live prerequisite; this change introduces
+no new retention policy, production path or live provider.
+
+Initial review — LATER / SIMPLICITY: `SyntheticRetentionWorkflow` and
+`WormCommandRepository` each implement refusal/replay handling. When durable
+retention is approved, reuse the durable command path rather than adding another
+alert store, so replay and operator investigation have one authoritative receipt.
