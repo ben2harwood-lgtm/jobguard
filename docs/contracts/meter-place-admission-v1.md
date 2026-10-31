@@ -46,8 +46,10 @@ No executor exports this routine; the DB module exposes only a strict held value
 
 Coordinator STOP: confirm complete lock order against LOCK-ORDER-1 and deliver
 checked source kinds/expected revisions/current authority and immutable binding
-before admission can replace refusal. Lock 184 must precede receipts, job/source
-locks and audit; no business lock after audit. Never acquire 184 late in a trigger.
+before admission can replace refusal. The implemented remainder below preserves
+LOCK-ORDER-1: job first, then command identity where applicable, then capacity
+and source serialization, with audit last. The old proposed capacity-before-job
+order is superseded; no business lock may be introduced after audit.
 Actual admission/mutation must be one transaction and recheck authority/plan after
 wait and on replay, with exact-payload conflict detection. Grace Decision and
 operations card deduplication remain unimplemented, not implied by oracle labels.
@@ -55,3 +57,102 @@ operations card deduplication remain unimplemented, not implied by oracle labels
 No route/UI/browser workflow belongs to this leaf. MON1-I and CH-5/SV-7A own
 consumer wiring and real-command coverage; trial/card legality stays MON-3C.
 All parent merge, review, CI, separate acceptance and live gates remain.
+
+
+## MON-1 remainder, migration 0367
+
+The legacy `mon1_admit_place`/pure supplied-fixture interface above remains held.
+Checked CH-4 work commands now use private `ch4_admit_place`, with a synchronous
+refresh of `meter_work_ledger` before admission and after source mutation. The
+ledger stores committed membership, not touched-day billing counts. No caller
+receives a reusable permit or can supply projected numbers. Source fingerprint
+replays verify the stored result; mismatches refuse the entire command.
+
+Normal-company accepted activations are supported. Shared practice aggregation,
+missing agreements and legacy live imports without accepted activation/trip terms
+remain refused. MON1-J captures checked normal-company lifecycle facts on each
+authenticated owner read using `mon1_today_source` (reusing unchanged inputs), then applies the existing
+approved pure day counter for the screen. It takes no client counts or clock.
+The legacy `mon1_fresh_counted_meter_today` still refuses stale stored sources
+with `METER_UNAVAILABLE`.
+Administrative bootstrap assigns its narrow owner and retires the older runtime
+reader in the same transaction. No financial action is introduced.
+
+The fresh display does not persist a second counted computation or issue billing
+facts. The stored period-ledger writer remains the existing meter-role path;
+closed/issued periods are untouched. This avoids a runtime ledger-write grant,
+another credential, or a duplicate SQL counting engine. Normal-company owner
+reads capture immutable source revisions under tenant lock 184, with current
+session/authority checks after waiting. Missing terms, unsupported live imports,
+shared practice, non-owner fresh captures and an in-period plan change still refuse.
+Admins retain their prior checked read of an already-fresh stored projection;
+stale or absent stored data still refuses for them. Reads may append a
+new source revision when inputs or the London date change; command retries remain
+durable replays of their first result.
+
+MON1-J browser coverage uses authenticated work-command HTTP requests and the
+real meter HTTP/UI path, with explicit synthetic activation parents, photo
+sources and historical clock fixtures. It does not claim a normal-company job-command browser UI.
+
+## Repair round 1: term-less imports and browser commands
+
+A term-less live adoption makes the committed snapshot unavailable: refresh
+returns no snapshot and does not throw. Place admission still rejects that
+result, so an older stored count cannot authorize new work. Subscription
+accept/change, final-account lock, finish/close and continuing site activity do
+not depend on knowing the imported job's capacity. The meter screen continues
+to display its existing unavailable message for unsupported imported sources;
+no partial count or guessed classification is presented. Site activity checks
+admission only when an activation-backed job actually restarts after stopping.
+New legacy live-import admissions remain refused once a subscription exists.
+
+The browser now sends work commands through the synthetic normal-company meter
+HTTP boundary with verified session, origin, CSRF and server-derived membership.
+The same checked repository handles finish, resume, close and reopen. Activation
+parents and photo sources remain explicit fictional fixtures; the meter response
+and work-command HTTP responses are real. The historical London-day fixture is
+not exposed as an API. Source keys bind the tenant, London date, agreement and
+builder lifecycle facts. Identical repeated reads reuse the checked capture;
+a changed event, lock, trip, observation, link, activation or agreement creates
+a new one. A new London date also refreshes midnight deadlines. The public
+final-account lock routine acquires tenant lock 184 after its job/variation
+locks and before its receipt, refresh and audit, including without withTenant. No fee or payment authority is added.
+
+Grace upgrade Decision delivery and immediate Builder track-review Decision
+creation remain unimplemented follow-up; this repair does not claim them.
+
+## CI repair: scope the capacity serializer to source commands
+
+`withTenant` only installs verified tenant context; it does not acquire lock 184.
+Unrelated reads, financial preflight/execute transactions and contractor authority
+gates keep their existing locks and concurrency. The generic live and source
+job guards retain only their existing job SHARE and authority checks; they never
+acquire 184. This keeps concurrent evidence writers' live guards compatible and
+lets legacy confirmation/evaluation transactions overlap.
+
+Checked work commands take their existing job lock, then the tenant-wide command
+identity lock, then 184 before per-job event lock 144 and audit. This prevents a
+cross-kind command-ID loser from holding capacity while its winner waits for it.
+Actual classified site-source capture takes 184 before 144; the general source
+guard does not serialize unrelated invoice/confirmation traffic. Final-account
+locking takes its existing job UPDATE and variation locks before 184, receipt and
+audit. Builder capture and final locking first share an exact tenant/command-ID
+advisory gate (`final-review-command`, seed 0) before claiming a receipt or job
+lock. Capture rechecks current owner authority after that wait, then claims its
+receipt. It takes no capacity lock while waiting for the source job guard;
+actual site-source capture joins 184 before 144 and its work event. Stored
+capture replays return the first result without requiring a currently live job.
+The checked final-lock routine acquires the same command gate for direct SQL
+callers, verifies owner authority again, then retains job/variation-before-capacity
+ordering. This prevents capture/lock receipt collisions without introducing a
+capacity-before-job cycle. A term-less import still returns an unavailable meter
+snapshot; only a new place admission refuses it, not unrelated company actions.
+No business lock is introduced after an audit append.
+
+CH-4 fixtures explicitly insert their synthetic small-builder commercial track
+before entering live; status alone supplies no track or environment authority.
+
+The commitment replay uses the core clock's `(fact_at, id)` order. Sequence is
+only a final tie-break for its synthetic cutoff sentinel, not a replacement for
+the canonical fact order. Simultaneous finish/evidence therefore agrees with the
+independent core comparator, including reversed UUID and sequence order.

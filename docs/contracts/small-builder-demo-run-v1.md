@@ -51,3 +51,40 @@ Value-source navigation now opens the existing variation or invoice panel for so
 Local verification: installed TypeScript compiler builds core/config; web typecheck passes; installed Vitest runs `app/demo-s/core-1000/journey.test.tsx`, `app/demo-s/chooser.test.tsx` and `app/ui/workspace-lifecycle.test.ts` (39 tests). Playwright `--list` discovers both browser-project cases; no browser execution is claimed. Money arithmetic and commercial boundary checks pass, `git diff --check` passes, and the existing lane-policy API verifies all 11 uncommitted paths against the exact lane list. Commit-range lane lint correctly refuses the uncommitted self-comparison (HEAD equals origin/main), so CI must run it after the router commits. The pnpm launcher could not resolve/verify pinned 10.28.1 with the registry unreachable; installed binaries were used instead and no dependency was added. Database, browser, full build and full mandatory suites remain CI gates. No migration is needed; reserved 0410 is unused. Independent exact-head Claude RED review and two real builder observations remain missing. No release, provider, fee policy or commercial decision is approved by this change.
 
 LATER / SIMPLICITY (initial self-review): `apps/web/app/ui/jobguard-app.tsx`, `WalkIt` — move the existing capture form into its own component file when that area next changes, retaining the current defaults and continuation callback. The guided route currently reuses it by importing the app module; extraction would reduce unrelated UI dependencies and keep capture maintenance in one small file. This is non-blocking and no unrelated extraction is included here.
+Catch-up verification (31 October 2026): reconciled the router-started merge of `origin/main` at `c47ae08e`, retaining both chooser links and both journey contract sections verbatim. Installed Vitest passed the three named J1/chooser/workspace lifecycle files (39 tests, at most two workers); installed TypeScript passed web `--noEmit`; Playwright `--list --workers=2 DEMO-J1-core-1000.spec.ts` discovered phone and desktop cases. The lane-policy API covers all 11 paths relative to main, and `git diff --check` passes. No migration or SQL routine is changed; `docs/contracts/lp-downstream-effects-v1.md` is untouched. The router must stage the resolved files and complete the merge because this sandbox cannot write Git metadata. Database/browser execution, required CI and exact-head independent RED review remain outstanding.
+
+### DEMO-J3 shadow-30000 guide (built ahead on SV-6 hookup)
+
+`/demo-s/shadow-30000` creates or recovers a real capture using the shadow recipe
+in `small-builder-demo-inputs.json` (five £6,000 lines). It links the same job to
+the existing review, quote, activation, capture, proof, final-review, lock and
+Final Check controls. A saved job reference resumes the guide. Its nine fixed
+instructions are target figures, never server completion or settlement facts.
+The chooser's company selection report remains a separate lifecycle record.
+
+`GET /api/jobs/:id/shadow-demo` authenticates current practice ownership before
+reading public producers. Before lock it never calls the reveal, attribution or
+pack readers. After lock it reads SV-5; after completed reconciliation it reads
+SV-6 history, selects the latest immutable revision per case/work/line/lock and
+uses the inherited illustration producer. Duplicate historical rows do not add
+principal. New excluded assessments supersede older positive illustrations.
+The report never aggregates per-line rounded fees or promotes historical
+assessments into current eligibility. A refund/evidence change still requires
+a new SV-6 assessment; the old receipt remains explicitly historical.
+
+MON-5 customer approval is **not ready yet**. Builder attestation is not used to
+approve the revealed catches on behalf of a customer. The £34,400 / £41,280
+invoice, £800 Q, £80 fee and £720 retained are targets until their genuine
+producer chains exist. CH-8 v3 generation and CH-9's public value reader remain
+producer-bound on the inspected main; their holds remain visible. No migration,
+external action, fee obligation or release is introduced. This guide and source
+report do not complete the full no-step-skipped DEMO-J3 or DEMO-S acceptance.
+
+Verification: scripted application/route/renderer tests exercise pre-lock
+non-invocation, current-authority denial, foreign bindings, duplicate/reversal
+history and captures' fee-free states. `DEMO-J3-shadow.spec.ts` exercises real
+capture replay, £30,000 accepted baseline, £3,200 capture, £400 review capture
+and £33,600 lock in both browser projects; execution is deferred to CI in the
+restricted builder environment. Existing SV-6 integration tests remain the
+real-PostgreSQL allocation/amount/reversal/locked-bill gate. Independent RED
+review and two builder observations are still missing.
