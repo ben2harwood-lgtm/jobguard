@@ -1,4 +1,4 @@
-import { Body,Controller,Get,Post,Headers,Header,Param,Query,HttpException,Inject } from "@nestjs/common";
+import { Body,Controller,Get,Post,Headers,Header,Param,Query,HttpException,Inject,StreamableFile,NotFoundException } from "@nestjs/common";
 import { ApiBody,ApiOperation,ApiParam,ApiResponse,ApiTags } from "@nestjs/swagger";
 import { Pool } from "pg";
 import { SuccessFeeApplication,successFeeFailure } from "./success-fee.application.js";
@@ -13,7 +13,7 @@ const commands=["review","approve"].map(action=>{
 @Controller("jobs/:id/success-fees")
 export class SuccessFeeController {
  constructor(@Inject(Pool) private readonly pool:Pool){}
- private async run(work:(app:SuccessFeeApplication)=>Promise<unknown>,cookie?:string){
+ private async run<T>(work:(app:SuccessFeeApplication)=>Promise<T>,cookie?:string){
   try{return await work(new SuccessFeeApplication(this.pool,practiceCookie(cookie)));}
   catch(error){const failure=successFeeFailure(error);if(failure)throw new HttpException(failure.body,failure.status);throw error;}
  }
@@ -31,4 +31,24 @@ export class SuccessFeeController {
  @ApiResponse({status:409,description:"Statement/source/revision changed, review missing, or command identity conflict"})
  @ApiResponse({status:503,description:"No qualifying catch adapter/lock; Q2 and Q3 remain dependency-bound"})
  post(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.command(id,body,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
+ @Get("statements") @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Read immutable synthetic fee statements; no posting or collection"})
+ @ApiResponse({status:200,description:"Versioned statement view with immutable source and approval links"})
+ statements(@Param("id")id:string,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.statements(id,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
+ @Post("statements") @Header("Cache-Control","no-store")
+ @ApiOperation({summary:"Issue a simulation statement or approve its exact hash; no posting or collection"})
+ @ApiBody({schema:{oneOf:[
+  {type:"object",additionalProperties:false,required:["version","commandId","action"],properties:{version:{type:"string",enum:["simulation-fee-statement-command.v1"]},commandId:{type:"string",format:"uuid"},action:{type:"string",enum:["issue"]}}},
+  {type:"object",additionalProperties:false,required:["version","commandId","action","statementId","statementHash"],properties:{version:{type:"string",enum:["simulation-fee-statement-command.v1"]},commandId:{type:"string",format:"uuid"},action:{type:"string",enum:["approve"]},statementId:{type:"string",format:"uuid"},statementHash:{type:"string",pattern:"^[a-f0-9]{64}$"}}},
+ ]}})
+ issueStatement(@Param("id")id:string,@Body()body:unknown,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){return this.run(app=>app.issueStatement(id,body,query,tenant!==undefined||selectedTenant!==undefined),cookie);}
+ @Get("statements/:statementId") @Header("Cache-Control","no-store")
+ @ApiParam({name:"statementId",schema:{type:"string",format:"uuid"}})
+ @ApiOperation({summary:"Download exact versioned simulation statement JSON bytes"})
+ async downloadStatement(@Param("id")id:string,@Param("statementId")statementId:string,@Headers("cookie")cookie?:string,@Query()query:unknown={},@Headers("x-tenant-id")tenant?:string,@Headers("x-jobguard-tenant-id")selectedTenant?:string){
+  const file=await this.run(app=>app.downloadStatement(id,statementId,query,tenant!==undefined||selectedTenant!==undefined),cookie);
+  if(!file)throw new NotFoundException({code:"NOT_FOUND"});
+  return new StreamableFile(file.bytes,{type:"application/json; charset=utf-8",disposition:`attachment; filename="${file.filename}"`});
+ }
+
 }

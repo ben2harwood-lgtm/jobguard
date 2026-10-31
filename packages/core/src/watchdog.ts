@@ -36,6 +36,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
   "nest:/jobs/:id/success-fees": "post_live_billing",
+  "/api/jobs/[id]/success-fees/statements": "post_live_billing",
+  "nest:/jobs/:id/success-fees/statements": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
   "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.
@@ -119,6 +121,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/recovery-cases/terms": "post_live_billing", "nest:/jobs/:id/recovery-cases/terms": "post_live_billing", "command:recovery.terms.approve": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/eligibility": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations": "post_live_billing",
+  "/api/jobs/[id]/receipt-case-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",
   "/api/jobs/[id]/recovery-cases": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]": "watchdog_live_only",
