@@ -3,12 +3,17 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { sessionResponseV1 } from "../../lib/contracts";
+import { demoLink } from "../chooser-state";
 import { parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
  const view = report.account, account = view.account;
  return <section aria-label="Saved shadow journey report">
-  <h2>Saved job evidence</h2><p>Incomplete. Customer approval is not ready yet (MON-5). No fee is charged.</p>
+  <h2>Saved job evidence</h2><p>Incomplete. No fee is charged.</p>
+  <p>Customer approval: {report.customerApproval.state === "not_ready_yet" ? "Not ready yet (MON-5)" : report.customerApproval.state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal"}.</p>
+  <ul>{report.customerApproval.approvals.map(approval => <li key={approval.variationId}>
+   <a href={`/jobs/${report.jobId}#final-check`}>Variation {approval.variationId}</a> · approved {approval.approvedAt} · customer portal
+  </li>)}</ul>
   <p><a href={`/jobs/${report.jobId}`}>Open the same saved job</a></p>
   <dl><dt>Final account</dt><dd>{account ? `${pounds(account.totals.net.pence)} net · revision ${account.revision}` : "Not built yet"}</dd>
    <dt>Lock</dt><dd>{view.lock ? `${view.lock.id} · ${view.lock.lockedAt}` : "Not locked"}</dd>
@@ -26,7 +31,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
    <ul>{report.assessments.map(({ assessment: a, illustrationAsAssessed: illustration }) => <li key={a.assessmentId}>Revision {a.revision} · {a.assessmentOutcome} · illustration as assessed: recovered {illustration.display.recovered ?? "Exact fraction; inspect source"}, proposed fee {illustration.display.fee}, yours {illustration.display.yoursBeforeVatAndTax ?? "Exact fraction; inspect source"} before VAT and tax
     <a href={`/api/jobs/${report.jobId}/success-fee-attribution`}> Inspect saved source manifest {a.assessmentId}</a></li>)}</ul></section>}
   <p>CH-8 evidence-pack generation: not ready yet; producer binding held.</p>
-  <p>CH-9 value report: {report.value.status}; producer bindings held.</p>
+  <p>CH-9 value report: {report.value.status}{report.value.status === "incomplete" ? "; producer bindings held" : "; source-linked receipt saved"}.</p>
   <p>Independent verdict: missing. Non-technical builder observations: 0 of 2 recorded here.</p>
   <p><a href={`/api/jobs/${report.jobId}/shadow-demo`}>Inspect this report's persisted source references</a></p>
  </section>;
@@ -35,7 +40,13 @@ export function ShadowJourney() {
  const [jobId, setJobId] = useState(""), [report, setReport] = useState<ShadowReport | null>(null);
  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
  const active = useRef(false);
- useEffect(() => { const saved = new URLSearchParams(location.search).get("jobId"); if (saved && z.string().uuid().safeParse(saved).success) setJobId(saved); }, []);
+ const [chooserLink, setChooserLink] = useState("/demo-s");
+ useEffect(() => {
+  const query = new URLSearchParams(location.search), saved = query.get("jobId");
+  if (saved && z.string().uuid().safeParse(saved).success) setJobId(saved);
+  const runId = query.get("runId"), tenantId = query.get("tenantId");
+  if (runId && tenantId && z.string().uuid().safeParse(runId).success && z.string().uuid().safeParse(tenantId).success) setChooserLink(demoLink(tenantId, runId));
+ }, []);
  async function load(event: FormEvent) {
   event.preventDefault(); if (active.current) return;
   setReport(null); setError("");
@@ -45,12 +56,14 @@ export function ShadowJourney() {
    const response = await fetch(`/api/jobs/${jobId}/shadow-demo`, { cache: "no-store" });
    if (!response.ok) throw new Error("This job report is unavailable to the current practice session.");
    setReport(parseShadowReport(await response.json(), jobId));
-   history.replaceState(null, "", `?${new URLSearchParams({ jobId })}`);
+   const query = new URLSearchParams(location.search); query.set("jobId", jobId);
+   history.replaceState(null, "", `?${query}`);
   } catch (reason) { setError((reason as Error).message); }
   finally { active.current = false; setBusy(false); }
  }
  async function start() {
-  if (active.current) return;
+  // A chooser launch already recovered this job. Keep its identity when revisiting the guide.
+  if (z.string().uuid().safeParse(jobId).success || active.current) return;
   active.current = true; setBusy(true); setError(""); setReport(null);
   try {
    const sessionResponse = await fetch("/api/session", { cache: "no-store" });
@@ -74,7 +87,7 @@ export function ShadowJourney() {
   } catch (reason) { setError((reason as Error).message); }
   finally { active.current = false; setBusy(false); }
  }
- return <main className="workspace-page"><a href="/demo-s">← Practice chooser</a><h1>Final Check £30,000 journey</h1>
+ return <main className="workspace-page"><a href={chooserLink}>← Practice chooser</a><h1>Final Check £30,000 journey</h1>
   <p>Practice sandbox — made-up data; nothing is sent or charged. Targets below describe the journey; saved evidence is shown separately.</p>
   <ol>{shadowSteps.map(step => <li key={step}><p>{step}</p></li>)}</ol>
   <p><a href="/">Open Jobs and start the safe practice demo</a></p>

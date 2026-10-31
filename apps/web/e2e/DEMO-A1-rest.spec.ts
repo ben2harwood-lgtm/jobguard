@@ -71,7 +71,7 @@ async function incompleteShadowReport(page: Page, jobId: string) {
   await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
   await button(page, "Load saved J3 evidence").click();
   const saved = page.getByRole("region", { name: "Saved shadow journey report" });
-  await expect(saved).toContainText("Customer approval is not ready yet (MON-5)");
+  await expect(saved).toContainText("Customer approval: Awaiting customer");
   await expect(saved).toContainText("No fee is charged");
   await expect(saved).toContainText("No invoice issued");
 }
@@ -140,8 +140,8 @@ test("DEMO-S unpaid catches: a real revealed catch stays unpaid and fee-free at 
   await expect(page.getByTestId("final-check-disposition")).toContainText("nothing is charged until your customer approves");
   await zeroRecovery(page, jobId);
   await incompleteShadowReport(page, jobId);
-  // Remaining blocker: authenticated customer approval and the downstream
-  // invoiced/settled catch are not ready. A priced proposal is never payment.
+  // No customer approval was requested or granted in this scenario.
+  // A priced proposal is never approval, an issued invoice or payment.
 });
 
 test("DEMO-S partial and duplicate receipts: one command reduces the balance once and never qualifies as settlement", async ({ page }) => {

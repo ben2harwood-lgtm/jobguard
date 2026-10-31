@@ -21,7 +21,7 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
  const html = renderToStaticMarkup(<ShadowJourney />);
- for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "not ready yet (MON-5)"]) expect(html).toContain(text);
+ for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval"]) expect(html).toContain(text);
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {
@@ -45,7 +45,16 @@ it("rejects a reveal from a different locked bill", () => {
 it.each(["not_ready_yet", "awaiting_customer", "approved"])("accepts the v2 customer approval state %s", state => {
  const customerApproval = { state, approvals: state === "approved"
   ? [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "customer_portal" }] : [] };
- expect(parseShadowReport({ ...report(), customerApproval }, jobId).customerApproval).toEqual(customerApproval);
+ const parsed = parseShadowReport({ ...report(), customerApproval }, jobId);
+ expect(parsed.customerApproval).toEqual(customerApproval);
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
+ expect(html).toContain(state === "not_ready_yet" ? "Not ready yet (MON-5)" : state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal");
+ if (state !== "not_ready_yet") expect(html).not.toContain("MON-5");
+ for (const approval of customerApproval.approvals) {
+  expect(html).toContain(approval.variationId); expect(html).toContain(approval.approvedAt);
+ }
+ expect(html).toContain("Incomplete"); expect(html).toContain("No invoice issued");
+ expect(html).not.toContain("£80");
 });
 it("accepts the full mapped v3 value receipt for the same locked job", () => {
  const raw = report(), lockId = randomUUID();
@@ -55,7 +64,11 @@ it("accepts the full mapped v3 value receipt for the same locked job", () => {
    lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt,
    checked: [], tracked: [], assessments: [] }) };
  const saved = { ...raw, account: { ...raw.account, lock }, value };
- expect(parseShadowReport(saved, jobId).value).toEqual(value);
+ const parsed = parseShadowReport(saved, jobId);
+ expect(parsed.value).toEqual(value);
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
+ expect(html).toContain("CH-9 value report: mapped; source-linked receipt saved");
+ expect(html).not.toContain("CH-9 value report: mapped; producer bindings held");
  expect(() => parseShadowReport({ ...saved, value: { ...value, jobId: randomUUID() } }, jobId)).toThrow();
  expect(() => parseShadowReport({ ...saved, value: { ...value, receipt: { ...value.receipt,
   sources: { ...value.receipt.sources, lockId: randomUUID() } } } }, jobId)).toThrow();
