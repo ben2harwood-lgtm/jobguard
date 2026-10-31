@@ -29,7 +29,6 @@ async function priced(f: WorkFixture, a: WorkJob, net: number, at: string, appro
     if (!existing) {
       await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, a.tenantId, a.jobId]);
       await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional final-review extra','Fictional extra',$5)", [variation, a.tenantId, a.jobId, scope, origin]);
-      if (origin !== "builder_logged") await db.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,raising_role,provenance,source_capture_kind,source_capture_hash) VALUES($1,$2,$3,'small_builder',$4,'legacy_unrecorded','backfilled_synthetic_fixture','text',$5)",[a.tenantId,a.jobId,variation,origin,CH4_HASH]);
     }
     const identity = (await db.query("SELECT scope_item_id FROM app.variation WHERE tenant_id=$1 AND id=$2", [a.tenantId, variation])).rows[0]!.scope_item_id;
     await db.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,previous_revision_id,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)

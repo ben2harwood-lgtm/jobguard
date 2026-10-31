@@ -8,7 +8,7 @@ import { requireLiveJob, WatchdogError } from "./watchdog.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const startInput = z.object({ commandId: uuid, jobId: uuid }).strict();
 const completeInput = z.object({ commandId: uuid, jobId: uuid, visitId: uuid, closeoutAnswer: z.enum(["yes", "no"]) }).strict();
 type Kind = "start" | "complete";
@@ -208,14 +208,7 @@ export class SiteVisitRepository {
  async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
    const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null }>(
-    `SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
-     FROM app.work_order w
-     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
-     JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
-     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id)
-     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
-     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`, [actor.tenantId, actor.membershipId])).rows;
+    assignedJobsByScopeQuery, [actor.tenantId, actor.membershipId])).rows;
    return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })), truncated: rows.length > 200 };
   });
  }
@@ -254,3 +247,56 @@ export class SiteVisitRepository {
   }
  }
 }
+
+// Previous assigned-first query retained for the existing Northside performance comparison.
+// The request path uses assignedJobsByScopeQuery below.
+// Materialize current assignments before invoking the unchanged, per-job authority rule.
+// Keep the 201-row limit AFTER authority and ordering (the public list returns 200).
+export const assignedJobsQuery = `WITH assigned_orders AS MATERIALIZED (
+      SELECT w.tenant_id,w.job_id,w.id,w.reference,c.revision_id
+      FROM app.work_order w
+      JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+      WHERE w.tenant_id=$1 AND EXISTS (
+       SELECT 1 FROM app.job_assignment a
+       WHERE (a.tenant_id,a.revision_id)=(c.tenant_id,c.revision_id) AND a.membership_id=$2
+      )
+     )
+     SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM assigned_orders w
+     JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
+     WHERE w.tenant_id=$1 AND j.provenance='work_order' AND (SELECT a.decision FROM app.ent3b_visit_authority($2,w.job_id) a)='allowed'
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;
+
+
+// All job-specific authority facts are filtered before selecting one representative
+// per team. Remaining authority (member, role, grants, team membership) depends only
+// on that team, so reuse the unchanged rule once per scope, in the same statement
+// snapshot. Materialization prevents PostgreSQL from moving it back into a job loop.
+export const assignedJobsByScopeQuery = `WITH assigned_orders AS MATERIALIZED (
+      SELECT w.tenant_id,w.job_id,w.id,w.reference,c.revision_id,team.team_id
+      FROM app.work_order w
+      JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id)
+      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,c.revision_id)
+      JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
+      JOIN app.job_commercial_track track ON(track.tenant_id,track.job_id)=(w.tenant_id,w.job_id)
+      JOIN app.job_assignment team ON(team.tenant_id,team.revision_id)=(c.tenant_id,c.revision_id) AND team.membership_id IS NULL
+      WHERE w.tenant_id=$1 AND j.provenance='work_order'
+       AND track.job_track='contractor' AND track.environment='synthetic_demo' AND r.status<>'cancelled'
+       AND EXISTS (
+        SELECT 1 FROM app.job_assignment a
+        WHERE (a.tenant_id,a.revision_id)=(c.tenant_id,c.revision_id) AND a.membership_id=$2
+       )
+     ), scope_jobs AS MATERIALIZED (
+      SELECT DISTINCT ON (team_id) team_id,job_id FROM assigned_orders ORDER BY team_id,job_id
+     ), allowed_scopes AS MATERIALIZED (
+      SELECT team_id FROM scope_jobs s
+      WHERE (SELECT a.decision FROM app.ent3b_visit_authority($2,s.job_id) a)='allowed'
+     )
+     SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+     FROM assigned_orders w
+     JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
+     WHERE EXISTS (SELECT 1 FROM allowed_scopes s WHERE s.team_id=w.team_id)
+     ORDER BY r.due_on NULLS LAST,w.reference,w.job_id LIMIT 201`;

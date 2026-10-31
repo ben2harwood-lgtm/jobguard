@@ -5,19 +5,58 @@ import EmbeddedPostgres from "embedded-postgres";
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
+import { bootstrapSyntheticDemo, finalizeMeterLifecycleOwnership, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
 describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
+  it.each(["jobguard_migration", "jobguard_meter_owner"])("finalizes %s routines and restores temporary permissions", async (routineOwner) => {
+    const sql: string[] = [];
+    const admin = { async query(query: string) {
+      sql.push(query);
+      if (query === "SELECT current_user") return { rows: [{ current_user: "synthetic_owner" }] };
+      if (query.startsWith("SELECT inherit_option")) return { rows: [{ inherit_option: false, set_option: true }] };
+      if (query.startsWith("SELECT pg_get_userbyid")) return { rows: [{ owner: routineOwner }] };
+      return { rows: [] };
+    } } as unknown as PoolClient;
+    await finalizeMeterLifecycleOwnership(admin);
+    expect(sql.filter(q=>q.startsWith('ALTER FUNCTION') && q.endsWith('OWNER TO jobguard_meter_owner'))).toEqual([
+      'ALTER FUNCTION app.mon1_lifecycle_actor(uuid,text,boolean) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_lifecycle_capture(uuid,text,uuid,date,integer) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_lifecycle_rebuild(uuid,text,uuid) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_lifecycle_read(uuid,text,uuid) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_fresh_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner',
+      'ALTER FUNCTION app.mon1_today_source(uuid,text) OWNER TO jobguard_meter_owner',
+    ]);
+    expect(sql).toContain('REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime');
+    expect(sql).toContain('GRANT jobguard_migration TO "synthetic_owner" WITH INHERIT FALSE, SET TRUE');
+    expect(sql.indexOf('REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner')).toBeLessThan(sql.indexOf('COMMIT'));
+    expect(sql.at(-2)).toBe('REVOKE jobguard_meter_owner FROM "synthetic_owner"');
+    expect(sql.at(-1)).toBe('COMMIT');
+  });
+  it("rolls back ownership and temporary grants if any routine has an unexpected owner", async () => {
+    const sql: string[] = [];
+    const admin = { async query(query: string) {
+      sql.push(query);
+      if (query === "SELECT current_user") return { rows: [{ current_user: "synthetic_owner" }] };
+      if (query.startsWith("SELECT pg_get_userbyid")) return { rows: [{ owner: "unexpected_owner" }] };
+      return { rows: [] };
+    } } as unknown as PoolClient;
+    await expect(finalizeMeterLifecycleOwnership(admin)).rejects.toThrow('Unexpected meter routine owner');
+    expect(sql.at(-1)).toBe('ROLLBACK');
+    expect(sql).not.toContain('COMMIT');
+  });
+
   it("binds the synthetic small-builder track in the fixture transaction before going live", async () => {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       queries.push({ sql, values });
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
       if (sql.includes("count(*)::int count")) return { rowCount: 1, rows: [{ count: 45 }] };
@@ -33,6 +72,13 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       expect(queries.some(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter')).toBe(true);
       expect(queries.findIndex(({sql,values}) => sql.includes('SELECT rolsuper,rolbypassrls') && values[0] === 'jobguard_meter'))
         .toBeLessThan(queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration'));
+      expect(queries.some(({sql}) => sql.includes('CREATE ROLE jobguard_meter_owner'))).toBe(true);
+      const reset = queries.findIndex(({sql}) => sql === 'RESET ROLE');
+      const transfer = queries.findIndex(({sql}) => sql.includes('ALTER FUNCTION app.mon1_lifecycle_actor') && sql.includes('OWNER TO jobguard_meter_owner'));
+      expect(transfer).toBeGreaterThan(reset);
+      expect(queries.filter(({sql}) => sql.startsWith('ALTER FUNCTION app.mon1_lifecycle_') && sql.endsWith('OWNER TO jobguard_meter_owner'))).toHaveLength(4);
+      expect(queries.filter(({sql}) => sql.startsWith('ALTER FUNCTION app.mon1_lifecycle_') && sql.endsWith('SECURITY DEFINER'))).toHaveLength(4);
+      expect(queries.some(({sql}) => sql === 'REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner')).toBe(true);
       const binding = queries.findIndex(({ sql }) => sql.includes("INSERT INTO app.job_commercial_track"));
       const live = queries.findIndex(({ sql }) => sql.includes("UPDATE app.job SET status='live'"));
       expect(binding, "missing SH-1 binding before UPDATE-to-live").toBeGreaterThan(queries.findIndex(({ sql }) => sql === "BEGIN"));
@@ -86,13 +132,16 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       { rolname: "jobguard_shadow", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
       { rolname: "jobguard_shadow_emergency_access", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
     ]);
+    expect((await admin.query("SELECT pg_get_userbyid(proowner) AS owner,prosecdef FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname LIKE 'mon1_lifecycle_%' ORDER BY proname")).rows).toEqual(Array.from({length:4},()=>({owner:'jobguard_meter_owner',prosecdef:true})));
+    expect((await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolinherit,rolreplication FROM pg_roles WHERE rolname='jobguard_meter_owner'")).rows).toEqual([{rolcanlogin:false,rolsuper:false,rolbypassrls:false,rolcreaterole:false,rolcreatedb:false,rolinherit:false,rolreplication:false}]);
+    expect((await admin.query("SELECT has_schema_privilege('jobguard_meter_owner','app','CREATE') AS create,pg_has_role('neondb_owner','jobguard_meter_owner','SET') AS set,pg_has_role('neondb_owner','jobguard_meter_owner','USAGE') AS usage")).rows).toEqual([{create:false,set:false,usage:false}]);
     // PostgreSQL 16 gives the CREATEROLE bootstrap owner an automatic ADMIN-only membership (no INHERIT, no SET)
     // granted by the bootstrap superuser. The owner cannot revoke it, so the exact shape is asserted: that one
     // holder per role and no other, with no privilege of either role, as the support route's USAGE check relies on.
     const holderShape = async () => (await admin.query(`SELECT r.rolname AS role,pg_get_userbyid(m.member) AS member,pg_get_userbyid(m.grantor) AS grantor,m.admin_option,m.inherit_option,m.set_option
-      FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid WHERE r.rolname IN ('jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY r.rolname`)).rows;
+      FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid WHERE r.rolname IN ('jobguard_meter_owner','jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY r.rolname`)).rows;
     const adminOnly = { member: "neondb_owner", grantor: "postgres", admin_option: true, inherit_option: false, set_option: false };
-    expect(await holderShape()).toEqual([{ role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
+    expect(await holderShape()).toEqual([{ role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
     expect((await admin.query(`SELECT pg_has_role('neondb_owner','jobguard_shadow','USAGE') AS shadow_usage,pg_has_role('neondb_owner','jobguard_shadow','SET') AS shadow_set,
       pg_has_role('neondb_owner','jobguard_shadow_emergency_access','USAGE') AS emergency_usage,pg_has_role('neondb_owner','jobguard_shadow_emergency_access','SET') AS emergency_set`)).rows)
       .toEqual([{ shadow_usage: false, shadow_set: false, emergency_usage: false, emergency_set: false }]);
@@ -131,8 +180,11 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     await admin.query("GRANT jobguard_shadow_emergency_access TO sv2_probe_holder");
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("holder other than the PostgreSQL 16 ADMIN-only creator membership");
     await admin.query("REVOKE jobguard_shadow_emergency_access FROM sv2_probe_holder");
+    await admin.query("GRANT jobguard_meter_owner TO sv2_probe_holder");
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("holder other than the PostgreSQL 16 ADMIN-only creator membership");
+    await admin.query("REVOKE jobguard_meter_owner FROM sv2_probe_holder");
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
-    expect(await holderShape()).toEqual([{ role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
+    expect(await holderShape()).toEqual([{ role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
   }, 60_000);
   it("creates and commits the subsequent builder origin using the actual runtime role", async () => {
     const client = await runtime.connect(), scope = randomUUID(), variation = randomUUID();

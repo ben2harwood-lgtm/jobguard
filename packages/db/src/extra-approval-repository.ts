@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { TenantTransaction } from "./tenant-context.js";
 import { ExtraSourceError } from "./extra-evidence-pack-sources.js";
-const queryV1 = z.object({ version: z.literal("extra-binding-query.v1"), jobId: z.string().uuid(), extraId: z.string().uuid(), bindingId: z.string().uuid() }).strict();
+const queryV1 = z.object({ version: z.literal("extra-binding-query.v1"), jobId: z.guid({ error: "Invalid uuid" }), extraId: z.guid({ error: "Invalid uuid" }), bindingId: z.guid({ error: "Invalid uuid" }) }).strict();
 
 /** Internal source-binding read only. No command writer, submission or authoritative approval projection. */
 export async function loadExtraApprovalBinding(db: TenantTransaction, raw: unknown): Promise<string> {

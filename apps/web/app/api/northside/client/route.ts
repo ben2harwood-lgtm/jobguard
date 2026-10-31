@@ -11,10 +11,10 @@ export async function POST(request: Request) {
     requireOrigin(request);
     const { pool, member, role, sessionId } = await demoActor();
     const context: VerifiedTenantContext = await demoContext(pool, sessionId);
-    const commonFields = { version: z.literal("northside-command.v1"), jobId: z.string().uuid(), requestId: z.string().uuid(), token: z.string().min(16).max(200), email: z.string().email() };
+    const commonFields = { version: z.literal("northside-command.v1"), jobId: z.guid({ error: "Invalid uuid" }), requestId: z.guid({ error: "Invalid uuid" }), token: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }) };
     const body = parseDemoBody(z.discriminatedUnion("action", [
       z.object({ action: z.literal("view"), ...commonFields }).strict(),
-      z.object({ action: z.literal("decide"), ...commonFields, commandId: z.string().uuid().optional(), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u),
+      z.object({ action: z.literal("decide"), ...commonFields, commandId: z.guid({ error: "Invalid uuid" }).optional(), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u),
         netPence: z.number().int().positive().max(1_000_000_000_000), decision: z.enum(["approve", "reject"]), reasonCode: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u).optional() }).strict(),
     ]), await bodyOf(request));
     if (role !== "client_approver") throw new DemoError("PERMISSION_DENIED", 403);

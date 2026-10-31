@@ -1,3 +1,7 @@
+import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -39,7 +43,9 @@ async function seed(owner:Pool,run:Pool){
  const document=await delivery.preview(context,j,"practice-customer@example.invalid");await delivery.issue(context,j,{commandId:randomUUID(),documentId:document.documentId,contentHash:document.hash,recipient:"practice-customer@example.invalid"});await delivery.execute(context,j,document.documentId,"success");await new QuoteAcceptanceRepository(run).accept(context,j,{commandId:randomUUID(),documentId:document.documentId,documentHash:document.hash,documentVersion:document.document.documentVersion,statedCustomerName:"Fictional customer",statedMethod:"email",acceptedAt:new Date().toISOString()});
  await new PracticeActivationRepository(run).start(context,j,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(owner,j);
- const final=await new FinalAccountCommandService(run).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:j,actorMembershipId:M});const invoice=await new PracticeInvoiceRepository(run).issue(context,{jobId:j,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"});
+ // Setup: carry this fixture's already-issued session into the unchanged invoice call.
+ run=practiceMaterialPool(run,digest);
+ const final=await new FinalAccountCommandService(run).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:j,actorMembershipId:M});/* Before-0134 history retains old issue; prerequisites apply only at head. */await prepareInvoicePrerequisites(owner,run,T,j,M,final.id);const invoice=await new PracticeInvoiceRepository(run).issue(context,{jobId:j,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"});
  const c=await new RecoveryCaseRepository(run).command(context,j,{version:"recovery-case-command.v1",action:"open",expectedRevision:0,commandId:randomUUID(),caseType:"withheld_customer_payment",claimedNetPence:32000,counterparty:"Fictional customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoice.id]},actor);
  const packs=new EvidencePackRepository(run),pack=await packs.generate(context,c.id,{commandId:randomUUID()},messageActor.actorRef);await packs.approveAttachment(context,c.id,pack.id,{commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash},messageActor.actorRef);return {job:j,caseId:c.id,packId:pack.id,session:sessionId};
 }
@@ -60,14 +66,14 @@ async function proofFixture(owner:Pool,j:string){
  }
 }
 beforeAll(async()=>{
- process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-upgrade-"));port=await freePort(58600,200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await admin.query("CREATE DATABASE terms_upgrade");upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"terms_upgrade"});
+ process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-upgrade-"));port=await freePort(58600,200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});
  await upgrade.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS){const current=fileURLToPath(url).split('/').at(-1)!;if(current===name)break;await upgrade.query(await readFile(url,"utf8"));await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[current]);}
- await admin.query("CREATE ROLE terms_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_upgrade_login");runtime=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"terms_upgrade",max:4});({job,caseId,packId,session}=await seed(upgrade,runtime));
+ await admin.query("CREATE ROLE terms_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_upgrade_login");runtime=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});({job,caseId,packId,session}=await seed(upgrade,runtime));
  const repo=new RecoveryMessageRepository(runtime),v=(await preview()).latest!,q=await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"approve",commandId:randomUUID(),messageId:v.id,expectedRevision:v.revision,recipient:v.message.recipient,body:v.message.body,amountPence:v.message.amountPence,packId:v.message.packId,contentHash:v.message.contentHash},messageActor);
  await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:q.latest!.revision,outcome:"success"},messageActor);
- const sandbox=new SandboxRepository(runtime);await sandbox.create(session,randomUUID());const follow=new RecoveryFollowUpRepository(runtime),scheduled=await follow.schedule(context,caseId,{version:"recovery-follow-up-command.v1",action:"schedule",commandId:randomUUID(),sourceMessageId:v.id,expectedCaseRevision:2},messageActor);
+ const sandbox=new SandboxRepository(runtime);await seedLegacySandbox(upgrade,session);const follow=new RecoveryFollowUpRepository(runtime),scheduled=await follow.schedule(context,caseId,{version:"recovery-follow-up-command.v1",action:"schedule",commandId:randomUUID(),sourceMessageId:v.id,expectedCaseRevision:2},messageActor);
  for(let tick=0;tick<3;tick++)await follow.advanceTime(context,caseId,{version:"recovery-follow-up-command.v1",action:"advance_time",commandId:randomUUID(),followUpId:scheduled.latest!.id},messageActor,(run,id)=>sandbox.advance(session,run,id));
 });
 afterAll(async()=>{if(original===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=original;await closeTestPools(runtime,upgrade,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
@@ -93,8 +99,8 @@ it("[T11] populated before N, apply N alone, compare canonical named columns, th
  await expect(preview()).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(caseId),actor);expect((await preview()).latest!.status).toBe("previewed");
 });
 it("[T8] private audit failure rolls back approval and dispatcher records, then the same command succeeds",async()=>{
- await admin.query("CREATE DATABASE terms_audit_failure");const owner=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"terms_audit_failure"}),run=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"terms_audit_failure",max:2});
+ const fixture=await jobDoorsDatabase(true),owner=fixture.owner,run=fixture.runtime;
  try{await migrate(owner);const f=await seed(owner,run),input=command(f.caseId),repo=new RecoveryCaseTermsRepository(run),counts=async()=>Object.fromEntries(await Promise.all(["recovery_case_terms_approval","decision","decision_resolution","action_authorization","command_receipt","audit_event"].map(async table=>[table,(await owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[T])).rows[0].n])));const before=await counts();
  await owner.query("CREATE FUNCTION app.ch7_fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit test failure'; END $$; CREATE TRIGGER ch7_fail_audit BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.ch7_fail_audit()");await expect(repo.approve(context,f.job,input,actor)).rejects.toThrow("audit test failure");expect(await counts()).toEqual(before);await owner.query("DROP TRIGGER ch7_fail_audit ON app.audit_event");expect((await repo.approve(context,f.job,input,actor)).caseId).toBe(f.caseId);
- }finally{await closeTestPools(run,owner);}
+ }finally{await fixture.close();}
 });

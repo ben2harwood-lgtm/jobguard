@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-// Private compiled seam until the coordinator supplies the shared core export.
-import { meterLifecycleInputV1, projectMeterDays, projectMeterJobTimeline } from "../../core/dist/meter-lifecycle.js";
+import { meterLifecycleInputV1, projectMeterDays, projectMeterJobTimeline } from "@jobguard/core";
 import type { TenantTransaction } from "./tenant-context.js";
 import { readSmallTrip, smallTripReadV1 } from "./meter-small-trip.js";
 import { meterLondonDateV1 } from "./meter-persistence.js";

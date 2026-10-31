@@ -43,8 +43,8 @@ export function priceSorLine(raw: unknown): Money {
 const codeV1 = z.string().trim().min(1).max(80);
 export const sorItemV1 = z.object({ code: codeV1, description: z.string().trim().min(1).max(500), unit: z.string().trim().min(1).max(40), rate: sorMoneyV1, standardMinutes: z.number().int().nonnegative().max(525600).optional() }).strict();
 export const sorVersionImportV1 = z.object({
-  version: z.literal("sor-version-import.v1"), environment: z.literal("synthetic_demo"), commandId: z.string().uuid(),
-  scheduleId: z.string().uuid(), reference: z.string().trim().min(1).max(100), effectiveFrom: z.string().date(),
+  version: z.literal("sor-version-import.v1"), environment: z.literal("synthetic_demo"), commandId: z.guid({ error: "Invalid uuid" }),
+  scheduleId: z.guid({ error: "Invalid uuid" }), reference: z.string().trim().min(1).max(100), effectiveFrom: z.string().date(),
   items: z.array(sorItemV1).min(1).max(10000),
 }).strict().superRefine((value, context) => {
   const codes = new Set<string>();
@@ -54,10 +54,10 @@ export const sorVersionImportV1 = z.object({
   });
 });
 export type SorVersionImport = z.infer<typeof sorVersionImportV1>;
-const effectiveVersionV1 = z.object({ id: z.string().uuid(), effectiveFrom: z.string().date() });
+const effectiveVersionV1 = z.object({ id: z.guid({ error: "Invalid uuid" }), effectiveFrom: z.string().date() });
 /** Caller supplies persisted, same-contract candidates. No implicit latest-version fallback. */
 export function selectSorVersion<T extends { id: string; effectiveFrom: string }>(issuedOn: string, allowedIds: readonly string[], versions: readonly T[]): T {
-  if (!z.string().date().safeParse(issuedOn).success || !z.array(z.string().uuid()).safeParse(allowedIds).success || versions.some(v => !effectiveVersionV1.safeParse(v).success)) throw new SorPricingError("INVALID_COMMAND");
+  if (!z.string().date().safeParse(issuedOn).success || !z.array(z.guid({ error: "Invalid uuid" })).safeParse(allowedIds).success || versions.some(v => !effectiveVersionV1.safeParse(v).success)) throw new SorPricingError("INVALID_COMMAND");
   const candidates = versions.filter(v => allowedIds.includes(v.id) && v.effectiveFrom <= issuedOn).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
   if (!candidates[0]) throw new SorPricingError("SOR_VERSION_NOT_FOUND");
   if (candidates[1]?.effectiveFrom === candidates[0].effectiveFrom) throw new SorPricingError("AMBIGUOUS_SOR_VERSION");
@@ -79,10 +79,10 @@ export function priceWorkOrderLines(lines: readonly Readonly<{ sorCode: string; 
   });
 }
 export const sorVersionResultV1 = z.object({
-  version: z.literal("sor-version-result.v1"), environment: z.literal("synthetic_demo"), versionId: z.string().uuid(), scheduleId: z.string().uuid(),
+  version: z.literal("sor-version-result.v1"), environment: z.literal("synthetic_demo"), versionId: z.guid({ error: "Invalid uuid" }), scheduleId: z.guid({ error: "Invalid uuid" }),
   itemCount: z.number().int().positive(), effectiveFrom: z.string().date(), replayed: z.boolean(), realExternalActions: z.literal(0),
 }).strict();
 export const sorVersionListV1 = z.object({
   version: z.literal("sor-version-list.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0),
-  versions: z.array(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), scheduleReference: z.string(), reference: z.string(), effectiveFrom: z.string().date(), itemCount: z.number().int().positive(), createdAt: z.string() }).strict()),
+  versions: z.array(z.object({ id: z.guid({ error: "Invalid uuid" }), scheduleId: z.guid({ error: "Invalid uuid" }), scheduleReference: z.string(), reference: z.string(), effectiveFrom: z.string().date(), itemCount: z.number().int().positive(), createdAt: z.string() }).strict()),
 }).strict();

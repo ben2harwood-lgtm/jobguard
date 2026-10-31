@@ -8,15 +8,22 @@ permissions:
   contents: read
   pull-requests: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  checks:
+  core-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4.2.2
         with: { fetch-depth: 0, persist-credentials: false }
+      - name: Verify the candidate SHA
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Candidate SHA: %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
       - uses: pnpm/action-setup@v4.1.0
         with: { version: 10.28.1, run_install: false }
       - uses: actions/setup-node@v4.0.3
@@ -24,12 +31,123 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      # The root test script's tools and every non-DB workspace test stay here.
+      # The entire DB test command runs across core-db below, with its own prerequisites.
+      - run: node --test tools/*.test.mjs
+      - run: pnpm exec turbo run test --filter='!@jobguard/db'
+  core-db:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Verify the candidate SHA
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Candidate SHA: %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # DB tests also import built API/AI output outside the DB dependency graph.
+      # This closure matches every build task in the original root test graph.
+      - run: pnpm exec turbo run build --filter=@jobguard/api...
+      - run: pnpm --filter @jobguard/db test --shard=${{ matrix.shard }}/4
+  core:
+    needs: [core-checks, core-db]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Require all core checks and DB shards to succeed
+        env:
+          CORE_CHECKS: ${{ needs.core-checks.result }}
+          CORE_DB: ${{ needs.core-db.result }}
+        run: |
+          printf 'core-checks: %s\ncore-db: %s\n' "${CORE_CHECKS:-}" "${CORE_DB:-}"
+          if [ "${CORE_CHECKS:-}" != "success" ] ||
+             [ "${CORE_DB:-}" != "success" ]; then
+            exit 1
+          fi
+  web-shards:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Verify the candidate SHA
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Candidate SHA: %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Install the browser used by the existing end-to-end suite
         run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
       - name: Exercise the production web build at mobile and desktop sizes
-        run: pnpm test:e2e
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/4
+      - name: Upload Playwright failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: playwright-evidence-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: warn
+  web:
+    needs: [web-shards]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Require every browser shard to succeed
+        env:
+          WEB_SHARDS: ${{ needs.web-shards.result }}
+        run: |
+          printf 'web-shards: %s\n' "${WEB_SHARDS:-}"
+          if [ "${WEB_SHARDS:-}" != "success" ]; then
+            exit 1
+          fi
+  checks:
+    needs: [core, web, secrets, dependency-review]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to succeed
+        env:
+          CORE: ${{ needs.core.result }}
+          WEB: ${{ needs.web.result }}
+          SECRETS: ${{ needs.secrets.result }}
+          DEPENDENCY_REVIEW: ${{ needs.dependency-review.result }}
+        run: |
+          printf 'core: %s\nweb: %s\nsecrets: %s\ndependency-review: %s\n' "${CORE:-}" "${WEB:-}" "${SECRETS:-}" "${DEPENDENCY_REVIEW:-}"
+          if [ "${CORE:-}" != "success" ] ||
+             [ "${WEB:-}" != "success" ] ||
+             [ "${SECRETS:-}" != "success" ] ||
+             [ "${DEPENDENCY_REVIEW:-}" != "success" ]; then
+            exit 1
+          fi
   secrets:
     runs-on: ubuntu-latest
     steps:

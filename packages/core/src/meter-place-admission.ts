@@ -3,7 +3,7 @@ import { sha256 } from "./evidence-pack.js";
 import { computeSmallPlaceAllowance, fixedMeterPlacesV1, groupSuppliedMeterPlaces, londonMeterDateV1, syntheticMeterPolicyV1 } from "./jobs-on-the-go.js";
 
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
-const jobs = fixedMeterPlacesV1.unwrap().innerType().shape.jobs;
+const jobs = fixedMeterPlacesV1.unwrap().shape.jobs;
 const job = jobs.unwrap().element;
 /** Supplied synthetic facts only. Neither this schema nor its result establishes authority.
  * The source kinds are local kernel vocabulary, NOT an accepted command adapter enum. */

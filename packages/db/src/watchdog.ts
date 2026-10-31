@@ -13,7 +13,7 @@ export class WatchdogError extends Error {
  * Trigger rechecks acquire the same already-held share lock, never a new row lock.
  */
 export async function requireLiveJob(database: TenantTransaction, jobId: string): Promise<void> {
-  if (!z.string().uuid().safeParse(jobId).success) throw new WatchdogError("JOB_NOT_FOUND");
+  if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new WatchdogError("JOB_NOT_FOUND");
   try {
     await database.$client.query("SELECT app.require_watchdog_live($1::uuid)", [jobId]);
   } catch (error) {
@@ -65,7 +65,19 @@ const LEGACY_COMMAND_OWNERS = `
  * have its id taken and used for a new effect. An id persisted by two kinds, or for two jobs, belongs to nobody and is refused to every
  * claim: no winner is picked among commands that already had their effects. */
 async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType }): Promise<void> {
+  // Upgrade fixtures execute commands before 0164 creates source tables. Resolve
+  // their presence before parsing a query that names them; do not cache across upgrades.
+  const sources = (await database.$client.query<{ name: string }>(
+    "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL")).rows;
   const owners = (await database.$client.query<{ kind: string; job_id: string | null }>(LEGACY_COMMAND_OWNERS, [spec.tenantId, spec.commandId])).rows;
+  if (sources.some(row => row.name === "app.job_diary_entry")) {
+    owners.push(...(await database.$client.query<{ kind: string; job_id: string | null }>(
+      "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2", [spec.tenantId, spec.commandId])).rows);
+  }
+  if (sources.some(row => row.name === "app.customer_message_source")) {
+    owners.push(...(await database.$client.query<{ kind: string; job_id: string | null }>(
+      "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2", [spec.tenantId, spec.commandId])).rows);
+  }
   const kinds = new Set(owners.map(owner => owner.kind)), jobs = new Set(owners.flatMap(owner => owner.job_id ? [owner.job_id] : []));
   if ((kinds.size && (kinds.size > 1 || !kinds.has(spec.kind))) || (jobs.size && (jobs.size > 1 || !jobs.has(spec.jobId)))) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
 }

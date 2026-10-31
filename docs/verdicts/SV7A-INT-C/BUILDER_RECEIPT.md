@@ -156,3 +156,72 @@ merged_revision: unknown
 ```
 
 Usage counters and turn identifiers are not exposed here; input/cached/cache-write/output/reasoning token counts are `unknown`, not zero. No cache benefit inferred.
+
+## make PR green
+
+25 October 2026 dispatcher order for PR #328. Starting worktree clean at
+`ca6e118e2938f267d2b506f20af40439a61111b1`, including the edit-free merge of
+`origin/main` `5bcd5ede90b84afbb7d1924d91c015dc07d7bd32`. No commit, push,
+installation, migration, deployment, independent review or acceptance performed.
+
+The piece has no obsolete Zod generic signatures or private Zod API uses; its
+clean-output typecheck passes. The existing C03 test instead exposed a runtime
+compatibility regression: Zod 4 `.max(8000)` counts Unicode code points, whereas
+the reviewed-text contract caps 8,000 UTF-16 code units. An 8,000-emoji string
+(16,000 UTF-16 units) was incorrectly accepted. Add the explicit `text.length`
+ceiling to the existing refinement in `job-sources.ts`. All existing strict,
+readonly, blank/NUL/surrogate and text-preservation checks remain. No test or
+scanner changed. This restores the pre-migration contract without new product
+behaviour, authority, external effects or operational alerts.
+
+Shared-file exception: `packages/core/src/job-sources.ts` is added to this lane
+because both unchanged request schemas and nested receipt records directly reuse
+its text schema; an intake-only guard could not restore their shared contract or
+satisfy the existing test's direct-schema assertions. This shared-file repair
+must serialize with other `job-sources.ts` work. The lane configuration itself
+changes solely to register that exception.
+
+Environment: Node `v24.17.0`, cached pinned pnpm `10.28.1`, installed Zod `4.6.6`
+and Vitest `4.1.12`. Commands below use a temporary pnpm shim in
+`/private/tmp/jg-sv7a-int-c-green-bin` invoking the already cached pinned pnpm;
+no packages downloaded. All pre-existing `packages/*/dist` directories were moved
+to `/private/tmp/jg-sv7a-int-c-dist-e7zasa9n` before typechecking. They remained
+absent through the repaired core typecheck and package lint.
+
+| Command | Actual result |
+| --- | --- |
+| `gh pr checks 328` | Exit 1: cannot connect to api.github.com; no live CI-log verification claimed. |
+| `pnpm --filter @jobguard/core typecheck` with no package dist, before and after repair | Exit 0 both times. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` before repair | Exit 1: 127/130 files, 3014/3017 tests passed. C03 failed on oversized emoji; receipt-allocation and enterprise boundary scanner exceeded their unchanged 5-second timeout during concurrent compiler checks. |
+| `pnpm --filter @jobguard/core exec vitest run src/job-source-intake.test.ts --maxWorkers=2` | Exit 1: reproduced C03 alone, 9/10 passed. |
+| `pnpm --filter @jobguard/core exec vitest run src/job-source-intake.test.ts src/job-sources.test.ts --maxWorkers=2` after repair | Exit 0: 2 files, 16 tests passed. |
+| `pnpm --filter @jobguard/core lint` with no package dist | Exit 0. |
+| `pnpm typecheck --concurrency=2` | Exit 0: 7/7 tasks, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | Exit 0: purity, lanes, money and commercial checks plus 7/7 package lints, 2 cached. Existing computed-import reports and sandbox cache IO warnings remain informational. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` after lane expansion | Exit 0; includes the added shared source file. |
+| `node tools/money-arithmetic-lint.mjs` | Exit 0. |
+| `pnpm openapi:check` | Exit 1: sandbox denies tsx CLI IPC pipe bind (`listen EPERM`); generator alternative recorded below. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` after repair, after compiler checks completed | Exit 0: 130/130 files, 3017/3017 tests passed, including the unchanged enterprise scanner and receipt-allocation tests; original timeout settings retained. |
+
+The same OpenAPI generator passes (exit 0) without the tsx CLI IPC server:
+`cd apps/api` then `node --import ../../node_modules/.pnpm/tsx@4.20.3/node_modules/tsx/dist/loader.mjs src/generate-openapi.ts --check`. The committed snapshot stays unchanged.
+
+`pnpm build --concurrency=2` passes (exit 0): 7/7 tasks, 2 cached, including
+the Next production build. Existing workspace-root, CSS/autoprefixer, Nest
+dependency and sandbox cache IO warnings remain; none is a build failure.
+`git diff --check` passes; the only tracked changes are the shared text guard,
+the lane allowlist entry and this receipt. No generated file changed.
+
+Raw run logs: `/private/tmp/jg-sv7a-int-c-{unit,unit-fixed,targeted,targeted-fixed,core-typecheck-fixed,core-lint,typecheck,lint,lanes-fixed,build,openapi,openapi-loader}.log`.
+
+Database and browser suites remain for GitHub CI under the dispatched sandbox
+constraint (PostgreSQL and localhost binding unavailable). No database or web
+workflow changed. Full live CI, exact-commit independent verdict, separate
+acceptance and all prior integration/release holds remain pending. The old
+self-comparison lane STOP in the initial receipt is superseded by the successful
+checks against the current distinct main/head above.
+
+Size: +72/−1 lines across 3 files; largest touched logic file: 27 lines; new abstractions: none.
+
+Intended commit message: `/private/tmp/jg-msg-sv7a-int-c.txt`. Final changes are
+uncommitted for the dispatcher; historical receipt entries above remain historical.
