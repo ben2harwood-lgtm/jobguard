@@ -1,13 +1,13 @@
 // CH4-U work-state controls and linked-job offer. Synthetic only; runs in CI.
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test, type Page } from "@playwright/test";
 import { activateMeterJob } from "../../../packages/db/test/meter-journey-fixtures.js";
-import { meterCompany } from "../../../packages/db/test/meter-persistence-fixtures.js";
 import { subscriptionConsentText } from "../../../packages/core/src/subscription-plan-view.js";
 import { insertPhoto, seedWorkJob, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 import { prepareLockJob } from "./helpers/final-account-lock-journey";
 import { prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
+import { openLiveWatchdogJob } from "./helpers/capture-journey";
 
 const LINKED = "Start a linked job for this customer and site";
 const E2E_RUNTIME_URL = "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo";
@@ -42,13 +42,13 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   const fixture = { admin, runtime } as WorkFixture;
   try {
-    const account = await meterCompany(fixture), token = randomUUID();
-    const digest = createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-    await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, account.sessionId]);
-    await acceptSolo(fixture, account.tenantId, digest);
-    await activateMeterJob(fixture, account);
-    await context.addCookies([{ name: "jobguard_session", value: token, url: "http://127.0.0.1:3000" }]);
-    const jobId = account.jobId;
+    await openLiveWatchdogJob(page);
+    const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+    const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
+    const session = (await context.cookies()).find(cookie => cookie.name === "jg_session");
+    if (!session) throw new Error("Synthetic practice session cookie is missing");
+    const digest = createHash("sha256").update(session.value).digest("hex");
+    await acceptSolo(fixture, tenantId, digest);
     await page.goto(`/jobs/${jobId}#site-work`);
     await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
 
@@ -110,7 +110,6 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await click(page, "Close job");
   const beforeCap = await eventIds(page);
   const revisionBeforeCap = await panel(page).getByTestId("work-state-revision").textContent();
-    const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
     for (let i = 0; i < 6; i++) {
       const counted = await seedWorkJob(fixture, tenantId);
       await activateMeterJob(fixture, counted);
