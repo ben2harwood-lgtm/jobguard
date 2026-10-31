@@ -113,16 +113,16 @@ export class PreventionCheckRepository {
         if (input.action === "evaluate_watch") results = preventionRegisterFixtures(["companies_house_feed","gazette_feed"],input.fixture,input.scenarioNow);
         else {
           watchRevision++;
-          await db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,'synthetic-watch-command.v1','Builder command (synthetic)',$9,NULL,$10)`,
-          [tenant,randomUUID(),job,current.bindingId,current.customerRevisionId,input.commandId,input.action==="start_watch"?"watch_start":"watch_stop",watchRevision,input.scenarioNow,auditId]);
+          await db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,'synthetic-watch-command.v1','Builder command (synthetic)',$9,NULL,$10,$11)`,
+          [tenant,randomUUID(),job,current.bindingId,current.customerRevisionId,input.commandId,input.action==="start_watch"?"watch_start":"watch_stop",watchRevision,input.scenarioNow,auditId,actor]);
         }
       }
       for (const result of results) {
-        if (input.action === "property") await db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [tenant,randomUUID(),job,current.bindingId,current.siteRevisionId,input.commandId,result.kind,result.source.id,result.source.name,result.retrievedAt,JSON.stringify(result),auditId]);
-        else await db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [tenant,randomUUID(),job,current.bindingId,current.customerRevisionId,input.commandId,result.kind,watchRevision,result.source.id,result.source.name,result.retrievedAt,JSON.stringify(result),auditId]);
+        if (input.action === "property") await db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [tenant,randomUUID(),job,current.bindingId,current.siteRevisionId,input.commandId,result.kind,result.source.id,result.source.name,result.retrievedAt,JSON.stringify(result),auditId,actor]);
+        else await db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [tenant,randomUUID(),job,current.bindingId,current.customerRevisionId,input.commandId,result.kind,watchRevision,result.source.id,result.source.name,result.retrievedAt,JSON.stringify(result),auditId,actor]);
       }
       await appendAuditBatch(db,[{id:auditId,version:"audit.v1",actorRef:`membership:${actor}`,eventType:`prevention.${input.action}`,subjectType:"job",subjectRef:job,
         payload:{references:{commandId:input.commandId,bindingId:current.bindingId,fixtureId:PREVENTION_FIXTURE_ID},hashes:{request:requestHash},classifications:{action:"operational"}}}]);

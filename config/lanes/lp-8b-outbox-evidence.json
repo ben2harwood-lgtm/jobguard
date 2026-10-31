@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8b-outbox-evidence": {
+      "branches": [
+        "codex/sandbox/lp-8b-outbox-evidence"
+      ],
+      "note": "LP-8b RED draft, not ready to commit: trusted external storage verification path remains incomplete; predecessor catch-up, full PostgreSQL CI and independent review remain required. Scanner definitions and pins unchanged.",
+      "allow": [
+        "packages/db/migrations/0530_lp8b_outbox_evidence.sql",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/prevention-check-repository.ts",
+        "packages/db/test/lp8b-outbox-evidence.integration.test.ts",
+        "packages/db/test/lp8b-storage.test.ts"
+      ]
+    }
+  }
+}

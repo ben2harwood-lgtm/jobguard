@@ -83,7 +83,7 @@ export class EvidenceService {
     let object:StoredObject;
     try { object=await this.storage.readExactVersion(prepared.upload.object_key,input.objectVersionId); }
     catch { await this.reject(context,input.uploadId,"missing_version",input.objectVersionId); throw new EvidenceError("OBJECT_INVALID","missing_version"); }
-    const rejection=object.versionId!==input.objectVersionId ? "missing_version" : object.byteLength>Number(prepared.upload.maximum_bytes) ? "size_exceeded" :
+    const rejection=object.key!==prepared.upload.object_key||object.versionId!==input.objectVersionId ? "missing_version" : (object.byteLength!==object.bytes.byteLength||object.byteLength>Number(prepared.upload.maximum_bytes)) ? "size_exceeded" :
       object.contentType!==prepared.upload.expected_content_type ? "wrong_type" : sha256(object.bytes)!==prepared.upload.expected_sha256.trim() ? "wrong_hash" : !hasCompleteImage(object.bytes,object.contentType)?"corrupt_image":null;
     if(rejection){await this.reject(context,input.uploadId,rejection,input.objectVersionId);throw new EvidenceError("OBJECT_INVALID",rejection);}
     return withTenant(this.pool,context,async db=>{
@@ -91,9 +91,11 @@ export class EvidenceService {
       const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,true,completing); if(earlier)return earlier;
       const locked=await db.$client.query<UploadRow>(`SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,input.uploadId]); const row=locked.rows[0];
       if(!row || row.state==="rejected" || row.object_version_id!==input.objectVersionId) throw new EvidenceError("OBJECT_INVALID");
-      const verified=new Date(); await db.$client.query(`UPDATE app.evidence_upload SET state='verified',server_verified_at=$3,rejection_code=NULL WHERE tenant_id=$1 AND id=$2`,[context.tenantId,input.uploadId,verified]);
+      await db.$client.query(
+        "SELECT app.verify_evidence_upload($1,$2,$3,$4,$5) verified",
+        [context.tenantId,input.uploadId,input.objectVersionId,object.contentType,Buffer.from(object.bytes)]);
       const inserted=await db.$client.query(`INSERT INTO app.evidence_object (id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,device_captured_at,server_received_at,server_verified_at)
-       VALUES ($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,$9,$10,'standard_evidence',$11,$12,$13) RETURNING *`,[input.uploadId,context.tenantId,row.job_id,row.scope_item_id,input.evidenceType,row.object_key,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,row.device_captured_at,row.server_received_at,verified]);
+       SELECT $1,$2,$1,$3,$4,'original',$5,$6,$7,$8,$9,$10,'standard_evidence',$11,u.server_received_at,u.server_verified_at FROM app.evidence_upload u WHERE u.tenant_id=$2 AND u.id=$1 RETURNING *`,[input.uploadId,context.tenantId,row.job_id,row.scope_item_id,input.evidenceType,row.object_key,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,row.device_captured_at]);
       // The command's identity and first result are stored with the object, atomically; a replay returns this immutable row.
       await storeCommandResult(db,{tenantId:context.tenantId,commandId:this.finalizeKey(row.job_id,input).commandId,result:{evidenceId:input.uploadId}});
       if(completing) await completing(db);
@@ -144,8 +146,9 @@ export class EvidenceService {
 
   async registerPreview(context: VerifiedTenantContext, raw: unknown) {
     const input=z.object({id:UUID,originalEvidenceId:UUID,objectKey:z.string().min(1).max(1024),objectVersionId:z.string().min(1).max(1024),contentType:z.enum(["image/jpeg","image/png","image/webp"]),maximumBytes:z.number().int().positive().max(5_000_000)}).parse(raw);
+    if(!input.objectKey.startsWith(`tenants/${context.tenantId}/uploads/`))throw new EvidenceError("EVIDENCE_NOT_AUTHORIZED");
     const object=await this.storage.readExactVersion(input.objectKey,input.objectVersionId);
-    if(object.versionId!==input.objectVersionId || object.contentType!==input.contentType || object.byteLength>input.maximumBytes)throw new EvidenceError("OBJECT_INVALID","invalid_preview");
+    if(object.key!==input.objectKey || object.byteLength!==object.bytes.byteLength || object.versionId!==input.objectVersionId || object.contentType!==input.contentType || object.byteLength>input.maximumBytes)throw new EvidenceError("OBJECT_INVALID","invalid_preview");
     return withTenant(this.pool,context,async db=>{const original=(await db.$client.query<{job_id:string;scope_item_id:string|null;evidence_type:string;retention_class:string;device_captured_at:Date|null;server_received_at:Date}>(`SELECT job_id,scope_item_id,evidence_type,retention_class,device_captured_at,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2 AND kind='original'`,[context.tenantId,input.originalEvidenceId])).rows[0];if(!original)throw new EvidenceError("EVIDENCE_NOT_AUTHORIZED");await checkPostLockSourceLifecycle(db,original.job_id);await requireLiveJob(db,original.job_id);const result=await db.$client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,original_evidence_id,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,device_captured_at,server_received_at,server_verified_at) VALUES($1,$2,NULL,$3,$4,'preview',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,clock_timestamp()) RETURNING *`,[input.id,context.tenantId,original.job_id,original.scope_item_id,input.originalEvidenceId,original.evidence_type,input.objectKey,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,original.retention_class,original.device_captured_at,original.server_received_at]);return result.rows[0];}).catch(rethrowJobWorkState);
   }
 
