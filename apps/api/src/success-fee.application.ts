@@ -5,7 +5,7 @@ import { PracticeAccess } from "./practice-access.js";
 import { successFeeQueryV1 } from "./success-fee.contracts.js";
 export function successFeeFailure(error:unknown):{status:number;body:{code:string}}|null {
  if(error instanceof PracticeAccessError)return {status:error.code==="NOT_FOUND"?404:error.code==="UNAUTHENTICATED"?401:403,body:{code:error.code}};
- if(error instanceof SuccessFeeError)return {status:error.code==="SUCCESS_FEE_DEPENDENCY_BOUND"?503:error.code==="SUCCESS_FEE_FORBIDDEN"?403:400,body:{code:error.code}};
+ if(error instanceof SuccessFeeError)return {status:error.code==="SUCCESS_FEE_DEPENDENCY_BOUND"?503:error.code==="SUCCESS_FEE_FORBIDDEN"?403:["SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_IDEMPOTENCY_CONFLICT","SUCCESS_FEE_REVIEW_REQUIRED"].includes(error.code)?409:400,body:{code:error.code}};
  return null;
 }
 export class SuccessFeeApplication {
