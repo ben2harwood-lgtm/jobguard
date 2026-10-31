@@ -1345,6 +1345,40 @@ async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
   routines:union(routines,added,after.routines), relations:union(before.relations,relations,after.relations),
   policies:union(before.policies,policies,after.policies)};
 }
+// 0519 adds exactly two history tables, their primary indexes and three bounded routines.
+async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await preLp5Snapshot();
+ const tables = ["recovery_timeline_run", "recovery_timeline_signal"];
+ const names = [...tables, ...tables.map(t => `${t}_pkey`)];
+ const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
+ const routines = after.routines.filter(r => r.nspname === "app" && ((r.proname === "guard_recovery_timeline_state" && r.args === "") || (r.proname === "record_recovery_timeline_signal" && r.args === "p_tenant uuid, p_signal uuid, p_follow_up uuid, p_fingerprint text") || (r.proname === "apply_recovery_timeline_signal" && r.args === "p_tenant uuid, p_signal jsonb")));
+ expect(routines).toHaveLength(3);
+ for (const routine of routines) {
+  const guarded = routine.proname !== "guard_recovery_timeline_state";
+  const executable = routine.proname === "apply_recovery_timeline_signal";
+  expect(routine).toMatchObject({prosecdef:guarded,proconfig:guarded ? ["search_path=pg_catalog"] : null});
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [routine.proacl])).rows[0].acl;
+  expect(acl).toEqual(executable ? ["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"] : ["jobguard_migration=X/jobguard_migration"]);
+ }
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
+ expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
+ for (const table of tables) {
+  expect(before.rows).not.toHaveProperty(`app.${table}`);
+  expect(after.rows[`app.${table}`]).toEqual([]);
+  const relation = relations.find(r => r.relname === table)!;
+  expect(relation).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
+  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner, $2::aclitem[]::text[] acl", [relation.relowner,relation.relacl])).rows).toEqual([
+   {owner:"jobguard_migration",acl:["jobguard_migration=arwdDxt/jobguard_migration","jobguard_runtime=r/jobguard_migration"]}
+  ]);
+ }
+ const columns = (await f.admin.query("SELECT c.relname,a.attname,a.attacl::text[] acl FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND a.attacl IS NOT NULL ORDER BY c.relname,a.attname", [tables])).rows;
+ expect(columns).toEqual([]);
+ const union = <T>(old:T[], added:T[], live:T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r => JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
+  relations:union(before.relations,relations,after.relations),routines:union(before.routines,routines,after.routines),policies:union(before.policies,policies,after.policies)};
+
+}
 // CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
 async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await preLp5Snapshot();
@@ -1396,8 +1430,10 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await lp3Additions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
+ Object.assign(expected, await timelineStoreAdditions(expected));
  Object.assign(expected, await lp4AuditAdditions(expected));
  Object.assign(expected, await lp5CommandAdditions(expected));
+
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

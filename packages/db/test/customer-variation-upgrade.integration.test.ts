@@ -26,11 +26,12 @@ it("preserves every historical approval field, privileges and policy and exact r
  await applyMigration(c,own);
  const expected={...before,"app.customer_variation_approval":[]};
  expect(await snapshot(c.admin)).toEqual(expected);expect((await catalogue()).rows).toEqual(privileges);
+ // Freeze main's predecessor set and add the exact LP-5 successor objects.
  await migrate(c.admin);
  const registry=(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data;
  const successors={...expected,"app.command_lifecycle_claim":[],"app.command_type_registry":registry,"app.repository_operational_record":[]};
- expect(await snapshot(c.admin)).toEqual(successors);
- await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(successors);
+ expect(await snapshot(c.admin,Object.keys(successors))).toEqual(successors);
+ await migrate(c.admin);expect(await snapshot(c.admin,Object.keys(successors))).toEqual(successors);
  expect((await fingerprints()).rows).toEqual(priorFingerprints);
  expect((await columns()).rows).toEqual(priorColumns);
  const sideConstraints=(await c.admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.customer_variation_approval'::regclass")).rows.map(r=>r.definition).join("\n");

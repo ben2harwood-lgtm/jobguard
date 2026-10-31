@@ -44,11 +44,18 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
   if (changed.includes(now.proname)) { expect(now.prosrc).not.toBe(was.prosrc); expect({ ...now, prosrc: was.prosrc }).toEqual(was); }
   else expect(now).toEqual(was);
  }
+ // Compare the same complete migration set across replay, including later objects.
+ await migrate(f.admin);
+ expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
+ const upgradedCatalogue = await catalogue();
+ const upgradedRows = await proofBefore(f.admin, Object.keys(before));
+ await migrate(f.admin);
+ expect(await proofDifferences(f.admin, upgradedRows)).toEqual({ rows: [], types: [] });
+ expect(await catalogue()).toEqual(upgradedCatalogue);
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rows[0].n).toBe(1);
- // The full successor install must preserve the same old receipt and bytes;
- // 0536 keeps 0505's on-site admission while taking over checked completion.
- await migrate(f.admin); await migrate(f.admin);
+ // The successor installs above preserve the old receipt; 0536 keeps
+ // 0505's admission while taking over checked completion.
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_lifecycle_claim WHERE command_id=$1", [input.commandId])).rows[0].n).toBe(0);
