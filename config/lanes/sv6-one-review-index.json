@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-one-review-index": {
+      "branches": ["codex/sandbox/sv6-one-review-index"],
+      "note": "RED SV-6 database uniqueness for one recorded review per assessment. Own lane file implicitly allowed.",
+      "allow": [
+        "packages/db/migrations/0401_recovery_attribution_one_review.sql",
+        "packages/db/migration-notes/0401_recovery_attribution_one_review.md",
+        "packages/db/test/recovery-attribution-review.integration.test.ts"
+      ]
+    }
+  }
+}
