@@ -46,3 +46,7 @@ it("bounds public errors without swallowing unknown failures",()=>{
  for(const [code,status] of [["INVALID_SUCCESS_FEE_COMMAND",400],["SUCCESS_FEE_DEPENDENCY_BOUND",503],["SUCCESS_FEE_FORBIDDEN",403]] as const)expect(successFeeFailure(new SuccessFeeError(code))).toEqual({status,body:{code}});
  expect(successFeeFailure(new Error("private SQL"))).toBeNull();
 });
+
+it.each(["SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_REVIEW_REQUIRED","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"] as const)("returns bounded 409 for %s",code=>{
+ expect(successFeeFailure(new SuccessFeeError(code))).toEqual({status:409,body:{code}});
+});
