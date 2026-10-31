@@ -12,7 +12,8 @@
         "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts",
         "apps/web/app/demo-s/shadow-30000/journey-model.ts",
         "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
-        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts"
       ]
     }
   }
