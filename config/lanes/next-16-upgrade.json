@@ -12,6 +12,7 @@
         "apps/web/proxy.ts",
         "apps/web/proxy.test.ts",
         "apps/web/tsconfig.json",
+        "apps/web/next-env.d.ts",
         "apps/api/src/auth/customer-signin.test.ts",
         "apps/api/src/auth/customer-variation.test.ts"
       ]
