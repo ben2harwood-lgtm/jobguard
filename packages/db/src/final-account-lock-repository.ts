@@ -21,7 +21,6 @@ const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisi
 const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
 function typed(error: unknown, uploadInFlight = false): never {
  const e = error as { message?: string; detail?: string };
- if (e.message === "FORBIDDEN" && (error as { code?: string }).code === "42501") throw new FinalAccountLockError("FORBIDDEN");
  if (e.message === "JOB_WORK_CLOSED") throw new JobWorkStateError("JOB_WORK_CLOSED");
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
  // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.
@@ -118,6 +117,31 @@ export class FinalAccountLockRepository {
    const allocation = lines.every(l=>Number(l.net_pence)===0) ? new Map(lines.map(l=>[l.final_account_line_id,money(0)])) : allocateGroupTax(tax,lines.map(l=>({id:l.final_account_line_id,net:money(Number(l.net_pence))})));
    if (net.pence!==result.netPence || tax.pence!==result.taxPence || addMoney(net,tax).pence!==result.totalPence || lines.some(l=>allocation.get(l.final_account_line_id)?.pence!==Number(l.tax_pence) || addMoney(money(Number(l.net_pence)),money(Number(l.tax_pence))).pence!==Number(l.gross_pence))) throw new Error("INVOICE_AMOUNT_INVALID");
    return result;
-  }); } catch (error) { return typed(error); }
+  }); } catch (error) {
+   // Classify only the new revoked-member replay refusal, after SQL's original
+   // authority check has failed and its transaction has rolled back. Never
+   // return a stored result or change the practice-session refusal contract.
+   if ((error as { code?: string }).code === "42501" && (error as Error).message === "FORBIDDEN") {
+    let revokedReplay = false;
+    try {
+     revokedReplay = await withTenant(this.pool, context, async db => (await db.$client.query<{ revoked_member_replay: boolean }>(`SELECT EXISTS(
+      SELECT 1 FROM app.command_receipt receipt
+      JOIN app.membership membership_row ON(membership_row.tenant_id,membership_row.id)=(receipt.tenant_id,receipt.actor_membership_id)
+      JOIN app.customer_invoice invoice ON invoice.tenant_id=receipt.tenant_id AND invoice.id::text=(receipt.result->>'invoiceId')
+      JOIN app.job job ON(job.tenant_id,job.id)=(invoice.tenant_id,invoice.job_id)
+      JOIN app.final_account_invoice_binding binding ON(binding.tenant_id,binding.job_id,binding.invoice_id)=(invoice.tenant_id,invoice.job_id,invoice.id)
+      JOIN app.action_authorization grant_row ON(grant_row.tenant_id,grant_row.id)=(invoice.tenant_id,invoice.authorization_id)
+      WHERE receipt.tenant_id=$1::uuid AND receipt.command_id=$2::uuid AND receipt.actor_membership_id=$3::uuid
+       AND receipt.command_type='IssueLockBoundInvoice' AND receipt.status='succeeded' AND receipt.semantic_key=$5::uuid::text
+       AND membership_row.role='owner' AND membership_row.revoked_at IS NOT NULL AND job.practice_session_digest IS NULL
+       AND nullif(current_setting('app.practice_material_digest',true),'') IS NULL
+       AND invoice.job_id=$4::uuid AND invoice.final_account_revision_id=$5::uuid AND invoice.source_hash=$6::text
+       AND invoice.issued_on=$7::date AND binding.invoice_kind=$8::text AND grant_row.recipient=$9::text AND grant_row.actor_membership_id=$3::uuid
+     ) AS revoked_member_replay`, [context.tenantId,c.commandId,c.actorMembershipId,c.jobId,c.finalAccountRevisionId,c.expectedSourceHash,c.issuedOn,c.invoiceKind,c.recipient])).rows[0]!.revoked_member_replay);
+    } catch { /* A failed diagnostic read must preserve the original refusal. */ }
+    if (revokedReplay) throw new FinalAccountLockError("FORBIDDEN");
+   }
+   return typed(error);
+  }
  }
 }
