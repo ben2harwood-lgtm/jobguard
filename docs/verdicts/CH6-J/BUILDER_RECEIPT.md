@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0402_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0411_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1403,8 +1403,8 @@ Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
   0376 and 0377 must be numbered above main's 0380.
 
 The brief says existing branch migrations are all above 0380, but this checkout
-has 0402_commercial_integrity_v3_receipts.sql and
-0403_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+has 0411_commercial_integrity_v3_receipts.sql and
+0412_commercial_integrity_sources.sql. Preserved their numbers per the explicit
 instruction; no reservation was invented and the check was not weakened.
 Handoff: do not commit until the router supplies/resolves valid migration
 reservations. Database and browser suites were not run because this sandbox
@@ -1546,3 +1546,53 @@ PostgreSQL or bind localhost; required CI checks and the independent RED review
 remain before merge. Per the brief, meter-track-review-upgrade.integration.test.ts
 was not run or changed; its main-wide table-count failure belongs to the
 separate fix. No commit, push, provider action or release was performed.
+
+## 31 October 2026 — PR #392 catch-up through #443, reserved 0411/0412
+
+CH-6 / DEMO-S prerequisite; RED. Continued the router-prepared merge of
+origin/main a173e27c85f6ad8d144a09a2aa64c0acbaa9b898 (#443; highest migration
+0406) into reviewed HEAD 2b3aeb9b. Resolved both LP-0 conflict blocks by
+retaining both CH-6 and main success-fee policies/triggers. Verified the entire
+LP-0 inventory as an exact recursive identity union, preserving latest main
+records. Every main line in shared SERIOUS-B5, contractor entitlement,
+privilege and tenancy expectations remains present.
+
+Used tools/migration-renumber.mjs's exported planRenumber with reservation
+boundary 0410 to generate 0402_commercial_integrity_v3_receipts ->
+0411_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
+0412_commercial_integrity_sources. Applied filesystem moves and bounded full
+filename-stem replacements to branch-owned references and migration notes;
+no bare-digit replacements. CLI --write was not used because it stages Git
+changes and this sandbox's .git is read-only. Logged the reservation and moves
+in coordinator/MIGRATIONS.txt and updated this lane's exact allow list.
+
+Both SQL files are byte-identical to reviewed HEAD 2b3aeb9b. All 352 migrations
+and lane files on origin/main are byte-identical. The protected
+lp-downstream-effects-v1.md contract is unchanged against HEAD and main.
+The 11 CH-6 routine names do not overlap routines created on main; no main
+routine was re-created. No new behavior, dependencies or substantial
+complexity were introduced.
+
+Checks actually executed with installed Node 24.17.0 and Vitest 4.1.12:
+- node --check tools/migration-renumber.mjs — PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — 25 tests passed; workspace test timed out at the default 5 seconds during import.
+- Isolated workspace retry with --maxWorkers=1 --testTimeout=30000 also timed out. Final bounded retry with --maxWorkers=1 --testTimeout=120000 — PASS, 1 test (27.90 seconds). No assertions or checked-in timeout configuration changed.
+- /tmp/ch6-verify-20261031.mjs — PASS: exact LP-0 union, preservation of shared expectations, unchanged main bytes and SQL, protected contract, exact 56-path lane, migration order and conflict-marker scan.
+- Deterministic routine-name comparison — PASS: no main routine recreated.
+- git diff --check — PASS.
+
+The router must stage the resolved LP-0 file and filesystem renames before
+committing; the read-only index still records the pre-existing merge conflict.
+No Git-writing command, commit or push was performed. PostgreSQL, migration
+execution and browser suites must run in GitHub CI after the router pushes;
+this sandbox cannot start PostgreSQL or bind localhost. Independent exact-head
+RED review remains required before merge. Neither demo journey was run here.
+
+Final local results for this catch-up:
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84/84 tests, including the integrated source and CLI checks.
+
+Ready for the router to stage the resolved merge and commit the catch-up;
+required GitHub CI and independent RED review precede merge to main.
