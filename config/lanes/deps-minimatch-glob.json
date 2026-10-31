@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-minimatch-glob": {
+      "branches": [
+        "codex/sandbox/deps-minimatch-glob"
+      ],
+      "note": "DEPS-MINIMATCH-GLOB: transitive security updates only; no web workflow. Own lane file is implicitly permitted.",
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml"
+      ]
+    }
+  }
+}
