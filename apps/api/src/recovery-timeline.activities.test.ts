@@ -35,6 +35,12 @@ describe("M4-6 activities reuse authorized application services", () => {
     expect(mocks.command).not.toHaveBeenCalled();
     expect(mocks.material).toHaveBeenCalledWith(pool, "server-only-digest");
   });
+  it("uses the supplied history transaction pool for due evaluation", async () => {
+    const transactionPool = {} as Pool;
+    await expect(create().execute(activity(), transactionPool)).resolves.toBe("waiting");
+    expect(mocks.material).toHaveBeenCalledWith(transactionPool, "server-only-digest");
+    expect(mocks.material.mock.calls[0]![0]).toBe(transactionPool);
+  });
   it.each(["tenantId", "jobId", "caseId", "runId", "followUpId"])("wrong %s never evaluates or cancels", async field => {
     if (field === "caseId") mocks.access.mockRejectedValue(new Error("NOT_FOUND"));
     await expect(create().execute({ ...activity(), ref: { ...ref, [field]: id(99) } })).rejects.toThrow();
