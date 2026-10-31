@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { buildRecoveryMessage, recoveryMessageSourceOf, RECOVERY_MESSAGE_CHANGED } from '@jobguard/core';
+import { buildRecoveryMessage, recoveryMessageSourceOf, RECOVERY_MESSAGE_CHANGED, recoveryCaseTermsHash } from '@jobguard/core';
 import {
-  ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
+  ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryCaseTermsRepository, RecoveryMessageRepository, migrate, withTenant,
   type OutboundAdapter, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from '../src/index.js';
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
@@ -29,6 +29,55 @@ const OPENED = 2; // claim revision 1 + the opening event
 /** The server-selected principal M4-1-S-R's workbench commands require: the fixture tenant's owner membership and its identity (a client reviewer field is ignored). */
 const reviewerOf = async () => ({ membershipId: fixture.memberId, identityUserId: (await admin.query('SELECT identity_user_id FROM app.membership WHERE id=$1', [fixture.memberId])).rows[0].identity_user_id as string });
 
+/** Fixture-only exact activation inputs; the existing v3 routine checks the
+ * owner, accepted document, authorization and lifecycle before binding v3. */
+async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
+  const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
+  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
+  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
+  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
+  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  return client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+}
+
+/** Local current-schema recipe: replace exactly the primary fixture's first
+ * v1 switch, after its accepted document/acceptance exist. All other SQL passes
+ * through unchanged; the v3 activation itself supplies the commercial track. */
+async function seedPursuitFixture() {
+  let primaryJob: string | undefined, switches = 0, tracks = 0;
+  const setup = new Proxy(admin, { get(pool, property) {
+    if (property !== 'connect') { const value = Reflect.get(pool, property, pool); return typeof value === 'function' ? value.bind(pool) : value; }
+    return async () => {
+      const client = await pool.connect();
+      return new Proxy(client, { get(target, key) {
+        if (key !== 'query') { const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value; }
+        return async (sql: string, values?: unknown[]) => {
+          const args = values ? [...values] : undefined;
+          if (sql === 'SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)' && args?.[4] === 'switch_live' && args[6] === 1880000) {
+            expect(args.slice(2)).toEqual([2, 'live', 'switch_live', args[5], 1880000, 'reference_fee_policy_v1', 28200]);
+            expect(switches++).toBe(0);
+            primaryJob = String(args[1]);
+            const document = (await target.query('SELECT id FROM app.quote_document_version WHERE tenant_id=$1 AND job_id=$2', [args[0], primaryJob])).rows;
+            expect(document).toEqual([{ id: args[5] }]);
+            return activatePursuitFixture(target, String(args[0]), primaryJob, Number(args[2]));
+          }
+          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')" && args?.[1] === primaryJob) {
+            expect(tracks++).toBe(0);
+            const bound = await target.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', args);
+            expect(bound.rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);
+            return bound;
+          }
+          return target.query(sql, args);
+        };
+      } });
+    };
+  } });
+  const seeded = await seedEvidencePackFixture(setup);
+  expect({ switches, tracks, primaryJob }).toEqual({ switches: 1, tracks: 1, primaryJob: seeded.jobId });
+  return seeded;
+}
+
 async function code(run: () => Promise<unknown>): Promise<string> {
   try { await run(); } catch (error) { return (error as { code?: string; message?: string }).code ?? (error as Error).message; }
   throw new Error('expected the call to fail');
@@ -42,6 +91,13 @@ async function newCase(caseType: 'withheld_customer_payment' | 'merchant_overcha
   // A real case always starts with its opening event, so its revision is claim 1 + event 1.
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)",
     [randomUUID(), fixture.tenantId, fixture.jobId, id, caseType === 'prevention' ? 'prevent' : 'opened', caseType === 'prevention' ? 'prevented' : 'identified', randomUUID(), hash(`open:${id}`)]);
+  if (caseType === 'withheld_customer_payment') {
+    await new RecoveryCaseTermsRepository(runtime).approve(context, fixture.jobId, {
+      version: 'recovery-case-terms-command.v1', action: 'approve', commandId: randomUUID(), caseId: id,
+      termsVersion: 'synthetic_recovery_fee_terms.v1', feePolicyVersion: 'reference_fee_policy_v3',
+      eligibilityPolicyVersion: 'reference_recovery_eligibility_policy_v3', termsHash: recoveryCaseTermsHash(id),
+    }, { membershipId: fixture.memberId, identityUserId: (await reviewerOf()).identityUserId });
+  }
   return id;
 }
 async function attached(caseType: 'withheld_customer_payment' | 'merchant_overcharge' = 'withheld_customer_payment', claimPence = 32000) {
@@ -87,7 +143,7 @@ async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessa
 /** Runs a test in a brand-new tenant, for changes (such as invalidating a proof) that must not leak into other tests. */
 async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
   const saved = { fixture, context, actor };
-  fixture = await seedEvidencePackFixture(admin);
+  fixture = await seedPursuitFixture();
   context = testTenantContext(fixture.tenantId);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
@@ -145,7 +201,7 @@ beforeAll(async () => {
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
   admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
   // CH-3a: every job needs fictional parties before its quote document and live switch; the shared fixture recipe supplies them.
-  await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedEvidencePackFixture(admin);
+  await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
   context = testTenantContext(fixture.tenantId);

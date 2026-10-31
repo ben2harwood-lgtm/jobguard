@@ -41,8 +41,8 @@ export async function listDecisionInbox(database:TenantTransaction,jobId?:string
  AND ($1::uuid IS NULL OR f.job_id=$1) AND ($2::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job))
  ORDER BY (f.classification='mandatory') DESC,f.created_at,f.fingerprint`,[jobId??null,practiceSessionDigest??null])).rows;}
 
-const checkCommandV1 = z.object({ version: z.literal("finding-evaluation-command.v1"), commandId: z.string().uuid(),
- tenantId: z.string().uuid(), jobId: z.string().uuid() }).strict();
+const checkCommandV1 = z.object({ version: z.literal("finding-evaluation-command.v1"), commandId: z.guid({ error: "Invalid uuid" }),
+ tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 const checkPhaseResultV1 = z.object({ replay: z.boolean(), response: z.unknown().optional() }).strict();
 
 /** The existing synthetic rule recipe is unchanged; only current persisted proof supplies proof facts.

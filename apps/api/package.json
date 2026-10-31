@@ -63,6 +63,10 @@
     "./practice-feed-contracts": {
       "types": "./src/practice-feed.contracts.ts",
       "import": "./dist/practice-feed.contracts.js"
+    },
+    "./trial": {
+      "types": "./src/free-first-job-lifecycle.application.ts",
+      "import": "./dist/free-first-job-lifecycle.application.js"
     }
   },
   "scripts": {
@@ -90,7 +94,7 @@
     "pg": "8.16.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "zod": "3.25.67"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@nestjs/cli": "11.0.24",
@@ -101,6 +105,6 @@
     "supertest": "7.1.1",
     "tsx": "4.20.3",
     "typescript": "5.8.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }

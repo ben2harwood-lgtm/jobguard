@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MAX_MONEY_PENCE, exactPenceInputV1 } from "@jobguard/core";
 export { recoveryAllocationCommandV1 } from "@jobguard/core";
-const id = z.string().uuid();
+const id = z.guid({ error: "Invalid uuid" });
 const pence = z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
 // A credit issued after payment leaves a customer credit (negative balance).
 const signedPence = z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE);

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-concurrency": {
+      "branches": ["codex/sandbox/ci-concurrency"],
+      "note": "CI-CONCURRENCY: approved Journey-first rule 6; CI configuration only, no web workflow. Own lane file is implicitly permitted.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}
