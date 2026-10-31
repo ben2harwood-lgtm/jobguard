@@ -38,6 +38,8 @@ export * from "./demo-seed.js";
 export * from "./demo-bootstrap.js";
 export * from "./demo-runtime.js";
 export * from "./commercial-integrity-repository.js";
+export * from "./commercial-integrity-v3-repository.js";
+export { CommercialIntegrityPersistenceError } from "./commercial-integrity-v3-sources.js";
 export * from "./job-import-repository.js";
 export * from "./sandbox-repository.js";
 

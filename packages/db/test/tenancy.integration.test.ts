@@ -235,6 +235,8 @@ describe("migration and privilege catalog", () => {
       { relname: "billing_status_import", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "cap_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "capture_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "ch6_identifier_assertion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "ch6_line_correction_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_contract", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_contract_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_organisation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -612,6 +614,8 @@ describe("migration and privilege catalog", () => {
       { relname: "billing_status_import", owner: "jobguard_migration" },
       { relname: "cap_snapshot", owner: "jobguard_migration" },
       { relname: "capture_source", owner: "jobguard_migration" },
+      { relname: "ch6_identifier_assertion", owner: "jobguard_migration" },
+      { relname: "ch6_line_correction_source", owner: "jobguard_migration" },
       { relname: "client_contract", owner: "jobguard_migration" },
       { relname: "client_contract_version", owner: "jobguard_migration" },
       { relname: "client_organisation", owner: "jobguard_migration" },
@@ -939,6 +943,30 @@ describe("migration and privilege catalog", () => {
   });
 });
 
+// CH-6: retained 0330 and additive 0331 routine execution boundaries.
+it("0330 and 0331 routines retain exact ownership and execution boundaries",async()=>{
+ const rows=(await admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,r.rolname owner,p.prosecdef,p.proconfig,
+ has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+ has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,
+ has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+ EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+ WHERE n.nspname='app' AND left(p.proname,4)='ch6_' ORDER BY p.proname`)).rows;
+ const identities=[
+  ["ch6_append_integrity_review_audit", "t uuid, j uuid, actor uuid, command_id uuid, request_hash text, snapshot_hash text"],
+  ["ch6_guard_integrity_review_receipt", ""],
+  ["ch6_guard_line_correction", ""],
+  ["ch6_integrity_authority", "t uuid, j uuid, digest text"],
+  ["ch6_integrity_canonical", "v jsonb"],
+  ["ch6_integrity_family", "t uuid, j uuid"],
+  ["ch6_integrity_published", "t uuid, j uuid, d text"],
+  ["ch6_integrity_source_fingerprint", "t uuid, j uuid, digest text, source_snapshot jsonb"],
+  ["ch6_integrity_sources", "t uuid, j uuid, d text"],
+  ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb"],
+  ["ch6_source", "t uuid, j uuid, d text, i text, k text, at_time timestamp with time zone, content jsonb, provenance text"],
+ ] as const;
+ expect(rows).toEqual(identities.map(([proname,args])=>({proname,args,owner:"jobguard_migration",prosecdef:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),proconfig:["search_path=pg_catalog"],runtime:["ch6_record_integrity_review","ch6_integrity_sources"].includes(proname),shadow:false,infrastructure:false,public:false})));
+});
 // MON-3C-ELIG adds no relation/policy. Only this exact checked routine is new.
 it("MON-3C-ELIG exact routine owner and execution grants", async () => {
  const rows = (await admin.query(`SELECT p.proname,r.rolname owner,p.prosecdef,p.proconfig,

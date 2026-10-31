@@ -1,0 +1,1881 @@
+# CH6-J builder receipt
+
+> Current state, 28 October 2026: CH-6 continuation is ready for router commit,
+> GitHub CI and the independent RED review. The final section below supersedes
+> previous incomplete/facade/source-port statuses. Explicit allocation avoidance
+> refuses the installed neutral-source handoff; it does not depend on SV-6.
+
+
+Status: BUILD-AHEAD IMPLEMENTATION; aggregate acceptance HELD. Builder source inspection and focused unit execution only. No independent model verdict or technical acceptance is asserted. No commit, push, merge, migration, live provider, spending or commercial external action.
+
+## Authority and base
+
+Issued CH6-J order (24 October 2026), decision 74, C250 and Ben's 23 October safest-choice answer. Read repository AGENTS.md in full, BUILD_PLAN.md §2.4 C1–C8, §10.2.9 and CH-6 card, planning pack common contract III-AUTH through III-RECEIPT, shared ownership, complete CH6-J draft at lines 4219–4259, adjacent CH6 contract/holds, and `/Users/benharwood/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261023.md`.
+
+Actual branch `codex/sandbox/ch6-j`; unchanged HEAD/base `cc59edd22d495a77b64c570bf3252cb7d6ed2350` (CH6-A). Integration target `origin/main` resolves to `cdd1b29b75fcdc206e43e66dbd68d9f03c9b38fe`; local `main` is older (`694e9e1755f2a5680898eb0fa04af48afd66c86b`). Dispatcher owns final commit SHA and CI/review binding. Consumed build-ahead producers as issued; no assertion that their review/merge gates have cleared.
+
+Installed Node `v24.17.0`, TypeScript 5.8.3, Next 15.5.27, React 19.1.9, Vitest 4.1.11. Lockfile/package manifests unchanged. Pinned pnpm 10.28.1 cannot start through installed launcher (see validation).
+
+## Exact changed files
+
+- `apps/web/app/ui/commercial-integrity.tsx`: installed family-first wrapper; saved v1 presentation retained, no client fixture/evaluator or activation-counter fetch; common persisted-review path.
+- `apps/web/app/ui/commercial-integrity-v3.tsx`: strict family/view/feedback parsing, generation-scoped reads, snapshot hashing, exact retry identity, saved v3 results and accessible review/error/loading controls.
+- `apps/web/app/ui/commercial-integrity-v3.test.tsx`: focused source-only journey/controller/render tests; synthetic wire fixtures are unit data, not browser acceptance evidence.
+- `apps/web/e2e/ch6-integrity-v3.spec.ts`: real existing capture/job page; current composition unavailable path (or generated v3 zero ordinary findings once integrated); reload and second context, notice, no legacy flash/links/overflow, screenshot destination.
+- `apps/web/e2e/ch6-integrity-v3-helpers.ts`: existing fictional capture commands; no final advisory-result seeding.
+- `config/lanes/ch6-j.json`: explicit order-authorised lane, parent's version-2 single-lane shape, exact file list and browser spec.
+- `docs/verdicts/CH6-J/BUILDER_RECEIPT.md`: this receipt.
+
+Read-only legacy `apps/web/e2e/M1-16-S.spec.ts` unchanged. No shared barrel, catalogue, route registration, stylesheet, money, meter, Final Check, source adapter or database file edited. No schema change; migration 0234 remains untouched/reserved to coordinator. No new role/routine/grant.
+
+## Implementation and safest choices
+
+1. Family is fetched with `cache: no-store` before data. Unknown/error/malformed/wrong-job/mode/contradictory responses render unavailable; there is no fallback, fixture, false empty state or previous job display. Canonical lower-case UUID comparisons and paths. Existing v1 endpoint lacks a jobId in its public view; retain that contract and bind to the selected job path plus request generation rather than inventing a field.
+2. V3 uses the actual CH6-C schemas and canonical serializer from its built module, following A/P's private module seam until dispatcher adds public exports. Browser SHA-256 derives the finding snapshot hash only; it does not evaluate advice, choose policy, derive fees or change facts.
+3. No optimistic dismissal. Only a matching persisted feedback response followed by an authoritative family/data re-read completes saving. The same command ID AND exact payload survive retry after failure/unknown outcome within the mounted application. Reload/new process reads persisted feedback; it does not persist unsaved commands or session authority locally. Edited uncertain payloads require reload. Historical feedback for another snapshot does not dismiss today's finding.
+4. Source descriptions show ordinary record type, server time, provenance and same/authorised-related-job wording, not source IDs, session digest, hashes, private references or arbitrary link targets. No source link is manufactured. Actual base source types `customer_invoice` and `customer_payment` are mapped explicitly. Unknown authorised ordinary types use “Recorded source”. No hidden-source labels, counts or requests.
+5. No guessed delay/repetition profile or cross-account lookup. Available/unavailable ordinary assessment is explicit, including zero ordinary findings. Money presentation uses the existing exact pence formatter; safe numeric or decimal-string pence comparisons display GBP to two decimals. No count/state/price/cap/fee/account action is introduced.
+6. Review explanation is bounded to 500 characters. Loading/errors are accessible, review textarea receives focus, Escape/Close restore the triggering control, primary buttons have minimum 44×44 dimensions. Raw server/schema/network errors never enter DOM. Job changes remount; unmount, focus, page show, visibility and explicit session-change invalidation clear stale responses/review drafts. See session integration hold below.
+7. Safest DEMO-S choices: refuse unavailable/ambiguous authority; do not infer a family or a saved dismissal; hold unsupported sources rather than disclose; never derive a count, fee or settlement. Existing server authorization is sole write authority. No new load-bearing policy adopted.
+
+## Verified symbols and STOP / integration handoff
+
+`git grep` verified `commercialIntegrityFamilyV1Schema`, `commercialIntegrityReviewV3Schema`, `commercialIntegrityV3ResultSchema`, `canonicalCommercialIntegritySnapshot` in `packages/core/src/commercial-integrity-v3.ts`; `CommercialIntegrityV3Application.view/review/family` and its return shape; P's `CommercialIntegrityV3Repository` and receipt fields; installed Next family/v3/review routes; installed wrapper call from workspace-shell; actual browser projects and legacy spec.
+
+- **STOP J-S1 (existing producer composition):** `git grep commercialIntegrityV3 apps/api/src/workspace/application.ts apps/api/src/workspace/index.ts` finds no facade/export. Base Next transport intentionally responds 503 `INTEGRITY_UNAVAILABLE`. Coordinator must add `CommercialIntegrityV3Application` construction with current request-scoped `sessionId`, expose `commercialIntegrityV3: {family(id), view(id, query), review(id, body)}` bound to it, and preserve fresh authority on each call. No alternate client authority or direct DB path added here. Nest controller registration already exists; no duplicate row needed.
+- **STOP J-S2 (public barrel):** shared `packages/core/src/index.ts` lacks `export * from './commercial-integrity-v3.js'`. Exact additive row belongs to dispatcher; this build consumes the already-existing private built module, so it compiles without a guessed export.
+- **STOP J-S3 (OpenAPI):** exact-base generated OpenAPI is stale; coordinator owns regeneration after composition/registration. Do not edit generated catalogue in this lane.
+- **HELD J-H1:** P currently provides invoice/payment ordinary activity only. Its published DTO returns `available:false`; quote/activation/work-event/assertion arrays are empty and no optional won/restart/allocation thresholds are installed. CI-H1/H2/H3/H4/H5/H7 remain producer-owned; no nine-family aggregate claim, accepted imported-v3 source claim, or won-never-live source proof. Conditional unit labels test selected family transport only, not producer discrimination.
+- **HELD J-H2:** no accepted source-ID-to-authorized-evidence-page contract for these advisory records. Source navigation remains plain text, no links. Coordinator/source owner must supply exact same-job route and authorization contract before enabling links or adding their browser journeys.
+- **HELD J-H3:** the component supports `jg:session-changed` and focus/visibility invalidation, but no existing shell dispatch of that event was found. For same-document session replacement, coordinator must dispatch `window.dispatchEvent(new Event('jg:session-changing'))` immediately when session reset/sign-in begins (clear without fetching), then `window.dispatchEvent(new Event('jg:session-changed'))` after the new session is installed (reload). Full-document navigation/remount is already generation-safe. No claim of arbitrary invisible HttpOnly-cookie-change detection or completed CI-J04 across all reset modes.
+- **HELD J-H4:** parent acceptance/merge gates, two exact-head independent Claude verdicts, separate acceptance, full exact-head CI and both browser projects remain outstanding. No source inspection or unit mock is counted as real PostgreSQL/browser evidence.
+
+No additional database test file is authorised by the UI-only allowlist. Existing producer PostgreSQL suites remain required and untouched: `packages/db/test/commercial-integrity-v3.integration.test.ts`, `commercial-integrity-v3-review.integration.test.ts`, `commercial-integrity-v3-query-isolation.integration.test.ts`, `commercial-integrity-v3-receipt-guard.integration.test.ts`, `commercial-integrity-v3-upgrade.integration.test.ts`, plus CH6-A HTTP/authority tests. They are NOT RUN locally. No new database invariant is implemented by this UI.
+
+## Acceptance mapping
+
+| ID | Evidence / remaining hold |
+|---|---|
+| CI-J01 | Unit render shows persisted source type, exact rule/window, advisory/no-effect language and explicit zero/unavailable state; real two-project source journey HELD J-S1/J-H1. |
+| CI-J02 | V1 labels/test IDs and saved-only values retained; unchanged M1-16-S regression NOT RUN and HELD on family composition. No v3 fixture/cap flash in unit tests. |
+| CI-J03 | Unit controller covers exact canonical hash/retry body, forged/mismatched success, failures, stale session response, double click, new controller loading stored feedback; real DB receipt/restart proof NOT RUN. |
+| CI-J04 | Generation invalidation tested at metadata, data and save stages. Current-session and other-session database proof remain upstream/CI; same-document reset dispatch HELD J-H3. |
+| CI-J05 | No hidden fetch or conditional count; UI only ordinary validated view, no hidden IDs/links. Real zero/many worker/query-log differential proof HELD upstream and NOT RUN. |
+| CI-J06 | Browser helper uses installed real fictional capture commands; no seeded final result or money/lock manipulation. Source-producing positive finding journey HELD J-H1. |
+| CI-J07 | Explicit exclusion of held producer branches; no canned signal used as source proof. |
+| CI-J08 | Unit tests cover exact supplied family routing v1/v3, unknown/wrong job/mode/track/contradiction/error with no fallback. Server policy/import classification stays A/P's responsibility; accepted-import browser journey HELD. |
+
+## Commands actually run
+
+Only source/unit/build/OpenAPI commands locally; no listener, PostgreSQL, browser, package install or dependency download command intentionally launched. The installed pnpm launcher itself attempted an automatic network version selection; no packages were installed.
+
+- `pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse origin/main main`, `git branch --show-current`, `git grep`, `rg`, `cat`, `sed`, `git diff --check`: inspection completed; diff whitespace check exit 0.
+- `node -v`: exit 0, v24.17.0.
+- `pnpm -v`, `pnpm --filter @jobguard/web typecheck`, `npm_config_manage_package_manager_versions=false pnpm --version`: exit 1 before package scripts. Installed launcher refuses pinned 10.28.1 because registry signature cannot be verified (`fetch failed`); config attempt did not bypass it. No `pmOnFail=ignore`, lockfile edit or alternate package-manager version used. Package scripts executed directly with installed exact binaries below.
+- First direct web `tsc` exit 2: CH6-C built output absent and initial test mock argument typing; built core and corrected test typing. Subsequent web typecheck exit 0.
+- `node_modules/.bin/tsc -p packages/core/tsconfig.json`: exit 0 (untracked/ignored generated dist only).
+- `../../node_modules/.bin/tsc -p tsconfig.json` in packages/config, packages/ai, packages/db and apps/api: exit 0 each. `node_modules/.bin/tsc -p packages/storage/tsconfig.json`: exit 0. These are build prerequisites, no source changes.
+- `apps/web/node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`: exit 0 after implementation; also the exact web lint script body (package lint is tsc).
+- Initial focused Vitest invocation used an incorrect relative binary path from apps/web: exit 127; corrected to local `node_modules/.bin/vitest`.
+- `node_modules/.bin/vitest run --maxWorkers=2 app/ui/commercial-integrity-v3.test.tsx` in apps/web: successive source iterations exit 0 (36 tests); final expanded matrix result recorded below.
+- One edit command used a repo-relative path from apps/web and failed before editing (`FileNotFoundError`); rerun from repository root successfully. Its following unchanged 36-test run passed. No claim the failed edit applied.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: exit 1. Core purity passed (240 TypeScript files, eight existing computed-import reports); lane boundary refuses inherited base producer files outside CH6-J. Do not broaden allowlist to conceal this build-ahead ancestry.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: exit 1, same inherited out-of-lane files (log `/private/tmp/ch6-j-lanes.log`). This is the actual lint:lanes script body.
+- `LANE_BASE_REF=cc59edd22d495a77b64c570bf3252cb7d6ed2350 node tools/agent-lane-boundary-lint.mjs`: exit 1, validator correctly rejects self-comparison while HEAD remains issued base. Separate explicit working-tree path audit below is labelled deterministic, not a passing lane-range check.
+- `node tools/money-arithmetic-lint.mjs`: exit 0. `node tools/commercial-boundary-lint.mjs`: exit 0.
+- First direct `next build`: exit 1 because API dist was not built. Second `CIRCLE_NODE_TOTAL=2 next build`: exit 1 because storage dist was not built. Dependencies then built sequentially. Final build result below. `CIRCLE_NODE_TOTAL=2` restricts Next static workers to one (its formula subtracts one); no source config edit.
+- First `node --import tsx src/generate-openapi.ts --check` in apps/api: exit 1, storage dist missing. After storage build: exit 1, committed OpenAPI stale on inherited base. No regeneration performed.
+
+## CI-only commands / remaining release gates
+
+NOT RUN locally by order: PostgreSQL, migrations, restore, browser/Playwright/start-server suites, full workspace tests (include DB). New browser spec is written for existing pages only; no browser is launched even for listing tests. Required CI:
+
+`pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop --workers=1 ch6-integrity-v3.spec.ts M1-16-S.spec.ts`, full `pnpm test:e2e`, `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `pnpm lint:lanes`, `pnpm test`, `pnpm build`, `pnpm openapi:check`, applicable producer `pnpm test:db` / `pnpm test:migrations` and fixture gates. Existing pipeline unchanged. Browser traces/screenshots and CI URLs not available. No model/prompt/parser changes, so no new live-model evaluation; previous evaluation requirements persist.
+
+Affected invariants: AGENTS §§5.1/5.3/5.9/5.10/5.12/5.13/5.14, D11 advisory isolation; no effect on money/meter/fees/Final Check. Rollback: revert the UI files; no data migration/backfill/financial compensation. No operational alert added. Commercial/regional/live release gates remain closed. Generated fixture IDs are fixed fictional UUIDs in unit tests; browser capture IDs will be recorded by CI traces. External commercial effect count: zero.
+
+## Final local validation results
+
+- Final focused unit command (apps/web): `node_modules/.bin/vitest run --maxWorkers=2 app/ui/commercial-integrity-v3.test.tsx` — **exit 0, 46 tests passed**. Added controls also reject foreign ordinary source job, inconsistent source window/profile, mismatched receipt fields and duplicate in-flight review. Test run is synthetic source-only; not database/browser execution.
+- Final web typecheck and package lint body: `apps/web/node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — **exit 0**. All dependency package TypeScript builds above also exit 0.
+- Production web build after prerequisite dist builds: `CIRCLE_NODE_TOTAL=2 node_modules/.bin/next build` (apps/web) — **exit 0**. Next completed compile/type validation, static generation and route collection, including existing job and family/v3 transport routes. Warnings: existing workspace-root inference, CSS `end` compatibility, Nest/file-type export and load-esm computed dependency. No warning suppressed. Final-source repeat logged at `/private/tmp/ch6-j-build.log`; result confirmed below.
+- Explicit working-tree-only allowlist audit using exported `loadLanePolicy` / `lanePathAllowed`, `git diff --name-only HEAD` and `git ls-files --others --exclude-standard` — **exit 0**, seven paths, zero violations. This does not turn either failed lane-range command into a pass.
+- Final `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs`, `git diff --check` — **exit 0** each.
+- Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch6-j.txt`; dispatcher must commit. HEAD remains the issued base, so no final commit hash exists yet.
+
+Discovered later (coordinator backlog proposal; BUILD_PLAN.md is outside this lane): integrate the request-scoped CH6-A facade and core barrel row; regenerate stale OpenAPI; install two-phase shell session invalidation events; hand over authorised source-navigation and remaining CH6 source adapters; then execute persisted dismissal/restart/tenant/shadow differential browser/database acceptance. Keep these held instead of treating synthetic unit fixtures as source-production proof.
+
+Final-source production build repeat: **exit 0** (`CIRCLE_NODE_TOTAL=2 node_modules/.bin/next build > /private/tmp/ch6-j-build.log 2>&1`, apps/web). Final whitespace check: **exit 0**. All generated build outputs remain ignored; the final seven changed paths stay within the issued allowlist.
+
+## r1
+
+25 October 2026. Repair order `jg-orders/CH6-J-v5-r1.txt`; read independent Claude A REPAIR report `jg-runs/v5-ch6-j-claude-A-c9098678-20261025.md` in full. Starting/remaining HEAD `298120254404521929237dce27e2c60de30ce489` on `codex/sandbox/ch6-j`. This section supersedes conflicting implementation/validation claims above. No commit, push or PR; dispatcher owns the next commit, exact-head review and acceptance.
+
+### Repairs and scope
+
+- **B1:** restored `apps/web/app/ui/commercial-integrity.tsx` byte-for-byte from `origin/main`. Deterministic `git diff --exit-code origin/main -- apps/web/app/ui/commercial-integrity.tsx` exits 0. It reads the original v1 endpoint directly, uses server decision status and preserves main's activation/cap/filter/review behavior, including its existing initial fixture and optimistic feedback behavior. Those inherited behaviors are not claimed as v3 guarantees. No installed page imports the family-first journey. Only the standalone `CommercialIntegrityV3` seam uses it; installing v3 remains HELD on J-S1 composition.
+- **B2:** v3 web component imports the four existing public exports from `@jobguard/core`. CH6-A r2 already added the core/db barrel rows; no missing export or barrel edit needed. No deep dist imports remain in these web files.
+- The first no-dist proof also exposed two transitive deep imports in `packages/db/src/commercial-integrity-v3-repository.ts` and `commercial-integrity-v3-sources.ts`. Switched only those imports to `@jobguard/core` and removed the stale build-first comment. These are **cross-lane CH6-P file edits**, made under r1's “and anything similar” instruction because they directly prevented the required web proof. Dispatcher must serialize/coordinate these two import-only repairs with CH6-P; the CH6-J lane register has not been widened. No query, SQL, schema, posting, grant, repository behavior or migration change.
+- Updated CH6-J browser coverage to the repaired installed behavior: saved v1 sources/cap/empty state remain visible even while a direct family probe returns unavailable; UI requests stay on v1, including after reload and a new browser context. Existing `M1-16-S.spec.ts` and all its assertions remain unchanged. Removed the old spec's expectation that the installed page should show the broken family's 503 alert; that expectation contradicts r1. This does not claim the standalone v3 seam is installed or browser-tested. V3 source/dismissal, process restart and source-production acceptance remain HELD, not replaced by weaker claims.
+
+LATER disposition:
+
+1. Ordinary focus/pageshow/visibility events no longer reload/clear the v3 journey, review draft or uncertain retry identity. Job mount, explicit reload and explicit session events retain invalidation. Same-document shell session dispatch remains HELD J-H3; removal of incidental focus refresh does not implement it.
+2. Hard-coded installed D11 status removed with wrapper restoration; main uses the server status.
+3. `LegacyResults` was removed with wrapper restoration. No separate unit-render claim for that deleted component; unchanged M1-16-S remains the required v1 DOM regression, NOT RUN locally.
+4. Scope references compare canonical lower case; added a distinct mixed-case scope test. Existing malformed-scope rejection test retained.
+5. Second browser context uses Playwright's configured `baseURL`, not a hard-coded port.
+6. Spec name/comments now say new **browser context**; application-process restart proof remains HELD.
+7. Replaced duplicate scenario names with one explicit server-selected v1 routing case and one server-selected v3 routing case. The identical routing assertions remain; no producer classification coverage is implied. Added scope test brings focused coverage to 44 distinct cases (previous 46 included repeated identical routing bodies).
+8. Removed pageshow listener, eliminating mount-plus-pageshow duplicate load.
+
+React best-practices skill read and applied to changed TSX: checked effect dependencies/listener cleanup, keyed job lifecycle, request generations, accessible loading/dialog controls and existing bounded explanation. User-required package imports take precedence over the skill's generic advice about barrel imports. This is builder source inspection, not an independent model verdict.
+
+### Commands and results
+
+Installed dependencies used; no install/download requested. Node v24.17.0, pinned pnpm 10.28.1 invoked directly via `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. A temporary `/private/tmp/ch6-j-r1-bin/pnpm` launcher invokes that same cached binary; final recursive commands used `PATH="/private/tmp/ch6-j-r1-bin:$PATH"` to prevent Turbo's nested calls selecting the system launcher. No repository package-manager, lockfile or configuration changes.
+
+- No-dist attempt 1: moved every `packages/*/dist` aside, invoked cached pnpm `--filter @jobguard/web typecheck`: **exit 2**, four errors from the two transitive DB deep imports. All dist directories restored in `finally`.
+- **Final no-dist proof: exit 0.** After the two import fixes, moved `packages/ai/dist`, `packages/config/dist`, `packages/core/dist`, `packages/db/dist`, `packages/storage/dist` to sibling `dist.ch6-j-r1-backup` names; asserted no `packages/*/dist` existed; removed ignored `apps/web/tsconfig.tsbuildinfo` for a fresh check; ran `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/web typecheck` (the pinned `pnpm --filter @jobguard/web typecheck` command): **exit 0**. Every directory restored in `finally`. Exit recorded in `/private/tmp/ch6-j-r1-no-dist.exit`. This is typechecking against source, not a clean install or runtime test.
+- `pnpm --filter @jobguard/web lint`: **exit 0**; final repeat after browser assertion adjustment also exit 0 (`/private/tmp/ch6-j-r1-web-lint-final.log`).
+- Initial `pnpm --filter @jobguard/web test --maxWorkers=2`: **exit 1**, 44 files/905 tests passed, v3 suite could not load because restored old core dist lacked the merged public exports. Rebuilt dependencies through the real workspace build; no test weakened or skipped to address it.
+- Final `pnpm --filter @jobguard/web test --maxWorkers=2`: **exit 0, 45 files, 949 tests passed**, including all 44 CH6-J cases (`/private/tmp/ch6-j-r1-web-unit-final.log`). Synthetic unit evidence, not PostgreSQL/browser proof.
+- `LANE_BASE_REF=origin/main pnpm lint`: **exit 1**, core purity completed (240 files, existing computed-import reports); lane boundary stops the remaining Turbo lint phase (`/private/tmp/ch6-j-r1-root-lint.log`).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **exit 1**, inherited build-ahead producer changes outside CH6-J plus the two explicitly noted DB import repairs (`/private/tmp/ch6-j-r1-lanes.log`). No allowlist broadening or lane pass claimed. Working-tree changed paths are the five CH6-J UI/test files, this receipt, and those two DB import files.
+- Initial root typecheck/build invocations without the temporary pinned launcher stalled in nested system-pnpm calls and were interrupted. Tool returned 0 on interruption; this is **not** recorded as success. Initial logs `/private/tmp/ch6-j-r1-typecheck.log` and `ch6-j-r1-build.log` contain replayed cache output from other worktrees; those are not this run's executed checks.
+- Final `pnpm typecheck` with pinned launcher: **exit 0, 7/7 Turbo tasks successful**, four cached (`/private/tmp/ch6-j-r1-typecheck-pinned.log`).
+- Final `CIRCLE_NODE_TOTAL=2 pnpm build` with pinned launcher: **exit 0, 7/7 tasks successful**, two cached; web production compilation/type validation/static generation/route collection completed (`/private/tmp/ch6-j-r1-build-pinned.log`). `CIRCLE_NODE_TOTAL=2` limits Next static workers. Existing CSS compatibility, workspace-root and Nest/computed-dependency warnings remain; Turbo reports cache I/O EPERM warnings without failing the build. Final browser-only path assertion adjustment was subsequently typechecked by web lint.
+- `pnpm openapi:check`: **exit 1 before generator execution**, sandbox rejects the tsx CLI IPC socket (`listen EPERM`, `/private/tmp/ch6-j-r1-openapi.log`). Safe equivalent `node --import tsx src/generate-openapi.ts --check` in apps/api: **exit 0**, catalogue current (`/private/tmp/ch6-j-r1-openapi-node.log`). No generated catalogue edit.
+- `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs`, `git diff --check`: **exit 0** each. Read-only `git status`, `git rev-parse`, `git diff`, `git show`, source searches and review/contract reads completed. A broad file search was interrupted; a process diagnostic was denied (`ps: operation not permitted`); neither provides validation evidence.
+
+### Remaining gates and handoff
+
+**Browser NOT RUN. PostgreSQL/migrations NOT RUN.** No listener or PostgreSQL started. Both `M1-16-S.spec.ts` and `ch6-integrity-v3.spec.ts` must pass in CI in **mobile-360 and desktop**, and within the full required suite:
+
+```sh
+pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop --workers=1 ch6-integrity-v3.spec.ts M1-16-S.spec.ts
+```
+
+No screenshots, traces or CI result asserted. Current independent verdict remains REPAIR until the dispatcher commits and obtains a fresh exact-commit review. CI-J02's code regression is repaired by exact-main restoration; its browser acceptance remains unverified. J-S2 export hold is resolved by the merged parent. OpenAPI is locally checked via the equivalent Node invocation. J-S1 facade, ordinary source completeness, source navigation, explicit shell session integration, persisted v3 process-restart/tenant/shadow differential proof and separate acceptance remain HELD. No fee/meter/settlement/Final Check action enabled; no commercial external effect. Rollback is a source revert, with no migration/backfill. Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch6-j.txt` for the dispatcher.
+
+
+## 28 October 2026 — CH-6 integration on ch6-j (RED, incomplete)
+
+Read the current SIMPLE_LOOP.md, SIMPLICITY_RULE.md, repository AGENTS.md and
+BUILD_PLAN.md CH-6 / 10.2.9. SIMPLE_LOOP supersedes the old BUILD_RULES coordination
+rules. No git mutation, dependency download, database server, HTTP listener,
+provider call, real customer data or release was used.
+
+Resolved all four conflicted working files, retaining both controller sets and
+providers, both tenancy tests and the union of B5 additive routine expectations.
+OpenAPI was regenerated from the combined Nest controller graph and checked.
+The index remains unmerged because .git is read-only; the router must stage the
+resolved files. No git add/commit/merge/reset was run.
+
+Ported the three tools files by hand from the requested read-only diff
+origin/main...origin/codex/sandbox/ch6-b. No old branch receipt or lane was copied.
+Rebound exactly five existing unresolved-site fingerprints after inspecting their
+current code and branch diff: commands.ts lines 81/109 and extra-repository.ts
+line 75 have only the upstream UUID schema compatibility change in their lexical
+closure; site-visit-repository.ts lines 197/205 retain business execute(context,...)
+with upstream assigned-jobs query extraction in their enclosing class. Reasons,
+site count, violation detection and fail-closed new/stale-site checks are retained.
+These remain unresolved sites, not a claim of whole-program runtime isolation.
+
+Self-attack found and fixed two gaps in pure advisory evaluation:
+- Allocation avoidance previously counted absent/reversed/overallocated receipts.
+  It now requires exact unreversed receipt references, common amount basis, known
+  catch lines, bounded outstanding value, and a cumulative exact bigint allocation
+  total within receipt capacity (including other saved active allocations).
+  Receipts enter the finding source snapshot, so changed receipt revisions change
+  its fingerprint. Duplicate inputs deduplicate; reversed competing allocations
+  consume no capacity. Tests cover all of these boundaries.
+- A supplied published lock could cite a different bill. Its source ID must now
+  equal the lock ID, its server timestamp must equal the immutable cutoff and its
+  provenance must be server_recorded. Cross-job/tenant/session references and
+  duplicate receipt identities are rejected. Existing fixture locks were made
+  explicit; previous assertions remain.
+
+Added CI-only cross-tenant read/review/SQL-replay and RLS receipt isolation tests.
+Extended the zero/many-hidden query-log test to compare protected economic records
+after advisory reads, review and replay. The snapshot now includes MON-1 lifecycle
+sources, computations, place bindings, corrections, alerts and day ledgers as well
+as the prior meter, financial and document records. Added the v1-only cap-signal
+label and its browser assertion. Fixed the two existing one-argument Zod record
+calls in the DB feedback decoder and web legacy decoder for this merged base.
+No migration is needed for these changes; reserved 0309 remains unused.
+
+Local executed evidence (Node 24.17.0, installed pnpm 10.28.1 cached CLI):
+- core targeted Vitest: commercial-integrity-v3.test.ts,
+  commercial-integrity-v3.boundaries.test.ts, commercial-integrity.test.ts,
+  --maxWorkers=2: PASS, 3 files / 28 tests.
+- API targeted Vitest: commercial-integrity-v3.application.test.ts and
+  commercial-integrity-v3.boundary.test.ts, --maxWorkers=2: PASS, 2 files / 24 tests.
+- web targeted Vitest: commercial-integrity-v3.test.tsx, --maxWorkers=2:
+  PASS, 1 file / 44 tests (rerun after the decoder fix).
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: PASS, 250 tests.
+  New v3 guard alone: 81 tests. The tests mutate authority sources and prove
+  forbidden dependencies/SQL cannot feed pricing, meter, fees, entitlement or
+  account status within the scanner's documented source model.
+- core, db, API and web typecheck: PASS. DB/API and web initially found the Zod
+  decoder incompatibilities above; final runs passed after repair.
+- core, db and config builds: PASS (needed to refresh inherited stale runtime
+  exports before generating OpenAPI). API OpenAPI generation and --check via
+  node --import tsx src/generate-openapi.ts in apps/api: PASS; no listener.
+- core-purity, money-arithmetic and commercial-boundary lint: PASS. Core purity
+  reports its existing ten computed-import observations, not refusals.
+- TypeScript syntax parsing of four changed DB test suites: PASS, syntax only.
+- git diff --check: PASS. React checklist applied to the two minimal TSX changes;
+  no hook, lifecycle or architecture refactor. Existing source package imports
+  retained. No independent review is claimed.
+
+The initial system pnpm wrapper stalled and was interrupted; that run is not a
+pass. OpenAPI initially hit inherited stale DB/config dist exports, corrected by
+the builds above. One generation attempt from repository root could not resolve
+the API-local tsx package; the final generation/check used the API directory.
+
+Not run: PostgreSQL, migrations, browser/E2E, full workspace test/lint/build,
+GitHub CI or RED review. These sandbox limits are explicit in the user brief.
+Lane policy lists exactly these session's edited paths (plus its implicitly
+permitted own file), not the inherited MON-1/main merge tree.
+
+**Not complete: do not commit as a finished CH-6 piece.** This base still has only
+CI-F05 as a persisted source adapter. CI-F01–04 have no exact published evidence /
+catch-line financial DTO; CI-F06–08 still have empty ordinary quote/activation /
+lifecycle arrays and no installed bounded profile; CI-F09 has no authorised opaque
+identifier assertion source. Imported-v3 routing also stays unavailable. The
+installed job page still uses the v1 panel; its v3 component remains a standalone
+seam. This change does not turn those unavailable sources into empty successful
+assessments or turn pure synthetic fixtures into persisted-source proof. The
+remaining source-contract and page composition work must be completed before
+aggregate CH-6 is called finished. CI and one independent RED review are then
+required. The router handoff message is marked do not commit accordingly.
+
+
+## 28 October 2026 — CH-6 persisted sources and installed v3 continuation (RED)
+
+Ready for the router to stage the resolved merge and commit. This continuation
+supersedes the preceding incomplete status and the earlier temporary message.
+No commit, push, merge, release, PostgreSQL server, local listener, provider or
+real customer data was used. Current working files preserve both merge parents
+(HEAD 46eeb776 / incoming 36de0fe3); module tokens, shared relation expectations
+and catalogue helpers were checked against the actual incoming merge parent.
+The remote main ref moved during work; unrelated later main changes were not
+copied into this task. The index still has unresolved entries because it is
+read-only; conflict markers are removed from all four working files.
+
+Implemented:
+- 0309 source migration: exact owned accepted quote documents/party bindings,
+  ordinary activity, immutable linked server lifecycle events, and minimized
+  current-user account reuse; completed published Final Check evidence and the
+  exact locked gross bill/catch lines/receipts; bounded synthetic credit/writeoff
+  line sources and opaque user/phone/card assertions. Runtime has no direct
+  SELECT or write grant on either new source table, no new hidden table grant,
+  and no execution grant on the private publication/validation helpers.
+- Eight active rule families F01–F03/F05–F09 now have persisted source paths.
+  Missing inputs remain distinguishable from no findings. Assertions and exact
+  correction mappings are owner-loaded, versioned fictional fixtures; no live
+  identifier collection, raw phone/card matching or financial write route exists.
+- The source reader enters its publication port only after ordinary lock presence
+  and a completed, authorized publication bound to that exact lock/run. Public
+  `published` is always null; the page receives only cited advisory snapshots.
+  Pending/failed/unavailable publication refuses without private fallback reads.
+- The checked feedback writer reconstructs each supported kind's exact facts,
+  comparisons, profile and key in SQL before matching the canonical hash.
+  Historical 0227 receipts replay before recomputation and retain their bytes.
+- The installed page now uses the existing family-first journey, preserves saved
+  v1 values/test IDs and v1-only cap labelling, and shows actual v3 read/review
+  results plus readable refusals. Fabricated initial values are removed.
+- LP-0 registers the one runtime read capability and all four new routine
+  protection rows. SERIOUS-B5 and both exact tenancy/upgrade inventories union
+  the new source objects with both parents' rows. 0309 adds no backfill or change
+  to prior business facts. Migration notes give its forward-fix strategy.
+
+Explicit source refusals:
+- F04: `receipt_line_source_handoff_unavailable` / per-rule `source_absent`.
+  The installed receipt-line adapter refuses every save with
+  `RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED`, and 0258 explicitly quarantines its
+  storage. CH-6 does not read/promote that quarantine or bypass its gate. The
+  pure allocation detector retains exact capacity/reversal tests; SQL review
+  refuses that kind until a later accepted neutral-source handoff. This is
+  independent of SV-6. No speculative enabling switch was added.
+- Imported-v3 family still refuses without immutable adoption routing. No lock,
+  pending/failed/unauthorized publication, unsupported original completion
+  metadata, absent/expired opaque assertions, missing exact quote party/value
+  sources, missing catch gross-line amounts, and unmapped credit balances are
+  explicit unavailable inputs. Actual corrections keep F02's credit-basis
+  comparison unavailable rather than inventing net/gross adjustment semantics.
+- All non-synthetic process routes remain closed; D11 production approval and
+  real-data/provider/release gates are unchanged.
+
+Self-attack and tests added:
+- Duplicate/replayed source identities and feedback, distinct-session related
+  quotes, cross-tenant receipt replay/RLS, forged locked-bill references, original
+  evidence bindings, credit/line aggregate capacity and competing insert races.
+- Whole-invoice versus exact-line corrections, partial unmapped credit balances,
+  verified writeoff evidence and invalidation, exact locked gross receipt bounds
+  and payment reversal. Source hash timestamps are timezone-normalized, with a
+  UTC versus Pacific/Auckland regression. Unsupported isolation refuses with
+  retry semantics instead of using a stale aggregate snapshot.
+- Zero/many hidden query logs and byte comparison, a private publication trap
+  proving the unlocked read never invokes it, closed runtime grants, and full
+  protected-fact snapshots across reads/reviews/replays. Protected snapshots
+  include quote/cap, account/membership, fee/landing/journal, subscription and
+  MON-1 source/computation/place/correction/day ledgers.
+- The published financial-parent fixtures explicitly bypass predecessor setup
+  checks only while making fictional parent rows. CH-6 source guards, FK checks,
+  reads and review verification run with ordinary triggers and RLS enabled.
+  These are source projection tests, not financial/provider command proof.
+
+Executed local checks, installed dependencies only (at most two workers):
+- Core targeted Vitest, three named files: PASS, 28 tests.
+- API v3 application/boundary Vitest, two named files: PASS, 24 tests.
+- Web v3 journey/rendering Vitest, one named file: PASS, 48 tests.
+- DB strict-input/LP-0 comparator unit Vitest, two named files: PASS, 31 tests.
+- Node v3 + installed-v1 guards, test-concurrency=1: PASS, 253 tests.
+  Total: 384 targeted local tests. Final v3 guard CLI: 58 protected roots,
+  zero diagnostics, 13 existing exactly baselined unresolved sites. No new
+  unresolved allowance was added; the five upstream fingerprint adaptations
+  documented above remain the only ported-baseline changes.
+- DB build, API/web typecheck, and expanded test-only TypeScript check covering
+  the new DB suites plus shared catalogue inventories: PASS. Expanded test
+  checking caught a fixture-scope mistake in the publication trap; it was fixed
+  before the final passing check. These checks do not start PostgreSQL.
+- OpenAPI `node --import tsx src/generate-openapi.ts --check` in apps/api: PASS.
+- Core purity (279 files), money arithmetic and commercial boundary lint: PASS.
+- git diff --check: PASS. Lane schema validates 33 exact edited/new paths plus
+  its implicit own lane file. Full branch-diff lane lint was not presented as a
+  pass against the read-only unresolved merge/inherited parent tree.
+
+New DB suites, migrations, fresh/upgrade catalogue checks, query-log tests and
+mobile/desktop browser journeys are CI ONLY and NOT RUN locally. Full workspace
+build/test/lint and GitHub CI are not claimed. The router must stage, commit,
+push and obtain green required CI plus one independent RED review on that head.
+The new ready message is /tmp/ch6-j-20261028T183104Z-commit-msg.txt.
+
+LATER / SIMPLICITY (initial self-check, non-blocking): the duplicate CH-6 routine
+identity lists in tenancy.integration.test.ts and contractor-entitlement-upgrade.
+integration.test.ts could share one test-only declared inventory. This would
+reduce expectation-list drift while keeping actual PostgreSQL catalogue reads
+independent from their expected values. No unrelated extraction was bundled.
+
+
+## 28 October 2026 — review locking and supplementary source follow-up (RED)
+
+Ready for router commit; migration 0309 is edited in place because it is not yet
+on main. No git mutation, database process, local listener, download, provider,
+real customer data or release was used. This follow-up still requires CI and
+independent RED review against the resulting head; the earlier review at ef1ffc9e
+does not review these new bytes.
+
+Replaced the 27 table-wide SHARE locks with explicitly ordered FOR SHARE locks
+on this tenant/job's source rows. Related-quote sources include the owned session
+jobs needed by that rule, sorted by UUID, with no other tenant/session included.
+Evidence invalidations are scoped through this job's evidence. The new priced
+revision source mapping is also row-locked. Session/membership/command locking,
+receipt replay, authorization rechecks and the final audit-head order remain.
+After lock waits the source readers/fingerprint use a fresh coherent statement
+snapshot (STABLE). This preserves exact aggregate/absence validation without
+claiming that row locks prevent inserts into an empty predicate. Family is also
+rechecked after the waits. No business lock is acquired after the audit append.
+
+Added CI-only PostgreSQL regressions:
+- Keep a successful review transaction open, actually update jobs in another
+  tenant and an unrelated session under a bounded lock timeout, and prove the
+  reviewed job still refuses a competing exclusive row lock. Exact replay still
+  returns the original result and only one receipt exists.
+- Hold this job, start a review, observe actual lock contention, then commit a
+  new payment before releasing it. The review must see the fresh source horizon,
+  reject the stale snapshot and leave no receipt/audit.
+- Publish a real Final Check, issue the locked final invoice, confirm/price/approve
+  its catch, assemble a descendant revision and issue the supplementary invoice
+  through the checked runtime repository with the actual practice-session pool.
+  Verify the baseline is not rebilled and the catch line is on the descendant.
+  An exact synthetic writeoff source then saves/replays an advisory review citing
+  that line and the original lock. No session_replication_role override is used
+  anywhere in this test. Existing projection-only fixtures remain labelled.
+
+That last path exposed an exact-ID gap: real assembled variation lines use the
+priced revision ID, while the old reader only matched the variation ID. The
+reader now resolves priced revisions back to their immutable origin variation,
+retaining compatibility with the earlier owner-loaded fictional source fixtures.
+Multiple possible invoiced catch lines still refuse exact attribution. No fee,
+ledger, allocation, meter or invoice command behavior was changed.
+
+Local checks actually executed, installed Node v24.17.0 / Vitest 4.1.12:
+- In packages/db: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 5 tests.
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs — PASS, 253 tests.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit — PASS.
+- node node_modules/typescript/bin/tsc -p /tmp/ch6-j-test-types.json — PASS;
+  temporary config extends the real root tsconfig and includes both changed DB
+  integration files and their transitive imports. Typecheck only, no DB execution.
+- git diff --check — PASS. Follow-up lane lists exactly its six changed source,
+  test and existing documentation paths, plus its implicitly allowed own file.
+
+One initial combined edit/check command used repository-relative paths from the
+DB directory and failed before editing or running tests. The paths were corrected;
+the successful commands above are the validation evidence.
+
+NOT RUN: PostgreSQL integration tests, migration fresh/upgrade suites, browser,
+full workspace suites or GitHub CI. The user explicitly reserves database/browser
+execution for GitHub CI because this sandbox cannot start PostgreSQL or bind
+localhost. These are pending checks, not passes. No new migration/backfill or
+privilege change is introduced. Independent RED review remains for the loop owner.
+The ready commit message is /tmp/ch6-j-20261028T195452Z-commit-msg.txt.
+
+
+## 28 October 2026 — exact catch revision mapping and main merge repair (RED)
+
+Ready for router staging/commit. This entry supersedes the earlier note about
+compatibility with owner-loaded variation-ID line fixtures: no such fallback
+remains. Migration 0309 is still unpublished and was edited in place.
+
+Both `ch6_integrity_published` catch lookups now join the source line's tenant,
+job and source_id to `variation_revision` tenant, job and id, then match
+`variation_revision.variation_id` to the immutable `extra_origin.variation_id`.
+The locked-account inclusion check and exact invoice-line lateral query both
+use this representation; the ambiguity count also resolves revision identities.
+A bare variation ID cannot match a real line. The existing tenant/job, original
+lock, gross bounds, ambiguity refusals and source row locks remain.
+
+Converted the shared published financial-parent fixture to reuse the actual
+confirmed/priced/approved catch and final/supplementary invoice path. The
+supplementary descendant contains the exact priced source revision, scope,
+approval and approved description, and asserts that the baseline was not billed
+again. Its financial facts now use PracticeInvoiceRepository recordReceipt,
+previewCredit/issueCredit and reverseReceipt. The entire published suite contains
+no session_replication_role override and fabricates no invoice, invoice binding,
+invoiced line, extra origin, disposition, payment, credit or reversal rows.
+The initial baseline and descendant account assembly remain explicit synthetic
+fixture setup with triggers/FKs enabled; this is not an end-to-end quote journey.
+
+The receipts comparison now proves 132001p versus the locked 120000p plus the
+real 12000p catch, with reversal removing the finding. Credit and writeoff
+findings run against that same actual catch-line representation. A real 83p net
+credit yields 100p gross, retaining the original 60p versus 41p overflow and
+competing 60p mapping tests without weakening their capacity boundaries.
+The supplementary writeoff test separately proves the saved catch line cites
+the original immutable lock and differs from the variation identity.
+
+Resolved both incoming-main conflicts in working files, preserving the union:
+- packages/db/src/index.ts: both meter exports and enterprise baseline export.
+- contractor-entitlement-upgrade.integration.test.ts: both CH-6 source-table and
+  platform enterprise fee-table expectation rows.
+No markers remain. The Git index still lists conflicts because this sandbox
+cannot write .git; the router must stage the resolved files. Other incoming-main
+changes were left in place, with no unrelated refactor.
+
+Local evidence actually executed (installed dependencies only, max one worker):
+- DB input Vitest: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts in packages/db — PASS, 5 tests.
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs — PASS, 253 tests.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit — PASS.
+- node node_modules/typescript/bin/tsc -p /tmp/ch6-j-test-types.json — PASS;
+  checks the changed published suite, existing review suite and resolved
+  contractor-entitlement upgrade suite with their transitive imports.
+- git diff --check — PASS; explicit source assertions confirm no conflict markers,
+  no direct source_id-to-variation-ID comparison and no replication-role override
+  in the published suite. The lane lists exactly this follow-up's edited paths
+  plus its implicitly permitted own file, excluding unrelated staged merge work.
+
+NOT RUN: PostgreSQL, fresh/upgrade migrations, browser suites, full workspace CI
+or independent RED review. Database execution remains CI-only under the user's
+sandbox brief. No git write, download, live provider, real data or release action.
+Ready message: /tmp/ch6-j-20261028T200215Z-commit-msg.txt.
+
+## 28 October 2026 — main catch-up verification (RED; router action required)
+
+The supplied worktree was already clean at merge commit 41ca6a5d, with main
+8e80dabd as its second parent. There were no unresolved Git entries or conflict
+markers to repair. This catch-up changes only this existing receipt and the
+CH6-J lane file; it adds no product behavior or SQL changes.
+
+Verified the merge result against the available origin/main:
+- All 178 main migration SQL/note files match main byte-for-byte. No duplicate
+  main migrations remain as branch additions under another name.
+- LP-0 effective privileges, SERIOUS-B5 upgrade, contractor-entitlement upgrade,
+  tenancy catalogue expectations and DB exports retain every main line; the
+  branch contributes additive CH-6 entries only.
+- config/lanes/mon1-read.json, including #377's lane note, matches main exactly.
+- Migration 0309 matches both HEAD and the pre-merge first parent byte-for-byte.
+  SHA-256: e127deaa30be03e0036265de63b559365b0f22881bd759eae5418421a3584ac3.
+- No tracked working file contains unresolved conflict markers.
+
+Updated config/lanes/ch6-j.json to enumerate the exact non-register paths in
+this branch's diff against main, including inherited CH6-A and CH6-P work.
+The lane's own file is implicitly allowed. The checker forbids a lane file
+from granting any other config/lanes path; those inherited files cannot be
+added to its allow list. The existing shared checker is unchanged.
+
+Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
+- node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs — PASS, 253 tests.
+  Output: /tmp/ch6-j-20261028T212452Z-boundary-tests.log.
+- From packages/db: node node_modules/vitest/vitest.mjs run --maxWorkers=1
+  test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 5 tests.
+- node node_modules/typescript/bin/tsc -p packages/db/tsconfig.json --noEmit — PASS.
+- Deterministic merge assertions listed above — PASS.
+- node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
+  config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
+- The checker's exported migrationOrderViolations against origin/main reports
+  inherited 0506_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  It is not present on main and is not a byte-identical copy of another main
+  migration. It was preserved, not dropped or assigned an unreserved number.
+
+Router action required before commit/PR readiness: reconcile inherited parent
+lane files with the intended PR base under the existing lane policy, and arrange
+an allocated number for inherited CH6-P migration 0227 (or land its dependency
+and catch up to that exact base). Keep 0309 SQL unchanged. These are actual
+admission failures, not a request to weaken checks. The attempted lane allow list
+including parent lane files was rejected and corrected before this handoff.
+
+NOT RUN: PostgreSQL, migration install/upgrade, browser, full workspace suites,
+GitHub CI or independent RED review. Database/browser execution remains CI-only
+under the sandbox brief. A pnpm --version probe stalled after a configuration
+warning and was interrupted; subsequent checks used installed Node executables.
+No Git write commands, live data/provider actions or release actions were used.
+The router owns finish-list and Command Center state updates.
+
+Commit-message handoff: /tmp/ch6-j-20261028T212452Z-commit-msg.txt is marked
+"do not commit" because both admission blockers remain.
+
+## 29 October 2026 — PR #392 main catch-up (RED)
+
+Catch-up only against origin/main bf1052a025f37831f7956eec8b604c1cdefcf18c.
+Resolved the three working-file conflicts, keeping both sides:
+- app.module.ts has one Module decorator registering both CH6 and success-fee
+  controllers, retaining main's providers and remaining controllers.
+- OpenAPI is regenerated from that combined controller set. Every main path is
+  unchanged and the three CH6 paths are additive.
+- SERIOUS-B5 keeps both integritySourceAdditions and evidencePackV3Additions,
+  with all source-intake, evidence-pack and demo-run expectations from main.
+
+Deterministic assertions passed: no tracked conflict markers; every SQL file
+from HEAD and current main is byte-identical to its respective source; all main
+lines (including multiplicity) survive in LP-0 catalogue, effective privileges,
+SERIOUS-B5, contractor entitlement and tenancy expectations. Migration 0309 is
+unchanged: SHA-256 e127deaa30be03e0036265de63b559365b0f22881bd759eae5418421a3584ac3.
+No new behavior, migration number, SQL change or protected fingerprint update.
+The lane lists exact non-register branch diff paths against current main; its
+own file is implicit, and the checker forbids granting other lane files.
+
+Actual local checks (installed dependencies, one Vitest worker per run):
+- Core and DB TypeScript builds: PASS (tsc -p packages/core/tsconfig.json,
+  then tsc -p packages/db/tsconfig.json).
+- API TypeScript noEmit: PASS (tsc -p apps/api/tsconfig.json --noEmit).
+- Shared DB expectation TypeScript noEmit: PASS using temporary config
+  /tmp/ch6-j-20261029T002245Z-types.json extending root tsconfig and including
+  SERIOUS-B5, entitlement, tenancy and LP-0 catalogue test files.
+- DB commercial-integrity-v3-input.test.ts: PASS, 5 tests. The initial invocation
+  also named nonexistent lp-0-compare.test.ts; only the input file ran. The actual
+  lp-0-catalog.test.ts was then run separately: PASS, 27 tests.
+- API commercial-integrity-v3.application.test.ts and
+  commercial-integrity-v3.boundary.test.ts: PASS, 24 tests.
+- OpenAPI generate and --check: PASS from apps/api after rebuilding installed
+  workspace outputs. Initial generation encountered stale compiled core exports;
+  rebuilding core/DB resolved that without source changes.
+- git diff --check: PASS.
+- Node boundary/current-source-guard tests, --test-concurrency=1: FAIL,
+  250 passed / 3 failed of 253. Log:
+  /tmp/ch6-j-20261029T002245Z-boundary.log. All three failures concern the v3
+  subscription-executor unresolved baseline: expected fingerprint
+  6d06ef4e1ea57f5eb65bf754153483bf36573d734ff96c44d4f53fe4a2668561
+  is stale against current source fingerprint
+  e3022f3b698c45f3159149e4750bb539f49c66ad1de705035eb0a737ecb33852.
+  No baseline/check was weakened or rebound under this catch-up-only brief.
+- Lane CLI: FAIL; the uncommitted merge comparison includes incoming main
+  paths and the inherited config/lanes/ch6-a.json and ch6-p.json. Independently
+  comparing the working tree directly to main still identifies those two parent
+  lane files outside this lane's permitted paths.
+- Exported migrationOrderViolations against current main: FAIL for inherited
+  0227 and own 0309, both below main's highest 0313. The explicit instruction to
+  preserve migration 0309 and SQL bytes was followed; neither was renumbered.
+
+A first edit invocation accidentally used root-relative paths from apps/api and
+failed before editing; it was corrected. An intermediate controller union had
+both Module decorators; inspecting the generated OpenAPI caught the lost
+success-fee path, and the final single-decorator union preserves every main path.
+
+NOT RUN: PostgreSQL, fresh/upgrade migration execution, browser suites, full
+workspace suites or GitHub CI. Those remain for CI under the sandbox brief.
+Git index still lists the three conflicts because no Git write is permitted;
+working files are resolved and require router staging. RED-passed status was
+supplied by the brief; this session performed deterministic checks, not another
+independent review. Router owns work-list updates and all Git writes.
+
+Handoff is NOT READY: existing lane/migration admission failures and the stale
+v3 baseline remain. The requested message file is marked "do not commit":
+/tmp/ch6-j-20261029T002245Z-commit-msg.txt. The router must resolve those through
+the existing policy/authority before committing; no new reporting mechanism or
+additional simplification is introduced in this repeat catch-up.
+
+## 29 October 2026 — router-authorized admission reconciliation (RED)
+
+READY for router staging and commit. This entry supersedes the previous
+catch-up's admission blockers and its do-not-commit message. Prior resolved
+controller/OpenAPI/SERIOUS-B5 behavior is retained; no new product behavior.
+
+The router explicitly authorized these changes:
+- Renumber 0227 to reserved 0330 and 0309 to reserved 0331, preserving order and
+  SQL bytes. Used tools/migration-renumber.mjs's exported planRenumber with the
+  router's reserved range starting after 0329, then applied its filesystem moves
+  and stem-reference updates without Git writes. The helper's --write CLI cannot
+  be used here: it requires a clean worktree and runs git add, both incompatible
+  with the supplied unresolved/read-only Git index. The helper passed node
+  --check before use; no shared helper/check was changed. Notes, executable
+  fixture URLs, input SQL assertions and the LP-0 inventory now use current names.
+- Archive branch-only config/lanes/ch6-a.json and ch6-p.json unchanged under
+  archive/2026-10-29/ch6-j-inherited-lanes/. There is no ch6-b registration in
+  this tree. All MON-1 and other main lane files already match main and remain
+  unchanged. ch6-j lists exactly the surviving branch payload plus archives and
+  new migration paths; its own lane file is implicitly allowed. No permission
+  for config/lanes or the lane register was added.
+- Refresh the single stale subscription-executor.ts:14 exception fingerprint
+  in commercial-integrity-boundary.unresolved.json from 6d06ef4e... to e3022f3b...
+  (full values recorded above). This one entry caused the three test failures.
+  Same file, line, code, reason and exception count; no scope widening. Main's
+  current-source-guard baseline already has that exact fingerprint and is kept.
+
+Byte verification passed:
+- 0330 equals HEAD's original 0227 exactly, SHA-256
+  bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605.
+- 0331 equals HEAD's original 0309 exactly, SHA-256
+  e127deaa30be03e0036265de63b559365b0f22881bd759eae5418421a3584ac3.
+- Both archive files equal their original HEAD lane files exactly.
+- Every SQL migration and lane file on main bf1052a0 remains byte-identical.
+  There are no branch duplicate migrations already on main; only 0330 and 0331
+  are new. Shared expectations retain main's rows plus CH-6 additions.
+
+Local checks actually executed, installed dependencies only:
+- Node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: PASS, 253/253.
+  Log: /tmp/ch6-j-20261029T003142Z-boundary.log.
+- DB Vitest --maxWorkers=1 test/commercial-integrity-v3-input.test.ts
+  test/lp-0-catalog.test.ts: PASS, 2 files / 32 tests. This executes the renamed
+  SQL-file assertion through the actual repository runner.
+- DB TypeScript --noEmit: PASS. Shared catalogue TypeScript: PASS.
+- Expanded test-only TypeScript --noEmit with catalogue, upgrade, query-isolation
+  and input suites: PASS, using /tmp/ch6-j-20261029T003142Z-types.json.
+- Final working-tree payload checked with the existing loadLanePolicy,
+  selectLane and lanePathAllowed exports against origin/main: PASS. Existing
+  migrationOrderViolations on actual main migration paths and the final on-disk
+  new migrations: PASS. Exact lane payload equality also checked.
+  This is explicitly the final filesystem projection, not the full Git CLI
+  result: the read-only index still records the old parents/conflicts until the
+  router stages the resolved merge. No policy/checker workaround was installed.
+- git diff --check and tracked working-file conflict-marker scan: PASS.
+
+PostgreSQL, fresh/upgrade migrations and browser suites remain CI-only under
+this sandbox brief. No DB execution, Git write, download, live provider/customer
+activity or release occurred. The prior RED-pass status came from the router;
+these deterministic checks are not an independent review. Router owns staging,
+commit/push, required CI and work-list updates.
+
+Ready message: /tmp/ch6-j-20261029T003142Z-commit-msg.txt.
+
+## PR #392 catch-up to main f7aa65c8 — 29 October 2026, 01:12 run
+
+RED, catch-up only. Resolved the two merge conflicts on disk: AppModule now
+retains CommercialIntegrityV3Controller alongside main's BusinessValueController,
+ValueV3Controller and reader factory; the LP-0 inventory retains main's exact
+billing group (including migration 0322) and CH-6's separate authority group.
+No new behaviour or SQL changes. Updated this receipt and the existing ch6-j
+lane note; its allow list exactly matches all 54 branch payload paths relative
+to MERGE_HEAD, excluding the implicitly allowed lane file itself.
+
+Verification actually run with installed dependencies:
+- API Vitest, maxWorkers=2: commercial-integrity-v3.boundary,
+  commercial-integrity-v3.application and value/value-composition: 25/25 PASS.
+  Initial composition run failed because installed DB dist lacked main's new
+  ValueV3Reader export; rebuilt core and DB via their existing tsc build commands,
+  then reran the same three files successfully. No source workaround added.
+- DB Vitest, maxWorkers=1: commercial-integrity-v3-input and lp-0-catalog:
+  32/32 PASS. These are local unit/catalogue checks, not PostgreSQL execution.
+- Node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs: 253/253 PASS;
+  /tmp/ch6-j-20261029T011209Z-boundary.log.
+- Installed tsc: API --noEmit PASS; core and DB builds PASS.
+- OpenAPI check PASS via `node --import tsx src/generate-openapi.ts --check`
+  in apps/api. The tsx CLI first hit its sandbox-blocked IPC socket; direct
+  Node import runs the same checker without that CLI socket.
+- Every main inventory array entry remains present exactly. Existing lane
+  loader/selector/path checker: exact payload equality PASS; existing migration
+  ordering checker PASS; tracked working-file conflict-marker scan PASS.
+- All 273 SQL migration and lane files from MERGE_HEAD remain byte-identical.
+- 0330 SHA-256 bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605;
+  0331 SHA-256 e127deaa30be03e0036265de63b559365b0f22881bd759eae5418421a3584ac3.
+  Both match RED-reviewed head 18db2a9f byte-for-byte.
+
+The read-only Git index still lists conflicts until the router stages these
+resolved files. No Git write was attempted. PostgreSQL, migrations and browser
+execution remain for GitHub CI. The supplied RED pass at 18db2a9f is historical;
+this catch-up's deterministic checks are not an independent review of a new head.
+Router owns staging, commit, push, current-head CI and status updates.
+Ready message: /tmp/ch6-j-20261029T011209Z-commit-msg.txt.
+
+## PR #392 CI-fix try 1 — 29 October 2026, 01:31 run
+
+RED. Read all supplied CI failure traces in ch6-j-ci-traces-0131.txt. The
+worktree had no outstanding conflicts. Fixed each root cause without skipping
+or weakening tests and without changing exceptions:
+
+- Both browser projects: CH-6 saved-v1/fresh-v3 and M1-16-S draft/activated
+  journeys could not display their recorded checks because the web transport
+  found no commercialIntegrityV3 in createWorkspaceApplication. Compose the
+  existing application there, forwarding only the request's session to family,
+  view and review. Added a regression through the real workspace factory for
+  all three delegates and the absent-session case; no alternative authority.
+- CI-P03: 0331's text-array concatenation interpreted a reason as an array
+  literal (22P02). Use array_append on all five single-reason branches. This
+  is a SQL bug, so 0331 necessarily changes; no grants, table definitions or
+  sources change. Its pending/failed CASE is parenthesized. 0330 is unchanged.
+- Five published financial tests: reconciliation deliberately does not publish
+  an invoice-authorizing certificate. The fixture now explicitly inserts the
+  completion for its exact verified run and lock through the existing shadow
+  worker's normal completion trigger before the production invoice command.
+  It preserves all certificate checks, triggers, FK and invoice assertions.
+- Lifecycle source replay test: PostgreSQL inferred parameter $4 as both integer
+  sequence and text concatenation. Derive the interval from $4::integer instead.
+- SERIOUS-B5 upgrade: pg_policies.roles is name[] and pg returns its raw text.
+  Reuse the suite's established name[]::text[] conversion, retaining the exact
+  expected migration-only policy role.
+
+Local checks actually executed with installed tools, at most two Vitest workers:
+- API Vitest: commercial-integrity-v3.boundary, commercial-integrity-v3.application
+  and value/value-composition: 3 files, 26/26 PASS.
+- Web Vitest: family route, v3 route and commercial-integrity-v3 UI: 3 files,
+  67/67 PASS. These are unit/transport checks, not browser execution.
+- DB Vitest: commercial-integrity-v3-input and lp-0-catalog: 2 files, 32/32 PASS.
+- Node boundary and current-source-guard: 253/253 PASS, log
+  /tmp/ch6-j-20261029T013134Z-boundary.log.
+- API tsc --noEmit and API tsc build PASS; focused integration-fixture TypeScript
+  PASS with /tmp/ch6-j-20261029T013134Z-types.json.
+- OpenAPI check PASS via node --import tsx in apps/api. An initial invocation
+  from the repository root could not resolve that package-local loader; reran
+  from its proper package directory without changing source or dependencies.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions; existing migration order checker PASS;
+  tracked-file conflict-marker scan and git diff --check PASS.
+
+0330 remains byte-identical to HEAD. Corrected 0331 SHA-256:
+312ac5de619bdc47263ec098c86f5b00a26348e4f6bac3b49f8da7cc91870993.
+No PostgreSQL/browser suite could execute in this sandbox; CI must exercise the
+reported DB and end-to-end failures. No Git writes, exceptions, downloads,
+customer data or live actions. The router owns commit/push, CI and RED review
+binding for the repaired head. Ready message:
+/tmp/ch6-j-20261029T013134Z-commit-msg.txt.
+
+## PR #392 CI-fix try 2 — 29 October 2026, 02:11 run
+
+RED. Read the supplied ch6-j-ci-traces-0211.txt. No merge conflicts were present.
+Three remaining root causes repaired, with all existing assertions retained:
+
+- CH-6 saved-v1/fresh-v3 and M1-16-S draft/activated browser failures (both
+  desktop and mobile): downloaded the existing CI artifact
+  playwright-evidence-3-1 (12866772246, run 40801349894) through the GitHub
+  connector. The error contexts show the panel's unavailable state, and the
+  CH-6 network traces contain no integrity request at all. IntegrityJourney
+  stored native fetch as a method and invoked it with a class-instance receiver,
+  which browser Web IDL rejects before sending a request. The default transport
+  now forwards through an arrow function. A regression models the native receiver
+  check using the default transport: FAIL before the fix (error instead of v1),
+  PASS after. Injected transport and all validation/failure paths remain intact.
+- Five published financial regressions: the shadow worker has no SELECT grant
+  on final_account_lock. Following the existing fixture boundary, the admin
+  reads the immutable ID/cutoff, then the shadow worker supplies them as VALUES
+  to the existing completion trigger. The trigger still verifies the exact
+  run/lock/cutoff. No grants, replication override or guard bypass added.
+- Lifecycle replay regression: sequence is bigint; the previous explicit integer
+  interval operand still conflicted with its inferred parameter type. Cast both
+  occurrences of parameter $4 as bigint, matching the actual column.
+
+Local validation actually executed:
+- Web Vitest, maxWorkers=2: commercial-integrity-v3 UI, family route and v3 route:
+  3 files, 68/68 PASS. The new default-fetch regression first reproduced failure
+  in a single-file maxWorkers=1 run (48 existing passes, one expected debugging
+  failure), before the implementation fix.
+- Web tsc --noEmit PASS.
+- Focused integration-fixture tsc --noEmit PASS using the existing
+  /tmp/ch6-j-20261029T013134Z-types.json (published, sources, upgrade suites).
+- Node boundary/current-source-guard tests: 253/253 PASS,
+  /tmp/ch6-j-20261029T021132Z-boundary.log.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions. Existing migration ordering check PASS.
+- Tracked-file conflict-marker scan and git diff --check PASS.
+- Migrations 0330 and 0331 are byte-identical to this run's HEAD. SHA-256:
+  0330 bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605;
+  0331 312ac5de619bdc47263ec098c86f5b00a26348e4f6bac3b49f8da7cc91870993.
+
+No tests skipped/weakened, exceptions changed, SQL edited, privileges widened,
+Git writes, packages installed, real customer data or live actions. PostgreSQL
+and browser reruns remain for GitHub CI. Local scripted/unit evidence is not
+independent RED review or proof that those CI suites pass. Router owns commit,
+push, current-head CI, RED review binding and status updates.
+Ready message: /tmp/ch6-j-20261029T021132Z-commit-msg.txt.
+
+## PR #392 CI-fix try 3 (last) — 29 October 2026, 02:31 run
+
+RED. Read all supplied ch6-j-ci-traces-0231.txt. No outstanding merge conflicts.
+The five failures reduce to two actual bugs in migration 0331:
+
+- Whole-invoice credit and receipt-overage tests failed strict decoding with
+  INTEGRITY_SOURCE_UNAVAILABLE. Ordinary payment activity and published receipts
+  used the same tenant/job/scope/sourceType/sourceId despite different fact
+  envelopes (and different reversal-sensitive content). Keep ordinary activity
+  as customer_payment; use published_customer_payment for the published receipt
+  projection. The source schema, conflicting-identity rejection, exact values,
+  reversal handling, review re-resolution and money controls are unchanged.
+- Both writeoff tests failed because SQL alias `old` collided with PL/pgSQL OLD
+  in the trigger's duplicate lookup. This also caused both competing credit
+  mappings to reject, failing the race's one-success assertion. Rename only the
+  lookup alias to prior_source. Duplicate refusal, job-row serialization,
+  line/credit conservation and evidence checks remain unchanged.
+
+Added a decoder regression using the namespace actually emitted by installed
+SQL: ordinary and published facts with the same payment ID decode only with
+separate projection identities, while conflicting same-identity facts still
+refuse. Restoring the original SQL namespace temporarily reproduced the exact
+INTEGRITY_SOURCE_UNAVAILABLE failure; fixed SQL was restored in a finally block.
+Log: /tmp/ch6-j-20261029T023130Z-regression-before.log. Added real SQL projection
+assertions to the existing receipt integration test; all prior assertions remain.
+
+Checks actually executed (installed tools, at most two Vitest workers):
+- DB Vitest, maxWorkers=1, commercial-integrity-v3-input and lp-0-catalog:
+  33/33 PASS, including the new decoder/projection regression.
+- Core Vitest, maxWorkers=2, commercial-integrity-v3 and its boundaries:
+  22/22 PASS, preserving duplicate/reversal, attribution and snapshot controls.
+- Boundary/current-source-guard Node tests: 253/253 PASS,
+  /tmp/ch6-j-20261029T023130Z-boundary.log.
+- Focused integration and input-fixture TypeScript --noEmit PASS via
+  /tmp/ch6-j-20261029T023130Z-types.json.
+- Existing lane loader/selector/path checks: exact 55 branch payload paths,
+  no missing/extra permissions. Existing migration order checker PASS.
+- Tracked-file conflict-marker scan and git diff --check PASS.
+- 0330 byte-identical to HEAD. Corrected 0331 SHA-256:
+  817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077.
+
+0331 changes because both bugs are in SQL; no other migration changes. No tests
+weakened/skipped, exceptions changed, grants widened, customer data, live actions
+or Git writes. PostgreSQL execution is unavailable here: CI still must prove
+all five reported failures and existing race/replay limits on the repaired head.
+This is the last authorized CI repair try; any remaining CI failure goes to the
+router's one Ben card under SIMPLE_LOOP, not another automatic repair round.
+Router owns commit/push, current-head CI, independent RED review binding and
+work-list updates. Ready message:
+/tmp/ch6-j-20261029T023130Z-commit-msg.txt.
+
+### PR #392 renumber-only catch-up — 29 October 2026
+
+CH-6 (RED): main already merged cleanly through migration 0332. Used
+`tools/migration-renumber.mjs` with its final staging call disabled in an
+in-memory sandbox copy; the repository tool and Git metadata are unchanged.
+Renamed this branch's receipt migration 0330 → 0333 and source migration
+0331 → 0334, preserving relative order and both SQL files byte for byte.
+The tool renamed their notes and updated full-stem references, including the
+shared LP-0 inventory; both main and branch entries remain. Existing bare
+historical migration labels in prior receipts/notes remain historical text.
+Updated this branch's existing lane with the new paths; no new behaviour.
+
+Checks actually executed for this catch-up:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Tool dry-run: exactly the two requested renames.
+- SHA-256 comparison before/after: both SQL files unchanged.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS.
+- From packages/db, installed `./node_modules/.bin/vitest run --maxWorkers=2
+  test/commercial-integrity-v3-input.test.ts`: 6/6 PASS.
+- Existing lane loader/path checker: exact 56 aggregate PR paths including the
+  automatically allowed lane file, no missing/extra payload permissions.
+- Existing migration order checker: PASS, own migrations above main's 0332.
+- `git diff --check`, unmerged-index and focused conflict-marker scans: PASS.
+
+No database or browser suite run: sandbox cannot start PostgreSQL or bind
+localhost. GitHub CI and independent RED review remain the router's gates.
+No Git writes performed. Router commits/pushes this ready change using
+`/tmp/ch6-j-20261029T025135Z-commit-msg.txt`.
+
+### PR #392 catch-up after #383 — 29 October 2026
+
+CH-6 (RED), starting HEAD `36d17cb4`, pending merge of main
+`d54c731f50ec3d29c7e3606f132ebb992e7bb946`. Resolved both working-file
+conflicts: LP-0 retains main's billing entries plus CH-6's source-reader entry;
+SERIOUS-B5 retains both additive catalogue helpers and invokes both. Main's
+stored-receipt implementation, migration 0335 and shared table lists remain.
+No new behaviour or SQL changes.
+
+Used the exported `planRenumber` from `tools/migration-renumber.mjs` with this
+order's reserved floor 0337, then filesystem-only moves/reference rewrites:
+0333 receipts → 0338 and 0334 sources → 0339. The CLI's clean-worktree and
+staging requirements cannot be used during this read-only-index merge.
+Migration notes and full-stem references were renamed together. Historical
+bare-number labels remain historical. Updated the existing ch6-j lane; its
+55 payload paths plus automatically allowed own lane exactly match all 56
+aggregate PR paths. No Git write commands were run; the router must stage the
+resolved files to clear the two unmerged index entries.
+
+Checks actually executed:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- Before/after SQL SHA-256: receipts
+  `bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605`;
+  sources `817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077`.
+  Both unchanged.
+- Installed pnpm 10.28.1 (`/private/tmp/ch6-j-r1-bin/pnpm`), db Vitest with
+  `--maxWorkers=2`: `test/commercial-integrity-v3-input.test.ts`,
+  `src/stored-receipt-migration.test.ts`,
+  `src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+- Same installed pnpm, `--filter @jobguard/db typecheck`: PASS.
+- `node --test --test-concurrency=2 tools/agent-lane-boundary.test.mjs
+  tools/agent-lane-boundary-train.test.mjs`: 66/66 PASS.
+- Existing lane loader/path and migration-order APIs: PASS; exact aggregate
+  payload, 0338/0339 above main, all main inventory rows and stored-receipt
+  files retained byte for byte.
+- TypeScript parser check of SERIOUS-B5, entitlement-upgrade and tenancy test
+  files: PASS. This is syntax evidence, not PostgreSQL execution.
+- `git diff --check` and focused conflict-marker scan: PASS.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  FAIL. Integrated-source/CLI/baseline assertions report stale protected
+  fingerprint metadata for `packages/db/src/demo-seed.ts:94` after main's
+  practice-digest fixture change. Baseline has
+  `63a981c5b89ae57de99b9346ef9667b12931e9a85c55f8379cd20bec6c1f85be`;
+  source now has `aee71a57a2756c911266f42700e1c0afe84d2d6d107f003759caca7ebdd5146e`.
+  No guard/baseline change made: SIMPLICITY_RULE item 6 requires separate
+  authorization for protected fingerprints. Router needs a bounded repair
+  authorization before this branch is ready; do not commit this as ready.
+
+PostgreSQL and browser suites remain for GitHub CI; independent RED review
+remains required. No package downloads, provider calls, real customer data,
+commit, push or release. Handoff message:
+`/tmp/ch6-j-20261029T043303Z-commit-msg.txt`.
+
+### Authorized existing-exception fingerprint refresh — 29 October 2026
+
+Router explicitly authorized refreshing stale protected fingerprint metadata for
+existing exceptions only, preserving each file, line, code and reason. This
+supersedes the preceding local readiness blocker and its earlier commit message.
+HEAD/main merge identities remain `36d17cb4` / `d54c731f`; no new conflict
+markers were present. The two resolved index entries remain unmerged until the
+router stages the working files, because Git metadata is read-only here.
+
+Inspected the current guard diagnostics, the raw unbaselined sites and the
+`delivery.execute(context,jobId,preview.documentId,"success")` call at
+`packages/db/src/demo-seed.ts:94`. It is the same existing business executor
+exception; main added practice-session fixture context in its containing helper.
+Refreshed only its fingerprint in
+`tools/commercial-integrity-boundary.unresolved.json` from `63a981c5...` to
+`aee71a57...` (full hashes above). All 13 file/line/code/reason tuples and entry
+order are unchanged. Raw diagnostics contain exactly those same 13 unique
+sites, with no genuinely new exception. No guard logic, product code or test
+assertion was changed. Updated the existing lane note only; its path coverage
+already includes this metadata file.
+
+Checks actually run after the refresh:
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS, including exact integrated source, CLI, baseline and adversarial
+  boundary mutations. Log: `/tmp/ch6-j-20261029T045146Z-boundary-tests.log`.
+- Installed pnpm 10.28.1, db Vitest `--maxWorkers=2` with exactly
+  `test/commercial-integrity-v3-input.test.ts`,
+  `src/stored-receipt-migration.test.ts`,
+  `src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+- Installed pnpm `--filter @jobguard/db typecheck`: PASS.
+- Exact 56-path aggregate lane coverage and migration-order API checks: PASS.
+- SQL hashes still match the original pre-renumber bytes for 0338/0339: PASS.
+- All main LP-0 rows and stored-receipt files retained; CH-6 inventory and both
+  SERIOUS-B5 upgrade helpers retained: PASS.
+- Conflict-marker scan, TypeScript syntax checks of the three shared integration
+  tests, and `git diff --check`: PASS.
+
+Ready for router staging/commit/push, using
+`/tmp/ch6-j-20261029T045146Z-commit-msg.txt`. Database/browser execution remains
+for GitHub CI; independent RED review remains required before merge. This is
+local deterministic evidence, not independent review or release approval.
+No Git write commands, downloads, real data, live providers or releases.
+
+### Renumber-only catch-up after main #400 — 29 October 2026 06:41 brief
+
+Plan piece CH-6 / PR #392, RED. Starting HEAD `3ab721e7` already contains
+main `32411c4e` (#400); the worktree and index were clean, with no unresolved
+merge conflicts. The router reports RED passed at `72a13e49`; this catch-up
+is deterministic local verification, not a new independent review.
+
+Renumbered own migrations 0338 receipts → 0354 and 0339 sources → 0355 in
+that order, plus their migration notes and exact-stem references. Used a
+`/tmp/ch6-j-reserved-renumber.mjs` copy of `tools/migration-renumber.mjs`:
+only its import location, in-memory reserved ceiling (0353), and staging call
+were adapted. The repo helper itself is unchanged. Imported its `renumber`
+function with `write:true`; filesystem moves/reference rewriting are the
+existing helper implementation. No Git write command ran. The normal helper
+would select 0341/0342 against current main, so the reserved ceiling is needed
+for the router's explicit 0354/0355 assignment. Both SQL files and both notes
+compare byte-for-byte equal to their pre-renumber HEAD contents.
+
+No product behavior or guard/baseline changed. All 13 existing protected
+exceptions remain current; no fingerprint refresh was needed. All main LP-0
+inventory entries are retained, as are all main assertions in tenancy,
+SERIOUS-B5 and contractor-entitlement upgrade tests. Updated the existing lane
+note and migration paths; its 56-path allow list exactly covers the final
+aggregate PR diff (the lane file itself is authorized by the lane API).
+
+Checks actually run:
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS; log `/tmp/ch6-j-20261029T064155Z-boundary.log`.
+- `node tools/commercial-integrity-boundary.mjs`: 65 protected roots,
+  zero diagnostics, 13 baselined unresolved sites.
+- From `packages/db`, `./node_modules/.bin/vitest run --maxWorkers=2
+  test/commercial-integrity-v3-input.test.ts src/stored-receipt-migration.test.ts
+  src/stored-receipt-case-allocation-repository.test.ts`: 27/27 PASS.
+  The installed global pnpm shim stalled before runner startup and was stopped;
+  used the already-installed repository runner directly, without downloads.
+- From `packages/db`, `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: PASS.
+- Existing lanePathAllowed and migrationOrderViolations APIs over the final
+  aggregate paths versus origin/main: PASS, exact 56 paths, 0354/0355 ordered.
+  The unstaged local lane CLI sees obsolete HEAD migration paths as well as
+  their replacements and reports those four obsolete paths; final-path API
+  verification accounts for the router's pending staging. CI runs the real
+  staged/committed lane check.
+- Exact SQL/note byte comparisons, recursive main inventory retention and
+  no removed main assertions in all three shared integration tests: PASS.
+- `git diff --check`, conflict-marker scan and syntax transpilation of the
+  three shared integration tests: PASS.
+
+Ready for router staging/commit/push. PostgreSQL, migration execution, browser
+suites and full required CI remain for GitHub CI in this sandbox. No customer
+data, live money, providers, releases or Git metadata writes. Commit message:
+`/tmp/ch6-j-20261029T064155Z-commit-msg.txt`.
+
+
+## 29 Oct 08:14 catch-up — current main through ENT-10 OIDC
+
+RED, CH-6 / PR #392. Resolved the router-started merge of origin/main
+`cc147d783a9d30ae53a44299cd31d8a0ba46f1bb` (including #296 migration 0347).
+Kept both CH-6 and OIDC controllers, providers, workspace applications and
+OpenAPI paths. Shared LP-0, SERIOUS-B5, contractor-entitlement and tenancy
+expectations retain every line from both parents; only additive unions.
+No product behavior, migration SQL or protected exception changes.
+
+Verified all 144 SQL migrations on the incoming main are byte-identical.
+Only 0354/0355 are additional, byte-identical to this branch's pre-merge HEAD:
+- 0354 SHA-256: bb05d312c73a68488b395a9b659f6f712f8147212492df40f314ff68ddf20605
+- 0355 SHA-256: 817800313a1473335de06e0884e9796c9cceefadb3b2aad9490b19cd8e584077
+
+Checks actually run with installed repository binaries (no downloads):
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts
+  src/auth/sso/oidc-paths.test.ts`: 31/31 PASS, including socket-free real Nest
+  module registration and CH-6 workspace composition.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS. Comparator fixtures do not prove PostgreSQL semantics.
+- From repo root: `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`
+  and `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS.
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS, including unchanged protected baseline checks.
+- From apps/api: `node --import tsx src/generate-openapi.ts --check`: PASS
+  after rebuilding local packages/db and packages/core with their existing tsc
+  build commands. Initial tsx CLI invocation was blocked by sandbox IPC;
+  loader invocation initially found stale local dependency exports.
+- Existing lanePathAllowed/migrationOrderViolations APIs: all 56 aggregate
+  paths versus MERGE_HEAD allowed; migration order PASS.
+- Working-tree conflict-marker scan, parent-line retention, migration-byte
+  comparisons and `git diff --check`: PASS.
+
+No Git writes ran. The three formerly conflicting files remain unmerged in
+Git's read-only index until the router stages them. Ready for router staging,
+merge commit and push; PostgreSQL, migration and browser suites plus required
+CI and the RED exact-head review remain external gates. Commit message:
+`/tmp/ch6-j-20261029T081424Z-commit-msg.txt`.
+
+## 29 Oct 09:47 catch-up 2 — main through LP-2 and CH-9
+
+RED, CH-6 / PR #392. Completed the working-tree resolution of the
+router-started merge of origin/main `7eef37d694d98e95eb76baae95169e089e3b98e5`
+(#283 LP-2 and #409 CH-9). Unioned the LP-0 trigger conflict, retaining
+main's current privilege revocations and every CH-6 inventory addition.
+SERIOUS-B5, contractor-entitlement and tenancy shared expectations retain
+all lines from both parents. No routines needed re-creation, and no product
+behavior or test expectations changed beyond the required union/renumber.
+
+Used `planRenumber` from `tools/migration-renumber.mjs` with the router's
+reserved boundary 0362 to assign 0354 receipts → 0363 and 0355 sources → 0364.
+Applied filesystem moves and the tool's stem-reference replacement only:
+the CLI write mode requires a clean worktree and invokes git add, which this
+sandbox forbids. Updated the lane paths and migration-note filenames.
+Both SQL files and both notes are byte-identical to pre-merge HEAD; all 147
+migrations on incoming main are byte-identical to main. No Git writes ran.
+
+Checks actually run using installed repository binaries, at most two
+concurrent local processes and one Vitest worker per run:
+- `node --check tools/migration-renumber.mjs`: PASS.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS. These fixtures do not prove PostgreSQL semantics.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts src/auth/sso/oidc-paths.test.ts`:
+  27 tests passed; boundary suite initially failed import on stale generated
+  core exports introduced by incoming main. Rebuilt packages/core and
+  packages/db with their existing tsc commands, then reran the boundary suite:
+  4/4 PASS (31 API tests passed across the completed runs).
+- Root installed tsc: packages/db and apps/api `--noEmit`: PASS;
+  packages/core and packages/db normal builds: PASS.
+- `node --test --test-concurrency=1
+  tools/commercial-integrity-boundary.test.mjs
+  tools/lp-downstream-inventory.test.mjs`: 86/89 PASS. All 84 commercial
+  integrity boundary tests pass. Three downstream-inventory tests fail only
+  on LP-0 inventory/document drift. Incoming main independently fails the
+  generator's `--check`; this branch additionally contributes its CH-6 LP-0
+  rows. Left the generator, document and expectations unchanged as directed.
+- Recursive incoming-main LP-0 retention plus branch-addition retention,
+  all shared integration-test parent lines retained, TypeScript syntax,
+  unchanged SQL/note bytes, all 56 final lane paths and migration order: PASS.
+- `git diff --check` and resolved inventory conflict-marker scan: PASS.
+
+The read-only Git index still records the LP-0 file as unmerged until the
+router stages the resolved working tree. PostgreSQL, migration execution,
+browser suites, full required GitHub CI and the exact-head RED review remain
+external gates. No customer data, live money, providers or releases.
+Commit message: `/tmp/ch6-j-20261029T094730Z-commit-msg.txt`.
+
+## 29 Oct 11:29 continuing catch-up 2 — LP-2 CI repair
+
+RED, CH-6 / PR #392. Read all saved failure traces in
+`~/.local/share/full-steam/codex-runs/ch6-j-ci-traces-1129.txt` against
+HEAD `fa31a496` (current main already merged, no conflicts).
+All seven failing suites share one setup root cause: the CH-6 fixture calls
+`app.issue_practice_session` in database `postgres`, but main's latest LP-2
+0356 body correctly rejects it with MODE_FORBIDDEN before session creation.
+Affected suites: query-isolation, receipt-guard, review, base integration,
+HTTP integration, upgrade integration and sources integration.
+
+The shared fixture now creates `jobguard_synthetic_demo` and connects both
+owner and runtime pools there. It still calls the existing checked session
+writer, which authenticates the existing practice owner before minting its
+private exact practice-home permits. No direct permit access, guard bypass,
+new grant, widened exception, or changed assertion. Main's latest adoption
+writer already includes its authenticated private adoption permit; CH-6 does
+not redefine that routine and this repair does not re-create any routine.
+The separate SQL_ASCII installation-only test keeps its `postgres` connection:
+it never issues a practice session and continues to test installation.
+
+As explicitly requested, parenthesised the CASE expression nested inside the
+review-validation IF condition in each own new migration, 0363 and 0364
+(`sum(CASE ... END)` -> `sum((CASE ... END))`). This is the only SQL byte
+change; no semantic change or SQL bug is claimed. All 147 migrations on main
+are byte-identical to incoming main. No tests were weakened/skipped/loosened,
+no privileges/inventory expectations were changed, and no Git writes ran.
+
+Checks actually run with installed tools (at most two workers):
+- From packages/db: installed Vitest, `run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS, rerun after the final SQL parentheses edit.
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS after the final edit, including protected exception checks.
+- Installed tsc, `-p packages/db/tsconfig.json --noEmit`: PASS (src scope).
+- Changed fixture TypeScript syntax transpilation and lane-path checks: PASS.
+- Exact main SQL preservation, own SQL change restricted to the requested
+  parentheses, no unresolved index paths, and `git diff --check`: PASS.
+
+PostgreSQL execution, including all seven formerly failing suites, remains
+for GitHub CI because this sandbox cannot start PostgreSQL. The exact-head
+RED review remains required. Ready for router commit/push and CI verification;
+commit message: `/tmp/ch6-j-20261029T112955Z-commit-msg.txt`.
+
+
+## 29 Oct 12:12 continuing catch-up — main #407 and #410
+
+RED, CH-6 / PR #392. Incoming main is
+`db2aff37b1207ba0c543c3e6bd32f2a26f8a9af8` (MON-4A #407 and DEMO-J3 #410).
+The router had already started the merge. Resolved the three working-tree
+conflicts in API module registration, workspace composition and OpenAPI by
+retaining both CH-6 and main's payment-fee handlers. API files start from
+current main; CH-6 wiring is additive. No routine re-created, new behavior,
+SQL edit, pinned-snapshot edit or test-assertion change.
+
+Verified all 148 main migration files byte-for-byte against incoming main,
+and both own 0363/0364 migration files against HEAD. No older migration copy
+was reintroduced. `docs/contracts/lp-downstream-effects-v1.md` is unchanged.
+All incoming-main LP-0 fields and all branch-only LP-0 rows are retained
+exactly; the entitlement, SERIOUS-B5 and tenancy tests retain every line
+from both parents. All main lane files are unchanged. Updated this lane's
+note, retaining its existing exact paths; all 56 main-relative changed
+paths are covered, and every listed path exists. Every OpenAPI path from
+both parents is retained exactly.
+
+Checks actually run using installed dependencies, at most two workers:
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs`:
+  84/84 PASS.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=1
+  test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts`:
+  33/33 PASS.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit`: PASS.
+- `./node_modules/.bin/tsc -p packages/core/tsconfig.json` then
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json`: PASS.
+- From apps/api, `./node_modules/.bin/vitest run --maxWorkers=1
+  src/commercial-integrity-v3.application.test.ts
+  src/commercial-integrity-v3.boundary.test.ts
+  src/payment-fee.application.test.ts`: 28/28 PASS after rebuilding the
+  existing core/db outputs. Initial run failed 4 tests because stale dist
+  lacked main's new payment-fee exports; no source/assertion change was
+  required to resolve it.
+- From apps/api, `node --import tsx src/generate-openapi.ts --check`: PASS.
+- Migration and parent-retention checks above, lane coverage, resolved
+  conflict-marker scan and `git diff --check`: PASS.
+
+Ready for router staging, merge commit and push. The read-only Git index
+still lists three unmerged paths until the router stages these resolved
+files. No Git-writing commands ran. Real PostgreSQL/migration execution,
+browser suites, required GitHub CI and the exact-head independent RED
+review remain external gates. Made-up data only; no live provider or release.
+Commit message: `/tmp/ch6-j-20261029T121241Z-commit-msg.txt`.
+
+### 29 October 2026 — PR #392 catch-up through c2de0bdd
+
+CH-6 / RED; no new behavior. Resolved the router-started merge with main in the
+working tree, retaining JobImportV3 and CommercialIntegrityV3 API wiring and the
+union of exact LP-0 and SERIOUS-B5 expectations. Main's entitlement, privileges,
+tenancy and lane additions remain present. Main has no CH-6 routine definitions
+to re-create. All main migration files and lane files were checked byte-for-byte;
+`docs/contracts/lp-downstream-effects-v1.md` remains unchanged.
+
+Used `tools/migration-renumber.mjs`'s pure `planRenumber` with the router's reserved
+0376/0377 range, then filesystem moves/reference rewrites because its `--write`
+mode requires a clean worktree and writes the read-only git index. Own 0363/0364
+became 0376/0377; SQL bytes match HEAD exactly. Migration notes, fixture paths and
+lane references follow the new names. Only these two migration files are added
+relative to main; older main copies are retained exactly.
+
+Local checks (installed dependencies; no downloads):
+- `node --check tools/migration-renumber.mjs`: PASS.
+- `node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs tools/migration-renumber.test.mjs`: PASS, 84 tests.
+- From apps/api, `./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts`: PASS, 25 tests.
+- From packages/db, `./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts`: PASS, 6 tests.
+- Installed TypeScript `--noEmit` for apps/api and packages/db: PASS.
+- Installed TypeScript builds for packages/core and packages/db: PASS (refresh ignored runtime exports for OpenAPI).
+- `node tools/plpgsql-case-in-if-lint.mjs`: PASS, 153 migrations.
+- `node tools/commercial-integrity-boundary.mjs`: PASS, 69 roots, zero diagnostics.
+- `git diff --check`: PASS.
+
+The pnpm shim failed before startup while trying to verify its unavailable registry signature, so installed repository executables were
+used. The tsx CLI's IPC socket is blocked by this sandbox; OpenAPI verification
+uses `node --import tsx src/generate-openapi.ts --check` instead. Its first attempt
+found stale ignored db exports; the package builds above refreshed them.
+PostgreSQL, migrations and browser suites require GitHub CI. No git-write command
+was run: the router must stage the resolved contents/renames and finish the merge.
+
+OpenAPI verification after rebuilding ignored package exports: PASS.
+
+During final verification origin/main advanced to 72226d28 (#418 MON-3).
+Preservation and lane checks are pinned to this requested in-progress merge
+target c2de0bdd (MERGE_HEAD); the router must reconcile the newer main before
+claiming green CI against current main. The existing merge is ready to commit.
+
+## Catch-up 3 — main 72226d28 / #418 MON-3 (29 October 2026)
+
+RED, CH-6 / PR #392. Completed the router-started merge from e0876b20 to
+MERGE_HEAD 72226d28. Retained both API controllers, both OpenAPI route sets and
+both tenancy checks. LP-0 is the exact union by identity with current main's
+MON-2 definitions taking precedence; every main line in SERIOUS-B5, entitlement
+and tenancy expectations survives. No routine was re-created: mon2_issue remains
+the latest body from immutable main migration 0373. No new product behavior.
+
+Preservation checks: all 311 main migration/lane files match MERGE_HEAD bytes;
+own 0376/0377 match e0876b20 bytes; lp-downstream-effects-v1.md matches both parents.
+The lane note records this target. Removed the own-lane path from the allow list:
+the existing lane validator rejects explicit grants to config/lanes, and already
+permits editing the lane's own file. All 56 changed paths against the pinned
+merge target are covered by the existing lane policy.
+
+Local checks with installed tools (no downloads):
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs: PASS, 84 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts: PASS, 25 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts: PASS, 6 tests.
+- Installed TypeScript builds for packages/core and packages/db, then apps/api --noEmit: PASS.
+- apps/api: node --import tsx src/generate-openapi.ts --check: PASS.
+- node tools/plpgsql-case-in-if-lint.mjs: PASS, 155 migrations.
+- node tools/commercial-integrity-boundary.mjs: PASS, 77 protected roots, zero diagnostics.
+- Existing loadLanePolicy/lanePathAllowed against the worktree diff: PASS, 56 paths.
+- git diff --check and changed-file conflict-marker scan: PASS.
+
+The initial LP-0 comparison incorrectly treated superseded predecessor MON-2
+rows as distinct objects; the corrected identity-based comparison confirms the
+union using latest main rows. The initial lane check exposed the self-grant
+corrected above. An OpenAPI command issued from repository root could not resolve
+the API-local tsx package; rerunning from apps/api passed.
+
+No git-writing command was run. The read-only index still reports its three
+unmerged entries until the router stages the resolved files and finishes this
+merge. PostgreSQL/migration/browser suites run in GitHub CI; RED review remains
+required. During final checks origin/main advanced to cd8703fc (#408 CH-8,
+migrations 0374/0375). This completed catch-up is pinned to the requested #418
+MERGE_HEAD, not that newer main. The router must merge the newer main after
+committing this resolution before claiming CI against current main.
+
+## CI repair try 1 — 30 October 2026 (incomplete; do not commit)
+
+CH-6 / PR #392, RED. Began on clean 67586eed (router already merged current
+main cd8703fc into 8d6a8147); no merge conflicts remained.
+
+Fetched all four supplied logs through the GitHub connector after the shell's
+GitHub request failed network access. Jobs 123559376160, 123559376092,
+123559376112 and 123559376248 are web shards 1, 2, 3 and 4 respectively. Each
+production build passed, then many browser journeys timed out until the job was
+cancelled. The connector's job-step response confirms the Playwright evidence
+upload was skipped after cancellation. The logs contain timed-out test names,
+but no terminal assertion stack or failed-locator detail. They include CH-1,
+CH-2, CH-3a, CH-4/5, CH-6, M1-16 and M4 recovery/receipt journeys. These broad
+capture/quote/recovery timeouts are not all explained by the patch below.
+
+Confirmed root cause and focused patch: the legacy repository explicitly returns
+null for absent draft cap/basis (commercial-integrity-application-repository.ts,
+lines 84–85), and CommercialIntegrityApplication.view passes them through. The
+CH-6 client schema rejected both nulls, putting a valid draft into its error
+state. Accept exactly null or the existing nonnegative safe-integer amounts;
+preserve null in parsed state and explicitly render the former £0.00 presentation
+at the existing display boundary. This restores compatibility rather than
+changing commercial policy. The v3 schema, authority and review controls are
+unchanged. Existing test expectations remain intact.
+
+Added a draft-null regression and separate invalid-amount controls for both
+fields (negative, fractional, unsafe integer, string, missing). The draft test
+fails with the original schema and passes with the patch. The CH-6 saved-v1
+browser test additionally asserts the actual nullable API contract. Its product
+locators are scoped to main so Next's route announcer and the sandbox banner
+cannot satisfy assertions. No fixtures substitute for API results.
+
+Local verification (installed tools, at most two workers):
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2 app/ui/commercial-integrity-v3.test.tsx: PASS, 52 tests.
+- Original-schema negative control with only the new draft-null test selected:
+  expected FAIL, "Expected the saved v1 draft"; fixed source restored in finally,
+  then all 52 tests rerun successfully. No tests are skipped in the final run.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity.audit.test.ts src/commercial-integrity.application.test.ts: PASS, 5 tests.
+- Installed TypeScript: ./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit: PASS.
+- apps/web: ./node_modules/.bin/playwright test --list --workers=2 e2e/ch6-integrity-v3.spec.ts: PASS, 4 tests discovered across mobile and desktop; discovery only, not browser execution.
+- node tools/commercial-integrity-boundary.mjs: PASS, 77 protected roots, zero diagnostics.
+- Existing lane policy path validation: PASS, all five repair source/test paths covered.
+- All main migrations/lane files checked byte-for-byte against origin/main;
+  0376/0377 and lp-downstream-effects-v1.md checked against HEAD: unchanged.
+- git diff --check: PASS.
+- React skill checklist: nullable values formatted only at rendering, hooks and
+  async state ownership unchanged, no new dependencies/listeners or authority path.
+
+A first edit script used the API-relative path from apps/web and stopped before
+writing; it was corrected to absolute repository paths. No git-writing commands,
+package downloads, database startup or browser server were attempted.
+
+Handoff is NOT READY as the requested complete CI repair: the other shard
+failures still need their first failing locator/stack or a DB-backed browser run.
+Asked for a saved report/error-context path while continuing the bounded work;
+none was supplied before this handoff. The commit-message file says do not commit.
+Do not present the confirmed draft-cap repair or local tests as proof that all
+four shards are fixed. The router retains CI and RED-review ownership.
+
+
+## 30 October 2026 — MON-1 catch-up only, migration reservation mismatch
+
+Plan piece CH-6 / CH6-J, RED. Current origin/main is ea2a8cfe (#388 MON-1).
+Resolved both conflict hunks in docs/contracts/lp-0-effective-privileges-v1.json:
+the policies list retains both CH-6 tenant-isolation rows and MON-1 meter-work
+isolation; the triggers list retains all three CH-6 triggers and all five MON-1
+triggers. Policies, triggers and RLS arrays equal the exact set union of HEAD
+and origin/main with no duplicates. All main privilege entries and all CH-6
+entries survive; main's withdrawal of runtime EXECUTE on the replaced
+mon1_counted_meter_today routine remains intact.
+
+Shared SERIOUS-B5, contractor-entitlement and tenancy expectation changes
+relative to main are additive only (57, 28 and 28 lines respectively); both
+MON-1 work-admission and CH-6 additions remain. No test expectations were
+changed by this catch-up. No routines were recreated. All 156 main migrations
+are byte-identical to origin/main, and CH-6 SQL is byte-identical to HEAD.
+Lane allow paths exactly match the working diff against origin/main, excluding
+the lane file itself as permitted by the lane policy.
+
+Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- Exact LP-0 union, main migration byte comparison and lane path comparison — PASS.
+- git diff --check — PASS.
+- Existing migrationOrderViolations against origin/main — FAIL: CH-6 migrations
+  0376 and 0377 must be numbered above main's 0380.
+
+The brief says existing branch migrations are all above 0380, but this checkout
+has 0506_commercial_integrity_v3_receipts.sql and
+0507_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+instruction; no reservation was invented and the check was not weakened.
+Handoff: do not commit until the router supplies/resolves valid migration
+reservations. Database and browser suites were not run because this sandbox
+cannot start PostgreSQL or bind localhost; GitHub CI and independent RED review
+remain required. The router must stage the resolved inventory because .git is
+read-only here. No git-writing commands, package downloads or external actions.
+
+
+## 30 October 2026 — catch-up through 0381, ready for router staging
+
+Plan piece CH-6 / CH6-J, PR #392, RED. This catch-up supersedes the
+migration-reservation hold in the preceding catch-up section. The router had
+already started the merge; MERGE_HEAD and origin/main both resolve to
+fb933151eba27e4b877229363b2640622e6603c7 (#425), including #388 MON-1
+0380 and #404 SV-5 worker 0381. Local main is older and was not used as the
+target. No git-writing command was run.
+
+Resolved the remaining LP-0 trigger conflict by preserving all three CH-6
+triggers and main's final_check_request_after_lock trigger. LP-0 policies,
+triggers and RLS arrays equal the exact HEAD/origin-main set union, without
+duplicates; every recorded main array entry survives. Main's withdrawn
+privileges remain withdrawn. SERIOUS-B5, contractor-entitlement and tenancy
+test differences against main are additive only, preserving main's 0381
+private lock-request routine expectations and CH-6's existing expectations.
+All 320 main migration/lane files are byte-identical to origin/main. Only
+CH-6 migrations 0395/0396 are additional; their numbers and SQL bytes are
+unchanged from HEAD. Existing migrationOrderViolations returns no violations
+against current origin/main. No SQL routine was recreated, so main's latest
+mon2_issue body (0374) remains unchanged. The downstream contract
+lp-downstream-effects-v1.md is unchanged against both HEAD and origin/main.
+Updated the CH6-J lane note to remove its obsolete migration-reservation
+hold; its allow list exactly covers the 55 branch paths excluding itself.
+No new product behavior, schema changes or dependency changes.
+
+Checks actually run with installed tools:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- Exact LP-0 unions, byte comparisons, additive shared expectations, exact lane paths and existing migration-order check — PASS.
+- Changed-file conflict-marker scan and git diff --check — PASS.
+
+Ready for the router to stage the resolved merge and commit. The index still
+records LP-0 as unmerged until the router stages it, because .git is read-only.
+PostgreSQL/migration and browser suites were not run: this sandbox cannot start
+PostgreSQL or bind localhost; required full checks run in GitHub CI after push.
+Independent RED review remains required before merge. No commit, push, merge,
+package download, live provider or external action was performed.
+
+## 30 October 2026 — catch-up through main 766b4004
+
+Plan piece CH-6 / CH6-J, PR #392, RED. MERGE_HEAD and origin/main both
+resolve to 766b400498b12e560e62b73e9a88af9e2a0c0df8, including #422
+(0383), #426 (0385), #402 (0386), #423 (0387) and #430. The router had
+already started this merge; no git-writing command was run.
+
+Resolved the API module and OpenAPI conflicts by retaining CH-6 alongside
+main's customer sign-in controller, guard and application provider. OpenAPI
+matches the resolved module's generated document. Shared expectations retain
+all main lines and add only existing CH-6 expectations. LP-0 is the exact union
+by identity, retaining latest main records on shared identities, including
+withdrawn privileges. Existing identical arrays, including historical duplicate
+source entries, were preserved rather than cleaned up.
+
+All 332 migration/lane files on main remain byte-identical. CH-6 migrations
+0395/0396 retain their names and exact HEAD SQL bytes; the existing migration
+order check passes above main's 0387. No routine was recreated and no migration
+on main was edited. docs/contracts/lp-downstream-effects-v1.md remains identical
+to both HEAD and main. The lane note reflects this target, and its allow list
+matches all 55 branch paths excluding the lane file itself. No new behavior,
+dependencies or substantial complexity.
+
+Checks actually executed with installed Node 24.17.0 and Vitest 4.1.12:
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: node --import tsx src/generate-openapi.ts --check — PASS.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 6 tests.
+- node --check tools/commercial-integrity-boundary.mjs — PASS.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- Exact LP-0 union/latest-main record comparison, main migration/lane bytes,
+  CH-6 SQL bytes, additive shared expectations, downstream contract bytes,
+  lane paths, existing migrationOrderViolations and conflict-marker scan — PASS.
+- git diff --check — PASS.
+
+Ready for router staging and commit. The index still records the two resolved
+files as unmerged until the router stages them because .git is read-only here.
+PostgreSQL, migration execution and browser suites were not run: this sandbox
+cannot start PostgreSQL or bind localhost. Full required checks remain for GitHub
+CI after push; independent RED review remains required before merge.
+
+## 30 October 2026 — reserved renumber catch-up through main b6a0941d
+
+Plan piece CH-6 / CH6-J, PR #392, RED. The router had already merged
+origin/main b6a0941da6468919400f8da32cb69d30deef707a (#433, highest
+migration 0398) into HEAD de1ba6fa. No git-writing command was run.
+
+Used tools/migration-renumber.mjs's exported planRenumber with the supplied
+reservation boundary 0401 to produce the required 0395 -> 0402 and
+0396 -> 0403 mapping. Applied that plan with filesystem moves and the tool's
+bounded stem-reference replacement, including migration notes and receipts.
+The CLI --write mode was not used because it stages changes and .git is
+read-only. Both SQL files are byte-identical to reviewed head 187d536e:
+- 0402: SHA-256 39d8b96dd7504b721126c5bdea59ac3bed2026fb385f8ed4c518ea2c8c2393c2
+- 0403: SHA-256 e5c1fe39a5561167b52915b842188967813fb610b6735614e58d467c11bfabc3
+
+Verified all 334 migration/lane files on current main remain byte-identical.
+LP-0 is the exact recursive identity union with main, retaining every latest
+main record, including routine, policy and trigger inventories. Shared
+SERIOUS-B5, contractor entitlement, privilege and tenancy expectations retain
+every main line. The lane allow list exactly covers the 55 net branch paths
+excluding its own file. No main routine was recreated. The protected
+lp-downstream-effects-v1.md contract is unchanged against both HEAD and main.
+No new behavior, dependency or substantial complexity was introduced.
+
+Checks actually executed using installed Node 24.17.0 / Vitest 4.1.12:
+- node --check tools/migration-renumber.mjs — PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 1 file / 6 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- apps/api: node --import tsx src/generate-openapi.ts --check — PASS.
+- Node test runner executed tools/commercial-integrity-boundary.test.mjs with --test-concurrency=2 — PASS, 84 tests. The initial invocation also named a nonexistent migration-renumber.test.mjs; that file supplied no tests and is not claimed as tested.
+- node tools/commercial-integrity-boundary.mjs — PASS, 77 protected roots, zero diagnostics, 13 existing baselined unresolved sites.
+- Deterministic exact union, main bytes, reviewed SQL bytes, protected contract,
+  shared expectation preservation, net lane paths, migration order and conflict
+  scan — PASS (verification helper /tmp/ch6-verify.mjs).
+- node tools/lint.mjs — NOT GREEN locally: core purity passed (307 files),
+  then the lane guard counted old 0395/0396 migration/note paths from the
+  unstaged deletion diff alongside the committed branch diff. Those paths are
+  absent from main and absent from the final net branch tree. The exact net
+  lane-path and migration-order checks pass; no obsolete allow-list entries
+  were added to bypass this transient local result. CI must run on the router's
+  committed tree.
+- git diff --check — PASS.
+
+Ready for the router to stage and commit the renumber. PostgreSQL, migration
+execution and browser suites were not run because this sandbox cannot start
+PostgreSQL or bind localhost; required CI checks and the independent RED review
+remain before merge. Per the brief, meter-track-review-upgrade.integration.test.ts
+was not run or changed; its main-wide table-count failure belongs to the
+separate fix. No commit, push, provider action or release was performed.
+
+## 31 October 2026 — PR #392 catch-up through #443, reserved 0411/0412
+
+CH-6 / DEMO-S prerequisite; RED. Continued the router-prepared merge of
+origin/main a173e27c85f6ad8d144a09a2aa64c0acbaa9b898 (#443; highest migration
+0406) into reviewed HEAD 2b3aeb9b. Resolved both LP-0 conflict blocks by
+retaining both CH-6 and main success-fee policies/triggers. Verified the entire
+LP-0 inventory as an exact recursive identity union, preserving latest main
+records. Every main line in shared SERIOUS-B5, contractor entitlement,
+privilege and tenancy expectations remains present.
+
+Used tools/migration-renumber.mjs's exported planRenumber with reservation
+boundary 0410 to generate 0402_commercial_integrity_v3_receipts ->
+0506_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
+0507_commercial_integrity_sources. Applied filesystem moves and bounded full
+filename-stem replacements to branch-owned references and migration notes;
+no bare-digit replacements. CLI --write was not used because it stages Git
+changes and this sandbox's .git is read-only. Logged the reservation and moves
+in coordinator/MIGRATIONS.txt and updated this lane's exact allow list.
+
+Both SQL files are byte-identical to reviewed HEAD 2b3aeb9b. All 352 migrations
+and lane files on origin/main are byte-identical. The protected
+lp-downstream-effects-v1.md contract is unchanged against HEAD and main.
+The 11 CH-6 routine names do not overlap routines created on main; no main
+routine was re-created. No new behavior, dependencies or substantial
+complexity were introduced.
+
+Checks actually executed with installed Node 24.17.0 and Vitest 4.1.12:
+- node --check tools/migration-renumber.mjs — PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — 25 tests passed; workspace test timed out at the default 5 seconds during import.
+- Isolated workspace retry with --maxWorkers=1 --testTimeout=30000 also timed out. Final bounded retry with --maxWorkers=1 --testTimeout=120000 — PASS, 1 test (27.90 seconds). No assertions or checked-in timeout configuration changed.
+- /tmp/ch6-verify-20261031.mjs — PASS: exact LP-0 union, preservation of shared expectations, unchanged main bytes and SQL, protected contract, exact 56-path lane, migration order and conflict-marker scan.
+- Deterministic routine-name comparison — PASS: no main routine recreated.
+- git diff --check — PASS.
+
+The router must stage the resolved LP-0 file and filesystem renames before
+committing; the read-only index still records the pre-existing merge conflict.
+No Git-writing command, commit or push was performed. PostgreSQL, migration
+execution and browser suites must run in GitHub CI after the router pushes;
+this sandbox cannot start PostgreSQL or bind localhost. Independent exact-head
+RED review remains required before merge. Neither demo journey was run here.
+
+Final local results for this catch-up:
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84/84 tests, including the integrated source and CLI checks.
+
+Ready for the router to stage the resolved merge and commit the catch-up;
+required GitHub CI and independent RED review precede merge to main.
+
+## 31 October 2026 — PR #392 catch-up through #455, reserved 0503/0504
+
+CH-6; RED. Completed the filesystem resolution of the router-prepared merge
+of current main faa26359139259a53e1c36597e2132a4114f0533 (#455; highest
+migration 0490) into reviewed HEAD 427c16cb. Retained both commercialIntegrityV3
+and main's success-fee statement service exports. Unioned both LP-0 conflict
+blocks, retaining CH-6 and main policies and triggers.
+
+Used tools/migration-renumber.mjs's exported planRenumber with reservation
+boundary 0502: 0411_commercial_integrity_v3_receipts ->
+0506_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
+0507_commercial_integrity_sources. Applied filesystem moves and bounded full
+filename-stem replacements only; no bare-digit replacements. CLI --write
+stages Git changes, so it was not used in this read-only Git sandbox. Updated
+migration notes, references, coordinator reservation and the existing lane.
+Both SQL files remain byte-identical to reviewed HEAD 427c16cb. No main
+migration or routine was changed or recreated. No new behavior or complexity.
+The protected docs/contracts/lp-downstream-effects-v1.md is unchanged.
+
+Checks actually run:
+- node --check tools/migration-renumber.mjs — PASS.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 --testTimeout=120000 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 26 tests.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- /tmp/ch6-j-current-verify.mjs — PASS: exact recursive LP-0 identity union;
+  latest main records unchanged; every main line of SERIOUS-B5, contractor
+  entitlement and tenancy expectations retained; all 361 main migration/lane
+  files unchanged; SQL bytes unchanged; protected contract unchanged; exact
+  56-path lane; migration order and conflict-marker scan.
+- Deterministic routine-name comparison — PASS: all 11 CH-6 routine names are
+  distinct from routines created on main.
+- git diff --check — PASS.
+
+Ready for router staging and commit. Git's index still records the original
+two unmerged paths until the router stages their resolved working files;
+no Git-writing command was run here. PostgreSQL, migration execution and
+browser suites require GitHub CI after push. Independent exact-head RED
+review remains required. Neither demo journey was executed in this sandbox.
+
+## 31 October 2026 — PR #392 catch-up through main #451, unchanged 0503/0504
+
+CH-6 / CH6-J; RED. Resolved the router-prepared merge of origin/main
+8970e6e600346b76ce789edc8fbcdb426efe6e8f (#451, following #453/#454/#455)
+into reviewed HEAD 3d111b1c. No Git-writing command was run. Kept both
+CommercialIntegrityV3Controller and CustomerVariationController registrations,
+using the latest main module/provider body. Regenerated OpenAPI with the existing
+generator and verified every operation from both parents is unchanged. Resolved
+LP-0 as the exact recursive identity union, retaining latest main records.
+
+Deterministic verification passed: all main SERIOUS-B5, contractor entitlement
+and tenancy expectation lines retained; all 364 main migration/lane files
+byte-identical; 0503/0504 byte-identical to HEAD 3d111b1c; protected
+lp-downstream-effects-v1.md byte-identical to both parents; exact 56-path lane;
+migration ordering; no working-file conflict markers. All 11 CH-6 routine names
+are distinct from main's routines, so no main routine was recreated. No new
+behavior, dependencies or substantial complexity. Existing initial-review
+LATER / SIMPLICITY note remains; this catch-up adds no further review round.
+
+Checks actually run with installed Node 24.17.0 / Vitest 4.1.12:
+- packages/core and packages/db: ./node_modules/.bin/tsc -p tsconfig.json — PASS.
+- packages/db and apps/api: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- apps/api: node --import tsx src/generate-openapi.ts, then --check — PASS.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 --testTimeout=120000 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts src/workspace/framework-boundary.test.ts — PASS, 3 files / 26 tests.
+- packages/core: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.test.ts src/commercial-integrity-v3.boundaries.test.ts — PASS, 2 files / 22 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 6 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/lp-0-catalog.test.ts — PASS, 27 tests (comparator fixtures, not PostgreSQL execution).
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- /tmp/ch6-j-oct31-verify.mjs plus routine-name and OpenAPI parent-operation comparisons — PASS.
+- git diff --check — PASS.
+
+An initial command used the wrong package-relative paths and made no edits;
+corrected to the explicit repository root. Initial OpenAPI attempts encountered
+stale local compiled core/db exports; rebuilding those packages resolved this.
+The pnpm turbo wrapper produced no build output and was interrupted; installed
+package-local tsc executables completed the relevant builds instead. No package
+installation/download command was issued.
+
+Ready for router staging and commit. The read-only Git index still lists the
+three original conflicts until the router stages the resolved working files.
+PostgreSQL, migration execution and browser suites were not run because the
+sandbox cannot start PostgreSQL or bind localhost; GitHub CI must run them after
+push. Independent exact-head RED review remains required before merge. Neither
+demo journey was executed, and no commit, push, provider action or release was
+performed here.
+
+## 31 October 2026 — CI repair round 1 after catch-up
+
+CH-6 / CH6-J, PR #392; RED. Read the supplied CI traces at
+~/.local/share/full-steam/codex-runs/ch6-j-ci-traces-0747.txt and inspected
+main's #438 and #445 fixes. Started from clean HEAD 02093f69 with current
+main already merged; no merge conflicts remained and no Git-writing command
+was run. This is a focused test-boundary repair, with no product changes.
+
+Failures and root-cause fixes:
+- onsite-diary-upgrade.integration.test.ts, "0505 preserves off-site receipts,
+  all predecessor privileges, rows and unrelated routine definitions on
+  upgrade/replay": the pre-0505 catalogue was compared with every successor,
+  so CH-6's later tables increased the received table count by two. Apply and
+  record only 0505 before every original catalogue/row/routine assertion.
+  Then apply successors, verify original predecessor rows/types, capture the
+  complete upgraded catalogue and tracked rows, and replay. Require exact
+  upgraded catalogue equality and unchanged tracked rows/types after replay.
+  This follows #438 and retains all original assertions, including unrelated
+  routine bodies, off-site receipt replay and the single migration record.
+- customer-variation-upgrade.integration.test.ts: after successors, dynamic
+  table discovery added the two CH-6 tables to the row snapshot (378 vs 376).
+  Keep the full own-step snapshot assertion, then reuse snapshot's existing
+  explicit table-list argument with Object.keys(expected), as in #445.
+  All predecessor tables plus customer approval provenance remain compared;
+  a dropped tracked table still errors. Fingerprints, columns, privileges
+  and both foreign-key/approval-method assertions remain unchanged.
+
+Updated only this lane's allow list for the two repaired tests. It exactly
+covers all 58 net branch paths (excluding its own lane file). No exception,
+assertion skip, migration or protected contract edit was introduced. Every
+migration is byte-identical to HEAD and every main migration is byte-identical
+to origin/main, including CH-6 0506/0507 against HEAD. The CASE expressions
+inside their review-validation IF conditions are already parenthesised.
+No new complexity requiring an additional reporting document.
+
+Local checks actually run with installed tools:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/contractor-entitlement-snapshot.test.ts test/upgrade-proof-utils.test.ts — PASS, 2 files / 10 tests. Existing regression fixtures cover later table additions, changed/inserted/deleted rows and missing tracked tables. This is helper evidence, not PostgreSQL execution.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS (source typecheck).
+- TypeScript transpileModule syntax diagnostics for both edited integration tests — PASS; this is syntax validation, not a full semantic test typecheck.
+- Deterministic migration/protected-contract byte comparisons against HEAD/main,
+  no-conflict check, already-parenthesised CASE inspection and exact lane-path
+  comparison — PASS. An initial overbroad CASE search also matched already
+  parenthesised CASE expressions; direct inspection confirmed no SQL change
+  was needed.
+- git diff --check — PASS.
+
+Ready for router commit/push and GitHub CI. The two PostgreSQL integration
+suites cannot execute in this sandbox and were not claimed as passed. Required
+CI and independent exact-head RED review remain before merge. No browser
+journey, commit, push or release was performed here.
+
+## 31 October 2026 — CI repair round 2 investigation, NOT READY
+
+CH-6 / CH6-J, PR #392; RED. Started from clean HEAD da312a68 (router
+merged current main). Read current SIMPLE_LOOP, SIMPLICITY_RULE and the
+supplied trace file. No conflicts were present. No Git-writing command,
+fetch, migration edit or product/test change was made.
+
+The supplied ch6-j-ci-traces-1217.txt is only 18 bytes: two empty
+"=== job " headings. It contains no failing step, stack or assertion diff.
+Retrieved run 41193644400 job 124515574659 through the connected GitHub
+read-only log API. It confirms the five DEMO-A1-rest timeout names and
+DEMO-A1-scenarios:39, but failure-detail output never appears before the
+job is cancelled. The log also shows earlier fresh-job setup consumers
+failing: AUDIT-FIX-API-VARIATION (5 minutes), CH-2 (5 minutes), CH-3a
+(3 minutes), and CH-6 fresh-v3 (4 minutes). Saved-v1 CH-6, customer invoice,
+customer sign-in and decision inbox pass quickly. All four core-db shards
+succeeded in that run; this does not verify the browser paths.
+
+Queried artifacts for run 41182180487: only gitleaks-results.sarif was
+available, with no Playwright trace/report. The inspected latest web job
+lists failure-evidence upload as skipped. No screenshots or failing action
+stacks were available from those sources.
+
+Source findings (inspection, not runtime verification):
+- Both DEMO-A1 setup helpers reach fresh capture/review/confirmation through
+  openLiveWatchdogJob before evidence/lock/receipt work. Earlier failures
+  also use this fresh-job setup, so the supplied list alone does not locate
+  an evidence/lock write hang.
+- 0506's trigger on ordinary command_receipt INSERT/UPDATE/DELETE only
+  inspects OLD/NEW values and returns or refuses; it performs no query,
+  advisory lock or row/table lock. 0507's locking correction trigger runs
+  only for inserts to the private CH-6 correction table.
+- 0507 replaces the earlier table-locking review writer with row locking.
+  That writer is reached by an explicit advisory review POST, not by the
+  normal DEMO-A1 setup. The automatic family/source reads have no explicit
+  row/table lock statements. This does not exclude an expensive query,
+  unexpected invocation, pool starvation or other runtime failure.
+- Reviewed UI load/session hooks and the fresh-setup helpers; no
+  source-demonstrable infinite loop or confirmed lock cycle was found.
+
+No root cause has been established, so no speculative timeout, lazy-load,
+lock-removal, trigger or test-weakening patch was made. Migration-boundary
+repairs remain intact. All migration SQL bytes match HEAD and all main
+migration bytes match origin/main. The protected downstream-effects contract
+is unchanged. git diff --check and the no-unresolved-conflict check pass.
+The CASE expressions inside CH-6's review-validation IF conditions were
+already parenthesised and were left unchanged.
+
+DO NOT COMMIT as a repair. The router needs a runnable reproduction or the
+first timed-out Playwright action/trace plus relevant API/worker diagnostics
+(and database wait information if the action is waiting on a query). Run one
+DEMO-A1-rest test with <=2 workers in an environment that can start PostgreSQL
+and bind localhost; preserve its failure output before cancellation. This
+sandbox cannot execute that reproduction. No browser or PostgreSQL suite
+was run, and no passing repair, independent review or journey completion
+is claimed. The only workspace edit in this investigation is this receipt.
+
+## 31 October 2026 — CI repair round 3 of 3, lock-boundary patch
+
+CH-6 / CH6-J, PR #392; RED. Continued at router-merged HEAD b7e117d3.
+The pre-existing round-2 investigation entry above was preserved. This entry
+supersedes its no-patch handoff for the current candidate. Read current
+SIMPLE_LOOP, SIMPLICITY_RULE, AGENTS and CH-6 plan acceptance. The new trace
+file ch6-j-ci-traces-1240.txt again contains only two empty job headings;
+there is no additional stack trace. No unresolved merge conflicts or
+Git-writing commands; no fetch, commit or push.
+
+Failures addressed by the common lock-boundary patch: DEMO-A1-rest's
+late evidence, disputed attribution, unpaid catches, partial/duplicate receipts
+and lost-reply receipt paths, and DEMO-A1-scenarios' no-proof path. Previous
+GitHub log inspection also found fresh-job setup timeouts in CH-1/2/3a/4/7.
+The router diagnosed a convoy. The exact browser-blocking statement has NOT
+been reproduced in this sandbox, and the patch is not a claim that the
+reported browser failures now pass. Full PostgreSQL and browser CI must
+establish that at this final repair head; a further red result goes to a
+person-level blocker, not another automatic repair round.
+
+Changes:
+- 0506 SQL CHANGED, numbering retained. Replace its intermediate writer's
+  table-wide SHARE lock on seven commercial tables with tenant/job-qualified
+  source row locks in the same order used by 0507, require READ COMMITTED,
+  and revalidate source/absence facts after waits. Session/membership fencing,
+  command serialization, replay, receipt-before-audit and authority rechecks
+  remain. 0507 already used CREATE OR REPLACE for the same signature, so it
+  replaces 0506; the older body can no longer acquire table locks either.
+- 0507 SQL CHANGED, numbering retained. The private correction guard no longer
+  takes FOR UPDATE on app.job. It serializes correction mappings under a
+  CH-6-only tenant/job advisory transaction lock (hash seed 628). Every competing
+  mapping for a job still shares a lock; READ COMMITTED conservation checks run
+  after the wait. Credit/line limits, duplicate handling, immutable source
+  permissions and provenance checks remain. Ordinary commercial writers do not
+  acquire this private lock. Existing concurrent correction conservation tests
+  and review-race tests remain unchanged for CI.
+- Standalone readFamily/read methods execute SET TRANSACTION READ ONLY before
+  authority/source reads. This enforces the no-writer-lock/no-write GET boundary
+  in PostgreSQL, including nested helpers. Review saves keep their write
+  transaction and ordered row fencing. Ordinary PostgreSQL AccessShare locks
+  required by SELECT are not described as absent. Inspected authority/family
+  source routines already contained no unconditional explicit row locks;
+  the database read-only boundary prevents a future nested locking read from
+  silently joining a writer convoy.
+- Added a real PostgreSQL concurrent read/write test to the existing isolation
+  suite. It holds session/membership/job rows in a writer, launches three actual
+  repository GETs on separate runtime connections, and holds their transactions
+  at a commit barrier. While readers remain open it updates the same session
+  and job and inserts another fictional job. It requires no Lock wait_event
+  and no pending/tuple/transaction-id or writer relation lock in pg_locks for
+  the readers. Commit barriers make the overlap deterministic; test-only lock
+  and statement deadlines bound failures. No production coordination helper.
+- Added executing local regressions for both GET transaction boundaries,
+  rollback/release on failure and absence of table/commercial-job locks in
+  the branch migrations. Updated existing migration notes. No exceptions added.
+
+Preservation: every migration on origin/main remains byte-identical; only the
+branch-owned 0506/0507 SQL changed. LP-0 remains the exact identity union with
+latest main records unchanged; no grants, routine signatures or catalogue
+identities changed. The protected lp-downstream-effects-v1.md and both earlier
+migration-boundary test repairs are unchanged against HEAD. Own lane scope now
+matches the 56 net branch paths: the two boundary-test paths no longer differ
+from main, so their stale own-lane entries were removed without editing the
+tests. No other lane file changed. Existing CASE expressions inside validation
+IF conditions are already parenthesised and remain so.
+
+Checks actually executed using installed Node 24.17.0 / Vitest 4.1.12:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 8 tests including the two new regressions.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext --experimentalDecorators --emitDecoratorMetadata --esModuleInterop test/commercial-integrity-v3-query-isolation.integration.test.ts test/commercial-integrity-v3-input.test.ts — PASS, semantic typecheck of both edited test files and imports.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- packages/db: ./node_modules/.bin/vitest list --maxWorkers=2 test/commercial-integrity-v3-query-isolation.integration.test.ts — PASS, new concurrency test collected by the actual runner. Collection is NOT PostgreSQL execution.
+- Deterministic LP-0 exact union/latest-main comparison, main migration bytes,
+  protected contract, boundary-test bytes, exact lane and conflict checks — PASS.
+  The initial lane check identified the two now-main-owned paths; the exact
+  scope check passed after correcting this lane's stale entries.
+- git diff --check — PASS.
+
+An initial unit-edit command used the wrong package-relative path, made no edit,
+and ran the existing 6 tests; corrected the working directory, added the tests,
+and the final 8-test run passed. No packages were downloaded.
+
+Ready for router commit/push as the final CI repair candidate. PostgreSQL,
+whole-database and browser journeys were NOT executed because this sandbox
+cannot start PostgreSQL or bind localhost. Require full CI (including the new
+concurrency and existing correction/race/upgrade tests) and independent RED
+review at the exact resulting head before merge. No demo pass is claimed.

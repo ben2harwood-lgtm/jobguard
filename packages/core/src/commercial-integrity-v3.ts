@@ -60,6 +60,13 @@ export const commercialIntegrityV3InputSchema = inputShape.superRefine((input, c
  }
  for (const assertion of input.ordinaryFacts.assertions) if (assertion.validFrom > assertion.validUntil) fail("Assertion validity reversed");
  if (input.phase === "post_lock") {
+  const pub = input.published;
+  if (pub.lockSource.sourceId !== pub.lockId || pub.lockSource.recordedAt !== pub.cutoff || pub.lockSource.provenance !== "server_recorded") fail("Published locked bill identity mismatch");
+  const receiptIds = new Set<string>();
+  for (const receipt of unique(pub.receipts)) {
+   if (receiptIds.has(receipt.source.sourceId)) fail("Conflicting receipt identity");
+   receiptIds.add(receipt.source.sourceId);
+  }
   const catches = new Set<string>(), lines = new Set<string>();
   for (const c of unique(input.published.catches)) {
    if (catches.has(c.catchId) || (c.invoiceLineId !== null && lines.has(c.invoiceLineId))) fail("Conflicting catch/line identity");
@@ -172,9 +179,29 @@ export function evaluateCommercialIntegrityV3(raw: unknown): CommercialIntegrity
    if (c && correction.value.pence > 0) add("catch_line_credit_or_writeoff", [c, correction, lockFact], { correctionKind: correction.correctionKind, pence: correction.value.pence, basis: correction.value.basis, lineId: correction.invoiceLineId, lockId: pub.lockId }, "An actual line-specific credit or write-off refers to a published confirmed catch; review its context.");
   }
   if (p.allocation) {
-   const allocations = unique(pub.allocations).filter(a => inWindow(a.source) && !a.reversed && a.method === "explicit_user" && a.catchLineIds.every(line => confirmed.some(c => c.invoiceLineId === line)) && a.catchOutstanding.basis !== "unknown" && a.catchAllocated.basis === a.catchOutstanding.basis && a.ordinaryAllocated.basis === a.catchOutstanding.basis && a.catchOutstanding.pence > 0 && a.catchAllocated.pence === 0 && a.ordinaryAllocated.pence > 0);
+   const saved = unique(pub.allocations).filter(a => !a.reversed);
+   const allocations = saved.filter(a => {
+    if (!inWindow(a.source) || a.method !== "explicit_user") return false;
+    const receipt = receipts.find(r => r.source.sourceId === a.receiptId);
+    if (!receipt) { unavailableRule(allocationKind, "source_absent"); return false; }
+    if (receipt.reversed) return false;
+    const basis = receipt.value.basis;
+    if (basis === "unknown" || [a.catchOutstanding, a.catchAllocated, a.ordinaryAllocated].some(v => v.basis !== basis)) {
+     unavailableRule(allocationKind, "basis_unavailable"); return false;
+    }
+    const lines = [...new Set(a.catchLineIds)].map(line => confirmed.find(c => c.invoiceLineId === line));
+    if (lines.some(c => !c)) { unavailableRule(allocationKind, "line_source_absent"); return false; }
+    if (lines.some(c => c!.value.basis !== basis)) { unavailableRule(allocationKind, "basis_unavailable"); return false; }
+    const total = saved.filter(other => other.receiptId === a.receiptId);
+    if (total.some(other => other.catchAllocated.basis !== basis || other.ordinaryAllocated.basis !== basis) ||
+     total.reduce((sum, other) => sum + BigInt(other.catchAllocated.pence) + BigInt(other.ordinaryAllocated.pence), 0n) > BigInt(receipt.value.pence) ||
+     BigInt(a.catchOutstanding.pence) > lines.reduce((sum, c) => sum + BigInt(c!.value.pence), 0n) || a.catchAllocated.pence > a.catchOutstanding.pence) {
+     unavailableRule(allocationKind, "source_absent"); return false;
+    }
+    return a.catchOutstanding.pence > 0 && a.catchAllocated.pence === 0 && a.ordinaryAllocated.pence > 0;
+   });
    const payments = new Set(allocations.map(a => a.receiptId));
-   if (payments.size >= p.allocation.minimumPayments) add(allocationKind, [lockFact, ...confirmed.filter(c => allocations.some(a => c.invoiceLineId !== null && a.catchLineIds.includes(c.invoiceLineId))), ...allocations], { payments: payments.size, minimumPayments: p.allocation.minimumPayments, lockId: pub.lockId }, "Repeated saved explicit allocations avoid outstanding confirmed catch lines in the declared window; no allocation is changed.");
+   if (payments.size >= p.allocation.minimumPayments) add(allocationKind, [lockFact, ...confirmed.filter(c => allocations.some(a => c.invoiceLineId !== null && a.catchLineIds.includes(c.invoiceLineId))), ...allocations, ...receipts.filter(r => allocations.some(a => a.receiptId === r.source.sourceId))], { payments: payments.size, minimumPayments: p.allocation.minimumPayments, lockId: pub.lockId }, "Repeated saved explicit allocations avoid outstanding confirmed catch lines in the declared window; no allocation is changed.");
   }
  }
  return freeze(commercialIntegrityV3ResultSchema.parse({ version: "commercial-integrity-result.v3", advisory: true, syntheticOnly: true, evaluatedAt: input.evaluatedAt, profileVersion: p.version, findings: findings.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), unavailable: unavailable.sort((a, b) => canonical(a) < canonical(b) ? -1 : 1) }));

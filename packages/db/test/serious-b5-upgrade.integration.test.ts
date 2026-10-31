@@ -1167,6 +1167,61 @@ async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
 
+async function integrityReviewAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const identities = [
+  ["ch6_append_integrity_review_audit", "t uuid, j uuid, actor uuid, command_id uuid, request_hash text, snapshot_hash text"],
+  ["ch6_guard_integrity_review_receipt", ""],
+  ["ch6_integrity_authority", "t uuid, j uuid, digest text"],
+  ["ch6_integrity_canonical", "v jsonb"],
+  ["ch6_integrity_family", "t uuid, j uuid"],
+  ["ch6_integrity_source_fingerprint", "t uuid, j uuid, digest text, source_snapshot jsonb"],
+  ["ch6_record_integrity_review", "t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb"],
+ ];
+ const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
+ const owner = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+  expect(r.proowner).toBe(owner);
+  expect(r.prosecdef).toBe(r.proname === "ch6_record_integrity_review");
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
+  expect(acl).toEqual(r.proname === "ch6_record_integrity_review"
+   ? ["jobguard_migration=X/jobguard_migration", "jobguard_runtime=X/jobguard_migration"]
+   : ["jobguard_migration=X/jobguard_migration"]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+}
+
+async function integritySourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const identities=[
+  ["ch6_guard_line_correction",""],
+  ["ch6_integrity_published","t uuid, j uuid, d text"],
+  ["ch6_integrity_sources","t uuid, j uuid, d text"],
+  ["ch6_source","t uuid, j uuid, d text, i text, k text, at_time timestamp with time zone, content jsonb, provenance text"],
+ ];
+ const names=identities.map(([name])=>name);
+ const routines=after.routines.filter(r=>r.nspname==="app"&&names.includes(r.proname));
+ expect(routines.map(r=>[r.proname,r.args])).toEqual(identities);
+ const owner=(await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for(const r of routines){expect(r.proowner).toBe(owner);expect(r.prosecdef).toBe(r.proname==="ch6_integrity_sources");expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl).toEqual(r.proname==="ch6_integrity_sources"?["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]:["jobguard_migration=X/jobguard_migration"]);}
+ const tables=["ch6_identifier_assertion","ch6_line_correction_source"];
+ // Generated UNIQUE names are checked by their exact columns, avoiding PostgreSQL identifier truncation guesses.
+ const uniqueRelations=after.relations.filter(r=>r.nspname==="app"&&!before.relations.some(b=>b.nspname===r.nspname&&b.relname===r.relname)&&tables.some(t=>r.relname.startsWith(t)));
+ expect(uniqueRelations).toHaveLength(6);
+ for(const r of uniqueRelations){expect(r.relowner).toBe(owner);if(tables.includes(r.relname)){expect(r.relrowsecurity).toBe(true);expect(r.relforcerowsecurity).toBe(true);expect((await f.admin.query("SELECT count(*)::int n FROM aclexplode($1::aclitem[]) WHERE grantee<>$2::oid",[r.relacl,owner])).rows[0].n).toBe(0);}}
+ const keys=(await f.admin.query("SELECT conrelid::regclass::text relation,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE contype='u' AND conrelid IN('app.ch6_identifier_assertion'::regclass,'app.ch6_line_correction_source'::regclass) ORDER BY 1,2")).rows;
+ expect(keys).toEqual([{relation:"app.ch6_identifier_assertion",definition:"UNIQUE (tenant_id, job_id, session_digest, identifier_kind, subject_ref, authority_ref)"},{relation:"app.ch6_line_correction_source",definition:"UNIQUE (tenant_id, job_id, correction_kind, authority_ref)"}]);
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));expect(policies).toHaveLength(2);
+ for(const policy of policies){expect(policy.policyname).toBe("tenant_isolation");expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);}
+ const order=(x:unknown,list:unknown[])=>list.findIndex(r=>JSON.stringify(r)===JSON.stringify(x));
+ return {...before,rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:[...before.routines,...routines].sort((a,b)=>order(a,after.routines)-order(b,after.routines)),relations:[...before.relations,...uniqueRelations].sort((a,b)=>order(a,after.relations)-order(b,after.relations)),policies:[...before.policies,...policies].sort((a,b)=>order(a,after.policies)-order(b,after.policies))};
+}
+
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -1190,6 +1245,8 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await catchAdditions(expected));
  Object.assign(expected, await workAdmissionAdditions(expected));
  Object.assign(expected, await invoicedImportAdditions(expected));
+ Object.assign(expected, await integrityReviewAdditions(expected));
+ Object.assign(expected, await integritySourceAdditions(expected));
  Object.assign(expected, await storedReceiptCaseAdditions(expected));
  Object.assign(expected, await paymentFeeAdditions(expected));
  Object.assign(expected, await successFeeCatchAdditions(expected));
