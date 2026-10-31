@@ -4,12 +4,12 @@ import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany, meterInput, storeMeter } from "./meter-persistence-fixtures.js";
 export { meterCompany, meterInput, storeMeter };
 export type SubscriptionCompany = Awaited<ReturnType<typeof meterCompany>>;
-export const terms = (a: SubscriptionCompany, plan: "Solo" | "Builder" = "Builder", expectedRevision = 0) => {
- const bound = { tenantId: a.tenantId, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", plan, cadence: "monthly", anchorDay: 1, maximumPence: plan === "Solo" ? 4900 : 16900, expectedRevision };
+export const terms = (a: SubscriptionCompany, plan: "Solo" | "Builder" = "Builder", expectedRevision = 0, anchorDay = expectedRevision === 0 ? Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric" }).format(new Date())) : 1) => {
+ const bound = { tenantId: a.tenantId, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", plan, cadence: "monthly", anchorDay, maximumPence: plan === "Solo" ? 4900 : 16900, expectedRevision };
  const {tenantId,...selection}=bound;
  const contentHash = subscriptionTermsContentHash(tenantId,selection);
  return ({
- version: "subscription-command.v1", kind: "accept", plan, cadence: "monthly", anchorDay: 1,
+ version: "subscription-command.v1", kind: "accept", plan, cadence: "monthly", anchorDay,
  termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4",
  maximumPence: plan === "Solo" ? 4900 : 16900, contentHash, expectedRevision,
 }); };
@@ -30,7 +30,7 @@ export async function historicalAgreement(f: WorkFixture, a: SubscriptionCompany
  const accepted = await command(f, a, terms(a, plan));
  await workTenant(f.admin, a.tenantId, async db => {
   await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.subscription_agreement_revision SET effective_date=$2::date WHERE tenant_id=$1", [a.tenantId, date]);
+  await db.query("UPDATE app.subscription_agreement_revision SET effective_date=$2::date, accepted_at=$2::date::timestamp AT TIME ZONE 'Europe/London', anchor_day=extract(day FROM $2::date)::integer WHERE tenant_id=$1", [a.tenantId, date]);
  });
  return accepted;
 }

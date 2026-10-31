@@ -16,8 +16,8 @@ beforeAll(async () => {
  dir = await mkdtemp(join(tmpdir(), "audit-api-value-pg-"));
  const port = await freePort(57000, 500);
  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await pg.initialise(); await pg.start();
- admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+ await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");
+ admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" , database: "jobguard_synthetic_demo"});
  await migrate(admin);
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
@@ -25,7 +25,7 @@ beforeAll(async () => {
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
  // Enable only the existing runtime role in this disposable fixture; no new grant.
  await admin.query("ALTER ROLE jobguard_runtime LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS");
- runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "jobguard_runtime", password: "synthetic" });
+ runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "jobguard_runtime", password: "synthetic" });
 }, 60000);
 afterAll(async () => {
  vi.unstubAllEnvs(); await closeTestPools(runtime, admin); await pg?.stop();

@@ -49,11 +49,11 @@ export class SimulationFeeStatementError extends Error {
 
 // Restricted to the validated JSON representation: sorted object keys, preserved array order,
 // JSON escaping/numbers, no whitespace/BOM/trailing newline. Locale never affects the bytes.
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+export function canonicalSimulationFeeStatementJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalSimulationFeeStatementJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
     const object = value as Record<string, unknown>;
-    return `{${Object.keys(object).sort().map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
+    return `{${Object.keys(object).sort().map(key => `${JSON.stringify(key)}:${canonicalSimulationFeeStatementJson(object[key])}`).join(",")}}`;
   }
   return JSON.stringify(value)!;
 }
@@ -63,7 +63,7 @@ export function formatSimulationFeeStatement(raw: unknown) {
   const parsed = simulationFeeStatementDocumentV1.safeParse(raw);
   if (!parsed.success) throw new SimulationFeeStatementError();
   const document = parsed.data;
-  const canonicalJson = canonical(document);
+  const canonicalJson = canonicalSimulationFeeStatementJson(document);
   const bytes = new TextEncoder().encode(canonicalJson);
   return Object.freeze({ document, canonicalJson, bytes, byteLength: bytes.byteLength, documentHash: sha256(canonicalJson) });
 }

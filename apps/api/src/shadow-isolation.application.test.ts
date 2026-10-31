@@ -105,14 +105,20 @@ beforeAll(async()=>{
  await owner.query("ALTER SYSTEM SET log_line_prefix='SV3:%u:%d:%c: '");await owner.query("SELECT pg_reload_conf()");
  await owner.query(`CREATE ROLE sv3_isolation_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  await owner.query("ALTER ROLE sv3_isolation_runtime SET log_statement='all'");
- await owner.query("CREATE DATABASE sv3_isolation_zero");const p=pool("postgres","sv3_isolation_zero");try{await migrate(p);await installLegacySyntheticPartyFixtures(p);
+ await owner.query("CREATE DATABASE jobguard_synthetic_demo");const p=pool("postgres","jobguard_synthetic_demo");try{await migrate(p);await installLegacySyntheticPartyFixtures(p);
  await p.query("GRANT jobguard_runtime TO sv3_isolation_runtime");
  await p.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await p.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
  await p.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SV-3 builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
  await p.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
  await p.query("SELECT app.issue_practice_session($1)",[digest]);
- await p.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);
+ // Ruling 103 (Q3): one explicit owner transaction carries the exact practice-home permit and the unchanged INSERT.
+ {const owner=await p.connect();try{await owner.query("BEGIN");await owner.query("SELECT set_config('app.tenant_id',$1,true)",[DEMO_TENANT_ID]);
+ await owner.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+  VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',$1::uuid,'id',$2::uuid,'title','Fictional SV-3 isolation job','status','live','revision',0,
+    'practice_session_digest',$3::text,'practice_scenario','home','provenance','system_generated_quote'))),$4)`,[DEMO_TENANT_ID,jobId,digest,DEMO_MEMBERSHIP_ID]);
+ await owner.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);await owner.query("COMMIT")}catch(error){await owner.query("ROLLBACK");throw error}finally{owner.release()}}
  await p.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES($1,$2,$3,'confirmed',$4)",[baselineScopeId,DEMO_TENANT_ID,jobId,fixed]);
  await withTenant(p,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){
@@ -123,7 +129,7 @@ beforeAll(async()=>{
  });
  }finally{await closeTestPools(p)}
  // Clone the freshly migrated and deterministically seeded baseline, preserving exact server timestamps and identities.
- await owner.query("CREATE DATABASE sv3_isolation_many TEMPLATE sv3_isolation_zero");
+ await owner.query("CREATE DATABASE sv3_isolation_many TEMPLATE jobguard_synthetic_demo");
  const many=pool("postgres","sv3_isolation_many");try{
   await many.query(`CREATE ROLE sv3_isolation_shadow LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO sv3_isolation_shadow`);
   const shadow=pool("sv3_isolation_shadow","sv3_isolation_many");try{await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
@@ -169,7 +175,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
     return {compared:{output,statements},retrievals,nestEtagOf:(text:string)=>nestEtag(Buffer.from(text,"utf8"))};
    }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await app.close();await closeTestPools(runtime)}
   }
-  const many=await replay("sv3_isolation_many"),zero=await replay("sv3_isolation_zero");
+  const many=await replay("sv3_isolation_many"),zero=await replay("jobguard_synthetic_demo");
   // Everything compared exactly, except the two named-limit items (placeholders stand in for them on exactly the two prevention-checks GETs).
   expect(many.compared).toEqual(zero.compared);
   for(const route of retrievedAtRoutes){
@@ -192,7 +198,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
  it("successful Log an extra, retries, mutation errors and current builder counts/inbox responses ignore held signals",async()=>{
   const {createWorkspaceApplication}=await import("./workspace/application.js");
   const responses=[];
-  for(const database of ["sv3_isolation_zero","sv3_isolation_many"]){const p=pool("sv3_isolation_runtime",database);try{
+  for(const database of ["jobguard_synthetic_demo","sv3_isolation_many"]){const p=pool("sv3_isolation_runtime",database);try{
    const app=createWorkspaceApplication({pool:p,sessionId:session}),out:unknown[]=[];
    const extra={version:"variation-command.v1",action:"propose",proposalId,scopeItemId,existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional builder addition",captureText:"Fictional builder addition",price:null};
    const initial=await app.variation.command(jobId,extra);expect(initial.variations.some(v=>v.id===proposalId)).toBe(true);out.push(initial);
@@ -286,7 +292,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  const {seedAccount}=await import(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url).href);
  const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(new URL("../../../packages/db/src/outbox.ts",import.meta.url).href);
  // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
- const initial=pool("postgres","sv3_isolation_zero"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
+ const initial=pool("postgres","jobguard_synthetic_demo"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
  const signalEvidence=randomUUID(),signalUpload=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
  try{await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
   await db.$client.query("SET LOCAL session_replication_role='replica'"); // Fixture ownership binding only, as in SV-4's exported fixture.
@@ -310,7 +316,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  });
  }finally{await closeTestPools(initial)}
  const databases=["sv3_effect_zero","sv3_effect_many"];
- for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE sv3_isolation_zero`);
+ for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE jobguard_synthetic_demo`);
  const manyAdmin=pool("postgres",databases[1]!);
  try{const hidden=pool("sv3_isolation_shadow",databases[1]!);try{await withTenant(hidden,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){const id=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',$4,'Private fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,a.jobId,id,fixed]);
