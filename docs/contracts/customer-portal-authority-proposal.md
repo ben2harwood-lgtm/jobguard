@@ -6,6 +6,45 @@ Read with [candidate reconciliation](../planning/mon5-candidate-reuse-map.md) an
 [adversarial vector specification](../fixtures/customer-portal-authority-cases.json).
 The vectors grant no access and define no successful authenticated principal.
 
+## MON-5 sign-in foundation ruling — 29 October 2026
+
+Ben selected emailed one-time links, no passwords, with browser-session cookies.
+Migration `0387_customer_signin.sql` implements this synthetic foundation only.
+`POST /customer-portal/{issue,revoke,signin,signout,read}` and matching Next `/api`
+paths are registered. Their customer scope is distinct from member authority.
+The earlier blanket AUTH/GRANT/ROUTES refusal below is superseded only for these
+five routes. All commercial, message, stage and cancellation-kit slices stay held.
+
+Owner or finance may request a server-generated 256-bit token for a current
+customer/job binding. Only `app.action_outbox`, `fake_email` and the current
+customer revision's `.invalid` address are allowed. The grant stores the HMAC,
+company, tenant, job, customer, exact binding/revision, issuer and outbox reference.
+The outbox alone retains the token-bearing fictional email artifact; it must never
+be returned by a customer or issuer response. Audit contains identifiers only.
+Issuance is limited to one request per job per minute; a new grant revokes previous
+grants and sessions and cancels pending old delivery. Revocation is owner/finance
+within the same company. No grant is standing commercial authority.
+
+A link expires ten minutes after issue. Atomic redemption consumes it once and
+creates one session. The cookie is HttpOnly, Secure, SameSite=Strict, with neither
+Max-Age nor Expires on issue. The conservative server cap is one hour from
+redemption, without sliding refresh. Closing a browser session removes the
+session cookie under normal browser behavior; browser session-restoration settings
+can restore session cookies, so the server cap and explicit sign-out remain the
+backstop. Sign-out revokes the stored session. Expiry of the consumed link does
+not truncate an otherwise valid session. Revoked/replaced grants, changed party
+bindings or customer revisions and inactive issuers refuse subsequent access.
+Both transports require the configured real Origin; issuance/revocation also
+require the builder session and its CSRF token. Customer credentials, even when
+mixed with builder cookies, cannot enter builder APIs. Reads return only their
+bound job/customer/company scope and never list jobs or inspect shadow data.
+
+`customerApprovalMethodV1` names `customer_authenticated` alongside existing
+methods. Existing quote/variation writers and stored history remain on their
+existing contracts; this foundation cannot turn a method label into an approval.
+No real customer data, delivery, payment or release is authorized. PostgreSQL CI,
+the browser suite and independent Claude RED review remain necessary evidence.
+
 ## Authority and safest synthetic choices
 
 The issued order supersedes the draft status and its suggested branch/registration

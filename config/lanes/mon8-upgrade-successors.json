@@ -6,7 +6,7 @@
         "codex/sandbox/mon8-upgrade-successors"
       ],
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-      "note": "MON-8 RED final authorized repair: reserved 0378/0379; preserve Round 5 repairs and pinned ENT-4b sources; synchronize only the three scanner locks approved by Ben on 29 October. Retained purposes are read-only; new work remains gated. Router owns Git merge ancestry, commit/push, CI and exact-head RED review.",
+      "note": "MON-8 RED final authorized CI repair (31 October): preserve the three re-pinned ENT-4b sources; retain read-only access and gate new work. Router owns Git merge ancestry, commit/push, CI and exact-head RED review.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",
@@ -37,8 +37,8 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/plan-entitlements-v1.md",
         "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-        "packages/db/migrations/0378_server_plan_entitlements.sql",
-        "packages/db/migrations/0379_contractor_feature_guards.sql",
+        "packages/db/migrations/0408_server_plan_entitlements.sql",
+        "packages/db/migrations/0409_contractor_feature_guards.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/contractor-entitlement-authority-repository.ts",
         "packages/db/src/enterprise-identity-repository.ts",

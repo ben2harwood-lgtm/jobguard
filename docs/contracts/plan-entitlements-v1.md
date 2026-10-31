@@ -149,8 +149,8 @@ separate evidence; source inspection and unit query doubles do not supply them.
 
 ## 29 October — combined MON-8 catch-up (0378/0379, RED)
 
-The branch migrations are reserved as `0378_server_plan_entitlements.sql` and
-`0379_contractor_feature_guards.sql`. The practice-worker decision retains the
+The branch migrations are reserved as `0408_server_plan_entitlements.sql` and
+`0409_contractor_feature_guards.sql`. The practice-worker decision retains the
 complete 0332 Northside finance-worker predicate, with the current contractor
 track/agreement check before worker selection. Missing status and an active
 status on an older assignment never grant current work.

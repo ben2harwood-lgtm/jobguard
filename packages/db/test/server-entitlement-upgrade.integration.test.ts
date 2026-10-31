@@ -8,12 +8,12 @@ let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); });
 it("MON-8 0352 and 0353 preserve every pre-existing row and refuse legacy new work without status", async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
-  c = await startBeforeMigration("0378_server_plan_entitlements.sql");
+  c = await startBeforeMigration("0408_server_plan_entitlements.sql");
   const f = await company(c), before = await snapshot(c.admin), retained = await read(c, f);
   expect((await c.admin.query("SELECT * FROM app.contractor_agreement_status_revision")).rows).toEqual([]);
-  await applyMigration(c, "0378_server_plan_entitlements.sql");
+  await applyMigration(c, "0408_server_plan_entitlements.sql");
   expect(await snapshot(c.admin)).toEqual(before);
-  await applyMigration(c, "0379_contractor_feature_guards.sql");
+  await applyMigration(c, "0409_contractor_feature_guards.sql");
   expect(await snapshot(c.admin)).toEqual(before);
   expect(await withTenant(c.runtime, f.context, db => serverEntitlement(db, f.p.membershipId, "work_orders"))).toMatchObject({ executable: false, entitlement: "held" });
   expect(await read(c, f)).toEqual(retained);

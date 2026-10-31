@@ -4,7 +4,7 @@ import { startBeforeMigration, applyMigration, status, snapshot, unchanged, type
 import { company } from "./practice-worker-switch-fixtures.js";
 import { currentCommand } from "./contractor-practice-session-fixtures.js";
 import { ownerTx } from "./extra-fixtures.js";
-const first="0378_server_plan_entitlements.sql", second="0379_contractor_feature_guards.sql";
+const first="0408_server_plan_entitlements.sql", second="0409_contractor_feature_guards.sql";
 let c:Cluster,f:Awaited<ReturnType<typeof company>>,before:Awaited<ReturnType<typeof snapshot>>;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";c=await startBeforeMigration(first);f=await company(c);

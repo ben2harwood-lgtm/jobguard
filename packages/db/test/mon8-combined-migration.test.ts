@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const read=(name:string)=>readFileSync(new URL(`../migrations/${name}`,import.meta.url),"utf8");
-const first=read("0378_server_plan_entitlements.sql"), second=read("0379_contractor_feature_guards.sql");
+const first=read("0408_server_plan_entitlements.sql"), second=read("0409_contractor_feature_guards.sql");
 const body=(sql:string,name:string)=>sql.slice(sql.indexOf(`CREATE OR REPLACE FUNCTION app.${name}(`)).split("END $$;")[0]+"END $$;";
 it("preserves all of 0332 worker logic after the entitlement guard",()=>{
  const expected=body(read("0332_northside_finance_switch.sql"),"practice_worker_switch_decision").replace("plpgsql STABLE","plpgsql VOLATILE").replace(" company:=rule.company;"," PERFORM app.mon8_require_feature(rule.owner_member,'operative_roles');\n company:=rule.company;");
@@ -38,4 +38,16 @@ it("preserves the full 0347 completion body with only MON-8 commercial-loss chan
   .replace(" IF sub.user_id IS NULL THEN\n  INSERT INTO identity.sso_subject"," IF sub.user_id IS NULL THEN PERFORM app.mon8_require_feature(member,'sso'); allow_new_grants:=true; END IF;\n IF sub.user_id IS NULL THEN\n  INSERT INTO identity.sso_subject")
   .replace("  WHERE enabled AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups')) LOOP","  WHERE enabled AND allow_new_grants AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups')) LOOP");
  expect(identityRoutine(second,"sso_complete")).toBe(expected);
+});
+
+it("keeps legacy tenant refusals before entitlement and entitlement before every import write",()=>{
+ for(const name of ["work_order_begin","work_order_commit","import_batch_record","import_sor_version"]) {
+  const routine=body(second,name);
+  const feature=routine.indexOf("PERFORM app.mon8_require_feature(actor,'work_orders');");
+  const permission=routine.indexOf("IF t IS NULL OR NOT coalesce(app.");
+  expect(permission,name).toBeGreaterThan(-1);
+  expect(feature,name).toBeGreaterThan(permission);
+  expect(routine.indexOf("RAISE EXCEPTION 'MODE_FORBIDDEN'"),name).toBeLessThan(permission);
+  expect(routine.indexOf("INSERT INTO"),name).toBeGreaterThan(feature);
+ }
 });

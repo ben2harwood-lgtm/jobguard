@@ -145,9 +145,9 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; k text:=
  lines jsonb:=coalesce(payload->'lines','[]'::jsonb); status_value text:=payload->>'status'; issued date:=(payload->>'issuedOn')::date; version_id uuid:=nullif(payload->>'sorVersionId','')::uuid;
  total bigint; team_value uuid:=nullif(payload->'team'->>'teamId','')::uuid; member uuid;
 BEGIN
- PERFORM app.mon8_require_feature(actor,'work_orders');
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t IS NULL OR NOT coalesce(app.work_order_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM app.mon8_require_feature(actor,'work_orders');
  IF payload->>'version' IS DISTINCT FROM 'work-order-commit.v1' OR k NOT IN('create','revise') OR status_value NOT IN('ordered','cancelled') OR jsonb_typeof(lines)<>'array' OR jsonb_array_length(lines)>1000
  THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='22023'; END IF;
  IF k='create' THEN
@@ -364,9 +364,9 @@ CREATE OR REPLACE FUNCTION app.import_batch_record(actor uuid, payload jsonb) RE
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; rows jsonb:=coalesce(payload->'rows','[]'::jsonb); batch uuid:=(payload->>'batchId')::uuid; n integer;
 BEGIN
- PERFORM app.mon8_require_feature(actor,'work_orders');
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF t IS NULL OR NOT coalesce(app.work_order_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM app.mon8_require_feature(actor,'work_orders');
  IF payload->>'version' IS DISTINCT FROM 'import-batch-record.v1' OR jsonb_typeof(rows)<>'array' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='22023'; END IF;
  n:=jsonb_array_length(rows);
  INSERT INTO app.import_batch(tenant_id,id,command_id,source_sha256,source_name,source_kind,row_count,created_count,revised_count,unchanged_count,rejected_count,actor_membership_id)
@@ -387,8 +387,8 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; items js
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR payload->>'environment' IS DISTINCT FROM 'synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
- PERFORM app.mon8_require_feature(actor,'work_orders');
  IF t IS NULL OR NOT coalesce(app.sor_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ PERFORM app.mon8_require_feature(actor,'work_orders');
  IF payload->>'version' IS DISTINCT FROM 'sor-version-record.v1' OR jsonb_typeof(items)<>'array' OR jsonb_array_length(items) NOT BETWEEN 1 AND 10000 THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='22023'; END IF;
  SELECT * INTO prior FROM app.sor_version WHERE tenant_id=t AND command_id=(payload->>'commandId')::uuid;
  IF FOUND THEN

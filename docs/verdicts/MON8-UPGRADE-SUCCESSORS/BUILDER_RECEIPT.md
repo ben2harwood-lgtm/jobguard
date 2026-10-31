@@ -1064,3 +1064,70 @@ and browser suites were not run: PostgreSQL startup and localhost binding are
 unavailable here. GitHub CI and the exact-head independent RED review remain
 required. No independent-review, merge or release claim is made.
 Commit message: /tmp/mon8-upgrade-successors-20261030T155215Z-commit-msg.txt.
+
+### 31 October 2026 — final authorised CI repair, PR #302 (RED)
+
+This is Ben's one further try under Journey-first rule 5. Read the saved trace
+mon8-upgrade-successors-ci-traces-0208.txt and current rulebook. Current main and
+MERGE_HEAD are c47ae08ebd79247ee173caff0a6fae372b574fc3, with migrations through
+0400. Resolved both working-tree conflicts: retain main's narrowly constrained
+finance customer-signin delivery path and MON-8's authorization_actor projection
+and claim-time entitlement check in outbox; union main's customer portal grant,
+customer portal session and meter work ledger successor expectations with every
+existing MON-8 expectation. Main LP-0 values remain intact.
+
+Failures and root-cause fixes:
+1. extra-origin.integration.test.ts, ENT-4b [S9]: scanner's expected digest still
+   described the scanner before the three explicitly authorised source-lock
+   substitutions. Set only that scanner digest to the actual
+   b77c7b63985dc66d359af04285e099463335085aa47e64100af9473dc9f58bc0.
+   Scanner bytes, all three re-pinned source bytes and their fingerprint values
+   remain identical to starting HEAD. No exception or allowlist was widened.
+2. work-order-import.integration.test.ts, ENT-2 tenant boundary: MON-8's SQL
+   entitlement guard ran before the legacy mode/context/permission refusal,
+   producing FORBIDDEN for missing tenant context instead of the existing
+   NOT_FOUND contract. In app.work_order_commit and the adjacent
+   app.import_batch_record path exercised by that same test, move the entitlement
+   check after the existing mode and tenant/permission refusal. Apply the same
+   ordering to app.import_sor_version. Every write still follows entitlement;
+   no entitlement condition, error expectation or integration test was loosened.
+   A focused source regression covers the mode/tenant/entitlement/write order
+   in all four import entry routines, including work_order_begin.
+
+Renumbered only this branch's migrations from 0378/0379 to the issued 0408/0409
+using tools/migration-renumber.mjs's pure planRenumber with the reservation ceiling
+0407, filesystem moves and its filename-stem replacement rule. No bare-number
+replacement; no Git write mode (it requires clean Git and stages files).
+0408_server_plan_entitlements.sql is byte-identical to starting 0378 SQL.
+0409_contractor_feature_guards.sql differs from starting 0379 SQL ONLY by the
+three guard moves above. The repaired routine copies retain their existing main
+bodies (latest definitions in 0110_work_orders.sql) plus MON-8's guard. No routine
+newly introduced by main at 0378 or later is overwritten; app.mon2_issue remains
+main's latest body. No main migration or docs/contracts/lp-downstream-effects-v1.md
+was edited.
+
+Local checks, installed executables only, maxWorkers=2:
+- packages/db Vitest: mon8-combined-migration.test.ts,
+  plan-entitlement-service.test.ts, outbox.test.ts: 3 files, 20 tests passed.
+- packages/db Vitest: contractor-entitlement-snapshot.test.ts and
+  upgrade-proof-utils.test.ts: 2 files, 10 tests passed.
+- apps/api Vitest: auth/context-boundary.test.ts: 145 tests passed.
+- Root tsc -p packages/db/tsconfig.json --noEmit: passed.
+- Focused TypeScript program for contractor-entitlement-upgrade,
+  work-order-import and extra-origin integration tests: zero diagnostics.
+- CASE-in-IF lint: 166 migrations, zero exceptions, passed.
+- Byte comparisons: all 348 latest-main migration/lane files identical; all
+  ENT-4b scanner/bridge digests match actual bytes; protected downstream contract
+  unchanged against main and HEAD; scanner and three pinned sources unchanged.
+- Inventory comparisons: every main LP-0 value retained; every HEAD successor
+  entry plus all 66 explicit main entries and 11 final-check tables retained.
+- Lane remains exact for 98 filesystem paths including its own file. No merge
+  markers remain; git diff --check passed.
+
+PostgreSQL/DB and browser suites were not run: this sandbox cannot start
+PostgreSQL or bind localhost. Git index remains unmerged because .git is
+read-only. Router must stage resolutions/renames, complete merge ancestry, commit
+and push for CI, then arrange exact-head independent RED review. This local
+handoff does not claim either demo passed. If this authorised try remains red,
+it goes to a person under Journey-first rule 5, not another repair round.
+Commit message: /tmp/mon8-upgrade-successors-20261031T020854Z-commit-msg.txt.
