@@ -100,7 +100,7 @@ it("an existing foreign tenant/job cannot use this tenant's customer session",as
  await f.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional foreign tenant','live')",[tenant,job]);
  const customer=(await f.admin.query("SELECT b.customer_id FROM app.job_party_current pc JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(pc.tenant_id,pc.job_id,pc.binding_id) WHERE pc.tenant_id=$1 AND pc.job_id=$2",[tenant,job])).rows[0].customer_id;
  await expect(run(a,{...a.command,jobId:job},{tenantId:tenant,jobId:job,customer})).rejects.toMatchObject(refused);expect(await approvals(a)).toEqual([]);
- await expect(new ShadowDemoApprovalReader(f.admin,a.sessionId).read(job)).rejects.toThrow("NOT_FOUND");
+ await expect(new ShadowDemoApprovalReader(f.runtime,a.sessionId).read(job)).rejects.toThrow("NOT_FOUND");
 });
 it("expiry while waiting for the source-effect lock cannot approve or create a claim",async()=>{
  const a=await fixture(),blocker=await f.admin.connect();
@@ -147,7 +147,7 @@ it("customer provenance is private, immutable, one-to-one and cannot commit with
 
 it("J3 reads only current portal approvals for its owned job, never another job's catch", async () => {
  const a=await fixture(), b=await fixture();
- const reader=new ShadowDemoApprovalReader(f.admin,a.sessionId);
+ const reader=new ShadowDemoApprovalReader(f.runtime,a.sessionId);
  expect(await reader.read(a.jobId)).toEqual({complete:false,approvals:[]});
  await run(b);
  expect(await reader.read(a.jobId)).toEqual({complete:false,approvals:[]});
