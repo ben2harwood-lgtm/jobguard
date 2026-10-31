@@ -2,10 +2,13 @@ import { createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 /** CI-only made-up company fixture. No application endpoint can backdate agreements or supply meter facts. */
 export async function seedSubscriptionPeriod(tenantId: string, sessionToken: string) {
- const admin=new Pool({host:"127.0.0.1",port:55432,user:"postgres",password:"sbox-e2e-owner",database:"jobguard_synthetic_demo"});
+ const connectionString = process.env.E2E_ADMIN_DATABASE_URL;
+ const secret = process.env.AUTH_CODE_SECRET;
+ if (!connectionString || !secret) throw new Error("Subscription fixture requires the e2e setup environment");
+ const admin=new Pool({connectionString});
  const db=await admin.connect();
  try {
-  const digest=createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${sessionToken}`).digest("hex");
+  const digest=createHmac("sha256", secret).update(`session:${sessionToken}`).digest("hex");
   const {start_date:startDate,end_date:endDate}=(await db.query<{start_date:string;end_date:string}>(
    "SELECT to_char(date_trunc('month',clock_timestamp() AT TIME ZONE 'Europe/London')-interval '1 month','YYYY-MM-DD') start_date,to_char(date_trunc('month',clock_timestamp() AT TIME ZONE 'Europe/London'),'YYYY-MM-DD') end_date"
   )).rows[0]!;
@@ -15,7 +18,7 @@ export async function seedSubscriptionPeriod(tenantId: string, sessionToken: str
   await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
   // Historical synthetic fixture only, preserving the real acceptance/authorization parents.
   await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.subscription_agreement_revision SET effective_date=$2::date WHERE tenant_id=$1",[tenantId,startDate]);
+  await db.query("UPDATE app.subscription_agreement_revision SET effective_date=$2::date, accepted_at=$2::date::timestamp AT TIME ZONE 'Europe/London', anchor_day=extract(day FROM $2::date)::integer WHERE tenant_id=$1",[tenantId,startDate]);
   await db.query("SET LOCAL session_replication_role='origin'");
   await db.query("SELECT app.mon1_store_fixture($1,$2,$3,$4::jsonb)",[tenantId,digest,randomUUID(),JSON.stringify({version:"meter-persisted-fixture.v1",environment:"synthetic_demo",startDate,endDateExclusive:endDate,days})]);
   await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb)",[tenantId,digest,randomUUID(),JSON.stringify({version:"subscription-command.v1",kind:"issue",periodStart:startDate,expectedRevision:2})]);

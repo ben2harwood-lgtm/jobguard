@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { subscriptionPlanView } from "@jobguard/core";
-import { loadSubscriptionPlan, PlanDetails, PlanScreen, submitSubscriptionAction } from "./plan-screen";
+import { loadSubscriptionPlan, loadSubscriptionWorkspace, PlanDetails, PlanScreen, submitSubscriptionAction, subscriptionActionMessage } from "./plan-screen";
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
 const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
@@ -55,7 +55,7 @@ it("renders the engine's exact amount, period maximum and simulated redirect wor
     results: [{ tenant_id, id: id(7), work_id: id(5), outcome: "redirect", environment: "synthetic_demo" }],
   }, "2026-04-20");
   const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
-  for (const label of ["£79.00", "£169.00", "day 31", "2026-03-31", "2026-04-30", "end date excluded", "Simulated redirect — not settled"]) expect(html).toContain(label);
+  for (const label of ["£79.00", "£169.00", "Your billing day: the 31", "2026-03-31", "2026-04-30", "end date excluded", "Simulated redirect — not settled"]) expect(html).toContain(label);
 });
 
 it("does not request company data without a valid current session and membership", async () => {
@@ -82,4 +82,52 @@ it("lost company access and rejected commands never become a success",async()=>{
     const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({},{status}));
     await expect(submitSubscriptionAction(session.memberships[0]!.tenantId,"same-retry-id",{},fetcher)).rejects.toThrow("check the saved result");
   }
+});
+
+it("selects the second company and preserves it when session membership order changes", async () => {
+  const second = "00000000-0000-4000-8000-000000000099";
+  for (const memberships of [[...session.memberships, {tenantId: second}], [{tenantId: second}, ...session.memberships]]) {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({...session, memberships})).mockResolvedValueOnce(Response.json(empty));
+    expect((await loadSubscriptionWorkspace(fetcher, second)).tenantId).toBe(second);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/subscriptions/current", expect.objectContaining({headers: {"x-csrf-token": session.csrfToken, "x-tenant-id": second}}));
+  }
+});
+it("a foreign or revoked company selection cannot load another company's figures", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session));
+  await expect(loadSubscriptionWorkspace(fetcher, "foreign-company")).rejects.toThrow("SIGN_IN_REQUIRED");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it("preserves saved-approval and pending-payment wording after a successful HTTP response", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json({workId: "saved", paymentStatus: "pending"}, {status: 201}));
+  const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
+  expect(subscriptionActionMessage(result)).toBe("Approval saved. Simulated payment is pending. Reload to check its progress; do not approve it again.");
+});
+
+it("keeps the authenticated company switcher available when the first company's read is forbidden", async () => {
+ const companies=vi.fn();
+ const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json({}, {status:403}));
+ await expect(loadSubscriptionWorkspace(fetcher,undefined,companies)).rejects.toThrow("SIGN_IN_REQUIRED");
+ expect(companies).toHaveBeenCalledWith(session.memberships,session.memberships[0]!.tenantId);
+});
+
+it("shows the server billing day before acceptance without an anchor input", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-06-01T00:00:00Z"));
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json({ ...empty, billingDay: 15 }));
+  const view = await loadSubscriptionPlan(fetcher);
+  expect(view.billingDay).toBe(15);
+  const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
+  expect(html).toContain("Your billing day: the 15");
+  expect(html).not.toContain('<input');
+  expect(subscriptionPlanView(empty, "2026-06-01").billingDay).toBeNull();
+});
+
+it("preserves a separate executor warning without rejecting a saved approval", async () => {
+  const answer = { workId: "saved", paymentStatus: "pending", executionStatus: "unavailable" };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json(answer, {status: 201}));
+  const result = await submitSubscriptionAction(session.memberships[0]!.tenantId, "same-id", {kind: "approve_simulation"}, fetcher);
+  expect(result).toEqual(answer);
+  expect(subscriptionActionMessage(result)).toContain("Approval saved. Simulated payment is pending.");
 });

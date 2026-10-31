@@ -20,3 +20,18 @@ export function meterTodayFailure(error: unknown) {
   const identity = identityStatus(error);
   return { status: identity.status, body: { version: "meter-today-error.v1", code: identity.code === "IDENTITY_UNAVAILABLE" ? "METER_UNAVAILABLE" : identity.code } };
 }
+
+/** Synthetic normal-company work commands use the same verified identity bridge
+ * as the meter read; actor and tenant are derived on the server. */
+export class MeterWorkStateApplication {
+  constructor(private readonly identity: IdentityApplication,
+    private readonly repository: Pick<import("@jobguard/db").JobWorkStateRepository, "command">) {}
+  async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    const principal = await this.identity.provider.authenticate(credentials.sessionToken!);
+    const membership = principal && await this.identity.provider.findMembership(principal, context.tenantId);
+    if (!membership) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+    return this.repository.command(context, jobId, membership.id, raw);
+  }
+}

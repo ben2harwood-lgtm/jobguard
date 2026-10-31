@@ -1,3 +1,4 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { expect, it, vi } from "vitest";
 import { MemoryAuthProvider, type TenantRequestCredentials } from "@jobguard/api/identity";
 import { SubscriptionApplication } from "@jobguard/api/workspace";
@@ -48,12 +49,12 @@ it("passes the screen's actual Request headers through C1's real credential read
   expect(requests[0]!.headers.get("x-tenant-id")).toBe(membership.tenantId);
   expect(read).toHaveBeenCalledOnce();
   expect(read.mock.calls[0]![0]).toMatchObject({ tenantId: membership.tenantId });
-  const selection = { version: "subscription-command.v1", kind: "change", plan: "Solo", cadence: "monthly", anchorDay: 1,
+  const selection = { consentText: subscriptionConsentText, version: "subscription-command.v1", kind: "change", plan: "Solo", cadence: "monthly", anchorDay: 1,
     termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4", maximumPence: 4900, expectedRevision: 1 };
   await submitSubscriptionAction(membership.tenantId, "00000000-0000-4000-8000-000000000010", selection, transport);
   expect(command).toHaveBeenCalledOnce();
   expect(command).toHaveBeenCalledWith(expect.objectContaining({tenantId: membership.tenantId}), "a".repeat(64),
-    "00000000-0000-4000-8000-000000000010", expect.objectContaining({...selection, contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)}));
+    "00000000-0000-4000-8000-000000000010", expect.objectContaining({plan: selection.plan, contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)}));
   // Removing either real header must prevent the repository read, not produce a stubbed success.
   for (const header of ["x-csrf-token", "x-tenant-id"]) {
     omit = header;
