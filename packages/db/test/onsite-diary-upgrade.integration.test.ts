@@ -23,16 +23,24 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
  const before = await proofBefore(f.admin, ["app.job", "app.job_diary_entry", "app.job_source_original", "app.evidence_object", "app.command_receipt", "app.audit_event"]);
  const catalogue = async () => ({
   routines: (await f.admin.query("SELECT oid,proname,proowner,proacl::text,prosecdef,proconfig,prosrc FROM pg_proc WHERE pronamespace='app'::regnamespace ORDER BY oid")).rows,
-  tables: (await f.admin.query("SELECT oid,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows,
+  tables: (await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows,
   policies: (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' ORDER BY tablename,policyname")).rows,
  });
  const prior = await catalogue(); await migrate(f.admin); await migrate(f.admin);
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
- const after = await catalogue(); expect(after.tables).toEqual(prior.tables); expect(after.policies).toEqual(prior.policies);
- expect(after.routines).toHaveLength(prior.routines.length);
+ const after = await catalogue();
+ const collectionTables=["platform_fee_attempt","platform_fee_attempt_event","platform_fee_collection_command"];
+ expect(after.tables.filter(r=>collectionTables.includes(r.relname)).map(r=>r.relname).sort()).toEqual(collectionTables);
+ expect(after.tables.filter(r=>!collectionTables.includes(r.relname))).toEqual(prior.tables);
+ expect(after.policies.filter(r=>collectionTables.includes(r.tablename)).map(r=>r.tablename)).toEqual(collectionTables);
+ expect(after.policies.filter(r=>!collectionTables.includes(r.tablename))).toEqual(prior.policies);
+ const collectionRoutines=["read_platform_fee_collection","write_platform_fee_collection"];
+ expect(after.routines.filter(r=>collectionRoutines.includes(r.proname)).map(r=>r.proname).sort()).toEqual(collectionRoutines);
+ const historicalRoutines=after.routines.filter(r=>!collectionRoutines.includes(r.proname));
+ expect(historicalRoutines).toHaveLength(prior.routines.length);
  const changed = ["sv7a_intake_job_source", "ch4_capture_site_source", "ch4_receipt_integrity"];
- for (let i = 0; i < after.routines.length; i++) {
-  const was = prior.routines[i]!, now = after.routines[i]!;
+ for (let i = 0; i < historicalRoutines.length; i++) {
+  const was = prior.routines[i]!, now = historicalRoutines[i]!;
   if (changed.includes(now.proname)) { expect(now.prosrc).not.toBe(was.prosrc); expect({ ...now, prosrc: was.prosrc }).toEqual(was); }
   else expect(now).toEqual(was);
  }

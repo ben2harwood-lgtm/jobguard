@@ -45,6 +45,6 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
    {index===records.length-1&&<button disabled={busy} onClick={()=>void command("approve",record)}>Approve this exact simulation statement</button>}
    {approved===d.statementId&&<p role="status">Exact statement approved; no money collected.</p>}
   </article>;})}{records.at(-1)&&<SimulationFeeCollection jobId={jobId} statementId={records.at(-1)!.document.statementId} statementHash={records.at(-1)!.documentHash}/>}
-  {error&&<p role="alert">{error}</p>}
+  {error&&<p role="alert" aria-label="Simulation statement error">{error}</p>}
  </section>;
 }

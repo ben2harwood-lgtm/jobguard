@@ -25,7 +25,8 @@ it("preserves every historical approval field, privileges and policy and exact r
  await applyMigration(c,own);
  const expected={...before,"app.customer_variation_approval":[]};
  expect(await snapshot(c.admin)).toEqual(expected);expect((await catalogue()).rows).toEqual(privileges);
- await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(expected);
+ const afterLaterMigrations={...expected,"app.platform_fee_attempt":[],"app.platform_fee_attempt_event":[],"app.platform_fee_collection_command":[]};
+ await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(afterLaterMigrations);
  expect((await fingerprints()).rows).toEqual(priorFingerprints);
  expect((await columns()).rows).toEqual(priorColumns);
  const sideConstraints=(await c.admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.customer_variation_approval'::regclass")).rows.map(r=>r.definition).join("\n");
