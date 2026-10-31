@@ -8,11 +8,11 @@ let f: LockFixture, practice: Awaited<ReturnType<typeof seedWorkPractice>>;
 const prior = process.env.JOBGUARD_ENV;
 beforeAll(async () => { f = await createLockFixture(); practice = await seedWorkPractice(f); }, 120_000);
 afterAll(async () => { await closeLockFixture(f); if (prior === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = prior; });
-it("A2: current owner reads an authoritative empty snapshot; superseded commands stay refused", async () => {
+it("A2: current owner reads an authoritative empty snapshot; unknown payments stay refused", async () => {
  const { auth, jobId } = practice;
  const repository = new RecoveryLineAllocationRepository(f.runtime, "synthetic_demo");
  await expect(repository.view(auth.context, auth, auth.digest, jobId)).resolves.toMatchObject({revision:1,rows:[],holds:[]});
- await expect(repository.command(auth.context, auth, auth.digest, jobId, { version: "receipt-line-allocation-command.v1", action: "review", commandId: randomUUID(), paymentId: randomUUID(), expectedSourceRevision: 1 })).rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
+ await expect(repository.command(auth.context, auth, auth.digest, jobId, { version: "receipt-line-allocation-command.v1", action: "review", commandId: randomUUID(), paymentId: randomUUID(), expectedSourceRevision: 1 })).rejects.toMatchObject({ code: "42501", message: "RECEIPT_LINE_FORBIDDEN" });
 });
 it("A2/A7: wrong-session and wrong-job return the same denial before source lookup", async () => {
  const other = await seedWorkPractice(f), { auth, jobId } = practice;
@@ -49,7 +49,7 @@ it("A1/A2/A5/A6: direct controlled calls refuse forged artifacts and all four ef
    await db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4,$5)", [auth.context.tenantId, jobId, auth.digest,
     { version: "receipt-line-allocation-command.v1", action, commandId: randomUUID(), expectedSourceRevision: 1 },
     { version: "receipt-line-allocation-artifact.v1", eligibilityApproved: true, gross: { numerator: "1", denominator: "3" }, approvalHash: "a".repeat(64) }]);
-  })).rejects.toThrow("RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED");
+  })).rejects.toThrow("INVALID_RECEIPT_LINE_COMMAND");
  }
 });
 

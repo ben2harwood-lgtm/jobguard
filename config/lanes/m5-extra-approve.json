@@ -31,9 +31,10 @@
         "packages/core/src/customer-variation-approval.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0389_customer_variation_approval.sql",
+        "packages/db/migrations/0410_customer_variation_approval.sql",
         "packages/db/src/variation-repository.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
         "packages/db/test/customer-variation-approval.integration.test.ts",
         "packages/db/test/customer-variation-upgrade.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts"

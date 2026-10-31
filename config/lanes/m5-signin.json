@@ -38,7 +38,9 @@
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/customer-signin.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/upgrade-proof-utils.test.ts",
+        "packages/db/test/upgrade-proof-utils.ts"
       ]
     }
   }

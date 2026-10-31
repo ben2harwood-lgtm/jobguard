@@ -12,10 +12,12 @@ let c: Cluster;
 beforeAll(async () => {
   c = await startBeforeMigration(own);
   const before = await snapshot(c.admin);
+  const expected = { ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] };
   await applyMigration(c, own);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  const successors = { ...expected, "app.variation_approval": (before["app.variation_approval"] as Record<string, unknown>[]).map(row => ({ ...row, customer_session_id: null, customer_command_hash: null })) };
+  expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {
@@ -121,7 +123,8 @@ it("finance can execute only the exact fake sign-in email; unrelated sends remai
  await c.admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,$4)",[d,w.tenant,w.job,variant.action]);
  await c.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[r,w.tenant,d,w.member]);
  await c.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at,amount_pence,currency) SELECT $1,tenant_id,$2,$3,actor_membership_id,$6,$7,content_hash,aggregate_revision,$8,expires_at,$9,CASE WHEN $9::bigint IS NULL THEN NULL ELSE 'GBP' END FROM app.action_authorization WHERE tenant_id=$4 AND id=(SELECT authorization_id FROM app.action_outbox WHERE tenant_id=$4 AND id=$5)",[a,d,r,w.tenant,outbox,variant.action,variant.recipient,variant.policy,variant.amount]);
- await c.admin.query("INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at,amount_pence,currency) SELECT $1,tenant_id,$2,adapter,$1::text,$5,$6,content_hash,immutable_content,aggregate_revision,$7,authorization_expires_at,$8,CASE WHEN $8::bigint IS NULL THEN NULL ELSE 'GBP' END FROM app.action_outbox WHERE tenant_id=$3 AND id=$4",[other,a,w.tenant,outbox,variant.action,variant.recipient,variant.policy,variant.amount]);
+ // Pin the reused identifier to UUID before converting its provider-effect key to text.
+ await c.admin.query("INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at,amount_pence,currency) SELECT $1::uuid,tenant_id,$2,adapter,$1::uuid::text,$5,$6,content_hash,immutable_content,aggregate_revision,$7,authorization_expires_at,$8,CASE WHEN $8::bigint IS NULL THEN NULL ELSE 'GBP' END FROM app.action_outbox WHERE tenant_id=$3 AND id=$4",[other,a,w.tenant,outbox,variant.action,variant.recipient,variant.policy,variant.amount]);
  await executor.execute(testTenantContext(w.tenant),other);expect(deliveries).toBe(1);
  expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[w.tenant,other])).rows[0].status).toBe("pending");
  }
