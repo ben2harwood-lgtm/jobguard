@@ -49,6 +49,21 @@ const storedRow = { jobId: id(6), sourceId: id(30), runId: id(31), at, recordedA
   billedNet: { numerator: "100", denominator: "1" }, creditedNet: { numerator: "0", denominator: "1" }, rejected: false, complete: true };
 const billing = (rows: unknown[]) => ({ version: "enterprise-billed-signal-rows.v1", rows });
 const observed = (rows = [storedRow], q = query) => scopedEnterpriseSignals({ ...facts, closeouts: [] }, q, signals, billing(rows));
+it("only the unmatched variation line is advisory when matched and unmatched invoice lines coexist", () => {
+  const matched = { ...storedRow, line: { ...storedRow.line, externalInvoiceLineId: "matched-extra", kind: "extra",
+    match: { exportLineId: id(40), jobId: storedRow.jobId, extraId: id(41), scopeItemId: id(42), revisionId: id(43), revisionHash: "a".repeat(64) } } };
+  // Use ENT-6's real boundary: a matched extra is valid, but is never a missing-extra observation.
+  expect(billingInvoiceLineV1.safeParse(matched.line).success).toBe(true);
+  expect(observed([matched]).observations).toEqual([]);
+  const mixed = [matched, storedRow], before = JSON.stringify(mixed);
+  const result = observed(mixed);
+  expect(result).toEqual(observed([storedRow]));
+  expect(observed([...mixed].reverse())).toEqual(result);
+  expect(result.observations).toHaveLength(1);
+  expect(result.observations[0]).toMatchObject({ kind: "billed_variation_without_extra", extraIds: [], sourceIds: [id(30), id(31)] });
+  expect(JSON.stringify(result)).not.toContain(id(41));
+  expect(JSON.stringify(mixed)).toBe(before);
+});
 it("adapts unmatched stored other lines even for a job with no captures; cites the fact and current run only", () => {
   const before = JSON.stringify(storedRow), result = observed();
   expect(result.observations).toEqual([expect.objectContaining({ kind: "billed_variation_without_extra", jobId: id(6), extraIds: [], sourceIds: [id(30), id(31)] })]);

@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-a1-rest": {
+      "branches": ["codex/sandbox/demo-a1-rest"],
+      "note": "RED DEMO-S step 8: remaining five dedicated HTTP/browser scenarios; no product changes, SQL seeding or mocked success. PostgreSQL/browser execution is CI-only.",
+      "allow": ["apps/web/e2e/DEMO-A1-rest.spec.ts"]
+    }
+  }
+}
