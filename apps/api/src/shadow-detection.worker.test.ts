@@ -61,7 +61,7 @@ describe("SV-3 / SV-4 accepted terms integration port",()=>{
 describe("SV-3 actual shared worker composition",()=>{
  it("gates Graphile/outbox startup on SV-4 and keeps accepted terms per detection invocation",async()=>{
   let available=false;
-  const registered=vi.fn(async(..._arguments:unknown[])=>({stop:vi.fn()})),execute=vi.fn(async()=>undefined);
+  const registered=vi.fn(async(..._arguments:unknown[])=>({stop:vi.fn()})),execute=vi.fn(async(..._arguments:unknown[])=>undefined);
   const queries=vi.fn(async(sql:string)=>sql.includes("pg_auth_members")?{rows:[{safe:true}]}:sql.includes("to_regclass")?{rows:[{available}]}:sql.includes("final_check_terms_acceptance")?{rows:[],rowCount:0}:{rows:[]});
   vi.doMock("pg",()=>({Pool:class{query=queries;connect=async()=>({query:queries,release:vi.fn()});end=async()=>undefined;}}));
   vi.doMock("graphile-worker",async()=>({...await vi.importActual<Record<string,unknown>>("graphile-worker"),run:registered}));
@@ -80,7 +80,16 @@ describe("SV-3 actual shared worker composition",()=>{
    const practice=registered.mock.calls[1]![0] as unknown as {taskList:Record<string,unknown>;crontab:string};
    expect(Object.keys(practice.taskList)).toEqual(["discover_final_check_requests","final_check_practice_run","discover_evidence_pack_requests","build_evidence_pack_v3"]);expect(practice.crontab).toBe("*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests");
    vi.stubEnv("JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY","");
-   await options.taskList.execute_outbox!({tenantId,actionId:jobId});expect(execute).toHaveBeenCalledWith(expect.objectContaining({tenantId}),jobId);
+   await options.taskList.execute_outbox!({tenantId,actionId:jobId});
+   expect(execute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({tenantId}),jobId,expect.any(Function));
+   const beforeClaim=execute.mock.calls[0]![2] as (actionType:string)=>void;
+   for(const environment of ["production_billing","pilot_no_charge","provider_sandbox","disabled"]){
+    vi.stubEnv("JOBGUARD_ENV",environment);
+    for(const actionType of ["future.action","fee.post"])
+     expect(()=>beforeClaim(actionType)).toThrow("PRODUCTION_SETTLEMENT_DISABLED");
+    expect(()=>beforeClaim("quote.send")).not.toThrow();
+   }
+   vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
    await expect(options.taskList.detect_shadow_evidence!(task)).rejects.toThrow("SHADOW_TERMS_NOT_ACCEPTED");
    expect(queries.mock.calls.filter(([sql])=>sql.includes("FROM app.evidence_object"))).toHaveLength(0);
   }finally{listener.mockRestore();vi.unstubAllEnvs();vi.doUnmock("pg");vi.doUnmock("graphile-worker");vi.doUnmock("@jobguard/db");vi.resetModules()}
