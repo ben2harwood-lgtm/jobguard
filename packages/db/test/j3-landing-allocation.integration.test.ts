@@ -5,7 +5,7 @@ import {RecoveryAttributionRepository} from "../src/recovery-attribution-reposit
 // Fake source documents only. All constraints/triggers stay enabled; quote,
 // activation, variation, final account, invoice, feed and receipt use writers.
 import {createHash,randomUUID} from "node:crypto";
-import {priceVariation,parseExactPence,serializeExactPence,sumExactPence} from "@jobguard/core";
+import {mapValueReceipt,priceVariation,parseExactPence,serializeExactPence,sumExactPence} from "@jobguard/core";
 import {prepareActivationFixtureV3,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID} from "../src/demo-seed.js";
 import {issuePracticeSession,authenticatePracticeSession,practiceMaterialPool} from "../src/practice-session.js";
 import {PracticeActivationRepository} from "../src/activation-repository.js";
@@ -70,12 +70,16 @@ async function combinedReceiptFixture(f:FinalCheckFixture){
  let drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId});
  await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
+ // A value read is identical with no hidden signals and with held signals.
+ const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result);
+ expect(await readBeforeLock()).toBeNull();
  const signals=[randomUUID(),randomUUID()];
  for(const [index,signalId] of signals.entries())await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,workIds[index],"Fictional catch"]);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
+ expect(await readBeforeLock()).toBeNull();
  const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
  const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
  for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
@@ -138,7 +142,7 @@ async function assess(x:Combined,index:number,lineId:string,expectedAttributionR
  expect(await repository.assess(x.context,x.jobId,x.auth.digest,command)).toEqual(saved);
  return saved;
 }
-it("one £41,280 receipt qualifies exactly £500 + £300, replays, refuses stale authority/foreign sessions, and appends a reversal revision",async()=>{
+it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, refuses foreign reads, and appends a reversal revision",async()=>{
  const x=await combinedReceiptFixture(f);const produced=await produce(x);
  if(!("allocationRevisionId" in produced)||!produced.allocationRevisionId)throw new Error("Expected saved receipt revision");
  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:1}]);
@@ -156,8 +160,26 @@ it("one £41,280 receipt qualifies exactly £500 + £300, replays, refuses stale
  expect(serializeExactPence(sumExactPence(assessments.map(a=>parseExactPence(a.remainingPrincipal))))).toEqual({numerator:"80000",denominator:"1"});
  expect(assessments.map(a=>attributionValueReceipt(a).fee.pence)).toEqual([5000,3000]);
  expect(serializeExactPence(sumExactPence(assessments.map(a=>parseExactPence(attributionValueReceipt(a).yoursBeforeVatAndTax))))).toEqual({numerator:"72000",denominator:"1"});
+ // Read through the same lock-gated projection used by the J3 report. Its
+ // public contract retains locked capture IDs, while the invoice uses copies.
+ const readValue=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const auditBefore=(await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows;
+ const raw=await readValue();expect(await readValue()).toEqual(raw);
+ const receipt=mapValueReceipt(raw);
+ expect(receipt).toMatchObject({tracked:{pence:360000},trackedFee:{pence:0},found:{state:"mapped",recovered:{pence:80000},fee:{pence:8000},yoursBeforeVatAndTax:{pence:72000}}});
+ const lockedCaptures=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation' ORDER BY id",[x.context.tenantId,x.jobId,x.lock.finalAccountRevisionId])).rows.map(row=>row.id as string);
+ expect(receipt.sources.tracked.map(line=>line.id)).toEqual(lockedCaptures);
+ expect(receipt.sources.tracked).toHaveLength(2);
+ for(const line of receipt.sources.tracked){
+  expect(line.revisionId).toBe(x.lock.finalAccountRevisionId);expect(line.invoiceId).toBe(x.invoice.invoiceId);
+  expect(snapshot.rows.some(row=>row.lineId===line.id)).toBe(false);
+ }
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows).toEqual(auditBefore);
+ await expect(finalCheckTenant(f.runtime,randomUUID(),db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,x.auth.digest]))).rejects.toThrow();
  const foreign=await issuePracticeSession(f.runtime);
  await expect(new ReceiptCaseAllocationApplication(f.runtime,foreign).view(x.jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
+ const foreignAuth=await authenticatePracticeSession(f.runtime,foreign);
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]))).rejects.toThrow("VALUE_FORBIDDEN");
  const {StoredReceiptCaseAllocationRepository}=await import("../src/stored-receipt-case-allocation-repository.js");
  await expect(new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo").command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,{version:"stored-receipt-case-command.v1",action:"review",commandId:randomUUID(),factLineId:snapshot.rows[0]!.lineAllocationId,caseId:x.catches[0]!.caseId,workId:x.catches[0]!.workId,expectedCaseRevision:1})).rejects.toThrow();
  // Original locked baseline cannot borrow a catch's recovery case.
@@ -183,6 +205,20 @@ it("one £41,280 receipt qualifies exactly £500 + £300, replays, refuses stale
   expect(attributionValueReceipt(next).fee.pence).toBe(0);
   expect((await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).find(a=>a.assessmentId===assessments[index]!.assessmentId)).toEqual(assessments[index]);
  }
+});
+it("combined value reader preserves authority and matches its LP-0 definition hash",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const inventory=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8")) as {recorded:{routines:{identity:string;definitionSha256:string|null}[]}};
+ const routine=inventory.recorded.routines.find(row=>row.identity==="function:app.read_value_job(uuid,text)")!;
+ expect(routine.definitionSha256).toMatch(/^[a-f0-9]{64}$/u);
+ const row=(await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef security_definer,proconfig settings,
+  encode(sha256(convert_to(pg_get_functiondef(oid),'UTF8')),'hex') digest,
+  has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,
+  has_function_privilege('jobguard_shadow',oid,'EXECUTE') shadow,
+  has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure,
+  EXISTS(SELECT 1 FROM aclexplode(proacl) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') public_execute
+  FROM pg_proc WHERE oid='app.read_value_job(uuid,text)'::regprocedure`)).rows[0];
+ expect(row).toEqual({owner:"jobguard_migration",security_definer:true,settings:["search_path=pg_catalog, app","TimeZone=UTC"],digest:routine.definitionSha256,runtime:true,shadow:false,infrastructure:false,public_execute:false});
 });
 it("combined helper stays private and requires a lock descendant; supplementary regression stays supported",async()=>{
  expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.j3_require_combined_revision(uuid,uuid,uuid,uuid)','EXECUTE') allowed")).rows).toEqual([{allowed:false}]);
