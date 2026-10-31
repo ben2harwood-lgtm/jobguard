@@ -231,7 +231,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties,reason:"Correct fictional payer"}));
     expect((await admin.query(`SELECT snapshot FROM app.job_party_snapshot WHERE tenant_id=$1 AND binding_id=$2`,[tenant,before.bindingId])).rows[0].snapshot).toEqual(before);
     const audit=await admin.query(`SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'job.parties.%'`,[tenant]);
-    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
+    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["auditTrust","commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
   });
   it("uses composite foreign keys to reject cross-tenant parties and hides foreign identities",async()=>{
     const job=await createJob(),{parties,c}=await saveParties(job);

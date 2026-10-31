@@ -15,8 +15,13 @@ it("E5-24 partial catalog RLS and absent business writer boundary", async () => 
   for (const table of tables) {
     const grants = (await c.admin.query("SELECT privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=$1 ORDER BY privilege_type", [table])).rows;
     expect(grants).toEqual([{ privilege_type: "SELECT" }]);
-    const policy = (await c.admin.query("SELECT cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1", [table])).rows;
-    expect(policy).toHaveLength(1); expect(policy[0]!.cmd).toBe("ALL"); expect(policy[0]!.qual).toContain("tenant_id"); expect(policy[0]!.with_check).toContain("tenant_id");
+    const policy = (await c.admin.query("SELECT policyname,roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1", [table])).rows;
+    expect(policy).toHaveLength(table==="extra_approval_revision_binding"?2:1);
+    const tenant=policy.filter(p=>p.cmd==="ALL");expect(tenant).toHaveLength(1);
+    expect(tenant[0]!.qual).toContain("tenant_id");expect(tenant[0]!.with_check).toContain("tenant_id");
+    const reads=policy.filter(p=>p.cmd==="SELECT");
+    if(table==="extra_approval_revision_binding")expect(reads).toEqual([{policyname:"lp5b_command_read",roles:["jobguard_command_writer"],cmd:"SELECT",qual:tenant[0]!.qual,with_check:null}]);
+    else expect(reads).toEqual([]);
     for (const operation of [`INSERT INTO app.${table}(tenant_id,id,job_id,variation_id) VALUES($1,$2,$3,$4)`, `UPDATE app.${table} SET id=id WHERE tenant_id=$1`, `DELETE FROM app.${table} WHERE tenant_id=$1`, `TRUNCATE app.${table}`, `ALTER TABLE app.${table} DISABLE TRIGGER ALL`]) {
       const context: VerifiedTenantContext = await world.a.ctx;
       await expect(withTenant(c.runtime, context, async db => db.$client.query(operation, operation.includes("$4") ? [world.a.p.tenantId, randomUUID(), world.a.jobId, world.a.priced.variationId] : operation.includes("$1") ? [world.a.p.tenantId] : []))).rejects.toMatchObject({ code: "42501" });

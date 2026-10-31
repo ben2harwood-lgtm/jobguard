@@ -322,12 +322,12 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
   const observed = new ObservedPool(c.runtime, c.admin), watched = new SiteVisitRepository(observed.pool);
   const { value, transactions } = await observed.record(() => kind === "start" ? watched.startVisit(f.ctx, a.member, raw) : watched.completeVisit(f.ctx, a.member, raw));
   expect(value).toEqual(first);
-  const replay = transactions.find(t => t.statements.some(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql)));
+  const replay = transactions.find(t => t.statements.some(s => /(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/u.test(s.sql)));
   expect(replay).toBeDefined(); expect(replay!.outcome).toBe("commit");
   const analysis = analyseLockOrder(replay!, { mutable: await mutableTables(c.admin) });
   expect(analysis.firstStatement).toMatch(/pg_advisory_xact_lock_shared\(hashtextextended\(\$1,54\)\)/u);
   expect(analysis.auditIndex).toBeUndefined(); expect(analysis.strongTableLocks).toEqual([]);
-  const statements = replay!.statements, receiptIndex = statements.findIndex(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql));
+  const statements = replay!.statements, receiptIndex = statements.findIndex(s => /(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/u.test(s.sql));
   const checks = statements.flatMap((s, index) => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(s.sql) ? [index] : []);
   expect(checks).toHaveLength(2); expect(checks[0]).toBeLessThan(receiptIndex); expect(checks[1]).toBeGreaterThan(receiptIndex);
   const held = statements[statements.findIndex(s => s.sql === analysis.firstStatement)]!.footprint.advisory;
@@ -551,7 +551,7 @@ describe("ENT-3b the audit event is in the same transaction", () => {
   const statements = command!.statements.map(s => s.sql);
   const authorityIndex = statements.findIndex(sql => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(sql));
   const liveIndex = statements.findIndex(sql => /require_watchdog_live/u.test(sql));
-  const receiptIndex = statements.findIndex(sql => /INSERT INTO app.command_receipt/u.test(sql));
+  const receiptIndex = statements.findIndex(sql => /(?:INSERT INTO app.command_receipt|SELECT app\.begin_command\()/u.test(sql));
   expect(authorityIndex).toBeGreaterThan(statements.indexOf(analysis.firstStatement!));
   expect(liveIndex).toBeGreaterThan(authorityIndex); expect(receiptIndex).toBeGreaterThan(liveIndex);
   expect(analysis.auditIndex).toBeDefined();

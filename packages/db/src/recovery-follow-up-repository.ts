@@ -60,6 +60,7 @@ const GUARD_CODES: Readonly<Record<string, RecoveryFollowUpErrorCode>> = {
 function translate(error: unknown): unknown {
   if (error instanceof RecoveryFollowUpError || error instanceof RecoveryMessageError) return error;
   const pg = error as { code?: string; message?: string; constraint?: string };
+  if (pg.message === "RECOVERY_CASE_NOT_FOUND") return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_NOT_FOUND");
   if ((pg.code === "23514" || pg.code === "23505") && pg.message === "COMMAND_CONFLICT") return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
   if(pg.message==="FORBIDDEN")return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_FORBIDDEN");
   if (pg.code === "23514") { const code = GUARD_CODES[pg.message ?? ""]; if (code) return new RecoveryFollowUpError(code); }
@@ -143,6 +144,7 @@ export class RecoveryFollowUpRepository {
     // 1. Recognise a replay, and find the run, before any clock is touched.
     const plan = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCommand(db, ctx.tenantId, input.commandId);
+      if (!(await db.$client.query("SELECT 1 FROM app.recovery_case WHERE tenant_id=$1 AND id=$2",[ctx.tenantId,caseId])).rowCount) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
       await this.requireOwner(db, ctx.tenantId, actor);
       const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
       if (recorded) { if (recorded.request_hash !== requestHash || recorded.follow_up_id !== followUpId) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT"); return { replayed: true as const }; }
@@ -172,7 +174,8 @@ export class RecoveryFollowUpRepository {
       // 3. Record the command; the clock already saved the due audit in its own transaction.
       await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
         await this.lockCommand(db, ctx.tenantId, input.commandId);
-        await this.requireOwner(db, ctx.tenantId, actor);
+        if (!(await db.$client.query("SELECT 1 FROM app.recovery_case WHERE tenant_id=$1 AND id=$2",[ctx.tenantId,caseId])).rowCount) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
+      await this.requireOwner(db, ctx.tenantId, actor);
       const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
         if (recorded) { if (recorded.request_hash !== requestHash || recorded.follow_up_id !== followUpId) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT"); return; }
         const row = await this.followUpRow(db, ctx.tenantId, caseId, followUpId);

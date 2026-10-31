@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { expect } from "vitest";
-import { lp5ReadTables } from "./lp5-command-catalog.js";
+import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
 
 /** Exact LP-5a ACL delta on pre-existing migration-owned relations. */
 export async function lp5RelationAcl(db: Pick<PoolClient,"query">, table: string, original: string): Promise<string> {
@@ -17,7 +17,7 @@ export function lp5Policies() {
   const policy = (table: string, name: string, cmd: string) => ({ name: `app.${table}.${name}`,
     permissive: "PERMISSIVE", roles: ["jobguard_command_writer"], cmd,
     qual: cmd === "INSERT" ? null : tenant, with_check: cmd === "SELECT" ? null : tenant });
-  return [...lp5ReadTables.map(table => policy(table, "lp5_command_read", "SELECT")),
+  return [...lp5ReadTables.map(table => policy(table, lp5bReadTables.includes(table)?"lp5b_command_read":"lp5_command_read", "SELECT")),
     ...["decision", "decision_resolution", "action_authorization", "command_receipt"].map(table => policy(table, "lp5_command_insert", "INSERT")),
     policy("command_receipt", "lp5_command_complete", "UPDATE"), policy("command_lifecycle_claim", "tenant_isolation", "ALL")];
 }

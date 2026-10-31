@@ -1,3 +1,4 @@
+import { beginRecoveryCommand } from "../src/recovery-command.js";
 import { RecoveryFollowUpRepository, RecoveryFollowUpError } from "../src/recovery-follow-up-repository.js";
 import { testTenantContext } from './tenant-context-test-utils.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -201,4 +202,34 @@ describe.each(["message", "follow_up"] as const)("LP-5b %s lifecycle refusal con
       expect(queries).toContain("ROLLBACK");
     }
   });
+});
+
+describe("LP-5b foreign recovery case uniform refusal",()=>{
+ it("keeps a foreign/missing case opaque before checking replay ownership",async()=>{
+  const query=vi.fn(async(_sql:string,..._values:unknown[])=>({rows:[],rowCount:0}));
+  await expect(beginRecoveryCommand({$client:{query}} as any,ctx.tenantId,id(50),"recovery.follow_up.advance",JSON.stringify({caseId:id(1),membershipId:actor.membershipId}))).rejects.toThrow("RECOVERY_CASE_NOT_FOUND");
+  expect(query).toHaveBeenCalledTimes(1);expect(query.mock.calls[0]?.[0]).toContain("FROM app.recovery_case");
+ });
+ it.each(["message","follow_up"] as const)("maps missing-case refusal to the established %s code",async family=>{
+  const failure=new Error("RECOVERY_CASE_NOT_FOUND");
+  const pool={connect:async()=>({release(){},query:async()=>({rows:[],rowCount:0})})} as unknown as Pool;
+  const messages={read:async()=>({})} as unknown as RecoveryMessageRepository;
+  const repo=family==="message"?new RecoveryMessageRepository(pool):new RecoveryFollowUpRepository(pool,messages);
+  const service=repo as unknown as {[key:string]:(...args:any[])=>Promise<any>};
+  service.lockCase=async()=>undefined;service.finishHistory=async()=>undefined;service.settleDueAudits=async()=>undefined;
+  service.state=async()=>{throw failure;};
+  await expect(repo.read(ctx,id(1))).rejects.toMatchObject({code:family==="message"?"RECOVERY_MESSAGE_NOT_FOUND":"RECOVERY_FOLLOW_UP_NOT_FOUND"});
+ });
+});
+
+it("advance-time refuses a foreign case as not found before owner/replay disclosure or clock work",async()=>{
+ const query=vi.fn(async(sql:string)=>{
+  if(sql.includes("app.membership")||sql.includes("app.command_receipt")||sql.includes("app.recovery_follow_up_advance"))throw new Error("foreign case reached authority/replay lookup");
+  return {rows:[],rowCount:0};
+ });
+ const pool={connect:async()=>({release(){},query})} as unknown as Pool;
+ const advance=vi.fn(async()=>undefined),repo=new RecoveryFollowUpRepository(pool);
+ await expect(repo.advanceTime(ctx,id(1),{version:"recovery-follow-up-command.v1",action:"advance_time",commandId:id(50),followUpId:id(6)},actor,advance)).rejects.toMatchObject({code:"RECOVERY_FOLLOW_UP_NOT_FOUND"});
+ expect(query.mock.calls.some(([sql])=>sql.includes("FROM app.recovery_case"))).toBe(true);
+ expect(advance).not.toHaveBeenCalled();expect(query.mock.calls.at(-1)).toEqual(["ROLLBACK"]);
 });

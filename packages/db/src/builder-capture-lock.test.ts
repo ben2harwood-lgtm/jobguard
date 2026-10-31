@@ -5,13 +5,15 @@ import { VariationRepository } from "./variation-repository.js";
 import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
 
 // SQL protocol checks only; the real capture/final-lock race runs in PostgreSQL CI.
-function fixture(roles: Array<string | undefined> = ["owner", "owner"], conflict = false) {
+function fixture(roles: Array<string | undefined> = ["owner", "owner"], conflict = false, prepareError?: Error) {
  const tenantId=randomUUID(), actor=randomUUID(), commandId=randomUUID(), jobId=randomUUID();
  const context=verifiedTenantContextForQueuedJob(tenantId), result={variationId:commandId};
  const input={version:"log-builder-extra.v1",actorMembershipId:actor,price:null,deviceId:null,deviceCapturedAt:null,
   proposal:{version:"variation-proposal.v1",id:commandId,jobId,scopeItemId:randomUUID(),existingScopeItemId:null,
    lineageParentScopeItemId:null,captureKind:"text",captureText:"Fictional extra",description:"Fictional extra",suggestion:null}};
  const query=vi.fn(async(sql:string,values?:unknown[])=>{
+  if(prepareError&&sql.includes("SELECT 1 FROM app.command_receipt"))return {rows:[],rowCount:0};
+  if(prepareError&&sql.includes("app.prepare_final_review_extra"))throw prepareError;
   if(sql.includes("SELECT role FROM app.membership")) {
    const role=roles.shift();return {rows:role?[{role}]:[],rowCount:role?1:0};
   }
@@ -57,5 +59,13 @@ it("a refused actor takes no command lock",async()=>{
 it("a different receipt payload still conflicts after the gate",async()=>{
  const f=fixture(undefined,true);
  await expect(f.repo.logBuilderExtra(f.context,f.input)).rejects.toThrow("COMMAND_CONFLICT");
+ expect(f.query.mock.calls.at(-1)).toEqual(["ROLLBACK"]);
+});
+
+it("preserves the controlled final-review routine's PostgreSQL refusal code",async()=>{
+ const failure=Object.assign(new Error("FORBIDDEN"),{code:"42501"});
+ const f=fixture(undefined,false,failure);
+ await expect(f.repo.addFinalReviewExtra(f.context,{...f.input,version:"final-review-extra.v1"})).rejects.toBe(failure);
+ expect(f.query.mock.calls.some(([sql])=>sql.includes("app.begin_command("))).toBe(false);
  expect(f.query.mock.calls.at(-1)).toEqual(["ROLLBACK"]);
 });

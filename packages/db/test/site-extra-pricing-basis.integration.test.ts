@@ -1,3 +1,4 @@
+import { terminalizeFixtureReceipt } from "./extra-fixtures.js";
 // ENT-3c pricing basis (ruling A1): the side record beside each priced revision. Written before the code it proves.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SiteExtraRepository, withTenant } from "../src/index.js";
@@ -12,7 +13,9 @@ const hand = <T>(work: (db: Parameters<Parameters<typeof ownerTx>[2]>[0], raw: A
   ownerTx(c, f.p.tenantId, async db => {
     const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
     const row = await insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, shape));
-    return work(db, raw, row);
+    const result=await work(db, raw, row);
+    await terminalizeFixtureReceipt(db,f.p.tenantId,raw.commandId,{variationId:raw.variationId});
+    return result;
   });
 
 describe("ENT-3c pricing basis", () => {

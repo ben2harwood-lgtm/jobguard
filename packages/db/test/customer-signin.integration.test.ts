@@ -18,7 +18,7 @@ beforeAll(async () => {
   expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
   await migrate(c.admin); await migrate(c.admin);
   const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.activation_acceptance_operation_use": [], "app.customer_portal_grant": [], "app.customer_portal_session": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry });
+  expect(await snapshot(c.admin)).toEqual({ ...before, "app.activation_acceptance_operation_use": [], "app.customer_portal_grant": [], "app.customer_portal_session": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] });
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {

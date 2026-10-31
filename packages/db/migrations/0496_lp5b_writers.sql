@@ -722,8 +722,8 @@ BEGIN
   ), created AS (
    SELECT DISTINCT ON(rule_id,rule_revision,finding_revision) * FROM events WHERE event_kind='created' ORDER BY rule_id,rule_revision,finding_revision,created_at DESC,id DESC
   ), durations AS (
-   SELECT greatest(0,extract(epoch FROM(e.scenario_at-c.scenario_at))*1000) ms FROM events e JOIN created c
-    ON(c.rule_id,c.rule_revision,c.finding_revision)=(e.rule_id,e.rule_revision,e.finding_revision) WHERE e.event_kind<>'created'
+   SELECT greatest(0,extract(epoch FROM(e.scenario_at-created_event.scenario_at))*1000) ms FROM events e JOIN created created_event
+    ON(created_event.rule_id,created_event.rule_revision,created_event.finding_revision)=(e.rule_id,e.rule_revision,e.finding_revision) WHERE e.event_kind<>'created'
   ) SELECT jsonb_build_object('created',count(*) FILTER(WHERE event_kind='created'),'dismissed',count(*) FILTER(WHERE event_kind='dismissed'),
     'approved',count(*) FILTER(WHERE event_kind='approved'),'resolutionTimeMs',(SELECT floor(avg(ms)+0.5) FROM durations),'clockVersion','scenario-clock.v1')
    INTO metrics FROM events;
@@ -779,6 +779,8 @@ BEGIN
    OR (p_significant_input->>'legacyJson')::jsonb IS DISTINCT FROM (p_significant_input->'input')
    OR p_expected_revisions<>'{}'::jsonb THEN
    RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+  IF p_command_type IN('LogBuilderExtra','AddFinalReviewExtra') AND p_semantic_key IS DISTINCT FROM 'extra-origin:'||(p_resource->>'subjectRef')||':'||p_command_id::text THEN
+   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
   IF (p_resource->>'subjectType') IS DISTINCT FROM 'job'
    OR (p_resource->>'subjectRef')::uuid IS NULL
    OR (((p_significant_input->'input') ? 'actorMembershipId') AND (p_significant_input->'input'->>'actorMembershipId')::uuid IS DISTINCT FROM actor)
@@ -806,9 +808,8 @@ BEGIN
  digest:=encode(sha256(convert_to(app.final_lock_canonical(jsonb_build_object('version',p_version,'commandType',p_command_type,
   'semanticKey',p_semantic_key,'resource',p_resource,'expectedRevisions',p_expected_revisions,
   'input',digest_input)),'UTF8')),'hex');
- IF reg.permission_rule='contractor' THEN
-  PERFORM app.lp5b_contractor_permission(p_command_type,actor,(p_resource->>'subjectRef')::uuid,(p_significant_input->'input'));
- END IF;
+ -- First execution preserves the writer's existing authority/refusal order.
+ -- Current contractor grants are checked before terminal replay and completion.
  INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
  VALUES(p_command_id,t,p_command_type,p_semantic_key,digest,'processing',actor) ON CONFLICT DO NOTHING RETURNING command_id INTO claimed;
  IF claimed IS NULL THEN

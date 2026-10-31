@@ -87,6 +87,9 @@ export class BuilderCaptureError extends Error {
  constructor(readonly code: "INVALID_BUILDER_CAPTURE" | "FORBIDDEN" | "COMMAND_CONFLICT") { super(code); }
 }
 function captureCommandFailure(error: unknown): never {
+ // Existing controlled final-review routines expose their PostgreSQL refusal.
+ // Do not turn those into a different application-level code.
+ if((error as {code?:string})?.code==="42501")throw error;
  if(error instanceof Error && ["COMMAND_CONFLICT","FORBIDDEN"].includes(error.message))throw new BuilderCaptureError(error.message as "COMMAND_CONFLICT"|"FORBIDDEN");
  throw error;
 }

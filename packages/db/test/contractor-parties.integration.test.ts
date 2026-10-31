@@ -51,7 +51,9 @@ describe("CH-3b PostgreSQL guarantees", () => {
       await assertContractorPartiesRequired(() => withTenant(runtime, ctx(f.p), db => rawBind(db, f.p, input)));
       const counts = await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT (SELECT count(*) FROM app.contractor_party_binding WHERE job_id=$1)::int bindings,(SELECT count(*) FROM app.command_receipt WHERE command_id=$2)::int receipts,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audit,(SELECT count(*) FROM app.action_outbox)::int outbox", [f.job, f.input.commandId]));
       // create_customer/site have their own audit; refusal must leave the exact prior projection unchanged.
-      expect(counts.rows[0]).toMatchObject({ bindings: 0, receipts: 0, outbox: 0, audit: 2 });
+      expect(counts.rows[0]).toMatchObject({ bindings: 0, receipts: 0, outbox: 0, audit: 4 });
+      const auditKinds=(await withTenant(runtime,ctx(f.p),db=>db.$client.query("SELECT event_type,count(*)::int n FROM app.audit_event WHERE subject_ref=$1::text GROUP BY event_type ORDER BY event_type",[f.job]))).rows;
+      expect(auditKinds).toEqual([{event_type:"command.succeeded",n:2},{event_type:"job.parties.create_customer",n:1},{event_type:"job.parties.create_site",n:1}]);
     }
     await expect(parties.bind(f.p, f.input)).resolves.toMatchObject({ realExternalActions: 0 });
   });

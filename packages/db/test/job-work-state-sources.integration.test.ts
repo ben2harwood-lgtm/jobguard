@@ -154,6 +154,8 @@ describe("CH-4 real database held-signal isolation",()=>{
       await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,commandId,CH4_HASH,a.actorId]);
       await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'completion_photo')",[linkId,a.tenantId,photoId,a.jobId,a.scopeId]);
       await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'completion',$5,$6)",[completionId,a.tenantId,a.jobId,a.scopeId,linkId,commandId]);
+      // This raw stage fixture proves source guards, not receipt construction.
+      await db.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,commandId,JSON.stringify({completionId,evidenceId:photoId,state:'complete'})]);
      });
      expect((await admin.query("SELECT kind FROM app.job_work_state_event ORDER BY sequence")).rows).toEqual([{kind:"first_site_evidence"},{kind:"first_site_evidence"},{kind:"site_activity"}]);
      const after=await snapshot();expect(after).not.toEqual(before);

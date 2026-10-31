@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { extraOriginHashV1, priceSorLine, SorSiteExtraError } from "@jobguard/core";
 import { ExtraRepository, SiteExtraRepository, demoSorItems, withTenant, type VerifiedTenantContext, type TenantTransaction } from "../src/index.js";
 import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
-import { fixture, receipt, rawOrigin, finishRaw } from "./extra-fixtures.js";
+import { fixture, receipt, terminalizeFixtureReceipt, rawOrigin, finishRaw } from "./extra-fixtures.js";
 import { cluster, siteFixture, command, ownerTx, sorInput, noteText, written, chainHead, rowText, stored, newOrder, reviseOrder, lineIds, newContract, newPriceList, leaveLive, moneyRows, hashOf,
   rawExtra, revisionValues, insertRow, basisValues, type Cluster, type SiteFixture } from "./site-extra-pricing-fixtures.js";
 import { invite, smallJob, smallTrack, cancel, originSql, originHashInput, decision } from "./site-extra-fixtures.js";
@@ -170,6 +170,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     const raw = await ownerTx(c, tenant, async db => {
       const raw = await directRaise(db, f, who, "supervisor");
       await finishRaw(db, raw.actorFixture, raw.variationId, raw.commandId, raw.originHash);
+      await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       return raw;
     });
     await command(c, f, { kind: "grant.revoke", grantId: who.grant });
@@ -201,6 +202,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
       const raw = await directRaise(db, f, f.members.supervisor, "supervisor");
       await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]);
       await finishRaw(db, raw.actorFixture, raw.variationId, raw.commandId, raw.originHash);
+      await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE"); return raw;
     });
     const { revision, basis } = await stored(c, tenant, raw.variationId);
@@ -454,7 +456,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
   it("[C15] a failure forced at each statement leaves nothing written, and the audit event is in the same transaction", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, tenant = f.p.tenantId;
     const original = ExtraRepository.prototype.raiseExtra;
-    for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "SELECT app.require_watchdog_live", "SELECT app.ent3a_require_extra_authority", "SELECT app.ent3c_record_sor_revision", "FROM app.append_audit(", "COMMIT"]) {
+    for (const fragment of ["SELECT app.begin_command(", "SELECT app.complete_command(", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "SELECT app.require_watchdog_live", "SELECT app.ent3a_require_extra_authority", "SELECT app.ent3c_record_sor_revision", "FROM app.append_audit(", "COMMIT"]) {
       const raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }), before = await written(c, tenant), head = await chainHead(c, tenant);
       vi.spyOn(ExtraRepository.prototype, "raiseExtra").mockImplementationOnce(async function (this: ExtraRepository, context, input, seam) {
         const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
@@ -482,6 +484,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       // The raise sits in a released savepoint: its facts carry another transaction id than the revision row, so the price is not in the raising transaction.
       const values = await revisionValues(db, f, raw, { claimed: "2" }); const row = await insertRow(db, "extra_sor_revision", values);
       await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
     })).rejects.toMatchObject({ message: "PRICING_AUDIT_REQUIRED" });
     const earlier = await repo.logSorSiteExtra(f.ctx, who.member, sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "3" }));
@@ -517,6 +520,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
       const row = await insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, { claimed: "2" }));
       await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE"); return raw;
     });
     const { revision, basis } = await stored(c, tenant, raw.variationId);
@@ -566,6 +570,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
       const origin = (await db.$client.query("SELECT origin_hash,server_recorded_at FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [tenant, raw.variationId])).rows[0]!;
       expect(row.content_hash).not.toBe("c".repeat(64)); expect(row.content_hash).toBe(hashOf(row, origin.origin_hash)); expect(new Date(row.server_recorded_at).getTime()).toBe(new Date(origin.server_recorded_at).getTime());
       await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       await db.$client.query("SAVEPOINT second");
       await expect(insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, { claimed: "2" }))).rejects.toMatchObject({ code: expect.stringMatching(/^(23505|23514)$/u) });
       await db.$client.query("ROLLBACK TO SAVEPOINT second");
@@ -600,6 +605,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
         const row = (await db.$client.query("SELECT * FROM app.extra_sor_revision WHERE tenant_id=$1 AND id=$2", [tenant, values.id])).rows[0]!;
         expect(row.net_pence).toBe(price);
         await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+        await terminalizeFixtureReceipt(db,tenant,raw.commandId,{variationId:raw.variationId});
       }
       await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
       throw new Error("ROLLBACK_PRICE_GUARD_CONTROL");

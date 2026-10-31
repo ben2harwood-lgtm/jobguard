@@ -47,7 +47,8 @@ function harness() {
       if (sql.startsWith("SELECT j.id job_id,b.customer_id,b.site_id FROM app.job j") && sql.includes("JOIN app.final_account_lock")) return result();
       if (sql.includes("FROM app.command_receipt")) return result();
       if (sql.startsWith("SELECT s.id,EXISTS(")) return result();
-      if (sql.startsWith("INSERT INTO app.command_receipt")) { completing = true; return result([{ command_id: values[0] }]); }
+      if (sql.includes("app.begin_command(")) { completing = true; return result([{result:{kind:"claim"}}]); }
+      if (sql.includes("app.complete_command(")) return result([{result:{completionId:completions.at(-1),evidenceId:evidence,state:"complete",decisionId:null}}]);
       if (sql.includes("FROM app.evidence_object") && sql.includes("e.kind='original'")) {
         // A READ COMMITTED statement takes its snapshot BEFORE a row-lock wait.
         // A separate lock statement must finish before the eligibility statement starts.

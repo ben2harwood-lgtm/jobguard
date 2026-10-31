@@ -15,4 +15,7 @@ it("LP-5b projection writers use checked completion without submitting a timesta
  expect(sql).toContain("'latestCustomerRevisionId'");
  expect(sql).toContain("'decisionIds'");
  expect(sql).toContain("'asOfSequence'");
+ expect(sql).toContain("JOIN created created_event");
+ expect(sql).toContain("created_event.rule_id");
+ expect(sql).not.toContain("JOIN created c\n");
 });

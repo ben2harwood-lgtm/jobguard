@@ -25,6 +25,9 @@ describe("LP-5b draft catalogue additions", () => {
     const begin = sql.split("CREATE OR REPLACE FUNCTION app.begin_command")[1]!.split("END $$;")[0]!;
     expect(begin.replace(/--[^\n]*/g, " ")).not.toMatch(/FOR\s+(UPDATE|SHARE)|pg_advisory|p_(digest|hash)/i);
     expect(begin).toContain("found_count<>1");
+    const claimAt=begin.indexOf("INSERT INTO app.command_receipt");
+    expect(begin.indexOf("app.lp5b_contractor_permission")).toBeGreaterThan(claimAt);
+    expect(begin).toContain("'extra-origin:'||(p_resource->>'subjectRef')||':'||p_command_id::text");
     expect(begin).toMatch(/END IF;\s*END IF;\s*INSERT INTO app\.command_lifecycle_claim/);
     expect(begin).toContain("(p_significant_input->>'legacyJson')::jsonb IS DISTINCT FROM (p_significant_input->'input')");
     expect(sql).not.toMatch(/GRANT\s+(INSERT|UPDATE|DELETE)\b/);

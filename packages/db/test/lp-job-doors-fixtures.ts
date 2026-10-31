@@ -125,17 +125,18 @@ export async function adoptionAuthority(db: JobDoorsDatabase, change: {
 } = {}) {
   const f = await adoptionFixture(db), other = await jobDoorsActor(db.owner, f.actor.tenant);
   const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  let seedReceipt: (client: PoolClient) => Promise<void> = async () => undefined;
   await transaction(db.owner, f.actor.tenant, async client => {
     if (change.member === "worker") await client.query("UPDATE app.membership SET role='worker' WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
     if (change.member === "revoked") await client.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
     if (change.member === "expired") await client.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
-    if (change.receipt !== "missing") await client.query(`INSERT INTO app.command_receipt
+    if (change.receipt !== "missing") seedReceipt = async runtimeClient => { await runtimeClient.query(`INSERT INTO app.command_receipt
       (tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
       VALUES($1,$2,$3,$4,$5,$6::varchar,$7,$8,CASE WHEN $6::varchar='succeeded' THEN clock_timestamp() ELSE NULL END)`,
     [f.actor.tenant, f.command.commandId, change.receipt === "type" ? "quote.send" : f.command.commandType,
       change.receipt === "subject" ? `import:${randomUUID()}` : f.command.semanticKey, "c".repeat(64),
       change.receipt === "succeeded" ? "succeeded" : "processing", change.receipt === "actor" ? other.member : f.actor.member,
-      change.receipt === "succeeded" ? {} : null]);
+      change.receipt === "succeeded" ? {} : null]); };
     const action = change.approval === "action" ? "quote.send" : "job.adopt_in_flight";
     await client.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,$3,$4,$5)",
       [f.actor.tenant, decision, change.approval === "subject_type" ? "quote_document" : "job",
@@ -156,12 +157,15 @@ export async function adoptionAuthority(db: JobDoorsDatabase, change: {
       change.approval === "expired" ? new Date(0) : new Date("2099-01-01T00:00:00Z"),
       change.approval === "revoked" ? new Date(0) : null]);
   });
-  return { ...f, authorization };
+  return { ...f, authorization, seedReceipt };
 }
 
 export async function callAdoption(client: PoolClient, f: Awaited<ReturnType<typeof adoptionAuthority>>, change: {
   tenant?: string; actor?: string; customer?: string; site?: string; payer?: string;
 } = {}) {
+  // Deliberately unmanaged authority fixture: stage the open receipt in the
+  // SAME transaction as the refused SQL, never commit processing setup rows.
+  await f.seedReceipt(client);
   return client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4::varchar,$5::varchar,$6::char(64),$7::varchar,
     $8::bigint,$9::bigint,$10::varchar,$11::varchar,$12,$13::timestamptz,$14,$15,$16,$17,$18)`,
   [change.tenant ?? f.actor.tenant, f.input.jobId, f.input.baselineId, f.input.title, f.input.lifecyclePoint,

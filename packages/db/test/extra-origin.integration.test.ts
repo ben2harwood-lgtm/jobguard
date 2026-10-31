@@ -14,7 +14,7 @@ const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user",
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
- if (complete) await finishRaw(db, f, id, command, row.origin_hash); return row;
+ if (complete) await finishRaw(db, f, id, command, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return row;
 });
 async function checkChain(f: Fixture) {
  const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.p.tenantId])).rows;
@@ -62,7 +62,7 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[DW5a] failures at each write, seam, audit and commit leave no facts or receipt", async () => {
   const f = await fixture(c);
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "FROM app.append_audit(", "COMMIT"]) {
+  for (const fragment of ["SELECT app.begin_command(", "SELECT app.complete_command(", "INSERT INTO app.variation", "INSERT INTO app.extra_origin", "INSERT INTO app.extra_event", "FROM app.append_audit(", "COMMIT"]) {
    const raw = raise(f, { clientCaptureId: randomUUID() }), capture = raw.clientCaptureId as string;
    const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
    spy.mockImplementation((async () => { const client = await connect(); const original = client.query.bind(client); const querySpy = vi.spyOn(client, "query"); querySpy.mockImplementation((async (sql: any, params?: any) => { const value = await original(sql, params); if (String(sql).includes(fragment)) { if (fragment === "COMMIT") throw new Error("COMMIT injection must be before execution"); throw new Error(noteCanary); } return value; }) as any); if (fragment === "COMMIT") querySpy.mockImplementation((async (sql: any, params?: any) => { if (sql === "COMMIT") { await original("SET CONSTRAINTS ALL IMMEDIATE"); throw new Error(noteCanary); } return original(sql, params); }) as any); return client; }) as any);
@@ -92,7 +92,11 @@ describe("ENT-4b origin persistence", () => {
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   const bound = (await c.admin.query("SELECT * FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, retry.commandId])).rows;
   expect(bound).toHaveLength(1); expect(bound[0]).toMatchObject({ status: "succeeded", result: a, command_type: original.commandType });
-  expect(bound[0].request_hash).toBe((await c.admin.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, original.commandId])).rows[0].request_hash);
+  const firstReceipt=(await c.admin.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[f.p.tenantId,original.commandId])).rows[0];
+  expect(bound[0].request_hash).toMatch(/^[a-f0-9]{64}$/);expect(firstReceipt.request_hash).toMatch(/^[a-f0-9]{64}$/);
+  expect(bound[0].request_hash).not.toBe(firstReceipt.request_hash); // distinct semantic identities stay bound
+  const claims=(await c.admin.query("SELECT significant_input,resource FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=ANY($2::uuid[])",[f.p.tenantId,[original.commandId,retry.commandId]])).rows;
+  expect(claims).toHaveLength(2);expect(claims[0]).toEqual(claims[1]);
   const counts = async () => Object.fromEntries(await Promise.all(["command_receipt", "scope_identity", "variation", "extra_origin", "extra_event", "audit_event"].map(async table => [table, (await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows[0].n])));
   const before = await counts(), changed = { ...retry, clientCaptureId: randomUUID(), note: "Fictional different capture" };
   await expect(repo.raiseExtra(f.ctx, changed)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
@@ -116,7 +120,7 @@ describe("ENT-4b origin persistence", () => {
   const f = await fixture(c);
   await assignTrack(f, "small_builder");
   const jobId = await smallFixture(f);
-  const id = await withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"); await rawOrigin(db, { ...f, jobId }, id, command, { job_track: "small_builder", kind: "builder_logged", raising_grant_id: null }); return id; });
+  const id = await withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"); await rawOrigin(db, { ...f, jobId }, id, command, { job_track: "small_builder", kind: "builder_logged", raising_grant_id: null }); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return id; });
   const old = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0];
   await assignTrack(f, "contractor");
   expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(old);
@@ -150,7 +154,7 @@ describe("ENT-4b origin persistence", () => {
   const f = await fixture(c), id = randomUUID(), commandId = randomUUID();
   await expect(withTenant(c.runtime, f.ctx, async db => {
    await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
-   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,commandId,{variationId:id});
    await db.$client.query("SELECT set_config('app.tenant_id','',true)");
   })).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
   for (const [table, column, value] of [["command_receipt", "command_id", commandId], ["variation", "id", id], ["extra_origin", "variation_id", id], ["extra_event", "variation_id", id], ["audit_event", "subject_ref", id]]) expect((await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, value])).rows[0].n).toBe(0);
@@ -200,6 +204,7 @@ describe("ENT-4b origin persistence", () => {
    const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId); await rawVariation(db, f.p.tenantId, f.jobId, id); const row = await rawOrigin(db, f, id, command);
    if (missing !== "logged") await db.$client.query("INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id,sequence,server_recorded_at) VALUES($1,$2,$3,$4,'logged',$5,$6,999,'2000-01-01T00:00:00Z')", [f.p.tenantId, randomUUID(), f.jobId, id, command, f.p.membershipId]);
    if (missing !== "audit") await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${f.p.membershipId}`, eventType: "contractor.extra.raised", subjectType: "extra", subjectRef: id, payload: { references: { command: missing === "command" ? randomUUID() : command }, hashes: { origin: missing === "origin_hash" ? "f".repeat(64) : row.origin_hash } } }]);
+   await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id});
   })).rejects.toMatchObject({ code: "23514" });
  });
  it("[S5] evidence and excess references preserve job identity and new scope lineage", async () => {
@@ -267,7 +272,7 @@ describe("ENT-4b origin persistence", () => {
   let refusal: any;
   await withTenant(c.runtime, f.ctx, async db => {
    await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
-   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,commandId,{variationId:id});
    await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [value]);
   }).catch(error => { refusal = error; });
   expect(refusal).toBeDefined();

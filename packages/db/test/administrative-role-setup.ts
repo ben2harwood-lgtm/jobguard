@@ -15,6 +15,16 @@ const clusterAdmins = new Map<number, {user:string;password:string}>();
 // not per filename/migration list, so mixed old/current databases stay honest.
 // Protocol/unit doubles retain the unwrapped production module.
 if (testPath?.endsWith(".integration.test.ts")) {
+  vi.doMock("../src/repository-command.js", async () => {
+    const actual=await vi.importActual<typeof import("../src/repository-command.js")>("../src/repository-command.js");
+    const {legacyRepositoryCommandModule}=await import("./legacy-repository-command-fixture.js");
+    return legacyRepositoryCommandModule(actual);
+  });
+  vi.doMock("../src/recovery-command.js", async () => {
+    const actual=await vi.importActual<typeof import("../src/recovery-command.js")>("../src/recovery-command.js");
+    const {legacyRecoveryCommandModule}=await import("./legacy-repository-command-fixture.js");
+    return legacyRecoveryCommandModule(actual);
+  });
   vi.doMock("../src/commands.js", async () => {
     const commands = await vi.importActual<typeof import("../src/commands.js")>("../src/commands.js");
     const {legacyCommandModule} = await import("./legacy-command-fixture.js");

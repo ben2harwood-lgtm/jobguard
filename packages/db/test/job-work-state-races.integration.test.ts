@@ -18,7 +18,7 @@ async function awaitBlocked(f:WorkFixture,tenantId:string){
  const deadline=Date.now()+10000;while(Date.now()<deadline){
   if((await f.admin.query("SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%command_receipt%' AND query LIKE '%'||$1||'%'",[tenantId])).rows.length)return;
   // pg uses bind parameters in the activity text; the source insert identifies this test's wait.
-  if((await f.admin.query("SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%INSERT INTO app.command_receipt%'" )).rows.length)return;
+  if((await f.admin.query("SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND (query LIKE '%INSERT INTO app.command_receipt%' OR query LIKE '%SELECT app.begin_command(%')" )).rows.length)return;
   await new Promise(resolve=>setTimeout(resolve,10));
  }throw new Error("source did not wait on the job lock");
 }

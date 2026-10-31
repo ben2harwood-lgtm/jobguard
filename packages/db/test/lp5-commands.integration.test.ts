@@ -41,12 +41,16 @@ async function begin(f: Awaited<ReturnType<typeof fixture>>, command = commercia
 describe("LP-5a actual PostgreSQL command lifecycle", () => {
   it("concurrent duplicate IDs and semantic keys commit one resolution, no grant and the first result", async () => {
     const f = await fixture();
-    const results = await Promise.all([f.command, f.command, { ...f.command, commandId: randomUUID() }].map(c => f.dispatcher.dismissDecision(f.context, c)));
+    const commands=[f.command, f.command, { ...f.command, commandId: randomUUID() }];
+    const results = await Promise.all(commands.map(c => f.dispatcher.dismissDecision(f.context, c)));
     expect(results).toEqual(Array(3).fill({ decisionId: f.command.decisionId, resolution: "dismissed", authorizedAction: false }));
     expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, resolutions: 1, authorizations: 0, audits: 2 });
     const audits = (await db.owner.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded'", [f.actor.tenant])).rows;
     expect(audits).toHaveLength(1);
-    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: f.command.commandId, auditTrust: "checked_operation" } } });
+    const receipts=(await db.owner.query("SELECT command_id FROM app.command_receipt WHERE tenant_id=$1",[f.actor.tenant])).rows;
+    expect(receipts).toHaveLength(1);
+    expect(commands.map(c=>c.commandId)).toContain(receipts[0].command_id);
+    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: receipts[0].command_id, auditTrust: "checked_operation" } } });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, resolution: "rejected" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, expectedSnapshotRevision: 2 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   });
