@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "j3-landing-alloc": {
+      "branches": [
+        "codex/sandbox/j3-landing-alloc"
+      ],
+      "note": "RED: DEMO-J3 / SV-6 receipt allocation; 0411 supports the explicit DEMO-S single invoice. CI PostgreSQL and independent RED review required.",
+      "allow": [
+        "apps/api/src/receipt-case-allocation.application.ts",
+        "apps/api/src/receipt-case-allocation.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/receipt-case-allocations/route.ts",
+        "apps/web/app/api/jobs/[id]/receipt-case-allocations/route.test.ts",
+        "packages/db/test/j3-landing-allocation.integration.test.ts",
+        "packages/db/migrations/0411_j3_combined_invoice.sql",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}
