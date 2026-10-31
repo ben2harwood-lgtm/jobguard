@@ -503,3 +503,47 @@ Remaining runtime column UPDATE inventory (catalogue comparison remains LP-0):
 | app.scope_identity.state | LP-6d, LP-13 |
 | app.variation.current_revision_id | LP-5c, LP-6d |
 | app.variation.state | LP-5c, LP-6d |
+
+## LP-6a dark binding delta (0520)
+
+The machine inventory adds exactly the following capabilities, in group
+`a-lp6a-request-binding`. They are source-derived expectations, pending real
+PostgreSQL CI and independent exact-head RED review. No existing capability is
+removed or learned from the installed catalogue. No business RLS or route changes.
+The new NOLOGIN owner cannot be assumed by runtime, identity or worker.
+Private session locking remains under the existing migration owner because
+SELECT alone does not permit FOR SHARE. Its credential-scoped helper and the
+binding accessor are callable only by the binding owner.
+
+- `acl|rel|table|control_plane.contractor_practice_session|jobguard_binding_owner|SELECT|-`
+- `acl|rel|table|control_plane.practice_session|jobguard_binding_owner|SELECT|-`
+- `acl|rel|table|identity.session|jobguard_binding_owner|SELECT|-`
+- `acl|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_runtime|EXECUTE|-`
+- `acl|routine|function:app.current_actor()|jobguard_runtime|EXECUTE|-`
+- `acl|routine|function:app.current_tenant()|jobguard_runtime|EXECUTE|-`
+- `acl|routine|function:app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)|jobguard_binding_owner|EXECUTE|-`
+- `acl|routine|function:identity.sso_session_memberships(u uuid, s uuid)|jobguard_binding_owner|EXECUTE|-`
+- `acl|schema|app|jobguard_binding_owner|USAGE|-`
+- `acl|schema|control_plane|jobguard_binding_owner|USAGE|-`
+- `acl|schema|identity|jobguard_binding_owner|USAGE|-`
+- `owner|rel:table|control_plane.request_binding|jobguard_binding_owner`
+- `owner|routine|function:app.bind_request(p_kind text, p_credential text, p_tenant uuid)|jobguard_binding_owner`
+- `owner|routine|function:app.current_actor()|jobguard_binding_owner`
+- `owner|routine|function:app.current_tenant()|jobguard_binding_owner`
+- `owner|routine|function:app.lp6_bound_request()|jobguard_binding_owner`
+- `owner|routine|function:app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)|jobguard_migration`
+- `role|jobguard_binding_owner|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=`
+
+Real session digests remain bearer credentials; identity-login compromise can
+mint/read them. Practice binds remain forgeable with the runtime password but
+are confined to their synthetic principal. No new key or key rotation. The
+UNLOGGED store is a private infrastructure exception with no runtime table grants
+and no tenant-RLS lookup dependency. Stale-row cleanup is administrator-only.
+
+Coordinator clarification, 31 October: the administrator may retain only its
+PostgreSQL 16 automatic ADMIN-only creator membership (no INHERIT or SET).
+The binding owner is never a member of any role; bootstrap grants migration
+membership temporarily and revokes it on both success and failure, then checks
+the catalogue again. This adds no runtime capability or LP-0 baseline membership
+in the superuser-created fixture. Environment identity uses postmaster start time
+and database OID directly; there is no control-file grant or environment helper.

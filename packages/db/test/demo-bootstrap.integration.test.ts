@@ -67,6 +67,10 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       await expect(bootstrapSyntheticDemo({ownerUrl:"postgresql://owner:synthetic@localhost/jobguard_synthetic_demo",
         runtimeUrl:"postgresql://jobguard_runtime:synthetic@localhost/jobguard_synthetic_demo"})).rejects.toThrow("fixture migration setup failure");
       const failed=queries.indexOf("SET ROLE jobguard_migration");
+      expect(queries.indexOf("GRANT jobguard_binding_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE")).toBeLessThan(failed);
+      const revokedBinding=queries.indexOf("REVOKE jobguard_binding_owner FROM jobguard_migration");
+      expect(revokedBinding).toBeGreaterThan(failed);
+      expect(queries.findLastIndex(q=>q.includes("g.rolsuper AS super_grantor"))).toBeGreaterThan(revokedBinding);
       expect(queries.indexOf("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE")).toBeLessThan(failed);
       expect(queries.indexOf("RESET ROLE")).toBeGreaterThan(failed);
       expect(queries.indexOf("REVOKE jobguard_audit_writer FROM jobguard_migration")).toBeGreaterThan(queries.indexOf("RESET ROLE"));
@@ -85,7 +89,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       if (sql.startsWith("SELECT app.complete_command(")) return { rowCount: 1, rows: [{ result: {} }] };
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
@@ -100,7 +104,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       const bootstrap = bootstrapSyntheticDemo({ ownerUrl: `postgresql://synthetic_owner:fixture@localhost/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: `postgresql://jobguard_runtime:fixture@localhost/${SYNTHETIC_DATABASE_NAME}` });
       if (migrationFailure) await expect(bootstrap).rejects.toThrow("synthetic migration failure");
       else await bootstrap;
-      for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
+      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
         const create = queries.findIndex(({sql}) => sql.includes(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`));
         const migrate = queries.findIndex(({sql}) => sql === 'SET ROLE jobguard_migration');
         expect(create).toBeGreaterThan(-1);
@@ -185,8 +189,8 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     const prerequisite = await admin.connect();
     try {
-      expect((await prerequisite.query("SELECT rolname FROM pg_roles WHERE rolname IN ('jobguard_audit_writer','jobguard_command_writer')")).rows).toEqual([]);
-      for (const [file, role] of [["0456_lp4_database_audit.sql", "jobguard_audit_writer"], ["0475_lp5a_commands.sql", "jobguard_command_writer"]]) {
+      expect((await prerequisite.query("SELECT rolname FROM pg_roles WHERE rolname IN ('jobguard_audit_writer','jobguard_command_writer','jobguard_binding_owner')")).rows).toEqual([]);
+      for (const [file, role] of [["0456_lp4_database_audit.sql", "jobguard_audit_writer"], ["0475_lp5a_commands.sql", "jobguard_command_writer"], ["0520_lp6a_request_binding.sql", "jobguard_binding_owner"]]) {
         const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
         await expect(prerequisite.query(sql)).rejects.toMatchObject({ code: "42704", message: `${role} is missing; run administrative ensureRoles before migrations` });
         await prerequisite.query("ROLLBACK");
@@ -227,9 +231,13 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     // granted by the bootstrap superuser. The owner cannot revoke it, so the exact shape is asserted: that one
     // holder per role and no other, with no privilege of either role, as the support route's USAGE check relies on.
     const holderShape = async () => (await admin.query(`SELECT r.rolname AS role,pg_get_userbyid(m.member) AS member,pg_get_userbyid(m.grantor) AS grantor,m.admin_option,m.inherit_option,m.set_option
-      FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid WHERE r.rolname IN ('jobguard_meter_owner','jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY r.rolname`)).rows;
+      FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid WHERE r.rolname IN ('jobguard_binding_owner','jobguard_meter_owner','jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY r.rolname`)).rows;
     const adminOnly = { member: "neondb_owner", grantor: "postgres", admin_option: true, inherit_option: false, set_option: false };
-    expect(await holderShape()).toEqual([{ role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
+    expect((await admin.query("SELECT count(*)::int n FROM pg_auth_members WHERE member='jobguard_binding_owner'::regrole")).rows[0].n).toBe(0);
+    expect((await admin.query(`SELECT rolname FROM pg_roles WHERE rolname IN ('jobguard_runtime','jobguard_identity','jobguard_infrastructure','jobguard_migration')
+      AND (pg_has_role(oid,'jobguard_binding_owner','USAGE') OR pg_has_role(oid,'jobguard_binding_owner','SET'))`)).rows).toEqual([]);
+    expect((await admin.query("SELECT has_schema_privilege('jobguard_binding_owner','app','CREATE') app,has_schema_privilege('jobguard_binding_owner','control_plane','CREATE') control_plane")).rows[0]).toEqual({app:false,control_plane:false});
+    expect(await holderShape()).toEqual([{ role: "jobguard_binding_owner", ...adminOnly }, { role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
     expect((await admin.query(`SELECT pg_has_role('neondb_owner','jobguard_shadow','USAGE') AS shadow_usage,pg_has_role('neondb_owner','jobguard_shadow','SET') AS shadow_set,
       pg_has_role('neondb_owner','jobguard_shadow_emergency_access','USAGE') AS emergency_usage,pg_has_role('neondb_owner','jobguard_shadow_emergency_access','SET') AS emergency_set`)).rows)
       .toEqual([{ shadow_usage: false, shadow_set: false, emergency_usage: false, emergency_set: false }]);
@@ -330,7 +338,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       await admin.query(`REVOKE jobguard_runtime FROM ${role}`);
     }
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
-    expect(await holderShape()).toEqual([{ role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
+    expect(await holderShape()).toEqual([{ role: "jobguard_binding_owner", ...adminOnly }, { role: "jobguard_meter_owner", ...adminOnly }, { role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
   }, 60_000);
   it("creates and commits the subsequent builder origin using the actual runtime role", async () => {
     const client = await runtime.connect(), scope = randomUUID(), variation = randomUUID();

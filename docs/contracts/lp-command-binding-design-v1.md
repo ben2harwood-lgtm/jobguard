@@ -1,6 +1,6 @@
 # LP-4 to LP-6 design note: commands, audit and the actor binding, version 1
 
-**Status: LP-5 design APPROVED WITH CHANGES; LP-6 proposals remain pending.** Design preparation required by BUILD_PLAN section 11.8 ("Design and inventory before cutover"), written by the LP-0 builder. **It is not implementation evidence.** The linked independent review clears LP-5 interface construction subject to its eight findings; LP-6a still requires its separate decisions (LP0-20). Passing the LP-0 catalogue guard says nothing about whether this design is right.
+**Status: LP-5 and LP-6a designs APPROVED WITH CHANGES; LP-6a changes applied below.** Design preparation required by BUILD_PLAN section 11.8 ("Design and inventory before cutover"), written by the LP-0 builder. **It is not implementation evidence.** The linked independent review clears LP-5 interface construction subject to its eight findings; LP-6a decisions (LP0-20) are recorded in §20 and its linked review. Passing the LP-0 catalogue guard says nothing about whether this design is right.
 
 **Review record:** [Independent design review, 30 October 2026](../review/LP-5-DESIGN-REVIEW-2026-10-30.md), APPROVED WITH CHANGES, bound to `5ce8a8c901d54c4a462dd16dadae85379dd2ba2a`. The following LP-5 clarifications apply findings 1–8; implementation still requires its RED review and the design delta check.
 
@@ -109,7 +109,7 @@ Credential treatment: a usable session digest is a credential; keep it out of lo
 
 Expand-compatible rollout stays decided (C4). Order: (1) bind_request, protected transaction store and `current_actor` / `current_tenant` merged **dark** (nothing enforces); (2) callers pass the binding in addition to existing arguments; (3) routines compare `p_actor` / `p_tenant` with the binding, parameters retained for caller compatibility (LP-6c, LP-6d); (4) enforcement flips; (5) old signatures are withdrawn in the same migration as their replacement or are named for closure (R3). Scanner and source-pin changes for `withTenant` and the bridges (LP-6b) are coordinator-owned and need Ben's typed yes; this note proposes none.
 
-## 9. Binding storage: proposed table-backed choice, pending review
+## 9. Binding storage: reviewed table-backed choice for LP-6a
 
 | | Table-backed binding | Transaction/environment-bound keyed signature |
 |---|---|---|
@@ -121,8 +121,8 @@ Expand-compatible rollout stays decided (C4). Order: (1) bind_request, protected
 Neither a plain setting nor a caller-selected actor is authority. **Recommendation
 for review: table-backed binding**, to avoid adding signing-key custody and
 rotation before the database can verify the existing trusted session records.
-This is a candidate choice, not LP-6a approval. Exact owner/grants, cleanup,
-revocation linearization and worker composition must be reviewed before coding.
+The original comparison above is retained as design history. Section 20 records
+the approved table-backed choice, owner/grants, cleanup and revocation rules.
 
 Candidate row identity combines the current database/environment identity, backend
 identity and full transaction identity; a PID alone, a wrapped transaction ID or
@@ -179,17 +179,17 @@ General owner creation, removal, transfer and recovery rights remain **NEEDS A R
 
 ## 14. Unresolved decisions (kept visible)
 
-1. Review the proposed table-backed binding against the keyed-signature alternative (section 9); no choice is approved.
+1. CLOSED for LP-6a: table-backed binding; see the reviewed implementation contract below.
 2. Exact signature of `begin_command` / `complete_command` and the input digest definition (section 5); to be fixed only after the independent review of this note.
 3. Validate the proposed rollback/refusal disposition of stale "processing" receipts and cancelled commands (section 17).
 4. Whether the audit event format needs a version for legacy history (LP-4 says "if needed"); no retroactive authentication of legacy history.
-5. Key and owner custody for the binding, and rotation.
+5. CLOSED for LP-6a: narrow NOLOGIN owner; no new signing key or rotation.
 6. The scanner and pin changes for LP-6b (coordinator-owned, Ben's typed yes).
 7. Worker authorization recheck wording under existing revocation rules (LP-10).
 
 ## 15. Required before LP-5 and LP-6a
 
-- Independent review of this note, recorded against the exact commit (not yet done).
+- Independent design reviews are linked above and in §20; independent implementation review remains required.
 - LP-1 to LP-3 merged (dependencies in section 11.8).
 - Coordinator integration slot for migrations and the lane register.
 
@@ -375,4 +375,102 @@ validate index coverage, references, lane scope and existing pure comparator/
 context regressions; they do not establish SQL refusal, locks, signatures,
 financial correctness or independent review. PostgreSQL/browser suites cannot run
 in this sandbox. All implementation, migration, cutover, RED implementation
-reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a decisions and implementation review remain outstanding. No migration or dependency is required for this slice.
+reviews and whole-track real-data gates remain outstanding. The recorded review above permits the LP-5 interface with its eight findings applied; the design delta check and RED implementation review remain required. LP-6a design decisions are closed by §20; implementation review remains outstanding. The original design-only slice had no migration; the dark foundation uses 0520.
+
+## 20. LP-6a reviewed implementation contract (30 October review applied)
+
+[LP-6a independent design review](../review/LP-6A-DESIGN-REVIEW-2026-10-30.md)
+is APPROVED WITH CHANGES. This section supersedes the candidate wording in §§7,
+9, 14 and 19 for LP-6a. It is a design delta, not an implementation verdict.
+
+- **1(a), 1(b):** UNLOGGED `control_plane.request_binding` uses top-level
+  `pg_current_xact_id()` (xid8), `pg_postmaster_start_time()` and database OID.
+  The postmaster epoch is encoded independently of caller TimeZone/DateStyle;
+  no PID, GUC, subtransaction ID or migration constant is authority. Logical
+  restore cannot reuse a carried row in a new postmaster/database environment;
+  physical recovery empties UNLOGGED data. No environment helper, control-file
+  grant or new signing key is needed.
+- **1(c), 1(e):** `app.bind_request(kind, credential, requested_tenant)` accepts
+  no actor. `real` accepts only a lowercase HMAC digest found in identity.session;
+  `contractor_practice` accepts only the raw UUID, hashed inside SQL; home
+  `practice` accepts its existing digest. The kind selects a trusted table, not
+  authority supplied by the caller. Both practice paths require the synthetic
+  database and their exact practice tenant/membership. Home credentials remain
+  forgeable with the runtime password; they never resolve identity.session.
+- **1(d):** real memberships use identity.sso_session_memberships unchanged,
+  retaining SSO-required, emergency-owner, expiry and SCIM rules. Practice uses
+  its existing exact principal mapping and current membership/revocation checks;
+  fictional practice users need not have identity.user_email records (the SSO
+  helper joins that table). No caller-selected practice user is accepted.
+  mon1_company_actor, mon9_session and invite_member conversion belongs to
+  LP-6c/6d, not this dark foundation.
+- **1(f):** bind is the first request-transaction statement. Lock only the
+  credential's session row FOR SHARE; no membership, business or advisory lock.
+  Session revocation waits for the request; SCIM's membership-first order cannot
+  cycle with a binding membership read, which takes no row lock. Downstream
+  operations still recheck permissions. Existing watchdog lock tests stay intact.
+  A private credential-scoped lookup helper owned by jobguard_migration takes
+  the row lock: PostgreSQL row locking requires UPDATE privilege, so giving the
+  new owner SELECT alone cannot lock directly. Runtime cannot call this helper;
+  it returns only derived principal, expiry and non-bearer session reference.
+- **2:** jobguard_binding_owner is NOLOGIN, NOINHERIT, with only the clarified
+  administrator creator membership described below, no role
+  assumption from runtime/worker/identity, no schema CREATE or business writes.
+  It owns only the store and public binding/accessor routines, with SELECT on
+  the three session tables, EXECUTE on the existing SSO helper and the
+  private credential helper. All paths put pg_catalog first and
+  pg_temp last; PUBLIC execution is revoked. No new signing key exists. The
+  identity HMAC key is unchanged; its rotation invalidates existing sessions and
+  its production custody remains deployment work.
+- **1(g):** database-password-only resistance covers runtime/worker and real
+  sessions only. Captured live digests remain credentials. Identity-process
+  takeover includes jobguard_identity (it can read and insert real sessions).
+  Session-table readers/backups and database/deployment administrators are
+  threat 4. Checked identity-session issuance is separate follow-up scope.
+
+Binding rows contain no usable credential. Same session/kind/tenant/actor
+rebinding is idempotent; substitution fails. Accessors reject unbound/expired
+transactions. Commit/backend/pool reuse cannot reuse xid8; rollback removes the
+row; savepoint rollback before binding removes it. Stale rows are unusable and
+administrators may truncate this ephemeral table during maintenance (never
+runtime cleanup). Failed binds roll back helper GUC changes. Successful binds
+restore helper GUCs: existing tenant settings remain transitional, not binding
+inputs. No signature format or caller-set signed-context value is accepted.
+
+Migration 0520 is forward-only and merged dark: no existing route, RLS policy,
+command, audit writer or bridge switches to this binding. Rollback of a dark
+application needs no database downgrade. Before real-data activation, complete
+LP-6b–6e/LP-9–13, renumber the LP block contiguously, run the whole PostgreSQL
+suite and obtain the independent exact-head RED review. Restore tests must
+exercise both real logical dump/restore and adversarial carried-over row replay.
+
+### LP-6a bootstrap clarification (coordinator / independent design reviewer, 31 October)
+
+The earlier bootstrap hold is resolved by this clarification within the approved
+LP-6a review. It is not a waiver of a security control or a new design approval.
+
+Administrator ensureRoles creates jobguard_binding_owner using the same posture
+and holder loops as the audit/command writers. It is NOLOGIN, NOINHERIT,
+NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS and is never a
+member of another role. The only persistent holder permitted is the
+administrator's automatic PostgreSQL 16 creator membership: ADMIN OPTION only,
+INHERIT FALSE, SET FALSE, granted by the bootstrap superuser. A superuser creator
+has no such row. Migration preflight rejects every other holder except the
+administrator-granted temporary jobguard_migration membership (ADMIN FALSE,
+INHERIT TRUE, SET TRUE), accepted only while running as jobguard_migration.
+It also rejects any runtime, worker, identity or infrastructure USAGE/SET path.
+
+Bootstrap grants the migration membership only for migrations and revokes it in
+finally on success and failure, then rechecks that only the creator row remains.
+Temporary schema CREATE needed for ownership transfer is revoked inside 0520.
+A real restricted-bootstrap catalogue assertion checks the creator row's exact
+member, grantor and option flags, absence of outgoing membership, absence of
+service/migration assumption paths and absence of retained schema CREATE.
+The administrator's power to GRANT this role adds nothing new: it already
+creates, alters and owns roles (threat 4, database/deployment administrators).
+
+Environment identity is postmaster start time plus database OID, alongside xid8.
+The control-file grant and its helper are removed entirely. The logical table
+row restore and forced-xid carried-row replay tests remain. PostgreSQL execution
+and independent exact-head RED review are still required in CI; the provisioning
+hold itself is closed by the clarification and implementation.

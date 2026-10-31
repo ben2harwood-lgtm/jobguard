@@ -36,7 +36,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -55,7 +55,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -63,6 +63,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       throw new Error(`${name} has a holder other than the PostgreSQL 16 ADMIN-only creator membership`);
     }
   }
+  await assertBindingOwnerHolders(admin, owner);
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_infrastructure TO ${quoteIdentifier(owner)}`);
@@ -120,12 +121,31 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     await admin.query("COMMIT");
   } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
+// LP-6a: only the PostgreSQL 16 ADMIN-only creator row survives bootstrap.
+async function assertBindingOwnerHolders(client: PoolClient, administrator: string): Promise<void> {
+  const holders = await client.query<{ role: string; member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean; super_grantor: boolean }>(
+    `SELECT pg_get_userbyid(m.roleid) AS role,pg_get_userbyid(m.member) AS member,
+      m.admin_option,m.inherit_option,m.set_option,g.rolsuper AS super_grantor
+     FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.grantor
+     WHERE m.roleid='jobguard_binding_owner'::regrole OR m.member='jobguard_binding_owner'::regrole`,
+  );
+  if (holders.rows.some(row => row.role !== "jobguard_binding_owner" || row.member !== administrator ||
+      !row.admin_option || row.inherit_option || row.set_option || !row.super_grantor)) {
+    throw new Error("jobguard_binding_owner has an invalid holder after provisioning");
+  }
+  const paths = await client.query(`SELECT rolname FROM pg_roles
+    WHERE rolname ~ '^jobguard_(runtime|identity|infrastructure|worker.*)$'
+    AND (pg_has_role(oid,'jobguard_binding_owner','USAGE') OR pg_has_role(oid,'jobguard_binding_owner','SET'))`);
+  if (paths.rows.length) throw new Error("jobguard_binding_owner is reachable by a service role");
+}
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
+  const administrator = (await client.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   // Only the administrator can grant owner membership; migrations remain
-  // NOCREATEROLE. Remove the temporary capability on success and failure.
-  await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+  // NOCREATEROLE. Remove every temporary capability on success and failure.
   try {
+    await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+    await client.query("GRANT jobguard_binding_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
@@ -135,10 +155,17 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
-    try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
-    finally { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
+    try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
+    finally {
+      try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+      finally {
+        try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
+        finally { await assertBindingOwnerHolders(client, administrator); }
+      }
+    }
   }
 }
+
 async function seedDatabase(client: PoolClient) {
   await client.query("BEGIN");
   try {

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6a-binding": {
+      "branches": [
+        "codex/sandbox/lp-6a-binding"
+      ],
+      "note": "LP-6a RED dark foundation stacked on LP-5c/LP-5b. Serialize the LP migration block and inventory; router runs whole PostgreSQL CI and obtains exact-head independent review.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/review/LP-6A-DESIGN-REVIEW-2026-10-30.md",
+        "packages/db/migrations/0520_lp6a_request_binding.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/lp6a-binding.integration.test.ts",
+        "packages/db/test/lp6a-binding.test.ts",
+        "packages/db/test/lp6a-practice-restore.integration.test.ts",
+        "packages/db/test/lp6a-sso.integration.test.ts"
+      ]
+    }
+  }
+}
