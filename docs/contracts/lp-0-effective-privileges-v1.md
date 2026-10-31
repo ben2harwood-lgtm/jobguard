@@ -465,3 +465,41 @@ The replay branch of the thirteen-argument adopt_in_flight_job (0095_job_parties
 ## Rollback
 
 Remove the LP-0 guard, inventory and design note through the ordinary reviewed code process. No migration, grant, role, routine, policy or trigger is installed, so there is no data rollback.
+
+## LP-5c cutover (0508; stacked after 0496)
+
+Direct command creation and completion ACLs are withdrawn, including the separate receipt column UPDATE grants. No new runtime grants or routine changes. Land after LP-5b and rerun the complete PostgreSQL suite and independent RED review at the exact head. Shared overlaps with LP-5a/b are this LP-0 inventory and its exception assertions; serialize their landing. Forward fixes repair checked writers rather than restoring the direct grants.
+
+The whole-track gate in section 11.8 still requires every remaining authority path to close through its assigned checked path. LP-5c does not implement LP-6/8/10. In particular authorization revocation is still direct, one-way under the immutable revocation trigger, and assigned to LP-6d. LP-5 does not resist forged actor claims before LP-6 binding.
+
+Remaining runtime column UPDATE inventory (catalogue comparison remains LP-0):
+
+| Column | Existing LP closure cards |
+|---|---|
+| app.account.created_at | LP-1, LP-7 |
+| app.action_attempt.error_code | LP-8b, LP-10 |
+| app.action_attempt.finished_at | LP-8b, LP-10 |
+| app.action_attempt.outcome | LP-8b, LP-10 |
+| app.action_attempt.provider_reference | LP-8b, LP-10 |
+| app.action_authorization.revoked_at | LP-6d |
+| app.action_outbox.claimed_at | LP-8b, LP-10 |
+| app.action_outbox.completed_at | LP-8b, LP-10 |
+| app.action_outbox.next_attempt_at | LP-8b, LP-10 |
+| app.action_outbox.status | LP-8b, LP-10 |
+| app.action_outbox.updated_at | LP-8b, LP-10 |
+| app.evidence_upload.id | LP-8b |
+| app.evidence_upload.object_version_id | LP-8b |
+| app.evidence_upload.rejection_code | LP-8b |
+| app.evidence_upload.server_verified_at | LP-8b |
+| app.evidence_upload.state | LP-8b |
+| app.membership.created_at | LP-1, LP-7 |
+| app.proposal_line.dismissal_reason | LP-6d, LP-13 |
+| app.proposal_line.state | LP-6d, LP-13 |
+| app.provider_event_inbox.processed_at | LP-8b, LP-10 |
+| app.provider_event_inbox.processing_status | LP-8b, LP-10 |
+| app.quote_draft.current_revision_id | LP-5c, LP-6d |
+| app.quote_draft.revision | LP-5c, LP-6d |
+| app.quote_draft.updated_at | LP-5c, LP-6d |
+| app.scope_identity.state | LP-6d, LP-13 |
+| app.variation.current_revision_id | LP-5c, LP-6d |
+| app.variation.state | LP-5c, LP-6d |

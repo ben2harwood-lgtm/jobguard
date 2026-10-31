@@ -334,8 +334,6 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
       ["acl|rel|table|app.audit_event|jobguard_audit_writer|INSERT|-", ["LP-4", "LP-6e"]],
-      ["acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-", ["LP-5a", "LP-5b", "LP-5c"]],
-      ["acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-", ["LP-5c"]],
       ["acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-", ["LP-8a"]],
       ["acl|rel|table|app.proposal_review|jobguard_runtime|DELETE|-", ["LP-6d"]],
       ["acl|rel|table|app.evidence_upload|jobguard_runtime|INSERT|-", ["LP-8b"]],

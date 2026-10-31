@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-5c": {
+      "branches": [
+        "codex/sandbox/lp-5c-revoke"
+      ],
+      "note": "LP-5c RED; stacked on LP-5b. Serialize migrations and shared LP-0 inventory. Full PostgreSQL CI and independent exact-head Claude review required.",
+      "allow": [
+        "config/lanes/lp-5c.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0508_lp5c_revoke_command_writes.sql",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/lp5c-revoke.integration.test.ts",
+        "packages/db/test/lp5c-revoke.test.ts"
+      ]
+    }
+  }
+}
