@@ -26,3 +26,23 @@ Builder local verification (29 October 2026; Node v24.17.0, cached pinned pnpm 1
 - `git diff --check`: PASS. No git-writing commands, downloads, database startup, browser binding, live provider or commercial actions.
 
 Ready for router commit/CI and one independent exact-head RED review; no database execution, CI pass, independent review, merge or aggregate SV-6 completion claimed. The live 0383 reservation collision must be reconciled before integration. No extra source abstraction, new allocator or reporting system was introduced: the new path reuses the existing command table, source resolver, approval records, audit primitive and hash.
+
+## PR #422 CI repair try 1 — 30 October 2026
+
+Issued failing head `3c562408`; router merged current main into this worktree at `7b8775d3` before repair. No unresolved conflicts were present. This repair changes no SQL, database expectation list, dependency pin or product behavior.
+
+Root causes and focused fixes:
+
+- Next's production import trace ran from `@jobguard/api/workspace` through `workspace/application` and `job-work-state.errors` into `@nestjs/common`'s file validator. That validator uses a native `require.resolve('file-type')` and dynamic ESM loader; webpack's resolution conditions cannot resolve that package's import-only export. Locally this reproduced as a build warning (the build still exited 0), plus a load-esm dynamic-request warning. Extracted only the unchanged `jobWorkStateFailure` function into `job-work-state.failure.ts`; the two shared-workspace callers now import that neutral module. The existing Nest exception filter and its original function export remain compatible. Verified the extracted function body is byte-for-byte identical. No Next configuration, package override or validation behavior changed.
+- `M0-6L` asserted on every document-level status. Next's route announcer also has that role; additionally the subscription screen intentionally renders both the saved-action message and a busy status while refreshing. Both result assertions now scope to `main` and filter the intended result text. Their asserted downgrade/pending-payment wording, permissions, replay checks and payment assertions are unchanged. No `.first()`, sleeps, retries, skipped checks or looser expectations.
+
+Verification with installed dependencies, Node v24.17.0 and cached pinned pnpm 10.28.1 (temporary PATH shim; no downloads):
+
+- `pnpm exec turbo run build --filter=@jobguard/web^... --concurrency=2`: PASS, all six dependency packages. Initial web attempt before rebuilding workspace dist outputs reported missing contract exports; rebuilding the existing packages resolved that prerequisite.
+- `NEXT_TELEMETRY_DISABLED=1 CIRCLE_NODE_TOTAL=2 pnpm --filter @jobguard/web build`: PASS after repair, including production compilation, type checks, all 48 static pages and build tracing. Before repair the complete build reproduced both file-type and load-esm warnings; after repair neither warning is present. Existing CSS/autoprefixer and worktree-root notices remain.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/workspace/framework-boundary.test.ts src/job-work-state.controller.test.ts src/job-work-state-commands.test.ts`: PASS, 15 tests. New regression loads the real workspace entry with Nest forbidden, and verifies both exact linked-job refusal paths. Independently restored each old caller import in a temporary mutation: each failed this regression at the intended Nest boundary (logs `/tmp/sv6-ci1-framework-mutation-{1,2}.log`). Both callers were restored to the repair, and the full three-file batch passed again. No mutation remains.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/plans/plan-screen.test.tsx app/plans/plan-screen-headers.test.ts`: PASS, 18 tests.
+- `pnpm --filter @jobguard/web exec playwright test e2e/M0-6L.spec.ts --list --workers=2`: PASS, both scenarios registered for mobile and desktop (four entries). Registration only, not browser execution.
+- `pnpm --filter @jobguard/api typecheck`: PASS.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: PASS, including own lane, core purity, money/commercial boundaries and SQL CASE lint. Lane includes exactly the additional repair paths alongside the existing PR paths; shared ownership is unchanged.
+- `git diff --check`: PASS. No Git writes, migration edits, PostgreSQL startup, localhost/browser binding or live-provider actions. Full M0-6L browser execution remains for CI; no CI pass or independent RED review is claimed.

@@ -2,7 +2,87 @@ BEGIN;
 -- RED M4-9-S/M4-10-S/M4-17-S. Forward fix only; existing private ACLs retained.
 -- Forward-fix strategy: retain immutable documents/allocations and replace routines in a later migration.
 -- Reverting the loader would disable withheld statements; no financial history needs backfill or deletion.
--- Withheld sources use the 0489 validator, not fabricated catch assessments.
+-- Withheld sources use the private validator below, not fabricated catch assessments.
+CREATE OR REPLACE FUNCTION app.success_fee_withheld_source(t uuid,j uuid,allocation uuid) RETURNS jsonb
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE landing app.recovery_case_allocation; rc app.recovery_case_current;
+ eligibility app.recovery_eligibility_revision; proof app.evidence_object; movement app.practice_feed_event;
+ terms app.recovery_case_terms_approval; approval app.action_authorization;
+ reversals jsonb; remaining bigint; reversed_net bigint; reversed_gross bigint;
+BEGIN
+ SELECT * INTO landing FROM app.recovery_case_allocation WHERE tenant_id=t AND job_id=j AND id=allocation;
+ IF landing.id IS NULL THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
+  SELECT * INTO rc FROM app.recovery_case_current WHERE tenant_id=t AND job_id=j AND id=landing.case_id;
+  SELECT * INTO eligibility FROM app.recovery_eligibility_revision WHERE tenant_id=t AND job_id=j AND case_id=landing.case_id ORDER BY revision DESC LIMIT 1;
+  SELECT * INTO movement FROM app.practice_feed_event WHERE tenant_id=t AND job_id=j AND id=landing.movement_id;
+  SELECT * INTO terms FROM app.recovery_case_terms_approval WHERE tenant_id=t AND job_id=j AND case_id=landing.case_id;
+  SELECT e.* INTO proof FROM app.evidence_object e JOIN app.evidence_upload u ON(u.tenant_id,u.id)=(e.tenant_id,e.upload_id)
+   WHERE e.tenant_id=t AND e.job_id=j AND e.id=landing.evidence_id AND e.kind='original'
+    AND (e.object_version_id,e.sha256,e.server_received_at)=(landing.object_version_id,landing.evidence_hash,landing.evidence_server_received_at)
+    AND e.server_verified_at IS NOT NULL AND u.state='verified';
+  IF rc.id IS NULL OR rc.case_type IS DISTINCT FROM 'withheld_customer_payment' OR NOT rc.synthetic OR rc.state='prevented' OR rc.claim_revision IS NULL OR rc.book<>'builder_customer'
+   OR eligibility.id IS NULL OR eligibility.status<>'approved' OR eligibility.classification<>'eligible_for_review'
+   OR proof.id IS NULL OR EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=proof.id)
+   OR movement.id IS NULL OR movement.state<>'settled' OR movement.identity<>'identified'
+   OR movement.source_hash<>landing.movement_hash OR movement.created_at<=rc.created_at
+   OR terms.id IS NULL OR terms.approved_at>movement.created_at
+   OR NOT EXISTS(SELECT 1 FROM app.action_authorization a WHERE a.tenant_id=t AND a.id=terms.authorization_id AND a.revoked_at IS NULL)
+   OR coalesce(app.recovery_job_payer_type(t,j),'unknown')='insurer'
+   OR NOT rc.source_refs ? landing.invoice_id::text
+   OR NOT EXISTS(SELECT 1 FROM app.practice_feed_receipt_match m JOIN app.customer_payment p
+    ON(p.tenant_id,p.job_id,p.id)=(m.tenant_id,m.job_id,m.payment_id)
+    WHERE m.tenant_id=t AND m.job_id=j AND m.payment_id=landing.payment_id AND p.invoice_id=landing.invoice_id
+     AND m.account_id=movement.account_id AND m.settled_event_id=movement.event_id
+     AND p.amount_pence=m.matched_pence AND m.matched_pence=movement.gross_pence)
+   OR EXISTS(SELECT 1 FROM app.practice_feed_event e WHERE e.tenant_id=t AND e.account_id=movement.account_id AND e.movement_key=movement.movement_key
+    AND e.state IN('reversed','possible_duplicate') AND (e.state='reversed' OR NOT EXISTS(
+     SELECT 1 FROM app.practice_feed_command q WHERE q.tenant_id=t AND q.account_id=e.account_id AND q.movement_key=e.movement_key AND q.action='reconcile_duplicate')))
+  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
+  -- A forged generic authority cannot replace the allocator's durable command.
+  SELECT auth.* INTO approval FROM app.action_authorization auth
+   JOIN app.decision_resolution dr ON(dr.tenant_id,dr.id,dr.decision_id)=(auth.tenant_id,auth.resolution_id,auth.decision_id)
+   JOIN app.recovery_allocation_review r ON(r.tenant_id,r.job_id,r.id)=(landing.tenant_id,landing.job_id,landing.review_id)
+   JOIN app.recovery_allocation_command cmd ON(cmd.tenant_id,cmd.job_id,cmd.command_id)=(landing.tenant_id,landing.job_id,landing.command_id)
+   WHERE auth.tenant_id=t AND auth.id=landing.authorization_id AND auth.action_type='recovery_allocation.allocate'
+    AND auth.recipient=landing.case_id::text AND auth.content_hash=r.approval_hash AND auth.decision_id=r.decision_id
+    AND auth.amount_pence=landing.gross_pence AND auth.currency='GBP' AND auth.policy_version=landing.policy_version
+    AND auth.actor_membership_id=cmd.actor_membership_id AND dr.actor_membership_id=cmd.actor_membership_id
+    AND dr.resolution='approved' AND auth.revoked_at IS NULL AND cmd.created_at<=auth.expires_at
+    AND cmd.payload->>'action'='allocate' AND cmd.result->>'allocationId'=landing.id::text
+    AND (r.artifact->>'eligibleNetPence')::bigint=landing.eligible_net_pence
+    AND r.artifact->>'evidenceId'=landing.evidence_id::text AND r.artifact->>'movementId'=landing.movement_id::text;
+  IF approval.id IS NULL THEN RAISE EXCEPTION 'SUCCESS_FEE_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.id),'[]'),coalesce(sum(r.eligible_net_pence),0),coalesce(sum(r.gross_pence),0)
+   INTO reversals,reversed_net,reversed_gross FROM app.recovery_case_allocation_reversal r
+   WHERE r.tenant_id=t AND r.job_id=j AND r.allocation_id=landing.id;
+  IF reversed_net>landing.eligible_net_pence OR reversed_gross>landing.gross_pence
+   OR EXISTS(SELECT 1 FROM app.recovery_case_allocation_reversal r WHERE r.tenant_id=t AND r.job_id=j AND r.allocation_id=landing.id
+    AND NOT EXISTS(SELECT 1 FROM app.recovery_allocation_command cmd JOIN app.action_authorization auth
+     ON(auth.tenant_id,auth.id)=(r.tenant_id,r.authorization_id)
+     JOIN app.decision_resolution dr ON(dr.tenant_id,dr.id,dr.decision_id)=(auth.tenant_id,auth.resolution_id,auth.decision_id)
+     WHERE cmd.tenant_id=t AND cmd.job_id=j AND cmd.command_id=r.command_id AND cmd.payload->>'action'='reverse'
+      AND cmd.result->>'allocationId'=landing.id::text AND auth.action_type='recovery_allocation.reverse'
+      AND auth.revoked_at IS NULL AND dr.resolution='approved' AND auth.amount_pence=r.gross_pence))
+   OR (EXISTS(SELECT 1 FROM app.customer_payment_reversal WHERE tenant_id=t AND job_id=j AND payment_id=landing.payment_id)
+    AND reversed_gross<>landing.gross_pence)
+   OR EXISTS(SELECT 1 FROM app.customer_credit_note cn WHERE cn.tenant_id=t AND cn.job_id=j AND cn.invoice_id=landing.invoice_id
+    AND NOT EXISTS(SELECT 1 FROM app.recovery_case_allocation_reversal r WHERE r.tenant_id=t AND r.job_id=j AND r.allocation_id=landing.id AND r.credit_note_id=cn.id))
+  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
+  remaining:=landing.eligible_net_pence-reversed_net;
+  IF (SELECT coalesce(sum(ca.eligible_net_pence),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.case_id=landing.case_id)>least(rc.claim_pence,eligibility.eligible_net_pence)
+   OR (SELECT coalesce(sum(ca.gross_pence),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.payment_id=landing.payment_id)>movement.gross_pence
+  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
+ RETURN jsonb_build_object('source',jsonb_build_object('caseId',landing.case_id,'recoveryAllocationId',landing.id,
+   'reviewAuthorizationId',approval.id,'sourceHash',app.final_lock_hash(jsonb_build_object(
+    'allocation',to_jsonb(landing),'reversals',reversals,'eligibility',to_jsonb(eligibility),'caseRevision',rc.revision,
+    'terms',terms.id,'movement',to_jsonb(movement),'proof',to_jsonb(proof)))),
+  'remainingPrincipal',jsonb_build_object('numerator',remaining::text,'denominator','1'),
+  'paymentId',landing.payment_id,'invoiceId',landing.invoice_id,
+  'reversalIds',(SELECT coalesce(jsonb_agg(r.id ORDER BY r.id),'[]') FROM app.recovery_case_allocation_reversal r
+    WHERE r.tenant_id=t AND r.job_id=j AND r.allocation_id=landing.id));
+END $$;
+ALTER FUNCTION app.success_fee_withheld_source(uuid,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.success_fee_withheld_source(uuid,uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow;
 CREATE OR REPLACE FUNCTION app.platform_fee_statement_sources(t uuid,j uuid,actor uuid) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE latest app.success_fee_derivation; saved app.success_fee_review; source jsonb; live jsonb; assessment app.recovery_attribution_revision;
@@ -56,6 +136,7 @@ BEGIN
    'evidenceInvalidationIds',(SELECT coalesce(jsonb_agg(i.id ORDER BY i.id),'[]') FROM app.evidence_invalidation i JOIN app.evidence_object e ON(e.tenant_id,e.id)=(i.tenant_id,i.evidence_id) WHERE e.tenant_id=t AND e.job_id=j)));
 
 END $$;
+
 CREATE OR REPLACE FUNCTION app.simulation_money_sources(t uuid,j uuid,actor uuid) RETURNS jsonb
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE result jsonb:=jsonb_build_object('version','simulation-money-snapshot.v1','tenantId',t,'jobId',j); live jsonb;
@@ -95,14 +176,15 @@ BEGIN
  END IF;
  RETURN result||jsonb_build_object('liveFee',live);
 END $$;
+
 CREATE OR REPLACE FUNCTION app.write_platform_fee_statement(p_job uuid,p_session text,p_command jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 #variable_conflict use_variable
 DECLARE t uuid; actor record; c record; action text:=p_command->>'action'; cid uuid;
  prior app.platform_fee_statement_command; existing app.platform_fee_statement; previous app.platform_fee_statement;
- snapshot jsonb; statement_source_hash text; document jsonb; history jsonb; digest text; result jsonb;
+ snapshot jsonb; v_source_hash text; document jsonb; history jsonb; digest text; result jsonb;
  sid uuid:=gen_random_uuid(); decision uuid:=gen_random_uuid(); resolution uuid:=gen_random_uuid(); auth_id uuid;
- sequence integer; amount bigint; deadline timestamptz;
+ sequence integer; amount bigint; deadline timestamptz; approval_action text;
 BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=p_job)
@@ -116,15 +198,10 @@ BEGIN
   OR p_command-ARRAY['version','action','commandId','statementId','statementHash']<>'{}'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
  cid:=(p_command->>'commandId')::uuid;
- -- Same source fence and lock order as 0393; acquire all business locks before audit.
+ -- Reuse the catch posting writer's private source fence; acquire business locks before audit.
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
- LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
- app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
- app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
- app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
- app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
- app.recovery_case,app.recovery_claim_revision,app.recovery_case_event,
- app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
+ PERFORM app.lock_success_fee_sources();
+ LOCK TABLE app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
  app.recovery_allocation_command,app.recovery_allocation_review,app.recovery_eligibility_revision,
  app.recovery_case_terms_approval,app.evidence_object,app.practice_feed_receipt_match,
  app.job_party_binding,app.job_party_current,app.evidence_upload,app.recovery_payment_payer_mark IN SHARE MODE;
@@ -142,10 +219,10 @@ BEGIN
   THEN RAISE EXCEPTION 'SUCCESS_FEE_IDEMPOTENCY_CONFLICT' USING ERRCODE='23514'; END IF;
   RETURN prior.result||jsonb_build_object('replayed',true);
  END IF;
- snapshot:=app.platform_fee_statement_sources(t,p_job,actor.member_id); statement_source_hash:=app.final_lock_hash(snapshot);
+ snapshot:=app.platform_fee_statement_sources(t,p_job,actor.member_id); v_source_hash:=app.final_lock_hash(snapshot);
  SELECT s.* INTO previous FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job ORDER BY s.sequence DESC LIMIT 1;
  IF action='issue' THEN
-  SELECT * INTO existing FROM app.platform_fee_statement WHERE tenant_id=t AND job_id=p_job AND platform_fee_statement.source_hash=statement_source_hash;
+  SELECT s.* INTO existing FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job AND s.source_hash=v_source_hash;
   IF existing.id IS NULL THEN
    SELECT coalesce(max(s.sequence),0)+1 INTO sequence FROM app.platform_fee_statement s WHERE s.tenant_id=t;
    amount:=(snapshot->>'feePence')::bigint-coalesce((previous.document->'cumulativeFeePrincipal'->>'pence')::bigint,0);
@@ -162,28 +239,40 @@ BEGIN
     'warning','Simulation statement — proposed policy, principal only; not a tax invoice or real amount due',
     'vatLabel','VAT not calculated','sandboxLabel','Practice sandbox — synthetic data; nothing is sent or charged');
    digest:=app.final_lock_hash(document);
-   INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision,t,'simulation_fee_statement',sid::text,'success_fee.statement_approve');
+   INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision,t,'simulation_fee_statement',sid::text,CASE WHEN amount<0 THEN 'success_fee.statement_correction_approve' ELSE 'success_fee.statement_approve' END);
    INSERT INTO app.platform_fee_statement(tenant_id,job_id,id,sequence,namespace,source_hash,document,document_hash,original_id,decision_id)
-    VALUES(t,p_job,sid,sequence,'success_fee.synthetic.v1',statement_source_hash,document,digest,previous.id,decision);
+    VALUES(t,p_job,sid,sequence,'success_fee.synthetic.v1',v_source_hash,document,digest,previous.id,decision);
   ELSE sid:=existing.id; digest:=existing.document_hash;
   END IF;
  ELSE
-  SELECT * INTO existing FROM app.platform_fee_statement WHERE tenant_id=t AND job_id=p_job AND id=(p_command->>'statementId')::uuid;
+  SELECT s.* INTO existing FROM app.platform_fee_statement s WHERE s.tenant_id=t AND s.job_id=p_job AND s.id=(p_command->>'statementId')::uuid;
   IF existing.id IS NULL OR existing.id IS DISTINCT FROM previous.id OR existing.document_hash IS DISTINCT FROM p_command->>'statementHash'
-   OR existing.source_hash IS DISTINCT FROM statement_source_hash
+   OR existing.source_hash IS DISTINCT FROM v_source_hash
   THEN RAISE EXCEPTION 'SUCCESS_FEE_STALE' USING ERRCODE='40001'; END IF;
   sid:=existing.id; digest:=existing.document_hash;
-  SELECT id INTO auth_id FROM app.action_authorization WHERE tenant_id=t AND decision_id=existing.decision_id AND revoked_at IS NULL AND expires_at>clock_timestamp();
+  amount:=(existing.document->'documentPrincipal'->>'pence')::bigint;
+  -- Action identity records direction without weakening the shared nonnegative amount invariant.
+  approval_action:=CASE WHEN amount<0 THEN 'success_fee.statement_correction_approve' ELSE 'success_fee.statement_approve' END;
+  SELECT a.id INTO auth_id FROM app.action_authorization a
+   JOIN app.decision d ON(d.tenant_id,d.id)=(a.tenant_id,a.decision_id)
+   WHERE a.tenant_id=t AND d.subject_type='simulation_fee_statement' AND d.subject_ref=sid::text
+    AND a.action_type=approval_action AND a.recipient=sid::text AND a.content_hash=digest
+    AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp();
   IF auth_id IS NULL THEN
-   IF EXISTS(SELECT 1 FROM app.decision_resolution WHERE tenant_id=t AND decision_id=existing.decision_id)
-   THEN RAISE EXCEPTION 'SUCCESS_FEE_STALE' USING ERRCODE='40001'; END IF;
+   decision:=existing.decision_id;
+   IF EXISTS(SELECT 1 FROM app.decision_resolution WHERE tenant_id=t AND decision_id=decision) THEN
+    -- Preserve the original Decision and expired authorization; renewal is a new explicit approval.
+    decision:=gen_random_uuid();
+    INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
+     VALUES(decision,t,'simulation_fee_statement',sid::text,approval_action);
+   END IF;
    SELECT least(s.expires_at,m.expires_at) INTO deadline FROM control_plane.practice_session s JOIN app.membership m ON m.tenant_id=t AND m.id=actor.member_id WHERE s.token_digest=p_session;
    IF deadline IS NULL OR deadline<=clock_timestamp() THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
    auth_id:=gen_random_uuid();
-   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution,t,existing.decision_id,'approved',actor.member_id);
+   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution,t,decision,'approved',actor.member_id);
    INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,amount_pence,currency,aggregate_revision,policy_version,expires_at)
-    VALUES(auth_id,t,existing.decision_id,resolution,actor.member_id,'success_fee.statement_approve',sid::text,digest,
-     abs((existing.document->'documentPrincipal'->>'pence')::bigint),'GBP',(snapshot->>'postingRevision')::integer,'reference_fee_policy_v3',deadline);
+    VALUES(auth_id,t,decision,resolution,actor.member_id,approval_action,sid::text,digest,
+     abs(amount),'GBP',(snapshot->>'postingRevision')::integer,'reference_fee_policy_v3',deadline);
   END IF;
  END IF;
  result:=jsonb_build_object('version','simulation-fee-statement-result.v1','commandId',cid,'statementId',sid,'documentHash',digest,'authorizationId',auth_id,'replayed',false);
@@ -193,6 +282,7 @@ BEGIN
  RETURN result;
 EXCEPTION WHEN deadlock_detected THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001';
 END $$;
+
 CREATE OR REPLACE FUNCTION app.write_platform_fee_collection(p_job uuid,p_session text,p_command jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 #variable_conflict use_variable
@@ -205,25 +295,25 @@ BEGIN
  PERFORM app.read_success_fee_v3(p_job,p_session); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=p_job)
  THEN RAISE EXCEPTION 'SUCCESS_FEE_DEPENDENCY_BOUND' USING ERRCODE='0A000'; END IF;
- IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR p_command->>'version' IS DISTINCT FROM 'simulation-fee-collection-command.v1'
+ IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR (p_command->>'version') IS DISTINCT FROM 'simulation-fee-collection-command.v1'
  OR action IS NULL OR action NOT IN('collect','refund','redirect','unknown','settle','fail')
  OR NOT(p_command ?& ARRAY['version','action','commandId']) OR NOT coalesce(pg_input_is_valid(p_command->>'commandId','uuid'),false)
  OR (action IN('collect','refund') AND (NOT(p_command ?& ARRAY['statementId','statementHash','amountPence'])
   OR NOT coalesce(pg_input_is_valid(p_command->>'statementId','uuid'),false) OR jsonb_typeof(p_command->'amountPence') IS DISTINCT FROM 'number' OR NOT coalesce(pg_input_is_valid(p_command->>'amountPence','bigint'),false)
   OR coalesce(p_command->>'statementHash','') !~ '^[a-f0-9]{64}$'
-  OR p_command-ARRAY['version','action','commandId','statementId','statementHash','amountPence']<>'{}'))
+  OR (p_command-ARRAY['version','action','commandId','statementId','statementHash','amountPence'])<>'{}'))
  OR (action NOT IN('collect','refund') AND (NOT coalesce(pg_input_is_valid(p_command->>'attemptId','uuid'),false)
-  OR p_command-ARRAY['version','action','commandId','attemptId']<>'{}'))
+  OR (p_command-ARRAY['version','action','commandId','attemptId'])<>'{}'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
+ -- session_user is the connection identity, unaffected by this SECURITY DEFINER owner
+ -- or by caller-controlled settings. Only the internal migration/operator connection
+ -- can report fake-rail terminal facts, including replays of already recorded events.
+ IF action IN('settle','fail') AND NOT pg_has_role(session_user,'jobguard_migration','USAGE')
+ THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  cid:=(p_command->>'commandId')::uuid;
  LOCK TABLE app.action_authorization IN SHARE ROW EXCLUSIVE MODE;
- LOCK TABLE app.recovery_attribution_revision,app.recovery_attribution_command,
- app.stored_receipt_case_allocation,app.receipt_allocation_fact_source,
- app.receipt_allocation_fact_line,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_command,
- app.customer_payment_reversal,app.customer_credit_note,app.practice_feed_event,app.practice_feed_command,
- app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,
- app.recovery_case,app.recovery_claim_revision,app.recovery_case_event,
- app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
+ PERFORM app.lock_success_fee_sources();
+ LOCK TABLE app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
  app.recovery_allocation_command,app.recovery_allocation_review,app.recovery_eligibility_revision,
  app.recovery_case_terms_approval,app.evidence_object,app.practice_feed_receipt_match,
  app.job_party_binding,app.job_party_current,app.evidence_upload,app.recovery_payment_payer_mark IN SHARE MODE;
@@ -285,29 +375,32 @@ BEGIN
  RETURN result;
 EXCEPTION WHEN deadlock_detected THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001';
 END $$;
+
 CREATE OR REPLACE FUNCTION app.simulation_money_run(p_job uuid,p_session text,p_command jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid; actor record; availability jsonb; action text:=p_command->>'action'; cid uuid;
+DECLARE t uuid; actor record; availability jsonb; action text:=(p_command->>'action'); cid uuid;
  r app.simulation_money_run; review app.simulation_money_review; source jsonb; digest text;
 BEGIN
  availability:=app.read_success_fee_v3(p_job,p_session);
  t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  -- This branch precedes all hidden-source reads, even for supplied run IDs.
- IF availability->>'state'<>'catch_review_available' THEN
+ IF (availability->>'state')<>'catch_review_available' THEN
   RAISE EXCEPTION 'SUCCESS_FEE_DEPENDENCY_BOUND' USING ERRCODE='0A000';
  END IF;
- IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR p_command->>'version' IS DISTINCT FROM 'simulation-money-command.v1'
+ IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR (p_command->>'version') IS DISTINCT FROM 'simulation-money-command.v1'
  OR action IS NULL OR action NOT IN('run','read','review','restore')
- OR NOT coalesce(pg_input_is_valid(p_command->>'commandId','uuid'),false)
+ OR NOT coalesce(pg_input_is_valid((p_command->>'commandId'),'uuid'),false)
  OR (p_command - (CASE WHEN action='run' THEN ARRAY['version','action','commandId'] ELSE ARRAY['version','action','commandId','runId','sourceHash'] END))<>'{}'
- OR (action<>'run' AND (NOT coalesce(pg_input_is_valid(p_command->>'runId','uuid'),false) OR coalesce(p_command->>'sourceHash','') !~ '^[a-f0-9]{64}$'))
+ OR (action<>'run' AND (NOT coalesce(pg_input_is_valid((p_command->>'runId'),'uuid'),false) OR coalesce((p_command->>'sourceHash'),'') !~ '^[a-f0-9]{64}$'))
  THEN RAISE EXCEPTION 'INVALID_SUCCESS_FEE_COMMAND' USING ERRCODE='23514'; END IF;
  cid:=(p_command->>'commandId')::uuid;
  -- Synthetic coarse fence: all source writers finish before snapshot collection.
  -- All business locks are acquired before the audit head. No provider call.
- LOCK TABLE app.customer_invoice,app.customer_credit_note,app.customer_payment,app.customer_payment_reversal,app.receipt_allocation_fact_revision,app.receipt_allocation_fact_source,app.receipt_allocation_fact_line,app.stored_receipt_case_allocation,app.success_fee_derivation,app.success_fee_journal,app.success_fee_journal_line,app.platform_fee_statement,app.platform_fee_attempt,app.platform_fee_attempt_event,app.subscription_period,app.subscription_period_line,app.platform_statement,app.platform_statement_line,app.subscription_simulated_work,app.subscription_simulated_result,app.action_authorization,app.recovery_attribution_revision,app.recovery_attribution_command,app.evidence_invalidation,app.shadow_signal_evidence,app.shadow_commercial_signal,app.shadow_disclosure_event,app.shadow_signal_ineligibility,app.recovery_case,app.recovery_claim_revision,app.recovery_case_event,app.practice_feed_event,app.practice_feed_command,app.practice_feed_receipt_match, app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
+ PERFORM app.lock_success_fee_sources();
+ LOCK TABLE app.customer_invoice,app.customer_payment,app.success_fee_derivation,app.success_fee_journal,app.success_fee_journal_line,app.platform_fee_statement,app.platform_fee_attempt,app.platform_fee_attempt_event,app.subscription_period,app.subscription_period_line,app.platform_statement,app.platform_statement_line,app.subscription_simulated_work,app.subscription_simulated_result,app.action_authorization,app.practice_feed_receipt_match IN SHARE MODE;
+ LOCK TABLE app.recovery_case_allocation,app.recovery_case_allocation_reversal,app.receipt_line_allocation,
  app.recovery_allocation_command,app.recovery_allocation_review,app.recovery_eligibility_revision,
- app.recovery_case_terms_approval,app.evidence_object,
+ app.recovery_case_terms_approval,app.evidence_object,app.practice_feed_receipt_match,
  app.job_party_binding,app.job_party_current,app.evidence_upload,app.recovery_payment_payer_mark IN SHARE MODE;
  PERFORM pg_advisory_xact_lock(hashtextextended('simulation-money:'||t::text,0));
  SELECT * INTO actor FROM app.final_check_builder(t,p_job,p_session,action<>'read');
@@ -331,7 +424,7 @@ BEGIN
  END IF;
  IF action<>'run' THEN
   SELECT * INTO r FROM app.simulation_money_run WHERE tenant_id=t AND job_id=p_job AND id=(p_command->>'runId')::uuid;
-  IF r.id IS NULL OR r.source_hash<>p_command->>'sourceHash'
+  IF r.id IS NULL OR r.source_hash<>(p_command->>'sourceHash')
   THEN RAISE EXCEPTION 'SUCCESS_FEE_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF action='review' AND review.id IS NULL THEN
    source:=app.simulation_money_sources(t,p_job,actor.member_id);

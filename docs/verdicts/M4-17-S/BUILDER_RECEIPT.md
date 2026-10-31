@@ -1,6 +1,6 @@
 # M4-17-S — RED builder receipt
 
-Built ahead on `codex/sandbox/m4-17-s-run`, base `codex/sandbox/m4-12-s-collect`; reserved migration 0492. Router owns commit/push/PR and the independent Claude review. This receipt is implementation evidence, not independent acceptance.
+Latest scoped handoff (31 October): ready for coordinator PostgreSQL validation on `codex/sandbox/m4-17-s-run`, caught up through incoming `18ed3f74`; retained migrations 0489 and 0492 await router renumbering at merge. The earlier blocked catch-up findings are superseded by the reconciliation below. Router owns commit/push/PR and the independent Claude review. This receipt is implementation evidence, not independent acceptance.
 
 Implemented server-gathered immutable reconciliation snapshots, authenticated replay/read, exact-source review acknowledgement, checkpoint hash verification and paused checkpoint restoration. Reports label the customer, success-fee and subscription books separately, retain specific difference rows and do not mutate their sources. Workspace UI and route expose the run and review actions. No provider adapters or external actions exist in this change. The existing 0374 subscription issuer and every predecessor migration are unchanged. LP inventories and the tenancy/SERIOUS-B5/entitlement expectation sets are extended for exactly the installed objects.
 
@@ -43,44 +43,132 @@ No package downloads, git writes, live provider calls, real data or real money w
 - `./node_modules/.bin/tsc -p packages/core/tsconfig.json`, `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`, and `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`: passed after the dependency-union narrowing fix. `git diff --check`: passed.
 - PostgreSQL suites, including the added real compensation/incomplete-adapter regression, remain CI-only. No database, browser, complete target journey or renewed independent RED-review pass is claimed.
 
-## m4-withheld-source — RED source adapter, migration 0497
+## 31 October catch-up: contents resolved, not ready to commit
 
-This built-ahead follow-up adds withheld-customer-payment sources to the existing statement loader. It starts from the latest 0490/0491/0492 routines and copies 0489's withheld-allocation validation, binding the result to the approved derivation's source hash. It retains the existing private routine identities/ACLs and tenant/job scope. The source fence now covers allocation/reversal, eligibility, terms, proof and payer writers before statement, collection and reconciliation audit writes. No new table, permission, provider or production capability is introduced. The two LP-0 recorded static-call lists are unioned with the newly used existing helpers; entitlement, SERIOUS-B5 and runtime privilege expectation sets have no new identities to add.
+This section supersedes the earlier current-state claims for the new incoming
+M4-12-S head `18ed3f74`. No DEMO-S or ENT-11b journey pass is claimed.
 
-The strict download schema and source display distinguish a withheld allocation from a catch assessment. Reconciliation snapshots now include existing withheld case, reversal and exact receipt-line rows; historical snapshots without those optional fields retain their encoding. Immutable documents and financial history remain unchanged. Migration 0497 documents a later-routine forward-fix strategy, without backfill or financial deletion.
+All ten conflicted file contents are resolved. The M4-9-S receipt and contract
+and M4-10-S migration 0490 match incoming exactly, including `v_source_hash`,
+`s.` aliases and the private source fence. API collection schema validation and
+session refusal of fake-rail settle/fail survive alongside M4-17-S's method and
+authorization test. Core exports include both incoming and reconciliation.
+Tenancy and entitlement expectations union only the two reconciliation tables;
+the tenancy lists are in PostgreSQL byte order (review before run).
 
-The existing PostgreSQL reconciliation test now executes real synthetic allocation, posting, statement, fake collection, customer reversal, allocator reversal, compensation, correction and fake refund commands. It asserts all five requested monetary results (£32 posted, £250 refunded, £288 yours before tax, zero differences, zero external actions), preserves the original download bytes, and checks replay/stale statements. Additional PG cases cover unsettled/unallocated payments, another job's payment, tenant/session refusal and invalidated proof. A predecessor upgrade test preserves genuine withheld allocations/postings and routine ACLs. These tests are authored, not locally executed. This monetary fixture is not evidence that the entire fresh DEMO-S capture/materials/pursuit/browser journey is complete.
+Both LP snapshots start from incoming and add only this piece's three capability
+entries, two routine records, two policies and two triggers. Every incoming row
+and all other metadata remain unchanged. No stale owner entry for
+`lock_success_fee_sources` is added. The private helper call is recorded only in
+this piece's routine's staticCalls. Its two definitionSha256 values remain null;
+capture the exact PostgreSQL definitions after the migration run. The downstream
+snapshot deliberately omits later dependency objects: this piece's scanner uses
+the live inventory's routine-name set while still checking both snapshots'
+actual own calls/writes, without copying dependency rows into the frozen snapshot.
 
-Initial source review: LATER / SIMPLICITY — `packages/db/migrations/0489_success_fee_recovery_compensation.sql` and `0497_withheld_payment_statement_source.sql`: a later bounded task could extract their common withheld-allocation validator into one private helper, retaining the exact source hashes and fences. This would reduce future validation drift; it does not block this patch. The current migration avoids changing the established posting writer or adding another privileged routine contract.
+0492 delegates the protected source lock batch to incoming's private
+`app.lock_success_fee_sources()` after the closed availability/input checks and
+before advisory/audit locks. Its remaining public source fences are retained.
+The runtime routine body contains no executable-shadow-helper catalogue pattern;
+a static regression checks that boundary and the lock position. JSON extraction
+expressions are bracketed. No main migration was edited.
 
-Local validation (Node v24.17.0; installed repository runners; at most two workers):
+Two unresolved findings prevent a ready commit:
 
-- Core Vitest: `issued-simulation-fee-statement.test.ts` and `simulation-money-run.test.ts`: 17 passed.
-- DB Vitest: `withheld-payment-statement-source-catalog.test.ts`, `simulation-money-run-catalog.test.ts`, `simulation-money-run-repository.test.ts`: 9 passed. These are static/unit checks, not PostgreSQL execution.
-- TypeScript: core, DB and web `--noEmit` passed. Standard local core/storage/config TypeScript builds supplied workspace dependency artifacts.
-- PL/pgSQL CASE-in-IF, core purity and money-arithmetic checks passed; `git diff --check` passed.
-- The pnpm launcher stalled and was stopped; direct installed `.bin` runners were used. The first DB unit/static invocation could not resolve the unbuilt core package; it passed after the normal dependency builds. No packages were downloaded or test infrastructure relaxed.
+1. Branch history includes 0489 and related compensation/schema/test changes
+   merged from `m4-9-s-compensate`. Incoming 18ed3f74 does not contain them.
+   0489 replaces the reviewed 0406 writer and its two guards and directly locks
+   shadow tables in its runtime-executable writer, undoing incoming's boundary.
+   The incoming-first rule and preserving this inherited compensation behavior
+   cannot both hold. These files are left untouched pending the coordinator's
+   answer on archiving the stale M4-9-S additions versus retaining/holding them.
+   The earlier receipt's description of 0489 as merged is not a current-main claim.
+2. The unchanged incoming `simulation-fee-collection-catalog.test.ts` fails its
+   downstream staticCalls comparison: `platform_fee_statement_sources` is recorded
+   as a 0491 call, but the frozen snapshot intentionally excludes 0490 routines,
+   so its known-name set omits that call. The test is byte-identical to incoming.
+   It was not weakened and dependency inventory rows were not copied across.
 
-PostgreSQL fresh/upgrade, full CI, browser suites and the independent Claude RED review remain required after router push. No database, browser, independent review, merge or release success is claimed. The router owns commit, push and the eventual PR after its base merges.
+Local validation with installed runners, at most two workers:
 
-- Full `node tools/lint.mjs` was attempted: core purity passed, then lane checking refused inherited predecessor paths against current main. The lane lists only this piece's actual changed paths, and was not expanded to claim the unmerged base. The router must rerun the unchanged gate once the base merges. No full lint pass is claimed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/simulation-money-run-catalog.test.ts src/simulation-money-run-repository.test.ts test/lp-0-catalog.test.ts`: 34 passed. The final parenthesis-only SQL edit was followed by a separate rerun of simulation-money-run-catalog.test.ts: 3 passed.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2 src/simulation-money-run.test.ts src/simulation-fee-collection.test.ts src/simulation-fee-statement.test.ts`: 64 passed.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=2 src/success-fee.application.test.ts`: 21 passed.
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 'app/api/jobs/[id]/success-fees/money-check/route.test.ts' 'app/api/jobs/[id]/success-fees/collection/route.test.ts'`: 5 passed.
+- From packages/db: the three money-run/statement/collection catalogue files: 5 passed, 1 failed with finding 2 above; money-run and statement passed.
+- Root installed `tsc -p <path>/tsconfig.json --noEmit` for packages/core, packages/db and apps/api: passed.
+- Read-only assertions: both snapshots preserve every incoming row and metadata with only own additions; no stale lock-helper owner entry; tenancy arrays equal the byte-ordered incoming/own union; incoming-owned receipt/contract/0490 exact; no listed reserved-word declaration in 0492. `git diff --check`: passed.
 
+PostgreSQL, browser journeys, CI and independent RED review remain for the
+coordinator/reviewer. No git write was performed, so the index still contains
+unmerged stages until the router stages the resolved contents. The requested
+commit-message file says `do not commit` with these blockers.
 
-## m4-withheld-source follow-up — RED allocation approval expiry
+## 31 October coordinator-authorized reconciliation: ready for PostgreSQL validation
 
-Extracted the duplicated withheld proof/terms/eligibility/allocation/reversal checks into the owner-only invoker routine `app.success_fee_withheld_source(uuid,uuid,uuid)` in branch-owned 0489. Both 0489's posting writer and 0497's statement loader call it. The source hash payload and writer statement encoding are retained. Migration 0497 now applies its existing current-authorization gate before branching, so expired or revoked withheld allocation approvals cannot issue/approve statements or start collections, just as catch approvals cannot. Catch validation and the downstream catch path are source-identical to the predecessor.
+The coordinator explicitly directed retaining and reconciling 0489 and repairing
+the downstream snapshot. This supersedes both blockers in the preceding section.
+It is a scoped code handoff, not a DEMO-S or ENT-11b journey pass.
 
-Source inspection clarified the brief's expiry premise: 0489 checks current expiry on catch attribution approvals; its withheld allocation check binds expiry to the historical allocator command (`cmd.created_at <= auth.expires_at`). That historical behavior is preserved exactly, so a later expiry does not prevent reviewing legitimate compensation. The shared helper retains that historical check; the statement loader separately requires current approval. No policy switches or new public permissions were added. The initial LATER / SIMPLICITY extraction suggestion above is now implemented by this requested follow-up.
+0489 now extends the reviewed 0405 guards and 0406 writer with the retained
+withheld-payment qualification and linked compensation. Read-only comparison
+verified those base files are byte-identical to origin/main. The new catalogue
+regression compares the authentication/validation prefix and the complete
+case-lock, replay and catch-source path against 0406, allowing only JSON
+parentheses. The sole stale source-fence hunk was replaced by the reviewed
+`PERFORM app.lock_success_fee_sources()` at the same lock-order position.
+Additional locks cover only the existing compensation source adapter. No public
+writer locks protected shadow tables directly. Existing compensation schemas,
+proof/allocator checks, cumulative arithmetic, source limits, original-journal
+bounds, signed authorizations, replay and audit behavior remain. No schema or
+compensation test was removed, and 0489's number is unchanged. All SQL string
+literals are unchanged. JSON extractions and the source-membership predicate
+are bracketed; no reserved identifier or function-prefixed local is introduced.
 
-The PostgreSQL regression attacks expiry at the exact historical command timestamp and revocation after posting/statement issue, asserts issue/approval/collection refusal and unchanged financial rows/download bytes, and confirms the 0489 historical-expiry behavior and source hashes remain intact. Existing recovery-18800 end figures, replay, reversal and catch tests are preserved. Upgrade coverage asserts the new helper's exact private ACL and direct runtime/shadow refusal. Both LP-0 inventories add only this owner identity and recorded helper/caller facts; SERIOUS-B5 unions only the exact helper identity with owner, search path and ACL checks. No migrations present on local main were edited (read-only `git ls-tree main` confirmed neither 0489 nor 0497 is present there).
+The unchanged collection catalogue test exposed three missing called dependency
+records in the downstream snapshot: `platform_fee_statement_sources`,
+`write_platform_fee_statement` and `lock_success_fee_sources`. Their exact live
+routine records are now included. The two retained compensation guards are also
+recorded, and the existing `write_success_fee_v3` record now has its actual final
+0489 calls/writes in both inventories. The original M4-17-S records remain.
+No grants, table capabilities or lock-helper owner entry are added. The separate
+statement snapshot test now asserts exactly the two called 0490 routine records,
+the source helper's private/invoker status and the continued absence of statement
+capability entries, table policies and triggers. The collection test itself is
+byte-identical to incoming and passes.
 
-Local validation (installed Node v24.17.0 / Vitest 4.1.12; all Vitest invocations `--maxWorkers=1`):
+Regenerated `lp-downstream-effects-v1.md` using the existing Python tool, then
+ran its `--check`. Relative to the prior generated file, added relation rows are
+platform_fee_attempt, platform_fee_attempt_event, platform_fee_collection_command,
+simulation_money_review and simulation_money_run. Added routine rows are
+check_success_fee_derivation, check_success_fee_journal, lock_success_fee_sources,
+platform_fee_statement_sources, read_platform_fee_collection,
+simulation_money_run, simulation_money_sources, write_platform_fee_collection
+and write_platform_fee_statement. The write_success_fee_v3 row is refreshed.
+These include the previously unregenerated M4-12-S/M4-17-S snapshot rows; no
+unrelated source cutoff, generator rule or authority group changed.
 
-- From `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=1 test/withheld-payment-statement-source-catalog.test.ts test/simulation-money-run-catalog.test.ts test/lp-0-catalog.test.ts` — 33 passed.
-- From `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=1 src/issued-simulation-fee-statement.test.ts src/simulation-money-run.test.ts` — 17 passed.
-- Root `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
-- `node tools/plpgsql-case-in-if-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, and `git diff --check` — passed.
-- A read-only source comparison confirmed unchanged catch validation/downstream catch code and the retained withheld validation predicates. Exact lane coverage checked locally.
-- From `packages/db`: `./node_modules/.bin/vitest list --maxWorkers=1 test/simulation-money-run.integration.test.ts test/withheld-payment-statement-source-upgrade.integration.test.ts test/serious-b5-upgrade.integration.test.ts` — all 13 tests registered, including both new refusal cases. Collection is not database execution.
+Routine definitionSha256 is null, never a digest of raw migration text. Existing
+live rows already had null values. Both snapshots explicitly record the final
+0489 routines with null digests pending the coordinator's PostgreSQL capture.
+Capture SHA-256 over UTF-8 pg_get_functiondef, as packages/db/test/lp-0-catalog.ts
+does, for write_success_fee_v3(uuid,text,jsonb,jsonb), check_success_fee_journal(),
+check_success_fee_derivation(), simulation_money_run(uuid,text,jsonb) and
+simulation_money_sources(uuid,uuid,uuid). No PostgreSQL result is fabricated.
 
-The router must push for real PostgreSQL fresh/upgrade, recovery-18800, catch/recovery compensation and full CI checks, then obtain the independent Claude RED review. No PostgreSQL/browser, CI, independent-review, merge or release success is claimed. No git writes, downloads, real data, providers or external money actions were used.
+Checks run after this reconciliation (installed runners; Vitest maxWorkers=2):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/success-fee-recovery-compensation-catalog.test.ts test/simulation-fee-collection-catalog.test.ts test/simulation-fee-statement-catalog.test.ts`: 5 passed. A final rerun of the compensation catalogue after the source-membership parentheses: 2 passed.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 test/simulation-money-run-catalog.test.ts src/simulation-money-run-repository.test.ts test/lp-0-catalog.test.ts`: 34 passed.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2 src/success-fee-catch-posting.test.ts src/simulation-money-run.test.ts src/simulation-fee-collection.test.ts`: 19 passed, including signed compensation/zero/unlinked-negative validation.
+- Root `python3 tools/lp-downstream-inventory.py` and `python3 tools/lp-downstream-inventory.py --check`: passed; syntax compilation to /tmp passed.
+- Root `node --test tools/lp-downstream-inventory.test.mjs`: 5 passed.
+- Root `node tools/plpgsql-case-in-if-lint.mjs`: 170 migrations passed, no historical exceptions.
+- Read-only assertions: incoming collection test/0490/receipt/contract and main 0405/0406 unchanged; 0489 string literals unchanged; reserved identifiers absent; no function-prefixed locals; `git diff --check`: passed.
+
+The coordinator runs PostgreSQL next, including compensation/reversal/replay,
+upgrade, tenant/grant, shadow catalogue and money-run suites. Independent RED
+review and CI remain gates. The withheld-payment statement adapter and full
+recovery-18800 target were not added by this repair and remain journey work.
+No database, browser, full journey, restore or release pass is claimed. No git
+write occurred; router staging still resolves the index's unmerged entries.

@@ -13,7 +13,10 @@ afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 it("0497 preserves genuine pre-upgrade withheld allocations and fee postings, and retains existing routine ACLs",async()=>{
  const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0497_withheld_payment_statement_source.sql'));expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- for(const url of MIGRATION_URLS.slice(0,own)){
+ // 0507 is an independent prerequisite for genuine withheld fee postings.
+ // Install it before the adapter upgrade fixture despite its later reserved number.
+ const compensation=MIGRATION_URLS.find(u=>u.pathname.endsWith('/0507_success_fee_recovery_compensation.sql'));expect(compensation).toBeDefined();
+ for(const url of [...MIGRATION_URLS.slice(0,own),compensation!]){
   const name=url.pathname.split('/').at(-1)!,sql=await readFile(url,"utf8");
   await f.admin.query(name.startsWith('0095_')?sql.replace('BEGIN;',"BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);"):sql);
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);

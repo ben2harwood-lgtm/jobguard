@@ -36,6 +36,7 @@ export class SimulationFeeCollectionRepository {
     const parsed=simulationFeeCollectionCommandV1.safeParse(raw);
     if(!parsed.success) throw new SuccessFeeError();
     const command=parsed.data,job=parseId(jobId);
+    if(command.action==="settle" || command.action==="fail") throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
     return this.run(context,digest,async db=>{
       const row=(await db.$client.query<{result:unknown}>("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[job,digest,command])).rows[0];
       const result=simulationFeeCollectionResultV1.parse(row?.result);

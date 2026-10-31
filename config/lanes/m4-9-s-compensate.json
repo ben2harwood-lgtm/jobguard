@@ -12,7 +12,7 @@
         "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
         "packages/core/src/success-fee-catch-posting.test.ts",
         "packages/core/src/success-fee-posting.ts",
-        "packages/db/migrations/0489_success_fee_recovery_compensation.sql",
+        "packages/db/migrations/0507_success_fee_recovery_compensation.sql",
         "packages/db/test/success-fee-catch-posting.integration.test.ts",
         "packages/db/test/success-fee-recovery-compensation.integration.test.ts",
         "packages/db/test/success-fee-recovery-fixture.ts",

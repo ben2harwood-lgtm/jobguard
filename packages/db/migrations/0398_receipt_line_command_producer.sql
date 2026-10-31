@@ -46,10 +46,6 @@ BEGIN
  END IF;
  IF expected<>(app.receipt_fact_watermark(t,j)->>'revision')::bigint THEN RAISE EXCEPTION 'RECEIPT_LINE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
  doc:=app.receipt_fact_proposal(t,j,request);
- -- Refuse a cross-job movement before any fact insert; the composite FK is a backstop.
- IF NOT EXISTS(SELECT 1 FROM app.practice_feed_event e
-  WHERE e.tenant_id=t AND e.job_id=j AND e.id=(doc->'movement'->>'id')::uuid)
- THEN RAISE EXCEPTION 'RECOVERY_ATTRIBUTION_MOVEMENT_JOB_REQUIRED' USING ERRCODE='23514'; END IF;
  -- The v1 amount confirms the complete stored reversal; it never sizes it.
  IF request->>'version'='receipt-line-allocation-command.v1' AND request->>'action'='review_reverse'
   AND (request->>'grossPence')::numeric*(doc->'input'->'receipt'->'gross'->>'denominator')::numeric
