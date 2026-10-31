@@ -132,6 +132,10 @@ export * from "./meter-today.js";
 
 export * from "./financial-reconciliation.js";
 export * from "./small-builder-demo-lifecycle.js";
+export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
+
 export * from "./value-source-receipt.js";
+export * from "./issued-simulation-fee-statement.js";
 
 export * from "./customer-approval-method.js";
+export * from "./customer-variation-approval.js";

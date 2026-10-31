@@ -17,7 +17,7 @@ export class JobSourceRepository {
    }catch(error){if(error instanceof Error && error.message==="JOB_SOURCE_FORBIDDEN")throw new JobSourceError("JOB_SOURCE_FORBIDDEN");throw error}
   });
  }
- /** Off-site diary notes and fictional customer messages through app.sv7a_intake_job_source only.
+ /** Diary notes and fictional customer messages through app.sv7a_intake_job_source only.
   * `owner` is the practice session digest, or a trusted server membership id: the same CH-4 authority seam
   * (app.ch4_require_command_owner) the work-state commands use. Routine-guarded live-only command (CH-2): the checked
   * routine replays first, then refuses a new note on a job that is not live. */
@@ -34,9 +34,10 @@ export class JobSourceRepository {
     if(!(error instanceof Error))throw error;
     if(["JOB_SOURCE_FORBIDDEN","JOB_NOT_FOUND"].includes(error.message))throw new JobSourceError("JOB_SOURCE_FORBIDDEN");
     if(error.message==="INVALID_JOB_SOURCE_INPUT")throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");
-    // On-site notes are first site evidence and wait for MON-1 place admission.
+    // Missing MON-1 admission facts fail closed.
     if(error.message==="CAPACITY_ADMISSION_UNAVAILABLE")throw new JobSourceError("JOB_SOURCE_UNAVAILABLE");
-    if(error.message==="POST_LOCK_WORK_REQUIRES_LINKED_JOB")throw new JobWorkStateError("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+    const workCode=(["POST_LOCK_WORK_REQUIRES_LINKED_JOB","METER_UPGRADE_REQUIRED","METER_PROJECTION_MISMATCH","JOB_WORK_CLOSED"] as const).find(code=>code===error.message);
+    if(workCode)throw new JobWorkStateError(workCode);
     if(error.message==="JOB_NOT_LIVE"||error.message==="IDEMPOTENCY_CONFLICT")throw new WatchdogError(error.message);
     throw error;
    }

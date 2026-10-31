@@ -156,4 +156,8 @@ export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-reposit
 
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+
+export * from "./practice-photo-observation.js";
+export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+export * from "./simulation-fee-statement-repository.js";

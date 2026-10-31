@@ -25,3 +25,13 @@ it("query refusals remain typed without exposing internal diagnostics", async ()
  const result = await GET(new Request("https://fictional.invalid?approved=true"), params);
  expect(result.status).toBe(400); expect(await result.json()).toEqual({ code: "INVALID_SHADOW_DEMO_QUERY" });
 });
+
+it("returns the v2 report and preserves the complete mapped value union", async () => {
+ const report = { version: "shadow-demo-report.v2", jobId: "saved-job",
+  customerApproval: { state: "awaiting_customer", approvals: [] },
+  value: { version: "job-value.v3", status: "mapped", receipt: { sources: { jobId: "saved-job" } } } };
+ state.read.mockResolvedValue(report);
+ const response = await GET(new Request("https://fictional.invalid"), params);
+ expect(response.status).toBe(200); expect(await response.json()).toEqual(report);
+ expect(response.headers.get("Cache-Control")).toBe("no-store");
+});
