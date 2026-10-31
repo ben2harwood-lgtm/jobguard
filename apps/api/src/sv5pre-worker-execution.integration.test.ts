@@ -104,7 +104,7 @@ describe("SV5PRE actual Graphile execution", () => {
     expect((await admin.query("SELECT count(*)::int AS count FROM app.final_account_lock_check")).rows[0]!.count).toBe(0);
   }, 45_000);
 
-  it("PRE-Q6-04 the executable entrypoint fails closed when the final-check handler is uninstalled", async () => {
+  it("PRE-Q6-04 the installed executable entrypoint refuses a forged tenant/job/manifest", async () => {
     const before = await domainCounts(), payload = { ...task, executionId: randomUUID() };
     const queued = await utilities.addJob("final_check", payload, { maxAttempts: 1, jobKey: `sv5pre-entrypoint:${payload.executionId}` });
     let output = "";
@@ -116,10 +116,10 @@ describe("SV5PRE actual Graphile execution", () => {
       await until(async () => {
         if (entrypoint?.exitCode !== null) throw new Error(`Worker entrypoint exited before dispatch: ${output.slice(-1500)}`);
         const row = (await admin.query<{ attempts: number; last_error: string | null }>("SELECT attempts,last_error FROM graphile_worker._private_jobs WHERE id=$1", [queued.id])).rows[0];
-        return row?.attempts === 1 && row.last_error?.includes("FINAL_CHECK_HANDLER_NOT_INSTALLED") === true;
-      }, "persisted uninstalled-handler failure");
+        return row?.attempts === 1 && row.last_error?.includes("FINAL_CHECK_FORBIDDEN") === true;
+      }, "persisted forged-manifest failure");
       const persisted = (await admin.query("SELECT payload,attempts,last_error FROM graphile_worker._private_jobs WHERE id=$1", [queued.id])).rows[0]!;
-      expect(persisted.payload).toEqual(payload); expect(persisted.attempts).toBe(1); expect(persisted.last_error).toContain("FINAL_CHECK_HANDLER_NOT_INSTALLED");
+      expect(persisted.payload).toEqual(payload); expect(persisted.attempts).toBe(1); expect(persisted.last_error).toContain("FINAL_CHECK_FORBIDDEN");
       expect(await domainCounts()).toEqual(before);
     } finally { await stopEntrypoint(); }
   }, 45_000);
