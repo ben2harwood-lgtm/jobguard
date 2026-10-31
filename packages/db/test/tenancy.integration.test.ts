@@ -463,6 +463,8 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_message_sink", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_payment_payer_mark", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_timeline_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_timeline_signal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "role_grant", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "role_grant_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "sandbox_adapter_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
