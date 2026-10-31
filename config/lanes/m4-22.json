@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-22": {
+      "branches": [
+        "codex/sandbox/m4-22"
+      ],
+      "allow": [
+        "packages/core/src/cis-deductions.ts",
+        "packages/core/src/cis-deductions.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/cis-deductions-dark-v1.md"
+      ],
+      "note": "M4-22 RED: CIS synthetic fixture calculations, always disabled for real issue/returns; no migrations or providers."
+    }
+  }
+}
