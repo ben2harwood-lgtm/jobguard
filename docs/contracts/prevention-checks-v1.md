@@ -1,8 +1,42 @@
 # MON-7a synthetic prevention checks v1
 
-Issued scope: B1, B2, B3, B5 and B6, with their DW1–DW4 assertions. B4 is MON-7b,
-parked until payment stages exist. No exposure figure, curve or schedule is defined
-or implemented here. MON-7 cannot be fully accepted while B4 is parked.
+MON-7a scope: B1, B2, B3, B5 and B6, with their DW1–DW4 assertions.
+MON-7b adds the dark, synthetic B4 preview described below. This does not enable
+live checks or establish full MON-7 acceptance.
+
+## MON-7b stage exposure preview
+
+`EXPOSURE_CURVE_ENABLED = false` keeps the preview absent from the normal
+prevention panel. The pure evaluator and isolated preview accept only strict
+`exposure-schedule.v1` / `synthetic_demo` data, without routes or persistence.
+The preview explicitly describes a fictional schedule independent of the selected
+job. It neither reads nor changes the base M4-18 draft book or live job records.
+
+Each dated stage is an independent cumulative snapshot, not an incremental sum.
+Reference net exposure is `max(0, cumulative work value - cumulative receipts)`
+in bounded GBP integer pence, using bigint intermediates. This is an illustrative
+unpaid-work forecast, not a claim about profit, loss, settlement or savings.
+Receipt reversals can increase exposure at a later stage; no monotonic assumption
+is imposed on either cumulative input. Stage identities are unique and dates
+strictly increase. Excess receipts floor exposure at zero and create no credit.
+
+Every displayed figure shares its row's exact generated schedule citation,
+retrieval date and observation date. Missing citation, observation or either
+amount yields `unknown` with no money figure. Source ages above the reference
+1440-minute limit and future observation/retrieval yield `unknown`, never
+`clear`; exactly 1440 minutes remains current. Fresh zero exposure is still an
+advisory snapshot, never an assurance of safety. Future *stage* dates are forecast
+dates, distinct from source observation dates. Forged citations, invalid dates,
+amounts, versions and production inputs fail with `INVALID_EXPOSURE_SCHEDULE`.
+The chart connects adjacent known stages only; unknown stages leave gaps. The
+adjacent accessible table provides exact figures, stage dates and source dates.
+
+The made-up fixture is retrieved/observed on 31 October 2026 at 12:00 UTC and
+evaluated at 13:00 UTC, with three November stages. All are net forecasts.
+This pure leaf has no Decision, posting, fee, value-receipt contribution, meter,
+entitlement, outbox, worker, external action or provider. No migration, tenancy
+list addition, operational alert or release is needed. Local domain and static
+render tests cover the preview; CI remains responsible for the full existing suites.
 
 ## Authority and subjects
 
