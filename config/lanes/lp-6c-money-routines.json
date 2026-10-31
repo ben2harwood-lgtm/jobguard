@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6c-money-routines": {
+      "branches": [
+        "codex/sandbox/lp-6c-money-routines"
+      ],
+      "note": "LP-6c RED built ahead of LP-6b. Serialize shared inventory and catch up onto predecessor before enforcement. Router owns PostgreSQL CI, exact-head independent review and migration renumbering. Own lane file is implicitly permitted by the lane checker.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migration-notes/0525_lp6c_money_binding.md",
+        "packages/db/migrations/0525_lp6c_money_binding.sql",
+        "packages/db/test/lp6c-money-routines.integration.test.ts",
+        "packages/db/test/lp6c-money-routines.test.ts"
+      ]
+    }
+  }
+}

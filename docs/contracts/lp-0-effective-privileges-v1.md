@@ -547,3 +547,9 @@ membership temporarily and revokes it on both success and failure, then checks
 the catalogue again. This adds no runtime capability or LP-0 baseline membership
 in the superuser-created fixture. Environment identity uses postmaster start time
 and database OID directly; there is no control-file grant or environment helper.
+
+### LP-6c build-ahead delta — protected money/commitment identity
+
+`0525_lp6c_money_binding.sql` guards 28 existing definitions without withdrawing compatibility parameters or changing existing runtime grants. The new `a-lp6c-money-binding` inventory group records exactly five owner-only binding EXECUTE grants. The meter bridge now selects identity through `bind_request`, retaining synthetic-environment and live owner/admin restrictions. Financial authorization membership, command resource/claim actors and all explicit actor/tenant arguments covered by this slice must match the protected binding before business access or replay returns.
+
+The body-preservation regression checks the latest predecessor definitions; permission, exact approval, money formulas and CH-7-TERMS clocks remain independent controls. See `packages/db/migration-notes/0525_lp6c_money_binding.md` and `packages/db/test/lp6c-money-routines.integration.test.ts`. This is source-inspected construction ahead of LP-6b, not PostgreSQL-executed or independently verified closure. Full PostgreSQL CI, LP-6b caller alignment, exact-head RED review and remaining LP-6d/LP-8/LP-9 gates remain required.
