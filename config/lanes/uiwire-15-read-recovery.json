@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "uiwire-15-read-recovery": {
+      "branches": [
+        "codex/sandbox/uiwire-15-read-recovery"
+      ],
+      "receipt": "docs/verdicts/UIWIRE-15-READ-RECOVERY/BUILDER_RECEIPT.md",
+      "note": "BUILD_PLAN C7/UIWIRE15 bounded read-state recovery; preserve successful business completion/money/API/auth behavior. Coordinator exact own-plan registration under27Oct refill/build-ahead authority.",
+      "allow": [
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/e2e/UIWIRE-15-READ-RECOVERY.spec.ts",
+        "docs/verdicts/UIWIRE-15-READ-RECOVERY/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
