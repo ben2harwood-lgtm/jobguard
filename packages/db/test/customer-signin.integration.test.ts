@@ -16,7 +16,8 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
+  const successors = { ...expected, "app.customer_variation_approval": [] };
+  expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {
@@ -94,7 +95,7 @@ it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s a
   await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
 });
 it("new tables have FORCE RLS and no direct runtime, identity or infrastructure access", async () => {
-  for (const table of ["customer_portal_grant", "customer_portal_session"]) {
+  for (const table of ["customer_portal_grant", "customer_portal_session", "customer_variation_approval"]) {
     const row = (await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid=$1::regclass", [`app.${table}`])).rows[0];
     expect(row).toEqual({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
     for (const role of ["jobguard_runtime", "jobguard_identity", "jobguard_infrastructure"]) expect((await c.admin.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [role, `app.${table}`])).rows[0].allowed).toBe(false);
