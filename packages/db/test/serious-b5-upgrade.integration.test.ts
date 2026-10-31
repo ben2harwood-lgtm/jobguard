@@ -317,8 +317,31 @@ async function baselineAdditions(before: Awaited<ReturnType<typeof snapshot>>, a
 // Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
 // Ruling 113 also extends it to ENT-8A-P's own live-prompt objects (livePromptAdditions).
 // Existing rows, routine privileges, relations and policies still compare in full.
+// Build earlier migration expectations without LP-5a's separately asserted delta.
+// The final raw snapshot comparison still checks every object and grant.
+async function preLp5Snapshot() {
+ const value = await snapshot();
+ const newRoutines = new Set(lp5Signatures.map(signature => signature.split("(")[0]!.replace("app.", "")));
+ const newRelations = new Set(["command_type_registry", "command_lifecycle_claim", "command_type_registry_pkey",
+  "command_lifecycle_claim_pkey", "command_lifecycle_claim_tenant_id_authorization_id_key"]);
+ delete value.rows['app.command_type_registry']; delete value.rows['app.command_lifecycle_claim'];
+ value.routines = value.routines.filter(row => row.nspname !== 'app' || !newRoutines.has(row.proname));
+ value.relations = value.relations.filter(row => row.nspname !== 'app' || !newRelations.has(row.relname));
+ value.policies = value.policies.filter(row => !(row.schemaname === 'app' &&
+  (row.tablename === 'command_lifecycle_claim' || ['lp5_command_read','lp5_command_insert','lp5_command_complete'].includes(row.policyname))));
+ const withoutWriter = async (acl: unknown) => {
+  if (acl === null) return null;
+  return (await f.admin.query(`SELECT coalesce(array_agg(item ORDER BY ordinal),'{}')::aclitem[] acl
+   FROM unnest($1::aclitem[]::text[]) WITH ORDINALITY a(item,ordinal)
+   WHERE split_part(item,'=',1)<>'jobguard_command_writer'`, [acl])).rows[0].acl;
+ };
+ for (const row of value.relations) if (row.nspname === 'app' && lp5ReadTables.includes(row.relname)) row.relacl = await withoutWriter(row.relacl);
+ for (const row of value.routines) if (row.nspname === 'app' && ['final_lock_canonical','lp4_seal_audit'].includes(row.proname)) row.proacl = await withoutWriter(row.proacl);
+ return value;
+}
+
 async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const livePrompt = await livePromptAdditions(before, after);
  const admission = await trialAdmissionAdditions(before, after);
  const finalCheck = await finalCheckAdditions(before, after);
@@ -380,7 +403,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
 }
 // Standing ruling 113: additive expectations for ENT-10-OIDC-B objects only.
 async function withOidcAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const names = ["oidc_claim", "oidc_complete", "oidc_create", "oidc_fail", "oidc_link", "oidc_save"];
  const routines = after.routines.filter(r => r.nspname === "identity" && names.includes(r.proname));
  expect(routines.map(r => r.proname)).toEqual(names);
@@ -472,7 +495,7 @@ async function livePromptAdditions(before: Awaited<ReturnType<typeof snapshot>>,
 
 // Standing ruling 113: extend only MON-8-P-A's exact newly created objects (layered on the expected snapshot above).
 async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const table = "contractor_agreement_status_revision";
  const names = ["mon8_agreement_status_guard", "mon8_contractor_agreement_context"];
  const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
@@ -499,7 +522,7 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
 }
 // SV6-PERSIST-A / C253: exactly 0260 additions. No predecessor exclusion or wildcard.
 async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const tables=["recovery_attribution_revision","recovery_attribution_command","recovery_attribution_reassessment"];
  const indexNames=["recovery_attribution_revision_pkey","ra_revision_subject_revision","ra_revision_subject_id","recovery_attribution_command_pkey","recovery_attribution_reassessment_pkey"];
  const routineIdentities=[
@@ -533,7 +556,7 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
 }
 // Per C135 (SV-5): exact additions created by the separable final-check persistence migration (0205), layered on the expected snapshot above.
 async function separableFinalCheckAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const tables = ["final_check_disposition_binding", "final_check_processing_source", "final_check_reveal_proof", "final_check_run_binding", "final_check_source_attempt"];
  const indexNames = ["final_check_classification_job_identity", "final_check_disposition_binding_pkey", "final_check_disposition_binding_tenant_id_command_id_key", "final_check_disposition_binding_tenant_id_job_id_signal_id_key",
   "final_check_disposition_job_identity", "final_check_processing_source_pkey", "final_check_processing_source_identity", "final_check_reveal_proof_pkey", "final_check_run_binding_pkey",
@@ -560,7 +583,7 @@ async function separableFinalCheckAdditions(prior: Awaited<ReturnType<typeof sna
 // CH-4-C / ruling 113: 0201 creates eight routines and no tables, indexes or policies.
 // Replaced routines retain their complete predecessor catalogue rows in the comparison.
 async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const identities = [
   ["ch4_admit_place", "t uuid, j uuid, action text"],
   ["ch4_command_work_facts", "t uuid, j uuid, digest text"],
@@ -579,7 +602,7 @@ async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snaps
 }
 // SV-7A (0303): only the intake and authorized SHARE-lock routines, migration-owned, definer, runtime EXECUTE only.
 async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const identities = [["sv7a_intake_job_source", "t uuid, j uuid, digest text, source text, input jsonb"], ["sv7a_require_watchdog_live_lock", "t uuid, j uuid, digest text"]];
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
@@ -590,7 +613,7 @@ async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>
 }
 // Dispatcher-assigned catalogue rows: only objects created by 0208.
 async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const tables = ["job_small_trip_event", "job_small_trip_observation"];
  const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_capture_small_trip"
   && r.args === "t uuid, j uuid, source_kind text, source_id uuid");
@@ -619,7 +642,7 @@ async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) 
 // 0209 exact additions, including source grants/policies. This fixture migrates
 // only: lifecycle routines remain invokers until the administrative finalizer.
 async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const tables = ["meter_lifecycle_scope", "meter_lifecycle_source", "meter_lifecycle_source_ref", "meter_lifecycle_computation",
   "meter_lifecycle_day_ledger", "meter_lifecycle_place_binding", "meter_lifecycle_correction", "meter_lifecycle_alert"];
  const indexNames = [...tables.map(t => `${t}_pkey`), "meter_lifecycle_scope_tenant_id_kind_key",
@@ -720,7 +743,7 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
 }
 // Dispatcher-assigned catalogue row: 0244 creates only this private routine.
 async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_admit_place"
   && r.args === "t uuid, j uuid, source_kind text, source_id uuid");
  expect(routines).toHaveLength(1);
@@ -738,7 +761,7 @@ async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
 }
 // Dispatcher-assigned catalogue row: 0361 creates only this private refusal routine.
 async function jobImportV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "adopt_in_flight_job_v3"
   && r.args === "t uuid, source_job_id uuid, session_digest text, command_id uuid, authorization_id uuid, snapshot jsonb");
  expect(routines).toHaveLength(1);
@@ -756,7 +779,7 @@ async function jobImportV3Additions(before: Awaited<ReturnType<typeof snapshot>>
 }
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const additions=after.routines.filter(r=>r.nspname==="app" && r.proname==="mon8_retained_contractor_workspace" && r.args==="s uuid, q jsonb");
  expect(additions).toHaveLength(1);
  expect(before.routines.some(r=>r.nspname==="app" && r.proname==="mon8_retained_contractor_workspace")).toBe(false);
@@ -772,7 +795,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 // SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
 // their table, triggers and constraint sit outside this snapshot. 0381 adds only the private lock-request trigger function.
 async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const identities = [["confirm_final_check_catch", "t uuid, j uuid, d text, p jsonb"], ["final_check_claim_catch_case", ""], ["final_check_open_catch_case", ""],
   ["final_check_refuse_catch_claim", ""], ["request_final_check_run", "t uuid, j uuid, d text"],
   ["final_check_practice_source_current", "s app.final_check_processing_source"], ["request_practice_final_check_on_lock", ""]];
@@ -796,7 +819,7 @@ async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 // DEMO-I: exactly the private lifecycle objects installed by 0313; no extra grants.
 async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const tables=["small_builder_demo_run","small_builder_demo_receipt","small_builder_demo_report"];
  const indexes=["small_builder_demo_run_pkey","small_builder_demo_run_tenant_id_predecessor_id_key","small_builder_demo_receipt_pkey","small_builder_demo_report_pkey"];
  const identities=[
@@ -830,7 +853,7 @@ async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
   routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const additions=after.routines.filter(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition' && r.args==='');
  expect(additions).toHaveLength(1);
  expect(before.routines.some(r=>r.nspname==='app' && r.proname==='guard_post_lock_upload_transition')).toBe(false);
@@ -851,7 +874,7 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 // MON-1 0380: enumerate only its committed projection, policy and seven routines.
 // Every predecessor row, privilege, routine posture and policy stays compared.
 async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const identities=[
   ["mon1_work_committed","t uuid, j uuid, activated timestamp with time zone, cutoff timestamp with time zone"],
   ["mon1_refresh_work_ledger","t uuid"],
@@ -892,7 +915,7 @@ async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot
 }
 // CH-5 / 0362: exactly one immutable import aggregate, its policy and checked writer.
 async function invoicedImportAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const relations = after.relations.filter(r => r.nspname === "app" && r.relname === "job_import_v3");
  const policies = after.policies.filter(r => r.schemaname === "app" && r.tablename === "job_import_v3");
  const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "adopt_invoiced_job_v3"
@@ -922,7 +945,7 @@ async function invoicedImportAdditions(before: Awaited<ReturnType<typeof snapsho
 // M4-8-S part 2 (0335): exact additive money consumer. No predecessor
 // routine/ACL/row is excluded from comparison. The legacy table gains one guard.
 async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const tables=["stored_receipt_case_binding","stored_receipt_case_command","stored_receipt_case_allocation"];
  const indexNames=["stored_receipt_case_binding_pkey","srcb_work","srcb_subject","stored_receipt_case_command_pkey","srcc_job","stored_receipt_case_allocation_pkey","srca_job","srca_fact","srca_command"];
  const identities=[["allocate_stored_receipt_line","t uuid, j uuid, d text, p jsonb"],["stored_receipt_case_facts","t uuid, j uuid, f uuid, c uuid, w uuid"],["guard_legacy_stored_receipt_cash",""],["receipt_fact_invoice_line","t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid"],["receipt_fact_watermark","t uuid, j uuid"],["receipt_fact_proposal","t uuid, j uuid, p jsonb"],["receipt_fact_source_approved","t uuid, j uuid, f uuid"]];
@@ -956,7 +979,7 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
 }
 // MON-4A 0359: enumerate only the two new immutable tables and five routines.
 async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot();
+ const after=await preLp5Snapshot();
  const tables=["payment_fee_statement","payment_fee_command"];
  const indexes=["payment_fee_statement_pkey","pf_stmt_job","pf_stmt_receipt","payment_fee_command_pkey"];
  const identities=[
@@ -991,7 +1014,7 @@ async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>)
 // LP-2 adds a private, tenant-checked permit table and five exact routines.
 // Keep predecessor facts intact except the three explicitly withdrawn EXECUTE ACLs.
 async function jobDoorAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const table = "lp_job_insert_permit", names = [table, `${table}_pkey`];
  expect(before.rows).not.toHaveProperty(`app.${table}`);
  expect(after.rows[`app.${table}`]).toEqual([]);
@@ -1039,7 +1062,7 @@ async function jobDoorAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 
 async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const tables = ["evidence_pack_v3", "evidence_pack_v3_approval", "evidence_pack_v3_check", "evidence_pack_v3_request"];
  // PostgreSQL shortens generated constraint-name components to fit its identifier limit.
  const indexNames = ["evidence_pack_v3_pkey", "evidence_pack_v3_tenant_id_job_id_case_id_id_key",
@@ -1089,7 +1112,7 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
 // This file is retained from origin/main on the LP-3 base so the additive B5 gate survives integration.
 async function lp4AuditAdditions(prior: Awaited<ReturnType<typeof snapshot>>) {
  const expected = structuredClone(prior);
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const writer = (await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_audit_writer'")).rows[0].oid;
  const acl = async (items: string[]) => (await f.admin.query("SELECT $1::text[]::aclitem[] acl", [items])).rows[0].acl;
  const changeAcl = async (row: { proacl?: unknown; relacl?: unknown }, field: 'proacl'|'relacl', remove: string[], add: string[]) => {
@@ -1198,7 +1221,7 @@ async function lp5CommandAdditions(prior: Awaited<ReturnType<typeof snapshot>>) 
 // LP-2 is applied by jobDoorAdditions above. Add only LP-3 catalogue changes;
 // historical business rows still compare in full.
 async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const privateAcl = "{jobguard_migration=X/jobguard_migration}";
  const runtimeAcl = "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}";
  const specifications = [
@@ -1253,7 +1276,7 @@ async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
 }
 // CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
 async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
+ const after = await preLp5Snapshot();
  const identities = [["read_value_business", "digest text"], ["read_value_job", "j uuid, digest text"]];
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
@@ -1331,7 +1354,7 @@ async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
 
 // MON-5 foundation: union only 0387's exact new private relations and identity routines.
 async function customerSigninAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot(), tables = ["customer_portal_grant", "customer_portal_session"];
+ const after = await preLp5Snapshot(), tables = ["customer_portal_grant", "customer_portal_session"];
  const identities = [
   ["app", "customer_portal_audit", "t uuid, subject uuid, kind text"],
   ["app", "customer_portal_current", "g app.customer_portal_grant"],

@@ -21,7 +21,7 @@ it("LP-5a preserves historical receipts and refuses stale processing claims with
   for(const [command,status] of [[completed,"succeeded"],[processing,"processing"]] as const){
    const {commandId:_id,...input}=command,hash=createHash("sha256").update(legacyCanonical(input)).digest("hex");
    await db.owner.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $6='succeeded' THEN clock_timestamp() END)`,
+    VALUES($1,$2,$3,$4,$5,$6::varchar,$7,$8,CASE WHEN $6::varchar='succeeded' THEN clock_timestamp() END)`,
     [actor.tenant,command.commandId,command.commandType,command.semanticKey,hash,status,actor.member,status==='succeeded'?{historical:true}:null]);
   }
   const before=(await db.owner.query("SELECT row_to_json(r)::text data FROM app.command_receipt r WHERE tenant_id=$1 ORDER BY command_id",[actor.tenant])).rows;

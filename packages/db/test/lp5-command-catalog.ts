@@ -183,6 +183,15 @@ export const lp5aRegistryRows = [
     "outbox_class": "fake_purchase_order"
   },
   {
+    "command_type": "purchase_order.place",
+    "version": "command.v1",
+    "permission_rule": "owner",
+    "lock_adapter": "route_before_begin",
+    "completion_adapter": "purchase_order",
+    "audit_class": "commercial",
+    "outbox_class": "fake_purchase_order"
+  },
+  {
     "command_type": "recovery.terms.approve",
     "version": "command.v1",
     "permission_rule": "owner",

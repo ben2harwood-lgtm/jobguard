@@ -242,10 +242,10 @@ describe("migration and privilege catalog", () => {
       { relname: "closeout_answer", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "command_lifecycle_claim", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "command_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      // Explicit private command-registry control-plane exception.
+      { relname: "command_type_registry", relrowsecurity: false, relforcerowsecurity: false, guarded: false },
       { relname: "commercial_integrity_activity_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "commercial_integrity_value_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      // Private global command configuration is the explicit LP-5a control-plane exception.
-      { relname: "command_type_registry", relrowsecurity: false, relforcerowsecurity: false, guarded: false },
       { relname: "commercial_track_assignment", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_agreement_status_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_client_customer", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -615,9 +615,9 @@ describe("migration and privilege catalog", () => {
       { relname: "closeout_answer", owner: "jobguard_migration" },
       { relname: "command_lifecycle_claim", owner: "jobguard_command_writer" },
       { relname: "command_receipt", owner: "jobguard_migration" },
+      { relname: "command_type_registry", owner: "jobguard_command_writer" },
       { relname: "commercial_integrity_activity_fact", owner: "jobguard_migration" },
       { relname: "commercial_integrity_value_fact", owner: "jobguard_migration" },
-      { relname: "command_type_registry", owner: "jobguard_command_writer" },
       { relname: "commercial_track_assignment", owner: "jobguard_migration" },
       { relname: "contractor_agreement_status_revision", owner: "jobguard_migration" },
       { relname: "contractor_client_customer", owner: "jobguard_migration" },

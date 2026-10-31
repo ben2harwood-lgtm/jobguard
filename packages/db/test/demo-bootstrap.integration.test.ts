@@ -243,11 +243,15 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       { schemaname: "app", tablename: "repository_operational_record", tableowner: "jobguard_command_writer" },
     ]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND c.relname <> 'command_type_registry' AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
-    expect((await admin.query(`SELECT relrowsecurity,relforcerowsecurity,
-      has_table_privilege('jobguard_runtime',oid,'SELECT') AS runtime_read,
-      has_table_privilege('jobguard_runtime',oid,'INSERT') AS runtime_insert
-      FROM pg_class WHERE oid='app.command_type_registry'::regclass`)).rows)
-      .toEqual([{ relrowsecurity: false, relforcerowsecurity: false, runtime_read: false, runtime_insert: false }]);
+    const catalogue = await admin.connect();
+    try {
+      await catalogue.query("SET ROLE jobguard_migration");
+      expect((await catalogue.query(`SELECT relrowsecurity,relforcerowsecurity,
+        has_table_privilege('jobguard_runtime',oid,'SELECT') AS runtime_read,
+        has_table_privilege('jobguard_runtime',oid,'INSERT') AS runtime_insert
+        FROM pg_class WHERE oid='app.command_type_registry'::regclass`)).rows)
+        .toEqual([{ relrowsecurity: false, relforcerowsecurity: false, runtime_read: false, runtime_insert: false }]);
+    } finally { await catalogue.query("RESET ROLE"); catalogue.release(); }
     // M4-8-S adds six read-only runtime catalog rows; bootstrap must preserve the no-direct-write standard.
     for (const table of ["recovery_allocation_command", "recovery_allocation_review", "recovery_allocation_line_source", "recovery_case_allocation", "recovery_case_allocation_reversal", "receipt_line_allocation"]) {
       expect((await admin.query(`SELECT pg_get_userbyid(c.relowner) AS owner,c.relrowsecurity,c.relforcerowsecurity,

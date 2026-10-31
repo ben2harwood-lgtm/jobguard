@@ -1,3 +1,4 @@
+import { lp5RelationAcl } from "./lp5-catalog-fixture.js";
 import {lp4AuditEventAcl} from "./lp4-catalog-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -24,8 +25,10 @@ it("S09 upgrades populated quote lineage without changing immutable rows, grants
   const beforeSecurity=await security();
   await c.migrate();
   expect(await proofDifferences(c.admin,proof)).toEqual({rows:[],types:[]});
-  const expectedSecurity=await Promise.all(beforeSecurity.map(async row=>row.relname==="audit_event"?
-    {...row,relacl:await lp4AuditEventAcl(c.admin,row.relacl)}:row));
+  const expectedSecurity=await Promise.all(beforeSecurity.map(async row=>{
+    const acl=row.relname==="audit_event" ? await lp4AuditEventAcl(c.admin,row.relacl) : row.relacl;
+    return {...row,relacl:await lp5RelationAcl(c.admin,row.relname,acl)};
+  }));
   expect(await security()).toEqual(expectedSecurity);
   const catalog=(await c.admin.query("SELECT conname,convalidated,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname IN('quote_line_item_source_fk','rate_observation_item_source_fk') ORDER BY conname")).rows;
   expect(catalog).toHaveLength(2);

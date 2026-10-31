@@ -35,6 +35,7 @@ INSERT INTO app.command_type_registry VALUES
  ('customer_credit_note.issue','command.v1','owner','route_before_begin','credit','commercial',NULL),
  ('customer_payment.reverse','command.v1','owner','route_before_begin','payment_reversal','commercial',NULL),
  ('purchase_order.simulate','command.v1','owner','route_before_begin','purchase_order','commercial','fake_purchase_order'),
+ ('purchase_order.place','command.v1','owner','route_before_begin','purchase_order','commercial','fake_purchase_order'),
  ('recovery.terms.approve','command.v1','owner','route_before_begin','recovery_terms','commercial',NULL),
  ('recovery.message.approve','command.v1','owner','route_before_begin','message','commercial','fake_recovery_message'),
  ('recovery.follow_up.approve_reminder','command.v1','owner','route_before_begin','message','commercial','fake_recovery_message'),
