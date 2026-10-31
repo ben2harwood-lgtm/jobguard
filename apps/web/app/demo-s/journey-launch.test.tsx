@@ -76,3 +76,16 @@ it("rejects stale v1, cross-job and pre-lock hidden results on the chooser read 
     await expect(readShadowResults(jobId)).rejects.toThrow();
   }
 });
+
+it("reports a lost capture reply as unconfirmed and replays the restored selection without a new session or identity", async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply(session)).mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    .mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(capture));
+  vi.stubGlobal("fetch", fetch);
+  await expect(recoverShadowCapture(runId)).rejects.toThrow("Capture outcome unconfirmed. Retry this selection to recover the same request.");
+  // A fresh call after reload receives only the server-restored selection ID.
+  expect(await recoverShadowCapture(runId)).toBe(jobId);
+  const calls = fetch.mock.calls.filter(call => call[0] === "/api/jobs/capture");
+  expect(calls).toHaveLength(2); expect(calls[0]).toEqual(calls[1]);
+  expect(JSON.parse(calls[1]![1].body).captureId).toBe(runId);
+  expect(fetch.mock.calls.filter(call => call[0] === "/api/session" && call[1]?.method === "POST")).toHaveLength(0);
+});

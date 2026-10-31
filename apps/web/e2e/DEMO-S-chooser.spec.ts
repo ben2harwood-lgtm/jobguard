@@ -96,8 +96,15 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
     else await route.fulfill({ response });
   });
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  // Next's route announcer also has role=alert. Require this journey's actual
+  // lost-response outcome before reload, so we cannot cancel the first attempt.
+  await expect(page.getByRole("region", { name: "Journey results", exact: true }).getByRole("alert"))
+    .toHaveText("Capture outcome unconfirmed. Retry this selection to recover the same request.");
+  expect(requests).toHaveLength(1); expect(requests[0]!.captureId).toBe(runId);
   await page.reload();
+  await expect(page.getByRole("region", { name: "Saved shadow-30000 selection", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Journey results", exact: true }).getByRole("alert")).toHaveCount(0);
   const replayResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
   const replay = await replayResponse;

@@ -15,10 +15,18 @@ export async function recoverShadowCapture(runId: string) {
   const session = sessionResponseV1.parse(await response.json());
   const tenantId = session.tenants[0]?.id;
   if (!tenantId) throw new Error("No practice business is available.");
-  const captured = await fetch("/api/jobs/capture", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ contractVersion: "job_capture_v1", requested_tenant_id: tenantId,
-      captureId: runId, source: { kind: "text", text: shadowCaptureText }, fixtureId: "deterministic-local-v1" }) });
-  if (!captured.ok) throw new Error("Capture outcome unconfirmed. Retry this selection to recover the same request.");
+  const unconfirmed = "Capture outcome unconfirmed. Retry this selection to recover the same request.";
+  let captured: Response;
+  try {
+    captured = await fetch("/api/jobs/capture", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contractVersion: "job_capture_v1", requested_tenant_id: tenantId,
+        captureId: runId, source: { kind: "text", text: shadowCaptureText }, fixtureId: "deterministic-local-v1" }) });
+  } catch {
+    // A lost reply does not mean capture failed. Keep the saved selection's
+    // identity so a reload/retry recovers the committed job rather than replacing it.
+    throw new Error(unconfirmed);
+  }
+  if (!captured.ok) throw new Error(unconfirmed);
   const capture = captureWorkspaceResponseV1.parse(await captured.json());
   if (capture.captureId !== runId) throw new Error("The saved capture does not match this selection.");
   return capture.jobId;
