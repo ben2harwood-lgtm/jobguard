@@ -8,8 +8,13 @@
       "note": "LP-5b RED: remaining receipt writers and synthetic seed. Stacked on LP-5a; shared source/catalog overlaps serialize after that base. PostgreSQL CI and fresh independent Claude RED review remain required.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/lp-command-binding-design-v1.md",
+        "docs/contracts/lp-downstream-effects-v1.md",
         "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0475_lp5a_commands.sql",
         "packages/db/migrations/0496_lp5b_writers.sql",
+        "packages/db/migrations/0535_lp5a_commands.sql",
+        "packages/db/migrations/0536_lp5b_writers.sql",
         "packages/db/src/builder-capture-lock.test.ts",
         "packages/db/src/commercial-integrity-application-repository.ts",
         "packages/db/src/demo-bootstrap.ts",
@@ -42,12 +47,14 @@
         "packages/db/test/job-parties.integration.test.ts",
         "packages/db/test/job-work-state-races.integration.test.ts",
         "packages/db/test/job-work-state-sources.integration.test.ts",
+        "packages/db/test/legacy-command-fixture.ts",
         "packages/db/test/legacy-repository-command-fixture.test.ts",
         "packages/db/test/legacy-repository-command-fixture.ts",
         "packages/db/test/lp-job-doors-fixtures.ts",
         "packages/db/test/lp5-catalog-fixture.ts",
         "packages/db/test/lp5-command-catalog.test.ts",
         "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/lp5-commands-upgrade.integration.test.ts",
         "packages/db/test/lp5-commands.integration.test.ts",
         "packages/db/test/lp5b-command-catalog.test.ts",
         "packages/db/test/lp5b-contractor-writers.integration.test.ts",
@@ -58,6 +65,7 @@
         "packages/db/test/lp5b-projection-writers.test.ts",
         "packages/db/test/lp5b-writers.integration.test.ts",
         "packages/db/test/onsite-diary-admission.integration.test.ts",
+        "packages/db/test/onsite-diary-upgrade.integration.test.ts",
         "packages/db/test/proof-invalidation.test.ts",
         "packages/db/test/recovery-follow-up.integration.test.ts",
         "packages/db/test/recovery-message-repository.test.ts",
@@ -67,7 +75,9 @@
         "packages/db/test/site-extra-pricing.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts",
         "packages/db/test/small-builder-origin.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/tenancy.integration.test.ts",
+        "tools/lp-downstream-inventory.py",
+        "tools/lp-downstream-inventory.test.mjs"
       ]
     }
   }

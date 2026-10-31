@@ -1,4 +1,4 @@
-// TEST ONLY: current repositories running against real pre-0475 upgrade schemas.
+// TEST ONLY: current repositories running against real pre-0535 upgrade schemas.
 // Current or partially damaged LP-5 schemas always use the production module.
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -21,7 +21,7 @@ export async function historicalRepositorySchema(client:Pick<PoolClient,"query">
 function observeCheckedResults(db:TenantTransaction){
  if(observed.has(db))return;observed.add(db);
  const client=db.$client as unknown as {query:(...args:any[])=>Promise<any>},originalQuery=client.query;
- client.query=async(...args:any[])=>{
+ const observedQuery=async(...args:any[])=>{
   const sql=args[0],values=args[1];
   try{
    const result=await originalQuery.apply(client,args);
@@ -32,13 +32,23 @@ function observeCheckedResults(db:TenantTransaction){
    }
    return result;
   }finally{
-   // Physical pooled clients outlive the transaction wrapper. Restore even when
-   // COMMIT fails a deferred constraint or ROLLBACK follows an earlier refusal.
+   // Restore only this transaction handle, never the physical pooled client.
+   // withTenant commits through its original handle; its weak-keyed observer
+   // then expires with the transaction, without modifying a practice proxy.
    if(sql==="COMMIT"||sql==="ROLLBACK"){
-    client.query=originalQuery;pending.delete(db);observed.delete(db);
+    db.$client=client as unknown as PoolClient;pending.delete(db);observed.delete(db);
    }
   }
  };
+ // Assigning client.query would write through practiceMaterialPool's proxy:
+ // its query getter calls the physical query, creating a wrapper cycle. Keep
+ // the original query/client intact and install one stable transaction observer.
+ db.$client=new Proxy(client,{
+  get(target,key){
+   if(key==="query")return observedQuery;
+   const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
+  },
+ }) as unknown as PoolClient;
 }
 async function historicalBegin<T>(db:TenantTransaction,spec:Spec):Promise<{kind:"claim"}|{kind:"replay";result:T}>{
  const requestHash=createHash("sha256").update(spec.legacyJson).digest("hex");

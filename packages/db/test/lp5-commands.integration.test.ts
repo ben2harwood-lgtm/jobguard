@@ -91,10 +91,12 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
   });
   it.each(["recovery.message.approve", "other.family"])("requires an unconverted %s receipt to finish before commit", async commandType => {
     const f = await fixture(), commandId = randomUUID();
-    const insert = (tx: TenantTransaction) => tx.$client.query(`INSERT INTO app.command_receipt
+    let inserted = 0;
+    const insert = async (tx: TenantTransaction) => { const result = await tx.$client.query(`INSERT INTO app.command_receipt
       (command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-      VALUES($1,$2,$3,$1::text,repeat('a',64),'processing',$4)`, [commandId, f.actor.tenant, commandType, f.actor.member]);
+      VALUES($1::uuid,$2::uuid,$3::text,$1::uuid::text,repeat('a',64),'processing',$4::uuid)`, [commandId, f.actor.tenant, commandType, f.actor.member]); inserted++; return result; };
     await expect(withTenant(db.owner, f.context, insert)).rejects.toMatchObject({ code: "23514", message: "COMMAND_CONFLICT" });
+    expect(inserted).toBe(1); // The deferred guard, rather than parameter parsing, refuses commit.
     await withTenant(db.owner, f.context, async tx => {
       await insert(tx);
       await tx.$client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [f.actor.tenant, commandId]);

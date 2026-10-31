@@ -1,4 +1,4 @@
-// TEST ONLY: pre-0475 dispatcher protocol from d2a1f8db^, for real partial-schema
+// TEST ONLY: pre-0535 dispatcher protocol from d2a1f8db^, for real partial-schema
 // upgrade fixtures. Current/malformed schemas always use the production client.
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";

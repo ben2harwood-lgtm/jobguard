@@ -26,7 +26,15 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
   tables: (await f.admin.query("SELECT oid,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows,
   policies: (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' ORDER BY tablename,policyname")).rows,
  });
- const prior = await catalogue(); await migrate(f.admin); await migrate(f.admin);
+ const prior = await catalogue();
+ // Prove 0505's own exact catalogue delta before later LP migrations add their
+ // separately asserted owner, registry, grants and completion machinery.
+ for (let repeat = 0; repeat < 2; repeat++) {
+  if (!(await f.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rowCount) {
+   await f.admin.query(await readFile(MIGRATION_URLS[position]!, "utf8"));
+   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
+  }
+ }
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  const after = await catalogue(); expect(after.tables).toEqual(prior.tables); expect(after.policies).toEqual(prior.policies);
  expect(after.routines).toHaveLength(prior.routines.length);
@@ -38,4 +46,10 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
  }
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rows[0].n).toBe(1);
+ // The full successor install must preserve the same old receipt and bytes;
+ // 0536 keeps 0505's on-site admission while taking over checked completion.
+ await migrate(f.admin); await migrate(f.admin);
+ expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
+ expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.command_lifecycle_claim WHERE command_id=$1", [input.commandId])).rows[0].n).toBe(0);
 });

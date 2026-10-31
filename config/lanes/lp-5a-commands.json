@@ -12,7 +12,7 @@
         "docs/contracts/lp-command-binding-design-v1.md",
         "packages/core/src/watchdog.ts",
         "packages/db/migrations/0456_lp4_database_audit.sql",
-        "packages/db/migrations/0475_lp5a_commands.sql",
+        "packages/db/migrations/0535_lp5a_commands.sql",
         "packages/db/src/activation-repository.ts",
         "packages/db/src/commands-replay.test.ts",
         "packages/db/src/commands.ts",

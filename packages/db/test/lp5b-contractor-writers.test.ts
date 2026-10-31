@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0496_lp5b_writers.sql");
+const sql = read("../migrations/0536_lp5b_writers.sql");
 it("LP-5b contractor callers have no direct receipt write or caller-JSON completion", () => {
   for (const file of ["extra-repository", "extra-approval-chain-repository", "site-visit-repository"]) {
     const source = read(`../src/${file}.ts`);

@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { jobMutationRegistry } from "@jobguard/core";
 import { lp5aReadTables as lp5ReadTables, lp5aRegistryRows as lp5RegistryRows, lp5Signatures } from "./lp5-command-catalog.js";
-const sql = readFileSync(new URL("../migrations/0475_lp5a_commands.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../migrations/0535_lp5a_commands.sql", import.meta.url), "utf8");
 describe("LP-5a exact catalogue expectations", () => {
   it.each([
     ["0456_lp4_database_audit.sql", "jobguard_audit_writer"],
-    ["0475_lp5a_commands.sql", "jobguard_command_writer"],
+    ["0535_lp5a_commands.sql", "jobguard_command_writer"],
   ])("%s requires administrative role provisioning without CREATEROLE", (file, role) => {
     const migration = readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8");
     expect(migration).not.toMatch(/CREATE ROLE/i);

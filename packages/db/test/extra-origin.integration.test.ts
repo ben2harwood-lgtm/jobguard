@@ -5,7 +5,7 @@ import { sha256Hex } from "../src/work-order-repository.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
-import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
+import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
@@ -122,6 +122,7 @@ describe("ENT-4b origin persistence", () => {
   const jobId = await smallFixture(f);
   const id = await withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, jobId, id, f.p.membershipId, "LogBuilderExtra"); await rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"); await rawOrigin(db, { ...f, jobId }, id, command, { job_track: "small_builder", kind: "builder_logged", raising_grant_id: null }); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return id; });
   const old = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0];
+  expect((await c.admin.query("SELECT r.status,r.result FROM app.command_receipt r JOIN app.extra_origin o ON (o.tenant_id,o.command_id)=(r.tenant_id,r.command_id) WHERE o.tenant_id=$1 AND o.variation_id=$2", [f.p.tenantId, id])).rows).toEqual([{ status: "succeeded", result: { variationId: id } }]);
   await assignTrack(f, "contractor");
   expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(old);
   await expect(withTenant(c.runtime, f.ctx, db => rawVariation(db, f.p.tenantId, jobId))).rejects.toMatchObject({ code: "23503" });
@@ -170,8 +171,10 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S2] new tenant tables have FORCE RLS, tenant policy and migration ownership", async () => {
   for (const table of newTables) {
-   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass", [`app.${table}`])).rows;
-   expect(row).toEqual([{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }]);
+   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
+   const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
+   if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
+   expect(row).toEqual(expected);
   }
  });
  it("[S3] exactly SELECT/INSERT; invoker functions uncallable by runtime/PUBLIC; least privilege preserved", async () => {

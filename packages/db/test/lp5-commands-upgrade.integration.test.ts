@@ -11,7 +11,7 @@ const legacyCanonical = (v: unknown): string => v === null || typeof v !== "obje
  : `{${Object.entries(v as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([k,x])=>`${JSON.stringify(k)}:${legacyCanonical(x)}`).join(",")}}`;
 
 it("LP-5a preserves historical receipts and refuses stale processing claims without timeout takeover", async () => {
- const db=await jobDoorsDatabase(true,"0475_lp5a_commands.sql");
+ const db=await jobDoorsDatabase(true,"0535_lp5a_commands.sql");
  try {
   const actor=await jobDoorsActor(db.owner),context=testTenantContext(actor.tenant);
   const make=()=>({version:"command.v1",commandId:randomUUID(),commandType:"job.switch_live",semanticKey:randomUUID(),actorMembershipId:actor.member,

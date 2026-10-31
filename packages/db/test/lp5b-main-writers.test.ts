@@ -1,7 +1,8 @@
+import { MIGRATION_URLS } from "../src/migrate.js";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const read = (name: string) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
-const sql = read("0496_lp5b_writers.sql");
+const sql = read("0536_lp5b_writers.sql");
 const routine = (text: string, name: string) => text.slice(text.indexOf(`CREATE OR REPLACE FUNCTION app.${name}(`)).split("END $$;")[0]!;
 const section = (text: string, start: string, end: string) => {
  const at = text.indexOf(start); expect(at).toBeGreaterThanOrEqual(0);
@@ -30,4 +31,13 @@ it("keeps latest main on-site admission before claim/effects, exact source DTO a
 it("checks fresh effect identity and the invoice outbox on completion and deferred revalidation", () => {
  const adapter = section(sql," CASE adapter\n"," WHEN 'prevention'");
  for (const marker of ["source_fact.command_id=p_command_id", "source_fact.actor_membership_id=c.actor_membership_id", "source_fact.transaction_id=pg_current_xact_id()::text", "invoice.id=(c.effect_ref->>'invoiceId')::uuid", "binding.revision_id=invoice.final_account_revision_id", "invoice.authorization_id=c.authorization_id", "outbox_row.content_hash=grant_row.content_hash", "outbox_row.immutable_content=convert_from(invoice.pdf_bytes,'UTF8')"]) expect(adapter).toContain(marker);
+});
+
+it("discovers the renamed LP block exactly once after the main on-site admission definition", () => {
+ const files=MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!);
+ const main=files.indexOf("0505_onsite_diary_admission.sql"),begin=files.indexOf("0535_lp5a_commands.sql"),writers=files.indexOf("0536_lp5b_writers.sql");
+ expect(main).toBeGreaterThan(-1);expect(begin).toBeGreaterThan(main);expect(writers).toBeGreaterThan(begin);
+ expect(files.filter(name=>name==="0535_lp5a_commands.sql")).toHaveLength(1);
+ expect(files.filter(name=>name==="0536_lp5b_writers.sql")).toHaveLength(1);
+ expect(files).not.toContain("0475_lp5a_commands.sql");expect(files).not.toContain("0496_lp5b_writers.sql");
 });

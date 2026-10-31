@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { jobMutationRegistry } from "@jobguard/core";
 import { lp5bReadTables, lp5bRegistryRows, lp5ReadTables, lp5RegistryRows, lp5aReadTables, lp5aRegistryRows, lp5bRoutines } from "./lp5-command-catalog.js";
-const sql = readFileSync(new URL("../migrations/0496_lp5b_writers.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../migrations/0536_lp5b_writers.sql", import.meta.url), "utf8");
 
 describe("LP-5b draft catalogue additions", () => {
   it("unions every installed rule and SELECT policy with the original LP-5a expectations", () => {
@@ -50,7 +50,7 @@ describe("LP-5b draft catalogue additions", () => {
     expect(records).toContain("synthetic_demo.seed");
   });
   it("preserves the complete LP-5a receipt-to-audit tail, including the final seal call", () => {
-    const parent = readFileSync(new URL("../migrations/0475_lp5a_commands.sql", import.meta.url), "utf8");
+    const parent = readFileSync(new URL("../migrations/0535_lp5a_commands.sql", import.meta.url), "utf8");
     const tail = (source: string) => {
       const start = source.indexOf(" UPDATE app.command_receipt SET status='succeeded',result=value,completed_at=clock_timestamp()");
       expect(start).toBeGreaterThan(-1);

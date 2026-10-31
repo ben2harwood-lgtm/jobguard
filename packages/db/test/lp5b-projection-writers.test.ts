@@ -8,7 +8,7 @@ it("LP-5b projection writers use checked completion without submitting a timesta
   expect(source).toContain("beginRepositoryCommand");
   expect(source).toMatch(/completeRepositoryCommand(?:<[^\n]*>)?\(db,/);
  }
- const sql=read("../migrations/0496_lp5b_writers.sql");
+ const sql=read("../migrations/0536_lp5b_writers.sql");
  expect(sql).toContain("CREATE FUNCTION app.lp5b_prepare_projection");
  expect(sql).toContain("CREATE FUNCTION app.lp5b_projection_result");
  expect(sql).toContain("inbox_already_seeded");

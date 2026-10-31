@@ -322,6 +322,8 @@ Quote-delivery and payment-reversal grant expiries are server-generated. Their r
 
 For the v3 activation, proposal review and legacy import routines, a private migration-owner handoff binds the effect to its processing claim. It is unavailable to runtime. Completion derives its stored result and a bounded private proof reference from those business rows; it never persists handler JSON. Existing server-proven activation, invoice and order no-ops retain their first effects and record a no-op reason. The historical synthetic lock-test command is explicitly registered as an operational no-op and cannot create a commercial authorization.
 
+Implementation source map (31 October 2026): LP-5a is `packages/db/migrations/0535_lp5a_commands.sql`; LP-5b is `packages/db/migrations/0536_lp5b_writers.sql`. The filename-only move puts both after main's 0505 source-intake admission definition. It changes no command signature, stored format or release gate.
+
 LP-5a converts dispatcher creation, dismiss/reject and completion. LP-5b traces
 all TypeScript and owner-side SQL writers, including later contractor wrappers,
 seed and restore tooling; preserves replay, membership-lock and watchdog/deferred

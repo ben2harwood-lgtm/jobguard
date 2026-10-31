@@ -16,7 +16,7 @@ afterAll(() => h.stop());
 
 describe("every watchdog_live_only command is covered by this contract", () => {
   it("reconciles every dispatcher database registry key with watchdog.ts", () => {
-    const seeds = ["0475_lp5a_commands.sql", "0496_lp5b_writers.sql"].map(file =>
+    const seeds = ["0535_lp5a_commands.sql", "0536_lp5b_writers.sql"].map(file =>
       readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8").split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!).join("\n");
     const keys = [...seeds.matchAll(/\('([^']+)','([^']+)'/g)].map(m => `${m[1]}:${m[2]}`).sort();
     expect(keys).toEqual(lp5RegistryRows.map(r => `${r.command_type}:${r.version}`).sort());

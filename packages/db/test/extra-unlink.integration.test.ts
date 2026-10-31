@@ -338,15 +338,19 @@ describe("ENT-4c un-link command", () => {
  it("[D14] the audit event commits or rolls back with the command", async () => {
   const f = await organisation(), l = await linked(f);
   await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId), async () => { throw new Error(noteCanary); }), "DATABASE_UNAVAILABLE");
-  for (const fragment of ["INSERT INTO app.command_receipt", "INSERT INTO app.extra_duplicate_link", "FROM app.append_audit(", "UPDATE app.command_receipt", "COMMIT"]) {
-   await spyQueries((sql, result) => { if (sql.includes(fragment)) throw new Error(descriptionCanary); return result; }, async () => {
+  for (const fragment of ["SELECT app.begin_command(", "INSERT INTO app.extra_duplicate_link", "FROM app.append_audit(", "SELECT app.complete_command(", "COMMIT"]) {
+   let reached = 0;
+   await spyQueries((sql, result) => { if (sql.includes(fragment)) { reached++; throw new Error(descriptionCanary); } return result; }, async () => {
     await refused(f, () => repo.unlinkDuplicate(f.ctx, input(f, l.linkId)), "DATABASE_UNAVAILABLE");
    });
+   expect(reached, fragment).toBe(1);
   }
   const before = await snapshot(f);
   await expect(withTenant(c.runtime, f.ctx, async db => {
    const commandId = randomUUID(); await receipt(db, f.p.tenantId, f.jobId, l.duplicate, f.p.membershipId, "UnlinkDuplicate", commandId, { semanticKey: semantic(f.jobId, l.linkId, commandId) });
    await db.$client.query("INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,reverses_link_id,reason_code,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,'unlink',$6,$7,$8,$9)", [f.p.tenantId, randomUUID(), f.jobId, l.duplicate, l.canonical, l.linkId, "linked_in_error", commandId, f.p.membershipId]);
+   // Isolate the missing unlink audit with a terminal unmanaged receipt.
+   await terminalizeFixtureReceipt(db, f.p.tenantId, commandId, { linkId: l.linkId, variationId: l.duplicate });
   })).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
   expect(await snapshot(f)).toEqual(before);
  }, 120_000);
