@@ -558,6 +558,9 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "worm_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "worm_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "worm_synthetic_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
