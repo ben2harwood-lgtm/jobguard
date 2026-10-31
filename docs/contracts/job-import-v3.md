@@ -180,3 +180,25 @@ Exact-head independent Claude A/B verdicts, required CI and separate technical
 acceptance must follow; Ben alone merges. See the builder receipt for executed
 commands and limits. No migration, operational alert or backwards-incompatible
 v1 change is introduced; revert these additive files to withdraw the proposal.
+
+## 28 October CH5-E integration candidate
+
+The original status above describes the earlier pure/held build. This branch now
+adds an authenticated API and browser journey at `/jobs/:id/parties/import-v3`
+(and `/preview`), plus the synthetic **invoiced** writer in migration 0324.
+`JobImportV3Repository.read` is the positive immutable import reader; it returns
+`job-import-read.v3`. Its stored snapshot and result bind the original parties,
+v3 terms and baseline/scope identities. This does not enable the separate imported
+Final Account or shadow source adapters, which still refuse their missing contract.
+
+For an invoiced import, `meterResultRef` references the immutable zero-count
+exclusion in `app.job_import_v3`, with reason `imported_at_invoiced_stage`.
+It is not a live capacity permit or a MON-1 period-ledger computation. Live
+imports still refuse before receipt/authorization creation; no temporary free
+period or unsupported grace-place bypass is introduced. The screen labels the
+pre-adoption £0 exclusion as a rule and explicitly states there are no imported
+historical evidence records or catches. A persisted pre-adoption catch journey
+is still outstanding, rather than being simulated as an actual Final Check result.
+
+Current-main product rules and the supplied SIMPLE_LOOP supersede the old build
+coordination/acceptance text above. RED review and CI are pending on this candidate.
