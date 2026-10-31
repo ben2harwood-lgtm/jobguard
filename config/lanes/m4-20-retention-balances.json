@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-20-retention-balances": {
+      "branches": ["codex/sandbox/m4-20-retention-balances"],
+      "allow": [
+        "packages/core/src/retention-balances.ts",
+        "packages/core/src/retention-balances.test.ts",
+        "packages/core/src/index.ts"
+      ],
+      "note": "M4-20 RED: dark synthetic retention balances and release review only; no persistence, runtime grants, notices, invoices, fee postings or providers. Durable scheduling remains disabled."
+    }
+  }
+}
