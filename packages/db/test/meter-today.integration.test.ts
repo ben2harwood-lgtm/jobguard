@@ -10,6 +10,9 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
   let f: WorkFixture;
   beforeAll(async () => {
     f = await createWorkFixture();
+    // The migration itself retires the stale reader, before bootstrap can mask a missing revoke.
+    expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_counted_meter_today(uuid,text)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
+    await expect(f.runtime.query("SELECT app.mon1_counted_meter_today($1,$2)", [randomUUID(), "synthetic"])).rejects.toMatchObject({ code: "42501" });
     // Migration-only posture fails closed until the real administrative finalizer.
     expect((await f.admin.query("SELECT prosecdef FROM pg_proc WHERE oid='app.mon1_fresh_counted_meter_today(uuid,text)'::regprocedure")).rows).toEqual([{ prosecdef: false }]);
     const admin = await f.admin.connect();
@@ -42,6 +45,7 @@ describe("MON-1 company stored-day reader (real PostgreSQL, CI)", () => {
   it("returns only its own stored numbers, rechecking persisted session and membership", async () => {
     const a = await meterCompany(f), b = await meterCompany(f);
     await stored(a, 5); await stored(b, 2);
+    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_counted_meter_today($1,$2)", [a.tenantId, a.digest]))).rejects.toMatchObject({ code: "42501" });
     expect(await read(a)).toMatchObject({ version: "meter-today-read.v1", hypothetical: true, plan: "Builder", countedPlaces: 5 });
     expect(await read(b)).toMatchObject({ countedPlaces: 2 });
     await expect(read(b, a.digest)).rejects.toThrow("METER_FORBIDDEN");
