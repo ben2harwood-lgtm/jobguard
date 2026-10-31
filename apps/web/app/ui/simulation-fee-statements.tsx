@@ -5,10 +5,12 @@ const pounds=(p:number)=>`${p<0?"−":""}£${(Math.abs(p)/100).toLocaleString("e
 // Finish bounded reads and their response bodies even when navigation replaces the panel.
 export async function readSimulationFeeStatements(jobId:string){
  const access=await fetch(`/api/jobs/${jobId}/success-fees`,{cache:"no-store",keepalive:true});
- const available=access.ok && (await access.json()).state==="catch_review_available";
+ const accessBody=await access.json();
+ const available=access.ok && accessBody.state==="catch_review_available";
  if(!available)return {available:false,statements:[]};
  const response=await fetch(`/api/jobs/${jobId}/success-fees/statements`,{cache:"no-store",keepalive:true});
- return {available,statements:response.ok?simulationFeeStatementViewV1.parse(await response.json()).statements:[]};
+ const body=await response.json();
+ return {available,statements:response.ok?simulationFeeStatementViewV1.parse(body).statements:[]};
 }
 export function SimulationFeeStatements({jobId}:{jobId:string}) {
  const [available,setAvailable]=useState(false),[records,setRecords]=useState<{document:IssuedSimulationFeeStatement;documentHash:string}[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[approved,setApproved]=useState<string|null>(null);

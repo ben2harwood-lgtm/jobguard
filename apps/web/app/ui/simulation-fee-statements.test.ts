@@ -29,3 +29,17 @@ it("gives the native download link the exact versioned filename",()=>{
  const html=renderToStaticMarkup(React.createElement(SimulationFeeStatements,{jobId}));
  expect(html).toContain(`href="/api/jobs/${jobId}/success-fees/statements/${jobId}" download="DEMO-FEE-000001.v1.json"`);
 });
+
+
+it.each(["availability","statements"])("awaits the complete %s refusal body instead of abandoning it",async refused=>{
+ let finish!:(value:unknown)=>void;const body=new Promise(resolve=>{finish=resolve;});
+ const refusedJson=vi.fn(()=>body);
+ const fetch=vi.fn();
+ if(refused==="statements")fetch.mockResolvedValueOnce({ok:true,json:async()=>({state:"catch_review_available"})});
+ fetch.mockResolvedValueOnce({ok:false,json:refusedJson});vi.stubGlobal("fetch",fetch);
+ let settled=false;const read=readSimulationFeeStatements(jobId).then(view=>{settled=true;return view;});
+ await vi.waitFor(()=>expect(refusedJson).toHaveBeenCalledOnce());expect(settled).toBe(false);
+ finish({code:"SUCCESS_FEE_FORBIDDEN"});
+ expect(await read).toEqual({available:refused==="statements",statements:[]});
+ expect(fetch).toHaveBeenCalledTimes(refused==="statements"?2:1);
+});
