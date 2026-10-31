@@ -16,6 +16,22 @@ import { ProofApplication, ProofApplicationError, finalizeFailure } from "./proo
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 const root = new URL("../../../", import.meta.url);
 const watchdogMigration = MIGRATION_URLS.find(url => url.pathname.endsWith("_watchdog_live.sql"))!;
+
+/** A later migration may replace a checked routine. Validate every body while
+ * retaining exactly one original definition, so replacement never bypasses the guard check. */
+function assertRoutineLiveGuard(sources: readonly string[], routine: string): void {
+  const marker = `FUNCTION ${routine}(`;
+  const defining = sources.filter(sql => sql.includes(marker));
+  expect(defining.filter(sql => sql.includes(`CREATE FUNCTION ${routine}(`))).toHaveLength(1);
+  for (const sql of defining) {
+    const start = sql.indexOf(marker);
+    const body = sql.slice(start, sql.indexOf("END $$;", start));
+    const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+  }
+}
+
 const MUTATION_VERBS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 type Reader = (file: string) => string | undefined;
 const bindingNames = (name: ts.BindingName): string[] => ts.isIdentifier(name) ? [name.text]
@@ -59,7 +75,7 @@ function routeKeys(files: ReadonlyMap<string, string>): string[] {
   for (const file of files.keys()) {
     if (!/(?:^|\/)app\/api\/.*\/route\.ts$/u.test(file)) continue;
     const route = "/api/" + file.split("/app/api/")[1]!.replace(/\/route\.ts$/u, "");
-    if (!/^\/api\/(?:jobs|decisions|recovery-cases|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)) continue;
+    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)) continue;
     for (const verb of routeVerbs(file, read)) keys.push(routeKey(verb, route));
   }
   return keys.sort();
@@ -202,7 +218,7 @@ function nestKeys(file: string, text: string): string[] {
   visit(tree);
   return keys;
 }
-const inJobScope = (key: string) => { const route = key.replace(/^nest:(?:[A-Z]+ )?/u, ""); return route.includes("jobs") || route.startsWith("/decisions") || route.startsWith("/recovery-cases") || /^\/contractor\/(?:work-order-imports|work-orders)(?:\/|$)/u.test(route); };
+const inJobScope = (key: string) => { const route = key.replace(/^nest:(?:[A-Z]+ )?/u, ""); return route.startsWith("/customer-portal/") || route.includes("jobs") || route.startsWith("/decisions") || route.startsWith("/recovery-cases") || /^\/contractor\/(?:work-order-imports|work-orders)(?:\/|$)/u.test(route); };
 async function readTree(url: URL, accept: (name: string) => boolean): Promise<Map<string, string>> {
   const files = new Map<string, string>();
   for (const entry of await readdir(url, { withFileTypes: true })) {
@@ -382,14 +398,26 @@ describe("CH-2 command coverage and lock order", () => {
   it.each(watchdogRoutineGuards)("$file $method: its checked routine $routine takes the live guard before its first write", async entry => {
     const repository = await readFile(new URL(`packages/db/src/${entry.file}`, root), "utf8");
     expect(repository).toContain(`SELECT ${entry.routine}(`);
-    const migrations = await readdir(new URL("packages/db/migrations/", root));
-    const sources = await Promise.all(migrations.filter(name => name.endsWith(".sql")).map(name => readFile(new URL(`packages/db/migrations/${name}`, root), "utf8")));
-    const defining = sources.filter(sql => sql.includes(`FUNCTION ${entry.routine}(`));
-    expect(defining).toHaveLength(1);
-    const sql = defining[0]!, body = sql.slice(sql.indexOf(`FUNCTION ${entry.routine}(`), sql.indexOf("END $$;", sql.indexOf(`FUNCTION ${entry.routine}(`)));
-    const guard = body.indexOf("PERFORM app.require_watchdog_live(j);");
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(body.search(/\b(?:INSERT INTO|UPDATE app\.)/u));
+    const sources = await Promise.all(MIGRATION_URLS.map(url => readFile(url, "utf8")));
+    assertRoutineLiveGuard(sources, entry.routine);
+  });
+  it("checks original and replacement live guards independently without assuming one migration body", () => {
+    const routine = "app.synthetic_guard_regression";
+    const original = `CREATE FUNCTION ${routine}(j uuid) RETURNS void AS $$ BEGIN
+      PERFORM app.require_watchdog_live(j);
+      INSERT INTO app.synthetic_fixture VALUES(j);
+    END $$;`;
+    const replacement = original.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+    expect(() => assertRoutineLiveGuard([original, replacement], routine)).not.toThrow();
+    // A good predecessor cannot conceal a replacement that writes before its guard,
+    // and a good replacement cannot conceal an unsafe predecessor.
+    const lateGuard = (sql: string) => sql.replace("PERFORM app.require_watchdog_live(j);", "")
+      .replace("END $$;", "PERFORM app.require_watchdog_live(j); END $$;");
+    expect(() => assertRoutineLiveGuard([original, lateGuard(replacement)], routine)).toThrow();
+    expect(() => assertRoutineLiveGuard([lateGuard(original), replacement], routine)).toThrow();
+    expect(() => assertRoutineLiveGuard([original, replacement.replace("PERFORM app.require_watchdog_live(j);", "")], routine)).toThrow();
+    expect(() => assertRoutineLiveGuard([replacement], routine)).toThrow();
+    expect(() => assertRoutineLiveGuard([original, original, replacement], routine)).toThrow();
   });
   it("CH-4 finish/cancel retain SHARE locks and serialize facts before checking revision", async () => {
     const sql = await readFile(new URL("packages/db/migrations/0201_job_work_state_commands.sql", root), "utf8");
@@ -820,7 +848,7 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
   await withModuleDispatch(async dispatch => {
     for (const scenario of ["stranger", "missing"] as const) {
       routeApplication.session = scenario === "missing" ? undefined : "18000000-0000-4000-8000-000000000001";
-      const query = vi.fn(async (sql: string) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
+      const query = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
       const connect = vi.fn(async () => ({ query, release: vi.fn() }));
       const pool = { query, connect } as unknown as Pool;
       const cookie = routeApplication.session ? `jg_session=${routeApplication.session}` : undefined;
@@ -841,7 +869,7 @@ it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing se
       const response = await route[endpoint.verb ?? "POST"](new Request("https://synthetic.invalid", { method: endpoint.verb ?? "POST", ...(endpoint.verb ? {} : { body: "{}" }) }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
       expect({ status: response.status, body: await response.json() }).toEqual(expected);
       if (scenario === "missing") { expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); }
-      for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+      for(const [sql] of query.mock.calls)expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
     }
   });
 });
