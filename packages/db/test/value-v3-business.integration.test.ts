@@ -16,15 +16,15 @@ beforeAll(async () => {
  directory = await mkdtemp(join(tmpdir(), "ch9-b-pg-"));
  const port = await freePort(57000, 500);
  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start();
- admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+ await postgres.initialise(); await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");
+ admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
  await migrate(admin);
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH9-B refusal test')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
  await admin.query("CREATE ROLE ch9b_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO ch9b_login");
- runtime = new Pool({ host: "127.0.0.1", port, user: "ch9b_login", password: "synthetic", database: "postgres" });
+ runtime = new Pool({ host: "127.0.0.1", port, user: "ch9b_login", password: "synthetic", database: "jobguard_synthetic_demo" });
 }, 60_000);
 afterAll(async () => {
  vi.unstubAllEnvs(); await closeTestPools(runtime, admin); await postgres?.stop();
