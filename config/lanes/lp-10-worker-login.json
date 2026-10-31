@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-10-worker-login": {
+      "branches": [
+        "codex/sandbox/lp-10-worker-login"
+      ],
+      "note": "LP-10 RED build-ahead candidate; predecessor cutover, inventory authorization, PostgreSQL CI and independent review outstanding. See commit-message handoff.",
+      "allow": [
+        ".env.example",
+        "apps/api/src/worker.ts",
+        "apps/web/e2e/global-setup.ts",
+        "config/lanes/lp-10-worker-login.json",
+        "docker-compose.yml",
+        "packages/db/migrations/0531_worker_login.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/worker-action-executor.test.ts",
+        "packages/db/src/worker-action-executor.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/lp-10-worker-login.integration.test.ts",
+        "tools/docker/001-worker-roles.sql"
+      ]
+    }
+  }
+}

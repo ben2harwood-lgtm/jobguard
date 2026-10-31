@@ -38,6 +38,7 @@ services:
     volumes: [".:/workspace"]
     environment:
       GRAPHILE_DATABASE_URL: postgresql://jobguard_infrastructure_login:dev-infrastructure-only@postgres:5432/jobguard
+      WORKER_DATABASE_URL: postgresql://jobguard_worker_login:dev-worker-only@postgres:5432/jobguard
       RUNTIME_DATABASE_URL: postgresql://jobguard_runtime_login:dev-runtime-only@postgres:5432/jobguard
     depends_on:
       postgres:
