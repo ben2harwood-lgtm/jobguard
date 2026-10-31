@@ -25,6 +25,8 @@ const finalCheckTables=["final_check_manifest","final_check_manifest_source","sh
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
  "app.tenant_key_version":[],
  "app.tenant_key_revocation":[],
+ "app.recovery_timeline_run":[],
+ "app.recovery_timeline_signal":[],
  "app.customer_variation_approval":[],
  "app.customer_portal_grant":[],
  "app.customer_portal_session":[],

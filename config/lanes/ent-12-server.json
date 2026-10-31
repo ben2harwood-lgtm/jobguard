@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-12-server": {
+      "branches": [
+        "codex/sandbox/ent-12-server"
+      ],
+      "note": "RED. ENT-12 dark server slice only; no migration or native distribution.",
+      "allow": [
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/contractor/operative-offline.application.test.ts",
+        "packages/db/src/site-extra-repository.ts",
+        "packages/db/test/operative-offline.integration.test.ts",
+        "packages/core/src/enterprise-domain/fee.test.ts",
+        "docs/operations/operative-offline-server.md"
+      ]
+    }
+  }
+}
