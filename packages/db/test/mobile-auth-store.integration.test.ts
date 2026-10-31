@@ -102,13 +102,13 @@ it("refuses cross-tenant revoke without harming the victim; no business/worker r
  expect(inventory.recorded.rls.filter((row: string) => row.startsWith("identity.mobile_auth_fixture_state|"))).toEqual(["identity.mobile_auth_fixture_state|rls=f|forced=f"]);
  expect((await db.admin.query("SELECT tableowner FROM pg_tables WHERE schemaname='identity' AND tablename='mobile_auth_fixture_state'")).rows[0].tableowner).toBe("jobguard_migration");
 });
-it("0482 upgrades the previous supported schema without touching existing identity rows", async () => {
+it("0520 upgrades the previous supported schema without touching existing identity rows", async () => {
  // Dedicated empty database: no DROP or edits to an already applied migration.
  await db.admin.query("CREATE DATABASE mobile_auth_upgrade");
  const admin = new Pool({ ...db.config, database: "mobile_auth_upgrade" });
  try {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("/0482_mobile_auth_store.sql"));
+  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("/0520_mobile_auth_store.sql"));
   expect(own).toBeGreaterThan(0);
   for (const url of MIGRATION_URLS.slice(0, own)) {
    await admin.query(await readFile(url, "utf8"));

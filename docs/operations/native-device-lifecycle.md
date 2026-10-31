@@ -51,7 +51,7 @@ issued tasks and gates.
 
 The server fake is unregistered in every live application and defaults off.
 Both an explicit synthetic environment and opt-in flag are required, and only
-`MemoryAuthProvider` is accepted. Migration 0482 adds a restricted identity control-plane fixture snapshot, with
+`MemoryAuthProvider` is accepted. Migration 0520 adds a restricted identity control-plane fixture snapshot, with
 SELECT/INSERT/UPDATE only for the identity role and no business/worker access.
 No endpoints, keys, providers, external data flows or deployment settings change. Auth.js is missing; no package
 was added. There are no new operational alerts because no runtime is activated.
@@ -71,7 +71,7 @@ failures restore their prior snapshot. Stored-version errors fail closed.
 This does not prove production restart recovery, audit or native cache erasure.
 PostgreSQL concurrency and restart tests are supplied for CI, not executed locally.
 Forward fix: disable composition if necessary and add a later migration; preserve
-0482 and existing tombstones/history. Do not reset the snapshot to repair an error.
+0520 and existing tombstones/history. Do not reset the snapshot to repair an error.
 
 Native file/key erasure and handling of pending work remain obligations above.
 Server logout cannot make a disconnected lease disappear; its prior finite expiry

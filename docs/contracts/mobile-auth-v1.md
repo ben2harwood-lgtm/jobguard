@@ -149,7 +149,7 @@ clock observations and refuses at exact lease expiry.
 
 ## Remaining implementation and release gates
 
-M3-2-store adds `PostgresSyntheticMobileAuthStore` and migration 0482. The
+M3-2-store adds `PostgresSyntheticMobileAuthStore` and migration 0520. The
 optional internal adapter persists versioned device records/tombstones, family
 and lease metadata, current/consumed credential digests and command claims in
 `identity.mobile_auth_fixture_state`. It is a restricted identity control-plane
