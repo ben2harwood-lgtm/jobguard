@@ -157,7 +157,7 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     const first = await repo.record(context, liveId, input);
     expect(await repo.record(context, liveId, input)).toEqual(first);
     await expect(repo.record(context, liveId, { ...input, resolved: true })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
-    await new JobRepository(runtime).transition(context, ["job:update"], { jobId: liveId, expectedRevision: 1, to: "invoiced", reason: "issue_invoice" });
+    await new JobRepository(admin).transition(context, ["job:update"], { jobId: liveId, expectedRevision: 1, to: "invoiced", reason: "issue_invoice" });
     expect(await repo.view(context, liveId)).toEqual(first);
     await expect(repo.advance(context, liveId, { commandId: randomUUID(), scenarioNow: "2026-03-30T08:00:00.000Z" })).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
   });
@@ -187,7 +187,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
   it("holds the first business lock until commit; both race orders serialize", async () => {
     for (const commandFirst of [true, false]) {
       const jobId = randomUUID(); await importWatchdogFixtureJob(admin, tenant, jobId);
-      const a = await runtime.connect(), b = await runtime.connect();
+      // Ruling 103: only the legacy lifecycle side uses an owner fixture; its race transaction stays intact.
+      const a = await runtime.connect(), b = await admin.connect();
       try {
         await a.query("BEGIN"); await b.query("BEGIN");
         await a.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await b.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
