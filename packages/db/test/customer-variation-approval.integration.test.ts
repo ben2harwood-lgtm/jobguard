@@ -76,7 +76,7 @@ it("a newly priced revision makes the displayed old revision stale",async()=>{
 });
 it("raw runtime INSERT cannot manufacture customer provenance; identity has only the checked routine",async()=>{
  const a=await fixture();const sid=(await f.admin.query("SELECT id FROM app.customer_portal_session WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].id;
- await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,approved_at,customer_session_id,customer_command_hash) VALUES($1,$2,$3,$4,$5,1,$6,50000,'customer_authenticated',clock_timestamp(),$7,$6)",[randomUUID(),a.tenantId,a.jobId,a.variationId,a.priced.id,a.priced.contentHash,sid]))).rejects.toMatchObject(refused);
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,approved_at,customer_session_id,customer_command_hash) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,1,$6::text,50000,'customer_authenticated',clock_timestamp(),$7::uuid,$6::text)",[randomUUID(),a.tenantId,a.jobId,a.variationId,a.priced.id,a.priced.contentHash,sid]))).rejects.toMatchObject(refused);
  for(const role of ["jobguard_runtime","jobguard_infrastructure"])expect((await f.admin.query("SELECT has_function_privilege($1,'identity.customer_variation(uuid,uuid,uuid,text,jsonb)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(false);
  expect((await f.admin.query("SELECT has_table_privilege('jobguard_identity','app.variation_approval','SELECT,INSERT,UPDATE,DELETE') allowed")).rows[0].allowed).toBe(false);
 });
