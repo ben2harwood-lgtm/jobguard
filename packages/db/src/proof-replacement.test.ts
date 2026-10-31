@@ -2,12 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { expect, it, vi } from "vitest";
+import { appendAuditBatch } from "./audit.js";
 import { ProofCommandService } from "./proof-repository.js";
 import { verifiedTenantContextForQueuedJob as testTenantContext } from "./tenant-context.js";
 vi.mock("./watchdog.js", () => ({ requireLiveJob: vi.fn(), readCommandIdentity: vi.fn(), claimCommandIdentity: vi.fn(), requestHashFor: () => "a".repeat(64) }));
 vi.mock("./audit.js", () => ({ appendAuditBatch: vi.fn() }));
 
 it("S13 replacement proof completes the same stage after invalidation instead of colliding with the original receipt", async () => {
+  vi.mocked(appendAuditBatch).mockClear();
   const tenant = randomUUID(), job = randomUUID(), scope = randomUUID(), actor = randomUUID(), oldId = randomUUID(), evidence = randomUUID();
   const bytes = Buffer.from("fictional proof"), hash = createHash("sha256").update(bytes).digest("hex");
   const stageKey = `${job}:${scope}:electrical-stage`, completionId=randomUUID();
@@ -23,6 +25,7 @@ it("S13 replacement proof completes the same stage after invalidation instead of
       return result([{result:{kind:"claim"}}]);
     }
     if (sql.includes("app.complete_command(")) {
+      expect(appendAuditBatch).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({eventType:"proof.completed"})]);
       expect(JSON.parse(values[1] as string)).toEqual({});
       return result([{result:storedResult}]);
     }

@@ -46,12 +46,21 @@ describe("LP-5b draft catalogue additions", () => {
     expect(records).not.toMatch(/current_database|LP4_SYNTHETIC_DATABASE_REQUIRED/);
     expect(records).toContain("synthetic_demo.seed");
   });
-  it("keeps proof's checked resolution before completion audit and caller audit", () => {
+  it("preserves the complete LP-5a receipt-to-audit tail, including the final seal call", () => {
+    const parent = readFileSync(new URL("../migrations/0475_lp5a_commands.sql", import.meta.url), "utf8");
+    const tail = (source: string) => {
+      const start = source.indexOf(" UPDATE app.command_receipt SET status='succeeded',result=value,completed_at=clock_timestamp()");
+      expect(start).toBeGreaterThan(-1);
+      return source.slice(start, source.indexOf("END $$;", start) + "END $$;".length);
+    };
+    expect(tail(sql)).toBe(tail(parent));
+  });
+  it("keeps proof's checked resolution before the final completion seal, with caller audit first", () => {
     const complete = sql.split("CREATE OR REPLACE FUNCTION app.complete_command")[1]!;
     expect(complete.indexOf("INSERT INTO app.decision_resolution")).toBeGreaterThan(0);
     expect(complete.indexOf("INSERT INTO app.decision_resolution")).toBeLessThan(complete.indexOf("app.lp4_seal_audit"));
     const proof = readFileSync(new URL("../src/proof-repository.ts", import.meta.url), "utf8");
-    expect(proof.indexOf("const completed=await completeRepositoryCommand")).toBeLessThan(proof.indexOf('eventType:"proof.completed"'));
+    expect(proof.indexOf("const completed=await completeRepositoryCommand")).toBeGreaterThan(proof.indexOf('eventType:"proof.completed"'));
     expect(proof).not.toContain("INSERT INTO app.decision_resolution");
   });
 });

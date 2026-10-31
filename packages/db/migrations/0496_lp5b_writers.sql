@@ -1238,6 +1238,7 @@ BEGIN
  PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
   'actorRef','membership:'||c.actor_membership_id::text,'eventType','command.succeeded','subjectType',(c.resource->>'subjectType'),
   'subjectRef',(c.resource->>'subjectRef'),'payload',jsonb_build_object('references',refs,
+  'classifications',jsonb_build_object('action',reg.audit_class)))),'checked_operation');
  RETURN value;
 END $$;
 REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
