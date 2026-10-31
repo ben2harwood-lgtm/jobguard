@@ -42,7 +42,7 @@ it("0492 copies the exact predecessor policy quoting and every other SQL format 
  expect(sql).not.toMatch(/current_setting\(app\.|,\)::uuid/u);
 });
 it("0489-0492 do not overwrite each other's routines; compensation is the latest writer and journal/derivation guard",async()=>{
- const files=["0489_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0491_simulation_fee_collection.sql","0492_simulation_money_trail_run.sql"];
+ const files=["0507_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0491_simulation_fee_collection.sql","0492_simulation_money_trail_run.sql"];
  const definitions=new Map<string,string>();
  for(const file of files){const sql=await readFile(new URL(`../migrations/${file}`,import.meta.url),"utf8");for(const match of sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)\(/gu)){expect(definitions.has(match[1]!)).toBe(false);definitions.set(match[1]!,file);}}
  for(const name of ["write_success_fee_v3","check_success_fee_journal","check_success_fee_derivation"])expect(definitions.get(name)).toBe(files[0]);

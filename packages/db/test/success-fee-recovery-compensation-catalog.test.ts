@@ -9,7 +9,7 @@ const jsonGrouping=(sql:string)=>sql.replace(/\(((?:[a-z_]+\.)?[a-z_]+(?:->>?'(?
 
 it("0489 retains the reviewed 0406 authorization, replay and catch validation before adding compensation",async()=>{
  const reviewed=writer(await migration("0406_success_fee_catch_posting.sql"));
- const current=writer(await migration("0489_success_fee_recovery_compensation.sql"));
+ const current=writer(await migration("0507_success_fee_recovery_compensation.sql"));
  const prefix=(sql:string)=>sql.slice(sql.indexOf("BEGIN\n"),sql.indexOf(" PERFORM app.lock_success_fee_sources();"));
  expect(jsonGrouping(prefix(current))).toBe(jsonGrouping(prefix(reviewed)));
  const start=" FOR c IN SELECT id FROM app.recovery_case";
@@ -27,7 +27,7 @@ it("0489 retains the reviewed 0406 authorization, replay and catch validation be
 });
 
 it("both inventories record the final compensation routines without widening their runtime grants",async()=>{
- const sql=await migration("0489_success_fee_recovery_compensation.sql");
+ const sql=await migration("0507_success_fee_recovery_compensation.sql");
  const definitions=[...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1])).toEqual(["check_success_fee_journal","check_success_fee_derivation","write_success_fee_v3"]);
  const live=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
