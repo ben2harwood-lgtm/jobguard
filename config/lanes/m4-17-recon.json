@@ -5,6 +5,8 @@
       "branches": ["codex/sandbox/m4-17-recon"],
       "note": "M4-17 RED production-shaped dark fake reconciliation on unmerged M4-17-S. No migration, live adapter, endpoint or deployment.",
       "allow": [
+        "apps/api/src/workspace/index.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/core/src/index.ts",
         "packages/core/src/financial-reconciliation.ts",
         "packages/core/src/financial-reconciliation.test.ts",

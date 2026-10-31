@@ -6,7 +6,7 @@
         "codex/sandbox/m4-9-s"
       ],
       "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
-      "note": "RED M4-9-S catch-up (BUILD_PLAN.md \u00a710.4, finish-list row 8). Preserve both sides of current-main merge; own success-fee migration renumbered to 0302 with unchanged SQL. No new behaviour or attribution/allocation writer changes; dependency boundary remains closed. GitHub CI and exact-head independent RED review required.",
+      "note": "RED M4-9-S / PR #380 catch-up only after #376 MON-1 day ledger 0300 and #384 ENT-9 dashboards. Preserve both sides of shared expectation lists and exports. Migration 0302 SQL bytes unchanged; no new behaviour. Prior RED pass reported by router; database/browser checks remain GitHub CI work.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",

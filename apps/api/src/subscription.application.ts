@@ -1,3 +1,4 @@
+import { subscriptionConsentText } from "@jobguard/core";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SubscriptionPersistenceError, subscriptionTermsContentHash, SubscriptionExecutor, SyntheticSubscriptionPaymentAdapter, type SubscriptionRepositoryPort } from "@jobguard/db";
@@ -11,7 +12,7 @@ export interface SubscriptionAuthorityPort {
  resolve(sessionHandle:unknown):Promise<{credentials:TenantRequestCredentials;digest:string}>;
 }
 const terms = {
- version: z.literal("subscription-command.v1"), plan: z.enum(["Solo", "Builder"]),
+ consentText: z.literal(subscriptionConsentText), version: z.literal("subscription-command.v1"), plan: z.enum(["Solo", "Builder"]),
  cadence: z.literal("monthly"), anchorDay: z.number().int().min(1).max(31),
  termsVersion: z.literal("subscription_terms_v1"), catalogueVersion: z.literal("subscription_pricing_policy_v4"),
  maximumPence: z.union([z.literal(4900), z.literal(16900)]), expectedRevision: z.number().int().safe().nonnegative(),
@@ -36,17 +37,25 @@ export class SubscriptionApplication {
    let command;
    if (action.kind === "accept" || action.kind === "change") {
     if (action.maximumPence !== (action.plan === "Solo" ? 4900 : 16900)) throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
-    const { version: _version, kind: _kind, ...selection } = action;
-    command = { ...action, contentHash: subscriptionTermsContentHash(context.tenantId, selection) };
+    const { version: _version, kind: _kind, consentText: _consentText, ...selection } = action;
+    command = { version: action.version, kind: action.kind, ...selection, contentHash: subscriptionTermsContentHash(context.tenantId, { ...selection, consentText: action.consentText }) };
    } else command = action;
    const result = await this.repository.command(context,digest,commandId,command);
    if (action.kind === "approve_simulation") {
-    const workId = z.string().uuid().parse(result.workId);
-    const snapshot = await this.repository.read(context, digest);
-    // A replay reads durable work. Never retry an attempted or unknown network outcome.
-    if (!snapshot.attempts.some(row => row.work_id === workId)) {
-     await new SubscriptionExecutor(this.repository, new SyntheticSubscriptionPaymentAdapter())
-      .executeApprovedSimulation(context, digest, randomUUID(), workId, action.expectedRevision);
+    try {
+     const workId = z.string().uuid().parse(result.workId);
+     const snapshot = await this.repository.read(context, digest);
+     // A replay reads durable work. Never retry an attempted or unknown network outcome.
+     if (!snapshot.attempts.some(row => row.work_id === workId)) {
+      const execution = await new SubscriptionExecutor(this.repository, new SyntheticSubscriptionPaymentAdapter())
+       .executeApprovedSimulation(context, digest, randomUUID(), workId, action.expectedRevision);
+      if (execution.outcome !== "settled") return { ...result, paymentStatus: "pending" as const };
+     } else if (!snapshot.results.some(row => row.work_id === workId && row.outcome === "settled")) {
+      return { ...result, paymentStatus: "pending" as const };
+     }
+    } catch {
+     // Approval committed above. Executor/read failures cannot undo it or justify a new approval.
+     return { ...result, paymentStatus: "pending" as const, executionStatus: "unavailable" as const };
     }
    }
    return result;
@@ -54,7 +63,9 @@ export class SubscriptionApplication {
  }
  async read(session:unknown){return this.current(session,async (credentials,digest)=>{
   const context=await resolveVerifiedTenantContext(this.authority.provider,credentials,this.authority.allowedOrigin);
-  return this.repository.read(context,digest);
+  const snapshot = await this.repository.read(context,digest);
+  const billingDay = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric" }).format(new Date()));
+  return { ...snapshot, billingDay };
  });}
  private async current<T>(session:unknown,fn:(credentials:TenantRequestCredentials,digest:string)=>Promise<T>):Promise<T>{
   try{

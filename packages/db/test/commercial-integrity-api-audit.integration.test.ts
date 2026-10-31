@@ -23,14 +23,14 @@ beforeAll(async () => {
   pg = new EmbeddedPostgres({ databaseDir: join(dir, "db"), port, user: "postgres", password: "synthetic",
     persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await pg.initialise(); await pg.start(); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+  await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo"); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" , database: "jobguard_synthetic_demo"});
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [T]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic audit builder')", [A,T]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [M,T,A,U]);
   await admin.query("CREATE ROLE integrity_audit_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO integrity_audit_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "integrity_audit_login", password: "synthetic", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "integrity_audit_login", password: "synthetic", max: 4 });
   // A subprocess uses the same source module as Vitest, independent of dist build order.
   tsconfig = join(dir, "child-tsconfig.json");
   await writeFile(tsconfig, JSON.stringify({ compilerOptions: { paths: {
@@ -81,7 +81,7 @@ async function inProcess(session: string, jobId: string, input?: unknown) {
     const require = createRequire(${JSON.stringify(new URL("../../../apps/api/package.json",import.meta.url).href)});
     const { Pool } = require('pg');
     const { CommercialIntegrityApplication } = await import(${JSON.stringify(new URL("../../../apps/api/src/commercial-integrity.application.ts",import.meta.url).href)});
-    const pool = new Pool({host:'127.0.0.1',port:${port},database:'postgres',user:'integrity_audit_login',password:'synthetic'});
+    const pool = new Pool({host:'127.0.0.1',port:${port},database:'jobguard_synthetic_demo',user:'integrity_audit_login',password:'synthetic'});
     try { const app = new CommercialIntegrityApplication(pool,process.argv[1],'synthetic_demo');
       const input = JSON.parse(process.argv[3]);
       console.log(JSON.stringify(input === null ? await app.view(process.argv[2]) : await app.review(process.argv[2],input)));

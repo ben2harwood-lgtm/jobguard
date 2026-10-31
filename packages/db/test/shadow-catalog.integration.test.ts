@@ -103,7 +103,8 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
    .toEqual(older.map(proname=>({proname,prosecdef:true,owner:"jobguard_migration",runtime:true,grantees:["jobguard_migration","jobguard_runtime"]})));
   // Every non-trigger routine in app that each new role can execute, by catalog. Trigger functions are not callable
   // directly (checked below). Two pure arithmetic INVOKER helpers keep their default PUBLIC EXECUTE by design.
-  const explicit:Record<string,string[]>={jobguard_shadow:["begin_final_check","complete_final_check","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+  // 0306 adds exactly three worker-only evidence-pack entrypoints; emergency access is unchanged.
+  const explicit:Record<string,string[]>={jobguard_shadow:["begin_final_check","complete_evidence_pack_v3_check","complete_final_check","finish_evidence_pack_v3","prepare_evidence_pack_v3","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
   const pureHelpers=["half_even_ratio","reference_recovery_cap"];
   const callable=(await admin.query(`SELECT r.rolname AS role,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
    CROSS JOIN (VALUES ('jobguard_shadow'),('jobguard_shadow_emergency_access')) r(rolname)
@@ -145,4 +146,15 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Signal state/revision alone are the shadow role's mutable projection columns.
   for(const table of tables.filter(t=>t!=="shadow_commercial_signal"))await expect(admin.query(`DELETE FROM app.${table}`)).rejects.toMatchObject({code:"55000"});
  });
+
+it('SB-01: Builder runtime role reads a shadow table directly or through a view', async () => {
+ const id = await signal();
+ for (const table of tables) {
+  expect((await admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') allowed", [`app.${table}`])).rows[0].allowed).toBe(false);
+  await expect(runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({ code: "42501" });
+ }
+ // Positive control: the authorized shadow login can read that same row in its tenant.
+ const rows = await withTenant(shadow, context(), db => db.$client.query("SELECT id FROM app.shadow_commercial_signal WHERE id=$1", [id]));
+ expect(rows.rows).toEqual([{ id }]);
+});
 });
