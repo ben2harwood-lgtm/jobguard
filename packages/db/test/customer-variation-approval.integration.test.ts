@@ -1,6 +1,6 @@
 // Real PostgreSQL CI only; no mocked proof of sessions, tenant boundaries, claims or concurrency.
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { priceVariation } from "@jobguard/core";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, availableFinalCheck, FINAL_CHECK_ACTOR, FINAL_CHECK_USER, type FinalCheckFixture } from "./final-check-fixture.js";
 import { ShadowDemoApprovalReader } from "../src/shadow-demo-approval-reader.js";
@@ -8,8 +8,8 @@ import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { insertPricedVariation } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 let f: FinalCheckFixture;
-beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
-afterAll(async()=>closeFinalCheckFixture(f));
+beforeAll(async()=>{vi.stubEnv("JOBGUARD_ENV","synthetic_demo");f=await createFinalCheckFixture();},120000);
+afterAll(async()=>{await closeFinalCheckFixture(f);vi.unstubAllEnvs();});
 const hash=(v:string)=>createHash("sha256").update(v).digest("hex");
 async function identity(sql:string,args:unknown[]) {
  const db=await f.admin.connect();
