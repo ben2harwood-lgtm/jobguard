@@ -644,8 +644,10 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
   expect(r.proowner).toBe(owner);
   expect(r.prosecdef).toBe(false);
   expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  // 0399 retires only the legacy reader; every other lifecycle grant stays exact.
   expect((await aclItems(r.proacl)).sort()).toEqual(["jobguard_migration=X/jobguard_migration",
-   `${r.proname === "mon1_lifecycle_actor" ? "jobguard_meter" : "jobguard_runtime"}=X/jobguard_migration`].sort());
+   ...(r.proname === "mon1_counted_meter_today" ? [] :
+    [`${r.proname === "mon1_lifecycle_actor" ? "jobguard_meter" : "jobguard_runtime"}=X/jobguard_migration`])].sort());
  }
  const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
  JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace
@@ -1195,7 +1197,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
 // MON-3-P-B: ONLY the four new side tables and five new routines from 0235.
 async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
  const tables = ["trial_admission", "trial_business_verification", "trial_card_attempt", "trial_card_result", "trial_start", "trial_end_source", "trial_subscription_source"];
- const names = ["mon3_admit", "mon3_audit", "mon3_owner", "mon3_record_card_fixture", "mon3_request_card", "mon3_activate", "mon3_build_source", "mon3_capture_lifecycle", "mon3_pin_source", "mon3_read_lifecycle", "mon3_require_registered_admission", "mon3_simulate_card", "mon3_trial_date", "mon3_validate_billing"].sort();
+ const names = ["mon3_admit", "mon3_audit", "mon3_owner", "mon3_lock_activation", "mon3_record_card_fixture", "mon3_request_card", "mon3_activate", "mon3_build_source", "mon3_capture_lifecycle", "mon3_pin_source", "mon3_read_lifecycle", "mon3_require_registered_admission", "mon3_simulate_card", "mon3_trial_date", "mon3_validate_billing"].sort();
  const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
  expect(routines.map(r => r.proname).sort()).toEqual(names);
  const indexRows = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x

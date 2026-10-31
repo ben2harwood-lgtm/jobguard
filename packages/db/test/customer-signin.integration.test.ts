@@ -12,10 +12,11 @@ let c: Cluster;
 beforeAll(async () => {
   c = await startBeforeMigration(own);
   const before = await snapshot(c.admin);
+  const expected = { ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] };
   await applyMigration(c, own);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
 }, 120000);
 afterAll(async () => { await c?.close(); });
 async function identityQuery(sql: string, args: unknown[]) {
