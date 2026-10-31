@@ -8,7 +8,9 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "pnpm turbo run build --filter=@jobguard/db... && playwright test",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:cloudflare": "pnpm --workspace-root exec turbo run build --filter=@jobguard/web^... && opennextjs-cloudflare build",
+    "preview:cloudflare": "wrangler dev --local"
   },
   "dependencies": {
     "next": "15.5.28",
@@ -29,6 +31,8 @@
     "@types/react-dom": "19.1.6",
     "embedded-postgres": "16.10.0-beta.15",
     "typescript": "5.8.3",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "@opennextjs/cloudflare": "1.20.12",
+    "wrangler": "4.151.1"
   }
 }

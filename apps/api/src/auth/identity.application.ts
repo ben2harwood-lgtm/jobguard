@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { IdentityRepository, type VerifiedTenantContext } from "@jobguard/db";
 import { parseIdentityEnvironment } from "@jobguard/config";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import { AuthError, type AuthPrincipal } from "./auth-provider.js";
 import { verifyCodeV1 } from "./auth-schemas.js";
 import { PersistedAuthProvider } from "./persisted-auth-provider.js";
@@ -54,7 +54,7 @@ export class IdentityApplication {
     return {version:"identity-invitation-response.v1",id,environment:"synthetic_demo"};
   }
 }
-export function createIdentityApplication(raw:unknown):IdentityApplication {
+export function createIdentityApplication(raw:unknown, poolOptions: Pick<PoolConfig,"max"|"maxUses"> = {}):IdentityApplication {
   const env=parseIdentityEnvironment(raw);
-  return new IdentityApplication(new PersistedAuthProvider(new IdentityRepository(new Pool({connectionString:env.IDENTITY_DATABASE_URL,max:4,application_name:"jobguard-identity"})),env.AUTH_CODE_SECRET,undefined,env.JOBGUARD_ENV),env.AUTH_ALLOWED_ORIGIN);
+  return new IdentityApplication(new PersistedAuthProvider(new IdentityRepository(new Pool({connectionString:env.IDENTITY_DATABASE_URL,max:4,...poolOptions,application_name:"jobguard-identity"})),env.AUTH_CODE_SECRET,undefined,env.JOBGUARD_ENV),env.AUTH_ALLOWED_ORIGIN);
 }
