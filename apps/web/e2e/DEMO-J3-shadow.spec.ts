@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { openCapture, startWatchdogJob } from "./helpers/capture-journey";
@@ -56,7 +58,10 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  expect(conflict.ok()).toBe(false);
  await post("final-account/terms", { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
  const publicBefore = await read("shadow-demo");
- await holdShadowRecipeSources("11111111-1111-4111-8111-111111111111", jobId);
+ // Test-only queued-worker contexts use the same ESM module as the driver.
+ const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>;
+ const { verifiedTenantContextForQueuedJob } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
+ await holdShadowRecipeSources(verifiedTenantContextForQueuedJob("11111111-1111-4111-8111-111111111111"), verifiedTenantContextForQueuedJob(randomUUID()), jobId);
  expect(await read("shadow-demo")).toEqual(publicBefore); // Holding/replaying signals cannot change a builder response.
  expect(await read("final-check")).toMatchObject({ state: "unlocked", items: [] });
  let final = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: 0 });
