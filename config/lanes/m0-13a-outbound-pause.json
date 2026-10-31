@@ -5,10 +5,11 @@
       "branches": [
         "codex/sandbox/m0-13a-outbound-pause"
       ],
-      "note": "RED M0-13a app-wide commercial outbound pause, operator two-person resume and fake-only adversarial tests. Migration 0474. No worker.ts change or live activation.",
+      "note": "RED M0-13a app-wide commercial outbound pause, operator two-person resume and fake-only adversarial tests. Migration 0474 retained for router renumbering at PR opening. Preserve inherited SV-8 settlement guard and latest main worker wiring; no live activation.",
       "allow": [
         ".env.example",
         "apps/api/src/production-settlement-guard.test.ts",
+        "apps/api/src/worker.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/operations/commercial-outbound-pause.md",
         "packages/db/migrations/0474_commercial_outbound_pause.sql",

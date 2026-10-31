@@ -21,8 +21,10 @@ async function issued() {
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MIGFIX builder')", [tenant, account]);
   await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
   const context = testTenantContext(tenant);
-  await withTenant(c.runtime, context, async db => {
+  await withTenant(c.admin, context, async db => {
     await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional quote','quoting')", [tenant, job]);
+  });
+  await withTenant(c.runtime, context, async db => {
     await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant, scope, job]);
     await db.$client.query("INSERT INTO app.scope_revision(tenant_id,id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fit cabinet','1','each',10000,10000)", [tenant, revisionId, job, scope]);
   });
