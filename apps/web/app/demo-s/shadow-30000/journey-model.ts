@@ -51,8 +51,8 @@ export const shadowSteps = [
  "Add the fictional supplier documents, completion photos and diary note. Ordinary findings stay hidden until lock; safety disclosures must still surface.",
  "Build the final account from the frozen baseline and approved captures. Add £400 in final review, then rebuild: £33,600 net.",
  "Finish proof, record all scope dispositions, accept the terms and complete the final account. This creates the immutable lock.",
- "Run and load the real Final Check. Confirm the £500 and £300 missing extras as drafts and price them. Customer approval: not ready yet (MON-5).",
- "After customer approval is available: issue one £34,400 net / £41,280 gross invoice and verify its settled payment. These are target figures, not a saved invoice or settlement.",
+ "Run and load the real Final Check. Confirm the £500 and £300 missing extras as drafts and price them. Request practice customer approval for the exact priced revisions; only saved customer responses count as approval.",
+ "After recorded customer approval: issue one £34,400 net / £41,280 gross invoice and verify its settled payment. These are target figures, not a saved invoice or settlement.",
  "After exact landing allocations and SV-6 assessment: target Q £800, proposed fee £80, yours £720 before VAT and tax. An assessment illustration is not an approved fee or posting.",
  "The £3,200 logged extras plus £400 at review are £3,600 of builder captures, carrying £0 recovery fee. The evidence pack and value report must link the actual source chain.",
 ] as const;

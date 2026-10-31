@@ -113,7 +113,7 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
  await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
  const saved = page.getByRole("region", { name: "Saved shadow journey report" });
- await expect(saved).toContainText("£33,600.00 net"); await expect(saved).toContainText("MON-5");
+ await expect(saved).toContainText("£33,600.00 net"); await expect(saved).toContainText("Customer approval: Awaiting customer");
  await expect(saved).toContainText("fitted garden drainage"); await expect(saved).toContainText("fitted loft hatch");
  await expect(saved).toContainText("No invoice issued"); await expect(saved).toContainText("recovery fee £0");
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

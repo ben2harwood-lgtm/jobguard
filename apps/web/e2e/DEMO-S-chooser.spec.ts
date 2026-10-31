@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 // Launch only available journeys; retain honest blockers for unmerged guides.
 async function signIn(page: Page) {
   await page.goto("/sign-in");
@@ -95,7 +96,13 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.reload();
+  const replayResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  const replay = await replayResponse;
+  const replayBody: unknown = await replay.json();
+  expect(replay.status(), JSON.stringify(replayBody)).toBe(201);
+  const recovered = captureWorkspaceResponseV1.parse(replayBody);
+  expect(recovered.captureId).toBe(runId);
   await expect(page.getByRole("heading", { name: "Final Check £30,000 journey" })).toBeVisible();
   const jobId = new URL(page.url()).searchParams.get("jobId");
   expect(jobId).toBeTruthy(); expect(requests).toHaveLength(2);

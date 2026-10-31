@@ -21,7 +21,7 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
  const html = renderToStaticMarkup(<ShadowJourney />);
- for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "not ready yet (MON-5)"]) expect(html).toContain(text);
+ for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval"]) expect(html).toContain(text);
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {

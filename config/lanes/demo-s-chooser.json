@@ -15,7 +15,10 @@
         "apps/web/app/demo-s/journey-result.tsx",
         "apps/web/e2e/DEMO-S-chooser.spec.ts",
         "apps/web/app/demo-s/shadow-30000/journey.tsx",
-        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts"
       ]
     }
   }

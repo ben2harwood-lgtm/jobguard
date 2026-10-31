@@ -20,7 +20,7 @@ export function JourneyResult({ runId, tenantId, archived, disabled, onBusyChang
     finally { active.current = false; setBusy(false); onBusyChange(false); }
   }
   return <section aria-label="Journey results"><h3>Final Check journey</h3>
-    <p>Available through the final-account lock. Customer approval and later steps are not ready yet.</p>
+    <p>The guide, final-account lock and practice customer approval are available. Read saved results for actual progress; full end-to-end completion is not ready yet.</p>
     <p>Launch or resume reuses this selection’s saved capture. Reset selection starts a fresh fictional job.</p>
     <button disabled={disabled || busy || archived} onClick={() => void recover(true)}>Launch or resume shadow-30000</button>
     <button disabled={disabled || busy || archived} onClick={() => void recover(false)}>Create or resume and read saved results</button>
