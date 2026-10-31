@@ -62,4 +62,36 @@ describe("fixture-only AI gateway", () => {
     await expect(gateway.generate({ ...request, timeoutMs: 0 }, outputSchema)).rejects.toMatchObject({ code: "invalid_request" });
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it.each([
+    "https://example.invalid/one-time-link?token=secret",
+    "session-secret", "csrf-secret", "refresh-secret",
+    "jane@example.invalid", "+44 7700 900123", "Jane Synthetic Customer",
+  ])("does not echo private fixture/source identifiers or validation keys: %s", async privateValue => {
+    const missingFixture = await new FixtureAiProvider({}).execute({ ...request, sources: [...request.sources], fixtureId: privateValue }).catch(error => error);
+    expect(missingFixture).toMatchObject({ code: "fixture_not_found", message: "Unknown AI fixture" });
+    const gateway = new AiGateway(new FixtureAiProvider({
+      valid: { output: { item: "doors", ratePence: null }, citations: [{ sourceId: privateValue, start: 0, end: 2 }] },
+    }));
+    await expect(gateway.generate(request, outputSchema)).rejects.toMatchObject({ code: "invalid_citation", message: "Citation is outside source bounds" });
+    const invalidRequest = await gateway.generate({ ...request, timeoutMs: 0 }, outputSchema).catch(error => error);
+    expect(invalidRequest).toMatchObject({ code: "invalid_request", message: "Invalid AI request" });
+    expect(invalidRequest.cause).toBeUndefined();
+    expect(String(invalidRequest)).not.toContain(privateValue);
+    const invalidOutput = await new AiGateway(new FixtureAiProvider({
+      valid: { output: { item: "doors", ratePence: null, [privateValue]: true }, citations: [] },
+    })).generate(request, outputSchema.strict()).catch(error => error);
+    expect(invalidOutput).toMatchObject({ code: "invalid_output", message: "Invalid structured AI output" });
+    expect(invalidOutput.cause).toBeUndefined();
+    expect(String(invalidOutput)).not.toContain(privateValue);
+    const providerFailure = await new AiGateway({ kind: "fixture", execute: async () => { throw new Error(privateValue); } })
+      .generate(request, outputSchema).catch(error => error);
+    expect(providerFailure).toMatchObject({ code: "invalid_provider_response", message: "AI provider failed" });
+    expect(providerFailure.cause).toBeUndefined();
+    const typedFailure = await new AiGateway({ kind: "fixture", execute: async () => {
+      throw new AiGatewayError("invalid_output", privateValue, { cause: new Error(privateValue) });
+    } }).generate(request, outputSchema).catch(error => error);
+    expect(typedFailure).toMatchObject({ code: "invalid_output", message: "AI provider failed" });
+    expect(typedFailure.cause).toBeUndefined();
+  });
 });

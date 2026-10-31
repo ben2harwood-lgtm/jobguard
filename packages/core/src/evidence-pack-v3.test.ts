@@ -26,6 +26,20 @@ const altered = (change: (pack: any) => void) => {
 };
 
 describe("CH8-A unbound preparation specimens only", () => {
+  it("post-lock observations allow the exact cutoff and reject one microsecond later", () => {
+    const manifest = buildEvidenceManifestV3(input());
+    if (manifest.lifecycle.state !== "post_lock") throw new Error("Expected post-lock fixture");
+    const observation = manifest.entries.find(entry => entry.kind === "source_observations")!;
+    manifest.lifecycle.evidenceCutoff = "2026-10-20T12:00:00.123456Z";
+    manifest.lifecycle.lockedAt = "2026-10-20T12:00:00.123457Z";
+    observation.recordedAt = manifest.lifecycle.evidenceCutoff;
+    expect(evidenceManifestV3.safeParse(manifest).success).toBe(true);
+    observation.recordedAt = manifest.lifecycle.lockedAt;
+    const result = evidenceManifestV3.safeParse(manifest);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.map(issue => issue.message)).toEqual(["Observation after cutoff"]);
+  });
+
   it.each(fixtures.specimens)("EP-A01: $name parses without claiming producer binding", ({ input: supplied, expected }) => {
     const manifest = buildEvidenceManifestV3(supplied);
     expect(evidenceManifestV3.parse(manifest).binding).toBe("unbound-specimen");
