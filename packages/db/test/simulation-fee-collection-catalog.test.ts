@@ -3,7 +3,7 @@ import { expect,it } from "vitest";
 import { parseInventory,staticScan } from "./lp-0-catalog.js";
 
 it("the live LP inventory enumerates exactly the two 0491 routines and their actual calls/writes",async()=>{
- const sql=await readFile(new URL("../migrations/0519_simulation_fee_collection.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0506_simulation_fee_collection.sql",import.meta.url),"utf8");
  const definitions=[...sql.matchAll(/CREATE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1]).sort()).toEqual(["read_platform_fee_collection","write_platform_fee_collection"]);
  // Keep the runtime entry points within the shadow-catalog boundary. The private

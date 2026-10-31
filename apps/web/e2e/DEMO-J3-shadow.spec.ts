@@ -116,16 +116,15 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  // each exact revision in an isolated portal context. No builder attestation.
  const customerApprovals = await approveJ3Catches(page, browser, jobId, catches);
  const approvedReport = await read("shadow-demo");
- // Main's v2 reader has not yet bound portal provenance into this report.
- // Approval itself is proved through the customer UI and variation records;
- // preserve the exact current public envelope rather than inventing completion.
+ // Compare exact persisted portal approvals, including their server timestamps.
+ const approvedCustomerApproval = { state: "approved", approvals: [...customerApprovals].sort((a, b) => a.variationId.localeCompare(b.variationId)) };
  expect(approvedReport.version).toBe("shadow-demo-report.v2");
- expect(approvedReport.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] });
+ expect(approvedReport.customerApproval).toEqual(approvedCustomerApproval);
  // Legs 7–9: one combined invoice, matched settled receipt, exact source-backed
  // allocations, SV-6 reviews, MON-4A statement and CH-8 offline-verified packs.
  const settled = await settleJ3(page, jobId, reveal.lockId!, catches, testInfo);
  const report = await read("shadow-demo");
- expect(report.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] });
+ expect(report.customerApproval).toEqual(approvedCustomerApproval);
  expect(report.account.lock).toEqual(locked.account.lock);
  expect(report.account.account.id).toBe(settled.final.account.id);
  expect(report.account.captures.map((row: { id: string }) => row.id).sort()).toEqual(before.account.captures.map((row: { id: string }) => row.id).sort());
@@ -140,15 +139,14 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
   expect(saved.result).toEqual(await jsonResult(page.request.get(`/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`), "Read approved pack"));
   expect(JSON.stringify(saved.result)).toContain(pack.manifestHash);
  }
- // Exact v2 envelope and full producer values, including the currently held
- // portal-approval binding. Do not turn these into fabricated completion flags.
+ // Exact v2 envelope and full producer values, including persisted portal approvals.
  const expectedPacks = await Promise.all(settled.packs.map(async pack => ({ caseId: pack.caseId,
   result: await jsonResult(page.request.get(`/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`), "Read report pack producer") })));
  const byAssessment = (a: { assessment: { assessmentId: string } }, b: { assessment: { assessmentId: string } }) => a.assessment.assessmentId.localeCompare(b.assessment.assessmentId);
  const byCase = (a: { caseId: string }, b: { caseId: string }) => a.caseId.localeCompare(b.caseId);
  expect({ ...report, assessments: [...report.assessments].sort(byAssessment), packs: [...report.packs].sort(byCase) }).toEqual({
   version: "shadow-demo-report.v2", environment: "synthetic_demo", jobId, status: "incomplete", realExternalActions: 0,
-  customerApproval: { state: "awaiting_customer", approvals: [] },
+  customerApproval: approvedCustomerApproval,
   account: await read("final-account/lock"), invoices: await read("customer-invoices"),
   value: await read("value/v3"), finalCheck: await read("final-check"),
   assessments: settled.assessments.map(row => ({ assessment: row.assessment, illustrationAsAssessed: row.valueReceipt })).sort(byAssessment),
@@ -160,7 +158,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  for (const text of ["£34,400.00", "£41,280.00", "£500.00", "£300.00", "fitted garden drainage", "fitted loft hatch", "recovery fee £0"]) await expect(saved).toContainText(text);
  // The reviewed UI still labels this report incomplete; the portal and pack
  // steps above remain active and must succeed independently of that wording.
- await expect(saved).toContainText("Incomplete. Customer approval is not ready yet (MON-5).");
+ await expect(saved.getByText("Incomplete. Step 6: approved by the customer. No fee is charged.", { exact: true })).toBeVisible();
  // Reload the report to prove the same persisted bindings survive navigation.
  await page.reload(); await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
  await expect(saved).toContainText("£34,400.00");
@@ -188,10 +186,8 @@ test.fixme("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/�
  for (const [id, amount] of [["found-recovered-net", "£800.00"], ["found-success-fee", "£80.00"], ["found-yours-before-tax", "£720.00"], ["tracked-captured-net", "£3,600.00"], ["tracked-fee", "£0.00"]]) await expect(page.getByTestId(id!)).toHaveText(amount!);
 });
 
-// DEMO-J3-APPROVAL-READ: main still returns awaiting_customer with no public
-// approvals. When the separate reader piece lands, update today's exact
-// expectations in completeJ3 and enable only this post-approval assertion.
-test.fixme("DEMO-J3-APPROVAL-READ", async ({ page, browser }, testInfo) => {
+// Portal approvals must survive the complete persisted journey.
+test("DEMO-J3-APPROVAL-READ", async ({ page, browser }, testInfo) => {
  const { report, customerApprovals } = await completeJ3(page, browser, testInfo);
  const byVariation = (a: { variationId: string }, b: { variationId: string }) => a.variationId.localeCompare(b.variationId);
  expect({ ...report.customerApproval, approvals: [...report.customerApproval.approvals].sort(byVariation) }).toEqual({
