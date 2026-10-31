@@ -21,7 +21,15 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   await issuer.getByLabel("Eight-digit code").fill((await issuer.getByTestId("fixture-code").innerText()).trim());
   await issuer.getByRole("button", { name: "Verify code", exact: true }).click();
   await expect(issuer.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
-  const session = await jsonResult(issuer.request.get("/api/auth/session"), "Read signed-in link issuer");
+  // Match customer-extra-approval: read through the signed-in browser, whose
+  // same-origin fetch carries the Secure identity cookie on the local origin.
+  const signedIn = await issuer.evaluate(async () => {
+   const response = await fetch("/api/auth/session", { cache: "no-store" });
+   return { status: response.status, body: await response.json() };
+  });
+  expect(signedIn.status, "Read signed-in link issuer through the browser session").toBe(200);
+  const session = signedIn.body;
+  expect(session.principal.id).toBe(await issuer.getByTestId("identity-id").innerText());
   // The practice job's tenant is fixed by the existing demo bootstrap, whereas
   // code sign-in creates a fresh fictional business. Establish only the test
   // issuer's owner membership; do not move or recreate the captured job.
@@ -54,12 +62,25 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
    await customer.goto(outbox.immutable_content);
    await customer.getByRole("button", { name: "Sign in", exact: true }).click();
    await customer.getByRole("link", { name: "Review extras", exact: true }).click();
+  const approvals: { variationId: string; approvedAt: string; method: "customer_portal" }[] = [];
   for (const item of catches) {
    const section = customer.locator("section").filter({ has: customer.getByRole("heading", { name: item.description, exact: true }) });
    const revision = item.revisions.find(row => row.id === item.currentRevisionId)!;
    await expect(section).toContainText(revision.contentHash);
+   const request = customer.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === "/api/customer-portal/variation-approvals");
    await section.getByRole("button", { name: `Approve revision ${revision.revision} for +£${(revision.signedDeltaPence / 100).toFixed(2)}`, exact: true }).click();
+   const approvedCommand = (await request).postDataJSON();
    await expect(section.getByText("Approved · authenticated customer", { exact: true })).toBeVisible();
+   // A fresh command for the same exact revision is a duplicate approval,
+   // not an idempotent replay. Exercise the real authenticated customer route.
+   const duplicate = await customer.evaluate(async command => {
+    const response = await fetch("/api/customer-portal/variation-approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+    return { status: response.status, body: await response.json() };
+   }, { ...approvedCommand, commandId: randomUUID() });
+   expect(duplicate).toEqual({ status: 401, body: { code: "CUSTOMER_REFUSED" } });
+   const saved = (await admin.query("SELECT id,method,actor_membership_id,signed_delta_pence,approved_at FROM app.variation_approval WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 AND revision_id=$4", [tenantId, jobId, item.id, revision.id])).rows;
+   expect(saved.map(({ approved_at: _at, ...row }) => row)).toEqual([{ id: approvedCommand.commandId, method: "customer_authenticated", actor_membership_id: null, signed_delta_pence: String(revision.signedDeltaPence) }]);
+   approvals.push({ variationId: item.id, approvedAt: saved[0].approved_at.toISOString(), method: "customer_portal" });
    await customer.reload();
    await expect(section.getByText("Approved · authenticated customer", { exact: true })).toBeVisible();
   }
@@ -70,5 +91,6 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
   }
   expect((await page.context().cookies()).some(cookie => cookie.name === "jobguard_customer" || cookie.name === "jobguard_session")).toBe(false);
   expect((await customerContext.cookies()).some(cookie => cookie.name === "jg_session" || cookie.name === "jobguard_session")).toBe(false);
+  return approvals;
  } finally { await customerContext.close(); await issuerContext.close(); await admin.end(); }
 }

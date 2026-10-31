@@ -114,7 +114,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);
  // Leg 6b: send the priced catches, then the customer signs in and approves
  // each exact revision in an isolated portal context. No builder attestation.
- await approveJ3Catches(page, browser, jobId, catches);
+ const customerApprovals = await approveJ3Catches(page, browser, jobId, catches);
  const approvedReport = await read("shadow-demo");
  // Main's v2 reader has not yet bound portal provenance into this report.
  // Approval itself is proved through the customer UI and variation records;
@@ -167,7 +167,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  expect(await read("shadow-demo")).toEqual(report);
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  await page.screenshot({ path: testInfo.outputPath(`DEMO-J3-${testInfo.project.name}.png`), fullPage: true });
- return { jobId, report };
+ return { jobId, report, customerApprovals };
 }
 
 test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs", async ({ page, browser }, testInfo) => {
@@ -186,4 +186,15 @@ test.fixme("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/�
  } });
  await page.goto(`/jobs/${jobId}/value`);
  for (const [id, amount] of [["found-recovered-net", "£800.00"], ["found-success-fee", "£80.00"], ["found-yours-before-tax", "£720.00"], ["tracked-captured-net", "£3,600.00"], ["tracked-fee", "£0.00"]]) await expect(page.getByTestId(id!)).toHaveText(amount!);
+});
+
+// DEMO-J3-APPROVAL-READ: main still returns awaiting_customer with no public
+// approvals. When the separate reader piece lands, update today's exact
+// expectations in completeJ3 and enable only this post-approval assertion.
+test.fixme("DEMO-J3-APPROVAL-READ", async ({ page, browser }, testInfo) => {
+ const { report, customerApprovals } = await completeJ3(page, browser, testInfo);
+ const byVariation = (a: { variationId: string }, b: { variationId: string }) => a.variationId.localeCompare(b.variationId);
+ expect({ ...report.customerApproval, approvals: [...report.customerApproval.approvals].sort(byVariation) }).toEqual({
+  state: "approved", approvals: [...customerApprovals].sort(byVariation),
+ });
 });
