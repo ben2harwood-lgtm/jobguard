@@ -6,7 +6,7 @@ import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as 
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate } from "../src/migrate.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-const own="0404_lp3_activation_acceptance.sql",context=testTenantContext(T),environment=process.env.JOBGUARD_ENV;
+const own="0510_lp3_activation_acceptance.sql",context=testTenantContext(T),environment=process.env.JOBGUARD_ENV;
 let db:Awaited<ReturnType<typeof jobDoorsDatabase>>;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true,own);

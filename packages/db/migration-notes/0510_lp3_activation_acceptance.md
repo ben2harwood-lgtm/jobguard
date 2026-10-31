@@ -139,3 +139,40 @@ migration and browser suites are deferred to GitHub CI by the issued sandbox
 constraint. The known main-wide meter-track-review-upgrade table-count failure
 was left untouched as instructed. No new behavior; RED exact-head review and
 green current-main CI remain separate merge gates.
+
+## PR #414 current-main catch-up — 31 October 2026
+
+Resolved the launcher's pending origin/main merge as the union of current main
+and LP-3. LP-0 has 1,453 unique privilege entries, 70 groups, 45 authority paths
+and 548 unique recorded routines, retaining main's latest unchanged records and
+LP-3's explicit legacy-route replacements. SERIOUS-B5 retains all 38 main
+helpers byte-for-byte, plus the separate top-level LP-3 helper; both LP-3 and
+timeline helper calls remain. Tenancy and entitlement expectations retain main
+plus LP-3's table entries. No routine bodies were recreated; no new behavior.
+
+Renamed only the migration stem from 0404 to reserved 0510, and updated its
+current lane, LP-0 and upgrade-test references. SQL SHA-256 remains
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+All main migrations and lane files are byte-identical to origin/main; the
+downstream-effects contract is unchanged. Earlier dated notes remain history.
+
+Local checks: installed package-local Vitest, --maxWorkers=2, ran
+src/lp3-operation.test.ts, src/lp3-mutations.test.ts and
+test/lp-0-catalog.test.ts: 3 files, 86 tests passed. Database source
+TypeScript --noEmit passed. TypeScript parser checks passed for B5, tenancy,
+entitlement upgrade and LP-3 upgrade tests. Core purity, money arithmetic,
+commercial boundary and PL/pgSQL CASE-in-IF checks passed. Read-only exported
+lane-path/migration-order checks passed against origin/main and final files.
+The lane CLI refuses detached HEAD; the router must rerun it on the registered
+branch after staging and committing the merge. git diff --check passed.
+
+The first local test invocation preceded conflict resolution because the repair
+helper was invoked from the package directory; two catalogue tests failed on
+conflict-marker JSON. Re-running the helper from the repository root and the
+same three test files produced the passing result above.
+
+PostgreSQL, migration execution and browser suites were not run under the
+issued sandbox restriction; GitHub CI must run them. RED exact-head independent
+review and green current-main CI remain merge gates. Git's pending merge index
+was not written: the router must stage the resolved working files and renamed
+migration/note before committing.
