@@ -4,9 +4,9 @@ import { afterEach,beforeEach,expect,it,vi } from "vitest";
 import { PracticeAccessError } from "@jobguard/db";
 import { SuccessFeeError } from "@jobguard/core";
 import { SuccessFeeApplication,successFeeFailure } from "./success-fee.application.js";
-const {job,view,command}=vi.hoisted(()=>({job:vi.fn(),view:vi.fn(),command:vi.fn()}));
+const {job,view,command,statements,issueStatement,downloadStatement}=vi.hoisted(()=>({job:vi.fn(),view:vi.fn(),command:vi.fn(),statements:vi.fn(),issueStatement:vi.fn(),downloadStatement:vi.fn()}));
 vi.mock("./practice-access.js",()=>({PracticeAccess:class{job=job;}}));
-vi.mock("@jobguard/db",async original=>({...await original<Record<string,unknown>>(),SuccessFeeRepository:class{view=view;command=command;}}));
+vi.mock("@jobguard/db",async original=>({...await original<Record<string,unknown>>(),SuccessFeeRepository:class{view=view;command=command;},SimulationFeeStatementRepository:class{view=statements;command=issueStatement;download=downloadStatement;}}));
 const id=randomUUID(),context=Object.freeze({tenantId:randomUUID()}),digest="a".repeat(64);
 const intent={version:"success-fee-command.v1",action:"review",commandId:randomUUID(),expectedPostingRevision:0};
 const app=()=>new SuccessFeeApplication({} as Pool);
@@ -49,4 +49,27 @@ it("bounds public errors without swallowing unknown failures",()=>{
 
 it.each(["SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_REVIEW_REQUIRED","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"] as const)("returns bounded 409 for %s",code=>{
  expect(successFeeFailure(new SuccessFeeError(code))).toEqual({status:409,body:{code}});
+});
+
+it("statement commands authorize before deferred JSON and pass only verified job context",async()=>{
+ const c={version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()};
+ const body=vi.fn().mockResolvedValue(c);
+ await app().issueStatement(id,body);expect(issueStatement).toHaveBeenCalledWith(context,id,digest,c);
+ await app().statements(id);expect(statements).toHaveBeenCalledWith(context,id,digest);
+ const sid=randomUUID();await app().downloadStatement(id,sid);expect(downloadStatement).toHaveBeenCalledWith(context,id,digest,sid);
+ vi.clearAllMocks();job.mockRejectedValue(new PracticeAccessError("NOT_FOUND"));
+ await expect(app().issueStatement(id,body)).rejects.toThrow("NOT_FOUND");expect(body).not.toHaveBeenCalled();expect(issueStatement).not.toHaveBeenCalled();
+});
+it("statement reads, downloads and mutations reject production, tenant selection and unknown query keys",async()=>{
+ for(const mode of ["production","pilot_no_charge"]){
+  vi.stubEnv("JOBGUARD_ENV",mode);
+  await expect(app().statements(id)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
+  await expect(app().issueStatement(id,{})).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
+  await expect(app().downloadStatement(id,randomUUID())).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
+ }
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ await expect(app().statements(id,{tenantId:randomUUID()})).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");
+ const body=vi.fn();await expect(app().issueStatement(id,body,{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");expect(body).not.toHaveBeenCalled();
+ await expect(app().downloadStatement(id,randomUUID(),{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");
+ expect(statements).not.toHaveBeenCalled();expect(issueStatement).not.toHaveBeenCalled();expect(downloadStatement).not.toHaveBeenCalled();
 });

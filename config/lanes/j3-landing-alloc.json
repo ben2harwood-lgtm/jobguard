@@ -14,7 +14,9 @@
         "apps/web/app/api/jobs/[id]/receipt-case-allocations/route.test.ts",
         "packages/db/test/j3-landing-allocation.integration.test.ts",
         "packages/db/migrations/0413_j3_combined_invoice.sql",
-        "docs/contracts/lp-0-effective-privileges-v1.json"
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
