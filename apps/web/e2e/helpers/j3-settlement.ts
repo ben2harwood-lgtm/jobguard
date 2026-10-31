@@ -13,16 +13,35 @@ const nativeImport = <T>(path: string) => (new Function("specifier", "return imp
 
 /** Continue the SAME captured job. The normal command routes own every monetary
  * write; admin queries below only read the post-lock source identity and hash. */
-export async function settleJ3(page: Page, jobId: string, lockId: string, expectedRevision: number, catches: PricedCatch[], info: TestInfo) {
+export async function settleJ3(page: Page, jobId: string, lockId: string, catches: PricedCatch[], info: TestInfo) {
  const path = `/api/jobs/${jobId}`;
  const read = (suffix: string) => jsonResult(page.request.get(`${path}/${suffix}`), suffix);
  const post = (suffix: string, data: unknown) => jsonResult(page.request.post(`${path}/${suffix}`, { data }), suffix);
- const final = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision });
+ // Customer approval may advance the bill. Read its current revision after
+ // approval, assemble from that revision, then refresh the page's lock view.
+ const current = await read("final-account");
+ const assembled = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: current.account.revision });
+ const stale = await page.request.post(`${path}/final-account/lock`, { data: {
+  version: "lock-bound-invoice.issue.v1", commandId: randomUUID(), invoiceKind: "final",
+  finalAccountRevisionId: assembled.account.id, expectedSourceHash: "0".repeat(64),
+  recipient: "practice-customer@example.invalid", issuedOn: "2026-10-31",
+ } });
+ expect(stale.status()).toBe(409);
+ expect(await stale.json()).toEqual({ code: "STALE_REVISION" });
+ const final = await read("final-account/lock");
+ expect(final.lock.id).toBe(lockId);
+ expect(final.account.id).not.toBe(final.lock.finalAccountRevisionId);
+ expect(final.invoiceGuard).toBeNull();
+ expect(final.account.issueBlocked).toBe(false);
  expect(final.account.totals).toMatchObject({ net: { pence: 3440000 }, tax: { pence: 688000 }, total: { pence: 4128000 } });
- const issued = await post("customer-invoices", { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-31" });
+ // The legacy practice endpoint only accepts the original locked revision.
+ // Use 0413's checked combined-final path, as the existing J3 DB journey does.
+ const issue = { version: "lock-bound-invoice.issue.v1", commandId: randomUUID(), invoiceKind: "final", finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-31" };
+ const issued = await post("final-account/lock", issue);
+ expect(await post("final-account/lock", issue)).toEqual(issued);
  expect(issued.invoices).toHaveLength(1);
  const invoice = issued.invoices[0];
- expect(invoice).toMatchObject({ netPence: 3440000, totalPence: 4128000, balancePence: 4128000 });
+ expect(invoice).toMatchObject({ finalAccountRevisionId: final.account.id, sourceHash: final.account.sourceHash, netPence: 3440000, totalPence: 4128000, balancePence: 4128000 });
  const receiptPath = `customer-invoices/${invoice.id}/receipts`;
  const recorded = await post(receiptPath, { version: "practice-customer-receipt.record.v1", commandId: randomUUID(), invoiceId: invoice.id, paidOn: "2026-10-31", amountPence: 4128000, method: "bank_transfer", reference: "Fictional receipt-41280" });
  expect(recorded.receipts).toHaveLength(1);

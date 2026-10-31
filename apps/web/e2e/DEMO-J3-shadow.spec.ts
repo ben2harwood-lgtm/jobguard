@@ -123,7 +123,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  expect(approvedReport.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] });
  // Legs 7–9: one combined invoice, matched settled receipt, exact source-backed
  // allocations, SV-6 reviews, MON-4A statement and CH-8 offline-verified packs.
- const settled = await settleJ3(page, jobId, reveal.lockId!, final.account.revision, catches, testInfo);
+ const settled = await settleJ3(page, jobId, reveal.lockId!, catches, testInfo);
  const report = await read("shadow-demo");
  expect(report.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] });
  expect(report.account.lock).toEqual(locked.account.lock);
