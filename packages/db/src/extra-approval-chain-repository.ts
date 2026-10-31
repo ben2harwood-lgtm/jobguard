@@ -78,6 +78,7 @@ export class ExtraApprovalRepository {
     const member = this.checkActor(context, actor), tenant = lc(context.tenantId), requestHash = sha256Hex(canonicalJson({ type, actor: member, content }));
     try {
       return await withTenant(this.pool, context, async db => {
+        if (type !== "RevokeClientApproval") await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]);
         const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
           VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, requestHash, member]);
         if (!inserted.rowCount) {
@@ -159,7 +160,7 @@ export class ExtraApprovalRepository {
       const command: ConsequentialCommand = { version: "command.v1", commandId: i.commandId, commandType: "IssueClientApproval", semanticKey: `extra-client-approval:${i.requestId}:${i.commandId}`, actorMembershipId: member, subjectType: "extra", subjectRef: request.variation_id,
         action: { actionType: "extra.client_approval_request.send", recipient: i.recipient, contentHash, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", expiresAt: i.expiresAt } };
       const handler: CommandMutation<Result> = {
-        lock: async db => { await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
+        lock: async db => { await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [member]); await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, i.jobId]); },
         mutate: async (db, c) => {
           await appendOutboundAction(db, tenant, { version: "outbound-action.v1", id: outboxId, authorizationId: c.authorizationId!, adapter: "fake_email", providerEffectKey: `extra-client-link:${linkId}`, actionType: c.action.actionType, recipient: i.recipient,
             contentHash, immutableContent: content, aggregateRevision: request.request_revision, amountPence: net, currency: "GBP", policyVersion: "extra-client-approval-send.v1", authorizationExpiresAt: i.expiresAt });

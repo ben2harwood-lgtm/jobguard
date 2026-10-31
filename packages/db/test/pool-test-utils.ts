@@ -35,6 +35,27 @@ export async function closeTestPools(...pools: Array<Pool | undefined>): Promise
  * explicit fictional party recipe as fixture setup, before their live/document
  * commands. CH-3a's own missing-details tests never install this trigger. */
 export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<void> {
+  // Earlier-schema upgrade fixtures execute current repository source. Supply the
+  // pre-MON-8 gate only for that fixture baseline, before 0352 exists. 0352 replaces
+  // these exact signatures; current-schema entitlement tests never use this shim.
+  const mon8FixtureSchema = (await admin.query("SELECT to_regprocedure('app.mon8_feature_decision(uuid,text,text)') present, NOT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0408_server_plan_entitlements.sql') legacy")).rows[0];
+  if (mon8FixtureSchema.legacy && !mon8FixtureSchema.present) {
+    await admin.query(`CREATE FUNCTION app.mon8_feature_decision(actor uuid,feature text,purpose text DEFAULT 'new_work') RETURNS jsonb
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+      DECLARE eligible boolean; BEGIN
+       eligible:=coalesce(app.contractor_member_active(actor),false);
+       RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+        'entitlement',CASE WHEN eligible THEN 'included' ELSE 'excluded' END,'executable',eligible,
+        'reason',CASE WHEN eligible THEN 'available' ELSE 'track_forbidden' END);
+      END $$;
+      CREATE FUNCTION app.mon8_require_feature(actor uuid,feature text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
+       IF NOT (app.mon8_feature_decision(actor,feature)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+      END $$;
+      REVOKE ALL ON FUNCTION app.mon8_feature_decision(uuid,text,text), app.mon8_require_feature(uuid,text) FROM PUBLIC;
+      GRANT EXECUTE ON FUNCTION app.mon8_feature_decision(uuid,text,text), app.mon8_require_feature(uuid,text) TO jobguard_runtime;
+      ALTER FUNCTION app.mon8_feature_decision(uuid,text,text) OWNER TO jobguard_migration;
+      ALTER FUNCTION app.mon8_require_feature(uuid,text) OWNER TO jobguard_migration;`);
+  }
   await admin.query(`CREATE OR REPLACE FUNCTION app.test_fixture_job_parties() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
   DECLARE c uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();s uuid:=gen_random_uuid();sr uuid:=gen_random_uuid();b uuid:=gen_random_uuid();BEGIN
    -- Controlled v1 (draft) and v3 (invoiced) adoption bind their own supplied parties.

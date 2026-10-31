@@ -43,6 +43,6 @@ it("retained reads grant no write capability",async()=>{
  const f=await startSession(c);await track(c,f);await unchanged(c,async()=>{
   await read(c,f);await expect(raw(c,f.p.tenantId,f.session,{...query(f),kind:"grant.create"})).rejects.toThrow("INVALID_COMMAND");
   for(const sql of ["INSERT INTO app.role_grant DEFAULT VALUES","UPDATE app.role_grant SET role='owner'","DELETE FROM app.role_grant","TRUNCATE app.role_grant"]){await expect(c.runtime.query(sql)).rejects.toMatchObject({code:"42501"});}
-  const client=await c.runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);expect((await client.query("SELECT app.contractor_allowed($1,'organisation.manage',$2) allowed",[f.p.membershipId,f.p.tenantId])).rows[0].allowed).toBe(false);}finally{await client.query("ROLLBACK");client.release();}
+  const client=await c.runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);expect((await client.query("SELECT app.contractor_allowed($1,'organisation.manage',$2) AND (app.mon8_feature_decision($1,'operative_roles')->>'executable')::boolean allowed",[f.p.membershipId,f.p.tenantId])).rows[0].allowed).toBe(false);}finally{await client.query("ROLLBACK");client.release();}
  });
 });

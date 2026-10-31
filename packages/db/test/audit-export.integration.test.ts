@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -187,7 +188,7 @@ beforeAll(async () => {
   contractor = new ContractorRepository(runtime); repo = new AuditExportRepository(runtime);
 }, 120000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
-async function setup() { const session = randomUUID(), p = await contractor.startPractice(session); return { session, p }; }
+async function setup() { const session = randomUUID(), p = await contractor.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); return { session, p }; }
 async function checkpoint(p: AuthenticatedMembership) {
   // Existing restricted path: exportAuditCheckpoints creates records using assurance credentials, not runtime.
   // It covers all tenants, but only this tenant's record is handed to its export.

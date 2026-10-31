@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant, migrate } from "../src/index.js";
@@ -53,6 +54,7 @@ it("upgrades populated fee books without changing journals, receipts, audit or f
   await applyMigration(c, migration); await migrate(c.admin); await migrate(c.admin);
   expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
   expect(await metadata()).toEqual(security);
+  await seedActiveContractorAgreement(c.admin,t.w.w.p.tenantId);
   expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ replayed: true, journals: 1 });
 });
 

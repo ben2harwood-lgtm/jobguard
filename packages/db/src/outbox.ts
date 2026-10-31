@@ -1,3 +1,4 @@
+import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -52,7 +53,7 @@ export class ActionExecutor {
     let refusal: OutboxRevocationRefusal | undefined;
     await withTenant(this.pool, context, async db => {
       await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, [context.tenantId]);
-      const r = (await db.$client.query<any>(`SELECT o.* FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND (m.role='owner' OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
+      const r = (await db.$client.query<any>(`SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND (m.role='owner' OR (m.role='finance' AND o.action_type='customer_portal.signin.send' AND o.adapter='fake_email' AND o.policy_version='customer-signin.synthetic.v1' AND o.recipient ~ '^[^@[:space:]]+@[^@[:space:]]+\\.invalid$' AND o.amount_pence IS NULL AND o.currency IS NULL)) AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
       if (!r) { refusal = await cancelRevokedAction(db, id, [...this.adapters.keys()]); return; }
       if (!this.adapters.has(r.adapter)) return;
       if (r.status === "executing" && new Date(r.claimed_at).getTime() < Date.now() - 300_000) {
@@ -66,6 +67,13 @@ export class ActionExecutor {
       if (new Date(r.authorization_expires_at) <= new Date()) {
         await db.$client.query(`UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1`, [id]);
         await auditOutcome(db, id, "cancelled", { reason: "authorization_expired" });
+        return;
+      }
+      // MON-8: eligibility is current at the claim, not inherited from an earlier approval.
+      // Contractor checks use the tenant lock already held here; no subscription/business lock is added.
+      if (r.action_type === "extra.client_approval_request.send" && !(await serverEntitlement(db, r.authorization_actor, "approval_chains")).executable) {
+        await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE id=$1", [id]);
+        await auditOutcome(db, id, "cancelled", { reason: "entitlement_lost" });
         return;
       }
       action = rowToAction(r);

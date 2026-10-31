@@ -45,9 +45,9 @@ const photoRefusal: EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED", reason: "pho
 type Gate = { raise: { evidenceId?: string; residentConfirmationEvidenceId?: string }; evidence?: EvidenceFacts };
 export class SiteExtraRepository {
  constructor(private readonly pool: Pool) {}
- private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string): Promise<Authority> {
+ private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, retained = false): Promise<Authority> {
   return withTenant(this.pool, context, async db => {
-   try { await assertContractorGate(db, actor, "member"); } catch (error) {
+   try { await assertContractorGate(db, actor, retained ? "retained_member" : "member", "site_origin_capture"); } catch (error) {
     if (error instanceof WorkOrderError && error.code === "TRACK_FORBIDDEN") return { code: "TRACK_FORBIDDEN", reason: "track_not_contractor" };
     if (error instanceof WorkOrderError && error.code === "NOT_FOUND") return { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
     throw error;
@@ -201,11 +201,11 @@ export class SiteExtraRepository {
  }
 
  // ---- ENT-3c additions (append-only): the order check, the server-priced log and the two site reads. Authority first, through the private pre-check; nothing below restates the access rule. ----
- private async sorAuthority(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string): Promise<{ grant: string; live: boolean } | Refusal> {
+ private async sorAuthority(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, retained = false): Promise<{ grant: string; live: boolean } | Refusal> {
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) return { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
-   const authority = await this.precheck(context, actor, jobId);
+   const authority = await this.precheck(context, actor, jobId, undefined, retained);
    return "code" in authority ? authority : { grant: authority.grant, live: true };
   } catch (error) {
    if (error instanceof InvalidTenantContextError) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
@@ -288,7 +288,7 @@ export class SiteExtraRepository {
  async sorItems(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, rawQuery: unknown): Promise<{ sorVersionId: string; items: Array<{ code: string; description: string; unit: string }>; truncated: boolean }> {
   const query = parseSorItemsQuery(rawQuery);
   if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
-  const authority = await this.sorAuthority(context, actor, jobId);
+  const authority = await this.sorAuthority(context, actor, jobId, true);
   if ("code" in authority) throw new SorSiteExtraError(authority.code);
   const tenant = context.tenantId.toLowerCase();
   return withTenant(this.pool, context, async db => {
@@ -301,7 +301,7 @@ export class SiteExtraRepository {
  async orderCheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, rawQuery: unknown): Promise<SiteOrderCheck["orderCheck"]> {
   const query = parseOrderCheckQuery(rawQuery);
   if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new SorSiteExtraError("NOT_FOUND");
-  const authority = await this.sorAuthority(context, actor, jobId);
+  const authority = await this.sorAuthority(context, actor, jobId, true);
   if ("code" in authority) throw new SorSiteExtraError(authority.code);
   const tenant = context.tenantId.toLowerCase();
   return withTenant(this.pool, context, async db => {

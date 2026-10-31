@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -27,7 +28,7 @@ async function member(p: AuthenticatedMembership, role: string, scope: { kind: s
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
   return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
 }
-async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
+async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
 const counts = async (tenantId: string, tables = [...ENT2_TABLES, ...SPINE_TABLES]) => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
 const importOf = (p: AuthenticatedMembership, csv: string, name = "test.csv", commandId: string = randomUUID()) => orders.importCsv(p, { commandId, name, kind: "csv", csv });
 const row1 = (demo: WorkOrderDemo, n: number, overrides: Record<string, unknown> = {}) => demoRow(demo, n, overrides);
@@ -351,8 +352,10 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     // The routine bound the order exactly once, with the order's own identity.
     expect((await admin.query("SELECT count(*)::int n FROM app.contractor_party_binding WHERE work_order_id=$1", [complete.rows[0]!.workOrderId])).rows[0].n).toBe(1);
   });
-  it("refuses an import for a small-builder-track tenant with the typed TRACK_FORBIDDEN, for both the order and the SoR import (Q5)", async () => {
+  it("refuses new order and SoR imports after track loss while retaining historical reads (Q5)", async () => {
     const { p, demo } = await org(); const csv = demoFile([row1(demo, 1)]);
+    const saved = await importOf(p, csv), workOrderId = saved.rows[0]!.workOrderId!;
+    const retained = { overview: await orders.overview(p), batch: await orders.batch(p, saved.batchId), revisions: await orders.revisions(p, workOrderId) };
     const before = await counts(p.tenantId);
     await withTenant(admin, testTenantContext(p.tenantId), async db => {
       const assignment = randomUUID();
@@ -362,7 +365,9 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     });
     await expect(importOf(p, csv)).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
     await expect(rates.importVersion(p, { version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId: randomUUID(), reference: "Fictional small builder", effectiveFrom: "2026-02-01", items: [{ code: "X", description: "x", unit: "each", rate: { pence: 1, currency: "GBP" } }] })).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
-    await expect(orders.overview(p)).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
+    expect(await orders.overview(p)).toEqual(retained.overview);
+    expect(await orders.batch(p, saved.batchId)).toEqual(retained.batch);
+    expect(await orders.revisions(p, workOrderId)).toEqual(retained.revisions);
     expect({ ...(await counts(p.tenantId)), audit_event: 0 }).toEqual({ ...before, audit_event: 0 });
   });
 });

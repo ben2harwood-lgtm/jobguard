@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { evaluateExtraApprovalRequirement } from "@jobguard/core";
-import { ExtraApprovalRepository, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
+import { ExtraApprovalRepository, ActionExecutor, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
 import { chainWorld, cluster, chain, command, reviseRules, submitted, approveInput, newToken, emailOf, newJob, raiseOn, sleep, demoRules, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
 
 let c: Cluster, w: ChainWorld, ctx: VerifiedTenantContext, repo: ExtraApprovalRepository;
@@ -273,3 +273,25 @@ it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and th
   expect(await code(price(surveyor(), 80000))).toBe("INVALID_TRANSITION"); // decided: only ReviseExtra
   expect(await chain(c, w)).toBeTruthy();
 }, 120_000);
+
+it("MON-8 a queued approval message is cancelled after agreement loss without an adapter call", async () => {
+  const other=await chainWorld(c), context=await other.ctx, repository=new ExtraApprovalRepository(c.runtime);
+  const s=await submitted(c,other,150000);
+  await repository.approveExtraStep(context,other.members.supervisor.member,approveInput(s,0));
+  await repository.approveExtraStep(context,other.supervisor2.member,approveInput(s,1));
+  const token=newToken(),recipient=await emailOf(c,other,other.members.client_approver.member.membershipId);
+  const sent=await repository.issueClientApproval(context,other.members.owner.member,{version:"issue-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,requestId:s.requestId,
+    approverMembershipId:other.members.client_approver.member.membershipId,recipient,linkToken:token,expiresAt:new Date(Date.now()+3600_000)});
+  await c.admin.query(`INSERT INTO app.contractor_agreement_status_revision
+    SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,clock_timestamp(),$3
+    FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1`,[other.p.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
+  const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional"}));
+  const adapter={name:"fake_email" as const,supportsProviderDeduplication:true,deliver,reconcile:async()=>"unknown" as const};
+  const executor=new ActionExecutor(c.runtime,new Map([["fake_email",adapter]]),{emit:vi.fn()});
+  await executor.execute(context,sent.outboxActionId as string);await executor.execute(context,sent.outboxActionId as string);
+  expect(deliver).not.toHaveBeenCalled();
+  expect((await sql("SELECT status FROM app.action_outbox WHERE id=$1",[sent.outboxActionId]))[0].status).toBe("cancelled");
+  expect(await sql("SELECT 1 FROM app.action_attempt WHERE action_id=$1",[sent.outboxActionId])).toEqual([]);
+  // Security revocation remains available even while new approval work is refused.
+  await repository.revokeClientApproval(context,other.members.owner.member,{version:"revoke-client-approval.v1",commandId:randomUUID(),jobId:s.jobId,linkId:sent.linkId});
+});

@@ -1,6 +1,7 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool, type PoolClient } from "pg";
 import { ContractorRepository, ExtraRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
@@ -11,6 +12,7 @@ import { createWorkspaceApplication } from "../workspace/application.js";
 const body = () => ({ version: "log-site-extra.v1", commandId: crypto.randomUUID(), note: "Fictional note", description: "Fictional extra" });
 const authorityFields = ["commandType", "actorMembershipId", "membershipId", "grantId", "tenantId", "requested_tenant_id", "role", "raisingRole", "origin", "kind", "jobTrack", "track", "serverRecordedAt", "time", "state", "raiserAssigned", "workOrderId", "workOrderRevisionId", "originHash", "environment", "provenance"];
 const member = () => ({ tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() }) as AuthenticatedMembership;
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("ENT-3a service and Nest boundary", () => {
  it("[A8] passes the identical session membership object and exactly four input fields", async () => {
@@ -83,7 +85,11 @@ describe("ENT-3a service and Nest boundary", () => {
   const raise = vi.spyOn(ExtraRepository.prototype, "raiseExtra");
   // Model the gate's absent active-membership row for either revocation or expiry.
   // An existing refusal audit models a retry; real PostgreSQL revocation coverage remains mandatory in CI.
-  const query = vi.fn(async (sql: string) => ({ rows: [], rowCount: sql.startsWith("SELECT 1 FROM app.audit_event") ? 1 : 0 }));
+  const query = vi.fn(async (sql: string) => ({
+   // Eligibility is positive so this test still reaches the independent active-member gate.
+   rows: sql.includes("app.mon8_feature_decision") ? [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "site_origin_capture", entitlement: "included", executable: true, reason: "available" } }] : [],
+   rowCount: sql.startsWith("SELECT 1 FROM app.audit_event") ? 1 : 0,
+  }));
   const release = vi.fn(), connect = vi.spyOn(pool, "connect").mockImplementation(async () => ({ query, release }) as unknown as PoolClient);
   const failure = await new SiteExtraApplication(pool).log({ version: "contractor-principal.v1", sessionId }, crypto.randomUUID(), body()).then(() => undefined, siteExtraHttpFailure);
   expect(failure).toEqual({ status: 403, body: { version: "site-extra-error.v1", code: "EXTRA_FORBIDDEN" } });

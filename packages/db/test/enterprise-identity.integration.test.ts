@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 /** ENT-10a actual PostgreSQL acceptance. NOT RUN in the builder sandbox: it cannot start PostgreSQL. */
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -55,6 +56,7 @@ afterAll(async () => { await closeTestPools(identity, runtime, admin); await pos
 async function fixture(idp = generateTestIdentityProvider()) {
   const contractor = new ContractorRepository(runtime);
   const principal = await contractor.startPractice(randomUUID());
+  await seedActiveContractorAgreement(admin,principal.tenantId);
   const sessionToken = randomUUID(), csrfToken = randomUUID(), sessionId = randomUUID();
   const auth = provider();
   const address = `${randomUUID()}@synthetic.invalid`;
@@ -243,7 +245,7 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
       expect(await count("app.membership", f.principal.tenantId)).toBe(members);
       expect(await count("identity.sso_subject", f.principal.tenantId)).toBe(0);
     }
-    await expect(f.signin({ confirmationMethod: undefined })).resolves.toHaveProperty("sessionToken");
+    await expect(f.signin({ confirmationMethod: undefined } as unknown as Partial<TestResponseOptions>)).resolves.toHaveProperty("sessionToken");
   });
   it("refuses every unsolicited response and a solicited A response on B's callback", async () => {
     const sharedIdp = generateTestIdentityProvider(), a = await fixture(sharedIdp), b = await fixture(sharedIdp); await a.verify(); await b.verify(); await a.mapping(); await b.mapping();
@@ -465,5 +467,43 @@ describe("ENT-10a / explicitly linked multi-tenant identity regression", () => {
     // Linking did not restrict the separately issued entered-code session.
     expect((await identityApp.session(ordinary.sessionToken)).memberships).toHaveLength(2);
     await expect(invite(b.principal.tenantId,{...ordinary,tenantHeader:b.principal.tenantId})).resolves.toHaveProperty("id");
+  });
+});
+
+
+describe("MON-8 SSO after agreement suspension", () => {
+  async function suspend(tenant: string) {
+    const db = await admin.connect();
+    try {
+      await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))",[tenant]);
+      await db.query(`INSERT INTO app.contractor_agreement_status_revision
+        SELECT tenant_id,$2,assignment_id,2,'suspended',schema_version,environment,clock_timestamp(),$3
+        FROM app.contractor_agreement_status_revision WHERE tenant_id=$1`,[tenant,randomUUID(),`fictional-fixture:${randomUUID()}`]);
+      await db.query("COMMIT");
+    } catch(error) { await db.query("ROLLBACK");throw error; } finally { db.release(); }
+  }
+  it("retains a linked user's existing scopes without adding grants, and refuses new JIT members", async () => {
+    const f = await fixture();await f.verify();await f.mapping();
+    const subject = randomUUID();
+    await f.signin({subject});
+    const grants = await count("app.role_grant",f.principal.tenantId);
+    await suspend(f.principal.tenantId);
+    const retained = await f.signin({subject});
+    expect(await count("app.role_grant",f.principal.tenantId)).toBe(grants);
+    expect(await permitted(await sessionMember(retained.sessionToken,f.principal.tenantId),"job.read")).toBe(true);
+    const members = await count("app.membership",f.principal.tenantId);
+    await expect(f.signin({email:`new@${f.domain}`})).rejects.toMatchObject({code:"SSO_FORBIDDEN"});
+    expect(await count("app.membership",f.principal.tenantId)).toBe(members);
+    await expect(f.mapping("finance",true,1)).rejects.toMatchObject({code:"SSO_FORBIDDEN"});
+  });
+  it("still revokes scopes removed by current IdP claims after suspension", async () => {
+    const f = await fixture();await f.verify();await f.mapping();const subject=randomUUID();
+    const first=await f.signin({subject});await suspend(f.principal.tenantId);
+    await expect(f.signin({subject,groups:[]})).rejects.toMatchObject({code:"NO_MAPPED_GRANTS"});
+    expect(await provider().authenticate(first.sessionToken)).toBeUndefined();
+    expect((await admin.query(`SELECT count(*)::int n FROM app.role_grant g
+      JOIN app.role_grant_revocation r ON(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)
+      WHERE g.tenant_id=$1 AND g.role='read_only'`,[f.principal.tenantId])).rows[0].n).toBeGreaterThan(0);
   });
 });

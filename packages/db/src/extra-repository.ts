@@ -66,20 +66,21 @@ export class ExtraRepository {
    const tenant = context.tenantId.toLowerCase();
    // Match revision/revocation order: tenant administration before job locks and origin foreign keys.
    await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
+   await db.$client.query("SELECT app.mon8_require_feature($1,'site_origin_capture')", [input.actorMembershipId]);
    await lockJob(db, tenant, input.jobId);
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");
    const variationId = derivedUuid(`extra:${tenant}:${input.jobId}:${input.clientCaptureId ?? input.commandId}`);
    // Capture retries bind their own command receipt without creating another origin.
    if (input.clientCaptureId) {
-    const prior = (await db.$client.query("SELECT c.request_hash,c.status,c.result FROM app.extra_origin o JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.client_capture_id=$3", [tenant, input.jobId, input.clientCaptureId])).rows[0];
+    const prior = (await db.$client.query("SELECT c.request_hash,c.status,o.variation_id FROM app.extra_origin o JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.client_capture_id=$3 AND c.command_type IN ('LogSiteExtra','ConfirmPrompt','RecordOfficeExtra','RecordClientInstruction')", [tenant, input.jobId, input.clientCaptureId])).rows[0];
     if (prior) {
      if (prior.request_hash !== requestHash || prior.status !== "succeeded") throw new ExtraPersistenceError("COMMAND_CONFLICT");
      // The original semantic key is unique. A retry uses the same receipt type,
      // with a command-specific key, and permanently binds this ID/hash/result.
      const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin-retry:${input.jobId}:${variationId}:${input.commandId}`, requestHash, input.actorMembershipId);
      if (replay) return replay;
-     const result = prior.result as RaisedExtra;
+     const result: RaisedExtra = { variationId: prior.variation_id };
      await complete(db, tenant, input.commandId, result); return result;
     }
    }

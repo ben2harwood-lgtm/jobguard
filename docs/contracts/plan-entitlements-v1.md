@@ -90,3 +90,85 @@ API port are deliberately unchanged. A is not their full adapter or enforcement.
 Migration 0193 adds only A's objects, no backfill or commercial effects. B owns
 command integration and permission-preserving historical readers; C owns merged
 subscription lifecycle composition and preservation evidence. MON-8 stays open.
+
+
+## 28 October — MON-8 persisted enforcement (0352/0353, RED)
+
+The historical port holds above are superseded for persisted subscription terms
+and contractor command enforcement by `app.mon8_feature_decision(uuid,text,text)`.
+`packages/db/src/plan-entitlement-service.ts` is its transaction-only server port;
+`companyPlanEntitlements` binds the existing normal-company identity bridge to
+`app.mon8_company_feature(text,text,uuid)`. The latter re-authenticates the stored
+session after lock contention and checks an optional job within that company.
+There is no new public feature-flag endpoint and no new normal-company commercial
+route enablement. Existing pure facts/evaluators remain compatibility/domain APIs,
+not grants accepted by the controlled writers.
+
+The service accepts only the existing eleven features. For new contractor work,
+only the latest company assignment and its latest **bound active status** qualify.
+Neither Solo nor Builder, a trial, payment result or client flag grants those
+capabilities. Missing/suspended/inactive status refuses, including before replay
+returns. Operative grants and email invitation issue/acceptance, work-order/batch/rate/party writes, site-origin and
+visit writes, approval-chain decisions and SSO administration/provisioning call
+the service in their existing guarded paths. Existing resource permissions, actor
+checks, lineage, exact commercial approval and tenant-qualified references remain
+mandatory. Queued client-approval messages recheck at execution claim: loss of
+entitlement cancels pending work without an adapter call or a delivery attempt.
+Unknown/executing outcomes retain their existing reconciliation rules.
+
+For small builders, effective subscription revisions are selected by the current
+server London date; a pending change is not an effective plan. Solo and Builder
+have identical feature decisions. No invoice, simulation result or payment failure
+is interpreted as changing the plan. Missing persisted free-first-job authority
+and missing effective terms refuse new work. Pay-now and **new** accounting exports
+remain disabled pending their owning readiness paths. The existing application
+authentication guard still refuses normal-company commercial routes outside its
+explicit subscription allowlist; this change does not bypass that gate.
+
+Retained reads/exports use `retained_read`: membership, expiry, revocation and the
+reader's existing role/resource/export permissions apply, while commercial status
+and track no longer filter historical records. `contractor_member_active` now
+expresses membership only. Existing SSO-linked identities can sign in after loss
+without adding grants; only existing scopes matching current IdP claims survive,
+and removed claims still revoke grants/sessions. New JIT/linking and mapping/config
+changes require active agreement. Grant/member/link revocation and disabling SSO
+required mode remain available under their original security permissions.
+
+Lock order is organisation/status (54), then subscription/lifecycle (184) when
+reading small-builder new-work terms, then existing business locks, then audit.
+Contractor and retained checks do not acquire a subscription lock. Status inserts
+now mechanically take the same exclusive tenant lock. READ COMMITTED and fresh
+post-wait reads are required. Results are never cached permits, and the usual
+verified-tenant context trust boundary still applies: this is not protection from
+a compromised privileged database owner. No runtime status writer, status backfill,
+provider, fee derivation or historical-data mutation is introduced.
+
+The existing builder receipt records actual local checks and the new real-PG
+CI suites. PostgreSQL, browser execution and independent Claude review remain
+separate evidence; source inspection and unit query doubles do not supply them.
+
+## 29 October — combined MON-8 catch-up (0378/0379, RED)
+
+The branch migrations are reserved as `0408_server_plan_entitlements.sql` and
+`0409_contractor_feature_guards.sql`. The practice-worker decision retains the
+complete 0332 Northside finance-worker predicate, with the current contractor
+track/agreement check before worker selection. Missing status and an active
+status on an older assignment never grant current work.
+
+0379 also contains the operative branch's structural insert guards for membership,
+role grants, invitations and contractor site-origin evidence, including forged
+job-track values. Existing operative membership expiry/revocation updates bypass
+new-work eligibility. One agreement-status trigger body in 0378 retains insert-only
+immutability, the synthetic database boundary, an exclusive tenant lock (seed 54)
+and server timestamping; operative inserts take the matching shared lock before
+reading the latest assignment and status. Function owners and existing ACLs are
+preserved; the new private trigger/helper grants no callable runtime bypass.
+
+This supersedes `codex/sandbox/mon8-operative` / 0402; do not deliver its competing
+replacement independently. Its automatic active-agreement practice bootstrap is
+not imported: the existing owner-only fictional fixture supplies positive test
+facts, and legacy/current companies without explicit agreement status stay held.
+No historical rows are backfilled. On failure, revert the unshipped candidate;
+after installation use a reviewed forward migration preserving immutable facts.
+PostgreSQL upgrade, concurrency, retained-read and revocation assertions execute
+in CI, followed by one independent RED review of the resulting head.

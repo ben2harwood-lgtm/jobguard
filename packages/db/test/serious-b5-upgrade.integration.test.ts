@@ -376,6 +376,30 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   policies: additive(before.policies, [...policies, ...admission.policies, ...subscription.policies, ...livePrompt.policies, ...finalCheck.policies, ...billing.policies, ...receiptFacts.policies, ...baseline.policies, ...enterpriseFee.policies, ...enterpriseStatement.policies, ...enterprisePosting.policies, ...enterpriseReconciliation.policies], after.policies),
  };
 }
+// Exact 0378/0379 additions only; fixture compatibility routines already in the
+// predecessor remain compared, with their migration owner and grants unchanged.
+async function withMon8Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const identities=[
+  ["mon8_company_feature","digest text, feature text, job uuid",true],
+  ["mon8_retained_fee_actor","p_session uuid",false],
+  ["mon8_retained_baseline_actor","p_session uuid",true],
+  ["mon8_require_operative_agreement","t uuid",true],
+  ["mon8_operative_write_guard","",true],
+ ] as const;
+ const additions=after.routines.filter(r=>r.nspname==="app" && identities.some(([name,args])=>r.proname===name && r.args===args));
+ expect(additions).toHaveLength(identities.length);
+ const owner=(await f.admin.query("SELECT oid FROM pg_roles WHERE rolname='jobguard_migration'")).rows[0].oid;
+ for(const [name,args,definer] of identities) {
+  expect(before.routines.some(r=>r.nspname==="app" && r.proname===name && r.args===args)).toBe(false);
+  const row=additions.find(r=>r.proname===name && r.args===args)!;
+  expect(row).toMatchObject({proowner:owner,prosecdef:definer,proconfig:["search_path=pg_catalog"]});
+  const acl=(await f.admin.query("SELECT $1::aclitem[]::text[] acl",[row.proacl])).rows[0].acl;
+  expect(acl).toEqual(name==="mon8_company_feature" ? ["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"] : ["jobguard_migration=X/jobguard_migration"]);
+ }
+ const position=(r:typeof additions[number])=>after.routines.findIndex(x=>JSON.stringify(x)===JSON.stringify(r));
+ return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+}
 // Standing ruling 113: additive expectations for ENT-10-OIDC-B objects only.
 async function withOidcAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1128,6 +1152,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await demoRunAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
  Object.assign(expected, await withOidcAdditions(expected));
+ Object.assign(expected, await withMon8Additions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
  expect(await snapshot()).toEqual(expected);

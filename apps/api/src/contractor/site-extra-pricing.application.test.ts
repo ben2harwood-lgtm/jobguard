@@ -1,6 +1,7 @@
+import { ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool, type PoolClient } from "pg";
 import { ContractorRepository, ExtraRepository, SiteExtraRepository, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import { ExtraPersistenceError, SorSiteExtraError, sorSiteExtraErrorCodes, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1, siteOrderCheckV1, siteSorItemsV1 } from "@jobguard/core";
@@ -15,6 +16,7 @@ const member = () => ({ tenantId: uuid(), membershipId: uuid(), identityUserId: 
 const authorityFields = ["commandType", "actorMembershipId", "membershipId", "grantId", "tenantId", "requested_tenant_id", "role", "raisingRole", "origin", "kind", "jobTrack", "track", "serverRecordedAt", "time", "state", "raiserAssigned", "workOrderId", "workOrderRevisionId", "originHash", "environment", "provenance",
   "jobId", "sorItem", "sorVersionId", "excessOfScopeItemId", "unit", "rate", "ratePence", "unitRatePence", "adjustment", "net", "netPence", "price", "pricePence", "amount", "extraQuantity", "instructedQuantity", "outcome", "orderCheck", "coverage", "priceSource", "pricingBasis", "description", "revision", "revisionId", "contentHash", "requestHash", "siteVisitId"];
 const stored = (jobId: string) => ({ variationId: uuid(), jobId, coverage: "excess" as const, sorCode: "CLEAR-GUTTER", unit: "metre", claimedQuantity: "6", instructedQuantity: "4", extraQuantity: "2", orderLineScopeItemId: uuid(), priceSource: "server_sor", requestHash: "a".repeat(64), raisingMembershipId: uuid() });
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("ENT-3c service and Nest boundary", () => {

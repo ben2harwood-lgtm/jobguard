@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
@@ -26,8 +27,19 @@ async function newCase(type="withheld_customer_payment",target=job){
  await admin.query(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)`,[randomUUID(),T,target,id,type==="prevention"?"prevent":"opened",type==="prevention"?"prevented":"identified",randomUUID(),hash(id)]);return id;
 }
 async function member(role:string,state="active"){
+ // Create a historically valid operative, then restore the tenant's builder track.
+ // Its later recovery refusal must be a role check, not failed fixture admission.
+ const prior=role==="operative" ? (await admin.query("SELECT commercial_track FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[T])).rows[0]?.commercial_track ?? "small_builder" : null;
+ const assign=async(track:string)=>withTenant(admin,context,async db=>{
+  const revision=(await db.$client.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[T])).rows[0].revision;
+  const assignment=randomUUID();
+  await db.$client.query("SELECT app.assign_commercial_track($1,$2,$3,$4,$5,'operations:terms-fixture')",[T,assignment,track,`synthetic-agreement:${T}`,revision]);
+  const { appendAuditBatch } = await import("../src/index.js");
+  await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:terms-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:T,payload:{references:{environment:"synthetic_demo"}}}]);
+ });
+ if(prior!==null) { await assign("contractor"); await seedActiveContractorAgreement(admin,T); }
  const id=randomUUID(),identity=randomUUID();await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[identity]);
- await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]);return {membershipId:id,identityUserId:identity};
+ await withTenant(admin,context,db=>db.$client.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]));if(prior!==null)await assign(prior);return {membershipId:id,identityUserId:identity};
 }
 async function handMade(db:PoolClient,caseId:string,memberId:string,over:Record<string,unknown>={}){
  const c=randomUUID(),d=randomUUID(),r=randomUUID(),a=randomUUID(),action=over.action??"recovery.terms.approve";
@@ -66,10 +78,12 @@ async function supplierFixture(){
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-"));port=await freePort(58400,200);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ const control=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});
+ try { await control.query("CREATE DATABASE jobguard_synthetic_demo"); } finally { await control.end(); }
+ admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});await migrate(admin);
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
- runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres",max:4});
+ runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
  job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(admin,job);
  supplierRefs=await supplierFixture();
@@ -88,7 +102,7 @@ it("[T1] stores exact owner approval, one dispatcher authorization and two audit
  expect(view).toMatchObject({caseId:id,jobId:job,actorMembershipId:M,commandId:input.commandId,termsHash:recoveryCaseTermsHash(id),policyStatus:"proposed",environment:"synthetic_demo",realExternalActions:0});
  const stored=(await admin.query("SELECT * FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2",[T,view.id])).rows[0];expect(stored.terms_hash.trim()).toBe(view.termsHash);expect(stored.authorization_id).toBe(view.authorizationId);
  expect((await admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[T,input.commandId])).rows[0].status).toBe("succeeded");
- const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
+ const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
 });
 // membership.role is unconstrained varchar(40): test each known product role plus an arbitrary schema-valid value.
 it.each(["admin","estimator","foreman","operative","finance","read_only","supervisor","surveyor","commercial_manager","client_approver","member","arbitrary_schema_role"])("[T2] dispatcher refuses non-owner %s with zero writes",async role=>{

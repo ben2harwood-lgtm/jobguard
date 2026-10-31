@@ -1,3 +1,4 @@
+import { requireServerEntitlement } from "./plan-entitlement-service.js";
 import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -96,6 +97,7 @@ export class AuditExportRepository {
       AND g.role IN ('owner','admin') AND g.scope_kind='tenant' AND g.scope_id=$1 AND g.contract_id IS NULL
       AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE (r.tenant_id,r.grant_id)=(g.tenant_id,g.id))) allowed,
       EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3) AS "knownMember"`, [context.tenantId, actor.membershipId, actor.identityUserId])).rows[0]!;
+    if (allowed.allowed) await requireServerEntitlement(db, actor.membershipId, "accounting_export", "retained_read");
     // Never copy an unknown/foreign membership identity into this tenant's refusal chain.
     if (!allowed.allowed) await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: allowed.knownMember ? `membership:${actor.membershipId}` : "security:unverified-member", eventType: "audit.export.refused", subjectType: "audit-export", subjectRef: context.tenantId, payload: { references: { action }, classifications: { action: "security" } } }]);
     return allowed.allowed;
