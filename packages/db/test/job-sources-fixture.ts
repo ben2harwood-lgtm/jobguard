@@ -2,7 +2,7 @@ import {createHash,randomUUID} from "node:crypto";
 import { createWorkFixture,closeWorkFixture,seedWorkPractice,workTenant } from "./job-work-state-fixtures.js";
 import {JobSourceRepository} from "../src/job-source-repository.js";
 export {createWorkFixture,closeWorkFixture,workTenant};
-export async function sourcesFixture(){const f=await createWorkFixture(),practice=await seedWorkPractice(f);return {...f,practice,repository:new JobSourceRepository(f.runtime)}}
+export async function sourcesFixture(){const f=await createWorkFixture(true,"jobguard_synthetic_demo"),practice=await seedWorkPractice(f);return {...f,practice,repository:new JobSourceRepository(f.runtime)}}
 export type SourceFixture=Awaited<ReturnType<typeof sourcesFixture>>;
 /** Labelled migration-role fixture ONLY. No runtime source creation is authorized by this setup. */
 export async function seedSource(f:SourceFixture,kind:"diary"|"customer_message"="diary",text="Fitted outside tap.",fixtureRef:string|null="job-source:outside-tap.v1",entryMode:"typed"|"dictated_text"="typed"){
