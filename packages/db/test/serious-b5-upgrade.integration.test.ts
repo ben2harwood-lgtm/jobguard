@@ -1176,6 +1176,7 @@ async function mobileAuthStoreAdditions(before: Awaited<ReturnType<typeof snapsh
  const position = (r: typeof relations[number]) => after.relations.findIndex(a => a.nspname === r.nspname && a.relname === r.relname);
  return { ...before, rows: { ...before.rows, "identity.mobile_auth_fixture_state": [] },
   relations: [...before.relations, ...relations].sort((a,b) => position(a)-position(b)) };
+}
 // 0519 adds exactly two history tables, their primary indexes and three bounded routines.
 async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
