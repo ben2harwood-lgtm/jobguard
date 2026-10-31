@@ -146,9 +146,17 @@ BEGIN
   IF prior.command_type<>'commercial_integrity.review.v3' OR prior.status<>'succeeded' OR prior.actor_membership_id<>actor OR prior.semantic_key<>j::text||':'||cid::text OR prior.request_hash<>rh THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT'; END IF;
   RETURN prior.result;
  END IF;
- -- Synthetic-only conservative source locks: block inserts as well as changes to absence predicates.
- -- No new role/grants, no assumption that other writers cooperate with an advisory lock.
- LOCK TABLE app.job,app.job_activation,app.job_activation_terms,app.job_commercial_track,app.customer_invoice,app.customer_payment,app.final_account_lock IN SHARE MODE;
+ IF current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'INTEGRITY_RETRY_REQUIRED' USING ERRCODE='40001'; END IF;
+ -- Review saves fence existing source rows only; never queue a table-wide lock
+ -- against ordinary job, evidence or money writers. Revalidate absence facts
+ -- in a fresh statement snapshot after these waits, as in the successor writer.
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_activation WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_activation_terms WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j ORDER BY job_id FOR SHARE;
+ PERFORM 1 FROM app.customer_invoice WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.customer_payment WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
+ PERFORM 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j ORDER BY id FOR SHARE;
  PERFORM app.ch6_integrity_authority(t,j,digest);
  sh:=app.ch6_integrity_source_fingerprint(t,j,digest,source_snapshot);
  IF sh IS DISTINCT FROM review->>'findingSnapshotHash' OR source_snapshot->>'findingKey' IS DISTINCT FROM review->>'findingKey' THEN RAISE EXCEPTION 'INTEGRITY_SOURCE_CHANGED'; END IF;

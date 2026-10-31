@@ -1734,3 +1734,148 @@ Ready for router commit/push and GitHub CI. The two PostgreSQL integration
 suites cannot execute in this sandbox and were not claimed as passed. Required
 CI and independent exact-head RED review remain before merge. No browser
 journey, commit, push or release was performed here.
+
+## 31 October 2026 — CI repair round 2 investigation, NOT READY
+
+CH-6 / CH6-J, PR #392; RED. Started from clean HEAD da312a68 (router
+merged current main). Read current SIMPLE_LOOP, SIMPLICITY_RULE and the
+supplied trace file. No conflicts were present. No Git-writing command,
+fetch, migration edit or product/test change was made.
+
+The supplied ch6-j-ci-traces-1217.txt is only 18 bytes: two empty
+"=== job " headings. It contains no failing step, stack or assertion diff.
+Retrieved run 41193644400 job 124515574659 through the connected GitHub
+read-only log API. It confirms the five DEMO-A1-rest timeout names and
+DEMO-A1-scenarios:39, but failure-detail output never appears before the
+job is cancelled. The log also shows earlier fresh-job setup consumers
+failing: AUDIT-FIX-API-VARIATION (5 minutes), CH-2 (5 minutes), CH-3a
+(3 minutes), and CH-6 fresh-v3 (4 minutes). Saved-v1 CH-6, customer invoice,
+customer sign-in and decision inbox pass quickly. All four core-db shards
+succeeded in that run; this does not verify the browser paths.
+
+Queried artifacts for run 41182180487: only gitleaks-results.sarif was
+available, with no Playwright trace/report. The inspected latest web job
+lists failure-evidence upload as skipped. No screenshots or failing action
+stacks were available from those sources.
+
+Source findings (inspection, not runtime verification):
+- Both DEMO-A1 setup helpers reach fresh capture/review/confirmation through
+  openLiveWatchdogJob before evidence/lock/receipt work. Earlier failures
+  also use this fresh-job setup, so the supplied list alone does not locate
+  an evidence/lock write hang.
+- 0506's trigger on ordinary command_receipt INSERT/UPDATE/DELETE only
+  inspects OLD/NEW values and returns or refuses; it performs no query,
+  advisory lock or row/table lock. 0507's locking correction trigger runs
+  only for inserts to the private CH-6 correction table.
+- 0507 replaces the earlier table-locking review writer with row locking.
+  That writer is reached by an explicit advisory review POST, not by the
+  normal DEMO-A1 setup. The automatic family/source reads have no explicit
+  row/table lock statements. This does not exclude an expensive query,
+  unexpected invocation, pool starvation or other runtime failure.
+- Reviewed UI load/session hooks and the fresh-setup helpers; no
+  source-demonstrable infinite loop or confirmed lock cycle was found.
+
+No root cause has been established, so no speculative timeout, lazy-load,
+lock-removal, trigger or test-weakening patch was made. Migration-boundary
+repairs remain intact. All migration SQL bytes match HEAD and all main
+migration bytes match origin/main. The protected downstream-effects contract
+is unchanged. git diff --check and the no-unresolved-conflict check pass.
+The CASE expressions inside CH-6's review-validation IF conditions were
+already parenthesised and were left unchanged.
+
+DO NOT COMMIT as a repair. The router needs a runnable reproduction or the
+first timed-out Playwright action/trace plus relevant API/worker diagnostics
+(and database wait information if the action is waiting on a query). Run one
+DEMO-A1-rest test with <=2 workers in an environment that can start PostgreSQL
+and bind localhost; preserve its failure output before cancellation. This
+sandbox cannot execute that reproduction. No browser or PostgreSQL suite
+was run, and no passing repair, independent review or journey completion
+is claimed. The only workspace edit in this investigation is this receipt.
+
+## 31 October 2026 — CI repair round 3 of 3, lock-boundary patch
+
+CH-6 / CH6-J, PR #392; RED. Continued at router-merged HEAD b7e117d3.
+The pre-existing round-2 investigation entry above was preserved. This entry
+supersedes its no-patch handoff for the current candidate. Read current
+SIMPLE_LOOP, SIMPLICITY_RULE, AGENTS and CH-6 plan acceptance. The new trace
+file ch6-j-ci-traces-1240.txt again contains only two empty job headings;
+there is no additional stack trace. No unresolved merge conflicts or
+Git-writing commands; no fetch, commit or push.
+
+Failures addressed by the common lock-boundary patch: DEMO-A1-rest's
+late evidence, disputed attribution, unpaid catches, partial/duplicate receipts
+and lost-reply receipt paths, and DEMO-A1-scenarios' no-proof path. Previous
+GitHub log inspection also found fresh-job setup timeouts in CH-1/2/3a/4/7.
+The router diagnosed a convoy. The exact browser-blocking statement has NOT
+been reproduced in this sandbox, and the patch is not a claim that the
+reported browser failures now pass. Full PostgreSQL and browser CI must
+establish that at this final repair head; a further red result goes to a
+person-level blocker, not another automatic repair round.
+
+Changes:
+- 0506 SQL CHANGED, numbering retained. Replace its intermediate writer's
+  table-wide SHARE lock on seven commercial tables with tenant/job-qualified
+  source row locks in the same order used by 0507, require READ COMMITTED,
+  and revalidate source/absence facts after waits. Session/membership fencing,
+  command serialization, replay, receipt-before-audit and authority rechecks
+  remain. 0507 already used CREATE OR REPLACE for the same signature, so it
+  replaces 0506; the older body can no longer acquire table locks either.
+- 0507 SQL CHANGED, numbering retained. The private correction guard no longer
+  takes FOR UPDATE on app.job. It serializes correction mappings under a
+  CH-6-only tenant/job advisory transaction lock (hash seed 628). Every competing
+  mapping for a job still shares a lock; READ COMMITTED conservation checks run
+  after the wait. Credit/line limits, duplicate handling, immutable source
+  permissions and provenance checks remain. Ordinary commercial writers do not
+  acquire this private lock. Existing concurrent correction conservation tests
+  and review-race tests remain unchanged for CI.
+- Standalone readFamily/read methods execute SET TRANSACTION READ ONLY before
+  authority/source reads. This enforces the no-writer-lock/no-write GET boundary
+  in PostgreSQL, including nested helpers. Review saves keep their write
+  transaction and ordered row fencing. Ordinary PostgreSQL AccessShare locks
+  required by SELECT are not described as absent. Inspected authority/family
+  source routines already contained no unconditional explicit row locks;
+  the database read-only boundary prevents a future nested locking read from
+  silently joining a writer convoy.
+- Added a real PostgreSQL concurrent read/write test to the existing isolation
+  suite. It holds session/membership/job rows in a writer, launches three actual
+  repository GETs on separate runtime connections, and holds their transactions
+  at a commit barrier. While readers remain open it updates the same session
+  and job and inserts another fictional job. It requires no Lock wait_event
+  and no pending/tuple/transaction-id or writer relation lock in pg_locks for
+  the readers. Commit barriers make the overlap deterministic; test-only lock
+  and statement deadlines bound failures. No production coordination helper.
+- Added executing local regressions for both GET transaction boundaries,
+  rollback/release on failure and absence of table/commercial-job locks in
+  the branch migrations. Updated existing migration notes. No exceptions added.
+
+Preservation: every migration on origin/main remains byte-identical; only the
+branch-owned 0506/0507 SQL changed. LP-0 remains the exact identity union with
+latest main records unchanged; no grants, routine signatures or catalogue
+identities changed. The protected lp-downstream-effects-v1.md and both earlier
+migration-boundary test repairs are unchanged against HEAD. Own lane scope now
+matches the 56 net branch paths: the two boundary-test paths no longer differ
+from main, so their stale own-lane entries were removed without editing the
+tests. No other lane file changed. Existing CASE expressions inside validation
+IF conditions are already parenthesised and remain so.
+
+Checks actually executed using installed Node 24.17.0 / Vitest 4.1.12:
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 8 tests including the two new regressions.
+- packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS.
+- packages/db: ./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext --experimentalDecorators --emitDecoratorMetadata --esModuleInterop test/commercial-integrity-v3-query-isolation.integration.test.ts test/commercial-integrity-v3-input.test.ts — PASS, semantic typecheck of both edited test files and imports.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- packages/db: ./node_modules/.bin/vitest list --maxWorkers=2 test/commercial-integrity-v3-query-isolation.integration.test.ts — PASS, new concurrency test collected by the actual runner. Collection is NOT PostgreSQL execution.
+- Deterministic LP-0 exact union/latest-main comparison, main migration bytes,
+  protected contract, boundary-test bytes, exact lane and conflict checks — PASS.
+  The initial lane check identified the two now-main-owned paths; the exact
+  scope check passed after correcting this lane's stale entries.
+- git diff --check — PASS.
+
+An initial unit-edit command used the wrong package-relative path, made no edit,
+and ran the existing 6 tests; corrected the working directory, added the tests,
+and the final 8-test run passed. No packages were downloaded.
+
+Ready for router commit/push as the final CI repair candidate. PostgreSQL,
+whole-database and browser journeys were NOT executed because this sandbox
+cannot start PostgreSQL or bind localhost. Require full CI (including the new
+concurrency and existing correction/race/upgrade tests) and independent RED
+review at the exact resulting head before merge. No demo pass is claimed.

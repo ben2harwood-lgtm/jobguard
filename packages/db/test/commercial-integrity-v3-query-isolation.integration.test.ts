@@ -1,3 +1,5 @@
+import { Pool } from "pg";
+import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
 import { readFile,readdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,describe,it,expect } from "vitest";
@@ -70,6 +72,56 @@ it("CH-6 unlocked reads never invoke even the private publication entry",async()
   expect(view.published).toBeNull();expect(view.result.findings.map(f=>f.kind)).toEqual(["invoice_or_payment_without_lock"]);
  }finally{await f.admin.query(definition);}
  await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_published($1,$2,$3)",[tenant,job,f.auth.digest]))).rejects.toMatchObject({code:"42501"});
+});
+
+it("concurrent family/source reads hold no writer locks while jobs and sessions change",async()=>{
+ const {job}=await seedIntegrityJob(f),writer=await f.admin.connect();
+ const pool=new Pool({...f.runtime.options,max:3}),repo=new CommercialIntegrityV3Repository(pool);
+ const pids:number[]=[];let reached=0,release!:()=>void,ready!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve;}),allReading=new Promise<void>(resolve=>{ready=resolve;});
+ const connect=pool.connect.bind(pool);
+ pool.connect=(async()=>{
+  const db=await connect(),query=db.query.bind(db);
+  await query("SET statement_timeout='10s'");
+  pids.push((await query("SELECT pg_backend_pid() pid")).rows[0].pid);
+  return new Proxy(db,{get(target,key){
+   if(key==="query")return async(sql:string,values?:unknown[])=>{
+    if(sql==="COMMIT"){
+     expect((await query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
+     if(++reached===3)ready();await gate;
+    }
+    return query(sql,values);
+   };
+   const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
+  }});
+ }) as typeof pool.connect;
+ let reads:Promise<unknown>|undefined,timer:ReturnType<typeof setTimeout>|undefined;
+ try{
+  await writer.query("BEGIN");await writer.query("SET LOCAL lock_timeout='500ms'");
+  await writer.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  // If authority or source reads lock these rows, they cannot reach our commit barrier.
+  await writer.query("SELECT 1 FROM control_plane.practice_session WHERE token_digest=$1 FOR UPDATE",[f.auth.digest]);
+  await writer.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[tenant,actor.membershipId]);
+  await writer.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[tenant,job]);
+  reads=Promise.all([repo.readFamily(f.auth.context,actor,f.auth.digest,job),
+   repo.read(f.auth.context,actor,f.auth.digest,job),repo.read(f.auth.context,actor,f.auth.digest,job)]);
+  void reads.catch(()=>undefined);
+  await Promise.race([allReading,reads.then(()=>{throw new Error("Reads escaped commit barrier");}),
+   new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error("Integrity reads waited on writer locks")),15000);})]);
+  expect(pids).toHaveLength(3);
+  // Keep all three real GET transactions open while an ordinary writer progresses.
+  expect((await writer.query("UPDATE control_plane.practice_session SET expires_at=expires_at+interval '1 minute' WHERE token_digest=$1 RETURNING token_digest",[f.auth.digest])).rowCount).toBe(1);
+  expect((await writer.query("UPDATE app.job SET title='Fictional concurrent edit' WHERE tenant_id=$1 AND id=$2 RETURNING id",[tenant,job])).rowCount).toBe(1);
+  expect((await writer.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional concurrent capture',$3,'capture') RETURNING id",[randomUUID(),tenant,f.auth.digest])).rowCount).toBe(1);
+  const waits=await f.admin.query("SELECT pid,wait_event FROM pg_stat_activity WHERE pid=ANY($1::int[]) AND wait_event_type='Lock'",[pids]);
+  expect(waits.rows).toEqual([]);
+  const locks=await f.admin.query("SELECT locktype,mode,granted FROM pg_locks WHERE pid=ANY($1::int[]) AND (NOT granted OR locktype IN ('tuple','transactionid') OR (relation IS NOT NULL AND mode<>'AccessShareLock'))",[pids]);
+  expect(locks.rows).toEqual([]);
+  release();await reads;
+ }finally{
+  if(timer)clearTimeout(timer);release();await writer.query("ROLLBACK");
+  await reads?.catch(()=>undefined);writer.release();await pool.end();
+ }
 });
 
 });

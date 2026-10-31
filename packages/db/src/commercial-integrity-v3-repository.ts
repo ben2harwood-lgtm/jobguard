@@ -28,6 +28,8 @@ export class CommercialIntegrityV3Repository {
  async readFamily(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string): Promise<CommercialIntegrityFamilyV1> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);
   return withTenant(this.pool,context,async db=>{
+   // Enforce the GET boundary in PostgreSQL, including nested authority readers.
+   await db.$client.query("SET TRANSACTION READ ONLY");
    const family=await readIntegrityFamily(db,s); await authorizeIntegrityScope(db,s);
    return { version: "commercial-integrity-family.v1", environment: "synthetic_demo", jobId:s.jobId, family, realExternalActions:0 };
   });
@@ -44,7 +46,10 @@ export class CommercialIntegrityV3Repository {
  }
  async read(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string): Promise<CommercialIntegrityV3StoredView> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);
-  return withTenant(this.pool,context,async db=>{await v3(db,s);const view=await this.view(db,s);await v3(db,s);return view;});
+  return withTenant(this.pool,context,async db=>{
+   await db.$client.query("SET TRANSACTION READ ONLY");
+   await v3(db,s);const view=await this.view(db,s);await v3(db,s);return view;
+  });
  }
  async review(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string, rawReview: unknown): Promise<CommercialIntegrityV3Feedback> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);

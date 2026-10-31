@@ -97,3 +97,15 @@ Their former shared source identity was rejected by the unchanged strict source
 conflict check. No schema is loosened, no privilege or table changes, and 0330
 remains unchanged. Existing published integration tests retain all assertions;
 additional projection/decoder regressions exercise this distinction.
+
+
+31 October 2026, CI repair round 3: the private line-correction guard now
+serializes mappings with a tenant/job-qualified CH-6 advisory transaction lock
+(seed 628), rather than FOR UPDATE on the commercial job. It keeps READ COMMITTED,
+line/credit conservation queries, exact duplicate handling, provenance checks,
+private grants and immutable history. Concurrent mappings remain serialized;
+ordinary job updates do not share this lock. The repository's standalone family
+and source GETs enforce READ ONLY transactions; review saves retain their explicit
+ordered source/authority row locks. Both 0506 and 0507 SQL bodies changed in this
+repair, without changing their numbers or any migration on main. PostgreSQL and
+browser execution remain CI evidence, not local sandbox results.

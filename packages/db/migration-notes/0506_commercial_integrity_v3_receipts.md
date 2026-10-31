@@ -13,10 +13,11 @@ ordinary final-account lock. Sources are re-resolved and compared to the exact
 strict snapshot. No caller hash, role GUC, detector output or JSON copy supplies
 source authority. It authenticates current practice ownership and family, holds
 session/membership against revocation, serializes tenant+command, returns genuine
-replay before source evaluation, locks source tables conservatively in SHARE mode,
-and rechecks authority/expiry after waits. Locks block inserts, including a new
-lock appearing after an absence check. This synthetic-only implementation trades
-concurrency for safety; these global source locks need review before any wider use.
+replay before source evaluation, locks only existing tenant/job source rows in
+fixed order, and rechecks authority/expiry after waits. It requires READ COMMITTED
+and revalidates source/absence facts in a fresh statement snapshot after waits.
+Insert gaps are not locked; no table-wide lock is taken, including when only
+this migration is installed. The successor uses the same row-locking boundary.
 A deadlock/serialization failure aborts the transaction and must retry the same
 command; there is no external action or unknown provider outcome.
 

@@ -1,3 +1,6 @@
+import type { Pool } from "pg";
+import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { readFile } from "node:fs/promises";
 import { expect,it,vi } from "vitest";
 import {parseInventory,pathCompleteness} from "./lp-0-catalog.js";
@@ -60,4 +63,40 @@ it("CH-6 SQL receipt projection has a distinct identity while conflicting facts 
  const {db}=database(payload);expect(await readCommercialIntegrityV3Input(db,scope)).toEqual(payload);
  const conflicting={...payload,input:{...payload.input,published:{...payload.input.published,receipts:[{...payload.input.published.receipts[0],source}]}}};
  await expect(readCommercialIntegrityV3Input(database(conflicting).db,scope)).rejects.toThrow("INTEGRITY_SOURCE_UNAVAILABLE");
+});
+
+it("both integrity GET methods enforce read-only transactions and release them on failure",async()=>{
+ const previous=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
+ try{
+  for(const method of ["readFamily","read"] as const)for(const fail of [false,true]){
+   const statements:string[]=[],release=vi.fn();
+   const query=vi.fn(async(sql:string)=>{
+    statements.push(sql);
+    if(sql==="SET TRANSACTION READ ONLY"&&fail)throw new Error("READ_ONLY_REQUIRED");
+    if(sql.includes("saved_v1_sample"))return {rows:[{saved_v1_sample:false,provenance:"system_generated_quote",job_policy:null,activation_policy:null,terms_policy:null,terms_track:null,job_track:null,environment:null}]};
+    if(sql.startsWith("WITH RECURSIVE practice_owned_job"))return {rowCount:1,rows:[{}]};
+    if(sql.includes("SELECT app.ch6_integrity_sources"))return {rows:[{result:fixture()}]};
+    return {rows:[]};
+   });
+   const pool={connect:async()=>({query,release})} as unknown as Pool;
+   const repo=new CommercialIntegrityV3Repository(pool),context=verifiedTenantContextForQueuedJob(scope.tenantId);
+   const result=repo[method](context,scope.actor,scope.digest,scope.jobId);
+   if(fail){await expect(result).rejects.toThrow("READ_ONLY_REQUIRED");expect(statements.at(-1)).toBe("ROLLBACK");expect(statements).toHaveLength(4);}
+   else{await expect(result).resolves.toBeDefined();expect(statements.at(-1)).toBe("COMMIT");}
+   expect(statements[2]).toBe("SET TRANSACTION READ ONLY");expect(release).toHaveBeenCalledOnce();
+  }
+ }finally{if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;}
+});
+
+it("CH-6 installs no table locks; source readers and correction guards never lock job rows",async()=>{
+ for(const name of ["0506_commercial_integrity_v3_receipts.sql","0507_commercial_integrity_sources.sql"]){
+  const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
+  expect(sql).not.toMatch(/\bLOCK\s+TABLE\b/iu);
+  const end=sql.indexOf("CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review")>0?sql.indexOf("CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review"):sql.indexOf("CREATE FUNCTION app.ch6_record_integrity_review");
+  expect(sql.slice(0,end)).not.toMatch(/\bFOR\s+(?:SHARE|UPDATE|NO KEY UPDATE|KEY SHARE)\b/iu);
+  if(name.startsWith("0507")){
+   const guard=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_guard_line_correction"),sql.indexOf("CREATE TRIGGER ch6_line_correction_bound"));
+   expect(guard).toContain("pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||':'||NEW.job_id::text,628))");
+  }
+ }
 });

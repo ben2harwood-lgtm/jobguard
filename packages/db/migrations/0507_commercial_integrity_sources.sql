@@ -34,8 +34,10 @@ BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'INTEGRITY_RETRY_REQUIRED' USING ERRCODE='40001'; END IF;
  -- Exact duplicates still reach the primary-key refusal without re-counting their own amount.
  IF EXISTS(SELECT 1 FROM app.ch6_line_correction_source prior_source WHERE prior_source.tenant_id=NEW.tenant_id AND prior_source.id=NEW.id) THEN RETURN NEW; END IF;
- -- Serialize competing mappings of a source/line before checking aggregate conservation.
- PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
+ -- Serialize private correction mappings without locking the commercial job.
+ -- Every line/credit allocation in this job shares this CH-6-only lock; under
+ -- READ COMMITTED the conservation queries below see the prior writer's commit.
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||':'||NEW.job_id::text,628));
  IF NOT EXISTS(SELECT 1 FROM app.final_account_invoice_binding b WHERE b.tenant_id=NEW.tenant_id AND b.job_id=NEW.job_id AND b.invoice_id=NEW.invoice_id AND b.lock_id=NEW.lock_id) THEN RAISE EXCEPTION 'INTEGRITY_SOURCE_CHANGED'; END IF;
  SELECT gross_pence INTO cap FROM app.final_account_invoiced_line WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND invoice_id=NEW.invoice_id AND final_account_line_id=NEW.line_id;
  SELECT coalesce(sum(amount_pence),0) INTO used FROM app.ch6_line_correction_source WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND invoice_id=NEW.invoice_id AND line_id=NEW.line_id;
