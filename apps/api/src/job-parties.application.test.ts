@@ -79,7 +79,7 @@ describe("CH-3a per-session ownership", () => {
           return action === "view" ? controller.view(request, job) : controller[action](request, job, {});
         };
         const code = scenario === "stranger" ? "NOT_FOUND" : "UNAUTHENTICATED";
-        const error = await Promise.resolve().then(run).catch((failure: unknown) => failure);
+        const error = await Promise.resolve().then((): unknown => run()).catch((failure: unknown) => failure);
         expect(error).toBeInstanceOf(PracticeAccessError);
         expect(error).toMatchObject({ code });
         if (scenario !== "stranger") expect(connect).not.toHaveBeenCalled();
