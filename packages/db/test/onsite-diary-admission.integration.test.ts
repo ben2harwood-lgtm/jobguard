@@ -1,4 +1,4 @@
-// SV-7A / CH-4, migration 0477. Real PostgreSQL CI only.
+// SV-7A / CH-4, migration 0505. Real PostgreSQL CI only.
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

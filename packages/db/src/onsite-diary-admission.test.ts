@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MIGRATION_URLS, migrate } from "./migrate.js";
-const name = "0477_onsite_diary_admission.sql";
+const name = "0505_onsite_diary_admission.sql";
 const sql = readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
 // Source/protocol checks only; PostgreSQL CI executes the adversarial suite.
 describe("SV-7A on-site migration boundaries", () => {

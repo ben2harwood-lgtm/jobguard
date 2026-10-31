@@ -9,8 +9,8 @@ import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => closeWorkFixture(f));
-it("0477 preserves off-site receipts, all predecessor privileges, rows and unrelated routine definitions on upgrade/replay", async () => {
- const name = "0477_onsite_diary_admission.sql", position = MIGRATION_URLS.findIndex(url => url.pathname.endsWith(`/${name}`)); expect(position).toBeGreaterThan(0);
+it("0505 preserves off-site receipts, all predecessor privileges, rows and unrelated routine definitions on upgrade/replay", async () => {
+ const name = "0505_onsite_diary_admission.sql", position = MIGRATION_URLS.findIndex(url => url.pathname.endsWith(`/${name}`)); expect(position).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.slice(0, position)) {
   await f.admin.query(await readFile(url, "utf8"));

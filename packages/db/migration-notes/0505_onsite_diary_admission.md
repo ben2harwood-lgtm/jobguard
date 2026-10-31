@@ -1,4 +1,4 @@
-# 0477 — SV-7A / CH-4 on-site diary admission (RED)
+# 0505 — SV-7A / CH-4 on-site diary admission (RED)
 
 The intake routine starts from 0303, the receipt validator from 0144, and site
 capture from 0144 with the tenant serializer added by 0380. On-site notes now
