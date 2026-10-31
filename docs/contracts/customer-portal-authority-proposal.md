@@ -6,6 +6,43 @@ Read with [candidate reconciliation](../planning/mon5-candidate-reuse-map.md) an
 [adversarial vector specification](../fixtures/customer-portal-authority-cases.json).
 The vectors grant no access and define no successful authenticated principal.
 
+## MON-5 variation approval slice — 29 October 2026
+
+The issued `m5-extra-approve` order supersedes the earlier variation-only route and
+consumer holds below. Synthetic customers use the unchanged 0387 session boundary
+(shared by `CustomerAuthGuard` and `CustomerSigninApplication`); a builder cookie
+or a method label supplies no customer authority. ENT-5 remains separate.
+
+`POST /customer-portal/variations/read` and `/customer-portal/variation-approvals`
+have matching Next `/api` adapters. Read accepts only
+`{version:'customer-variations-read.v1',jobId}`. Approval uses the existing proposed
+`customer-portal-approval.v1` envelope, restricted to its variation target:
+`commandId`, `jobId`, `expectedJobRevision`, and
+`target:{kind:'variation',id,revision,hash,amount:{pence,currency:'GBP'}}`.
+Here target `id` is the variation identity; revision/hash/signed amount bind its
+immutable priced revision. Unknown fields, including actor and method, are refused.
+The review screen displays the exact description, revision, hash and signed amount.
+
+Migration 0410 resolves the 0387 customer session again in the approval transaction,
+locks the variation, checks the current job/revision, and records one immutable
+`variation_approval` with method `customer_authenticated`. The session reference
+and canonical command hash live in the private, immutable 1:1
+`customer_variation_approval` side table, written in the same transaction.
+The approval row keeps its fingerprinted column list and historical row hashes.
+Member actor and evidence are null for this method;
+legacy approvals retain their fields and require member actors as before.
+A runtime insert cannot manufacture customer provenance. Replays reauthenticate,
+return only the same session's exact stored command, and create no second effect.
+All public refusals remain generic across Next/Nest, including malformed JSON.
+
+The existing 0282 trigger still creates catch claim revision 1, at exactly the
+approved positive amount. Its only change is to use a customer-session reviewer
+reference for the new method. Negative approvals create no positive claim.
+Builder final-account/invoice readers continue to consume the existing approval
+row, and variation history distinguishes authenticated approval from attestation.
+No shadow source, fee, settlement, send, provider or live release is enabled.
+Database/browser CI and independent Claude RED review remain required.
+
 ## MON-5 sign-in foundation ruling — 29 October 2026
 
 Ben selected emailed one-time links, no passwords, with browser-session cookies.

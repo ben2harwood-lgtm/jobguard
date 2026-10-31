@@ -47,7 +47,7 @@ const tasks:TaskList={
 // SV-5 practice run: the checked lock trigger or owner request queues identifiers; this worker alone
 // freezes the manifest, examines each frozen source honestly, reconciles and publishes the completion record.
 const finalCheckEnvironment=process.env.JOBGUARD_ENV??"disabled";
-const practiceRun=new FinalCheckWorker(practiceFinalCheckPorts(shadowPool,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex")),finalCheckEnvironment);
+const practiceRun=new FinalCheckWorker(practiceFinalCheckPorts(shadowPool,runtimePool,createHash("sha256").update(generatePracticePng()).digest("hex"),createHash("sha256").update(generatePracticePng("j3-drainage-photo")).digest("hex")),finalCheckEnvironment);
 const finalCheckRepository=new FinalCheckRepository(shadowPool);
 const completionRepository=new FinalCheckCompletionRepository(shadowPool);
 const finalCheckExecutionPorts:FinalCheckExecutionPorts={
