@@ -1,6 +1,6 @@
 import {JobSourceError,JobWorkStateError} from "@jobguard/core";
 import {PracticeAccessError,WatchdogError} from "@jobguard/db";
-import {jobWorkStateFailure} from "./job-work-state.errors.js";
+import {jobWorkStateFailure} from "./job-work-state.failure.js";
 export function jobSourceFailure(error:unknown):{status:number;body:Record<string,unknown>} {
  // Intake shares the watchdog 409 and the post-lock linked-job 422 with other live-only commands.
  if(error instanceof WatchdogError&&error.code!=="JOB_NOT_FOUND")return {status:409,body:{code:error.code}};
