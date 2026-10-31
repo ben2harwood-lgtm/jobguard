@@ -3,7 +3,7 @@
   "lanes": {
     "ent-10-oidc-a": {
       "branches": [
-        "codex/sandbox/ent-10-oidc-a",
+        "codex/sandbox/ent-10-oidc-a3",
         "codex/sandbox/ent-10-oidc-a2"
       ],
       "receipt": "docs/verdicts/ENT-10-OIDC-A/BUILDER_RECEIPT.md",
