@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent11b-360-flake": {
+      "branches": ["codex/sandbox/ent11b-360-flake"],
+      "note": "ENT11B-360-FLAKE: test-only settled approvals read at both journey widths; no product changes.",
+      "allow": [
+        "apps/web/e2e/ENT-11b.spec.ts"
+      ]
+    }
+  }
+}
