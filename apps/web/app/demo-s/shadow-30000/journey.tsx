@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { sessionResponseV1 } from "../../lib/contracts";
+import { demoLink } from "../chooser-state";
 import { parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
@@ -35,7 +36,13 @@ export function ShadowJourney() {
  const [jobId, setJobId] = useState(""), [report, setReport] = useState<ShadowReport | null>(null);
  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
  const active = useRef(false);
- useEffect(() => { const saved = new URLSearchParams(location.search).get("jobId"); if (saved && z.string().uuid().safeParse(saved).success) setJobId(saved); }, []);
+ const [chooserLink, setChooserLink] = useState("/demo-s");
+ useEffect(() => {
+  const query = new URLSearchParams(location.search), saved = query.get("jobId");
+  if (saved && z.string().uuid().safeParse(saved).success) setJobId(saved);
+  const runId = query.get("runId"), tenantId = query.get("tenantId");
+  if (runId && tenantId && z.string().uuid().safeParse(runId).success && z.string().uuid().safeParse(tenantId).success) setChooserLink(demoLink(tenantId, runId));
+ }, []);
  async function load(event: FormEvent) {
   event.preventDefault(); if (active.current) return;
   setReport(null); setError("");
@@ -45,12 +52,14 @@ export function ShadowJourney() {
    const response = await fetch(`/api/jobs/${jobId}/shadow-demo`, { cache: "no-store" });
    if (!response.ok) throw new Error("This job report is unavailable to the current practice session.");
    setReport(parseShadowReport(await response.json(), jobId));
-   history.replaceState(null, "", `?${new URLSearchParams({ jobId })}`);
+   const query = new URLSearchParams(location.search); query.set("jobId", jobId);
+   history.replaceState(null, "", `?${query}`);
   } catch (reason) { setError((reason as Error).message); }
   finally { active.current = false; setBusy(false); }
  }
  async function start() {
-  if (active.current) return;
+  // A chooser launch already recovered this job. Keep its identity when revisiting the guide.
+  if (z.string().uuid().safeParse(jobId).success || active.current) return;
   active.current = true; setBusy(true); setError(""); setReport(null);
   try {
    const sessionResponse = await fetch("/api/session", { cache: "no-store" });
@@ -74,7 +83,7 @@ export function ShadowJourney() {
   } catch (reason) { setError((reason as Error).message); }
   finally { active.current = false; setBusy(false); }
  }
- return <main className="workspace-page"><a href="/demo-s">← Practice chooser</a><h1>Final Check £30,000 journey</h1>
+ return <main className="workspace-page"><a href={chooserLink}>← Practice chooser</a><h1>Final Check £30,000 journey</h1>
   <p>Practice sandbox — made-up data; nothing is sent or charged. Targets below describe the journey; saved evidence is shown separately.</p>
   <ol>{shadowSteps.map(step => <li key={step}><p>{step}</p></li>)}</ol>
   <p><a href="/">Open Jobs and start the safe practice demo</a></p>

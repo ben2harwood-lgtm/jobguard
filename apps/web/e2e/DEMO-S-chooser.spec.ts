@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-// These are lifecycle/chooser journeys. Full DEMO-J1–J5 and A1 remain explicitly not ready.
+// Launch only available journeys; retain honest blockers for unmerged guides.
 async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Fictional email address").fill(`demo-s-${crypto.randomUUID()}@practice.invalid`);
@@ -23,10 +23,10 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
   test.setTimeout(90_000);
   await signIn(page); await page.goto("/demo-s");
   await expect(page.getByRole("heading", { name: "Choose a journey" })).toBeVisible();
-  for (const scenario of ["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"]) {
+  for (const scenario of ["core-1000", "recovery-18800", "meter", "trial"]) {
     await page.getByRole("button", { name: `Save ${scenario} selection`, exact: true }).click();
     const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
-    await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("No product journey completion is recorded");
+    await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
     await page.reload(); await expect(saved).toBeVisible();
   }
   await page.getByText("Meter profiles — all not ready yet", { exact: true }).click();
@@ -43,7 +43,7 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
     if (sent.length === 1) { expect(response.status()).toBe(201); await route.abort("failed"); }
     else await route.fulfill({ response });
   });
-  await page.getByRole("button", { name: "Save shadow-30000 selection", exact: true }).click();
+  await page.getByRole("button", { name: "Choose shadow-30000 selection", exact: true }).click();
   await expect(page.getByRole("button", { name: "Retry saved request" })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Retry saved request" }).click();
@@ -76,4 +76,57 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
     expect((await api(foreign, "read", undefined, runId)).status).toBe(404);
     expect((await api(foreign, "reset", reset)).status).toBe(404);
   } finally { await other.close(); }
+});
+
+test("DEMO-S launches a fresh shadow job, resumes it and resets without inventing results", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page); await page.goto("/demo-s");
+  await page.getByRole("button", { name: "Choose shadow-30000 selection", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Saved shadow-30000 selection" })).toBeVisible();
+  const selectionUrl = page.url();
+  const runId = new URL(selectionUrl).searchParams.get("runId");
+  const requests: { captureId: string }[] = [];
+  await page.route("**/api/jobs/capture", async route => {
+    requests.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    if (requests.length === 1) { expect(response.ok()).toBe(true); await route.abort("failed"); }
+    else await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Final Check £30,000 journey" })).toBeVisible();
+  const jobId = new URL(page.url()).searchParams.get("jobId");
+  expect(jobId).toBeTruthy(); expect(requests).toHaveLength(2);
+  await expect(page.getByRole("link", { name: "← Practice chooser", exact: true })).toHaveAttribute("href", new URL(selectionUrl).pathname + new URL(selectionUrl).search);
+  await page.getByRole("button", { name: "Create or recover the J3 capture", exact: true }).click();
+  await expect(page.getByLabel("Saved job reference")).toHaveValue(jobId!);
+  expect(requests[0]).toEqual(requests[1]); expect(requests[0]!.captureId).toBe(runId);
+  await page.getByRole("link", { name: "Continue this job through its real controls", exact: true }).click();
+  await page.getByRole("button", { name: "Save customer and site", exact: true }).click();
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) {
+    await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
+  }
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
+  await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+  await page.goto(selectionUrl);
+  await page.getByRole("button", { name: "Create or resume and read saved results", exact: true }).click();
+  const results = page.getByRole("region", { name: "Saved shadow journey report" });
+  await expect(results).toContainText("Not built yet"); await expect(results).toContainText("Not locked");
+  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("MON-5");
+  await expect(results.getByRole("link", { name: "Open the same saved job" })).toHaveAttribute("href", `/jobs/${jobId}`);
+  await expect(results).not.toContainText("£80.00");
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`jobId=${jobId}`));
+  await page.goto(selectionUrl);
+  await page.getByRole("button", { name: "Reset selection", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Open archived selection", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Saved shadow journey report" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Final Check £30,000 journey" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("jobId")).not.toBe(jobId);
+  expect(requests.at(-1)!.captureId).not.toBe(runId);
 });

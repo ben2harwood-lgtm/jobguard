@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, smallBuilderDemoReadRunV1,
   type SmallBuilderDemoRun, type SmallBuilderDemoReport, type SmallBuilderDemoHttpCommand } from "@jobguard/core";
-import { demoLink, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { demoLink, journeyAvailable, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { JourneyResult } from "./journey-result";
 import styles from "./chooser.module.css";
 const sessionV1 = z.object({ version: z.literal("identity-session.v1"), environment: z.literal("synthetic_demo"),
   csrfToken: z.string().min(24), memberships: z.array(z.object({ id: z.string().uuid(), tenantId: z.string().uuid(), name: z.string() })) });
@@ -27,7 +28,7 @@ async function readSaved(session: Session, tenantId: string, operation: "read" |
 export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemoReport; tenantId: string }) {
   const facts = report.facts;
   return <section aria-labelledby="report-title"><h2 id="report-title">Saved selection report</h2>
-    <p>This report records the saved selection and its blocker. The product journey has not run.</p>
+    <p>This snapshot records selection metadata only. It does not record whether a product journey ran. Read current persisted journey results below.</p>
     <dl><dt>Scenario</dt><dd>{facts.scenario}</dd><dt>Status</dt><dd>{facts.status}</dd>
       <dt>Saved reason</dt><dd>{facts.reason}</dd><dt>Revision</dt><dd>{facts.revision}</dd>
       <dt>Created</dt><dd>{facts.createdAt}</dd><dt>Archived</dt><dd>{facts.archivedAt ?? "Not archived at snapshot time"}</dd></dl>
@@ -123,8 +124,7 @@ export function DemoChooser() {
   }
   const disabled = busy || !!pending || !membership;
   return <main className={styles.main}><a href="/">JobGuard home</a><h1>Small-builder practice chooser</h1>
-    <p>Made-up data only. Choose a journey to see whether it is ready and save your selection.</p>
-    <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>
+    <p>Made-up data only. Choose an available journey, launch a fresh fictional job, or resume your saved selection.</p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}
@@ -133,17 +133,17 @@ export function DemoChooser() {
       {pending && <section aria-label="Unconfirmed request"><p>A saved request has no confirmed response. Retry uses its original reference.</p>
         <button disabled={busy} onClick={() => void send(pending)}>Retry saved request</button></section>}
       <section aria-labelledby="journey-title"><h2 id="journey-title">Choose a journey</h2><div className={styles.choices}>
-        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>Not ready yet. {choice.reason}</p>
+        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>{journeyAvailable(choice.scenario) ? "Available to the lock. " : "Not ready yet. "}{choice.reason}</p>
           {choice.scenario === "meter" && <details><summary>Meter profiles — all not ready yet</summary><ul>{meterProfiles.map(profile => <li key={profile}>{profile}</li>)}</ul></details>}
-          <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>Save {choice.scenario} selection</button>
+          <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>{journeyAvailable(choice.scenario) ? "Choose" : "Save"} {choice.scenario} selection</button>
         </article>)}
       </div></section>
       <form onSubmit={event => void resume(event)}><h2>Resume a saved selection</h2><label htmlFor="demo-resume">Saved selection reference</label>
         <input id="demo-resume" value={resumeId} onChange={event => setResumeId(event.target.value)} required />
         <button disabled={busy || !membership} type="submit">Resume</button></form>
-      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : "Not ready yet"}: {run.reason}</p>
+      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : journeyAvailable(run.scenario) ? "Journey available to the lock" : "Not ready yet"}: {journeyAvailable(run.scenario) ? "Read journey results for actual progress." : run.reason}</p>
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
-        <p>Saved revision {run.revision}. No product journey completion is recorded.</p>
+        <p>Saved selection revision {run.revision}. Selection metadata does not record journey completion.</p>
         {run.successorId && <p><a href={demoLink(tenantId, run.successorId)}>Open replacement selection</a></p>}
         {run.predecessorId && <p><a href={demoLink(tenantId, run.predecessorId)}>Open archived selection</a></p>}
         <p>Reset archives this selection and creates a replacement. Existing history and business records stay saved.</p>
@@ -151,6 +151,7 @@ export function DemoChooser() {
         <button disabled={disabled || run.status === "archived"} onClick={() => void send({ operation: "snapshot", runId: run.runId, input: { contractVersion: "small-builder-demo.report-snapshot.v1", commandId: crypto.randomUUID(), expectedRunRevision: run.revision } })}>Save selection report</button>
       </section>}
       {report && <LifecycleReport report={report} tenantId={tenantId} />}
+      {run?.scenario === "shadow-30000" && <JourneyResult key={`${tenantId}:${run.runId}`} runId={run.runId} tenantId={tenantId} archived={run.status === "archived"} disabled={disabled} onBusyChange={value => { busyRef.current = value; setBusy(value); }} />}
     </>}
   </main>;
 }
