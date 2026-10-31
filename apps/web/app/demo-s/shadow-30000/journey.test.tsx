@@ -29,7 +29,7 @@ it("reports every capture state fee-free without implying customer approval or v
  const raw = report();
  const parsed = parseShadowReport({ ...raw, account: { ...raw.account, captures: ["draft", "priced", "approved", "rejected", "withdrawn"].map((state, i) => ({ id: randomUUID(), state, description: `Fictional capture ${i}`, origin: i === 0 ? "final_review" : "builder_logged", netPence: i === 0 ? 40000 : 320000 })) } }, jobId);
  const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
- expect(html.match(/recovery fee £0/gu)).toHaveLength(5); expect(html).toContain("No invoice issued"); expect(html).toContain("MON-5");
+ expect(html.match(/recovery fee £0/gu)).toHaveLength(5); expect(html).toContain("No invoice issued"); expect(html).toContain("MON-5"); expect(html).toContain("not ready yet (MON-5)");
  expect(html).toContain("CH-8"); expect(html).toContain("CH-9"); expect(html).not.toContain("SV-6 historical assessments");
 });
 it("rejects another job, pre-lock reveal/count/history/pack leaks and client completion flags", () => {
@@ -95,4 +95,35 @@ it("opens the existing pack and payment-fee screens with a report return link", 
  expect(payment).toContain("Success fee on your payment");
  const invalid = renderToStaticMarkup(await ShadowJourneyPage({ searchParams: Promise.resolve({ jobId, caseId: "invalid", screen: "pack" }) }));
  expect(invalid).toContain("Final Check £30,000 journey"); expect(invalid).not.toContain("Lock and reveal evidence pack");
+});
+
+it.each(["not_ready_yet", "awaiting_customer", "approved"])("accepts the v2 customer approval state %s", state => {
+ const customerApproval = { state, approvals: state === "approved"
+  ? [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "customer_portal" }] : [] };
+ expect(parseShadowReport({ ...report(), customerApproval }, jobId).customerApproval).toEqual(customerApproval);
+});
+it("accepts the full mapped v3 value receipt for the same locked job", () => {
+ const raw = report(), lockId = randomUUID();
+ const lock = { id: lockId, finalAccountRevisionId: randomUUID(), lockedAt: "2026-10-31T04:00:00Z", digest: "a".repeat(64) };
+ const value = { version: "job-value.v3", environment: "synthetic_demo", jobId, status: "mapped",
+  receipt: mapValueReceipt({ tenantId: randomUUID(), jobId, lockId, lockedRevisionId: lock.finalAccountRevisionId,
+   lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt,
+   checked: [], tracked: [], assessments: [] }) };
+ const saved = { ...raw, account: { ...raw.account, lock }, value };
+ expect(parseShadowReport(saved, jobId).value).toEqual(value);
+ expect(() => parseShadowReport({ ...saved, value: { ...value, jobId: randomUUID() } }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...saved, value: { ...value, receipt: { ...value.receipt,
+  sources: { ...value.receipt.sources, lockId: randomUUID() } } } }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...saved, account: raw.account }, jobId)).toThrow();
+});
+it("rejects stale v1 reports, unbound value shortcuts and unknown approval fields or methods", () => {
+ const raw = report();
+ for (const patch of [
+  { version: "shadow-demo-report.v1" }, { customerApproval: "not_ready_yet" },
+  { customerApproval: { state: "unknown", approvals: [] } },
+  { customerApproval: { ...raw.customerApproval, attested: true } },
+  { customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "builder_attestation" }] } },
+  { value: { status: "incomplete", reason: "producer_bindings_held" } },
+  { value: { ...raw.value, hiddenCount: 0 } },
+ ]) expect(() => parseShadowReport({ ...raw, ...patch }, jobId)).toThrow();
 });
