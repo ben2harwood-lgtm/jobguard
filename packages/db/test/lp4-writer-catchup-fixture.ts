@@ -3,8 +3,10 @@ import { expect } from "vitest";
 import { auditEventTrust, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 
 // Each entry names the HIGHEST migration on the pinned main that defines the
-// routine, including the 0322 replacement of 0290's ef_audit. 14 reports = 13 routines.
+// routine, including the 0322 replacement of 0290's ef_audit.
 export const lp4WriterSources = {
+  "app.mon3_audit": "0372_free_first_job_admission.sql",
+  "app.customer_portal_audit": "0387_customer_signin.sql",
   "app.decision_check_command": "0193_later_decision_identity.sql",
   "app.mon2_audit": "0195_subscription_persistence.sql",
   "app.mon1_capture_small_trip": "0208_meter_small_trip.sql",

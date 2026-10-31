@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AclEntry, type Catalogue, type Inventory, type RelationRow, type RoutineRow, type RoleRow,
   compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness, staleEntries,
-  routineIdentity, staticScan, InventoryError, loadReviewedInventory,
+  routineIdentity, staticScan, InventoryError, loadReviewedInventory, repoFileExists,
 } from "./lp-0-catalog.js";
 
 const RT = "jobguard_runtime";
@@ -302,6 +302,10 @@ describe("[LP0-02] stale inventory entries fail the base", () => {
 });
 
 describe("recorded routine facts and static scan", () => {
+  it("the installed reviewed inventory has complete authority dispositions after legacy grant withdrawal", async () => {
+    const { inventory } = await loadReviewedInventory();
+    expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
+  });
   it("static scan finds written tables and called routines as hypotheses, ignoring comments and unknown names", () => {
     const known = new Set(["app.helper", "app.other"]);
     const rels = new Set(["app.membership", "app.audit_event"]);

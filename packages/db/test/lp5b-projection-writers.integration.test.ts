@@ -5,15 +5,17 @@ import { PreventionCheckRepository } from "../src/prevention-check-repository.js
 import { InboxRelevanceRepository } from "../src/inbox-relevance-repository.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { withTenant } from "../src/tenant-context.js";
+import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 let db: JobDoorsDatabase;
 const previous=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true);},300_000);
 afterAll(async()=>{await db?.close();if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;});
-async function fixture(status="quoting"){
+async function fixture(status:"quoting"|"live"="quoting"){
  const actor=await jobDoorsActor(db.owner),context=testTenantContext(actor.tenant),job=randomUUID();
- await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP5b projection job',$3)",[actor.tenant,job,status]);
+ if(status==="live")await importWatchdogFixtureJob(db.owner,actor.tenant,job,"Fictional LP5b projection job");
+ else await db.owner.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional LP5b projection job','quoting')",[actor.tenant,job]);
  return {actor,context,job};
 }
 async function preventionFixture(){

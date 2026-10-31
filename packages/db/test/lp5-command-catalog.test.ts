@@ -15,6 +15,18 @@ describe("LP-5a exact catalogue expectations", () => {
     expect(migration).toContain(`GRANT CREATE ON SCHEMA app TO ${role}`);
     expect(migration).toContain(`REVOKE CREATE ON SCHEMA app FROM ${role}`);
   });
+  it("rejects common reserved SQL identifiers in PL/pgSQL variable declarations", () => {
+    // Source guard only; the PostgreSQL suites remain the compilation proof.
+    const reserved = new Set(['authorization', 'user', 'order', 'check', 'table', 'grant', 'default', 'constraint',
+      'select', 'from', 'where', 'group', 'limit', 'offset', 'returning', 'case', 'when', 'then', 'else', 'end']);
+    const declarations = [...sql.matchAll(/\bDECLARE\s+([\s\S]*?)\bBEGIN\b/gi)];
+    expect(declarations).toHaveLength(9);
+    for (const declaration of declarations) {
+      for (const variable of declaration[1]!.split(';').map(part => part.trim().match(/^([a-z_][a-z_0-9]*)\s+/i)?.[1]).filter(Boolean)) {
+        expect(reserved.has(variable!.toLowerCase()), variable).toBe(false);
+      }
+    }
+  });
   it("enumerates every installed registry rule and shares the watchdog keys", () => {
     const seeds = sql.split("INSERT INTO app.command_type_registry VALUES")[1]!.split(";")[0]!;
     const installed = [...seeds.matchAll(/\(([^()]+)\)/g)].map(match => Object.fromEntries(match[1]!.split(",").map((v, i) =>

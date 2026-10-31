@@ -118,29 +118,29 @@ BEGIN
  SELECT * INTO reg FROM app.command_type_registry WHERE command_type=p_command_type AND version=p_version;
  IF NOT FOUND THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  IF p_command_id IS NULL OR p_semantic_key IS NULL OR length(p_semantic_key) NOT BETWEEN 1 AND 300
-  OR jsonb_typeof(p_resource) IS DISTINCT FROM 'object' OR p_resource-ARRAY['tenantId','actorMembershipId','subjectType','subjectRef']<>'{}'
+  OR jsonb_typeof(p_resource) IS DISTINCT FROM 'object' OR (p_resource-ARRAY['tenantId','actorMembershipId','subjectType','subjectRef'])<>'{}'
   OR NOT(p_resource ?& ARRAY['tenantId','actorMembershipId','subjectType','subjectRef'])
   OR jsonb_typeof(p_resource->'subjectType') IS DISTINCT FROM 'string' OR jsonb_typeof(p_resource->'subjectRef') IS DISTINCT FROM 'string'
   OR length(p_resource->>'subjectType') NOT BETWEEN 1 AND 100 OR length(p_resource->>'subjectRef') NOT BETWEEN 1 AND 200
   OR jsonb_typeof(p_expected_revisions) IS DISTINCT FROM 'object' OR jsonb_typeof(p_significant_input) IS DISTINCT FROM 'object'
  THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
- IF p_significant_input->>'version' IS DISTINCT FROM p_version
+ IF (p_significant_input->>'version') IS DISTINCT FROM p_version
   OR (p_significant_input->>'actorMembershipId')::uuid IS DISTINCT FROM actor
-  OR (p_version='command.v1' AND (p_significant_input->>'commandType' IS DISTINCT FROM p_command_type
-   OR p_significant_input->>'subjectType' IS DISTINCT FROM p_resource->>'subjectType'
-   OR p_significant_input->>'subjectRef' IS DISTINCT FROM p_resource->>'subjectRef')) THEN
+  OR (p_version='command.v1' AND ((p_significant_input->>'commandType') IS DISTINCT FROM p_command_type
+   OR (p_significant_input->>'subjectType') IS DISTINCT FROM (p_resource->>'subjectType')
+   OR (p_significant_input->>'subjectRef') IS DISTINCT FROM (p_resource->>'subjectRef'))) THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  -- Pre-cutover receipts keep their exact historical digest format. No new claim
  -- is recorded with this digest. Legacy replay still checks both keys and access.
  legacy_input:=p_significant_input;
  IF p_version='command.v1' THEN
-  legacy_input:=jsonb_set(legacy_input-ARRAY['commandId','decisionId','resolutionId','authorizationId'],'{action,expiresAt}','{}');
+  legacy_input:=jsonb_set((legacy_input-ARRAY['commandId','decisionId','resolutionId','authorizationId']),'{action,expiresAt}','{}');
  END IF;
  legacy_digest:=encode(sha256(convert_to(app.final_lock_canonical(legacy_input),'UTF8')),'hex');
  -- Preserve the historical exclusion of server-generated grant expiry. It
  -- remains in the immutable authorization and is checked for fresh execution;
  -- a replay neither renews that grant nor repeats its business effect.
- digest_input:=p_significant_input-ARRAY['commandId','decisionId','resolutionId','authorizationId'];
+ digest_input:=(p_significant_input-ARRAY['commandId','decisionId','resolutionId','authorizationId']);
  IF p_version='command.v1' THEN
   digest_input:=jsonb_set(digest_input,'{action,expiresAt}','{}');
  END IF;
@@ -169,47 +169,47 @@ BEGIN
   RETURN jsonb_build_object('kind','replay','result',prior.result);
  END IF;
  IF reg.completion_adapter='finding' THEN
-  IF p_significant_input-ARRAY['version','commandId','semanticKey','actorMembershipId','decisionId','findingFingerprint','resolution','expectedSnapshotRevision']<>'{}'
-   OR NOT(p_expected_revisions ? 'snapshotRevision') OR p_expected_revisions-ARRAY['snapshotRevision']<>'{}' OR (p_expected_revisions->>'snapshotRevision')::integer IS DISTINCT FROM (p_significant_input->>'expectedSnapshotRevision')::integer
-   OR p_resource->>'subjectRef' IS DISTINCT FROM p_significant_input->>'decisionId'
+  IF (p_significant_input-ARRAY['version','commandId','semanticKey','actorMembershipId','decisionId','findingFingerprint','resolution','expectedSnapshotRevision'])<>'{}'
+   OR NOT((p_expected_revisions ? 'snapshotRevision')) OR (p_expected_revisions-ARRAY['snapshotRevision'])<>'{}' OR (p_expected_revisions->>'snapshotRevision')::integer IS DISTINCT FROM (p_significant_input->>'expectedSnapshotRevision')::integer
+   OR (p_resource->>'subjectRef') IS DISTINCT FROM (p_significant_input->>'decisionId')
   THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
-  IF p_significant_input->>'resolution' IS NULL OR p_significant_input->>'resolution' NOT IN('dismissed','rejected')
+  IF (p_significant_input->>'resolution') IS NULL OR (p_significant_input->>'resolution') NOT IN('dismissed','rejected')
    OR NOT EXISTS(SELECT 1 FROM app.job_finding WHERE tenant_id=t AND decision_id=(p_significant_input->>'decisionId')::uuid
-    AND fingerprint=p_significant_input->>'findingFingerprint' AND snapshot_revision=(p_expected_revisions->>'snapshotRevision')::integer)
+    AND fingerprint=(p_significant_input->>'findingFingerprint') AND snapshot_revision=(p_expected_revisions->>'snapshotRevision')::integer)
   THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id)
-   VALUES(gen_random_uuid(),t,(p_significant_input->>'decisionId')::uuid,p_significant_input->>'resolution',actor);
+   VALUES(gen_random_uuid(),t,(p_significant_input->>'decisionId')::uuid,(p_significant_input->>'resolution'),actor);
  ELSE
-  IF p_significant_input-ARRAY['version','commandId','commandType','semanticKey','actorMembershipId','subjectType','subjectRef','decisionId','resolutionId','authorizationId','action']<>'{}'
-   OR NOT(p_expected_revisions ? 'aggregateRevision') OR p_expected_revisions-ARRAY['aggregateRevision']<>'{}' THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
-  a:=p_significant_input->'action';
+  IF (p_significant_input-ARRAY['version','commandId','commandType','semanticKey','actorMembershipId','subjectType','subjectRef','decisionId','resolutionId','authorizationId','action'])<>'{}'
+   OR NOT((p_expected_revisions ? 'aggregateRevision')) OR (p_expected_revisions-ARRAY['aggregateRevision'])<>'{}' THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
+  a:=(p_significant_input->'action');
   IF jsonb_typeof(a) IS DISTINCT FROM 'object' OR NOT(a ?& ARRAY['actionType','recipient','contentHash','aggregateRevision','amountPence','currency','policyVersion','expiresAt'])
-   OR a-ARRAY['actionType','recipient','contentHash','aggregateRevision','amountPence','currency','policyVersion','expiresAt']<>'{}'
-   OR (a->>'expiresAt')::timestamptz<=clock_timestamp() OR a->>'expiresAt' IS NULL
-   OR a->>'contentHash' IS NULL OR a->>'contentHash'!~'^[a-f0-9]{64}$'
+   OR (a-ARRAY['actionType','recipient','contentHash','aggregateRevision','amountPence','currency','policyVersion','expiresAt'])<>'{}'
+   OR (a->>'expiresAt')::timestamptz<=clock_timestamp() OR (a->>'expiresAt') IS NULL
+   OR (a->>'contentHash') IS NULL OR (a->>'contentHash')!~'^[a-f0-9]{64}$'
    OR (a->>'aggregateRevision')::integer IS DISTINCT FROM (p_expected_revisions->>'aggregateRevision')::integer
-   OR (a->>'aggregateRevision')::integer<0 OR a->>'actionType' IS NULL OR length(a->>'actionType') NOT BETWEEN 1 AND 100
-   OR length(a->>'policyVersion') NOT BETWEEN 1 AND 80 OR a->>'policyVersion' IS NULL
+   OR (a->>'aggregateRevision')::integer<0 OR (a->>'actionType') IS NULL OR length(a->>'actionType') NOT BETWEEN 1 AND 100
+   OR length(a->>'policyVersion') NOT BETWEEN 1 AND 80 OR (a->>'policyVersion') IS NULL
    OR ((a->>'amountPence') IS NULL) IS DISTINCT FROM ((a->>'currency') IS NULL)
-   OR (a->>'amountPence' IS NOT NULL AND ((a->>'amountPence')::numeric NOT BETWEEN 0 AND 1000000000000 OR a->>'currency'<>'GBP'))
+   OR ((a->>'amountPence') IS NOT NULL AND ((a->>'amountPence')::numeric NOT BETWEEN 0 AND 1000000000000 OR (a->>'currency')<>'GBP'))
   THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
   -- Operational no-op probes validate the same schema but mint no grant.
   IF reg.completion_adapter<>'synthetic_lock_noop' THEN
   dec:=coalesce((p_significant_input->>'decisionId')::uuid,gen_random_uuid());
   res:=coalesce((p_significant_input->>'resolutionId')::uuid,gen_random_uuid());
   auth:=coalesce((p_significant_input->>'authorizationId')::uuid,gen_random_uuid());
-  IF p_significant_input ? 'decisionId' THEN
+  IF (p_significant_input ? 'decisionId') THEN
    SELECT id INTO existing_dec FROM app.decision WHERE tenant_id=t AND id=dec
-    AND subject_type=p_resource->>'subjectType' AND subject_ref=p_resource->>'subjectRef' AND action_type=a->>'actionType';
+    AND subject_type=(p_resource->>'subjectType') AND subject_ref=(p_resource->>'subjectRef') AND action_type=(a->>'actionType');
    IF existing_dec IS NULL THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
   ELSE
    INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)
-    VALUES(dec,t,p_resource->>'subjectType',p_resource->>'subjectRef',a->>'actionType');
+    VALUES(dec,t,(p_resource->>'subjectType'),(p_resource->>'subjectRef'),(a->>'actionType'));
   END IF;
   INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(res,t,dec,'approved',actor);
   INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
-   VALUES(auth,t,dec,res,actor,a->>'actionType',a->>'recipient',a->>'contentHash',(a->>'aggregateRevision')::integer,
-    (a->>'amountPence')::bigint,a->>'currency',a->>'policyVersion',(a->>'expiresAt')::timestamptz);
+   VALUES(auth,t,dec,res,actor,(a->>'actionType'),(a->>'recipient'),(a->>'contentHash'),(a->>'aggregateRevision')::integer,
+    (a->>'amountPence')::bigint,(a->>'currency'),(a->>'policyVersion'),(a->>'expiresAt')::timestamptz);
   END IF;
  END IF;
  INSERT INTO app.command_lifecycle_claim(tenant_id,command_id,actor_membership_id,version,resource,expected_revisions,significant_input,authorization_id)
@@ -231,7 +231,7 @@ BEGIN
  IF c.command_id IS NULL OR adapter IS NULL OR c.actor_membership_id IS DISTINCT FROM r.actor_membership_id
   OR c.transaction_id IS DISTINCT FROM pg_current_xact_id() THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
- subject:=c.resource->>'subjectRef'; a:=c.significant_input->'action'; expected_revision:=(c.expected_revisions->>'aggregateRevision')::integer;
+ subject:=(c.resource->>'subjectRef'); a:=(c.significant_input->'action'); expected_revision:=(c.expected_revisions->>'aggregateRevision')::integer;
  effect_table:=CASE adapter WHEN 'invoice' THEN 'customer_invoice' WHEN 'credit' THEN 'customer_credit_note'
   WHEN 'payment' THEN 'customer_payment' WHEN 'payment_reversal' THEN 'customer_payment_reversal'
   WHEN 'quote_send' THEN 'quote_send' WHEN 'purchase_order' THEN 'purchase_order_placement'
@@ -244,7 +244,7 @@ BEGIN
 
  CASE adapter
  WHEN 'review' THEN
-  SELECT CASE WHEN p_outcome ? 'revision' THEN jsonb_build_object('jobId',j.id,'revision',j.revision,'status',j.status)
+  SELECT CASE WHEN (p_outcome ? 'revision') THEN jsonb_build_object('jobId',j.id,'revision',j.revision,'status',j.status)
    ELSE jsonb_build_object('jobId',j.id,'reviewId',v.id,'jobRevision',j.revision,'status',j.status) END INTO value
    FROM app.proposal_review v JOIN app.job j ON(j.tenant_id,j.id)=(v.tenant_id,v.job_id)
    WHERE v.tenant_id=t AND j.id=subject::uuid AND v.state='confirmed' AND j.status='quoting'
@@ -256,12 +256,12 @@ BEGIN
    'billing','none','historicFeesCreated',0) INTO value
    FROM app.imported_job_baseline b JOIN app.job j ON(j.tenant_id,j.id)=(b.tenant_id,b.job_id)
    WHERE b.tenant_id=t AND b.job_id=subject::uuid AND b.attested_by_membership_id=c.actor_membership_id
-    AND b.baseline_hash=a->>'contentHash' AND b.accepted_net_value_pence=(a->>'amountPence')::bigint
-    AND b.import_terms_version=a->>'policyVersion' AND b.id=(c.effect_ref->>'baselineId')::uuid;
+    AND b.baseline_hash=(a->>'contentHash') AND b.accepted_net_value_pence=(a->>'amountPence')::bigint
+    AND b.import_terms_version=(a->>'policyVersion') AND b.id=(c.effect_ref->>'baselineId')::uuid;
   -- The parties-import API enriches the legacy mutation's base result. Treat
   -- its two IDs only as references: rederive their relationship and source hash
   -- from the immutable bindings and the baseline before returning the DTO.
-  IF value IS NOT NULL AND (p_outcome ? 'sourceJobId' OR p_outcome ? 'sourceBindingId') THEN
+  IF value IS NOT NULL AND ((p_outcome ? 'sourceJobId') OR (p_outcome ? 'sourceBindingId')) THEN
    IF jsonb_typeof(p_outcome->'sourceJobId') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_outcome->'sourceBindingId') IS DISTINCT FROM 'string'
     OR NOT EXISTS(SELECT 1 FROM app.imported_job_baseline b
@@ -276,7 +276,7 @@ BEGIN
        ',"baselineDescription":'||to_jsonb(b.baseline_description)::text||',"netPence":'||b.accepted_net_value_pence::text||'}','UTF8')),'hex'))
    THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
    value:=value||jsonb_build_object('version','job-parties-import-result.v1','environment','synthetic_demo',
-    'sourceJobId',p_outcome->>'sourceJobId','sourceBindingId',p_outcome->>'sourceBindingId','realExternalActions',0);
+    'sourceJobId',(p_outcome->>'sourceJobId'),'sourceBindingId',(p_outcome->>'sourceBindingId'),'realExternalActions',0);
   END IF;
  WHEN 'import_v3' THEN
   SELECT i.result INTO value FROM app.job_import_v3 i WHERE i.tenant_id=t AND i.command_id=p_command_id
@@ -289,14 +289,14 @@ BEGIN
   SELECT jsonb_build_object('decisionId',d.decision_id,'resolution',d.resolution,'authorizedAction',false) INTO value
    FROM app.decision_resolution d JOIN app.job_finding f ON(f.tenant_id,f.decision_id)=(d.tenant_id,d.decision_id)
    WHERE d.tenant_id=t AND d.decision_id=(c.significant_input->>'decisionId')::uuid
-    AND d.actor_membership_id=c.actor_membership_id AND d.resolution=c.significant_input->>'resolution'
-    AND f.fingerprint=c.significant_input->>'findingFingerprint' AND f.snapshot_revision=(c.expected_revisions->>'snapshotRevision')::integer;
+    AND d.actor_membership_id=c.actor_membership_id AND d.resolution=(c.significant_input->>'resolution')
+    AND f.fingerprint=(c.significant_input->>'findingFingerprint') AND f.snapshot_revision=(c.expected_revisions->>'snapshotRevision')::integer;
  WHEN 'activation' THEN
-  IF a->>'policyVersion'='synthetic_demo_activation.v3' THEN
+  IF (a->>'policyVersion')='synthetic_demo_activation.v3' THEN
    SELECT jsonb_build_object('jobId',j.job_id,'activationId',j.id,'termsId',terms.id,'state','live') INTO value
     FROM app.job_activation j JOIN app.job_activation_terms terms ON(terms.tenant_id,terms.activation_id)=(j.tenant_id,j.id)
     WHERE j.tenant_id=t AND j.job_id=subject::uuid AND j.actor_membership_id=c.actor_membership_id
-     AND j.accepted_document_hash=a->>'contentHash' AND j.accepted_document_version=expected_revision
+     AND j.accepted_document_hash=(a->>'contentHash') AND j.accepted_document_version=expected_revision
      AND j.id=(c.effect_ref->>'activationId')::uuid AND terms.id=(c.effect_ref->>'termsId')::uuid;
   IF value IS NOT NULL AND EXISTS(SELECT 1 FROM app.trial_admission WHERE tenant_id=t AND command_id=p_command_id) THEN
     value:=value||jsonb_build_object('snapshotId',(SELECT snapshot_id FROM app.trial_admission WHERE tenant_id=t AND command_id=p_command_id)); END IF;
@@ -309,12 +309,12 @@ BEGIN
     LEFT JOIN app.synthetic_obligation ob ON(ob.tenant_id,ob.activation_id)=(j.tenant_id,j.id)
     WHERE u.tenant_id=t AND u.command_id=p_command_id AND u.authorization_id=c.authorization_id
      AND u.actor_membership_id=c.actor_membership_id AND j.job_id=subject::uuid
-     AND j.accepted_document_hash=a->>'contentHash' AND j.accepted_document_version=expected_revision;
+     AND j.accepted_document_hash=(a->>'contentHash') AND j.accepted_document_version=expected_revision;
    -- Owner-connected legacy transition/lock fixtures have no activation row.
    -- Keep their narrow proof for the unchanged commands integration tests:
    -- runtime cannot execute transition_job or become a superuser, and even the
    -- fixture must prove a real live/revision change in this same transaction.
-   IF value IS NULL AND a->>'actionType'='switch_live' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN
+   IF value IS NULL AND (a->>'actionType')='switch_live' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN
     SELECT jsonb_build_object('jobId',id,'revision',app.job.revision,'status',status) INTO value FROM app.job
      WHERE tenant_id=t AND id=subject::uuid AND status='live' AND app.job.revision=expected_revision+1
       AND xmin::text=pg_current_xact_id()::text;
@@ -332,7 +332,7 @@ BEGIN
    FROM app.activation_acceptance_operation_use u JOIN app.quote_acceptance q ON(q.tenant_id,q.job_id)=(u.tenant_id,u.job_id)
    JOIN app.acceptance_event e ON(e.tenant_id,e.acceptance_id)=(q.tenant_id,q.id)
    WHERE u.tenant_id=t AND u.command_id=p_command_id AND u.authorization_id=c.authorization_id
-    AND q.actor_membership_id=c.actor_membership_id AND q.document_id=subject::uuid AND q.document_hash=a->>'contentHash'
+    AND q.actor_membership_id=c.actor_membership_id AND q.document_id=subject::uuid AND q.document_hash=(a->>'contentHash')
     AND q.document_version=expected_revision AND q.accepted_total_pence=(a->>'amountPence')::bigint AND e.kind='accepted'
     AND e.id=(p_outcome->>'eventId')::uuid;
  WHEN 'disposition' THEN
@@ -341,17 +341,17 @@ BEGIN
    FROM app.activation_acceptance_operation_use u JOIN app.acceptance_event e ON(e.tenant_id,e.job_id)=(u.tenant_id,u.job_id)
    WHERE u.tenant_id=t AND u.command_id=p_command_id AND u.authorization_id=c.authorization_id
     AND e.id=(p_outcome->>'eventId')::uuid AND e.actor_membership_id=c.actor_membership_id AND e.document_id=subject::uuid
-    AND e.document_hash=a->>'contentHash' AND e.document_version=expected_revision AND 'quote.'||e.kind=r.command_type;
+    AND e.document_hash=(a->>'contentHash') AND e.document_version=expected_revision AND 'quote.'||e.kind=r.command_type;
  WHEN 'quote_send' THEN
   SELECT jsonb_build_object('documentId',s.document_id,'outboxActionId',s.outbox_action_id,'state','issued') INTO value
    FROM app.quote_send s JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(s.tenant_id,s.document_id)
    WHERE s.tenant_id=t AND s.authorization_id=c.authorization_id AND s.document_id=subject::uuid
-    AND s.content_hash=a->>'contentHash' AND d.document_version=expected_revision;
+    AND s.content_hash=(a->>'contentHash') AND d.document_version=expected_revision;
  WHEN 'invoice' THEN
   SELECT jsonb_build_object('invoiceId',i.id,'invoiceNumber',i.invoice_number,'pdfSha256',i.pdf_sha256,'reused',i.authorization_id<>c.authorization_id,'synthetic',i.synthetic) INTO value
    FROM app.customer_invoice i JOIN app.action_outbox b ON(b.tenant_id,b.authorization_id)=(i.tenant_id,i.authorization_id)
    WHERE i.tenant_id=t AND (i.authorization_id=c.authorization_id OR i.id=(p_outcome->>'invoiceId')::uuid) AND i.job_id=subject::uuid
-    AND i.pdf_sha256=a->>'contentHash' AND i.total_pence=(a->>'amountPence')::bigint
+    AND i.pdf_sha256=(a->>'contentHash') AND i.total_pence=(a->>'amountPence')::bigint
     AND EXISTS(SELECT 1 FROM app.final_account_revision WHERE tenant_id=t AND id=i.final_account_revision_id AND revision=expected_revision);
  WHEN 'credit' THEN
   SELECT jsonb_build_object('creditNoteId',id,'creditNumber',credit_number,'originalInvoiceUnchanged',true) INTO value
@@ -365,20 +365,20 @@ BEGIN
   SELECT jsonb_build_object('placementId',p.id,'outboxActionId',p.outbox_action_id,'reused',p.authorization_id<>c.authorization_id) INTO value
    FROM app.purchase_order_placement p JOIN app.purchase_order_revision v ON(v.tenant_id,v.id)=(p.tenant_id,p.revision_id)
    WHERE p.tenant_id=t AND p.id=(p_outcome->>'placementId')::uuid AND p.revision_id=subject::uuid
-    AND v.revision=expected_revision AND v.authority_hash=a->>'contentHash' AND v.order_net_pence=(a->>'amountPence')::bigint
-    AND v.recipient IS NOT DISTINCT FROM a->>'recipient';
+    AND v.revision=expected_revision AND v.authority_hash=(a->>'contentHash') AND v.order_net_pence=(a->>'amountPence')::bigint
+    AND v.recipient IS NOT DISTINCT FROM (a->>'recipient');
  WHEN 'recovery_terms' THEN
   SELECT jsonb_build_object('version','recovery-case-terms.v1','id',id,'tenantId',tenant_id,'jobId',job_id,'caseId',case_id,
    'termsVersion',terms_version,'feePolicyVersion',fee_policy_version,'eligibilityPolicyVersion',eligibility_policy_version,
    'policyStatus',policy_status,'environment',environment,'termsHash',terms_hash,'actorMembershipId',actor_membership_id,
    'commandId',command_id,'authorizationId',authorization_id,'approvedAt',to_char(approved_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'realExternalActions',0) INTO value
    FROM app.recovery_case_terms_approval WHERE tenant_id=t AND command_id=p_command_id AND authorization_id=c.authorization_id
-    AND actor_membership_id=c.actor_membership_id AND case_id=subject::uuid AND terms_hash=a->>'contentHash';
+    AND actor_membership_id=c.actor_membership_id AND case_id=subject::uuid AND terms_hash=(a->>'contentHash');
  WHEN 'message' THEN
   SELECT jsonb_build_object('messageId',m.message_id,'outboxActionId',m.outbox_action_id,'authorizationId',m.authorization_id) INTO value
    FROM app.recovery_message_approval m JOIN app.recovery_message d ON(d.tenant_id,d.id)=(m.tenant_id,m.message_id)
-   WHERE m.tenant_id=t AND m.authorization_id=c.authorization_id AND d.content_hash=a->>'contentHash'
-    AND d.case_revision=expected_revision AND (m.message_id::text=subject OR (c.resource->>'subjectType'='recovery_follow_up' AND EXISTS(SELECT 1 FROM app.decision WHERE tenant_id=t AND id=(c.significant_input->>'decisionId')::uuid AND subject_type='recovery_follow_up' AND subject_ref=subject)));
+   WHERE m.tenant_id=t AND m.authorization_id=c.authorization_id AND d.content_hash=(a->>'contentHash')
+    AND d.case_revision=expected_revision AND (m.message_id::text=subject OR ((c.resource->>'subjectType')='recovery_follow_up' AND EXISTS(SELECT 1 FROM app.decision WHERE tenant_id=t AND id=(c.significant_input->>'decisionId')::uuid AND subject_type='recovery_follow_up' AND subject_ref=subject)));
  WHEN 'client_link' THEN
   SELECT jsonb_build_object('linkId',id,'outboxActionId',outbox_action_id,'requestId',request_id,'replacedOutboxIds',coalesce((SELECT jsonb_agg(k.outbox_action_id ORDER BY x.server_recorded_at,k.id) FROM app.extra_client_link_closure x JOIN app.extra_client_link k ON(k.tenant_id,k.id)=(x.tenant_id,x.link_id) WHERE x.tenant_id=t AND x.command_id=p_command_id AND x.kind='replaced'),'[]'::jsonb)) INTO value
    FROM app.extra_client_link WHERE tenant_id=t AND command_id=p_command_id AND authorization_id=c.authorization_id
@@ -386,7 +386,7 @@ BEGIN
  WHEN 'synthetic_lock_noop' THEN
   -- Explicit existing lock-test contract; not an unknown-type fallback.
   SELECT jsonb_build_object('locked',id) INTO value FROM app.job WHERE tenant_id=t AND id=subject::uuid
-   AND p_outcome->>'locked'=id::text;
+   AND (p_outcome->>'locked')=id::text;
  ELSE RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514';
  END CASE;
  IF value IS NULL THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
@@ -398,7 +398,7 @@ CREATE FUNCTION app.complete_command(p_command_id uuid,p_outcome jsonb) RETURNS 
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.command_lifecycle_claim;
  r app.command_receipt; reg app.command_type_registry; value jsonb; refs jsonb; proof_ref jsonb;
 BEGIN
- IF jsonb_typeof(p_outcome) IS DISTINCT FROM 'object' OR p_outcome-ARRAY['eventId','placementId','invoiceId','locked','revision','sourceJobId','sourceBindingId']<>'{}' THEN
+ IF jsonb_typeof(p_outcome) IS DISTINCT FROM 'object' OR (p_outcome-ARRAY['eventId','placementId','invoiceId','locked','revision','sourceJobId','sourceBindingId'])<>'{}' THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=p_command_id;
  SELECT * INTO r FROM app.command_receipt WHERE tenant_id=t AND command_id=p_command_id;
@@ -417,24 +417,24 @@ BEGIN
  value:=app.lp5_command_result(p_command_id,p_outcome);
  -- The argument is a reference hint only. Persist exclusively the adapter-derived result.
  proof_ref:=CASE reg.completion_adapter
-  WHEN 'import' THEN (CASE WHEN value ? 'sourceJobId' THEN jsonb_build_object('sourceJobId',value->'sourceJobId','sourceBindingId',value->'sourceBindingId') ELSE '{}'::jsonb END)
-  WHEN 'acceptance' THEN jsonb_build_object('eventId',value->'eventId')
-  WHEN 'disposition' THEN jsonb_build_object('eventId',value->'eventId')
-  WHEN 'purchase_order' THEN jsonb_build_object('placementId',value->'placementId')
-  WHEN 'invoice' THEN jsonb_build_object('invoiceId',value->'invoiceId')
-  WHEN 'synthetic_lock_noop' THEN jsonb_build_object('locked',value->'locked')
-  WHEN 'review' THEN (CASE WHEN value ? 'revision' THEN jsonb_build_object('revision',value->'revision') ELSE '{}'::jsonb END)
+  WHEN 'import' THEN (CASE WHEN (value ? 'sourceJobId') THEN jsonb_build_object('sourceJobId',(value->'sourceJobId'),'sourceBindingId',(value->'sourceBindingId')) ELSE '{}'::jsonb END)
+  WHEN 'acceptance' THEN jsonb_build_object('eventId',(value->'eventId'))
+  WHEN 'disposition' THEN jsonb_build_object('eventId',(value->'eventId'))
+  WHEN 'purchase_order' THEN jsonb_build_object('placementId',(value->'placementId'))
+  WHEN 'invoice' THEN jsonb_build_object('invoiceId',(value->'invoiceId'))
+  WHEN 'synthetic_lock_noop' THEN jsonb_build_object('locked',(value->'locked'))
+  WHEN 'review' THEN (CASE WHEN (value ? 'revision') THEN jsonb_build_object('revision',(value->'revision')) ELSE '{}'::jsonb END)
   ELSE '{}'::jsonb END;
  UPDATE app.command_lifecycle_claim SET outcome=proof_ref WHERE tenant_id=t AND command_id=p_command_id;
  UPDATE app.command_receipt SET status='succeeded',result=value,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=p_command_id;
  refs:=jsonb_build_object('commandId',p_command_id::text);
  IF c.authorization_id IS NOT NULL THEN refs:=refs||jsonb_build_object('authorizationId',c.authorization_id::text); END IF;
- IF reg.completion_adapter='synthetic_lock_noop' OR value->>'reused'='true' OR c.effect_ref ? 'noopReason' THEN
-  refs:=refs||jsonb_build_object('outcome','succeeded_noop','reason',coalesce(c.effect_ref->>'noopReason','adapter_verified_existing_effect')); END IF;
+ IF reg.completion_adapter='synthetic_lock_noop' OR (value->>'reused')='true' OR (c.effect_ref ? 'noopReason') THEN
+  refs:=refs||jsonb_build_object('outcome','succeeded_noop','reason',coalesce((c.effect_ref->>'noopReason'),'adapter_verified_existing_effect')); END IF;
  -- All business writes and the terminal receipt precede the last contending lock.
  PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
-  'actorRef','membership:'||c.actor_membership_id::text,'eventType','command.succeeded','subjectType',c.resource->>'subjectType',
-  'subjectRef',c.resource->>'subjectRef','payload',jsonb_build_object('references',refs,
+  'actorRef','membership:'||c.actor_membership_id::text,'eventType','command.succeeded','subjectType',(c.resource->>'subjectType'),
+  'subjectRef',(c.resource->>'subjectRef'),'payload',jsonb_build_object('references',refs,
   'classifications',jsonb_build_object('action',reg.audit_class)))),'checked_operation');
  RETURN value;
 END $$;
@@ -442,14 +442,14 @@ END $$;
 CREATE FUNCTION app.lp5_check_command_completion() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE c app.command_lifecycle_claim; r app.command_receipt; reg app.command_type_registry;
- value jsonb; outbox uuid; authorization uuid; a app.action_authorization; caller_tenant text:=current_setting('app.tenant_id',true);
+ value jsonb; outbox uuid; outbox_authorization_id uuid; a app.action_authorization; caller_tenant text:=current_setting('app.tenant_id',true);
 BEGIN
  -- Deferred checks run after caller code may have changed or cleared context.
  -- RLS and the result adapter must see the tenant of THIS receipt, not that setting.
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
  SELECT * INTO c FROM app.command_lifecycle_claim WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
- -- LP-5b converts other writers; LP-5c closes their direct grants. This trigger
- -- proves managed dispatcher claims, without declaring the unconverted writers secure.
+ -- Every touched receipt must finish before commit. LP-5b converts other writers;
+ -- LP-5c closes direct grants. Full effect/audit/outbox proof covers managed claims.
  IF NEW.status='processing' AND NOT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id AND status='succeeded') THEN
   RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23514'; END IF;
  IF c.command_id IS NULL THEN
@@ -460,20 +460,20 @@ BEGIN
   RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23514'; END IF;
  value:=app.lp5_command_result(r.command_id,c.outcome);
  IF value IS DISTINCT FROM r.result OR NOT EXISTS(SELECT 1 FROM app.audit_event e WHERE e.tenant_id=r.tenant_id
-   AND e.event_type='command.succeeded' AND e.actor_ref='membership:'||r.actor_membership_id::text
-   AND e.subject_type=c.resource->>'subjectType' AND e.subject_ref=c.resource->>'subjectRef'
-   AND e.payload->'references'->>'commandId'=r.command_id::text AND e.payload->'references'->>'auditTrust'='checked_operation') THEN
+   AND e.version='audit.v2' AND e.event_type='command.succeeded' AND e.actor_ref='membership:'||r.actor_membership_id::text
+   AND e.subject_type=(c.resource->>'subjectType') AND e.subject_ref=(c.resource->>'subjectRef')
+   AND (e.payload->'references'->>'commandId')=r.command_id::text AND (e.payload->'references'->>'auditTrust')='checked_operation') THEN
   RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='23514'; END IF;
  IF reg.outbox_class IS NOT NULL THEN
-  authorization:=c.authorization_id;
-  IF reg.completion_adapter='purchase_order' AND value->>'reused'='true' THEN
-   SELECT authorization_id INTO authorization FROM app.purchase_order_placement WHERE tenant_id=r.tenant_id AND id=(value->>'placementId')::uuid;
+  outbox_authorization_id:=c.authorization_id;
+  IF reg.completion_adapter='purchase_order' AND (value->>'reused')='true' THEN
+   SELECT authorization_id INTO outbox_authorization_id FROM app.purchase_order_placement WHERE tenant_id=r.tenant_id AND id=(value->>'placementId')::uuid;
   END IF;
-  IF reg.completion_adapter='invoice' AND value->>'reused'='true' THEN
-   SELECT authorization_id INTO authorization FROM app.customer_invoice WHERE tenant_id=r.tenant_id AND id=(value->>'invoiceId')::uuid;
+  IF reg.completion_adapter='invoice' AND (value->>'reused')='true' THEN
+   SELECT authorization_id INTO outbox_authorization_id FROM app.customer_invoice WHERE tenant_id=r.tenant_id AND id=(value->>'invoiceId')::uuid;
   END IF;
-  SELECT * INTO a FROM app.action_authorization WHERE tenant_id=r.tenant_id AND id=authorization;
-  IF NOT EXISTS(SELECT 1 FROM app.action_outbox b WHERE b.tenant_id=r.tenant_id AND b.authorization_id=authorization
+  SELECT * INTO a FROM app.action_authorization WHERE tenant_id=r.tenant_id AND id=outbox_authorization_id;
+  IF NOT EXISTS(SELECT 1 FROM app.action_outbox b WHERE b.tenant_id=r.tenant_id AND b.authorization_id=outbox_authorization_id
    AND b.adapter=reg.outbox_class AND b.action_type=a.action_type AND b.content_hash=a.content_hash
    AND b.aggregate_revision=a.aggregate_revision AND b.recipient IS NOT DISTINCT FROM a.recipient
    AND b.amount_pence IS NOT DISTINCT FROM a.amount_pence AND b.currency IS NOT DISTINCT FROM a.currency

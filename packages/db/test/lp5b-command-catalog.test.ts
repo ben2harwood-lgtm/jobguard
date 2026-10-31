@@ -25,7 +25,8 @@ describe("LP-5b draft catalogue additions", () => {
     const begin = sql.split("CREATE OR REPLACE FUNCTION app.begin_command")[1]!.split("END $$;")[0]!;
     expect(begin.replace(/--[^\n]*/g, " ")).not.toMatch(/FOR\s+(UPDATE|SHARE)|pg_advisory|p_(digest|hash)/i);
     expect(begin).toContain("found_count<>1");
-    expect(begin).toContain("(p_significant_input->>'legacyJson')::jsonb IS DISTINCT FROM p_significant_input->'input'");
+    expect(begin).toMatch(/END IF;\s*END IF;\s*INSERT INTO app\.command_lifecycle_claim/);
+    expect(begin).toContain("(p_significant_input->>'legacyJson')::jsonb IS DISTINCT FROM (p_significant_input->'input')");
     expect(sql).not.toMatch(/GRANT\s+(INSERT|UPDATE|DELETE)\b/);
     expect([...sql.matchAll(/GRANT EXECUTE ON FUNCTION ([^;]+);/g)].map(m=>m[1])).toEqual([
       "app.record_repository_command(uuid) TO jobguard_runtime,jobguard_migration",
@@ -41,6 +42,9 @@ describe("LP-5b draft catalogue additions", () => {
     expect(revoke).toBeGreaterThan(sql.lastIndexOf("OWNER TO jobguard_command_writer;"));
     expect(revoke).toBeLessThan(sql.lastIndexOf("COMMIT;"));
     expect(sql).not.toMatch(/CREATE\s+ROLE/i);
+    const records = sql.split("CREATE FUNCTION app.record_repository_command")[1]!.split("END $$;")[0]!;
+    expect(records).not.toMatch(/current_database|LP4_SYNTHETIC_DATABASE_REQUIRED/);
+    expect(records).toContain("synthetic_demo.seed");
   });
   it("keeps proof's checked resolution before completion audit and caller audit", () => {
     const complete = sql.split("CREATE OR REPLACE FUNCTION app.complete_command")[1]!;

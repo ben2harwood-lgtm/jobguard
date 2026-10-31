@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RecordBuilderAcceptanceMutation, RecordQuoteDispositionMutation } from "./acceptance-repository.js";
 import { RecordSimulatedSettlementMutation, SwitchJobLiveMutation } from "./activation-repository.js";
 import { lp3MutationHash } from "./lp3-operation.js";
+import type { TenantTransaction } from "./tenant-context.js";
 import type { ConsequentialCommand } from "./commands.js";
 const id="11111111-1111-4111-8111-111111111111",other="22222222-2222-4222-8222-222222222222",at=new Date("2026-10-01T00:00:00.123Z");
 const command={actorMembershipId:id} as ConsequentialCommand;
@@ -10,6 +11,19 @@ const activation={version:"switch-live.v1",activationId:id,capSnapshotId:id,synt
 const settlement={version:"simulated-settlement.v1",settlementId:id,obligationId:id,providerEventId:"Fictional 🧱 event",amountPence:7900,currency:"GBP",simulatedAt:at};
 const disposition={version:"quote-disposition.v1",eventId:id,jobId:id,documentId:id,documentVersion:1,documentHash:"a".repeat(64),expectedJobRevision:2,kind:"superseded",occurredAt:at};
 describe("LP3 runtime mutation binding",()=>{
+  it("reports only the LP-3 semantic-use uniqueness race as a command conflict", async () => {
+    const exact = {...command, action:{actionType:"quote.acceptance.attest", contentHash:acceptance.documentHash,
+      aggregateRevision:acceptance.documentVersion, amountPence:acceptance.acceptedTotalPence,
+      currency:"GBP", policyVersion:"builder-attestation.v1"}} as ConsequentialCommand;
+    const failure = (error: unknown) => ({$client:{query:async()=>{throw error;}}}) as unknown as TenantTransaction;
+    const constraint="activation_acceptance_operati_tenant_id_operation_semantic__key";
+    await expect(new RecordBuilderAcceptanceMutation(id,acceptance).mutate(failure({code:"23505",constraint}),exact))
+      .rejects.toMatchObject({code:"COMMAND_CONFLICT"});
+    for (const error of [{code:"23505",constraint:"quote_acceptance_pkey"},{code:"42501",constraint},new Error("connection failed")]) {
+      await expect(new RecordBuilderAcceptanceMutation(id,acceptance).mutate(failure(error),exact)).rejects.toBe(error);
+    }
+  });
+
   it("converts all four actual command input schemas to the shared strict codec",()=>{
     expect(new RecordBuilderAcceptanceMutation(id,acceptance).inputHash(command)).toBe(lp3MutationHash(id,id,acceptance));
     expect(new RecordQuoteDispositionMutation(id,disposition).inputHash(command)).toBe(lp3MutationHash(id,id,disposition));

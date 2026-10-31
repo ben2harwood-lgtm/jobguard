@@ -60,6 +60,7 @@ const GUARD_CODES: Readonly<Record<string, RecoveryFollowUpErrorCode>> = {
 function translate(error: unknown): unknown {
   if (error instanceof RecoveryFollowUpError || error instanceof RecoveryMessageError) return error;
   const pg = error as { code?: string; message?: string; constraint?: string };
+  if ((pg.code === "23514" || pg.code === "23505") && pg.message === "COMMAND_CONFLICT") return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
   if(pg.message==="FORBIDDEN")return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_FORBIDDEN");
   if (pg.code === "23514") { const code = GUARD_CODES[pg.message ?? ""]; if (code) return new RecoveryFollowUpError(code); }
   if (pg.code === "23505" && /recovery_follow_up(_event)?_(tenant_id_command_id|tenant_id_follow_up_id_revision|event_scheduled|event_became_due|event_cancelled|event_command)/u.test(pg.constraint ?? "")) return new RecoveryFollowUpError("RECOVERY_FOLLOW_UP_STALE_REVISION");

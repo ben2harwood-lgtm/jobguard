@@ -22,8 +22,8 @@ deleting audit history. External checkpoint anchoring remains deferred to M4 as 
 LP-4 dark database append (migration 0456)
 ----------------------------------------
 
-**LP-4 part 1: dark in-database audit append (RED).** This synthetic-only slice
-builds database sealing and grant withdrawal. **REFUSED / not built:** reserved
+**LP-4 part 1: in-database audit append (RED).** This slice builds database
+sealing and grant withdrawal in every migrated database. **REFUSED / not built:** reserved
 high-trust event-type enforcement and authority-consumer closure, including
 `practiceOwnedJobsSql`. Generic appends still accept those names as lower-trust
 statements; REFUSED describes the delivery guarantee, not an implemented SQL
@@ -69,8 +69,10 @@ The new NOLOGIN, NOBYPASSRLS audit writer has only audit table/head privileges a
 encoding execution. Runtime has no membership or SET ROLE route to it, no direct audit
 INSERT, no private primitive execution and no execution on the retired head routines.
 The SSO head bridge is also withdrawn from identity credentials in the same migration.
-All append paths refuse outside `jobguard_synthetic_demo`, irrespective of caller-set
-flags. No deployment or real-data enablement is supplied by this piece.
+Audit sealing does not depend on the database name. Tenant context, input validation
+and writer privileges apply in every migrated database. Separate synthetic-only
+commercial routines retain their own gates; no deployment or real-data enablement
+is supplied by this piece.
 
 This is a forward-only, atomic writer/verifier/grant cutover. Apply compatible callers
 before directing traffic to the new database routine. On failure, roll back the migration

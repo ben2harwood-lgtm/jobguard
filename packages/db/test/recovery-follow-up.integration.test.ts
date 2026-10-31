@@ -45,11 +45,9 @@ async function activatePursuitFixture(client: import("pg").PoolClient, tenant: s
   await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
   await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
   await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
-  const switched=await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
-  // Owner-only fixture: the real mutation and its terminal receipt commit
-  // together; LP-5a refuses a processing receipt left behind at commit.
-  await client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[tenant,command,JSON.stringify({fixtureActivation:true,jobId:job})]);
-  return switched;
+  const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  return result;
 }
 
 /** The practice demo tenant's invoiced job, owned by one practice session, exactly as the persisted recovery journey leaves it. */
@@ -1020,7 +1018,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const base = await scheduled(), commandId = randomUUID();
     const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
     const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
-    const repair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const historicalRepair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const sealedMigration = await readFile(new URL("../migrations/0456_lp4_database_audit.sql", import.meta.url), "utf8");
+    const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
+    // Restore the repaired semantics with the currently installed sealed writer,
+    // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
+    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, () => sealedEvaluator);
     const owner = await admin.connect();
     try {
       // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
@@ -1110,11 +1113,11 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();

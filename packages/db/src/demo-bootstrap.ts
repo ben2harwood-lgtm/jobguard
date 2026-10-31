@@ -121,9 +121,8 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
   } catch (error) { await admin.query("ROLLBACK"); throw error; }
 }
 async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
-  // Ownership transfers require membership in the target roles. Only the
-  // administrator grants it; migration never receives CREATEROLE. Restrict this
-  // temporary capability to the migration run, including its failure path.
+  // Only the administrator can grant owner membership; migrations remain
+  // NOCREATEROLE. Remove the temporary capability on success and failure.
   await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
   try {
     await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");

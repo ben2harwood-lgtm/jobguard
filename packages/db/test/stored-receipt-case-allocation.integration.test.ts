@@ -2,7 +2,7 @@
 import {assertLp4SealedEvents} from "./lp4-writer-catchup-fixture.js";
 import {randomUUID} from "node:crypto";
 import {beforeAll,afterAll,expect,it} from "vitest";
-import {calculateCumulativeFee} from "@jobguard/core";
+import {calculateCumulativeFee,parseExactPence,serializeExactPence,sumExactPence} from "@jobguard/core";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
 import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
@@ -36,6 +36,7 @@ it("LP-4 seals a stored-receipt review without a null allocation reference and r
 });
 it.each(["F5","F7"] as const)("saves %s from real invoice/feed/receipt/producer writers and preserves exact SH-1 money",async kind=>{
  const x=await realReceiptFixture(f,kind),{result,approval}=await save(x);
+ expect(result.facts.gross).toEqual({numerator:kind==="F5"?"48000":"96000",denominator:"1"});
  expect(result.facts.net).toEqual({numerator:kind==="F5"?"40000":"80000",denominator:"1"});
  expect(result.facts.rule).toBe(kind==="F5"?"pro_rata":"separate_invoice");
  const saved=(await f.admin.query("SELECT net_numerator,net_denominator FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,result.allocationId])).rows;
@@ -86,8 +87,10 @@ it("concurrent alternate assignments conserve the line",async()=>{
  const results=await Promise.allSettled([execute(x,{...a,action:"approve",commandId:randomUUID(),reviewId:ar.reviewId,approvalHash:ar.approvalHash}),execute(x,{...b,action:"approve",commandId:randomUUID(),reviewId:br.reviewId,approvalHash:br.approvalHash})]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
 });
-it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutable, replay-safe reversal",async kind=>{
- const x=await realReceiptFixture(f),{result:original}=await save(x),originalBytes=(await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,original.allocationId])).rows[0];
+it.each([
+ ["F5","refund"],["F5","credit"],["F7","refund"],["F7","credit"],
+] as const)("%s: a real %s writer drives a linked, immutable, replay-safe reversal",async(fixture,kind)=>{
+ const x=await realReceiptFixture(f,fixture),{result:original}=await save(x),originalBytes=(await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,original.allocationId])).rows[0];
  let sourceId:string;
  if(kind==="refund"){
   // Loss/revocation of the original proof cannot prevent a negative correction.
@@ -96,8 +99,8 @@ it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutab
   await x.invoices.reverseReceipt(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,paymentId:x.paymentId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),reason:"Fictional full refund"});
   sourceId=(await f.admin.query("SELECT id FROM app.customer_payment_reversal WHERE tenant_id=$1 AND payment_id=$2",[x.context.tenantId,x.paymentId])).rows[0].id;
  }else{
-  const preview=await x.invoices.previewCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,netPence:80000,reason:"Fictional item credit"});
-  sourceId=(await x.invoices.issueCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),netPence:80000,reason:"Fictional item credit",previewHash:preview.previewHash})).creditNoteId;
+  const preview=await x.invoices.previewCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,netPence:fixture==="F5"?1220000:80000,reason:"Fictional item credit"});
+  sourceId=(await x.invoices.issueCredit(x.context,{jobId:x.jobId,invoiceId:x.invoiceId,actorMembershipId:x.actor.membershipId,commandId:randomUUID(),netPence:fixture==="F5"?1220000:80000,reason:"Fictional item credit",previewHash:preview.previewHash})).creditNoteId;
  }
  const snapshot=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId});
  const review=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,{version:"receipt-line-facts-command.v1",action:"review_reverse",commandId:randomUUID(),allocationRevisionId:x.produced.allocationRevisionId,reversalSource:{kind:kind==="refund"?"payment_reversal":"credit_note",sourceId},expectedSourceRevision:snapshot.revision});
@@ -106,7 +109,7 @@ it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutab
  expect(reviewAudit).toHaveLength(1);
  expect(reviewAudit[0].payload.references).not.toHaveProperty("allocationRevisionId");
  const approval={version:"receipt-line-facts-command.v1",action:"reverse",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash,expectedSourceRevision:review.sourceRevision};
- if(kind==="refund"){
+ if(kind==="refund"&&fixture==="F7"){
   await f.admin.query(`CREATE FUNCTION app.receipt_r1_source_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type='receipt_facts.reverse' THEN RAISE EXCEPTION 'RECEIPT_R1_SOURCE_AUDIT_FAILURE'; END IF; RETURN NEW; END $$;
    CREATE TRIGGER receipt_r1_source_audit_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.receipt_r1_source_audit_failure()`);
   try{
@@ -118,10 +121,20 @@ it.each(["refund","credit"] as const)("a real %s writer drives a linked, immutab
  const negative=await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,approval);
  expect(await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,approval)).toEqual({...negative,replayed:true});
  const after=await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId}),line=after.rows.find(r=>r.direction==="reversal"&&r.lineId===x.line)!;
- expect(line.net).toEqual({numerator:"-80000",denominator:"1"});
+ expect(line.net).toEqual({numerator:fixture==="F5"?"-40000":"-80000",denominator:"1"});
+ expect(line.gross).toEqual({numerator:fixture==="F5"?"-48000":"-96000",denominator:"1"});
+ expect(line.rule).toBe(fixture==="F5"?"pro_rata":"separate_invoice");
  expect(line.reversesLineAllocationId).toBe(x.fact.lineAllocationId);
  if(kind==="refund"){expect(after.holds).toContain("INVALIDATED_EVIDENCE");expect(after.holds).toContain("APPROVAL_REVOKED");}
  const reversed=await save(x,line.lineAllocationId);
+ expect(reversed.result.facts.net).toEqual(line.net);
+ expect(await execute(x,reversed.approval)).toEqual({...reversed.result,replayed:true});
+ const saved=(await f.admin.query("SELECT net_numerator,net_denominator,reverses_id FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,reversed.result.allocationId])).rows;
+ expect(saved).toEqual([{net_numerator:line.net.numerator,net_denominator:"1",reverses_id:original.allocationId}]);
+ // Exact cumulative fee arithmetic only; neither fixture authorizes a fee posting.
+ const cumulative=serializeExactPence(sumExactPence([original.facts.net,reversed.result.facts.net].map(value=>parseExactPence(value))));
+ expect(cumulative).toEqual({numerator:"0",denominator:"1"});
+ expect(calculateCumulativeFee({version:"cumulative-fee.v1",cumulativeQualifyingPrincipal:cumulative,rate:{version:"fee-rate.v1",policyVersion:"reference_fee_policy_v3",numerator:"1",denominator:"10"},priorNetPostedPence:fixture==="F5"?4000:8000,priorPolicyVersion:"reference_fee_policy_v3",compensatesDerivationId:randomUUID()}).postingDelta.pence).toBe(fixture==="F5"?-4000:-8000);
  expect(reversed.result.facts.reversesId).toBe(original.allocationId);
  expect((await f.admin.query("SELECT row_to_json(a)::text bytes FROM app.stored_receipt_case_allocation a WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,original.allocationId])).rows[0]).toEqual(originalBytes);
  await expect(save(x,line.lineAllocationId)).rejects.toThrow();

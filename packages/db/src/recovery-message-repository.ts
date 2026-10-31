@@ -74,6 +74,10 @@ function translate(error: unknown): unknown {
     return new RecoveryMessageError(error.code === "FORBIDDEN" ? "RECOVERY_MESSAGE_FORBIDDEN" : error.code === "COMMAND_CONFLICT" ? "RECOVERY_MESSAGE_COMMAND_CONFLICT" : "RECOVERY_MESSAGE_EXPIRED");
   }
   const pg = error as { code?: string; message?: string; constraint?: string };
+  // Deferred command guards can fail at COMMIT, outside the dispatcher's mapper.
+  if ((pg.code === "23514" || pg.code === "23505") && pg.message === "COMMAND_CONFLICT") {
+    return new RecoveryMessageError("RECOVERY_MESSAGE_COMMAND_CONFLICT");
+  }
   if(pg.message==="FORBIDDEN")return new RecoveryMessageError("RECOVERY_MESSAGE_FORBIDDEN");
   if (pg.code === "23514") {
     const mapped: Record<string, RecoveryMessageErrorCode> = {
