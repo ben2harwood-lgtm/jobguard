@@ -51,7 +51,7 @@ export function JobWorkState({ jobId }: { jobId: string }) {
   } catch { if (current(requestEpoch)) setError("The result is unknown. Retry the same action, or load the saved state first."); }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
  };
- const act = (action: "finish" | "cancel_finish" | "close" | "reopen", extra: Record<string, unknown> = {}) => {
+ const act = (action: "finish" | "cancel_finish" | "close" | "reopen" | "resume", extra: Record<string, unknown> = {}) => {
   if (!view) return;
   void send(jobWorkStateCommandV1.parse({ version: "job-work-state-command.v1", commandId: crypto.randomUUID(), expectedRevision: view.revision, action, ...extra }));
  };
@@ -65,10 +65,10 @@ export function JobWorkState({ jobId }: { jobId: string }) {
    <div className={styles.actions}>
     {!closed && !view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
     {!closed && view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
-    {closed && <button type="button" disabled={busy || !view.locked} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
-    <button type="button" disabled>Resume site work</button>
+    {closed && <button type="button" disabled={busy || view.locked} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
+    {!closed && <button type="button" disabled={busy || view.locked} onClick={() => act("resume")}>Resume site work</button>}
    </div>
-   <p>Resume site work is not available yet: it waits for the jobs-on-the-go meter.{closed && !view.locked ? " Reopening a closed job waits for it too." : ""}</p>
+   <p>Resuming or reopening checks the saved jobs-on-the-go meter before it records the event.</p>
    {!closed && <fieldset className={styles.actions}>
     <legend>Close job</legend>
     <div className={styles.field}><label htmlFor="close-reason">Reason</label><select id="close-reason" value={reason} disabled={busy} onChange={e => setReason(e.target.value as CloseReason)}>{(Object.keys(closeReasonLabels) as CloseReason[]).map(key => <option key={key} value={key}>{closeReasonLabels[key]}</option>)}</select></div>
