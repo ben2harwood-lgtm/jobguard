@@ -4,7 +4,7 @@ import { Inject, Injectable, UnauthorizedException, ForbiddenException, type Can
 import { IDENTITY_APPLICATION, cookieToken, identityStatus, type IdentityHttpRequest } from "./identity-http.js";
 import type { IdentityApplication } from "./identity.application.js";
 import { syntheticSessionAllowed } from "./synthetic-session.js";
-const SUBSCRIPTION_PATHS=new Set(["GET /subscriptions/current","POST /subscriptions/commands"]);
+const SUBSCRIPTION_PATHS=new Set(["GET /subscriptions/current","POST /subscriptions/commands","POST /privacy-rehearsal/commands","POST /privacy-rehearsal/read"]);
 /** Fail closed before any Nest controller, including when Next is bypassed. */
 @Injectable()
 export class ApplicationAuthGuard implements CanActivate {
@@ -14,7 +14,7 @@ export class ApplicationAuthGuard implements CanActivate {
     if(request.method==="POST" && [...customerActions,...customerVariationActions].some(action=>request.path===`/customer-portal/${action}`))return true;
     if(customerToken(request)!==undefined)throw new UnauthorizedException({code:"UNAUTHENTICATED"});
     if(request.path==="/healthz" || request.path.startsWith("/auth/"))return true;
-    // MON-2A subscription paths and CH-9 exact GET value paths use the company bridge
+    // MON-2A subscription, M0-13c privacy and CH-9 exact GET value paths use the company bridge
     // before the practice shortcut. All other money paths retain their existing refusal.
     if(SUBSCRIPTION_PATHS.has(`${request.method??""} ${request.path}`) || (request.method==="GET" && (request.path==="/value" || /^\/jobs\/[a-f0-9-]{36}\/value\/v3$/iu.test(request.path)) && cookieToken(request))){
       try {
