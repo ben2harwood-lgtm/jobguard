@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-drive-6-9": {
+      "branches": ["codex/sandbox/demo-j3-drive-6-9"],
+      "note": "RED DEMO-S steps 6–9 on the same fresh shadow-30000 job. Builds on #450, #451 and j3-landing-alloc; report assertions require #453 v2. No new migration. Privilege inventory is the exact identity union for the pending merge, with 0413 routine facts retained.",
+      "allow": [
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/helpers/j3-customer-approval.ts",
+        "apps/web/e2e/helpers/j3-settlement.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
+      ]
+    }
+  }
+}

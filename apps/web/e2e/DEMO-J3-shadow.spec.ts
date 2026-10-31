@@ -6,12 +6,13 @@ import { openCapture, startWatchdogJob } from "./helpers/capture-journey";
 import { jsonResult } from "./helpers/customer-invoice-journey";
 import type { FinalCheckRead } from "../app/ui/final-check-reveal-view";
 import { holdShadowRecipeSources } from "./helpers/shadow-source-recipe";
+import { approveJ3Catches } from "./helpers/j3-customer-approval";
+import { settleJ3 } from "./helpers/j3-settlement";
 import { finishDispositionsAndTerms } from "./helpers/final-account-lock-journey";
 
-// Real persisted first half; no customer approval, paid invoice, Q or fee is
-// manufactured to get past MON-5. Runs in both configured browser projects.
-test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 without customer approval", async ({ page }) => {
- test.setTimeout(300_000);
+// Fresh persisted DEMO-S steps 1–9, on both phone and desktop. No end-state seed.
+test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs", async ({ page, browser }, testInfo) => {
+ test.setTimeout(720_000);
  await openCapture(page); await page.goto("/demo-s/shadow-30000");
  const create = page.getByRole("button", { name: "Create or recover the J3 capture" });
  await create.click();
@@ -73,7 +74,7 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  expect(final.account.totals.net.pence).toBe(3360000);
  const before = await read("shadow-demo"); expect(before.account.captures.map((c: { netPence: number }) => c.netPence).sort()).toEqual([320000, 40000]);
  expect(before).not.toHaveProperty("finalCheck"); expect(before).not.toHaveProperty("assessments");
- expect(before.customerApproval).toBe("not_ready_yet"); expect(before.invoices.invoices).toEqual([]);
+ expect(before).toMatchObject({ version: "shadow-demo-report.v2", customerApproval: { state: "not_ready_yet", approvals: [] } }); expect(before.invoices.invoices).toEqual([]);
  await page.goto(`/jobs/${jobId}#final-account-title`); await finishDispositionsAndTerms(page);
  await page.getByRole("button", { name: "Complete final account", exact: true }).click();
  await expect.poll(async () => (await read("shadow-demo")).account.lock?.finalAccountRevisionId).toBe(final.account.id);
@@ -104,17 +105,57 @@ test("DEMO-J3 source recipe locks £33,600 and genuinely reveals £500 + £300 w
  const after = await read("shadow-demo");
  expect(after.account.lock).toEqual(locked.account.lock);
  expect(after.account.account.id).toBe(final.account.id);
- expect(after.assessments).toEqual([]); // Q/£80/£720 remain targets until MON-5 and verified settlement.
+ expect(after.assessments).toEqual([]); // No assessment before settlement and allocation.
  expect(after.invoices.invoices).toEqual([]);
- expect(after.customerApproval).toBe("not_ready_yet"); expect(after.realExternalActions).toBe(0);
+ expect(after.customerApproval).toEqual({ state: "awaiting_customer", approvals: [] }); expect(after.realExternalActions).toBe(0);
  // A fresh post-lock note is refused; exact earlier command can still replay.
  const late = await page.request.post(`/api/jobs/${jobId}/diary`, { data: { ...diary, commandId: randomUUID() } });
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);
+ // Leg 6b: send the priced catches, then the customer signs in and approves
+ // each exact revision in an isolated portal context. No builder attestation.
+ await approveJ3Catches(page, browser, jobId, catches);
+ const approvedReport = await read("shadow-demo");
+ expect(approvedReport.customerApproval.state).toBe("approved");
+ expect(approvedReport.customerApproval.approvals.map((row: { variationId: string }) => row.variationId).sort()).toEqual(catches.map((row: { id: string }) => row.id).sort());
+ for (const row of approvedReport.customerApproval.approvals) {
+  expect(row.method).toBe("customer_portal"); expect(Number.isNaN(Date.parse(row.approvedAt))).toBe(false);
+ }
+ // Legs 7–9: one combined invoice, matched settled receipt, exact source-backed
+ // allocations, SV-6 reviews, MON-4A statement and CH-8 offline-verified packs.
+ const settled = await settleJ3(page, jobId, reveal.lockId!, final.account.revision, catches, testInfo);
+ const report = await read("shadow-demo");
+ expect(report).toMatchObject({ version: "shadow-demo-report.v2", jobId, realExternalActions: 0, customerApproval: { state: "approved" }, account: { lock: locked.account.lock } });
+ expect(report.account.account.id).toBe(settled.final.account.id);
+ expect(report.account.captures.map((row: { id: string }) => row.id).sort()).toEqual(before.account.captures.map((row: { id: string }) => row.id).sort());
+ expect(report.invoices.invoices).toEqual([expect.objectContaining({ id: settled.invoice.id, netPence: 3440000, totalPence: 4128000, balancePence: 0 })]);
+ expect(report.finalCheck).toMatchObject({ state: "completed", lockId: reveal.lockId, runId: reveal.runId });
+ expect(report.assessments.map((row: { assessment: { assessmentId: string } }) => row.assessment.assessmentId).sort()).toEqual(settled.assessments.map(row => row.assessment.assessmentId).sort());
+ expect(report.packs.map((row: { caseId: string }) => row.caseId).sort()).toEqual(settled.packs.map(row => row.caseId).sort());
+ for (const pack of settled.packs) {
+  const saved = report.packs.find((row: { caseId: string }) => row.caseId === pack.caseId);
+  // The report must contain the same persisted pack producer response, not a
+  // hard-coded completion label or a pack borrowed from another case.
+  expect(saved.result).toEqual(await jsonResult(page.request.get(`/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`), "Read approved pack"));
+  expect(JSON.stringify(saved.result)).toContain(pack.manifestHash);
+ }
+ // v2 embeds the FULL held-or-mapped value union. A completed journey requires
+ // mapped values, and must keep the builder's £3,600 captures fee-free.
+ expect(report.value).toEqual(await read("value/v3"));
+ expect(report.value).toMatchObject({ version: "job-value.v3", jobId, status: "mapped", receipt: {
+  tracked: { pence: 360000, currency: "GBP" }, trackedFee: { pence: 0, currency: "GBP" },
+  found: { state: "mapped", recovered: { pence: 80000 }, fee: { pence: 8000 }, yoursBeforeVatAndTax: { pence: 72000 } },
+ } });
+ await page.goto(`/jobs/${jobId}/value`);
+ for (const [id, amount] of [["found-recovered-net", "£800.00"], ["found-success-fee", "£80.00"], ["found-yours-before-tax", "£720.00"], ["tracked-captured-net", "£3,600.00"], ["tracked-fee", "£0.00"]]) await expect(page.getByTestId(id!)).toHaveText(amount!);
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
  await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
  const saved = page.getByRole("region", { name: "Saved shadow journey report" });
- await expect(saved).toContainText("£33,600.00 net"); await expect(saved).toContainText("MON-5");
- await expect(saved).toContainText("fitted garden drainage"); await expect(saved).toContainText("fitted loft hatch");
- await expect(saved).toContainText("No invoice issued"); await expect(saved).toContainText("recovery fee £0");
+ for (const text of ["£34,400.00", "£41,280.00", "£800.00", "£80.00", "£720.00", "fitted garden drainage", "fitted loft hatch", "recovery fee £0"]) await expect(saved).toContainText(text);
+ await expect(saved).not.toContainText("Customer approval is not ready yet");
+ // Reload the report to prove the same persisted bindings survive navigation.
+ await page.reload(); await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await expect(saved).toContainText("£34,400.00");
+ expect(await read("shadow-demo")).toEqual(report);
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ await page.screenshot({ path: testInfo.outputPath(`DEMO-J3-${testInfo.project.name}.png`), fullPage: true });
 });
