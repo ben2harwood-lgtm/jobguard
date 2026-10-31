@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
-import { withTenant, type VerifiedTenantContext } from "@jobguard/db";
+import { withTenant } from "@jobguard/db";
+import { PracticeAccess } from "./practice-access.js";
 import {
   RecoveryTimelineError, requireSyntheticTimeline, type RecoveryTimelineRef, type RecoveryTimelineSignal,
   type RecoveryWorkflowStore, type TimelineState,
@@ -37,14 +38,20 @@ function activityPool(pool: Pool, client: PoolClient): Pool {
 /** Dark synthetic history only. Authentication is resolved afresh before reading any history. */
 export class PostgresRecoveryWorkflowStore implements RecoveryWorkflowStore {
   constructor(private readonly pool: Pool,
-    private readonly contextFor: (ref: RecoveryTimelineRef) => Promise<VerifiedTenantContext>,
+    private readonly sessionFor: (ref: RecoveryTimelineRef) => Promise<string | undefined>,
     private readonly environment = "disabled") {}
+
+  private async context(ref: RecoveryTimelineRef) {
+    try {
+      const session = await this.sessionFor(ref);
+      const access = await new PracticeAccess(this.pool, session).case(ref.caseId);
+      return access.context;
+    } catch { throw new RecoveryTimelineError("ACTIVITY_FAILED"); }
+  }
 
   async apply(signal: RecoveryTimelineSignal, update: (state: TimelineState, transactionPool?: Pool) => Promise<TimelineState>): Promise<TimelineState> {
     requireSyntheticTimeline(this.environment);
-    let context: VerifiedTenantContext;
-    try { context = await this.contextFor(signal.ref); }
-    catch { throw new RecoveryTimelineError("ACTIVITY_FAILED"); }
+    const context = await this.context(signal.ref);
     if (context.tenantId !== signal.ref.tenantId) throw new RecoveryTimelineError("NOT_FOUND");
     const { tenantId, jobId, caseId, runId, followUpId } = signal.ref;
     return withTenant(this.pool, context, async db => {

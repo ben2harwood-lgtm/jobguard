@@ -18,7 +18,6 @@ import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { StoredRecoveryWorkflowRuntime } from "../../../apps/api/src/recovery-timeline.workflow.js";
 import { PostgresRecoveryWorkflowStore } from "../../../apps/api/src/recovery-timeline.store.js";
 import { PracticeRecoveryTimelineActivities } from "../../../apps/api/src/recovery-timeline.activities.js";
-import { PracticeAccess } from "../../../apps/api/src/practice-access.js";
 
 // Real PostgreSQL 16, the real migrations applied as the migration owner, the real non-owner runtime role, and the real SBOX-2 and M4-5-S
 // repositories: no mock stands in for a guarantee here. Every number below is read back from the database.
@@ -1174,7 +1173,7 @@ it("ReminderUsesSameGuard: a due reminder cannot preview after its terms prerequ
 describe("M4-6 PostgreSQL timeline history", () => {
   const timeline = (pool = runtime) => new StoredRecoveryWorkflowRuntime(
     new PracticeRecoveryTimelineActivities(pool, async () => token, "synthetic_demo"),
-    new PostgresRecoveryWorkflowStore(pool, async ref => (await new PracticeAccess(pool, token).case(ref.caseId)).context, "synthetic_demo"),
+    new PostgresRecoveryWorkflowStore(pool, async () => token, "synthetic_demo"),
     "synthetic_demo");
   const event = (base: Awaited<ReturnType<typeof scheduled>>, kind: "timer" | "cancel" | "builder_response" = "timer") => ({
     version: "recovery-timeline-signal.v1", signalId: randomUUID(), eventId: randomUUID(), kind,
@@ -1275,7 +1274,7 @@ describe("M4-6 PostgreSQL timeline history", () => {
     const base = await scheduled(), signal = event(base);
     await missedClock(base);
     const real = new PracticeRecoveryTimelineActivities(runtime, async () => token, "synthetic_demo");
-    const store = new PostgresRecoveryWorkflowStore(runtime, async () => ctx, "synthetic_demo");
+    const store = new PostgresRecoveryWorkflowStore(runtime, async () => token, "synthetic_demo");
     const crash = new StoredRecoveryWorkflowRuntime({ async execute(activity, transactionPool) { await real.execute(activity, transactionPool); throw new Error("synthetic crash"); } }, store, "synthetic_demo");
     await expect(crash.signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
     expect(await dueDecisions(base.followUp.id)).toBe(0);

@@ -1,27 +1,41 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { verifiedTenantContextForQueuedJob, type VerifiedTenantContext } from "@jobguard/db";
 import { PostgresRecoveryWorkflowStore } from "./recovery-timeline.store.js";
 import { StoredRecoveryWorkflowRuntime } from "./recovery-timeline.workflow.js";
+
+const mocks = vi.hoisted(() => ({ access: vi.fn(), bridge: vi.fn() }));
+vi.mock("./practice-access.js", () => ({ PracticeAccess: class {
+  constructor(pool: Pool, session: string | undefined) { mocks.bridge(pool, session); }
+  case = mocks.access;
+} }));
+beforeEach(() => { vi.clearAllMocks(); mocks.access.mockReset(); });
 
 const id = (n: number) => `29000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const signal = { version: "recovery-timeline-signal.v1", signalId: id(1), eventId: id(2), kind: "timer",
   ref: { tenantId: id(3), jobId: id(4), caseId: id(5), runId: id(6), followUpId: id(7) } };
 function fixture(environment?: string) {
   const connect = vi.fn(), context = vi.fn(), execute = vi.fn();
-  const store = new PostgresRecoveryWorkflowStore({ connect } as unknown as Pool, context, environment);
-  return { connect, context, execute, runtime: new StoredRecoveryWorkflowRuntime({ execute }, store, "synthetic_demo") };
+  mocks.access.mockImplementation(async () => ({ context: await context() }));
+  const session = vi.fn(async () => "server-only-session");
+  const store = new PostgresRecoveryWorkflowStore({ connect } as unknown as Pool, session, environment);
+  return { connect, context, session, execute, runtime: new StoredRecoveryWorkflowRuntime({ execute }, store, "synthetic_demo") };
 }
 describe("PostgreSQL timeline authentication boundary", () => {
   it.each([undefined, "production"])("refuses %s store mode before authentication or history reads", async mode => {
     const f = fixture(mode);
     await expect(f.runtime.signal(signal)).rejects.toThrow("DISABLED");
-    expect(f.context).not.toHaveBeenCalled(); expect(f.connect).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
+    expect(f.session).not.toHaveBeenCalled(); expect(mocks.access).not.toHaveBeenCalled(); expect(f.context).not.toHaveBeenCalled(); expect(f.connect).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
   });
   it("redacts a revoked authentication failure before reading saved history", async () => {
     const f = fixture("synthetic_demo"); f.context.mockRejectedValue(new Error("private session material"));
     await expect(f.runtime.signal(signal)).rejects.toThrow(/^RECOVERY_TIMELINE_ACTIVITY_FAILED$/);
     expect(f.connect).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
+  });
+  it("redacts session lookup failures before entering the bridge or history", async () => {
+    const f = fixture("synthetic_demo"); f.session.mockRejectedValue(new Error("private session material"));
+    await expect(f.runtime.signal(signal)).rejects.toThrow(/^RECOVERY_TIMELINE_ACTIVITY_FAILED$/);
+    expect(mocks.access).not.toHaveBeenCalled(); expect(f.connect).not.toHaveBeenCalled(); expect(f.execute).not.toHaveBeenCalled();
   });
   it("never uses a signal tenant in place of the authenticated context", async () => {
     const f = fixture("synthetic_demo"); f.context.mockResolvedValue({ tenantId: id(99) } as VerifiedTenantContext);
@@ -42,8 +56,8 @@ describe("single-connection activity transaction", () => {
     });
     const connect = vi.fn(async () => ({ query, release }));
     const pool = { connect } as unknown as Pool;
-    const store = new PostgresRecoveryWorkflowStore(pool,
-      async () => verifiedTenantContextForQueuedJob(signal.ref.tenantId), "synthetic_demo");
+    mocks.access.mockResolvedValue({ context: verifiedTenantContextForQueuedJob(signal.ref.tenantId) });
+    const store = new PostgresRecoveryWorkflowStore(pool, async () => "server-only-session", "synthetic_demo");
     return { pool, store, connect, release, statements, query };
   }
   it("runs activity queries and nested transactions on the one history connection", async () => {
@@ -62,6 +76,8 @@ describe("single-connection activity transaction", () => {
       return "review";
     } }, f.store, "synthetic_demo");
     await expect(runtime.signal(signal)).resolves.toBe("review");
+    expect(mocks.bridge).toHaveBeenCalledWith(f.pool, "server-only-session");
+    expect(mocks.access).toHaveBeenCalledWith(signal.ref.caseId);
     expect(f.connect).toHaveBeenCalledTimes(1);
     expect(f.release).toHaveBeenCalledTimes(1);
     expect(f.statements.filter(sql => sql === "BEGIN")).toHaveLength(1);

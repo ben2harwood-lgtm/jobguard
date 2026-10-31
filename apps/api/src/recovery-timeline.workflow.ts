@@ -106,4 +106,4 @@ export class StoredRecoveryWorkflowRuntime implements RecoveryWorkflowRuntime {
   }
 }
 /** Compatibility name for existing fake-runtime callers. */
-export class InMemoryRecoveryWorkflowRuntime extends StoredRecoveryWorkflowRuntime {}
+export { StoredRecoveryWorkflowRuntime as InMemoryRecoveryWorkflowRuntime };
