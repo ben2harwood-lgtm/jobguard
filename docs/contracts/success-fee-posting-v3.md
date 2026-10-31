@@ -5,7 +5,8 @@
 M4-9 part 2 adds a per-job posting lock, insert bounds and an exact deferred rebuild
 of the principal, statement authority and allocation-level source links. The private
 `success_fee_inputs` helper is shared by the command and rebuild, using the latest
-0393 writer's source checks. The inherited coarse source fence remains in place.
+0406 writer's source checks. The inherited private `lock_success_fee_sources`
+fence remains in place.
 
 After a posting, a changed source can only reduce its previously approved principal.
 An excluded source contributes zero. A fresh source still requires current approved
@@ -27,7 +28,7 @@ adapters and RED review remain separate gates. Q2 non-catch qualification stays 
 The historical Q3 catch compensation hold below is superseded only by this synthetic
 review/approve path; direct `reverse` actions remain invalid.
 
-## 29 October 2026: migrations 0392–0393 (historical)
+## 29 October 2026: migrations 0405–0406 (current)
 
 The current stacked SV-6 review and M4-8-S v1 producer replace the historical
 source dependency described below for **catch-only positive/zero posting**.

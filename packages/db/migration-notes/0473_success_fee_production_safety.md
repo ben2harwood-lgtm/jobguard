@@ -73,3 +73,28 @@ Follow-up local checks use installed binaries only (no downloads):
 Database/migration/browser execution remains for GitHub CI; independent Claude RED
 review and required CI on the final head remain pending. No real customer data,
 live money, provider action, release, Git mutation or merge was performed.
+
+31 October 2026 NOPR catch-up onto cached main 87b5dd4e:
+
+Resolved all six source conflicts. Kept main's 0406 private source-lock helper
+in the branch-own 0473 replacement writer, retained both fixture protocols
+(the new two-catch option is sixth), and kept main's FK-valid pending-source
+attack test. Shared upgrade expectations retain main's lock helper and this
+piece's compensation indexes/routines. LP-0 inventories are the exact semantic
+union without duplicate entries, routine identities or trigger records. Main's
+migrations and lp-downstream-effects-v1.md are unchanged. No migration renumbering.
+
+Focused installed-runner checks (maxWorkers=2):
+- Core success-fee-catch-posting, success-fee-posting and success-fee-posting-fixtures:
+  81 tests passed.
+- DB lp-0-catalog, success-fee-repository and migrate-discovery: 39 tests passed.
+- Core purity, money arithmetic, commercial boundary and PL/pgSQL lint passed.
+- Exact lane paths, unique inventory records and git diff --check passed.
+
+Core TypeScript build and DB TypeScript no-emit check were started but stalled
+without diagnostics under concurrent Mac load at handoff. Vitest list collected all nine PostgreSQL safety/upgrade cases without running
+database hooks; collection is not PostgreSQL execution.
+GitHub CI must run full typecheck and PostgreSQL/migration suites, followed by
+independent Claude RED review at the final head. READY for the router to stage and
+commit the resolved files; the Git index remains unmerged because this sandbox
+prohibits Git writes. No PR is opened in this NOPR run.

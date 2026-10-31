@@ -14,6 +14,22 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Customer commercial boundary: generic refusals and live status checked in 0389,
+  // rather than exposing the builder watchdog's status/409 diagnostics.
+  "/api/customer-portal/variations/read": "pre_live_allowed",
+  "/api/customer-portal/variation-approvals": "pre_live_allowed",
+  "nest:/customer-portal/variations/read": "pre_live_allowed",
+  "nest:/customer-portal/variation-approvals": "pre_live_allowed",
+  "/api/customer-portal/issue": "pre_live_allowed",
+  "/api/customer-portal/revoke": "pre_live_allowed",
+  "/api/customer-portal/signin": "pre_live_allowed",
+  "/api/customer-portal/signout": "pre_live_allowed",
+  "/api/customer-portal/read": "pre_live_allowed",
+  "nest:/customer-portal/issue": "pre_live_allowed",
+  "nest:/customer-portal/revoke": "pre_live_allowed",
+  "nest:/customer-portal/signin": "pre_live_allowed",
+  "nest:/customer-portal/signout": "pre_live_allowed",
+  "nest:/customer-portal/read": "pre_live_allowed",
   // MON-3 card setup precedes switch-live; persisted company sessions require an owner.
   // Classification grants no authority and does not enable non-live watchdog writes.
   "/api/jobs/[id]/trial": "pre_live_allowed",
@@ -26,6 +42,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/payment-fees": "post_live_billing",
   "/api/jobs/[id]/success-fees": "post_live_billing",
   "nest:/jobs/:id/success-fees": "post_live_billing",
+  "/api/jobs/[id]/success-fees/statements": "post_live_billing",
+  "nest:/jobs/:id/success-fees/statements": "post_live_billing",
   "/api/jobs/[id]/success-fee-attribution": "post_live_billing",
   "nest:/jobs/:id/success-fee-attribution": "post_live_billing",
   // Coordinator ruling 107: classification never grants command authority.
@@ -108,6 +126,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/recovery-cases/terms": "post_live_billing", "nest:/jobs/:id/recovery-cases/terms": "post_live_billing", "command:recovery.terms.approve": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/eligibility": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations": "post_live_billing",
+  "/api/jobs/[id]/receipt-case-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",
   "/api/jobs/[id]/recovery-cases": "post_live_billing",
   "/api/jobs/[id]/relevance-inbox/[action]": "watchdog_live_only",

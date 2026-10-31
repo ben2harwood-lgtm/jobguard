@@ -6,7 +6,7 @@
         "codex/sandbox/m4-9-prod-sb"
       ],
       "receipt": "packages/db/migration-notes/0473_success_fee_production_safety.md",
-      "note": "RED M4-9 part 2: synthetic small-builder posting guard, exact rebuild and linked compensation. Stacked on m4-9-s-posting; router opens PR after base merges.",
+      "note": "RED M4-9 part 2: synthetic small-builder posting guard, exact rebuild and linked compensation. Caught up with main; router opens PR when CI has room.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",

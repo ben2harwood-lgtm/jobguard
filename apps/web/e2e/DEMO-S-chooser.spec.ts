@@ -29,7 +29,7 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
     await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("No product journey completion is recorded");
     await page.reload(); await expect(saved).toBeVisible();
   }
-  await page.getByText("Meter profiles — all not ready yet", { exact: true }).click();
+  await page.getByText("Meter profiles — reference previews available", { exact: true }).click();
   await expect(page.getByText("DM-10 · Builder 13–17 places and track review")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

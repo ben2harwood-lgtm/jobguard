@@ -5,7 +5,7 @@ import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-
 import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
 export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatches=false,stageSecondCatch=false){
- const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,twoCatches);
+ const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,undefined,twoCatches);
  const subjects=[{caseId:x.caseId,workId:x.workId,line:x.line,fact:x.fact}];
  if(twoCatches){
   const rows=(await f.admin.query(`SELECT fl.id line,c.id case_id,s.work_id FROM app.final_account_line fl

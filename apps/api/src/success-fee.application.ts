@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { parseSuccessFeeCommand, SuccessFeeError } from "@jobguard/core";
-import { PracticeAccessError, SuccessFeeRepository } from "@jobguard/db";
+import { PracticeAccessError, SuccessFeeRepository, SimulationFeeStatementRepository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 import { successFeeQueryV1 } from "./success-fee.contracts.js";
 export function successFeeFailure(error:unknown):{status:number;body:{code:string}}|null {
@@ -11,7 +11,7 @@ export function successFeeFailure(error:unknown):{status:number;body:{code:strin
 export class SuccessFeeApplication {
  private readonly access:PracticeAccess;
  private readonly repository:SuccessFeeRepository;
- constructor(pool:Pool,sessionId?:string){this.access=new PracticeAccess(pool,sessionId);this.repository=new SuccessFeeRepository(pool);}
+ constructor(private readonly pool:Pool,sessionId?:string){this.access=new PracticeAccess(pool,sessionId);this.repository=new SuccessFeeRepository(pool);}
  private async authorize(jobId:string,query:unknown,tenantSelection:boolean){
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new PracticeAccessError("SYNTHETIC_MODE_REQUIRED");
   const auth=await this.access.job(jobId);
@@ -31,4 +31,20 @@ export class SuccessFeeApplication {
   const command=parseSuccessFeeCommand(body);
   return this.repository.command(auth.context,jobId,auth.digest,command);
  }
+ async statements(jobId:string,query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  return new SimulationFeeStatementRepository(this.pool).view(auth.context,jobId,auth.digest);
+ }
+ async issueStatement(jobId:string,raw:unknown|(()=>Promise<unknown>),query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  let body:unknown;
+  try{body=typeof raw==="function"?await (raw as ()=>Promise<unknown>)():raw;}
+  catch(error){if(error instanceof SyntaxError)throw new SuccessFeeError();throw error;}
+  return new SimulationFeeStatementRepository(this.pool).command(auth.context,jobId,auth.digest,body);
+ }
+ async downloadStatement(jobId:string,statementId:string,query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  return new SimulationFeeStatementRepository(this.pool).download(auth.context,jobId,auth.digest,statementId);
+ }
+
 }

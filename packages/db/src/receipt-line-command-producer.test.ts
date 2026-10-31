@@ -17,8 +17,8 @@ it.each([
  await expect(repository.command(verifiedTenantContextForQueuedJob(randomUUID()),{membershipId:randomUUID(),identityUserId:randomUUID()},"a".repeat(64),randomUUID(),raw)).rejects.toMatchObject({code:"INVALID_RECEIPT_LINE_COMMAND"});
  expect(connect).not.toHaveBeenCalled();
 });
-it("0384 is discovered once and replaces only the latest writer and source validator, retaining its controls and privilege surface",async()=>{
- const name="0384_receipt_line_command_producer.sql";
+it("0398 is discovered once and replaces only the latest writer and source validator, retaining its controls and privilege surface",async()=>{
+ const name="0398_receipt_line_command_producer.sql";
  expect(MIGRATION_URLS.filter(url=>url.pathname.endsWith(name))).toHaveLength(1);
  const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
  expect(sql).toMatch(/^BEGIN;/u);expect(sql).toMatch(/COMMIT;\s*$/u);
