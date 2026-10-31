@@ -9,7 +9,9 @@
       "allow": [
         "apps/api/src/shadow-demo.application.ts",
         "apps/api/src/shadow-demo.application.test.ts",
-        "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts"
+        "apps/web/app/api/jobs/[id]/shadow-demo/route.test.ts",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
       ]
     }
   }
