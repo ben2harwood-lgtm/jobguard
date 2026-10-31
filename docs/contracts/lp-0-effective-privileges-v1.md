@@ -547,3 +547,17 @@ membership temporarily and revokes it on both success and failure, then checks
 the catalogue again. This adds no runtime capability or LP-0 baseline membership
 in the superuser-created fixture. Environment identity uses postmaster start time
 and database OID directly; there is no control-file grant or environment helper.
+
+### LP-6d remaining-routine binding (0526, built ahead)
+
+Migration 0526 withdraws the runtime `action_authorization.revoked_at` column
+UPDATE and replaces its sole repository caller with the checked recovery-message
+revoke command. The JSON inventory unions that routine's owner/runtime EXECUTE,
+four protected accessor EXECUTEs for the existing migration/command owners,
+`bind_request` EXECUTE for the invitation/contractor credential bridges, and one
+private migration-owned switched-session projection. It adds no business-table
+write grant. Existing recorded routine hashes and scanner pins are unchanged.
+
+The exact binding edits and LP-6c split are in
+`packages/db/migration-notes/0526_lp6d_remaining_routines.md`; actual `pg_proc`
+classification and refusals require PostgreSQL CI and independent RED review.

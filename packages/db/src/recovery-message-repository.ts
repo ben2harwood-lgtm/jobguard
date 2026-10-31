@@ -227,7 +227,7 @@ export class RecoveryMessageRepository {
       if (await this.revisionOf(db, ctx.tenantId, messageId) !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
       if (status === "previewed") fail("RECOVERY_MESSAGE_NOT_APPROVED");
       if (status !== "queued" && status !== "retryable") fail("RECOVERY_MESSAGE_NOT_REVOCABLE");
-      await db.$client.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL", [ctx.tenantId, m.authorization_id]);
+      await db.$client.query("SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)", [ctx.tenantId, actor.membershipId, input.commandId, messageId]);
       const cancelled = await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status IN('pending','retryable')", [ctx.tenantId, m.outbox_action_id]);
       if (cancelled.rowCount !== 1) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
       await this.event(db, ctx.tenantId, { id: messageId, jobId: m.job_id, caseId }, actor, "revoked", input.commandId, requestHash, input.expectedRevision);

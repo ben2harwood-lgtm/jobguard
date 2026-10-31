@@ -1,0 +1,522 @@
+[
+  {
+    "name": "app.transition_scope_progress",
+    "arguments": "p_tenant uuid,p_job uuid,p_scope uuid,p_expected integer,p_to varchar,p_reason varchar",
+    "source": "packages/db/migrations/0003_job_spine.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.bind_job_parties",
+    "arguments": "p_tenant uuid,p_job uuid,p_id uuid,p_expected integer,p_customer uuid,p_payer uuid,p_site uuid,p_correct boolean,p_reason text,p_actor uuid,p_command uuid",
+    "source": "packages/db/migrations/0095_job_parties.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.require_current_job_parties",
+    "arguments": "p_tenant uuid,p_job uuid",
+    "source": "packages/db/migrations/0095_job_parties.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.require_watchdog_live",
+    "arguments": "p_job uuid",
+    "source": "packages/db/migrations/0096_watchdog_live.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.link_contractor_customer",
+    "arguments": "actor uuid,client uuid,payload jsonb",
+    "source": "packages/db/migrations/0102_contractor_parties.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.bind_contractor_parties",
+    "arguments": "actor uuid,payload jsonb",
+    "source": "packages/db/migrations/0102_contractor_parties.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.read_contractor_resident",
+    "arguments": "actor uuid,p_job uuid",
+    "source": "packages/db/migrations/0110_work_orders.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.work_order_begin",
+    "arguments": "actor uuid, p_job uuid, p_title text",
+    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.work_order_commit",
+    "arguments": "actor uuid, payload jsonb",
+    "source": "packages/db/migrations/0110_work_orders.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.import_batch_record",
+    "arguments": "actor uuid, payload jsonb",
+    "source": "packages/db/migrations/0110_work_orders.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.import_sor_version",
+    "arguments": "actor uuid, payload jsonb",
+    "source": "packages/db/migrations/0110_work_orders.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.work_order_parties_unchanged",
+    "arguments": "actor uuid, p_work_order uuid, p_client uuid, p_contract uuid, p_site_revision uuid, p_resident jsonb",
+    "source": "packages/db/migrations/0110_work_orders.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.reveal_shadow_signals",
+    "arguments": "p_tenant uuid,p_job uuid",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.read_final_account_lock_verification",
+    "arguments": "p_tenant uuid,p_job uuid",
+    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "actor": null,
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.prepare_final_review_extra",
+    "arguments": "p_tenant uuid,p_job uuid,p_actor uuid",
+    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.accept_final_check_terms",
+    "arguments": "p_tenant uuid,p_actor uuid,p_command uuid,p_version text",
+    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.record_final_account_disposition",
+    "arguments": "p_tenant uuid,p_job uuid,p_actor uuid,p_command uuid,p_scope uuid,p_disposition text",
+    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.ent3b_start_visit",
+    "arguments": "p_actor uuid, p_command uuid, p_job uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3b_complete_visit",
+    "arguments": "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_answer text",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3c_record_sor_revision",
+    "arguments": "p_job uuid, p_variation uuid, p_claimed_quantity text, p_request_hash text",
+    "source": "packages/db/migrations/0140_site_extra_pricing.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.xa_submit",
+    "arguments": "p_job uuid, p_variation uuid, p_command uuid, p_actor uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_price",
+    "arguments": "p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_net bigint, p_revise boolean",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_approve",
+    "arguments": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_withdraw",
+    "arguments": "p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_mark_duplicate",
+    "arguments": "p_job uuid, p_duplicate uuid, p_canonical uuid, p_command uuid, p_actor uuid, p_link uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_issue_link",
+    "arguments": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamptz, p_authorization uuid, p_outbox uuid",
+    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_revoke_link",
+    "arguments": "p_job uuid, p_link uuid, p_command uuid, p_actor uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_client_decide",
+    "arguments": "p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_client_view_authority",
+    "arguments": "p_job uuid, p_request uuid, p_actor uuid, p_email text",
+    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.read_job_sources",
+    "arguments": "t uuid,j uuid,digest text,source text",
+    "source": "packages/db/migrations/0164_job_sources.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.lp_authority",
+    "arguments": "p_session uuid,p_job uuid,p_action text",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp_read",
+    "arguments": "p_session uuid,p_input jsonb",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp_command",
+    "arguments": "p_session uuid,p_input jsonb,p_source_bytes bytea DEFAULT NULL",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp_finish",
+    "arguments": "p_session uuid,p_command uuid,p_result jsonb",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp_visit_evaluate",
+    "arguments": "p_actor uuid,p_job uuid,p_command uuid",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.lp_sources",
+    "arguments": "p_session uuid,p_job uuid",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp_observation_prompt",
+    "arguments": "p_session uuid,p_job uuid,p_observation uuid",
+    "source": "packages/db/migrations/0196_enterprise_live_prompts.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.ch4_read_work_facts",
+    "arguments": "t uuid,j uuid,digest text",
+    "source": "packages/db/migrations/0144_job_work_state.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.ch4_command_work_facts",
+    "arguments": "t uuid,j uuid,digest text",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.ch4_work_state_command",
+    "arguments": "t uuid,j uuid,digest text,input jsonb",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "t",
+    "amendedBy": "packages/db/migrations/0380_meter_work_admission.sql"
+  },
+  {
+    "name": "app.ch4_record_work_state",
+    "arguments": "t uuid,j uuid,digest text,input jsonb",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.ch4_link_post_lock_job",
+    "arguments": "t uuid,j uuid,digest text,input jsonb",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.read_final_check_reveal",
+    "arguments": "t uuid,j uuid,d text",
+    "source": "packages/db/migrations/0262_final_check_reveal_lines.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.record_final_check_disposition",
+    "arguments": "t uuid,j uuid,d text,p jsonb",
+    "source": "packages/db/migrations/0238_final_check.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.read_final_check_disputes",
+    "arguments": "t uuid,j uuid,d text",
+    "source": "packages/db/migrations/0238_final_check.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.confirm_final_check_catch",
+    "arguments": "t uuid,j uuid,d text,p jsonb",
+    "source": "packages/db/migrations/0281_final_check_catch.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.request_final_check_run",
+    "arguments": "t uuid,j uuid,d text",
+    "source": "packages/db/migrations/0283_final_check_practice_run.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.sv7a_require_watchdog_live_lock",
+    "arguments": "t uuid,j uuid,digest text",
+    "source": "packages/db/migrations/0303_job_source_intake.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.sv7a_intake_job_source",
+    "arguments": "t uuid,j uuid,digest text,source text,input jsonb",
+    "source": "packages/db/migrations/0303_job_source_intake.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.read_evidence_pack_v3",
+    "arguments": "t uuid,c uuid,d text",
+    "source": "packages/db/migrations/0306_evidence_pack_v3.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.request_evidence_pack_v3",
+    "arguments": "t uuid,c uuid,d text,q jsonb",
+    "source": "packages/db/migrations/0375_evidence_pack_v3_activation.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.create_practice_sandbox_job",
+    "arguments": "p_tenant uuid,p_job uuid,p_actor uuid,p_digest text",
+    "source": "packages/db/migrations/0356_unchecked_job_doors.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.decision_check_command",
+    "arguments": "p_digest text,p_command jsonb,p_phase text,p_data jsonb DEFAULT '{}'::jsonb",
+    "source": "packages/db/migrations/0456_lp4_database_audit.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.contractor_admin_command",
+    "arguments": "actor uuid, payload jsonb, request_hash text",
+    "source": "packages/db/migrations/0138_practice_session_hardening.sql",
+    "actor": "actor",
+    "tenant": null
+  },
+  {
+    "name": "app.enterprise_baseline_actor",
+    "arguments": "p_session uuid",
+    "source": "packages/db/migrations/0296_enterprise_baseline.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.enterprise_baseline_import",
+    "arguments": "p_session uuid,p_history text,p_hash text,p_bindings jsonb",
+    "source": "packages/db/migrations/0456_lp4_database_audit.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.enterprise_baseline_read",
+    "arguments": "p_session uuid,p_batch uuid",
+    "source": "packages/db/migrations/0296_enterprise_baseline.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.record_repository_command",
+    "arguments": "p_command uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp5b_prepare_projection",
+    "arguments": "p_command uuid",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.lp5b_contractor_permission",
+    "arguments": "p_type text,p_actor uuid,p_job uuid,p_input jsonb",
+    "source": "packages/db/migrations/0496_lp5b_writers.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.practice_worker_switch_on",
+    "arguments": "p_session uuid,p_command uuid,p_worker uuid",
+    "source": "packages/db/migrations/0165_practice_worker_switch.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.practice_worker_switch_off",
+    "arguments": "p_session uuid,p_command uuid",
+    "source": "packages/db/migrations/0165_practice_worker_switch.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.practice_worker_switch_state",
+    "arguments": "p_session uuid",
+    "source": "packages/db/migrations/0165_practice_worker_switch.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.revoke_contractor_practice_session",
+    "arguments": "s uuid",
+    "source": "packages/db/migrations/0138_practice_session_hardening.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.northside_register",
+    "arguments": "p_owner uuid,p_settings jsonb",
+    "source": "packages/db/migrations/0167_northside_run_attribution.sql",
+    "actor": "p_owner",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_escalate",
+    "arguments": "",
+    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.ent3b_visit_authority",
+    "arguments": "p_actor uuid, p_job uuid",
+    "source": "packages/db/migrations/0139_site_visit_closeout.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.ent3a_extra_authority",
+    "arguments": "p_actor uuid, p_command_type text, p_job uuid",
+    "source": "packages/db/migrations/0135_site_extra_authority.sql",
+    "actor": null,
+    "tenant": null,
+    "subjectActor": "p_actor"
+  },
+  {
+    "name": "app.ent3a_require_extra_authority",
+    "arguments": "p_job uuid, p_variation uuid",
+    "source": "packages/db/migrations/0135_site_extra_authority.sql",
+    "actor": null,
+    "tenant": null
+  },
+  {
+    "name": "app.xa_begin",
+    "arguments": "p_job uuid, p_command uuid, p_types text[], p_actor uuid",
+    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.xa_covers",
+    "arguments": "p_actor uuid, p_roles text[], p_job uuid, p_permission text",
+    "source": "packages/db/migrations/0158_extra_approval_chain.sql",
+    "actor": "p_actor",
+    "tenant": null
+  },
+  {
+    "name": "app.final_lock_require_owner",
+    "arguments": "p_tenant uuid,p_actor uuid",
+    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "actor": "p_actor",
+    "tenant": "p_tenant"
+  },
+  {
+    "name": "app.evidence_pack_v3_owner",
+    "arguments": "t uuid,c uuid,d text",
+    "source": "packages/db/migrations/0306_evidence_pack_v3.sql",
+    "actor": null,
+    "tenant": "t"
+  },
+  {
+    "name": "app.ch4_require_command_owner",
+    "arguments": "t uuid,j uuid,digest text",
+    "source": "packages/db/migrations/0201_job_work_state_commands.sql",
+    "actor": null,
+    "tenant": "t"
+  }
+]
