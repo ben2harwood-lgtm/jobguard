@@ -736,3 +736,48 @@ src/receipt-line-command-producer.test.ts passed 14 tests in two files;
 git diff --check passed. Database execution is unavailable in this sandbox:
 the three repaired PostgreSQL cases still require CI verification. This is not
 an independent RED review. No git write commands were run.
+
+
+## 31 October 2026: CI repair 1 at 87996900 — private source fence
+
+SV-2's runtime routine scan matched write_success_fee_v3.prosrc because its
+LOCK TABLE batch directly named app.shadow_signal_evidence,
+app.shadow_commercial_signal, app.shadow_disclosure_event and
+app.shadow_signal_ineligibility. No composite type or inlined SQL was needed
+for that match. Moved the complete source-lock batch, byte-for-byte, into
+app.lock_success_fee_sources(): migration-owned SECURITY DEFINER with pinned
+search_path=pg_catalog,app and all PUBLIC/runtime/infrastructure/shadow/emergency
+EXECUTE revoked. The writer calls it at precisely the prior position, after
+command validation and the authorization-table lock and before case/advisory/
+audit locks. The protected tables remain behind the private migration-owned
+path; no dynamic SQL, matching-name disguise or allow-list addition was used.
+The existing source reconstruction still uses recovery_attribution_sources.
+
+Added an actual-role regression to success-fee-access.integration.test.ts for
+the helper's owner, pinned path, exact owner-only grants and refused runtime
+call. Extended SERIOUS-B5's exact additive routine union by this helper only;
+its existing signature, SECURITY DEFINER, pinned-path and exact ACL assertions
+also apply to the new helper. The original shadow-catalog test is unchanged.
+No migration on main was edited; only branch-owned 0406 changed.
+
+LP-0 gains the private helper's owner/definition row and the writer's helper
+call edge. The writer's stored hash was already null; both affected/new bodies
+remain null pending PostgreSQL pg_get_functiondef capture, never source-hashed.
+Exact capture identities:
+function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)
+function:app.lock_success_fee_sources()
+
+Local verification: packages/db installed tsc --noEmit passed; installed Vitest
+--maxWorkers=2 src/success-fee-repository.test.ts test/lp-0-catalog.test.ts passed
+36 tests in two files; node --test tools/lp-downstream-inventory.test.mjs passed
+all five tests; PL/pgSQL CASE-in-IF lint passed (166 migrations); git diff --check
+passed. Read-only assertions verified an identical source-lock batch, preserved
+lock-order position, no protected SV-2 pattern in the writer body, unchanged SV-2
+test, unique null LP-0 rows and changed files within this piece's lane.
+
+PostgreSQL is unavailable in this sandbox. No database/catalogue pass or journey
+pass is claimed. The router commit message includes the complete source-found
+success-fee/shadow-catalog test inventory (including related upgrade/catalogue
+coverage) for coordinator rerun, plus the exact hash-capture identities.
+Independent exact-head RED review and existing release gates remain required.
+No git write command was run.

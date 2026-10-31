@@ -966,7 +966,7 @@ async function successFeeCatchAdditions(before: Awaited<ReturnType<typeof snapsh
   "success_fee_source_pkey","success_fee_journal_pkey","success_fee_journal_tenant_id_job_id_id_key",
   "success_fee_journal_tenant_id_derivation_id_key","success_fee_journal_line_pkey",
  ];
- const identities=["check_success_fee_journal","check_success_fee_derivation"];
+ const identities=["check_success_fee_journal","check_success_fee_derivation","lock_success_fee_sources"];
  const routines=after.routines.filter(r=>r.nspname==="app"&&identities.includes(r.proname));
  expect(routines.map(r=>r.proname).sort()).toEqual([...identities].sort());
  for(const r of routines){

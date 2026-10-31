@@ -121,3 +121,16 @@ it("post-live billing availability also permits invoiced and paid jobs with the 
   }finally{await db.query('ROLLBACK');db.release();}
  }
 });
+
+it("the source fence is migration-owned and cannot be called by runtime or worker roles",async()=>{
+ const sig="app.lock_success_fee_sources()";
+ const row=(await f.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END
+   FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE' ORDER BY 1)::text[] grantees
+  FROM pg_proc p WHERE p.oid=$1::regprocedure`,[sig])).rows[0];
+ expect(row).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog, app"],grantees:["jobguard_migration"]});
+ for(const role of ["jobguard_runtime","jobguard_infrastructure","jobguard_shadow","jobguard_shadow_emergency_access"]){
+  expect((await f.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,sig])).rows[0].allowed).toBe(false);
+ }
+ await expect(f.runtime.query("SELECT app.lock_success_fee_sources()")).rejects.toMatchObject({code:"42501"});
+});
