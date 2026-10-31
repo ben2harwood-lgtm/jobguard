@@ -1,4 +1,3 @@
-import { EvidencePackV3HeldError } from "./evidence-pack.errors.js";
 import { PracticeAccess } from "./practice-access.js";
 import type { Pool } from "pg";
 import { EvidencePackRepository, EvidencePackV3Repository, practiceMaterialPool } from "@jobguard/db";
@@ -29,11 +28,11 @@ export class EvidencePackApplication {
   }
 
   async generate(sessionId: string | undefined, caseId: string, raw: unknown) {
-    const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
+    const { ctx, actorRef, repo, v3, digest } = await this.authorize(sessionId, caseId);
     const parsed = evidencePackGenerationCommand.parse(raw);
     if (parsed.version === "evidence-pack-command.v3") {
-      // CH-8 part 3 must bind the runtime attribution producer before activation.
-      throw new EvidencePackV3HeldError();
+      await v3.request(ctx, caseId, digest, parsed);
+      return this.listV3(sessionId, caseId);
     }
     const { version: _version, ...command } = parsed;
     await repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
@@ -41,10 +40,11 @@ export class EvidencePackApplication {
   }
 
   async approveAttachment(sessionId: string | undefined, caseId: string, packId: string, raw: unknown) {
-    const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
+    const { ctx, actorRef, repo, v3, digest } = await this.authorize(sessionId, caseId);
     const parsed = evidencePackAttachmentCommand.parse(raw);
     if (parsed.version === "evidence-pack-attachment-approval.v3") {
-      throw new EvidencePackV3HeldError();
+      await v3.request(ctx, caseId, digest, { ...parsed, packId: evidencePackIdV1.parse(packId).toLowerCase() });
+      return this.listV3(sessionId, caseId);
     }
     const { version: _version, ...command } = parsed;
     await repo.approveAttachment(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), command, actorRef);
