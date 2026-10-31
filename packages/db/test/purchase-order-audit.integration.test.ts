@@ -6,7 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
-  issuePracticeSession, migrate } from "../src/index.js";
+  issuePracticeSession, migrate, practiceMaterialPool } from "../src/index.js";
 import { MaterialApplication } from "../../../apps/api/src/material.application.js";
 import { PurchaseOrderApplication } from "../../../apps/api/src/purchase-order.application.js";
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
@@ -137,7 +137,9 @@ describe("purchase-order audit with authenticated applications and PostgreSQL", 
 // Dark seam called directly with deterministic fakes; no HTTP or worker registration.
 async function darkFixture() {
   const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
-  const repo = new PurchaseOrderActionRepository(runtime);
+  // Mirror the authenticated material path: restrictive practice RLS also scopes SKU/rate reads.
+  const scopedPool = practiceMaterialPool(runtime, f.auth.digest);
+  const repo = new PurchaseOrderActionRepository(scopedPool);
   const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
   const preview = await repo.preview(f.auth.context, scope);
   const approved = { version: "command.v1", commandId: randomUUID(), commandType: "purchase_order.send.dark",
@@ -147,7 +149,7 @@ async function darkFixture() {
       aggregateRevision: revision.revision, amountPence: preview.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1",
       expiresAt: "2099-01-01T00:00:00Z" } };
   const port = new FakeMerchantOrderPort();
-  const executor = new ActionExecutor(runtime, new Map([[port.name, port]]), { emit() {} });
+  const executor = new ActionExecutor(scopedPool, new Map([[port.name, port]]), { emit() {} });
   const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
     commandId: randomUUID(), actorMembershipId: f.auth.membershipId, supplierReference: `synthetic-${randomUUID()}` };
   return { ...f, revision, repo, scope, preview, approved, port, executor, manual };
@@ -157,6 +159,16 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
   it("upgrades main with a pre-existing order intact and needs no backfill", async () => {
     expect((await admin.query("SELECT id FROM app.purchase_order_revision WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, upgradeRevisionId])).rows).toEqual([{ id: upgradeRevisionId }]);
+  });
+  it("keeps session-owned rates hidden without the authenticated practice digest", async () => {
+    const f = await darkFixture(), before = await effects();
+    await expect(new PurchaseOrderActionRepository(runtime).preview(f.auth.context, f.scope))
+      .rejects.toThrow("ORDER_AUTHORITY_STALE");
+    const otherToken = await issuePracticeSession(runtime);
+    const other = await authenticatePracticeSession(runtime, otherToken);
+    await expect(new PurchaseOrderActionRepository(practiceMaterialPool(runtime, other.digest)).preview(f.auth.context, f.scope))
+      .rejects.toThrow("ORDER_AUTHORITY_STALE");
+    expect(await effects()).toEqual(before);
   });
   it("concurrent confirmation and executor replay commit one effect and one fake merchant order", async () => {
     const f = await darkFixture();

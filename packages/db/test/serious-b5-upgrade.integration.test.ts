@@ -1098,6 +1098,46 @@ async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>
  return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
 }
 
+// 0465: exact dark-order additions only; every predecessor row and ACL stays compared.
+async function darkOrderAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot(), table = "purchase_order_manual_attestation";
+ const names = ["guard_dark_order_revision", "guard_manual_order_effect"];
+ const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname) && r.args === "");
+ expect(routines.map(r => r.proname)).toEqual(names);
+ for (const r of routines) {
+  expect(r).toMatchObject({ prosecdef: false, proconfig: ["search_path=pg_catalog, app"], proacl: "{jobguard_migration=X/jobguard_migration}" });
+  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner", [r.proowner])).rows).toEqual([{ owner: "jobguard_migration" }]);
+  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ }
+ const indexes = (await f.admin.query(`SELECT c.relname,array_agg(a.attname::text ORDER BY k.ordinality) columns
+  FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
+  CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum,ordinality)
+  JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum
+  WHERE i.indrelid='app.purchase_order_manual_attestation'::regclass AND i.indisunique
+  GROUP BY c.relname ORDER BY c.relname COLLATE "C"`)).rows;
+ expect(indexes.map(i => i.columns).sort()).toEqual([
+  ["tenant_id", "command_id"], ["tenant_id", "draft_id"], ["tenant_id", "id"],
+  ["tenant_id", "merchant_id", "supplier_reference_hash"],
+ ].sort());
+ const relationNames = [table, ...indexes.map(i => i.relname as string), "purchase_order_revision_draft_identity"];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual(relationNames.sort());
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ expect(relations.find(r => r.relname === table)).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true,
+  relacl: "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}" });
+ const policies = after.policies.filter(p => p.schemaname === "app" && p.tablename === table);
+ expect(policies).toHaveLength(1);
+ expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", permissive: "PERMISSIVE", cmd: "ALL" });
+ expect((await f.admin.query("SELECT $1::name[]::text[] roles", [policies[0]!.roles])).rows[0].roles).toEqual(["jobguard_migration", "jobguard_runtime"]);
+ expect(before.policies.some(p => p.schemaname === "app" && p.tablename === table)).toBe(false);
+ expect(before.rows).not.toHaveProperty(`app.${table}`);
+ expect(after.rows[`app.${table}`]).toEqual([]);
+ return { rows: { ...before.rows, [`app.${table}`]: [] },
+  routines: catalogueAdditions(before.routines, routines, after.routines),
+  relations: catalogueAdditions(before.relations, relations, after.relations),
+  policies: catalogueAdditions(before.policies, policies, after.policies) };
+}
+
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -1130,6 +1170,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await withOidcAdditions(expected));
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
+ Object.assign(expected, await darkOrderAdditions(expected));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
