@@ -27,7 +27,7 @@
         "docs/contracts/small-builder-demo-run-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/small-builder-trial-demo.ts",
-        "packages/db/migrations/0394_small_builder_trial_demo.sql",
+        "packages/db/migrations/0557_small_builder_trial_demo.sql",
         "packages/db/src/index.ts",
         "packages/db/src/small-builder-trial-demo-repository.test.ts",
         "packages/db/src/small-builder-trial-demo-repository.ts",
@@ -35,7 +35,9 @@
         "packages/db/test/lp-0-catalog.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/small-builder-trial-demo-upgrade.integration.test.ts",
-        "packages/db/test/small-builder-trial-demo.integration.test.ts"
+        "packages/db/test/small-builder-trial-demo.integration.test.ts",
+        "apps/web/app/demo-s/trial/browser-bundle.test.mts",
+        "packages/db/test/tenancy.integration.test.ts"
       ]
     }
   }
