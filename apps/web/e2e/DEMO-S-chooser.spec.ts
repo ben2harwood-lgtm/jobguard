@@ -45,12 +45,14 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
   test.setTimeout(90_000);
   await signIn(page); await page.goto("/demo-s");
   await expect(page.getByRole("heading", { name: "Choose a journey" })).toBeVisible();
-  for (const scenario of ["recovery-18800", "meter"]) {
+  for (const scenario of ["recovery-18800"]) {
     await page.getByRole("button", { name: `Save ${scenario} selection`, exact: true }).click();
     const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
     await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
     await page.reload(); await expect(saved).toBeVisible();
   }
+  await page.getByRole("button", { name: "Choose meter selection", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Saved meter selection" })).toContainText("Previews and your saved meter available");
   await page.getByText("Meter profiles — reference previews available", { exact: true }).click();
   await expect(page.getByText("DM-10 · Builder 13–17 places and track review")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
