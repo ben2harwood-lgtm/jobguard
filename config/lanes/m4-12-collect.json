@@ -7,6 +7,7 @@
       ],
       "note": "M4-12 RED dark small-builder card collection/refund seam, built on M4-13. No live registration, dependencies or migration. Own lane path is implicitly permitted.",
       "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "apps/api/src/fee-collection/contracts.ts",
         "apps/api/src/fee-collection/executor.ts",
         "apps/api/src/fee-collection/executor.test.ts",
