@@ -16,3 +16,11 @@ Recovery: forward-fix constraints in a new migration. An intentional rollback
 requires first archiving/exporting new fixture-kind rows; do not delete evidence
 or edit this or earlier migrations. D04, route verification and live evaluation
 remain separate gates; no real audio, endpoint, key or network transport exists.
+
+Migration proof: `test/migration-proofs/0437_deepgram_fixture_transcripts.proof.json`
+has empty LP-0, upgrade and tenancy changes. The SQL only replaces/adds CHECK
+constraints on existing tables: it creates no routines, relations (including
+indexes), policies or rows, and changes no capability, owner, ACL or RLS posture.
+CHECK constraints are outside the upgrade snapshot's recorded attributes; their
+behavior remains covered by `test/deepgram.integration.test.ts`. No RLS-off
+allowance is declared. This migration needs no unmerged sibling proof.

@@ -25,7 +25,8 @@
         "packages/db/src/index.ts",
         "packages/db/src/speech-audio.test.ts",
         "packages/db/src/speech-audio.ts",
-        "packages/db/test/deepgram.integration.test.ts"
+        "packages/db/test/deepgram.integration.test.ts",
+        "packages/db/test/migration-proofs/0437_deepgram_fixture_transcripts.proof.json"
       ]
     }
   }
