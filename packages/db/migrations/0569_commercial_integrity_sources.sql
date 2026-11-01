@@ -157,9 +157,26 @@ BEGIN
  IF app.ch6_integrity_family(t,j)<>'v3' THEN RAISE EXCEPTION 'INTEGRITY_FAMILY_UNAVAILABLE'; END IF;
  SELECT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) INTO has_lock;
  -- Only exact, owned, immutable accepted documents and their saved party bindings. No fuzzy identity matching.
- WITH RECURSIVE owned AS (SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=d
- UNION SELECT x.id FROM owned source JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
- JOIN app.job x ON x.tenant_id=t AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL)
+ -- Start with this job and exact party-related accepted jobs, then prove each
+ -- candidate's ownership by walking its ancestors, never the whole session tree.
+ WITH RECURSIVE candidates AS (
+  SELECT jb.id FROM app.job jb WHERE jb.tenant_id=t AND (jb.id=j OR EXISTS(
+   SELECT 1 FROM app.quote_document_version current_doc
+   JOIN app.job current_job ON current_job.tenant_id=t AND current_job.id=j AND current_job.accepted_quote_version_id=current_doc.id
+   JOIN app.job_party_binding current_binding ON current_binding.tenant_id=t AND current_binding.job_id=j AND current_binding.id::text=current_doc.snapshot->'jobParties'->>'bindingId'
+   JOIN app.quote_document_version related_doc ON related_doc.tenant_id=t AND related_doc.job_id=jb.id AND related_doc.id=jb.accepted_quote_version_id
+   JOIN app.job_party_binding related_binding ON related_binding.tenant_id=t AND related_binding.job_id=jb.id AND related_binding.id::text=related_doc.snapshot->'jobParties'->>'bindingId'
+   WHERE current_doc.tenant_id=t AND current_doc.job_id=j AND related_binding.customer_id=current_binding.customer_id AND related_binding.site_id=current_binding.site_id
+  ))
+ ), ancestry AS (
+  SELECT id AS candidate_id,id FROM candidates
+  UNION SELECT source.candidate_id,parent.id FROM ancestry source
+  JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
+  JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
+  JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+ ), owned AS (
+  SELECT DISTINCT source.candidate_id AS id FROM ancestry source JOIN app.job root ON root.tenant_id=t AND root.id=source.id AND root.practice_session_digest=d
+ )
  SELECT coalesce(jsonb_agg(jsonb_build_object('source',app.ch6_source(t,a.job_id,d,a.id::text,'quote_acceptance',a.recorded_at,
  jsonb_build_object('document',doc.content_hash,'binding',b.id,'customer',b.customer_id,'site',b.site_id)),
  'status','accepted','customerId',coalesce(b.customer_id::text,'unbound'),'siteId',coalesce(b.site_id::text,'unbound'),'bindingConfirmed',b.id IS NOT NULL,

@@ -23,9 +23,9 @@ function setup(responses: unknown[] = [family(), fixture()]) {
 }
 function ready(state: IntegrityState): IntegrityV3View { if (state.status !== "v3") throw Error("Expected ready v3"); return state.view; }
 describe("CH6-J authoritative family selection and no fixture flash", () => {
- it("renders loading without v1 values, findings or source identifiers", () => {
+ it("renders an unopened panel without loading, v1 values, findings or source identifiers", () => {
   const markup = renderToStaticMarkup(<CommercialIntegrity jobId={job} />);
-  expect(markup).toContain("Loading recorded sources"); expect(markup).not.toMatch(/£|Frozen accepted|No checks|private-source/u);
+  expect(markup).toContain("Open recorded checks"); expect(markup).not.toContain("Loading recorded sources"); expect(markup).not.toMatch(/£|Frozen accepted|No checks|private-source/u);
  });
  it("routes a server-selected v1 family to the v1 endpoint", async () => {
   const s = setup([family("v1"), legacy]); await s.journey.load(); expect(s.latest().status).toBe("v1");
@@ -210,3 +210,20 @@ it.each(["acceptedCapPence", "capBasisPence"])("CH-6 still refuses invalid legac
   await s.journey.load(); expect(s.latest().status).toBe("error");
  }
 });
+
+ it.each(["family", "view"])("aborts an in-flight %s read on cleanup without publishing stale results", async stage => {
+  let signal: AbortSignal | undefined;
+  const states: IntegrityState[] = [];
+  const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+   if (stage === "view" && String(url).endsWith("/family")) return ok(family());
+   signal = init?.signal ?? undefined;
+   return new Promise<Response>((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+  });
+  const journey = new IntegrityJourney(job, state => states.push(state), request as typeof fetch);
+  const loading = journey.load();
+  await vi.waitFor(() => expect(signal).toBeDefined());
+  journey.clear();
+  expect(signal?.aborted).toBe(true);
+  await loading;
+  expect(states.every(state => state.status === "loading")).toBe(true);
+ });

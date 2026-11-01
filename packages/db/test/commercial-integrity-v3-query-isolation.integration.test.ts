@@ -31,7 +31,7 @@ describe("local family and architecture checks",()=>{
  });
  it("read/review source contains no business DML and SQL helpers contain no financial writes",async()=>{
   for(const name of ["commercial-integrity-v3-repository.ts","commercial-integrity-v3-sources.ts"]){const text=await readFile(new URL(`../src/${name}`,import.meta.url),"utf8");expect(text).not.toMatch(/\b(?:INSERT INTO|UPDATE app\.|DELETE FROM)\b/iu);}
-  const sql=await readFile(new URL("../migrations/0506_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0568_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
   const writes=[...sql.matchAll(/\bINSERT INTO\s+([a-z_.]+)/giu)].map(m=>m[1]);expect(writes.sort()).toEqual(["app.audit_event","app.command_receipt"]);
   expect(sql).not.toMatch(/\b(?:UPDATE|DELETE FROM)\s+app\./iu);
  });
@@ -76,7 +76,7 @@ it("CH-6 unlocked reads never invoke even the private publication entry",async()
 
 it("concurrent family/source reads hold no writer locks while jobs and sessions change",async()=>{
  const {job}=await seedIntegrityJob(f),writer=await f.admin.connect();
- const pool=new Pool({...f.runtime.options,max:3}),repo=new CommercialIntegrityV3Repository(pool);
+ const pool=new Pool({...f.runtimeConfig,max:3}),repo=new CommercialIntegrityV3Repository(pool);
  const pids:number[]=[];let reached=0,release!:()=>void,ready!:()=>void;
  const gate=new Promise<void>(resolve=>{release=resolve;}),allReading=new Promise<void>(resolve=>{ready=resolve;});
  const connect=pool.connect.bind(pool);

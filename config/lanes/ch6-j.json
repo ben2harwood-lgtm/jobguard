@@ -6,7 +6,7 @@
         "codex/sandbox/ch6-j"
       ],
       "receipt": "docs/verdicts/CH6-J/BUILDER_RECEIPT.md",
-      "note": "RED: CH-6 / PR #392, final CI repair round 3. Keep 0506/0507 numbering; amend branch-only SQL to eliminate table locks and correction locks on commercial job rows. Enforce read-only GET transactions and add concurrent read/write regression coverage. Preserve current main SQL, LP-0 exact union and migration-boundary repairs. PostgreSQL/browser CI and independent exact-head RED review remain required.",
+      "note": "RED: CH-6 / PR #392, one more repair authorised by Ben 1 Nov. Exact union with current main; branch migrations renamed to 0568/0569. Open integrity panel explicitly, abort requests on cleanup, bound recursive ownership to this job and exact party-related candidates. Keep every authorization and advisory-only control. PostgreSQL/browser CI and independent exact-head RED review required.",
       "test": "tools/commercial-integrity-boundary.test.mjs",
       "allow": [
         "apps/api/openapi.json",
@@ -42,10 +42,10 @@
         "packages/core/src/commercial-integrity-v3.ts",
         "packages/core/src/index.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/0506_commercial_integrity_v3_receipts.md",
-        "packages/db/migration-notes/0507_commercial_integrity_sources.md",
-        "packages/db/migrations/0506_commercial_integrity_v3_receipts.sql",
-        "packages/db/migrations/0507_commercial_integrity_sources.sql",
+        "packages/db/migration-notes/0568_commercial_integrity_v3_receipts.md",
+        "packages/db/migration-notes/0569_commercial_integrity_sources.md",
+        "packages/db/migrations/0568_commercial_integrity_v3_receipts.sql",
+        "packages/db/migrations/0569_commercial_integrity_sources.sql",
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/commercial-integrity-v3-sources.ts",
         "packages/db/src/index.ts",
@@ -64,7 +64,8 @@
         "packages/db/test/tenancy.integration.test.ts",
         "tools/commercial-integrity-boundary.mjs",
         "tools/commercial-integrity-boundary.test.mjs",
-        "tools/commercial-integrity-boundary.unresolved.json"
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "apps/web/e2e/M1-16-S.spec.ts"
       ]
     }
   }

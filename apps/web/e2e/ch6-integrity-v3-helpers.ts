@@ -10,6 +10,7 @@ export async function openOrdinaryAdvisoryJob(page: Page) {
 }
 export async function expectInstalledV1Panel(page: Page) {
  const panel = page.getByRole("main").locator("#commercial-integrity");
+ await panel.getByRole("button", { name: "Open recorded checks", exact: true }).click();
  await expect(panel.getByText("Example thresholds — not a judgement or billing rule", { exact: true })).toBeVisible();
  await expect(panel.getByText("Cap-basis signals are v1-only.", { exact: true })).toBeVisible();
  await expect(panel.getByTestId("integrity-frozen-accepted-cap")).toHaveText("£0.00");
@@ -31,6 +32,7 @@ export async function openFreshAdvisoryJob(page: Page) {
 }
 export async function expectInstalledV3Panel(page: Page) {
  const panel = page.getByRole("main").locator("#commercial-integrity");
+ await panel.getByRole("button", { name: "Open recorded checks", exact: true }).click();
  await expect(panel.getByText("Recorded advisory checks · v3", { exact: true })).toBeVisible();
  await expect(panel.getByText("Example thresholds — not a judgement or billing rule", { exact: true })).toBeVisible();
  await expect(panel.getByRole("heading", { name: "Some checks are unavailable", exact: true })).toBeVisible();

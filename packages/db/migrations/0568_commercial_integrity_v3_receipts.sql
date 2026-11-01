@@ -20,11 +20,12 @@ BEGIN
  SELECT a.membership_id INTO actor FROM app.authenticate_practice_session(digest,t) a;
  IF actor IS NULL OR NOT EXISTS(
   WITH RECURSIVE practice_owned_job AS (
-   SELECT id FROM app.job WHERE tenant_id=t AND practice_session_digest=digest
-   UNION SELECT x.id FROM practice_owned_job source
-   JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
-   JOIN app.job x ON x.tenant_id=e.tenant_id AND x.id::text=e.subject_ref AND x.provenance='imported' AND x.practice_session_digest IS NULL
-  ) SELECT 1 FROM practice_owned_job WHERE id=j
+   SELECT id FROM app.job WHERE tenant_id=t AND id=j
+   UNION SELECT parent.id FROM practice_owned_job source
+   JOIN app.job child ON child.tenant_id=t AND child.id=source.id AND child.provenance='imported' AND child.practice_session_digest IS NULL
+   JOIN app.audit_event e ON e.tenant_id=t AND e.subject_type='job' AND e.event_type='job.imported_baseline_attested' AND e.subject_ref=child.id::text
+   JOIN app.job parent ON parent.tenant_id=t AND parent.id::text=e.payload->'references'->>'sourceJobId'
+  ) SELECT 1 FROM practice_owned_job source JOIN app.job root ON root.tenant_id=t AND root.id=source.id WHERE root.practice_session_digest=digest
  ) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='42501'; END IF;
  RETURN actor;
 END $$;

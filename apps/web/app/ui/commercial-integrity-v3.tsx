@@ -30,21 +30,23 @@ async function responseJSON(response: Response) {
 /** One mount owns one job/session generation. No storage, evaluator or optimistic feedback. */
 export class IntegrityJourney {
  private generation = 0;
+ private reads: AbortController | null = null;
  private state: IntegrityState = { status: "loading" };
  private pending: { target: ReviewTarget; body: ReviewBody } | null = null;
  private saving = false;
  readonly jobId: string;
  constructor(jobId: string, private readonly publish: (state: IntegrityState) => void, private readonly request: typeof fetch = (input, init) => fetch(input, init)) { this.jobId = jobId.toLowerCase(); }
  private set(state: IntegrityState) { this.state = state; this.publish(state); }
- clear() { ++this.generation; this.pending = null; this.saving = false; this.set({ status: "loading" }); }
+ clear() { this.reads?.abort(); this.reads = null; ++this.generation; this.pending = null; this.saving = false; this.set({ status: "loading" }); }
  async load() {
   this.clear(); const generation = this.generation;
+  const controller = new AbortController(); this.reads = controller;
   try {
    uuid.parse(this.jobId);
-   const family = commercialIntegrityFamilyV1Schema.parse(await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity/family`, { cache: "no-store" })));
+   const family = commercialIntegrityFamilyV1Schema.parse(await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity/family`, { cache: "no-store", signal: controller.signal })));
    if (generation !== this.generation) return;
    if (family.jobId.toLowerCase() !== this.jobId) throw new Error(failure);
-   const raw = await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity${family.family === "v3" ? "/v3" : ""}`, { cache: "no-store" }));
+   const raw = await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity${family.family === "v3" ? "/v3" : ""}`, { cache: "no-store", signal: controller.signal }));
    if (generation !== this.generation) return;
    if (family.family === "v1") this.set({ status: "v1", view: legacySchema.parse(raw) });
    else {
@@ -69,7 +71,7 @@ export class IntegrityJourney {
   this.saving = true;
   try {
    const body = this.pending.body;
-   const raw = await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity${family === "v3" ? "/v3" : ""}/reviews`, { method: "POST", cache: "no-store", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+   const raw = await responseJSON(await this.request(`/api/jobs/${this.jobId}/commercial-integrity${family === "v3" ? "/v3" : ""}/reviews`, { method: "POST", cache: "no-store", signal: this.reads?.signal ?? null, headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
    if (generation !== this.generation) return false;
    if (family === "v3") {
     const feedback = feedbackSchema.parse(raw);

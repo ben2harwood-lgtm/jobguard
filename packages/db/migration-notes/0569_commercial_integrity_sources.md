@@ -109,3 +109,10 @@ and source GETs enforce READ ONLY transactions; review saves retain their explic
 ordered source/authority row locks. Both 0506 and 0507 SQL bodies changed in this
 repair, without changing their numbers or any migration on main. PostgreSQL and
 browser execution remain CI evidence, not local sandbox results.
+
+1 Nov CH-6 repair: renamed branch-only stem 0507 to 0569. Ordinary source
+reads start from the displayed job and accepted jobs with the same exact saved
+customer/site binding. Each candidate must independently reach an authenticated
+session-owned ancestor through immutable import events. This preserves related
+quote advice, including nested imports, without expanding the session's whole
+job tree. Other source, review-lock and authorization checks are retained.

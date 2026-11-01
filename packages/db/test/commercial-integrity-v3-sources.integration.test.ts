@@ -95,3 +95,31 @@ it("CH-6 persisted user/phone/card assertions are opaque, immutable, session sco
  const before=await protectedFacts(f);await review(job,"account_identifier_reuse");expect(await protectedFacts(f)).toEqual(before);
  expect(JSON.stringify(view)).not.toMatch(/fictional-(phone|card)|identityUserId|membershipId/);
 });
+
+it("CH-6 bounded ownership retains nested imported related quotes and refuses another session",async()=>{
+ const root=await seedIntegrityJob(f,false),middle=await seedIntegrityJob(f,false),related=await seedIntegrityJob(f,false);
+ let binding:string;
+ await transaction(f.admin,async db=>{
+  const first=(await db.query("SELECT * FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision DESC LIMIT 1",[tenant,root.job])).rows[0];
+  binding=randomUUID();
+  await db.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance)
+   VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,$9,'entered')`,[tenant,binding,related.job,first.customer_id,first.customer_revision_id,first.paying_party_id,first.paying_party_revision_id,first.site_id,first.site_revision_id]);
+  // Model immutable imported ancestry in this isolated synthetic projection fixture.
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("UPDATE app.job SET provenance='imported',practice_session_digest=NULL WHERE tenant_id=$1 AND id=ANY($2::uuid[])",[tenant,[middle.job,related.job]]);
+  await db.query("SET LOCAL session_replication_role='origin'");
+ });
+ const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
+ await withTenant(f.admin,f.auth.context,async db=>{
+  for(const [child,parent] of [[middle.job,root.job],[related.job,middle.job]] as const)await appendAuditBatch(db,[{
+   id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"job.imported_baseline_attested",subjectType:"job",subjectRef:child,payload:{references:{sourceJobId:parent}}
+  }]);
+ });
+ await accepted(root,7);await accepted(related,6,binding!);
+ const view=await f.repo.read(f.auth.context,actor,f.auth.digest,root.job);
+ const finding=view.result.findings.find(f=>f.kind==="related_sub2000_quotes_90_days");
+ expect(finding?.sourceReferences.map(s=>s.jobId).sort()).toEqual([root.job,related.job].sort());
+ expect((await transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor",[tenant,related.job,f.auth.digest]))).rows[0].actor).toBe(member);
+ await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3)",[tenant,related.job,f.other.digest]))).rejects.toThrow("NOT_FOUND");
+ await review(root.job,"related_sub2000_quotes_90_days");
+});

@@ -37,6 +37,10 @@ test("CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock 
   if (/\/commercial-integrity(?:\/|$)/u.test(path)) requests.push(path);
  });
  const jobId = await openFreshAdvisoryJob(page);
+ // Wait for hydration on the real job page; scrolling to its anchor is not an open.
+ await expect(page.getByRole("button", { name: "Open recorded checks", exact: true })).toBeEnabled();
+ await expect(page.getByRole("main")).toHaveAttribute("data-job-id", jobId);
+ expect(requests).toEqual([]);
  await expectInstalledV3Panel(page);
  const read = await page.request.get(`/api/jobs/${jobId}/commercial-integrity/v3`);
  expect(read.ok(), await read.text()).toBe(true); expect(read.headers()["cache-control"]).toBe("no-store");

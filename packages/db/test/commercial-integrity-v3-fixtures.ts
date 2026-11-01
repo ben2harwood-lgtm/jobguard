@@ -12,7 +12,7 @@ import { canonicalCommercialIntegritySnapshot } from "../../core/src/commercial-
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 export const tenant="11111111-1111-4111-8111-111111111111", member="d1500000-0000-4000-8000-000000000003", user="d1500000-0000-4000-8000-000000000001";
 export const actor={membershipId:member,identityUserId:user};
-export const migrationUrl=new URL("../migrations/0506_commercial_integrity_v3_receipts.sql",import.meta.url);
+export const migrationUrl=new URL("../migrations/0568_commercial_integrity_v3_receipts.sql",import.meta.url);
 export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF8" | "SQL_ASCII" = "UTF8") {
  const dir=await mkdtemp(join(tmpdir(),"ch6-p-")),port=await freePort(59200,300),password=randomUUID();
  const logs:string[]=[];
@@ -37,7 +37,7 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
  const otherToken=await issuePracticeSession(runtime),other=await authenticatePracticeSession(runtime,otherToken);
  const repo=new CommercialIntegrityV3Repository(runtime);
- return {admin,runtime,repo,auth,other,logs,login,async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
+ return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }
 export type IntegrityFixture=Awaited<ReturnType<typeof createIntegrityFixture>>;
 export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>) {

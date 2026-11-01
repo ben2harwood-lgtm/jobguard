@@ -9,16 +9,22 @@ export function CommercialIntegrity({ jobId }: { jobId: string }) {
  return <IntegrityPanel key={jobId.toLowerCase()} jobId={jobId.toLowerCase()} />;
 }
 function IntegrityPanel({ jobId }: { jobId: string }) {
- const journey = useIntegrityJourney(jobId);
+ const [opened, setOpened] = useState(false);
  return <section className="materials-panel" id="commercial-integrity" aria-label="Recorded advisory checks">
   <p className="eyebrow">Things to check · D11 advisory demo</p><h2>Check the recorded job values and activity</h2>
+  {opened ? <IntegrityPanelContent jobId={jobId} /> : <button onClick={() => setOpened(true)}>Open recorded checks</button>}
+ </section>;
+}
+function IntegrityPanelContent({ jobId }: { jobId: string }) {
+ const journey = useIntegrityJourney(jobId);
+ return <>
   <p>These are source-linked prompts, not evidence of cheating or proof of fraud. They cannot reprice, change the jobs-on-the-go meter, charge, penalise, suspend or change eligibility or authority.</p>
   {journey.state.status === "loading" ? <p role="status">Loading recorded sources…</p>
    : journey.state.status === "error" ? <><p role="alert">{journey.state.message}</p><button onClick={journey.reload}>Reload recorded checks</button></>
    : journey.state.status === "v3" ? <IntegrityV3Results view={journey.state.view} open={journey.open} />
    : <LegacyIntegrityResults view={journey.state.view} open={journey.open} />}
   {journey.error && <p role="alert">{journey.error}</p>}{journey.dialog}
- </section>;
+ </>;
 }
 export function LegacyIntegrityResults({ view, open }: { view: LegacyIntegrityView; open: (target: ReviewTarget, button: HTMLButtonElement) => Promise<void> }) {
  const [filter, setFilter] = useState<"open" | "dismissed" | "all">("open");

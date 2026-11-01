@@ -46,3 +46,8 @@ encoding. The 25 original code points and the UTF-16 length check are unchanged.
 The own-step suite now explicitly creates a SQL_ASCII cluster and applies 0330
 with `check_function_bodies=on`; its UTF8 check covers all 25 trim characters and
 three non-trim neighbours. These PostgreSQL tests are NOT RUN in this sandbox.
+
+1 Nov CH-6 repair: renamed branch-only stem 0506 to 0568. The authority
+check retains tenant, authenticated session and immutable import-lineage checks,
+but walks ancestors from the requested job instead of expanding every session
+job. UNION retains cycle termination. No grant or routine identity changed.

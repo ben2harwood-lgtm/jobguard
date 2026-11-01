@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0506_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0568_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1403,8 +1403,8 @@ Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
   0376 and 0377 must be numbered above main's 0380.
 
 The brief says existing branch migrations are all above 0380, but this checkout
-has 0506_commercial_integrity_v3_receipts.sql and
-0507_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+has 0568_commercial_integrity_v3_receipts.sql and
+0569_commercial_integrity_sources.sql. Preserved their numbers per the explicit
 instruction; no reservation was invented and the check was not weakened.
 Handoff: do not commit until the router supplies/resolves valid migration
 reservations. Database and browser suites were not run because this sandbox
@@ -1559,8 +1559,8 @@ privilege and tenancy expectations remains present.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0410 to generate 0402_commercial_integrity_v3_receipts ->
-0506_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
-0507_commercial_integrity_sources. Applied filesystem moves and bounded full
+0568_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
+0569_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements to branch-owned references and migration notes;
 no bare-digit replacements. CLI --write was not used because it stages Git
 changes and this sandbox's .git is read-only. Logged the reservation and moves
@@ -1607,8 +1607,8 @@ blocks, retaining CH-6 and main policies and triggers.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0502: 0411_commercial_integrity_v3_receipts ->
-0506_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
-0507_commercial_integrity_sources. Applied filesystem moves and bounded full
+0568_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
+0569_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements only; no bare-digit replacements. CLI --write
 stages Git changes, so it was not used in this read-only Git sandbox. Updated
 migration notes, references, coordinator reservation and the existing lane.
@@ -1879,3 +1879,70 @@ whole-database and browser journeys were NOT executed because this sandbox
 cannot start PostgreSQL or bind localhost. Require full CI (including the new
 concurrency and existing correction/race/upgrade tests) and independent RED
 review at the exact resulting head before merge. No demo pass is claimed.
+
+
+## 1 November — Ben-authorised one-more-try repair for PR #392 (RED)
+
+READY for the router to stage the resolved merge, commit and push; CI and an
+independent exact-head RED review remain required. No git write or fetch was run.
+
+- Resolved the workspace application conflict as an exact union: CH-6 family,
+  read and review handlers plus main's collection/collect handlers are retained.
+- Job pages now render an explicit “Open recorded checks” button. The integrity
+  hook mounts only after opening, so neither family nor v3 reads run on ordinary
+  page load. Existing v1/v3 browser assertions now open the panel first. The
+  fresh-job browser regression records requests and requires none before open.
+- Each load owns an AbortController; clear/unmount/session changes abort reads
+  and review fetches. Generation guards still reject stale results, and uncertain
+  review retries retain the existing exact-request behavior. Added cancellation
+  tests for both the family and view request.
+- Renamed only CH-6's branch migration/note stems to 0568/0569 and updated their
+  references. No current-main migration changed. Authority walks back from the
+  displayed job; quote projection walks back from that job and exact saved
+  customer/site-related quote candidates. Every candidate must reach this
+  authenticated session through the same immutable imported-job lineage.
+  UNION prevents cycles. Existing authentication, membership, tenant, family,
+  source and review checks remain. Related imported quotes are preserved rather
+  than dropping required related-quote advice. The candidate/ancestor CTE is
+  needed to retain that behavior while avoiding a session-wide descendant walk.
+- The concurrent-lock test now uses explicit fixture runtime credentials instead
+  of spreading Pool.options, which does not retain the enumerable password.
+  Added a PostgreSQL regression for nested imported related quotes, direct
+  authority and denial from another session; it is collected, not run locally.
+- Deterministic preservation checks: LP-0 exact identity union/no duplicates and
+  latest-main records unchanged; all 174 main migration files byte-identical;
+  protected lp-downstream-effects-v1.md unchanged; B5 helper calls and workspace
+  bound calls from both sides retained; merged B5/workspace/browser syntax and
+  braces valid. Own lane exactly covers the 58 net paths against origin/main;
+  canonical lane-path and migration-order helpers pass for that net diff and
+  the two new migration stems. No other lane was altered by this repair.
+
+Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
+- apps/web: ./node_modules/.bin/vitest run --maxWorkers=2 app/ui/commercial-integrity-v3.test.tsx — PASS, 54 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-input.test.ts — PASS, 9 tests.
+- packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/commercial-integrity-v3-query-isolation.integration.test.ts -t 'local family and architecture checks' — PASS, 4 local checks; 3 PostgreSQL tests intentionally not selected.
+- apps/api: ./node_modules/.bin/vitest run --maxWorkers=2 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.http.test.ts src/commercial-integrity-v3.boundary.test.ts — 25 tests PASS in the application/boundary files; HTTP suite BLOCKED at its fixture's free-port probe (5 tests skipped). This HTTP file unexpectedly required PostgreSQL; no retry was attempted.
+- node --test --test-concurrency=2 tools/commercial-integrity-boundary.test.mjs — PASS, 84 tests.
+- apps/web, apps/api, packages/db: ./node_modules/.bin/tsc -p tsconfig.json --noEmit — PASS for each package.
+- packages/db: ./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext --experimentalDecorators --emitDecoratorMetadata --esModuleInterop test/commercial-integrity-v3-query-isolation.integration.test.ts test/commercial-integrity-v3-sources.integration.test.ts test/commercial-integrity-v3-input.test.ts — PASS after adding the required audit event ID to the new fixture.
+- packages/db: ./node_modules/.bin/vitest list --maxWorkers=2 test/commercial-integrity-v3-query-isolation.integration.test.ts test/commercial-integrity-v3-sources.integration.test.ts — PASS; includes both the concurrency and new nested-import regression. Collection is not PostgreSQL execution.
+- React best-practices checklist: source-inspected lazy mount, stable job key,
+  top-level component/hook structure, cancellation/generation handling, accessible
+  native button, existing loading/error states and unchanged advisory controls.
+  This is builder self-checking, not independent review.
+- git diff --check — PASS.
+
+Diagnostic limits/errors retained honestly: directly invoking root tsc with the
+base tsconfig (not the repository typecheck script) failed across unrelated
+sources without package JSX/decorator settings; all relevant package-configured
+checks above passed. The stock local lane command fails during this unstaged
+merge because it unions incoming main/index changes and the old deleted stems;
+the canonical path/order helpers applied to the net current-main diff pass.
+Router must stage the merge and rerun the normal committed lane CI. Two small
+helper invocations initially used package working directories with root-relative
+paths; they made no edits and were rerun from the explicit root successfully.
+
+No full PostgreSQL, migration, browser or production build pass is claimed.
+GitHub CI must execute the HTTP, PostgreSQL/migration and browser suites after
+router push, then obtain the independent RED review at the resulting exact head.
+No customer data, live provider, charge, release or demo pass is involved.
