@@ -85,7 +85,6 @@
 {"key":"owner|rel:table|app.recovery_timeline_signal|jobguard_migration","group":"a-owner-tables-views"},
 {"key":"acl|routine|function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)|jobguard_identity|EXECUTE|-","group":"a-customer-variation"},
 {"key":"owner|routine|function:app.simulation_money_run(uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
-{"key":"owner|routine|function:app.simulation_money_sources(uuid,uuid,uuid)|jobguard_migration","group":"a-owner-routines"},
 {"key":"owner|routine|function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)|jobguard_migration","group":"a-owner-routines"},
 {"key":"acl|routine|function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)|jobguard_identity|EXECUTE|-","group":"a-customer-signin"},
 {"key":"owner|routine|function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)|jobguard_migration","group":"a-owner-routines"},

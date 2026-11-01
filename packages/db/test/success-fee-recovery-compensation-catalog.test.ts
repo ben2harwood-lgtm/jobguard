@@ -24,6 +24,10 @@ it("0489 retains the reviewed 0406 authorization, replay and catch validation be
  expect(current).toContain("outstanding:=outstanding-remaining;");
  expect(current).toContain("IF outstanding<>0 THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'");
  expect(current).toContain("'compensationLinks',links");
+ // The writer already declares a record named a for catch attribution. A table
+ // alias with that name makes withheld-payment authorization ambiguous in PL/pgSQL.
+ expect(current).not.toMatch(/FROM app\.action_authorization a\b/u);
+ expect(current).toContain("terms_auth.id=terms.authorization_id AND terms_auth.revoked_at IS NULL");
 });
 
 it("both inventories record the final compensation routines without widening their runtime grants",async()=>{

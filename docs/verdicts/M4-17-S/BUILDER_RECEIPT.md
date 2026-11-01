@@ -225,3 +225,52 @@ These are deterministic local checks, not independent review. PostgreSQL and
 browser suites cannot run in this sandbox and remain for GitHub CI after the
 router commits and pushes. No journey, CI, database, independent RED review,
 restore, provider, real-money or release pass is claimed.
+
+
+## 1 November PR #500 RED-failure repair at 77f0c43f
+
+READY for router commit/push and PostgreSQL CI; no renewed independent PASS
+or real-PostgreSQL success is claimed. Scope is the three reported failures.
+
+1. Renamed only the withheld-payment terms authorization alias in 0516 from
+   `a` to `terms_auth`. The writer declares `a record` for catch attribution,
+   so qualifying `a.tenant_id` was ambiguous in PL/pgSQL. The terms membership,
+   authorization identity and revocation predicates are unchanged. The existing
+   compensation catalogue test now also rejects that conflicting writer alias.
+2. Corrected successFeeCatchAdditions' exact index list: remove the journal's
+   former derivation UNIQUE index and include both new partial journal indexes
+   and both source allocation UNIQUE indexes, including PostgreSQL's truncated
+   recovery-allocation name. The test still compares the full catalogue exactly;
+   no assertion was skipped or loosened. Static checks agree with 0516's DDL
+   and the requested names. A fresh real-schema diff remains CI-only here.
+3. Removed only the stale simulation_money_sources owner capability from the
+   live LP-0 inventory and its recorded downstream input. deriveFacts in
+   test/lp-0-catalog.ts emits a routine owner fact only if another principal has
+   an ACL or the owner differs from the schema owner. This helper has neither:
+   it belongs to jobguard_migration (also app's owner), with every non-owner
+   grant revoked by 0515. Its recorded private routine facts remain unchanged.
+   No grants, exposure, comparator or inventory format changed. The unchanged
+   downstream generator check still passes without regenerating the document.
+
+Available origin/main is c6d3c2d8; it contains no migration-proofs directory or
+#499 proof system. Therefore the requested existing B5 and inventory corrections
+were used. No new merge conflicts were present. All 174 main SQL migrations
+remain byte-identical; 0516 is not on that main ref. No fetch or git write ran.
+
+Checks actually run with installed dependencies:
+
+- From packages/db: ./node_modules/.bin/vitest run --maxWorkers=2 test/success-fee-recovery-compensation-catalog.test.ts test/simulation-money-run-catalog.test.ts test/lp-0-catalog.test.ts — 33 passed.
+- Root ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit — passed.
+- node tools/plpgsql-case-in-if-lint.mjs — 176 migrations passed.
+- python3 tools/lp-downstream-inventory.py --check — passed.
+- Read-only assertions verify only the stale owner entry was removed from each inventory, unchanged private routine records, the four requested B5 index names and removed predecessor name, and byte-identical main SQL.
+- git diff --check — passed.
+
+The sandbox cannot start PostgreSQL. The router/CI must run the unmodified
+success-fee-recovery-compensation.integration.test.ts,
+simulation-money-run.integration.test.ts, serious-b5-upgrade.integration.test.ts
+and lp-0-grant-freeze.integration.test.ts on real PostgreSQL (at most two workers),
+including confirmation of the schema diff. These suites were not run locally.
+The £320 -> £2,820 -> -£250 -> £32 path remains unverified after this repair until
+those results arrive. No browser, complete journey, live provider, real money,
+CI or release pass is claimed.

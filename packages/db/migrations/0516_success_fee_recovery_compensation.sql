@@ -185,7 +185,7 @@ BEGIN
    OR movement.id IS NULL OR movement.state<>'settled' OR movement.identity<>'identified'
    OR movement.source_hash<>landing.movement_hash OR movement.created_at<=rc.created_at
    OR terms.id IS NULL OR terms.approved_at>movement.created_at
-   OR NOT EXISTS(SELECT 1 FROM app.action_authorization a WHERE a.tenant_id=t AND a.id=terms.authorization_id AND a.revoked_at IS NULL)
+   OR NOT EXISTS(SELECT 1 FROM app.action_authorization terms_auth WHERE terms_auth.tenant_id=t AND terms_auth.id=terms.authorization_id AND terms_auth.revoked_at IS NULL)
    OR coalesce(app.recovery_job_payer_type(t,p_job),'unknown')='insurer'
    OR NOT (rc.source_refs ? landing.invoice_id::text)
    OR NOT EXISTS(SELECT 1 FROM app.practice_feed_receipt_match m JOIN app.customer_payment p
