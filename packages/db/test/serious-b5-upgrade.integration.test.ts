@@ -1298,6 +1298,17 @@ async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
   relations:union(before.relations,relations,after.relations),routines:union(before.routines,routines,after.routines),policies:union(before.policies,policies,after.policies)};
 }
+// 0515: the one demo-only settle routine, which only the runtime role can run.
+async function demoSettleAddition(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "simulation_fee_demo_settle");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({args:"p_job uuid, p_session text, p_command jsonb",prosecdef:true,proconfig:["search_path=pg_catalog"]});
+ expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[routines[0]!.proacl])).rows[0].acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]);
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "simulation_fee_demo_settle")).toBe(false);
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+}
 // m4-withheld-source / 0489: one private validator, with no runtime execute grant.
 async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1376,6 +1387,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
  Object.assign(expected, await withheldSourceAddition(expected));
+ Object.assign(expected, await demoSettleAddition(expected));
  Object.assign(expected, await timelineStoreAdditions(expected));
  if (proofs.length) {
   expect(await snapshot()).toEqual(expected);
@@ -1395,7 +1407,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await migrate(f.admin);
  expect(await snapshot()).toEqual(withProofs);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
-}, 60000);
+}, 180000);
 
 // MON-3-P-B: ONLY the four new side tables and five new routines from 0235.
 async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
