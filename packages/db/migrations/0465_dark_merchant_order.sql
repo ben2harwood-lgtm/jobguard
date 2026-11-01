@@ -26,7 +26,7 @@ CREATE TABLE app.purchase_order_manual_attestation (
 ALTER TABLE app.purchase_order_manual_attestation OWNER TO jobguard_migration;
 ALTER TABLE app.purchase_order_manual_attestation ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.purchase_order_manual_attestation FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON app.purchase_order_manual_attestation FOR ALL TO jobguard_runtime,jobguard_migration
+CREATE POLICY tenant_isolation ON app.purchase_order_manual_attestation FOR ALL TO jobguard_runtime
   USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)
   WITH CHECK(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
 GRANT SELECT,INSERT ON app.purchase_order_manual_attestation TO jobguard_runtime;
