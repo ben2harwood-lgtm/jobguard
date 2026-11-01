@@ -5,11 +5,11 @@ import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
-const migration="0480_dunning_workbench.sql";
+const migration="0581_dunning_workbench.sql";
 let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(migration);},240000);
 afterAll(async()=>{await c?.close();});
-it("0480 alone preserves populated company, identity, job and financial predecessors; repeated runner is safe",async()=>{
+it(`${migration} alone preserves populated company, identity, job and financial predecessors; repeated runner is safe`,async()=>{
  await meterCompany(c as unknown as WorkFixture);
  const tables=["control_plane.tenant","identity.session","app.account","app.membership","app.job","app.command_receipt","app.audit_event","app.journal","app.journal_line"];
  const before=await proofBefore(c.admin,tables);

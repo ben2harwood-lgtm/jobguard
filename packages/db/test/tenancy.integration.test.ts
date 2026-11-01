@@ -1,3 +1,4 @@
+import { applyTenancyProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -214,7 +215,7 @@ describe("migration and privilege catalog", () => {
       GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
       ORDER BY c.relname
     `);
-    expect(result.rows).toEqual([
+    expect(result.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -268,8 +269,6 @@ describe("migration and privilege catalog", () => {
       { relname: "decision_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_finding_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_review_outcome", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "dunning_invoice", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "dunning_reminder", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "enterprise_agreement_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "enterprise_baseline_batch", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "enterprise_baseline_team", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -393,6 +392,9 @@ describe("migration and privilege catalog", () => {
       { relname: "planned_work_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_enterprise_fee", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_enterprise_fee_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_attempt_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_collection_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_fee_statement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_fee_statement_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_statement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -465,6 +467,8 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_message_sink", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_payment_payer_mark", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_timeline_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_timeline_signal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "role_grant", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "role_grant_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "sandbox_adapter_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -539,6 +543,8 @@ describe("migration and privilege catalog", () => {
       { relname: "synthetic_recovery_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "team", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "team_membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "tenant_key_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "tenant_key_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "trial_admission", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "trial_business_verification", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "trial_card_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -560,7 +566,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-    ]);
+    ], loadMigrationProofs().proofs, "rls"));
   });
 
   it("keeps runtime and infrastructure roles unprivileged", async () => {
@@ -593,7 +599,7 @@ describe("migration and privilege catalog", () => {
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
-    expect(ownership.rows).toEqual([
+    expect(ownership.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
@@ -647,8 +653,6 @@ describe("migration and privilege catalog", () => {
       { relname: "decision_resolution", owner: "jobguard_migration" },
       { relname: "discrepancy_finding_revision", owner: "jobguard_migration" },
       { relname: "discrepancy_review_outcome", owner: "jobguard_migration" },
-      { relname: "dunning_invoice", owner: "jobguard_migration" },
-      { relname: "dunning_reminder", owner: "jobguard_migration" },
       { relname: "enterprise_agreement_version", owner: "jobguard_migration" },
       { relname: "enterprise_baseline_batch", owner: "jobguard_migration" },
       { relname: "enterprise_baseline_team", owner: "jobguard_migration" },
@@ -772,6 +776,9 @@ describe("migration and privilege catalog", () => {
       { relname: "planned_work_revision", owner: "jobguard_migration" },
       { relname: "platform_enterprise_fee", owner: "jobguard_migration" },
       { relname: "platform_enterprise_fee_line", owner: "jobguard_migration" },
+      { relname: "platform_fee_attempt", owner: "jobguard_migration" },
+      { relname: "platform_fee_attempt_event", owner: "jobguard_migration" },
+      { relname: "platform_fee_collection_command", owner: "jobguard_migration" },
       { relname: "platform_fee_statement", owner: "jobguard_migration" },
       { relname: "platform_fee_statement_command", owner: "jobguard_migration" },
       { relname: "platform_statement", owner: "jobguard_migration" },
@@ -844,6 +851,8 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_message_sink", owner: "jobguard_migration" },
       { relname: "recovery_payment_payer_mark", owner: "jobguard_migration" },
       { relname: "recovery_review", owner: "jobguard_migration" },
+      { relname: "recovery_timeline_run", owner: "jobguard_migration" },
+      { relname: "recovery_timeline_signal", owner: "jobguard_migration" },
       { relname: "role_grant", owner: "jobguard_migration" },
       { relname: "role_grant_revocation", owner: "jobguard_migration" },
       { relname: "sandbox_adapter_receipt", owner: "jobguard_migration" },
@@ -918,6 +927,8 @@ describe("migration and privilege catalog", () => {
       { relname: "synthetic_recovery_receipt", owner: "jobguard_migration" },
       { relname: "team", owner: "jobguard_migration" },
       { relname: "team_membership", owner: "jobguard_migration" },
+      { relname: "tenant_key_revocation", owner: "jobguard_migration" },
+      { relname: "tenant_key_version", owner: "jobguard_migration" },
       { relname: "trial_admission", owner: "jobguard_migration" },
       { relname: "trial_business_verification", owner: "jobguard_migration" },
       { relname: "trial_card_attempt", owner: "jobguard_migration" },
@@ -939,7 +950,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", owner: "jobguard_migration" },
       { relname: "work_order_line", owner: "jobguard_migration" },
       { relname: "work_order_revision", owner: "jobguard_migration" },
-    ]);
+    ], loadMigrationProofs().proofs, "owner"));
   });
 });
 
