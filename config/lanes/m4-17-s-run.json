@@ -25,7 +25,7 @@
         "packages/core/src/simulation-money-run.test.ts",
         "packages/core/src/simulation-money-run.ts",
         "packages/db/migrations/0516_success_fee_recovery_compensation.sql",
-        "packages/db/migrations/0515_simulation_money_trail_run.sql",
+        "packages/db/migrations/0512_simulation_money_trail_run.sql",
         "packages/db/src/index.ts",
         "packages/db/src/simulation-money-run-repository.test.ts",
         "packages/db/src/simulation-money-run-repository.ts",
