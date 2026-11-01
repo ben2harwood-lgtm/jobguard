@@ -114,4 +114,17 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
       await migrate(f.admin);
     } finally { await closeWorkFixture(upgrade); }
   },120000);
+  // M5-11 adds no tables or runtime grants: only the exact private synthetic inventory fence.
+  it("M5-11 keeps the inventory fence private, migration-owned and attached only to privacy inventory", async () => {
+   const rows=(await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,
+    has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime_execute,
+    has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infrastructure_execute,
+    EXISTS(SELECT 1 FROM aclexplode(proacl) WHERE grantee=0) public_execute
+    FROM pg_proc WHERE oid='app.privacy_inventory_fence()'::regprocedure`)).rows;
+   expect(rows).toEqual([{owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog'],runtime_execute:false,infrastructure_execute:false,public_execute:false}]);
+   const triggers=(await f.admin.query(`SELECT tgrelid::regclass::text relation,tgenabled FROM pg_trigger
+    WHERE tgfoid='app.privacy_inventory_fence()'::regprocedure ORDER BY tgrelid::regclass::text`)).rows;
+   expect(triggers).toEqual([{relation:'app.privacy_artifact',tgenabled:'O'},{relation:'app.privacy_subject',tgenabled:'O'}]);
+  });
+
 });
