@@ -1,11 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
+import { createHmac } from "node:crypto";
+import { Pool } from "pg";
+import { E2E_ADMIN_DATABASE_URL, E2E_AUTH_CODE_SECRET } from "./global-setup";
 const recoveredCaptureV1 = z.object({ version: z.literal(1), environment: z.literal("synthetic_demo"),
   captureId: z.string().uuid(), jobId: z.string().uuid() });
+// Like ENT-10d, release only this spec's disposable request-window fixtures.
+// Unique addresses isolate the 60-second resend key, but the web adapter also
+// shares the web-bootstrap 10-per-ten-minute bucket with M0-6L. Limits stay
+// active throughout each journey; challenges, sessions and memberships remain.
+const challengeEmails: string[] = [];
+test.afterEach(async () => {
+  if (!challengeEmails.length) return;
+  const pool = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
+  try {
+    await pool.query(`DELETE FROM identity.request_window w USING identity.challenge c
+      WHERE c.email=ANY($1::text[]) AND w.requested_at=c.requested_at AND w.ip_digest=$2`,
+    [challengeEmails, createHmac("sha256", E2E_AUTH_CODE_SECRET).update("ip:web-bootstrap").digest("hex")]);
+  } finally { await pool.end(); challengeEmails.length = 0; }
+});
 // Launch only available journeys; retain honest blockers for unmerged guides.
 async function signIn(page: Page) {
   await page.goto("/sign-in");
-  await page.getByLabel("Fictional email address").fill(`demo-s-${crypto.randomUUID()}@practice.invalid`);
+  const email = `demo-s-${crypto.randomUUID()}@practice.invalid`;
+  challengeEmails.push(email);
+  await page.getByLabel("Fictional email address").fill(email);
   await page.getByRole("button", { name: "Request code", exact: true }).click();
   const code = await page.getByTestId("fixture-code").textContent();
   await page.getByLabel("Eight-digit code").fill(code!);

@@ -4,12 +4,12 @@ import { z } from "zod";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { sessionResponseV1 } from "../../lib/contracts";
 import { demoLink } from "../chooser-state";
-import { parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
+import { shadowApprovalLabel, parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
  const view = report.account, account = view.account;
  return <section aria-label="Saved shadow journey report">
-  <h2>Saved job evidence</h2><p>Incomplete. No fee is charged.</p>
+  <h2>Saved job evidence</h2><p>Incomplete. {shadowApprovalLabel(report)} No fee is charged.</p>
   <p>Customer approval: {report.customerApproval.state === "not_ready_yet" ? "Not ready yet (MON-5)" : report.customerApproval.state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal"}.</p>
   <ul>{report.customerApproval.approvals.map(approval => <li key={approval.variationId}>
    <a href={`/jobs/${report.jobId}#final-check`}>Variation {approval.variationId}</a> · approved {approval.approvedAt} · customer portal
