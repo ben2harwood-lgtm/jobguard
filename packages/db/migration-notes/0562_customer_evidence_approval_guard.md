@@ -25,3 +25,12 @@ Unverified objects cannot be inserted under the existing NOT NULL constraint;
 the pending-upload test exercises the actual unverified lifecycle.
 PostgreSQL suites and exact-head independent RED review remain required in CI.
 Local checks and results are recorded in the router commit message.
+
+Proof isolation: 0562's proof declares only its owner-only invoker trigger function
+and INSERT trigger. It grants no LP-0 runtime/PUBLIC capability and creates no
+relations, policies, rows or tenancy tables; RLS is unchanged, not disabled.
+The recorded routine definition digest follows the existing customer_variation_guard
+convention (null); LP0-13 protection-digest comparison remains held on main.
+All expectations come from the SQL source and committed contracts, never a database.
+No unmerged sibling migration or proof is needed. Main's missing legacy/proof entry
+for 0510_read_value_job_combined_final.sql remains the separate #502 blocker.

@@ -7,7 +7,9 @@
       "allow": [
         "packages/db/migrations/0562_customer_evidence_approval_guard.sql",
         "packages/db/migration-notes/0562_customer_evidence_approval_guard.md",
-        "packages/db/test/customer-evidence-approval.integration.test.ts"
+        "packages/db/test/customer-evidence-approval.integration.test.ts",
+        "packages/db/test/migration-proofs/0562_customer_evidence_approval_guard.proof.json",
+        "packages/db/test/customer-evidence-approval-proof.test.ts"
       ]
     }
   }
