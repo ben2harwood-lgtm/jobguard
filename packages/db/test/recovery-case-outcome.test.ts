@@ -22,3 +22,24 @@ it.each(["command", "eligibilityCommand"] as const)("%s: a missing affected row 
  const input = method === "command" ? { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "withheld_customer_payment", claimedNetPence: 32000, counterparty: "Customer", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"], expectedRevision: 0 } : { version: "recovery-eligibility-command.v1", action: "review", commandId: randomUUID(), caseId: randomUUID(), expectedCaseRevision: 1, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1, scenario: "evidence_backed_withheld_payment" };
  await expect(repo[method](context, randomUUID(), input, reviewer)).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
 });
+
+it("maps only the exact stored-cash database refusal to the existing transition error", async () => {
+ const { withTenant } = await import("../src/tenant-context.js");
+ const repo = new RecoveryCaseRepository({} as Pool);
+ const input = { version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId: randomUUID(), expectedRevision: 2, eventType: "prevent" };
+ const failure = Object.assign(new Error("RECOVERY_PREVENTION_HAS_STORED_CASH"), {code: "23514"});
+ vi.mocked(withTenant).mockRejectedValueOnce(failure);
+ await expect(repo.command(context, randomUUID(), input, reviewer)).rejects.toMatchObject({code: "RECOVERY_TRANSITION_FORBIDDEN"});
+ for (const error of [new Error("RECOVERY_PREVENTION_HAS_STORED_CASH"), Object.assign(new Error("connection lost"), {code: "23514"})]) {
+  vi.mocked(withTenant).mockRejectedValueOnce(error);
+  await expect(repo.command(context, randomUUID(), input, reviewer)).rejects.toBe(error);
+ }
+});
+
+it("keeps a matching stored-cash error after commit as an unknown outcome", async () => {
+ const repo = new RecoveryCaseRepository({} as Pool);
+ const failure = Object.assign(new Error("RECOVERY_PREVENTION_HAS_STORED_CASH"), {code: "23514"});
+ vi.spyOn(repo, "listForMember").mockRejectedValue(failure);
+ await expect(repo.command(context, randomUUID(), {version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId: randomUUID(), expectedRevision: 2, eventType: "prevent"}, reviewer)).rejects.toMatchObject({code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN", cause: failure});
+ expect(transaction.committed).toBe(1);
+});
