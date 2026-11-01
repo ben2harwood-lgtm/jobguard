@@ -29,7 +29,7 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
   }catch{setError("Statements could not be loaded.");}finally{setBusy(false);}
  }
  if(!available)return null;
- return <section className="workspace-panel" aria-label="Simulation fee statements"><h2>Simulation fee statements</h2>
+ return <section id="simulation-fee-statements" className="workspace-panel" aria-label="Simulation fee statements"><h2>Simulation fee statements</h2>
   <button disabled={busy} onClick={()=>void command("issue")}>Save current simulation statement or correction</button>
   {records.map((record,index)=>{const d=record.document;return <article key={d.statementId}>
    <h3 data-testid="fee-statement-number">{d.number}</h3><p>{d.warning}</p><p>{d.vatLabel}</p><p>{d.sandboxLabel}</p>

@@ -32,7 +32,7 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   } finally {
    await f.admin.query(await readFile(new URL("../migrations/0400_trial_activation_lock_order.sql", import.meta.url), "utf8"));
    // Later tests in this file run the current routine, which 0517 supersedes.
-   await f.admin.query(await readFile(new URL("../migrations/0517_trial_first_activation_capacity.sql", import.meta.url), "utf8"));
+   await f.admin.query(await readFile(new URL("../migrations/0516_trial_first_activation_capacity.sql", import.meta.url), "utf8"));
   }
  });
 

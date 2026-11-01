@@ -138,6 +138,7 @@ export function DemoChooser() {
     <p>Made-up data only. Choose an available journey, launch a fresh fictional job, or resume your saved selection.</p>
     <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This is not tied to a saved selection; choose core-1000 below to resume it and read its saved report.</p>
     <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>
+    <p><a href="/demo-s/recovery-18800">Open the guided £18,800 recovery journey</a></p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}

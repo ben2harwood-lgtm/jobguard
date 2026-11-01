@@ -1,6 +1,6 @@
 import {readFile} from "node:fs/promises";
 import {expect,it} from "vitest";
-import {parseInventory,staticScan} from "./lp-0-catalog.js";
+import {loadReviewedInventory,parseInventory,staticScan} from "./lp-0-catalog.js";
 const read=(name:string)=>readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
 it("0497 retains the private validator and five consumers with exact static privilege facts",async()=>{
  const sql=await read("0514_withheld_payment_statement_source.sql");
@@ -11,14 +11,16 @@ it("0497 retains the private validator and five consumers with exact static priv
  const sharedDefinitions=[...shared.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)]
   .filter(m=>m[1]==="write_success_fee_v3");
  expect(sharedDefinitions).toHaveLength(1);
- for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
-  const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
-  const known=new Set<string>(raw.recorded.routines.map((r:{identity:string})=>r.identity.slice(9).split("(")[0]));
-  const tables=new Set<string>(raw.recorded.routines.flatMap((r:{staticWrites:string[]})=>r.staticWrites));
-  for(const [_,name,body] of [...definitions,...sharedDefinitions]){
-   const facts=raw.recorded.routines.filter((r:{identity:string})=>r.identity.startsWith(`function:app.${name}(`));expect(facts).toHaveLength(1);
-   expect(staticScan(body!,known,tables)).toEqual({staticCalls:facts[0].staticCalls,staticWrites:facts[0].staticWrites});
-  }
+ // The live inventory carries the exact facts; the downstream snapshot is frozen at its 29 Oct design base and must not gain them.
+ const frozen=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",import.meta.url),"utf8"));parseInventory(frozen);
+ expect(frozen.recorded.routines.filter((r:{identity:string})=>r.identity.includes("app.success_fee_withheld_source("))).toEqual([]);
+ // The reviewed baseline plus migration proofs is the live inventory; 0511's proof adds the payer helper to the writer's calls.
+ const raw=(await loadReviewedInventory()).raw as {recorded:{routines:{identity:string;staticWrites:string[];staticCalls:string[]}[]}};
+ const known=new Set<string>(raw.recorded.routines.map(r=>r.identity.slice(9).split("(")[0]!));
+ const tables=new Set<string>(raw.recorded.routines.flatMap(r=>r.staticWrites));
+ for(const [_,name,body] of [...definitions,...sharedDefinitions]){
+  const facts=raw.recorded.routines.filter(r=>r.identity.startsWith(`function:app.${name}(`));expect(facts).toHaveLength(1);
+  expect(staticScan(body!,known,tables)).toEqual({staticCalls:facts[0]!.staticCalls,staticWrites:facts[0]!.staticWrites});
  }
 });
 it("fences withheld eligibility, allocation, terms and proof writers before all downstream audit writes",async()=>{
