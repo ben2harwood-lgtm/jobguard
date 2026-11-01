@@ -27,3 +27,37 @@ localhost. Independent RED review and green CI remain required.
 
 Forward fix: add a successor migration if necessary. Preserve the immutable imports
 and their original receipts. Do not edit 0362 or rewrite old ownership/audit chains.
+
+Migration proof: `0566_job_import_v3_original_source.proof.json` deliberately
+contains empty lp0, upgrade and tenancy delta lists. Source comparison with 0362
+shows only CREATE OR REPLACE and the source-provenance guard. The existing routine
+keeps its signature, owner, ACL, SECURITY DEFINER, search_path, static calls and
+static writes; its recorded definitionSha256 is null. Upgrade snapshots do not
+include function bodies. No rows, relations, policies, triggers or tenancy tables
+are added or changed, and no RLS-off exception is declared. All dependencies are
+already on main; no sibling proof is needed for 0566. The three shared allowance
+files match main exactly, and migration bytes and numbers are unchanged.
+
+Proof-loader integration remains subject to main's missing proof for
+0510_read_value_job_combined_final.sql until #502 lands. This branch does not
+supply that unrelated proof or relax discovery.
+
+Proof refresh local checks (1 Nov 2026):
+- `./node_modules/.bin/vitest run --maxWorkers=1 test/job-import-v3.integration.test.ts -t 'CH5-P source-only'`
+  from packages/db: 13 passed, 3 database tests skipped by name selection.
+- `./node_modules/.bin/tsc -p tsconfig.json --noEmit` from
+  packages/db: PASS.
+- Storage build via root `./node_modules/.bin/tsc -p packages/storage/tsconfig.json`:
+  PASS; required because the initial loader run could not resolve storage dist.
+- `./node_modules/.bin/vitest run --maxWorkers=1 test/migration-proof-loader.test.ts`
+  from packages/db after that build: 25 passed, 1 failed solely on missing main
+  0510_read_value_job_combined_final.proof.json (known #502 dependency).
+- Installed tsx with Node imported the actual proofSchema and applied 0566 to
+  combineLp0, applyUpgradeProofs and both applyTenancyProofs projections: PASS,
+  strictly parsed and unchanged outputs. No database facts were read.
+- `git diff --check`: PASS. Byte comparisons confirm all three shared allowance
+  files equal origin/main and 0566 SQL equals HEAD. The launcher's existing merge
+  preserved this piece's source, SQL and regression files exactly.
+
+READY for router NOPR commit. PostgreSQL fresh/upgrade and browser suites were not
+run in this sandbox; green CI and independent RED review remain outstanding.
