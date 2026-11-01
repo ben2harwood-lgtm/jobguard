@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-2-store": {
+      "branches": [
+        "codex/sandbox/m3-2-store"
+      ],
+      "note": "M3-2 RED: optional durable synthetic identity state, migration 0520, and all-tenant device logout/revocation. Built ahead on m3-2-lease; LP-0 records the identity no-RLS exception and catalogue tests deny runtime/infrastructure access. Fixture inspection reloads committed state. PostgreSQL CI and independent RED review pending.",
+      "allow": [
+        "apps/api/src/auth/mobile-auth.application.test.ts",
+        "apps/api/src/auth/mobile-auth.application.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/mobile-auth-v1.md",
+        "docs/operations/native-device-lifecycle.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/mobile-auth-state.test.ts",
+        "packages/core/src/mobile-auth-state.ts",
+        "packages/db/migrations/0507_mobile_auth_store.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/mobile-auth-store.ts",
+        "packages/db/test/mobile-auth-store.integration.test.ts",
+        "packages/db/test/mobile-auth-store.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
