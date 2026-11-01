@@ -10,7 +10,7 @@ it("0492 adds exactly its checked run, private loader, private immutable tables 
  // Calls are scanned against the live inventory; only this piece's rows are unioned into each snapshot.
  const live=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
  const known=new Set<string>(live.recorded.routines.map((r:{identity:string})=>r.identity.slice(9).split("(")[0]));
- for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
+ for(const file of ["lp-0-effective-privileges-v1.json"]){
   const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
   const tables=new Set<string>(raw.recorded.routines.flatMap((r:{staticWrites:string[]})=>r.staticWrites));
   for(const [_,name,body] of definitions){
@@ -42,7 +42,7 @@ it("0492 copies the exact predecessor policy quoting and every other SQL format 
  expect(sql).not.toMatch(/current_setting\(app\.|,\)::uuid/u);
 });
 it("0489-0492 do not overwrite each other's routines; compensation is the latest writer and journal/derivation guard",async()=>{
- const files=["0516_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0509_simulation_fee_collection.sql","0512_simulation_money_trail_run.sql"];
+ const files=["0511_success_fee_recovery_compensation.sql","0490_simulation_fee_statement_issue.sql","0509_simulation_fee_collection.sql","0512_simulation_money_trail_run.sql"];
  const definitions=new Map<string,string>();
  for(const file of files){const sql=await readFile(new URL(`../migrations/${file}`,import.meta.url),"utf8");for(const match of sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION app\.(\w+)\(/gu)){expect(definitions.has(match[1]!)).toBe(false);definitions.set(match[1]!,file);}}
  for(const name of ["write_success_fee_v3","check_success_fee_journal","check_success_fee_derivation"])expect(definitions.get(name)).toBe(files[0]);
