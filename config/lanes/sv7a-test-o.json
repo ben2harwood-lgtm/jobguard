@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/sv7a-test-o"
       ],
-      "note": "RED SV-7A Test O DB proof on the checked intake writer (PR 354): a diary note omitted at lock is revealed by the Final Check. Test only.",
+      "note": "RED SV-7A Test O catch-up: the diary-to-Final-Check PostgreSQL proof is already on main; retain its test scope after merging current main. No migration.",
       "allow": [
         "packages/db/test/job-source-test-o.integration.test.ts"
       ]
