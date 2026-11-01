@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m4-4-hold-alert"
       ],
-      "note": "RED M4-4 operator alerts projected from stored audited refusal receipts; fake adapters only. Built on m4-4-recover; serialize shared WORM files. Migration proofs for prerequisite 0455/0488 and own 0499 are source-reviewed; prerequisite branches must land first.",
+      "note": "RED M4-4 operator alerts projected from stored audited refusal receipts; fake adapters only. Built on m4-4-recover; serialize shared WORM files. Repair 2 isolates operator routines in worm_control, removes executor runtime membership and leaves shared ACLs unchanged. Migration proofs for prerequisite 0455/0488 and own 0499 are source-reviewed; prerequisite branches must land first.",
       "allow": [
         "docs/operations/evidence-storage.md",
         "packages/db/migrations/0499_worm_operator_alerts.sql",
@@ -21,7 +21,10 @@
         "packages/db/test/migration-proofs/0488_worm_operator_recovery.proof.json",
         "packages/db/test/migration-proofs/0499_worm_operator_alerts.proof.json",
         "packages/db/test/worm-migration-proofs.test.ts",
-        "packages/db/migrations/0488_worm_operator_recovery.sql"
+        "packages/db/migrations/0488_worm_operator_recovery.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/migrations/0455_worm_durable_commands.sql"
       ]
     }
   }

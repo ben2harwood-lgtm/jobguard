@@ -96,11 +96,13 @@ No provider error text or object key enters the audit payload. The trust boundar
 includes the separately provisioned operator login and its configured storage reader;
 readback confirms protection state, not the authenticity of the evidence's contents.
 
-Migration 0488 adds the operator role and two routines. It withdraws PUBLIC EXECUTE
-on the exact 17 legacy app predicates/trigger helpers, preserving their access for
-the existing app-schema roles through explicit grants. Reconciliation appends its audit
-event inside the restricted SQL routine; the operator cannot invoke general audit helpers.
-It does not replace old routine bodies or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
+Migration 0488 adds the operator role and two routines in `worm_control`. The
+operator has USAGE only on that private schema, so shared app routine ACLs remain
+unchanged. Reconciliation appends its audit event inside the restricted SQL
+routine; the operator cannot invoke general audit helpers.
+The executor has only tenant receipt reads and claim/finish access, with no runtime
+membership. Its SQL commands append audit through an owner-only WORM helper.
+It does not replace shared routine bodies or rewrite evidence/receipt rows. Forward fixes preserve blocked attempts,
 audit and immutable versions. D07, production residency/store validation and RED review
 remain required before release. The fake-adapter tests are not live-provider proof.
 
@@ -108,7 +110,7 @@ remain required before release. The fake-adapter tests are not live-provider pro
 
 In the synthetic durable harness, poll `WormCommandRepository.operatorAlerts` with
 a verified tenant context and the separately provisioned operator pool. Migration
-0499 grants that role only one additional read routine, `app.worm_operator_alerts()`.
+0499 grants that role only one additional read routine, `worm_control.worm_operator_alerts()`.
 Runtime and storage executors cannot call it. It returns critical
 `WORM_STORAGE_REFUSED` alerts with command/evidence references, action and attempt
 time; it exposes no object keys, provider messages or other tenants' receipts.

@@ -57,10 +57,10 @@ beforeAll(async () => {
     "INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Synthetic retention')", [job, tenant]));
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   const key = `synthetic/tenants/${tenant}/manifest`;
-  await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
-    VALUES($1,$2,$3,$4,$5,'application/json',100,'standard_evidence',now()+interval '1 day')`, [evidence, tenant, job, key, "a".repeat(64)]);
-  await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-    VALUES($1,$2,$1,$3,'original','manifest',$4,'v1',$5,2,'application/json','standard_evidence',now(),now())`, [evidence, tenant, job, key, "a".repeat(64)]);
+  await withTenant(admin, context, db => db.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
+    VALUES($1,$2,$3,$4,$5,'application/json',100,'standard_evidence',now()+interval '1 day')`, [evidence, tenant, job, key, "a".repeat(64)]));
+  await withTenant(admin, context, db => db.$client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+    VALUES($1,$2,$1,$3,'original','manifest',$4,'v1',$5,2,'application/json','standard_evidence',now(),now())`, [evidence, tenant, job, key, "a".repeat(64)]));
   await admin.query("INSERT INTO app.worm_synthetic_version VALUES($1,$2,$3)", [tenant, evidence, job]);
   await admin.query("CREATE ROLE worm_test_login LOGIN PASSWORD 'synthetic-runtime' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_runtime TO worm_test_login");
@@ -97,18 +97,42 @@ describe("durable synthetic WORM SQL", () => {
     expect(await repo.operatorAlerts(context)).toEqual(alerts);
     expect((await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows).toEqual(before);
   });
+  it("keeps executor credentials separate from runtime and audit authority", async () => {
+    for (const role of ["jobguard_worm_executor", "jobguard_worm_operator"]) {
+      expect((await admin.query("SELECT rolinherit FROM pg_roles WHERE rolname=$1", [role])).rows).toEqual([{ rolinherit: false }]);
+      expect((await admin.query("SELECT pg_has_role($1,'jobguard_runtime','MEMBER') allowed", [role])).rows[0].allowed).toBe(false);
+    }
+    for (const sql of ["SET LOCAL ROLE jobguard_runtime", "SELECT * FROM app.job",
+      "SELECT * FROM app.worm_submit('{}'::jsonb)", "SELECT * FROM app.lock_audit_head()",
+      "SELECT app.advance_audit_head(1,NULL)", "SELECT app.worm_audit(NULL,'applied','forged')",
+      "INSERT INTO app.audit_event DEFAULT VALUES"]) {
+      await expect(withTenant(executor, context, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+    }
+    const c = command();
+    await repo.submit(context, c);
+    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    const before = (await admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows;
+    await expect(withTenant(executor, context, async db => {
+      await db.$client.query("SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]);
+      throw new Error("synthetic executor rollback");
+    })).rejects.toThrow("synthetic executor rollback");
+    expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("executing");
+    expect((await admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows).toEqual(before);
+    // Leave no active hold to interfere with later independent commands.
+    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
+  });
   it("limits operators to recovery and alert reads with no table authority", async () => {
     await expect(withTenant(operator, context, db => db.$client.query(
       "SELECT * FROM app.worm_submit($1::jsonb)", [JSON.stringify(command())]))).rejects.toMatchObject({ code: "42501" });
     for (const role of ["jobguard_runtime", "jobguard_worm_executor", "jobguard_migration"]) {
       await expect(withTenant(operator, context, db => db.$client.query(`SET LOCAL ROLE ${role}`))).rejects.toMatchObject({ code: "42501" });
     }
-    // Check every overload, including PUBLIC predicates and trigger helpers.
+    // Check every overload and schema boundary, including PUBLIC app helpers.
     const routines = (await operator.query(`SELECT p.oid::text, p.oid::regprocedure::text signature,
-      has_function_privilege(current_user,p.oid,'EXECUTE') executable
-      FROM pg_proc p WHERE p.pronamespace='app'::regnamespace ORDER BY 2`)).rows;
+      (has_schema_privilege(current_user,p.pronamespace,'USAGE') AND has_function_privilege(current_user,p.oid,'EXECUTE')) executable
+      FROM pg_proc p WHERE p.pronamespace IN ('app'::regnamespace,'worm_control'::regnamespace) ORDER BY 2`)).rows;
     expect(routines.filter(r => r.executable).map(r => r.signature).sort()).toEqual([
-      "app.worm_operator_alerts()", "app.worm_reconcile(uuid,integer,boolean)", "app.worm_recovery_target(uuid)",
+      "worm_control.worm_operator_alerts()", "worm_control.worm_reconcile(uuid,integer,boolean)", "worm_control.worm_recovery_target(uuid)",
     ]);
     for (const r of routines.filter(r => !r.executable)) {
       const call = (await admin.query(`SELECT format('%I.%I(%s)',n.nspname,p.proname,
@@ -169,7 +193,7 @@ describe("durable synthetic WORM SQL", () => {
     await expect(repo.execute(testTenantContext(other), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
     expect(calls).toBe(1);
     for (const credentials of [runtime, executor]) {
-      await expect(withTenant(credentials, context, db => db.$client.query("SELECT * FROM app.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(credentials, context, db => db.$client.query("SELECT * FROM worm_control.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
     }
     expect((await admin.query("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [tenant, evidence])).rows).toEqual(beforeEvidence);
     expect(held).toBe(beforeHeld);
@@ -190,6 +214,8 @@ describe("durable synthetic WORM SQL", () => {
     })).rejects.toThrow("synthetic audit failure");
     expect((await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId)).toEqual([]);
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("executing");
+    // Finish the fixture only after proving rollback, so the next test can raise a new hold.
+    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
   });
   it("reconciles an unknown completed write once, audits the operator, and never rewrites storage", async () => {
     const c = command();
@@ -204,13 +230,13 @@ describe("durable synthetic WORM SQL", () => {
     const fresh = new WormCommandRepository(runtime, true, executor, operator);
     await expect(fresh.recover(testTenantContext(other), recovery, { read })).rejects.toThrow("WORM_REFUSED");
     await expect(withTenant(operator, testTenantContext(other), db => db.$client.query(
-      "SELECT * FROM app.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
+      "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     expect(read).not.toHaveBeenCalled();
     for (const credentials of [runtime, executor]) {
       const denied = new WormCommandRepository(runtime, true, executor, credentials);
       await expect(denied.recover(context, recovery, { read })).rejects.toThrow("WORM_REFUSED");
       await expect(withTenant(credentials, context, db => db.$client.query(
-        "SELECT * FROM app.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
+        "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
       await expect(withTenant(credentials, context, db => db.$client.query("SET LOCAL ROLE jobguard_worm_operator"))).rejects.toMatchObject({ code: "42501" });
     }
     expect(read).not.toHaveBeenCalled();
@@ -291,10 +317,10 @@ describe("durable synthetic WORM SQL", () => {
     await expect(withTenant(executor, context, db => db.$client.query(
       "SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     await expect(withTenant(operator, context, db => db.$client.query(
-      "SELECT * FROM app.worm_reconcile($1,2,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
+      "SELECT * FROM worm_control.worm_reconcile($1,2,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     const auditsBeforeRollback = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n;
     await expect(withTenant(operator, context, async db => {
-      await db.$client.query("SELECT * FROM app.worm_reconcile($1,1,true)", [c.commandId]);
+      await db.$client.query("SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]);
       throw new Error("synthetic audit transaction failure");
     })).rejects.toThrow("synthetic audit transaction failure");
     expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(auditsBeforeRollback);

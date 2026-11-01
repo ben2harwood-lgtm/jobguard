@@ -56,7 +56,7 @@ export class WormCommandRepository {
     this.requireDark();
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     return withTenant(this.operatorPool, context, async db =>
-      (await db.$client.query<WormOperatorAlert>("SELECT * FROM app.worm_operator_alerts()")).rows
+      (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows
     ).catch(refuse);
   }
 
@@ -88,7 +88,6 @@ export class WormCommandRepository {
       const prior = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_command WHERE tenant_id=$1 AND id=$2", [context.tenantId, commandId])).rows[0];
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_claim($1)", [commandId])).rows[0]!;
       const claimed = !!prior && ["queued", "pending"].includes(prior.status) && c.status === "executing";
-      if (claimed || c.status !== prior?.status) await audit(db, c, c.status);
       return { c, claimed };
     }).catch(refuse);
     if (!claim.claimed) return claim.c;
@@ -118,7 +117,7 @@ export class WormCommandRepository {
     return withTenant(this.executorPool, context, async db => {
       const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_finish($1,$2,$3,$4::jsonb)",
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
-      await audit(db, finished, status);
+      // worm_finish appends its restricted audit event atomically.
       return finished;
     }).catch(refuse);
   }
@@ -134,7 +133,7 @@ export class WormCommandRepository {
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     const { commandId } = parsed.data;
     const c = await withTenant(this.operatorPool, context, async db =>
-      (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_recovery_target($1)", [commandId])).rows[0]!
+      (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!
     ).catch(refuse);
     if (c.status === "applied") return c;
     let observed: boolean | null = null;
@@ -144,9 +143,9 @@ export class WormCommandRepository {
     } catch { /* Unavailable/missing readback cannot prove the write; leave unresolved. */ }
     return withTenant(this.operatorPool, context, async db => {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}/worm`]);
-      const prior = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_recovery_target($1)", [commandId])).rows[0]!;
+      const prior = (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!;
       if (prior.status === "applied") return prior; // Concurrent reconciliation already committed.
-      const finished = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_reconcile($1,$2,$3)",
+      const finished = (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_reconcile($1,$2,$3)",
         [commandId, c.attempts, observed])).rows[0]!;
       // The restricted SQL routine appends the audit event in this transaction.
       return finished;

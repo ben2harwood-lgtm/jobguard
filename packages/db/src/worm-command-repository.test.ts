@@ -61,11 +61,11 @@ describe("dark durable WORM application", () => {
     }
     expect(wormCommandV1.safeParse({ ...command(), action: "release_hold" }).success).toBe(false);
   });
-  it("commits the claim before exact-version I/O, audits final state, and does not execute a replay", async () => {
+  it("commits the SQL-audited claim before exact-version I/O and does not execute a replay", async () => {
     expect((await repo().execute(context, row.id, storage, unavailable)).status).toBe("applied");
     await repo().execute(context, row.id, storage, unavailable);
     expect(storage.hold).toHaveBeenCalledExactlyOnceWith({ tenantId: context.tenantId, key: row.object_key, versionId: "immutable-v1" }, true);
-    expect(fake.audit).toHaveBeenCalledTimes(2);
+    expect(fake.audit).not.toHaveBeenCalled();
     expect(fake.pools).toEqual([executorPool, executorPool, executorPool]);
   });
   it("does not mark a hold applied when storage readback disagrees", async () => {
@@ -82,7 +82,9 @@ describe("dark durable WORM application", () => {
     await repo().execute(context, row.id, storage, unavailable);
     expect(storage.hold).toHaveBeenCalledTimes(1);
     expect(storage.read).not.toHaveBeenCalled();
-    expect(fake.audit.mock.calls.at(-1)?.[1][0].eventType).toBe("worm.refused");
+    expect(fake.query.mock.calls.find(([sql]) => sql.includes("worm_finish"))?.[1]?.slice(0, 3))
+      .toEqual([row.id, 1, "refused"]);
+    expect(fake.audit).not.toHaveBeenCalled(); // SQL owns executor audit atomicity.
   });
   it("keeps a refusal during readback unknown because the write already completed", async () => {
     vi.mocked(storage.read).mockRejectedValue(new WormBoundaryError("INVALID_INPUT"));
@@ -133,7 +135,7 @@ describe("read-only operator WORM recovery", () => {
       code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: new Date() };
     fake.query.mockResolvedValue({ rows: [alert] });
     expect(await operator().operatorAlerts(context)).toEqual([alert]);
-    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT * FROM app.worm_operator_alerts()");
+    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT * FROM worm_control.worm_operator_alerts()");
     expect(fake.pools).toEqual([operatorPool]);
     expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
     fake.query.mockRejectedValue(new Error("secret database detail"));

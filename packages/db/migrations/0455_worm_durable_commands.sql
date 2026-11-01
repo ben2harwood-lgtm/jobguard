@@ -2,10 +2,11 @@ BEGIN;
 -- Separate storage executor credentials; runtime must never be a member of this role.
 DO $$ BEGIN
  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_worm_executor') THEN
- CREATE ROLE jobguard_worm_executor NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+ CREATE ROLE jobguard_worm_executor NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
  END IF;
 END $$;
-GRANT jobguard_runtime TO jobguard_worm_executor;
+-- No runtime membership: receipt reads and the two executor routines are sufficient.
+GRANT USAGE ON SCHEMA app TO jobguard_worm_executor;
 -- DARK fixture admission is migration-owned; runtime cannot label real evidence synthetic.
 CREATE TABLE app.worm_synthetic_version (
  tenant_id uuid NOT NULL, evidence_id uuid NOT NULL, job_id uuid NOT NULL,
@@ -42,10 +43,34 @@ DO $$ DECLARE n text; BEGIN
  EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
  EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
  EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
- EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_runtime,jobguard_migration USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
- EXECUTE format('GRANT SELECT ON app.%I TO jobguard_runtime',n);
+ EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_runtime,jobguard_migration,jobguard_worm_executor USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
+ EXECUTE format('GRANT SELECT ON app.%I TO jobguard_runtime,jobguard_worm_executor',n);
  END LOOP;
 END $$;
+
+-- Owner-only helper: executors cannot append arbitrary audit events or acquire
+-- general runtime privileges. Call after the command/attempt's final domain lock.
+CREATE FUNCTION app.worm_audit(c app.worm_command, phase text, actor_ref text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ seq bigint; prev text; ts timestamptz; payload jsonb; ph text; eh text;
+BEGIN
+ IF t IS NULL OR c.tenant_id IS DISTINCT FROM t THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ SELECT sequence,event_hash INTO seq,prev FROM app.lock_audit_head();
+ seq:=seq+1; ts:=date_trunc('milliseconds',clock_timestamp());
+ payload:=jsonb_build_object('references',jsonb_build_object('command',c.id,'action',c.action,'status',c.status),
+  'hashes',jsonb_build_object('imprint',trim(c.imprint)));
+ ph:=app.final_lock_hash(payload);
+ eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,actor_ref,
+  'worm.'||phase,'evidence',c.evidence_id::text,to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(prev,'')),'UTF8')),'hex');
+ INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,
+  occurred_at,payload,payload_hash,previous_hash,event_hash)
+ VALUES(gen_random_uuid(),t,seq,'audit.v1',actor_ref,'worm.'||phase,'evidence',c.evidence_id::text,
+  ts,payload,ph,prev,eh);
+ PERFORM app.advance_audit_head(seq,eh);
+END $$;
+ALTER FUNCTION app.worm_audit(app.worm_command,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.worm_audit(app.worm_command,text,text) FROM PUBLIC;
 
 CREATE FUNCTION app.worm_submit(c jsonb) RETURNS app.worm_command
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
@@ -109,9 +134,10 @@ BEGIN
  AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
  AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id) FOR SHARE;
  IF NOT FOUND THEN UPDATE app.worm_command SET status='cancelled' WHERE tenant_id=t AND id=cid RETURNING * INTO c;
- RETURN c; END IF;
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text); RETURN c; END IF;
  UPDATE app.worm_command SET status='executing',attempts=attempts+1 WHERE tenant_id=t AND id=cid RETURNING * INTO c;
  INSERT INTO app.worm_attempt(tenant_id,command_id,attempt,outcome,result) VALUES(t,cid,c.attempts,'executing','{}'::jsonb);
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text);
  RETURN c;
 END $$;
 
@@ -130,6 +156,7 @@ BEGIN
  THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
  UPDATE app.worm_attempt SET outcome=worm_finish.outcome,result=material WHERE tenant_id=t AND command_id=cid AND attempt=n;
  UPDATE app.worm_command SET status=outcome,result=material WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text);
  RETURN c;
 END $$;
 DO $$ DECLARE signature text; BEGIN

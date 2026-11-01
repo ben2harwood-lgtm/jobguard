@@ -126,31 +126,7 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "member|jobguard_runtime|jobguard_worm_executor|admin=f,inherit=t,set=t",
-        "group": "a-worm-recovery"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "reach|jobguard_worm_executor|jobguard_runtime|inherit",
-        "group": "a-worm-recovery"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "reach|jobguard_worm_executor|jobguard_runtime|set",
-        "group": "a-worm-recovery"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "role|jobguard_worm_executor|super=f,inherit=t,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "key": "role|jobguard_worm_executor|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
         "group": "a-worm-recovery"
       }
     },
@@ -189,17 +165,17 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.worm_attempt|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+      "after": "app.worm_attempt|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime,jobguard_worm_executor|6fa387f2f629fba6"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.worm_command|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+      "after": "app.worm_command|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime,jobguard_worm_executor|6fa387f2f629fba6"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.worm_synthetic_version|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+      "after": "app.worm_synthetic_version|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime,jobguard_worm_executor|6fa387f2f629fba6"
     },
     {
       "section": "rls",
@@ -237,7 +213,9 @@
           "app.worm_attempt",
           "app.worm_command"
         ],
-        "staticCalls": []
+        "staticCalls": [
+          "app.worm_audit"
+        ]
       }
     },
     {
@@ -261,7 +239,9 @@
           "app.worm_attempt",
           "app.worm_command"
         ],
-        "staticCalls": []
+        "staticCalls": [
+          "app.worm_audit"
+        ]
       }
     },
     {
@@ -284,6 +264,63 @@
         ],
         "staticCalls": []
       }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|app|jobguard_worm_executor|USAGE|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_attempt|jobguard_worm_executor|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_command|jobguard_worm_executor|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_synthetic_version|jobguard_worm_executor|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.worm_audit(app.worm_command,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.audit_event"
+        ],
+        "staticCalls": [
+          "app.advance_audit_head",
+          "app.final_lock_hash",
+          "app.lock_audit_head"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -295,7 +332,7 @@
         "tablename": "worm_attempt",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": "{jobguard_migration,jobguard_runtime}",
+        "roles": "{jobguard_migration,jobguard_runtime,jobguard_worm_executor}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
@@ -309,7 +346,7 @@
         "tablename": "worm_command",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": "{jobguard_migration,jobguard_runtime}",
+        "roles": "{jobguard_migration,jobguard_runtime,jobguard_worm_executor}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
@@ -323,7 +360,7 @@
         "tablename": "worm_synthetic_version",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": "{jobguard_migration,jobguard_runtime}",
+        "roles": "{jobguard_migration,jobguard_runtime,jobguard_worm_executor}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
@@ -336,7 +373,7 @@
         "nspname": "app",
         "relname": "worm_attempt",
         "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_worm_executor=r/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
       }
@@ -348,7 +385,7 @@
         "nspname": "app",
         "relname": "worm_command",
         "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_worm_executor=r/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
       }
@@ -360,7 +397,7 @@
         "nspname": "app",
         "relname": "worm_synthetic_version",
         "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_worm_executor=r/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
       }
@@ -480,6 +517,21 @@
       "after": {
         "table": "app.worm_synthetic_version",
         "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "worm_audit",
+        "args": "c app.worm_command, phase text, actor_ref text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
       }
     }
   ],

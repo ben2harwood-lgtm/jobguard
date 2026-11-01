@@ -11,33 +11,30 @@ describe("M4-4 source-reviewed migration proofs", () => {
     const baseline = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
     const inventory = parseInventory(combineLp0(baseline, proofs));
     expect(inventory.entries).toContainEqual({
-      key: "acl|routine|function:app.worm_operator_alerts()|jobguard_worm_operator|EXECUTE|-", group: "a-worm-recovery",
+      key: "acl|routine|function:worm_control.worm_operator_alerts()|jobguard_worm_operator|EXECUTE|-", group: "a-worm-recovery",
     });
-    expect(inventory.entries.some(e => e.key === "acl|routine|function:app.signal_outbox()|PUBLIC|EXECUTE|-")).toBe(false);
+    expect(inventory.entries.some(e => e.key === "acl|routine|function:app.signal_outbox()|PUBLIC|EXECUTE|-")).toBe(true);
     expect(() => combineLp0(baseline, [...proofs, proofs[2]!])).toThrow(/before allowance mismatch/);
   });
 
-  it("keeps the imported-job guard unchanged and trigger helpers owner-only", () => {
+  it("leaves shared trigger ACLs and protections unchanged", () => {
     const recovery = proofs[1]!;
-    expect(JSON.stringify(recovery)).not.toContain("function:app.guard_imported_job()");
+    expect(recovery.lp0.every(c => c.before === null)).toBe(true);
+    expect(recovery.upgrade.every(c => c.before === null)).toBe(true);
     const baseline = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
     const inventory = parseInventory(combineLp0(baseline, proofs));
-    const guard = "function:app.guard_imported_job()";
-    expect(inventory.recorded.routines.find(r => r.identity === guard))
-      .toEqual(baseline.recorded.routines.find((r: { identity: string }) => r.identity === guard));
-    const triggers = recovery.lp0.filter(c => c.section === "routines" && c.before?.returnsTrigger);
-    expect(triggers).toHaveLength(14);
-    for (const c of triggers) {
-      if (c.section !== "routines") throw new Error("expected routine");
-      expect(c.after).toMatchObject({ reachable: false, runtimeExecute: false, publicExecute: false, otherExecute: [] });
+    const triggers = baseline.recorded.routines.filter((r: { returnsTrigger: boolean }) => r.returnsTrigger);
+    for (const trigger of triggers) {
+      expect(inventory.recorded.routines.find(r => r.identity === trigger.identity)).toEqual(trigger);
     }
-    const audit = recovery.upgrade.find(c => c.section === "routines" && c.before?.proname === "reject_audit_mutation");
-    expect(audit).toEqual({ section: "routines",
-      before: { nspname: "app", proname: "reject_audit_mutation", args: "", proowner: "postgres",
-        proacl: null, prosecdef: false, proconfig: null },
-      after: { nspname: "app", proname: "reject_audit_mutation", args: "", proowner: "postgres",
-        proacl: "{postgres=X/postgres}", prosecdef: false, proconfig: null },
-    });
+    expect(inventory.entries.filter(e => e.group === "x-public-definer-trigger-functions"))
+      .toEqual(baseline.entries.filter((e: { group: string }) => e.group === "x-public-definer-trigger-functions"));
+    expect(inventory.entries).toContainEqual({ key: "acl|schema|worm_control|jobguard_worm_operator|USAGE|-", group: "a-worm-recovery" });
+    expect(inventory.entries.some(e => e.key === "acl|schema|app|jobguard_worm_operator|USAGE|-" )).toBe(false);
+    expect(inventory.entries.some(e => e.key.startsWith("member|jobguard_runtime|jobguard_worm_executor|"))).toBe(false);
+    for (const role of ["jobguard_worm_executor", "jobguard_worm_operator"]) {
+      expect(inventory.entries.some(e => e.key.startsWith(`role|${role}|super=f,inherit=f,`))).toBe(true);
+    }
   });
 
   it("applies all exact upgrade attributes and preserves unrelated objects", () => {
@@ -48,14 +45,14 @@ describe("M4-4 source-reviewed migration proofs", () => {
       relations: [untouched], policies: [] }, proofs, { jobguard_migration: 42, postgres: 10 });
     expect(upgraded.rows["app.unrelated"]).toEqual([{ value: "preserved" }]);
     expect(upgraded.relations).toContainEqual(untouched);
-    expect(upgraded.routines).toHaveLength(22);
+    expect(upgraded.routines).toHaveLength(7);
     expect(upgraded.relations).toHaveLength(8);
     expect(upgraded.policies).toHaveLength(3);
     expect(applyTenancyProofs([], proofs, "rls")).toEqual(["worm_attempt", "worm_command", "worm_synthetic_version"].map(relname =>
       ({ relname, relrowsecurity: true, relforcerowsecurity: true, guarded: true })));
     const corrupted = structuredClone(proofs);
-    const changed = corrupted[1]!.upgrade.find(c => c.section === "routines" && c.before !== null)!;
-    if (changed.section === "routines" && changed.before) changed.before.proacl = "{unexpected=X/jobguard_migration}";
+    const changed = corrupted[0]!.upgrade.find(c => c.section === "routines")!;
+    if (changed.section === "routines" && changed.after) changed.before = { ...changed.after, proacl: "{unexpected=X/jobguard_migration}" };
     expect(() => applyUpgradeProofs({ rows: {}, routines: prior, relations: [], policies: [] }, corrupted, { jobguard_migration: 42, postgres: 10 }))
       .toThrow(/before allowance mismatch/);
   });
