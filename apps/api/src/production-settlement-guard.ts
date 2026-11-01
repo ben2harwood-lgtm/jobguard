@@ -74,9 +74,9 @@ export function requireProductionSettlementEligibility(mode: string, facts?: unk
 }
 
 /** Check before reads, claims, audit writes or adapters; queue data is never gate evidence. */
-export async function executeSettlementGuardedWork<T>(mode: string, execute: () => Promise<T>): Promise<T> {
+export async function executeSettlementGuardedWork<T>(mode: string, runWork: () => Promise<T>): Promise<T> {
   requireProductionSettlementEligibility(mode);
-  return execute();
+  return runWork();
 }
 
 /** Known delivery actions describe money without moving it. New types require explicit review. */
