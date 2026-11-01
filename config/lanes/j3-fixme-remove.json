@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "j3-fixme-remove": {
+      "branches": ["codex/sandbox/j3-fixme-remove"],
+      "note": "AMBER: J3-FIXME-REMOVE enables the existing combined-invoice value assertion without changing expectations. This lane file is implicitly editable by its own branch.",
+      "allow": ["apps/web/e2e/DEMO-J3-shadow.spec.ts"]
+    }
+  }
+}
