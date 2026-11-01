@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { recoveryCaseTermsHash, type SimulationMoneyReport, type SuccessFeeResult } from "@jobguard/core";
+import { recoveryCaseTermsHash, type SimulationFeeCollectionView, type SimulationMoneyReport, type SuccessFeeResult } from "@jobguard/core";
+import { readSimulationFeeCollection } from "./simulation-fee-collection";
 import { approveSuccessFee, moneyCheckFigures, moneyCheckLinkFrom, readReceiptLines, readRecoveryJourney, readSavedMoneyCheck, receiptLineCommand, recoveryJourneyMarkers, recoveryJourneySteps, recoveryJourneyUnavailable, reviewSuccessFee, runMoneyCheck, type MoneyCheckLink, type ReceiptLineReview, type RecoveryJourneySnapshot } from "../lib/recovery-journey";
 import { pounds } from "../lib/pounds";
 
@@ -55,6 +56,35 @@ function ReceiptLines({ jobId, allocations, onChange }: { jobId: string; allocat
       </li>;
     })}</ul>}
     {review && <button style={target} disabled={busy} onClick={() => void run(async () => { await receiptLineCommand(jobId, { action: review.action === "review" ? "approve" : "reverse", reviewId: review.reviewId, approvalHash: review.approvalHash, expectedSourceRevision: review.sourceRevision }, fetch); setReview(null); onChange(); })}>Approve this exact line split</button>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}
+
+// The demo-only fake rail. Settlement never happens on its own: the person chooses it, for one pending attempt on this job.
+function FakeRail({ jobId, revision, onChange }: { jobId: string; revision: number; onChange: () => void }) {
+  const [view, setView] = useState<SimulationFeeCollectionView | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const commands = useRef(new Map<string, string>()); // A retry re-sends the same command, so it can only have one effect.
+  useEffect(() => { void readSimulationFeeCollection(jobId).then(setView).catch(() => setError("Fake payments could not be loaded.")); }, [jobId, revision]);
+  async function settle(attemptId: string) {
+    setBusy(true); setError("");
+    try {
+      const commandId = commands.current.get(attemptId) ?? crypto.randomUUID(); commands.current.set(attemptId, commandId);
+      const response = await fetch(`/api/jobs/${jobId}/success-fees/collection/demo-settle`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "simulation-fee-demo-settle-command.v1", commandId, attemptId }) });
+      await response.json();
+      if (!response.ok) throw new Error("refused");
+      setView(await readSimulationFeeCollection(jobId)); onChange();
+    } catch { setError("That fake payment could not be settled. Read the saved journey again, then retry."); }
+    setBusy(false);
+  }
+  const pending = view?.attempts.filter(attempt => attempt.state === "pending") ?? [];
+  return <section id="journey-fake-rail" aria-label="Fake payment rail">
+    <h2>Fake payment rail</h2>
+    <p>Demo only. This stands in for the payment provider; no real money moves.</p>
+    {pending.length === 0 ? <p>No fake payment is waiting.</p> : <ul>{pending.map(attempt => <li key={attempt.id}>
+      <button style={target} disabled={busy} onClick={() => void settle(attempt.id)}>Settle fake {attempt.kind} of {pounds(attempt.amountPence)}</button>
+    </li>)}</ul>}
+    {view && <p>Settled: <span data-testid="journey-fee-settled">{pounds(view.settledPrincipal)}</span>. Refunded: <span data-testid="journey-fee-refunded">{pounds(view.refundedPrincipal)}</span>.</p>}
     {error && <p role="alert">{error}</p>}
   </section>;
 }
@@ -121,6 +151,7 @@ export function RecoveryJourney({ jobId }: { jobId: string }) {
       <CaseTerms jobId={jobId} cases={saved.allocations.cases} />
       <ReceiptLines jobId={jobId} allocations={saved.allocations} onChange={() => refresh(value => value + 1)} />
       <FeePosting jobId={jobId} onChange={() => refresh(value => value + 1)} />
+      <FakeRail jobId={jobId} revision={revision} onChange={() => refresh(value => value + 1)} />
       <section aria-label="Saved recovery sources">
         <h2>Saved source report</h2>
         <p>Allocated eligible net: <strong data-testid="journey-eligible-net">{pounds(saved.allocations.eligibleNetPence)}</strong></p>

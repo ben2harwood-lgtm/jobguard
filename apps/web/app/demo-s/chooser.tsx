@@ -128,6 +128,7 @@ export function DemoChooser() {
     <p>Made-up data only. Choose an available journey, launch a fresh fictional job, or resume your saved selection.</p>
     <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This uses a separate practice session; saving a company selection below does not run or complete it.</p>
     <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>
+    <p><a href="/demo-s/recovery-18800">Open the guided £18,800 recovery journey</a></p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}
@@ -136,7 +137,7 @@ export function DemoChooser() {
       {pending && <section aria-label="Unconfirmed request"><p>A saved request has no confirmed response. Retry uses its original reference.</p>
         <button disabled={busy} onClick={() => void send(pending)}>Retry saved request</button></section>}
       <section aria-labelledby="journey-title"><h2 id="journey-title">Choose a journey</h2><div className={styles.choices}>
-        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>{journeyAvailable(choice.scenario) ? "Available to the lock. " : "Not ready yet. "}{choice.reason}</p>
+        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>{choice.scenario === "recovery-18800" ? "Available. " : journeyAvailable(choice.scenario) ? "Available to the lock. " : "Not ready yet. "}{choice.reason}</p>
           {choice.scenario === "meter" && <details><summary>Meter profiles — reference previews available</summary><ul>{meterProfiles.map(profile => <li key={profile}>{profile}</li>)}</ul></details>}
           <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>{journeyAvailable(choice.scenario) ? "Choose" : "Save"} {choice.scenario} selection</button>
         </article>)}
@@ -144,7 +145,7 @@ export function DemoChooser() {
       <form onSubmit={event => void resume(event)}><h2>Resume a saved selection</h2><label htmlFor="demo-resume">Saved selection reference</label>
         <input id="demo-resume" value={resumeId} onChange={event => setResumeId(event.target.value)} required />
         <button disabled={busy || !membership} type="submit">Resume</button></form>
-      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : journeyAvailable(run.scenario) ? "Journey available to the lock" : "Not ready yet"}: {journeyAvailable(run.scenario) ? "Read journey results for actual progress." : run.reason}</p>
+      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : run.scenario === "recovery-18800" ? "Journey available" : journeyAvailable(run.scenario) ? "Journey available to the lock" : "Not ready yet"}: {run.scenario === "recovery-18800" ? "Its guide reads actual progress from the saved job." : journeyAvailable(run.scenario) ? "Read journey results for actual progress." : run.reason}</p>
         {run.meterPreviewNote && <p role="status">{run.meterPreviewNote}</p>}
         {run.meterPreview && <MeterPreview preview={run.meterPreview} />}
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>

@@ -62,6 +62,14 @@ export class SuccessFeeApplication {
   return new SimulationFeeCollectionRepository(this.pool).command(auth.context,jobId,auth.digest,parsed.data);
  }
 
+ async demoSettle(jobId:string,raw:unknown|(()=>Promise<unknown>),query:unknown={},tenantSelection=false){
+  const auth=await this.authorize(jobId,query,tenantSelection);
+  let body:unknown;
+  try{body=typeof raw==="function"?await (raw as ()=>Promise<unknown>)():raw;}
+  catch(error){if(error instanceof SyntaxError)throw new SuccessFeeError();throw error;}
+  return new SimulationFeeCollectionRepository(this.pool).demoSettle(auth.context,jobId,auth.digest,body);
+ }
+
  async reconcileMoney(jobId:string,raw:unknown|(()=>Promise<unknown>),query:unknown={},tenantSelection=false){
   const auth=await this.authorize(jobId,query,tenantSelection);
   let body:unknown;

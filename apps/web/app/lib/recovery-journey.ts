@@ -124,11 +124,14 @@ export function recoveryJourneySteps(jobId: string) {
     { title: "Review and approve exact landing allocations", href: `${base}#recovery-allocations` },
     { title: "Review and post the recovery-case v3 success fee", href: `${guide}#journey-fee-posting` },
     { title: "Save and approve the exact v3 fee statement", href: `${base}#simulation-fee-statements` },
-    { title: "Approve simulated collection; the fake rail reports its outcome", href: `${base}#simulation-fee-statements` },
-    { title: "Reverse the £3,000 receipt and its line split", href: `${guide}#journey-receipt-lines` },
+    { title: "Approve simulated collection", href: `${base}#simulation-fee-statements` },
+    { title: "Settle the fake collection on the demo rail", href: `${guide}#journey-fake-rail` },
+    { title: "Reverse the £3,000 receipt", href: `${base}#final-account-title` },
+    { title: "Reverse that receipt's line split", href: `${guide}#journey-receipt-lines` },
     { title: "Review and approve the allocation reversal", href: `${base}#recovery-allocations` },
     { title: "Review and post the fee compensation", href: `${guide}#journey-fee-posting` },
     { title: "Save the correction and approve the £250 simulated refund", href: `${base}#simulation-fee-statements` },
+    { title: "Settle the fake refund on the demo rail", href: `${guide}#journey-fake-rail` },
     { title: "Reconcile both books", href: `${guide}#journey-money-check` },
   ];
 }

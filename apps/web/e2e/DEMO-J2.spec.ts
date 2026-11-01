@@ -1,12 +1,9 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { Pool } from "pg";
-import { E2E_ADMIN_DATABASE_URL } from "./global-setup";
-import { allocationPanel, allocateThroughUi, post, readAllocations, readyAllocations, recovery18800 } from "./helpers/recovery-allocation-journey";
+import { allocationPanel, readAllocations, readyAllocations } from "./helpers/recovery-allocation-journey";
 
-// Real routes and fresh command-produced state. No seeded end state and no mocked response.
-// Settled fake-rail outcomes are refused over HTTP by design; as in the collection DB suite
-// they come through the real writer on the fake-rail operator's connection.
+// A person's path through the screens: no seeded state, mocked response or operator connection.
+// Fake payments settle on the guide's demo-only rail; the general settle command stays refused.
 test.setTimeout(600_000);
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
 async function click(page: Page, name: string) { await expect(button(page, name)).toBeEnabled({ timeout: 30_000 }); await button(page, name).click(); }
@@ -54,17 +51,6 @@ async function approveTerms(page: Page, jobId: string, caseId: string) {
   await row.getByRole("button", { name: /^Approve exact terms for the/u }).click();
   await expect(row.getByRole("status")).toHaveText("Exact terms approved for this case.");
 }
-async function packAndPursuit(page: Page, jobId: string, amount: string) {
-  await page.goto(`/jobs/${jobId}#recovery-cases`);
-  await page.getByRole("button", { name: `withheld customer payment · ${amount}`, exact: true }).click();
-  await click(page, "Build evidence pack");
-  await V(page, "pack-state", "Sources mapped — inspect the evidence");
-  await click(page, "Approve this pack for attachment");
-  await V(page, "pack-current-attachment-status", "Attachment approval recorded for these exact hashes");
-  await click(page, "Preview factual message");
-  await click(page, "Approve this exact message");
-  await click(page, "Advance practice delivery");
-}
 async function splitReceiptLines(page: Page, jobId: string, grossPence: number, control: string, state: string) {
   await page.goto(`/jobs/${jobId}/recovery-journey`);
   const row = page.locator(`[data-receipt-lines="${grossPence}"]`);
@@ -82,42 +68,121 @@ async function postFee(page: Page, jobId: string, cumulative: string, delta: str
   await click(page, "Approve this exact fee posting");
   await expect(page.getByTestId("fee-posting-saved")).toContainText(`Cumulative fee ${cumulative}; change ${delta}.`);
 }
-/** The fake rail's terminal fact: the real writer, on the operator connection, replayed once. */
-async function fakeRailSettles(page: Page, jobId: string, attemptId: string) {
-  const token = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;
-  const digest = createHash("sha256").update(token).digest("hex");
-  const rail = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
-  try {
-    const client = await rail.connect();
-    try {
-      const tenant = (await client.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
-      const command = { version: "simulation-fee-collection-command.v1", action: "settle", commandId: randomUUID(), attemptId };
-      for (let i = 0; i < 2; i++) {
-        await client.query("BEGIN");
-        await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)", [tenant, digest]);
-        await client.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb)", [jobId, digest, command]);
-        await client.query("COMMIT");
-      }
-    } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-  } finally { await rail.end(); }
+async function settleOnGuide(page: Page, jobId: string, control: string, testId: string, expected: string) {
+  await page.goto(`/jobs/${jobId}/recovery-journey`);
+  await click(page, control);
+  await V(page, testId, expected);
+  await expect(button(page, control)).toHaveCount(0);
 }
 const collectionPanel = (page: Page) => page.getByRole("region", { name: "Simulated fee collection" });
-async function settlePendingAttempt(page: Page, jobId: string) {
-  const view = await (await page.request.get(`/api/jobs/${jobId}/success-fees/collection`)).json() as { attempts: { id: string; state: string }[] };
-  const pending = view.attempts.filter(attempt => attempt.state === "pending");
-  expect(pending).toHaveLength(1);
-  await fakeRailSettles(page, jobId, pending[0]!.id);
-  await collectionPanel(page).getByRole("button", { name: "Refresh collection records", exact: true }).click();
+async function openCaseAndApprove(page: Page, jobId: string, open: string, amount: string) {
+  await page.goto(`/jobs/${jobId}#recovery-cases`);
+  await click(page, open);
+  await V(page, "case-claimed-net", amount);
+  const caseId = await page.evaluate(async ([job, net]) => (await (await fetch(`/api/jobs/${job}/recovery-allocations`)).json() as { cases: { caseId: string; claimedNetPence: number }[] }).cases.find(row => row.claimedNetPence === net)!.caseId, [jobId, Math.round(Number(amount.replace(/[£,]/gu, "")) * 100)] as const);
+  await approveTerms(page, jobId, caseId);
+  await page.goto(`/jobs/${jobId}#recovery-cases`);
+  await page.getByRole("button", { name: `withheld customer payment · ${amount}`, exact: true }).click();
+  await click(page, "Evidence assembled");
+  await V(page, "case-state", "Evidence assembled");
+  await click(page, "Review evidence-backed claim");
+  await click(page, "Approve this eligibility review");
+  await V(page, "eligibility-status", "Approved for this simulation");
+  await click(page, "Build evidence pack");
+  await V(page, "pack-state", "Sources mapped — inspect the evidence");
+  await click(page, "Approve this pack for attachment");
+  await V(page, "pack-current-attachment-status", "Attachment approval recorded for these exact hashes");
+  await click(page, "Preview factual message");
+  await click(page, "Approve this exact message");
+  await click(page, "Advance practice delivery");
+  return caseId;
+}
+async function receiptAndFeed(page: Page, jobId: string, amount: string, movement: string, label: string) {
+  await page.goto(`/jobs/${jobId}#final-account-title`);
+  await page.getByTestId("uiwire12-receipt-amount").fill(amount);
+  await click(page, "Record practice receipt");
+  await page.goto(`/jobs/${jobId}#practice-receipts`);
+  const panel = page.locator("#practice-receipts"), connect = panel.getByRole("button", { name: "Connect practice feed", exact: true });
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  await expect(panel.getByTestId("practice-feed-state")).toBeVisible();
+  if (await connect.isVisible()) { await connect.click(); await expect(panel.getByTestId("practice-feed-state")).toHaveText("Connected"); }
+  await panel.getByLabel("Generated movement", { exact: true }).selectOption(movement);
+  await panel.getByLabel("Generated event", { exact: true }).selectOption("settled");
+  await panel.getByRole("button", { name: "Advance practice executor", exact: true }).click();
+  await expect(panel.locator(`[data-movement-key="${movement}"]`).first()).toBeVisible();
+  await panel.getByRole("button", { name: `Match ${label} receipt to its settled movement`, exact: true }).click();
+  await expect(panel.getByTestId("receipt-matched-movement").filter({ hasText: movement })).toBeVisible();
+}
+async function allocate(page: Page, jobId: string, caseId: string, gross: string, split: string, receiptLabel: string) {
+  await page.goto(`/jobs/${jobId}#recovery-allocations`); await readyAllocations(page);
+  const panel = allocationPanel(page);
+  await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(caseId);
+  const receipt = panel.getByRole("combobox", { name: "Matched receipt", exact: true });
+  await receipt.selectOption({ value: await receipt.locator("option").filter({ hasText: receiptLabel }).first().getAttribute("value") ?? "" });
+  await panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true }).selectOption({ index: 1 });
+  await panel.getByLabel("Allocation gross (£)", { exact: true }).fill(gross);
+  await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
+  await expect(panel.getByTestId("allocation-review-split")).toHaveText(split);
+  await panel.getByRole("button", { name: "Approve exact receipt allocation", exact: true }).click();
+  await expect(panel.getByTestId("allocation-review-split")).toHaveCount(0);
+  await readyAllocations(page);
 }
 
 test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh journey", async ({ page, browser, baseURL }, testInfo) => {
-  const pursuits = ["£320.00", "£2,500.00"];
-  const fixture = await recovery18800(page, {
-    afterStart: () => materialsChecks(page, testInfo.project.name),
-    afterCaseOpen: (jobId, caseId) => approveTerms(page, jobId, caseId),
-    afterEligibility: jobId => packAndPursuit(page, jobId, pursuits.shift()!),
-  });
-  const { jobId } = fixture, guide = `/jobs/${jobId}/recovery-journey`;
+  await page.goto("/demo-s");
+  await page.getByRole("link", { name: "Open the guided £18,800 recovery journey" }).click();
+  await click(page, "Start recovery-18800 practice session");
+  await click(page, "Make my draft");
+  await expect(page.getByTestId("proposal-line-count")).toHaveText("5");
+  await click(page, "Check and edit my draft");
+  await page.waitForURL(/recovery-18800\?jobId=/u);
+  const jobId = new URL(page.url()).searchParams.get("jobId")!, guide = `/jobs/${jobId}/recovery-journey`;
+  await click(page, "Save customer and site");
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await click(page, `Accept ${name}`);
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
+  await click(page, "Confirm scope");
+  await expect(page.getByTestId("confirmed-line-count")).toHaveText("5");
+  await click(page, "Price the work");
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
+  await expect(page.getByTestId("quote-net")).toHaveText("GBP 18,800.00");
+  await click(page, "Save draft revision");
+  await expect(page.getByTestId("quote-revision")).toHaveText("1");
+  for (const step of ["Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
+  await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
+
+  await materialsChecks(page, testInfo.project.name);
+
+  await click(page, "Build final account");
+  await click(page, "Attach generated practice image");
+  await click(page, "Check file integrity");
+  await click(page, "Complete this stage");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await click(page, "Rebuild from approved sources");
+  await expect(page.getByTestId("final-gross")).toHaveText("£22,560.00");
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) {
+    await page.getByLabel(`Disposition ${name}`, { exact: true }).selectOption("done");
+    await expect(page.getByLabel(`Disposition ${name}`, { exact: true })).toHaveValue("done");
+  }
+  const terms = button(page, "Accept final check terms");
+  await expect(page.getByTestId("final-account-lock")).toHaveAttribute("aria-busy", "false");
+  if (await terms.isEnabled()) await terms.click();
+  await expect(terms).toBeDisabled();
+  await click(page, "Complete final account");
+  await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
+  await page.reload();
+  await click(page, "Run the final check (practice)");
+  // Read-only wait for the real worker, as in DEMO-J1.
+  await expect.poll(async () => (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state, { timeout: 180_000, intervals: [3_000] }).toBe("completed");
+  await click(page, "Load the saved final check");
+  await page.goto(`/jobs/${jobId}#final-account-title`);
+  await click(page, "Issue and simulate this invoice");
+  await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 22,560.00");
+
+  const case320 = await openCaseAndApprove(page, jobId, "Open £320 withheld payment", "£320.00");
+  await receiptAndFeed(page, jobId, "384.00", "receipt-384", "£384.00");
+  const case2500 = await openCaseAndApprove(page, jobId, "Open £2,500 withheld payment", "£2,500.00");
+  await receiptAndFeed(page, jobId, "3000.00", "receipt-3000", "£3,000.00");
 
   // A fresh guide shows no figures until a money check runs over saved rows.
   await page.goto(guide);
@@ -126,11 +191,9 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
 
   await splitReceiptLines(page, jobId, 38400, "Review line split for £384.00", "Split saved");
   await splitReceiptLines(page, jobId, 300000, "Review line split for £3,000.00", "Split saved");
-  await page.goto(`/jobs/${jobId}#recovery-allocations`); await readyAllocations(page);
-  await allocateThroughUi(page, fixture.cases[0]!, "384.00", "£384.00 = £320.00 net + £64.00 tax");
+  await allocate(page, jobId, case320, "384.00", "£384.00 = £320.00 net + £64.00 tax", "£384.00");
   await postFee(page, jobId, "£32.00", "£32.00");
-  await page.goto(`/jobs/${jobId}#recovery-allocations`); await readyAllocations(page);
-  await allocateThroughUi(page, fixture.cases[1]!, "3000.00", "£3,000.00 = £2,500.00 net + £500.00 tax");
+  await allocate(page, jobId, case2500, "3000.00", "£3,000.00 = £2,500.00 net + £500.00 tax", "£3,000.00");
   const before = await readAllocations(page, jobId);
   await postFee(page, jobId, "£282.00", "£250.00");
   await V(page, "journey-eligible-net", "£2,820.00"); await V(page, "journey-invoice-balance", "£19,176.00");
@@ -145,14 +208,18 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
   await collectionPanel(page).getByRole("button", { name: "Approve simulated collection of £282.00 principal", exact: true }).click();
   await expect(collectionPanel(page).getByRole("status").first()).toHaveText("pending");
   await V(page, "fee-settled-principal", "£0.00");
-  await settlePendingAttempt(page, jobId);
+  await settleOnGuide(page, jobId, "Settle fake collection of £282.00", "journey-fee-settled", "£282.00");
+  await page.goto(`/jobs/${jobId}#simulation-fee-statements`);
   await V(page, "fee-settled-principal", "£282.00"); await V(page, "fee-outstanding-principal", "£0.00");
 
   // Reversal, then compensation.
-  await post(page, `${fixture.receiptPath}/reversals`, { version: "practice-customer-receipt.reverse.v1", commandId: randomUUID(), invoiceId: fixture.invoiceId, paymentId: fixture.cases[1]!.paymentId, reason: "Fictional reversal for DEMO-J2" });
+  await page.goto(`/jobs/${jobId}#final-account-title`);
+  await page.getByTestId("uiwire12-reversal-reason").fill("Fictional reversal for DEMO-J2");
+  await page.getByTestId("uiwire12-receipt-history").filter({ hasText: "3,000.00" }).getByRole("button", { name: "Reverse this receipt", exact: true }).click();
+  await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 22,176.00");
   await splitReceiptLines(page, jobId, 300000, "Review line split reversal for £3,000.00", "Split and reversal saved");
   await page.goto(`/jobs/${jobId}#recovery-allocations`); await readyAllocations(page);
-  const allocation = before.allocations.find(row => row.caseId === fixture.cases[1]!.caseId)!;
+  const allocation = before.allocations.find(row => row.caseId === case2500)!;
   await allocationPanel(page).locator(`[data-allocation-id="${allocation.id}"]`).getByRole("button", { name: "Review allocation reversal", exact: true }).click();
   await allocationPanel(page).getByRole("button", { name: "Approve exact allocation reversal", exact: true }).click();
   await expect(allocationPanel(page).getByTestId("eligible-net")).toHaveText("£320.00");
@@ -167,7 +234,8 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
   await V(page, "fee-refund-due", "£250.00");
   await collectionPanel(page).getByRole("button", { name: "Approve simulated refund of £250.00 principal", exact: true }).click();
   await expect(collectionPanel(page).getByRole("article").filter({ hasText: "refund:" }).getByRole("status")).toHaveText("pending");
-  await settlePendingAttempt(page, jobId);
+  await settleOnGuide(page, jobId, "Settle fake refund of £250.00", "journey-fee-refunded", "£250.00");
+  await page.goto(`/jobs/${jobId}#simulation-fee-statements`);
   await V(page, "fee-refunded-principal", "£250.00"); await V(page, "fee-retained-principal", "£32.00");
 
   // Reconcile from saved rows; the same figures come back after a fresh read.
@@ -186,7 +254,7 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
   await click(page, "Read saved journey again"); await end();
   const saved = new URL(page.url()); expect(saved.searchParams.get("run")).toBeTruthy();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  for (const source of fixture.cases) await expect(page.locator(`a[href="/api/recovery-cases/${source.caseId}/evidence-packs"]`)).toBeVisible();
+  for (const caseId of [case320, case2500]) await expect(page.locator(`a[href="/api/recovery-cases/${caseId}/evidence-packs"]`)).toBeVisible();
 
   // A stranger gets a refusal, including with the saved run's exact link.
   const stranger = await browser.newContext({ ...(baseURL ? { baseURL } : {}) });
@@ -199,5 +267,11 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
       await expect(other.getByTestId("success-fee-net-posted")).toHaveCount(0);
       await expect(other.getByTestId("real-external-actions")).toHaveCount(0);
     }
+    // The demo step refuses a stranger over HTTP, and the general settle stays refused for the owner.
+    const attempts = (await (await page.request.get(`/api/jobs/${jobId}/success-fees/collection`)).json()).attempts as { id: string }[];
+    const strange = await stranger.request.post(`/api/jobs/${jobId}/success-fees/collection/demo-settle`, { data: { version: "simulation-fee-demo-settle-command.v1", commandId: randomUUID(), attemptId: attempts[0]!.id } });
+    expect(strange.ok()).toBe(false);
+    const general = await page.request.post(`/api/jobs/${jobId}/success-fees/collection`, { data: { version: "simulation-fee-collection-command.v1", action: "settle", commandId: randomUUID(), attemptId: attempts[0]!.id } });
+    expect(general.status()).toBe(403);
   } finally { await stranger.close(); }
 });

@@ -75,7 +75,7 @@ describe("DEMO-J2 persisted recovery guide", () => {
   });
   it("gives every journey step a real workbench link and no producer hold", () => {
     const steps = recoveryJourneySteps(jobId);
-    expect(steps).toHaveLength(18);
+    expect(steps).toHaveLength(21);
     expect(steps.every(step => step.href.startsWith(`/jobs/${jobId}`) && step.href.includes("#"))).toBe(true);
   });
   it("only reads a saved run from a well-formed link, and shows the report's figures", async () => {
