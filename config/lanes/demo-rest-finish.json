@@ -32,6 +32,7 @@
         "apps/web/e2e/DEMO-J5-trial.spec.ts",
         "apps/web/e2e/DEMO-S-chooser.spec.ts",
         "apps/web/e2e/helpers/chooser-sign-in.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/core/src/meter-today.ts",
         "packages/core/src/small-builder-demo-meter.ts",
         "packages/db/migrations/0516_trial_first_activation_capacity.sql",
