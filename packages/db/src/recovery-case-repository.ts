@@ -136,7 +136,6 @@ export class RecoveryCaseRepository{
   if(replay.rowCount){if(!sameCommand({hash:replay.rows[0].payload_hash,reviewer:replay.rows[0].reviewer_ref},hash,legacy)||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return {caseId,replayed:true};}
   const job=await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId]);if(!job.rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
   if(input.action==="open"){
-   if(input.caseType==="missed_variation_final_account")throw new Error("FINAL_CHECK_CONFIRMATION_HELD");
    assertRecoverySources(input);
    await resolveRecoverySources(db,context.tenantId,jobId,input.sourceType,input.sourceRefs);
    caseId=randomUUID();const claimId=randomUUID();
