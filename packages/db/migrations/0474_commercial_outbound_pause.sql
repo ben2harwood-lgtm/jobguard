@@ -10,7 +10,6 @@ END $$;
 CREATE SCHEMA outbound_control AUTHORIZATION jobguard_migration;
 REVOKE ALL ON SCHEMA outbound_control FROM PUBLIC;
 GRANT USAGE ON SCHEMA outbound_control TO jobguard_runtime, jobguard_outbound_operator;
-SET LOCAL ROLE jobguard_migration;
 CREATE TABLE outbound_control.state (
  singleton boolean PRIMARY KEY CHECK (singleton),
  paused boolean NOT NULL,
@@ -91,5 +90,8 @@ END $$;
 REVOKE ALL ON FUNCTION outbound_control.command(uuid,text,integer,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION outbound_control.command(uuid,text,integer,uuid) TO jobguard_outbound_operator;
 GRANT SELECT ON outbound_control.state, outbound_control.event TO jobguard_outbound_operator;
-RESET ROLE;
+ALTER TABLE outbound_control.state OWNER TO jobguard_migration;
+ALTER TABLE outbound_control.event OWNER TO jobguard_migration;
+ALTER FUNCTION outbound_control.claims_enabled() OWNER TO jobguard_migration;
+ALTER FUNCTION outbound_control.command(uuid,text,integer,uuid) OWNER TO jobguard_migration;
 COMMIT;
