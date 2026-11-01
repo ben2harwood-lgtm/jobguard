@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "sweep-ch-tests": {
+      "branches": [
+        "codex/sandbox/sweep-ch-tests"
+      ],
+      "allow": [
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/test/job-import-v3-fixtures.ts",
+        "packages/db/test/job-import-v3.integration.test.ts",
+        "packages/db/test/job-import-v3-invoiced.integration.test.ts",
+        "packages/db/test/job-import-v3-original-source-upgrade.integration.test.ts",
+        "packages/db/migrations/0566_job_import_v3_original_source.sql",
+        "packages/db/migration-notes/0566_job_import_v3_original_source.md"
+      ],
+      "note": "RED CH stage-end sweep; original-source guard and regressions. CH-4 assertions and persisted exclusion already on main. NOPR."
+    }
+  }
+}
