@@ -29,3 +29,20 @@ Requires one independent Claude RED review against the exact pushed head. No ind
 ## Initial review — discovered later
 
 LATER / SIMPLICITY — `apps/api/src/auth/customer-stages.ts`: a future shared typed customer-scope adapter in the sign-in owner lane could replace parsing the already-verified cookie again here and in later portal slices. It would centralize the credential shape and reduce drift without weakening per-command database revalidation. It is outside this bounded piece and does not block it.
+
+## NOPR catch-up — 1 November 2026
+
+Resolved working-tree conflicts against the launcher's fetched main `e9d6c8b2bec984fb2edc604a1fe90005e67e7f0f` (matches MERGE_HEAD). Preserved customer variation routes, controllers, guards, OpenAPI entries, sign-in links, proxy restrictions, route classifications and shared upgrade expectations alongside stage signoff. Retained main's Next `proxy.ts` convention. No new product behavior, main migration edits, fetch, git-index writes, commit, push or PR creation.
+
+Renamed only the migration stem to `0571_customer_stage_acknowledgement`; SQL bytes match the branch's original migration (SHA-256 `78d27fa4ee3e093fbee56f56ed55f6216a96305b9be878b85f9e4197a6e3fc99`). Added its strict proof fragment with seven LP-0 additions, explicit upgrade rows/routines/relations/policies and tenant posture. Moved stage allowances out of shared LP-0/tenancy/upgrade baselines into that fragment so they apply once. The fragment explicitly names PostgreSQL's 63-byte generated unique-index identity. Updated test lookup and lane paths; lane lists exactly the resulting changed paths. Protected `docs/contracts/lp-downstream-effects-v1.md` remains byte-identical to main.
+
+Checks actually run in this catch-up:
+
+- Existing installed `tsc -p tsconfig.json` in core, config, storage, db and ai: pass; API emit: pass. API and web `tsc -p tsconfig.json --noEmit`: pass.
+- From `apps/api`, installed Vitest `run --maxWorkers=2 src/auth/customer-stages.test.ts src/auth/customer-signin.test.ts src/watchdog-registry.test.ts`: **163 passed**. `run --maxWorkers=2 src/auth/customer-variation.test.ts`: **13 passed**. Initial registry/variation failures came from stale compiled package exports; regenerated existing outputs, then reran successfully.
+- From `apps/api`, `node --import tsx src/generate-openapi.ts --check`: pass after rebuilding workspace outputs.
+- From `packages/db`, installed Vitest `run --maxWorkers=1 test/migration-proof-loader.test.ts -t '^(?!.*zero fragments)'`: **25 passed, one filtered**. The filtered test loads the complete migration registry and encounters main's known missing 0510 proof; that gap remains outside this piece.
+- Isolated `loadMigrationProofs` using the committed legacy names plus 0571: schema validation, combined LP-0 parsing, upgrade projection (two routines/four relations/five policies) and tenancy projection pass. This validates proof structure and composition, not PostgreSQL catalogue execution.
+- Working-tree paths checked through existing lane-validator exports: **25 changed paths**, no missing/extra lane allowance; migration order passes. `git diff --check`, PL/pgSQL CASE-in-IF lint and commercial-boundary lint: pass. All 13 conflict files have no remaining conflict markers.
+
+READY for router staging and commit, NOPR. The index still has unmerged entries because `.git` is read-only here; the router must stage the resolved content and migration rename. PostgreSQL and browser suites remain for GitHub CI; the entire PostgreSQL suite and one independent exact-head RED review are required before merge. No stalled checks remain. No independent review or merge is claimed.

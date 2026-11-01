@@ -51,7 +51,7 @@ export function classifySiteSource(raw: unknown): { firstEvidence: boolean; acti
 }
 
 export class JobWorkStateError extends Error {
- constructor(readonly code: "WORK_STATE_CONFLICT" | "JOB_NOT_LIVE" | "WORK_STATE_STALE_REVISION" | "CAPACITY_ADMISSION_UNAVAILABLE" | "INVALID_WORK_STATE_INPUT" | "WORK_FACT_IDENTITY_CONFLICT" | "WORK_STATE_FORBIDDEN" | "SYNTHETIC_MODE_REQUIRED" | "POST_LOCK_WORK_REQUIRES_LINKED_JOB" | "JOB_WORK_CLOSED") { super(code); this.name = "JobWorkStateError"; }
+ constructor(readonly code: "WORK_STATE_CONFLICT" | "JOB_NOT_LIVE" | "WORK_STATE_STALE_REVISION" | "CAPACITY_ADMISSION_UNAVAILABLE" | "METER_UPGRADE_REQUIRED" | "METER_PROJECTION_MISMATCH" | "INVALID_WORK_STATE_INPUT" | "WORK_FACT_IDENTITY_CONFLICT" | "WORK_STATE_FORBIDDEN" | "SYNTHETIC_MODE_REQUIRED" | "POST_LOCK_WORK_REQUIRES_LINKED_JOB" | "JOB_WORK_CLOSED") { super(code); this.name = "JobWorkStateError"; }
 }
 const canonicalEvent = (e: JobWorkStateEvent) => JSON.stringify([e.version, e.id, e.jobId, e.sequence, e.kind, e.factAt, e.recordedAt, e.sourceReceiptId, e.commandId, e.predecessorId, e.closeReason, e.closeNote]);
 export function orderWorkFacts(raw: readonly unknown[]): JobWorkStateEvent[] {

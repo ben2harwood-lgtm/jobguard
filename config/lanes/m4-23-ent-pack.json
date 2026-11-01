@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-ent-pack": {
+      "branches": ["codex/sandbox/m4-23-ent-pack"],
+      "note": "RED M4-23 contractor acceptance tests; no migration. Platform invoice execution remains held on this base; collection is not enabled pending m4-12-collect. PostgreSQL execution belongs to CI.",
+      "allow": [
+        "packages/db/test/m4-23-contractor-acceptance.integration.test.ts"
+      ]
+    }
+  }
+}

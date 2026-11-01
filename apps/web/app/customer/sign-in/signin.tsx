@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 export default function CustomerSignin() {
-  const [signedInJob, setSignedInJob] = useState<string>();
-  const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open the link from your email to sign in."), [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open the link from your email to sign in."), [busy, setBusy] = useState(false), [signedInJob, setSignedInJob] = useState<string>();
   useEffect(() => {
     const parts = window.location.hash.slice(1).split("/");
     // Remove the bearer credential from browser history before any request or rendering.
@@ -22,11 +21,11 @@ export default function CustomerSignin() {
     finally { setBusy(false); }
   }
   async function signout() {
+    setSignedInJob(undefined);
     try {
     const response = await fetch("/api/customer-portal/signout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: "customer-signout.v1" }), cache: "no-store" });
-    if (response.ok) setSignedInJob(undefined);
     setMessage(response.ok ? "You are signed out." : "Sign-out could not be confirmed. Close this browser session.");
     } catch { setMessage("Sign-out could not be confirmed. Close this browser session."); }
   }
-  return <main><h1>Customer sign-in</h1><p>{message}</p>{signedInJob && <a href={`/customer/jobs/${signedInJob}`}>Review recorded stages</a>}{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button></main>;
+  return <main><h1>Customer sign-in</h1><p>{message}</p>{signedInJob && <p><a href={`/customer/extras?jobId=${encodeURIComponent(signedInJob)}`}>Review extras</a></p>}{signedInJob && <p><a href={`/customer/jobs/${signedInJob}`}>Review recorded stages</a></p>}{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button></main>;
 }

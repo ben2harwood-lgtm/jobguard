@@ -70,3 +70,28 @@ async function logFence(){
   await new Promise<void>(resolve=>setTimeout(resolve,5));
  }
 }
+
+it('SB-02: A builder view, count, error, cache key, export or timing varies with signals before lock', async () => {
+ const {createWorkspaceApplication}=await import(new URL("../../../apps/api/dist/workspace/application.js",import.meta.url).href);
+ const app=createWorkspaceApplication({pool:runtime,sessionId:session});
+ const replay=async()=>{
+  const start=(await logFence()).end, values=[];
+  for(const call of [()=>app.decisions.list({tenantId:DEMO_TENANT_ID,jobId:J}),()=>app.variation.get(J),
+   ()=>app.jobs.get({sessionId:session},J),()=>app.customerInvoice.get(J),()=>app.finalAccount.get(J),
+   ()=>app.materials.view(J),()=>app.supplierDocuments.view(J),()=>app.value.read(J)]) {
+   try { values.push(await call()); } catch(error) { values.push({code:(error as {code:string}).code}); }
+  }
+  const end=(await logFence()).start;
+  const statements=logs.join('').slice(start,end).split(/(?=^SV3:[^:\r\n]+: (?!DETAIL:))/mu)
+   .filter(s=>/^SV3:sv3_log_runtime: LOG:  (?:statement|execute [^:\r\n]+):/u.test(s));
+  expect(statements.length).toBeGreaterThan(0);
+  expect(statements.join('\n')).not.toMatch(/\b(?:shadow_[a-z_]+|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
+  return {bytes:JSON.stringify(values),statements};
+ };
+ const before=await replay(), signalId=randomUUID();
+ await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),db=>db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signalId]));
+ expect((await admin.query('SELECT id FROM app.shadow_commercial_signal WHERE id=$1',[signalId])).rows).toEqual([{id:signalId}]);
+ expect(await replay()).toEqual(before);
+ // Positive control: authorized ordinary job data is actually visible through the same application.
+ expect(await app.jobs.get({sessionId:session},J)).toBeTruthy();
+});

@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "migration-proof-isolation": {
+      "branches": ["codex/sandbox/migration-proof-isolation"],
+      "note": "RED: test-only exact migration proof loading. LP0-13 and LP0-22 remain held. PostgreSQL suites and independent review required in CI before merge.",
+      "allow": [
+        "packages/db/test/migration-proofs/legacy-migrations.json",
+        "packages/db/test/migration-proof-loader.ts",
+        "packages/db/test/migration-proof-loader.test.ts",
+        "packages/db/test/lp-0-catalog.ts",
+        "packages/db/test/lp-0-grant-freeze.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
