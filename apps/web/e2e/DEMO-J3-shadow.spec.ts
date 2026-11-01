@@ -1,16 +1,15 @@
-import { pathToFileURL } from "node:url";
-import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { openCapture, startWatchdogJob } from "./helpers/capture-journey";
 import { jsonResult } from "./helpers/customer-invoice-journey";
 import type { FinalCheckRead } from "../app/ui/final-check-reveal-view";
-import { holdShadowRecipeSources } from "./helpers/shadow-source-recipe";
 import { approveJ3Catches } from "./helpers/j3-customer-approval";
 import { settleJ3 } from "./helpers/j3-settlement";
 import { finishDispositionsAndTerms } from "./helpers/final-account-lock-journey";
 
-// Fresh persisted DEMO-S steps 1–9, on both phone and desktop. No end-state seed.
+// A person's path through DEMO-S steps 1–9, on both phone and desktop: clicks on the job, its
+// practice guide and the customer portal. No database connection, producer call or seeded state.
+// API requests here only read saved state or replay a command the page just sent.
 async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  test.setTimeout(720_000);
  await openCapture(page); await page.goto("/demo-s/shadow-30000");
@@ -30,73 +29,133 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  const price = page.getByRole("button", { name: "Price the work", exact: true });
  await expect(price).toBeVisible(); await expect(price).toBeEnabled(); await price.click();
  await startWatchdogJob(page);
- const post = (path: string, data: unknown) => jsonResult(page.request.post(`/api/jobs/${jobId}/${path}`, { data }), path);
+ const post = (path: string, data: unknown) => jsonResult(page.request.post(`/api/jobs/${jobId}/${path}`, { data }), path); // Replays only; each first command comes from a click.
  const read = (path: string) => jsonResult(page.request.get(`/api/jobs/${jobId}/${path}`), path);
  const quote = await read("quotes"); expect(quote.revisions.at(-1).netPence).toBe(3000000);
- const proposalId = randomUUID();
- const proposed = await post("variations", { version: "variation-command.v1", action: "propose", proposalId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
-  description: "Fictional builder logged extras", captureText: "Fictional builder logged extras", price: { quantity: "1", unit: "item", unitRatePence: 320000, direction: "addition" } });
- const approve = async (view: typeof proposed, id: string) => {
-  const variation = view.variations.find((v: { id: string }) => v.id === id)!;
-  return post("variations", { version: "variation-command.v1", action: "approve", variationId: id, revisionId: variation.currentRevisionId, approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+ const guide = `/jobs/${jobId}/shadow-journey`;
+ const clickOn = async (name: string) => { const control = page.getByRole("button", { name, exact: true }); await expect(control).toBeEnabled({ timeout: 45_000 }); await control.click(); };
+ // Step 2: £3,200 logged on the job screen. Builder-recorded practice acceptance only.
+ const addExtra = async (description: string, amount: string) => {
+  const form = page.locator(".variation-entry"); await expect(form).toBeVisible();
+  await form.getByLabel("Description", { exact: true }).fill(description);
+  await form.getByLabel("Variation price (£, optional)").fill(amount);
+  await clickOn("Add proposed variation");
+  await expect(form.getByLabel("Description", { exact: true })).toHaveValue("");
  };
- await approve(proposed, proposalId);
- // Use the established producer's requirement, finalized image and completion.
- await jsonResult(page.request.post("/api/decisions", { data: { version: "finding-evaluation-command.v1", commandId: randomUUID(), tenantId: "11111111-1111-4111-8111-111111111111", jobId } }), "Proof requirement");
- const proof = await read("proof");
- const selected = await post("proof", { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", scopeItemId: proof.scopeItemId, fixture: "j3-drainage-photo" });
- const finalized = await post("proof", { version: "practice-proof-command.v1", commandId: randomUUID(), action: "finalize", uploadId: selected.upload.id, objectVersionId: selected.upload.objectVersionId });
- await post("proof", { version: "practice-proof-command.v1", commandId: randomUUID(), action: "complete", evidenceId: finalized.upload.evidenceId, scopeItemId: proof.scopeItemId });
- // Three genuine source types, through existing product intake routes. The
- // material invoice is examined honestly as zero-result, not labelled extra work.
- const supplier = { version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-320-invoice", channel: "picker", expectedRevision: 0 };
- await post("supplier-documents/intake", supplier);
- await post("supplier-documents/intake", supplier);
- const diary = { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: "Fictional practice diary: fitted loft hatch. Estimated extra: £300 net." };
+ const variationNamed = async (description: string) => {
+  await expect.poll(async () => (await read("variations")).variations.some((v: { description: string }) => v.description === description)).toBe(true);
+  return (await read("variations")).variations.find((v: { description: string }) => v.description === description) as { id: string; currentRevisionId: string };
+ };
+ const approveOnJob = async (id: string) => {
+  const row = page.getByTestId(`variation-${id}`);
+  await row.getByRole("button", { name: "Approve exact revision", exact: true }).click();
+  await expect(row.getByText("Approved immutable commercial fact", { exact: true })).toBeVisible();
+ };
+ await addExtra("Fictional builder logged extras", "3200.00");
+ const proposalId = (await variationNamed("Fictional builder logged extras")).id;
+ await approveOnJob(proposalId);
+ // Step 3 sources. The photo comes from the guide's generated drainage image.
+ await page.goto(guide);
+ await clickOn("Check what proof this job needs");
+ await expect(page.getByTestId("guide-proof-state")).toHaveText("Proof required");
+ await clickOn("Attach the generated drainage photo");
+ await expect(page.getByTestId("guide-proof-state")).toHaveText("Photo attached");
+ await clickOn("Check file integrity");
+ await expect(page.getByTestId("guide-proof-state")).toHaveText("Photo checked");
+ await clickOn("Record proof complete");
+ await expect(page.getByTestId("guide-proof-state")).toHaveText("Proof complete");
+ // The material invoice is examined honestly as zero-result, not labelled extra work.
+ await page.goto(`/jobs/${jobId}#supplier-documents`);
+ const documents = page.locator("#supplier-documents");
+ await documents.locator("select").first().selectOption("materials-320-invoice");
+ const intake = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith("/supplier-documents/intake"));
+ await documents.getByRole("button", { name: "Import generated document", exact: true }).click();
+ await post("supplier-documents/intake", (await intake).postDataJSON()); // Replaying the same command is safe.
+ await page.goto(`/jobs/${jobId}#job-diary`);
+ const diaryPanel = page.getByTestId("job-diary");
+ await expect(diaryPanel).toHaveAttribute("aria-busy", "false");
+ await diaryPanel.getByLabel("Note", { exact: true }).fill("Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.");
+ const diaryRequest = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith("/diary"));
+ await diaryPanel.getByRole("button", { name: "Save note", exact: true }).click();
+ const diary = (await diaryRequest).postDataJSON();
+ await expect(diaryPanel.getByLabel("Note", { exact: true })).toHaveValue("");
  const note = await post("diary", diary);
  expect(await post("diary", diary)).toEqual(note);
+ expect((await read("diary")).entries).toHaveLength(1);
  const conflict = await page.request.post(`/api/jobs/${jobId}/diary`, { data: { ...diary, text: "Different fictional work." } });
  expect(conflict.ok()).toBe(false);
- await post("final-account/terms", { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ // Step 4 begins: build from baseline and captures, then accept the terms on the same panel.
+ await page.goto(`/jobs/${jobId}#final-account-title`);
+ await clickOn("Build final account");
+ await expect.poll(async () => (await read("final-account")).account?.totals.net.pence).toBe(3320000);
+ await page.reload();
+ const lockPanel = page.getByTestId("final-account-lock");
+ await expect(lockPanel.getByTestId("lock-state")).toHaveText("Final account review");
+ // Terms are accepted once per business, so another practice job in this tenant may already have done it.
+ const accept = lockPanel.getByRole("button", { name: "Accept final check terms", exact: true });
+ if (await accept.isEnabled()) await accept.click();
+ await expect(lockPanel.getByRole("button", { name: "Accept final check terms", exact: true })).toBeDisabled();
  const publicBefore = await read("shadow-demo");
- // Test-only queued-worker contexts use the same ESM module as the driver.
- const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>;
- const { verifiedTenantContextForQueuedJob } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
- await holdShadowRecipeSources(verifiedTenantContextForQueuedJob("11111111-1111-4111-8111-111111111111"), verifiedTenantContextForQueuedJob(randomUUID()), jobId);
- expect(await read("shadow-demo")).toEqual(publicBefore); // Holding/replaying signals cannot change a builder response.
+ // Step 3: the guide asks the real worker to hold signals. Its answer never says what it held.
+ await page.goto(guide);
+ await expect(page.getByTestId("guide-hold-state")).toHaveText("Not asked for yet");
+ await clickOn("Hold signals from saved sources");
+ await expect(page.getByTestId("guide-hold-state")).toHaveText("Saved sources examined", { timeout: 180_000 });
+ expect(await read("shadow-demo")).toEqual(publicBefore); // Holding signals cannot change a builder response.
  expect(await read("final-check")).toMatchObject({ state: "unlocked", items: [] });
- let final = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: 0 });
- expect(final.account.totals.net.pence).toBe(3320000);
- const reviewId = randomUUID();
- await post("final-account/review-extras", { version: "final-review-extra.v1", commandId: reviewId, scopeItemId: randomUUID(), description: "Fictional extra at final review", captureText: "Fictional extra at final review", price: { quantity: "1", unit: "item", unitRatePence: 40000, direction: "addition" } });
- await approve(await read("variations"), reviewId);
- final = await post("final-account", { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: final.account.revision });
- expect(final.account.totals.net.pence).toBe(3360000);
+ // Step 4: £400 at review, approved, then the rebuild.
+ await page.goto(`/jobs/${jobId}#final-account-title`);
+ await expect(lockPanel.getByTestId("lock-state")).toHaveText("Final account review");
+ await lockPanel.getByLabel("Final-review extra description").fill("Fictional extra at final review");
+ await lockPanel.getByLabel("Final-review extra price (£, optional)").fill("400.00");
+ await lockPanel.getByRole("button", { name: "Add final-review extra", exact: true }).click();
+ const reviewId = (await variationNamed("Fictional extra at final review")).id;
+ await page.reload();
+ await approveOnJob(reviewId);
+ await clickOn("Rebuild from approved sources");
+ await expect.poll(async () => (await read("final-account")).account.totals.net.pence).toBe(3360000);
+ const final = await read("final-account");
  const before = await read("shadow-demo"); expect(before.account.captures.map((c: { netPence: number }) => c.netPence).sort()).toEqual([320000, 40000]);
  expect(before).not.toHaveProperty("finalCheck"); expect(before).not.toHaveProperty("assessments");
  expect(before.version).toBe("shadow-demo-report.v2");
  expect(before.customerApproval).toEqual({ state: "not_ready_yet", approvals: [] }); expect(before.invoices.invoices).toEqual([]);
+ // Step 5: the lock.
  await page.goto(`/jobs/${jobId}#final-account-title`); await finishDispositionsAndTerms(page);
  await page.getByRole("button", { name: "Complete final account", exact: true }).click();
  await expect.poll(async () => (await read("shadow-demo")).account.lock?.finalAccountRevisionId).toBe(final.account.id);
  const locked = await read("shadow-demo"); expect(locked.account.lock.finalAccountRevisionId).toBe(final.account.id);
- // Ask the actual scheduled practice worker to freeze, examine, reconcile and publish.
- const request = { version: "final-check-run.request.v1" };
- await post("final-check/runs", request); await post("final-check/runs", request);
+ // Step 6: the real worker reveals; the builder confirms and prices each item on screen.
+ await page.goto(`/jobs/${jobId}#final-check`);
+ const reveal0 = page.getByTestId("final-check-reveal");
+ await expect(reveal0).toHaveAttribute("aria-busy", "false");
+ const run = reveal0.getByRole("button", { name: "Run the final check (practice)", exact: true });
+ if (await run.isVisible()) await run.click();
  await expect.poll(async () => (await read("final-check")).state, { timeout: 180_000, intervals: [5000] }).toBe("completed");
+ await page.reload();
  const reveal = await read("final-check") as FinalCheckRead;
  expect(reveal.items.map(item => item.description).sort()).toEqual(["fitted garden drainage", "fitted loft hatch"]);
+ const prices: Record<string, string> = { "fitted garden drainage": "500.00", "fitted loft hatch": "300.00" };
  for (const item of reveal.items) {
-  const command = { version: "final-check.catch.v1", commandId: randomUUID(), lockId: reveal.lockId!, runId: reveal.runId!, signalId: item.signalId, expectedSignalRevision: item.signalRevision };
+  const panel = page.getByTestId("final-check-reveal");
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  const request = page.waitForRequest(r => r.method() === "POST" && r.url().endsWith("/final-check/catches"));
+  await panel.locator("article").filter({ hasText: item.description }).getByRole("button", { name: "Yes — this was extra work", exact: true }).click();
+  const command = (await request).postDataJSON();
+  await expect.poll(async () => (await read("variations")).variations.some((v: { id: string }) => v.id === command.commandId)).toBe(true);
   const confirmed = await post("final-check/catches", command);
   expect(await post("final-check/catches", command)).toEqual(confirmed);
   const changed = await page.request.post(`/api/jobs/${jobId}/final-check/catches`, { data: { ...command, expectedSignalRevision: item.signalRevision + 1 } });
   expect(changed.ok()).toBe(false);
   const variation = (await read("variations")).variations.find((v: { id: string }) => v.id === command.commandId);
   expect(variation.state).toBe("draft"); expect(variation.currentRevisionId).toBeNull();
-  const price = item.description === "fitted garden drainage" ? 50000 : 30000;
-  await post("variations", { version: "variation-command.v1", action: "revise", variationId: variation.id, revisionId: randomUUID(), expectedRevisionId: null,
-   description: item.description, price: { quantity: "1", unit: "item", unitRatePence: price, direction: "addition" } });
+  // The saved job opens its work section at this variation.
+  await page.goto(`/jobs/${jobId}#variation-${variation.id}`); await page.reload();
+  const row = page.getByTestId(`variation-${variation.id}`);
+  await row.getByRole("button", { name: "Change price", exact: true }).click();
+  await row.getByLabel(`New price ${item.description}`).fill(prices[item.description]!);
+  await row.getByRole("button", { name: "Save new proposed revision", exact: true }).click();
+  await expect(row.getByRole("button", { name: "Approve exact revision", exact: true })).toBeVisible();
+  await page.goto(`/jobs/${jobId}#final-check`); await page.reload();
  }
  const variations = (await read("variations")).variations;
  const catches = variations.filter((v: { id: string }) => !new Set<string>([proposalId, reviewId]).has(v.id));
@@ -119,12 +178,15 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  for (const text of ["£33,600.00 net", "Customer approval: Awaiting customer", "fitted garden drainage", "fitted loft hatch", "No invoice issued", "recovery fee £0"]) await expect(unapproved).toContainText(text);
  // Leg 6b: send the priced catches, then the customer signs in and approves
  // each exact revision in an isolated portal context. No builder attestation.
- const customerApprovals = await approveJ3Catches(page, browser, jobId, catches);
+ await approveJ3Catches(page, browser, jobId, catches);
  const approvedReport = await read("shadow-demo");
- // Compare exact persisted portal approvals, including their server timestamps.
- const approvedCustomerApproval = { state: "approved", approvals: [...customerApprovals].sort((a, b) => a.variationId.localeCompare(b.variationId)) };
+ // Each catch's current revision was approved through the portal; keep its saved timestamp to compare later.
+ const customerApprovals = approvedReport.customerApproval.approvals as { variationId: string; approvedAt: string; method: string }[];
+ const approvedCustomerApproval = { state: "approved", approvals: customerApprovals };
  expect(approvedReport.version).toBe("shadow-demo-report.v2");
- expect(approvedReport.customerApproval).toEqual(approvedCustomerApproval);
+ expect(approvedReport.customerApproval.state).toBe("approved");
+ expect(customerApprovals.map(row => row.variationId).sort()).toEqual(catches.map((row: { id: string }) => row.id).sort());
+ expect(customerApprovals.every(row => row.method === "customer_portal")).toBe(true);
  // Approved but unbilled is honestly still incomplete on the saved report.
  expect(approvedReport.status).toBe("incomplete");
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);

@@ -226,11 +226,16 @@ allocated payment behind each catch, current £800 / £80 / £720, £3,600 at £
 each catch. Otherwise it stays `incomplete`. The client refuses a complete status that contradicts its own parts.
 
 The two held signals come from the photo and the diary note. The supplier document is frozen, examined and kept in
-each pack but raises no signal, because a supplier bill alone does not assert extra work. Saving a source still does
-not schedule pre-lock detection: the browser journey invokes the real reader, detector and sink, and the Final Check
-worker detects from the frozen sources at run time. Issuing the customer link, allocating the receipt and reviewing
-the assessment use real command routes with no screens yet, and the issuer's owner membership in the practice
-tenant is test identity setup. The independent verdict and two builder observations are still missing.
+each pack but raises no signal, because a supplier bill alone does not assert extra work.
+
+A person can click the whole journey on the job screens and `/jobs/:id/shadow-journey`. That guide covers proof with the
+generated drainage photo, holding signals, the customer link, the one combined invoice, the receipt line split, and
+allocating, assessing and reviewing each catch. Migration 0518 adds its demo-only helpers: a queued request for the
+worker to hold signals before lock (saving a source still schedules nothing), a customer link issued by the practice
+owner with simulated delivery, and the work identity and exact review hash of confirmed catches after lock. Each one
+refuses outside `synthetic_demo` in its route, its application and its SQL routine, and needs the practice session that
+owns the job. The general customer-portal issue route and the attribution command are unchanged. The independent
+verdict and two builder observations are still missing.
 
 Receipt-fact commands run SERIALIZABLE and lock the tenant's audit head, so another writer on the shared practice
 tenant can abort one. The repository re-runs that rolled-back command up to five attempts with the same command id.
