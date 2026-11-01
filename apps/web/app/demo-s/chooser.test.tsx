@@ -20,9 +20,13 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts });
     const html = renderToStaticMarkup(<LifecycleReport report={report} tenantId={id} />);
     expect(html).toContain("Final Check journey execution is unavailable");
-    expect(html).toContain("It does not record whether a product journey ran"); expect(html).toContain("DEMO-A1 is not ready yet");
+    expect(html).toContain("It does not record whether a product journey ran"); expect(html).toContain("Demo acceptance is not recorded here");
     expect(html).toContain("0 of 2"); expect(html).toContain("snapshotId="); expect(html).toContain("Revision");
     expect(html).not.toMatch(/£800|£80|£720|£34,400|PASS|settled|signals found/);
+  });
+  it.each([["meter", "/meter"], ["trial", "/demo-s/trial?"], ["core-1000", "Read saved core-1000 results"]])("points the %s report at its saved screens", (scenario, target) => {
+    const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts: { ...facts, scenario } });
+    expect(renderToStaticMarkup(<LifecycleReport report={report} tenantId={id} />)).toContain(target);
   });
   it("renders actual producer amounts, grace crossing and plain unavailable reasons without a settlement claim",()=>{
     const html=renderToStaticMarkup(<MeterPreview preview={previewDemoMeter({tenantId:id,runId:id})} />);

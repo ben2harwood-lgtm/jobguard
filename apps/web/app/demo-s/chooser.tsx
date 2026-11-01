@@ -27,6 +27,14 @@ async function readSaved(session: Session, tenantId: string, operation: "read" |
   if (!response.ok) throw new Error(errors[(body as { code?: string }).code ?? ""] ?? "Saved state is unavailable. Try Resume again.");
   return operation === "read" ? smallBuilderDemoRunV1.parse(body) : smallBuilderDemoReportV1.parse(body);
 }
+/** Where this selection's persisted results are read. Links only: a snapshot asserts no outcome. */
+function SavedScreens({ scenario, tenantId, runId }: { scenario: string; tenantId: string; runId: string }) {
+  const trial = `/demo-s/trial?${new URLSearchParams({ tenantId, runId })}`;
+  if (scenario === "core-1000") return <p>Saved screens: use Read saved core-1000 results on this selection. It links each job screen to its saved record.</p>;
+  if (scenario === "meter") return <p>Saved screens: <a href={demoLink(tenantId, runId)}>reference previews</a> · <a href="/meter">Jobs on the go and account review</a> · <a href="/plans">Plan and saved periods</a></p>;
+  if (scenario === "trial") return <p>Saved screens: <a href={trial}>trial source report</a> · <a href="/plans">Accepted terms and saved periods</a> · <a href="/meter">Jobs on the go</a></p>;
+  return null;
+}
 export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemoReport; tenantId: string }) {
   const facts = report.facts;
   return <section aria-labelledby="report-title"><h2 id="report-title">Saved selection report</h2>
@@ -38,7 +46,8 @@ export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemo
     <p><a href={demoLink(tenantId, facts.runId, report.snapshotId)}>Open exact saved report {report.snapshotId}</a></p>
     {facts.predecessorId && <p><a href={demoLink(tenantId, facts.predecessorId)}>Open previous selection</a></p>}
     {facts.successorId && <p><a href={demoLink(tenantId, facts.successorId)}>Open replacement selection</a></p>}
-    <p>DEMO-A1 is not ready yet: DEMO-J1–J5 need completed journeys and persisted source reports.</p>
+    <SavedScreens scenario={facts.scenario} tenantId={tenantId} runId={facts.runId} />
+    <p>Demo acceptance is not recorded here. Each journey reports its own saved results.</p>
     <p>Independent verdict: missing. Non-technical builder observations: 0 of 2 recorded here.</p>
   </section>;
 }
