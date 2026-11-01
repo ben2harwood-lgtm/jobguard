@@ -172,3 +172,56 @@ review and CI remain gates. The withheld-payment statement adapter and full
 recovery-18800 target were not added by this repair and remain journey work.
 No database, browser, full journey, restore or release pass is claimed. No git
 write occurred; router staging still resolves the index's unmerged entries.
+
+
+## 1 November C261 main catch-up: READY for router staging and CI
+
+Plan piece: M4-17-S-RUN-CATCHUP, RED. This section supersedes the historical
+catch-up status above. The router had already started merging origin/main
+`c6d3c2d8da709c40de428c77c24f7ef2eb01ff9f` (also MERGE_HEAD). No fetch or git
+write was run here; the router must stage the resolved files and renames to
+clear the index's unmerged stages and finish its merge.
+
+Resolved the three working-file conflicts by retaining the money-check panel
+and main's labelled statement error, both DB exports, and the exact main/branch
+union of LP-0 capability entries. Main's tenancy, B5 and entitlement additions
+remain, including byte-identical mobileAuthStoreAdditions and
+keyRegistryAdditions helpers and their single invocations. Relative to main,
+these lists add only this piece's existing two reconciliation tables and helper.
+No test assertion or product behaviour was changed.
+
+Main's 0509_simulation_fee_collection replaces the branch's duplicate 0519 copy.
+The two remaining branch migrations retain their existing order:
+
+- 0521_simulation_money_trail_run -> 0515_simulation_money_trail_run
+- 0522_success_fee_recovery_compensation -> 0516_success_fee_recovery_compensation
+
+Only full migration filename stems were replaced in references and lane files;
+no bare-number substitution was used. Read-only assertions prove both renamed
+SQL files equal their original HEAD bytes and all 174 main migrations remain
+byte-identical. Reservations 0510–0514 were not used. The existing generated
+lp-downstream-effects-v1.md contained five collection rows absent from the merged
+frozen snapshot; regeneration with the unchanged generator removes those stale
+document rows, preserving main's snapshot boundary without adding inventory facts.
+The initial generator check and three of its five Node tests failed on that stale
+document; all passed after regeneration.
+
+Validation used installed runners, no downloads, at most two workers and at most
+three named Vitest files per invocation:
+
+- packages/db: vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/simulation-money-run-catalog.test.ts src/simulation-money-run-repository.test.ts — 35 passed.
+- packages/db: vitest run --maxWorkers=2 test/success-fee-recovery-compensation-catalog.test.ts test/simulation-fee-collection-catalog.test.ts test/simulation-fee-statement-catalog.test.ts — 6 passed.
+- packages/db: vitest run --maxWorkers=2 src/migrate-discovery.test.ts test/audit-export-privilege-comparator.test.ts src/stored-receipt-migration.test.ts — 23 passed.
+- packages/core: vitest run --maxWorkers=2 src/simulation-money-run.test.ts src/success-fee-catch-posting.test.ts src/simulation-fee-collection.test.ts — 20 passed.
+- apps/api: vitest run --maxWorkers=2 src/success-fee.application.test.ts — 21 passed.
+- apps/web: vitest run --maxWorkers=2 'app/api/jobs/[id]/success-fees/money-check/route.test.ts' 'app/api/jobs/[id]/success-fees/collection/route.test.ts' app/ui/simulation-fee-statements.test.ts — 12 passed.
+- Root installed tsc -p <package>/tsconfig.json --noEmit, with at most two processes: core, storage, config, AI, DB, API and web all passed. The pnpm --version shim stalled and was interrupted; no pnpm suite pass is claimed.
+- python3 tools/lp-downstream-inventory.py --check — passed after regeneration.
+- node --test tools/lp-downstream-inventory.test.mjs — 5 passed after regeneration.
+- node tools/plpgsql-case-in-if-lint.mjs — 176 migrations passed, zero historical exceptions.
+- git diff --check and git diff --cached --check — passed. The index remains router-owned.
+
+These are deterministic local checks, not independent review. PostgreSQL and
+browser suites cannot run in this sandbox and remain for GitHub CI after the
+router commits and pushes. No journey, CI, database, independent RED review,
+restore, provider, real-money or release pass is claimed.

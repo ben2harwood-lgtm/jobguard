@@ -44,6 +44,6 @@ export function SimulationFeeCollection({jobId,statementId,statementHash}:{jobId
    </article>)}
   </>}
   <button disabled={busy} onClick={()=>void load().catch(()=>setError("Collection records could not be loaded."))}>Refresh collection records</button>
-  {error&&<p role="alert">{error}</p>}
+  {error&&<p role="alert" aria-label="Simulation collection error">{error}</p>}
  </section>;
 }
