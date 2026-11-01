@@ -2,37 +2,11 @@
   "migration": "0465_dark_merchant_order.sql",
   "lp0": [
     {
-      "section": "groups",
-      "before": null,
-      "after": {
-        "id": "a-dark-order-manual-attestation",
-        "title": "Synthetic manual purchase-order attestation",
-        "kind": "working_data",
-        "status": "approved_current",
-        "target": {
-          "state": "retain",
-          "note": "Synthetic manual attestation only; serialized against placement and revision commands."
-        },
-        "cards": [],
-        "responsibilities": {},
-        "downstream": "Records a manual-order assertion; cannot send an order or establish payment, settlement or fee entitlement.",
-        "sources": [
-          "packages/db/migrations/0465_dark_merchant_order.sql"
-        ],
-        "tests": [
-          "packages/db/test/purchase-order-audit.integration.test.ts"
-        ],
-        "gaps": [
-          "Sibling dark-merchant-order merge, PostgreSQL CI and independent RED review remain required."
-        ]
-      }
-    },
-    {
       "section": "entries",
       "before": null,
       "after": {
         "key": "acl|rel|table|app.purchase_order_manual_attestation|jobguard_runtime|INSERT|-",
-        "group": "a-dark-order-manual-attestation"
+        "group": "x-supplier-procurement-writes"
       }
     },
     {
@@ -40,7 +14,7 @@
       "before": null,
       "after": {
         "key": "acl|rel|table|app.purchase_order_manual_attestation|jobguard_runtime|SELECT|-",
-        "group": "a-dark-order-manual-attestation"
+        "group": "a-runtime-reads"
       }
     },
     {
@@ -50,16 +24,6 @@
         "key": "owner|rel:table|app.purchase_order_manual_attestation|jobguard_migration",
         "group": "a-owner-tables-views"
       }
-    },
-    {
-      "section": "rls",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|rls=t|forced=t"
-    },
-    {
-      "section": "policies",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|f4b6ad5879e052e3"
     },
     {
       "section": "routines",
@@ -98,31 +62,6 @@
         "staticWrites": [],
         "staticCalls": []
       }
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_revision|guard_dark_order_revision|app.guard_dark_order_revision|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_placement|guard_manual_order_effect|app.guard_manual_order_effect|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|guard_manual_order_effect|app.guard_manual_order_effect|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|a_watchdog_live_before_insert|app.guard_watchdog_input|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|b_watchdog_command_id_before_insert|app.reserve_watchdog_command_id|BEFORE INSERT|O"
     }
   ],
   "upgrade": [
@@ -144,18 +83,6 @@
         "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
-      }
-    },
-    {
-      "section": "relations",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "relname": "purchase_order_revision_draft_identity",
-        "relowner": "jobguard_migration",
-        "relacl": null,
-        "relrowsecurity": false,
-        "relforcerowsecurity": false
       }
     },
     {
@@ -207,6 +134,18 @@
       }
     },
     {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "purchase_order_revision_draft_identity",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -244,10 +183,7 @@
         "tablename": "purchase_order_manual_attestation",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_migration",
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"

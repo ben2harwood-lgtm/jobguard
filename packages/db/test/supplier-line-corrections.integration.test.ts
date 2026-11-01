@@ -152,8 +152,8 @@ describe("M2-4 durable audited reviewer corrections (PostgreSQL)", () => {
     })).rejects.toThrow("MATCH_AUDIT_BINDING_REQUIRED");
     expect((await admin.query("SELECT 1 FROM app.supplier_line_match_snapshot WHERE tenant_id=$1 AND id=$2",[tenant,id])).rows).toEqual([]);
     await expect(withTenant(runtime, ctx, db => db.$client.query(`INSERT INTO app.supplier_line_match_correction
-      SELECT tenant_id,$1,job_id,snapshot_id,$2,3,actor_membership_id,
-      correction||jsonb_build_object('commandId',$2::text,'expectedRevision',2),request_hash,$3,created_at
+      SELECT tenant_id,$1,job_id,snapshot_id,$2::uuid,3,actor_membership_id,
+      correction||jsonb_build_object('commandId',$2::uuid::text,'expectedRevision',2),request_hash,$3,created_at
       FROM app.supplier_line_match_correction WHERE tenant_id=$4 AND snapshot_id=$5`,
       [randomUUID(),randomUUID(),randomUUID(),tenant,f.input.snapshotId]))).rejects.toThrow("MATCH_REVISION_CONFLICT");
     await expect(withTenant(runtime, ctx, db => db.$client.query(`INSERT INTO app.supplier_line_match_snapshot
