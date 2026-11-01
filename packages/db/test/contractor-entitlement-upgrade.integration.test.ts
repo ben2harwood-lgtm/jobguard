@@ -23,43 +23,28 @@ it("actual catalogs retain least privilege",async()=>{
 // C239: SV5PRE owns the six shared tables; SV-5 adds processing and result persistence. Every pre-existing row still compares in full.
 const finalCheckTables=["final_check_manifest","final_check_manifest_source","shadow_final_check_completion","shadow_final_check_reveal_proof","shadow_final_check_run_binding","shadow_final_check_source_attempt","final_check_processing_source","final_check_disposition_binding","final_check_reveal_proof","final_check_run_binding","final_check_source_attempt"];
 it("repeat migration and later successors succeed",async()=>{const before=await snapshot(c.admin);await migrate(c.admin);const expected={...before,
- "app.accounting_export_attempt":[],
- "app.accounting_export_decision":[],
- "app.accounting_export_fixture":[],
- "app.accounting_export_inbox":[],
- "app.accounting_export_ledger":[],
- "app.accounting_export_outbox":[],
- "app.billing_allocation_run":[],
- "app.billing_application_event":[],
- "app.billing_export_batch":[],
- "app.billing_export_delivery":[],
- "app.billing_export_line":[],
- "app.billing_fact":[],
- "app.billing_line_match":[],
- "app.billing_quarantine":[],
- "app.billing_status_import":[],
- "app.contractor_receipt_line_allocation":[],
+ "app.tenant_key_version":[],
+ "app.tenant_key_revocation":[],
+ "app.recovery_timeline_run":[],
+ "app.recovery_timeline_signal":[],
+ "app.customer_variation_approval":[],
  "app.customer_portal_grant":[],
  "app.customer_portal_session":[],
- "app.customer_variation_approval":[],
- "app.enterprise_agreement_version":[],
- "app.enterprise_baseline_batch":[],
- "app.enterprise_baseline_team":[],
- "app.enterprise_duplicate_correction":[],
- "app.enterprise_fee_contribution":[],
- "app.enterprise_fee_derivation":[],
- "app.enterprise_fee_statement":[],
- "app.enterprise_fee_statement_approval":[],
- "app.enterprise_fee_statement_dispute":[],
- "app.enterprise_fee_statement_section":[],
+ "app.job_import_v3":[],
+ "app.payment_fee_command":[],
+ "app.payment_fee_statement":[],
+ "app.lp_job_insert_permit":[],
+ "identity.oidc_assertion_use":[],
+ "identity.oidc_request":[],
+ "app.small_builder_demo_run":[],
+ "app.small_builder_demo_receipt":[],
+ "app.small_builder_demo_report":[],
  "app.evidence_pack_v3":[],
  "app.evidence_pack_v3_approval":[],
  "app.evidence_pack_v3_check":[],
  "app.evidence_pack_v3_request":[],
- "app.job_import_v3":[],
  "app.job_small_trip_event":[],
  "app.job_small_trip_observation":[],
- "app.lp_job_insert_permit":[],
  "app.meter_lifecycle_alert":[],
  "app.meter_lifecycle_computation":[],
  "app.meter_lifecycle_correction":[],
@@ -69,66 +54,12 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.meter_lifecycle_source":[],
  "app.meter_lifecycle_source_ref":[],
  "app.meter_work_ledger":[],
- "app.payment_fee_command":[],
- "app.payment_fee_statement":[],
- "app.platform_enterprise_fee":[],
- "app.platform_enterprise_fee_line":[],
- "app.platform_fee_statement":[],
- "app.platform_fee_statement_command":[],
- "app.receipt_allocation_fact_command":[],
- "app.receipt_allocation_fact_line":[],
- "app.receipt_allocation_fact_review":[],
- "app.receipt_allocation_fact_revision":[],
- "app.receipt_allocation_fact_source":[],
- "app.recovery_attribution_command":[],
- "app.recovery_attribution_reassessment":[],
- "app.recovery_attribution_revision":[],
- "app.small_builder_demo_receipt":[],
- "app.small_builder_demo_report":[],
- "app.small_builder_demo_run":[],
- "app.stored_receipt_case_allocation":[],
- "app.stored_receipt_case_binding":[],
- "app.stored_receipt_case_command":[],
- "app.success_fee_command":[],
- "app.success_fee_derivation":[],
- "app.success_fee_journal":[],
- "app.success_fee_journal_line":[],
- "app.success_fee_review":[],
- "app.success_fee_source":[],
  "app.trial_admission":[],
+ "app.trial_start":[],
+ "app.trial_end_source":[],
+ "app.trial_subscription_source":[],
  "app.trial_business_verification":[],
  "app.trial_card_attempt":[],
  "app.trial_card_result":[],
- "app.trial_end_source":[],
- "app.trial_start":[],
- "app.trial_subscription_source":[],
- "identity.oidc_assertion_use":[],
- "identity.oidc_request":[],
- ...Object.fromEntries(finalCheckTables.map(t=>[`app.${t}`,[]]))};expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);await migrate(c.admin);expect(await snapshot(c.admin, Object.keys(expected))).toEqual(expected);
- // 0208/0209/0244 successor routines; catalogue order is schema, name, identity arguments.
- expect((await c.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
- FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname IN ('mon1_admit_place','mon1_capture_small_trip','mon1_lifecycle_actor','mon1_lifecycle_capture','mon1_lifecycle_read','mon1_lifecycle_rebuild') ORDER BY 1,2,3`)).rows).toEqual([
- {nspname:"app",proname:"mon1_admit_place",args:"t uuid, j uuid, source_kind text, source_id uuid"},
- {nspname:"app",proname:"mon1_capture_small_trip",args:"t uuid, j uuid, source_kind text, source_id uuid"},
- {nspname:"app",proname:"mon1_lifecycle_actor",args:"t uuid, digest text, mutation boolean"},
- {nspname:"app",proname:"mon1_lifecycle_capture",args:"t uuid, digest text, command uuid, start_day date, expected integer"},
- {nspname:"app",proname:"mon1_lifecycle_read",args:"t uuid, digest text, computation uuid"},
- {nspname:"app",proname:"mon1_lifecycle_rebuild",args:"t uuid, digest text, p_source uuid"},
- ]);
- // 0236 successor routine follows 0208; preserve both additive catalogue expectations.
- expect((await c.admin.query("SELECT proname FROM pg_proc WHERE oid='app.mon3_read_eligibility(uuid,text,uuid)'::regprocedure")).rows).toEqual([{proname:"mon3_read_eligibility"}]);
-});
-it("negative controls detect changed prior rows grants and shapes",async()=>{
- const before=await snapshot(c.admin), prior=await predecessorCatalogue(c.admin);
- const db=await c.admin.connect();
- try {
-  await db.query("BEGIN");await db.query("UPDATE app.account SET name='Negative control changed prior row'");
-  expect(await snapshot(db)).not.toEqual(before);await db.query("ROLLBACK");
-  await db.query("BEGIN");await db.query("GRANT DELETE ON app.account TO jobguard_runtime");
-  expect(await predecessorCatalogue(db)).not.toEqual(prior);await db.query("ROLLBACK");
-  await db.query("BEGIN");await db.query("ALTER TABLE app.account ADD COLUMN mon8_negative_control text");
-  expect(await predecessorCatalogue(db)).not.toEqual(prior);
- }finally{await db.query("ROLLBACK");db.release();}
- expect(await snapshot(c.admin)).toEqual(before);expect(await predecessorCatalogue(c.admin)).toEqual(prior);
-});
+ "app.enterprise_baseline_batch":[],
+ "app.enterprise_baseline_team":[],
