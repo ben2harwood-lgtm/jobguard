@@ -158,6 +158,7 @@ export * from "./mobile-auth-store.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";

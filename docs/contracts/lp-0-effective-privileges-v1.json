@@ -77,6 +77,8 @@
 ],
 "entries":[
 {"key":"acl|routine|function:app.simulation_money_run(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-exec-recovery-money"},
+{"key":"owner|routine|function:app.demo_trial(uuid,text,jsonb)|jobguard_migration","group":"a-demo-i-lifecycle"},
+{"key":"acl|routine|function:app.demo_trial(uuid,text,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-demo-i-lifecycle"},
 {"key":"acl|rel|table|app.recovery_timeline_run|jobguard_runtime|SELECT|-","group":"a-runtime-reads"},
 {"key":"owner|rel:table|app.recovery_timeline_run|jobguard_migration","group":"a-owner-tables-views"},
 {"key":"acl|routine|function:app.apply_recovery_timeline_signal(uuid,jsonb)|jobguard_runtime|EXECUTE|-","group":"a-m4-6-history"},
@@ -1602,6 +1604,7 @@
 "recorded":{
 "note":"0367 adds private committed-ledger refresh and a fresh counted reader; bootstrap retires the old runtime reader grant. New routine hashes await PostgreSQL CI capture. Routine, RLS policy and trigger protection facts recorded for review. They are NOT compared by any guard: comparison of reviewed routine and RLS definitions is held under the Q2 ruling (LP0-13). CH-4-C 0201: seven new routines and five changed definitions are source-inspected only; their null definitionSha256 values require exact PostgreSQL catalogue capture in CI. New public signatures are restricted to ch4_record_work_state(uuid,uuid,text,jsonb) and ch4_link_post_lock_job(uuid,uuid,text,jsonb); no other ACL is changed.",
 "routines":[
+{"identity":"function:app.demo_trial(uuid,text,jsonb)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.demo_trial_binding","app.small_builder_demo_receipt"],"staticCalls":["app.final_lock_hash","app.mon2_read","app.mon3_owner","app.mon3_read_eligibility","app.mon3_read_lifecycle","app.small_builder_demo_audit"]},
 {"identity":"function:app.apply_recovery_timeline_signal(uuid,jsonb)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":true,"runtimeExecute":true,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.recovery_timeline_run"],"staticCalls":["app.authenticate_practice_session","app.record_recovery_timeline_signal","app.recovery_follow_up_stop_reason"]},
 {"identity":"function:app.guard_recovery_timeline_state()","owner":"jobguard_migration","securityDefiner":false,"searchPath":null,"returnsTrigger":true,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":[],"staticCalls":[]},
 {"identity":"function:app.record_recovery_timeline_signal(uuid,uuid,uuid,text)","owner":"jobguard_migration","securityDefiner":true,"searchPath":"search_path=pg_catalog","returnsTrigger":false,"extension":null,"reachable":false,"runtimeExecute":false,"publicExecute":false,"otherExecute":[],"definitionSha256":null,"staticWrites":["app.recovery_timeline_signal"],"staticCalls":[]},

@@ -137,6 +137,7 @@ export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./s
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
+export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
 export * from "./simulation-money-run.js";
