@@ -267,7 +267,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   const view = await readStatement.json() as StatementView;
   await details.locator("summary").first().click();
   expect(view.statement.period).toBe(period); expect(view.statement.revision).toBe(1);
-  await expect(details.getByRole("heading")).toHaveText(`Statement ${period} · revision 1`);
+  await expect(details.getByRole("heading", { level: 2 })).toHaveText(`Statement ${period} · revision 1`);
   expect(view.statement.totalDeltaPence).toBe(rate * 6 / 10);
   expect(view.statement.totalDeltaPence).toBe(view.statement.sections.reduce((sum, section) => sum + section.deltaPence, 0));
   for (const section of view.statement.sections) {
@@ -303,7 +303,8 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
     for (const entry of posting.lines) await expect(journal).toContainText(`${entry.account}: debit ${pounds(entry.debitPence)}, credit ${pounds(entry.creditPence)}`);
   }
   await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-  const now = new Date(), from = new Date(now.getTime() - 86400000).toISOString().slice(0, 10), until = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+  // Include the matched invoice's effective date as well as today's captured extra.
+  const now = new Date(), from = "2026-10-01", until = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
   await page.getByLabel("Captured from (UTC)").fill(from); await page.getByLabel("Until, exclusive (UTC)").fill(until);
   const activityResponse = page.waitForResponse(r => r.url().endsWith("/api/contractor/dashboard") && r.request().postDataJSON().resource === "activity");
   const billingResponse = page.waitForResponse(r => r.url().endsWith("/api/contractor/dashboard") && r.request().postDataJSON().resource === "billing");
@@ -365,6 +366,42 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
     await expect(summary).toHaveText(`${group.id ?? "Unattributed"} · billed ${pounds(rate * 6)} · paid ${pounds(rate * 6)}`);
     await summary.click(); await expect(summary.locator("..")).toContainText(line.extraId);
   }
+  // ENT-9: a matched billed extra is not a missing-extra advisory. All reads use real HTTP.
+  const advisory = page.getByRole("listitem").filter({ hasText: "Possible billed variation without a JobGuard extra" });
+  await expect(page.getByRole("heading", { name: "Advisory signals", exact: true })).toBeVisible();
+  await expect(advisory).toHaveCount(0);
+  // Include amounts in every summary, group and source drill-down, even closed details.
+  const moneyOnDashboard = async () => (await page.locator("main").textContent())!.match(/−?£[\d,]+\.\d{2}|-?\d+\/\d+ pence/g) ?? [];
+  const moneyBeforeAdvisory = await moneyOnDashboard();
+  expect(moneyBeforeAdvisory.length).toBeGreaterThan(0);
+
+  await page.goto(`/contractor/work-orders/${order.id}`);
+  await page.getByRole("link", { name: "Billing and reconciliation", exact: true }).click();
+  // ENT-6 requires an export match for kind=extra; an unmatched possible variation is kind=other.
+  const unmatched = event("invoiced", 25000, { invoiceNumber: "NS-UNMATCHED-VARIATION", effectiveAt: now.toISOString(),
+    composition: { declared: amount(25000), lines: [
+      { externalInvoiceLineId: "unmatched-variation", kind: "other", existedAt: "2026-10-01T00:00:00Z", ...amount(25000), match: null },
+    ] } });
+  await importStatus(unmatched);
+  const sources = (await db.query(`SELECT f.id AS fact_id,r.id AS run_id FROM app.billing_fact f
+    JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.source,r.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
+    WHERE f.tenant_id=$1 AND f.source_event_id=$2`, [tenant, unmatched.sourceEventId])).rows;
+  expect(sources).toHaveLength(1);
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await page.getByLabel("Captured from (UTC)").fill(from); await page.getByLabel("Until, exclusive (UTC)").fill(until);
+  await page.getByRole("button", { name: "Load dashboard", exact: true }).click();
+  await expect(advisory).toHaveCount(1);
+  await expect(advisory).toBeVisible();
+  await expect(advisory).toContainText(`job ${order.job_id} · extras none`);
+  await expect(advisory).toContainText(sources[0].fact_id);
+  await expect(advisory).toContainText(sources[0].run_id);
+  await expect(advisory).not.toContainText(line.extraId);
+  await expect(page.getByText("Advisory only. These observations never change prices, counts, states, fees or statements.", { exact: true })).toBeVisible();
+  expect(await moneyOnDashboard()).toEqual(moneyBeforeAdvisory);
+  for (const stage of ["billed", "paid"]) {
+    await expect(page.locator("summary").filter({ hasText: new RegExp(`^${stage}:`) })).toHaveText(`${stage}: 1 extras · net ${pounds(rate * 6)}`);
+  }
+  expect(await noSideScroll(page)).toBe(true);
   await page.getByRole("button", { name: "Load fictional Northside baseline sample", exact: true }).click();
   const teams = (await db.query("SELECT id FROM app.team WHERE tenant_id=$1 ORDER BY id LIMIT 2", [tenant])).rows;
   await page.getByLabel(/Historical team =/).fill(`fictional-pilot=${teams[0].id}\nfictional-rest=${teams[1].id}`);

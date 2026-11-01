@@ -1,0 +1,44 @@
+// Browser/transport demonstration with synthetic responses; SQL proof is separate.
+import { randomUUID } from "node:crypto";
+import { expect,test } from "@playwright/test";
+import { openQuote } from "./helpers/v1-sample-job";
+
+test("immutable statement download and linked reversal correction retain exact hashes without automatic writes",async({page})=>{
+ const {canonicalSimulationFeeStatementJson,sha256}=await import("@jobguard/core");
+ const id=randomUUID(),allocation=randomUUID(),hash="a".repeat(64),gbp=(pence:number)=>({pence,currency:"GBP"});
+ let jobId="",corrected=false;const writes:Record<string,unknown>[]=[];
+ function record(correction=false){
+  const original={version:"issued-simulation-fee-statement.v1",statementId:id,jobId,number:"DEMO-FEE-000001",namespace:"success_fee.synthetic.v1",environment:"synthetic_demo",policyVersion:"reference_fee_policy_v3",
+   qualifyingPrincipal:{numerator:"282000",denominator:"1"},cumulativeFeePrincipal:gbp(28200),documentPrincipal:gbp(28200),postingHistory:[{journalId:allocation,principal:gbp(28200)}],original:null as null|{statementId:string;documentHash:string},
+   sourceSnapshot:{adjustments:{paymentReversalIds:[],creditNoteIds:[],evidenceInvalidationIds:[]},postingRevision:1,qualifyingPrincipal:{numerator:"282000",denominator:"1"},feePence:28200,derivations:[{derivationId:id,reviewId:id,authorizationId:id,statementHash:hash}],sources:[{assessmentId:id,currentAssessmentId:id,sourceHash:hash,reviewAuthorizationId:id,allocationIds:[allocation],remainingPrincipal:{numerator:"282000",denominator:"1"},reasonCodes:[]}]},
+   settlementHistory:{state:"integration_unavailable",dependency:"M4-12-S"},warning:"Simulation statement — proposed policy, principal only; not a tax invoice or real amount due",vatLabel:"VAT not calculated",sandboxLabel:"Practice sandbox — synthetic data; nothing is sent or charged"};
+  const originalHash=sha256(canonicalSimulationFeeStatementJson(original));
+  const document=correction?{...original,statementId:allocation,number:"DEMO-FEE-000002",original:{statementId:id,documentHash:originalHash},qualifyingPrincipal:{numerator:"32000",denominator:"1"},cumulativeFeePrincipal:gbp(3200),documentPrincipal:gbp(-25000),sourceSnapshot:{...original.sourceSnapshot,qualifyingPrincipal:{numerator:"32000",denominator:"1"},feePence:3200,sources:original.sourceSnapshot.sources.map(s=>({...s,remainingPrincipal:{numerator:"32000",denominator:"1"},sourceHash:"b".repeat(64)}))}}:original;
+  return {document,documentHash:sha256(canonicalSimulationFeeStatementJson(document))};
+ }
+ await page.route("**/api/jobs/*/success-fees",async route=>{jobId=new URL(route.request().url()).pathname.split("/")[3]!;await route.fulfill({json:{state:"catch_review_available"}});});
+ await page.route("**/api/jobs/*/success-fees/statements",async route=>{
+  jobId=new URL(route.request().url()).pathname.split("/")[3]!;
+  if(route.request().method()==="POST"){
+   const c=route.request().postDataJSON();writes.push(c);
+   if(c.action==="approve"){await route.fulfill({status:409,json:{code:"SUCCESS_FEE_STALE"}});return;}
+   corrected=true;await route.fulfill({json:{}});return;
+  }
+  await route.fulfill({json:{version:"simulation-fee-statement-view.v1",jobId,statements:[record(),...(corrected?[record(true)]:[])]}});
+ });
+ await page.route("**/api/jobs/*/success-fees/statements/*",async route=>{const r=record(route.request().url().endsWith(allocation));await route.fulfill({body:canonicalSimulationFeeStatementJson(r.document),headers:{"content-type":"application/json","content-disposition":`attachment; filename="${r.document.number}.v1.json"`,"x-content-sha256":r.documentHash}});});
+ await openQuote(page);
+ for(const input of await page.getByLabel(/Unit rate/u).all())if(await input.inputValue()==="")await input.fill("100.00");
+ for(const action of ["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await page.getByRole("button",{name:action,exact:true}).click();
+ await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");await page.getByRole("button",{name:"Start this practice job",exact:true}).click();
+ const panel=page.getByRole("region",{name:"Simulation fee statements"});
+ await expect(panel.getByTestId("fee-statement-number")).toHaveText("DEMO-FEE-000001");await expect(panel.getByTestId("statement-success-fee-principal")).toHaveText("£282.00");
+ await expect(panel.getByText(record().document.warning,{exact:true})).toBeVisible();await expect(panel.getByRole("link",{name:"£2,820.00",exact:true})).toBeVisible();expect(writes).toEqual([]);
+ const originalHash=record().documentHash;
+ const downloaded=page.waitForEvent("download");await panel.getByRole("link",{name:"Download DEMO-FEE-000001 (v1)"}).click();expect((await downloaded).suggestedFilename()).toBe("DEMO-FEE-000001.v1.json");expect(writes).toEqual([]);
+ await panel.getByRole("button",{name:"Save current simulation statement or correction"}).click();
+ await expect(panel.getByTestId("statement-document-principal").last()).toHaveText("−£250.00");await expect(panel.getByTestId("statement-success-fee-principal").last()).toHaveText("£32.00");
+ await expect(panel.locator("article").first().getByText(originalHash,{exact:true})).toBeVisible();
+ await panel.getByRole("button",{name:"Approve this exact simulation statement"}).click();await expect(panel.getByRole("alert")).toBeVisible();
+ expect(writes.at(-1)).toMatchObject({action:"approve",statementId:allocation,statementHash:record(true).documentHash});
+});
