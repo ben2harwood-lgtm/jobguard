@@ -143,3 +143,31 @@ test("DEMO-J5 without an approved identity nothing is offered and no trial start
   await expect(outcome(page)).toContainText("No saved trial start");
   expect(await facts(tenantId)).toMatchObject({ starts: 0, activations: 0, keys: 0 });
 });
+
+test("DEMO-A1 stale authority: a revoked member and a revoked session cannot replay saved trial commands", async ({ page, context, baseURL }) => {
+  const { tenantId, first, second } = await company(context, baseURL!);
+  await openGuide(page);
+  const runId = new URL(page.url()).searchParams.get("runId")!;
+  const session = await (await page.request.get("/api/auth/session")).json();
+  const send = (data: unknown) => page.request.post("/api/small-builder-demo/trial", { data,
+    headers: { origin: new URL(page.url()).origin, "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId } });
+  const bound = { version: "trial-demo-command.v1", action: "bind", commandId: randomUUID(), runId, firstJobId: first, secondJobId: second };
+  const read = { version: "trial-demo-command.v1", action: "read", runId };
+  expect((await send(bound)).status()).toBe(200);
+  expect((await send(read)).status()).toBe(200);
+  const refused = async () => { for (const command of [bound, read]) expect((await send(command)).ok()).toBe(false); };
+  const membership = (await f.admin.query("SELECT id FROM app.membership WHERE tenant_id=$1", [tenantId])).rows[0].id;
+  await f.admin.query("BEGIN");
+  await f.admin.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenantId, membership]);
+  await f.admin.query("COMMIT");
+  await refused();
+  await f.admin.query("BEGIN");
+  await f.admin.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  await f.admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [tenantId, membership]);
+  await f.admin.query("COMMIT");
+  expect((await send(read)).status()).toBe(200);
+  await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE user_id=(SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2)", [tenantId, membership]);
+  await refused();
+  expect(await facts(tenantId)).toMatchObject({ starts: 0, activations: 0 });
+});

@@ -24,6 +24,8 @@
         "apps/web/app/jobs/[id]/value/page.tsx",
         "apps/web/app/meter/meter-screen.test.tsx",
         "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-A1-scenarios.spec.ts",
         "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
         "apps/web/e2e/DEMO-J4-meter.spec.mts",
         "apps/web/e2e/DEMO-J5-trial.spec.mts",
