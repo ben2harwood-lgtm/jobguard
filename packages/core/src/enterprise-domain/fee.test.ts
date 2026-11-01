@@ -94,6 +94,16 @@ describe("generated ENT-F1–ENT-F12 via enterprise qualification and shared all
   const office=paid(50000,50000,60000,60000,"office_entry"),client=paid(80000,80000,96000,96000,"client_instruction",8);
   expect(f(statement([office,client]))).toBe(0);expect(section(statement([office,client])).kind).toBe("zero_result");
  });
+ it("ENT12 device clocks cannot change the server-origin agreement binding", () => {
+  const x = paid(15000,15000,18000,18000,"site_user",1,"2026-11-20T00:00:00Z","2026-11-16T00:00:00Z","v2");
+  const patch = { period: "2026-11", recordedCutoff: "2026-12-01T00:00:00Z", agreements: [agreement(), agreement("v2","8","2026-11-15T00:00:00Z")], prior: [] };
+  const expected = section(statement([x],0,[],patch));
+  for (const capture of ["1970-01-01T00:00:00Z", "2099-01-01T00:00:00Z"]) {
+   x.members[0]!.origin.deviceCapturedAt = capture;
+   expect(section(statement([x],0,[],patch))).toEqual(expected);
+   expect(() => section(statement([{ ...x, agreementVersionId: "v1" }],0,[],patch))).toThrow("AGREEMENT_VERSION_MISMATCH");
+  }
+ });
  it("ENT-F9: origin binds agreement, credit retains v1",()=>{
   const x=paid(15000,15000,18000,18000,"site_user",1,"2026-11-20T00:00:00Z","2026-11-10T00:00:00Z","v1"),y=paid(15000,15000,18000,18000,"site_user",8,"2026-11-20T00:00:00Z","2026-11-16T00:00:00Z","v2");
   const patch={period:"2026-11",recordedCutoff:"2026-12-01T00:00:00Z",agreements:[agreement(),agreement("v2","8","2026-11-15T00:00:00Z")]};
