@@ -7,3 +7,4 @@ export * from "./shadow-proposal.js"; export * from "./shadow-evaluation.js";
 export * from "./sor-suggestion.js";
 export * from "./sor-suggestion-evaluation.js";
 export * from "./pursuit-draft.js";
+export * from "./claude-provider.js";
