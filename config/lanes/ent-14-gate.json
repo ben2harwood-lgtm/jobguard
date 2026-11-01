@@ -13,8 +13,7 @@
         "packages/config/src/enterprise-real-data.test.ts",
         "packages/core/src/index.ts",
         "packages/core/src/contractor-mandate.ts",
-        "packages/core/src/contractor-mandate.test.ts",
-        "config/lanes/ent-14-gate.json"
+        "packages/core/src/contractor-mandate.test.ts"
       ]
     }
   }
