@@ -112,6 +112,11 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  // A fresh post-lock note is refused; exact earlier command can still replay.
  const late = await page.request.post(`/api/jobs/${jobId}/diary`, { data: { ...diary, commandId: randomUUID() } });
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);
+ // Keep the unapproved checkpoint before continuing main's full paid journey.
+ await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
+ await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ const unapproved = page.getByRole("region", { name: "Saved shadow journey report" });
+ for (const text of ["£33,600.00 net", "Customer approval: Awaiting customer", "fitted garden drainage", "fitted loft hatch", "No invoice issued", "recovery fee £0"]) await expect(unapproved).toContainText(text);
  // Leg 6b: send the priced catches, then the customer signs in and approves
  // each exact revision in an isolated portal context. No builder attestation.
  const customerApprovals = await approveJ3Catches(page, browser, jobId, catches);

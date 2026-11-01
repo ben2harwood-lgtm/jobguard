@@ -176,3 +176,42 @@ issued sandbox restriction; GitHub CI must run them. RED exact-head independent
 review and green current-main CI remain merge gates. Git's pending merge index
 was not written: the router must stage the resolved working files and renamed
 migration/note before committing.
+
+## 1 November 2026 catch-up for PR #414 (0514 reservation)
+
+READY for router commit and push; RED exact-head review and green CI remain
+merge gates. Renamed the migration and this note from 0510 to 0514, updated
+current filename references and the lane, and explicitly legacy-listed
+0514_lp3_activation_acceptance.sql for #499's proof loader. SQL bytes remain
+SHA-256 8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+LP-3 does not depend on main's proof-only 0510 read-value routines.
+
+Resolved the pending merge as main plus LP-3's reviewed changes: LP-0 has
+70 groups, 1,461 unique privilege entries, 45 authority paths and 552 unique
+routine identities. Main's latest routine records are retained except the four
+reviewed LP-3 legacy-signature withdrawals. All 41 current-main B5 helpers
+remain byte-identical, with every main helper call retained and the separate
+LP-3 helper added with its own closing brace. Tenancy and entitlement lists
+retain main plus LP-3. All main migration and lane files are byte-identical to
+origin/main. docs/contracts/lp-downstream-effects-v1.md is unchanged.
+
+Local verification using installed package-local binaries from packages/db:
+- ./node_modules/.bin/tsc -p tsconfig.json --noEmit: PASS.
+- ./node_modules/.bin/vitest run --maxWorkers=2 src/lp3-operation.test.ts
+  src/lp3-mutations.test.ts test/lp-0-catalog.test.ts: 84 passed, 3 failed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts: 25 passed, 1 failed.
+All four failures are ENOENT for main's missing
+0510_read_value_job_combined_final.proof.json, the issued #502 dependency;
+this repair does not change that migration, its classification or the loader.
+The initial pnpm wrappers could not verify/switch to the pinned pnpm version
+because registry fetches failed; the installed test runner/compiler above ran
+without changing dependencies.
+
+TypeScript parser checks passed for B5, tenancy, entitlement and LP-3 upgrade
+suites. Explicit union/uniqueness, B5 helper/call preservation, final lane paths,
+migration order, SQL byte identity and git diff --check passed. Core purity,
+money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF checks passed.
+PostgreSQL and browser suites were not run in this sandbox; GitHub CI must run
+them after router push. The router must stage the resolved files and both
+renames to clear the read-only pending merge index before committing.
