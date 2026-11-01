@@ -5,13 +5,16 @@
       "branches": [
         "codex/sandbox/fix-prevented-drops-fee"
       ],
-      "note": "RED: prevent stored-receipt cash being relabelled as prevented; migration 0564, synthetic fixtures only.",
+      "note": "RED: refuse prevention and write-off of stored-receipt cash; migration 0564, synthetic fixtures only.",
       "allow": [
         "packages/db/migrations/0564_prevent_allocated_case.sql",
         "packages/db/src/recovery-case-repository.ts",
         "packages/db/test/recovery-case-outcome.test.ts",
         "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
-        "packages/db/test/prevent-allocated-case-upgrade.integration.test.ts"
+        "packages/db/test/prevent-allocated-case-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/recovery-messages.integration.test.ts",
+        "packages/db/test/migration-proofs/0564_prevent_allocated_case.proof.json"
       ]
     }
   }

@@ -101,6 +101,8 @@ export class RecoveryCaseRepository{
    // Connection/commit ambiguity must retain the existing unknown-outcome path.
    if(error instanceof Error && "code" in error && error.code==="23514" && error.message==="RECOVERY_PREVENTION_HAS_STORED_CASH")
     throw new RecoveryTransitionError("identified","prevent");
+   if(error instanceof Error && "code" in error && error.code==="23514" && error.message==="RECOVERY_WRITE_OFF_HAS_STORED_CASH")
+    throw new RecoveryTransitionError("pursuing","write_off");
    throw error;
   }
   return this.committedCase(context,jobId,caseId,reviewer)}

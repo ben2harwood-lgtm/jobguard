@@ -125,6 +125,12 @@ it.each([
  // from being paid. Its zero net balance cannot erase the original receipt.
  const cases=new RecoveryCaseRepository(x.scoped),current=(await cases.listForMember(x.context,x.jobId,x.actor)).find(c=>c.id===x.caseId)!;
  await expect(cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType:"prevent",commandId:randomUUID(),caseId:x.caseId,expectedRevision:current.revision},x.actor)).rejects.toMatchObject({code:"RECOVERY_TRANSITION_FORBIDDEN"});
+ // Nor can the original cash be erased via write-off after a refund or credit.
+ let latest=current;
+ for(const eventType of ["assemble_evidence","start_pursuit"]){
+  latest=await cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType,caseId:x.caseId,commandId:randomUUID(),expectedRevision:latest.revision},x.actor);
+ }
+ await expect(cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType:"write_off",caseId:x.caseId,commandId:randomUUID(),expectedRevision:latest.revision},x.actor)).rejects.toMatchObject({code:"RECOVERY_TRANSITION_FORBIDDEN"});
 });
 it("forged money and artifacts are refused at SQL, and private tables have no runtime grant",async()=>{
  const x=await realReceiptFixture(f);
@@ -250,4 +256,40 @@ it("an unallocated catch can still be prevented, but its reviewed cash can no lo
  const prevented=await new RecoveryCaseRepository(x.scoped).command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType:"prevent",caseId:x.caseId,commandId:randomUUID(),expectedRevision:p.expectedCaseRevision},x.actor);
  expect(prevented.state).toBe("prevented");
  await expect(execute(x,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash})).rejects.toThrow();
+});
+
+it("stored cash cannot be written off through the pursuit path or lose its principal",async()=>{
+ const x=await realReceiptFixture(f,"F7"),{result,approval}=await save(x),cases=new RecoveryCaseRepository(x.scoped);
+ const current=async()=> (await cases.listForMember(x.context,x.jobId,x.actor)).find(c=>c.id===x.caseId)!;
+ for(const eventType of ["assemble_evidence","start_pursuit"]){
+  const before=await current();
+  await cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType,caseId:x.caseId,commandId:randomUUID(),expectedRevision:before.revision},x.actor);
+ }
+ const before=await current();
+ expect(before).toMatchObject({state:"pursuing",landedNetPence:0,writtenOffPence:0});
+ const history=async()=> (await f.admin.query("SELECT * FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2 ORDER BY sequence",[x.context.tenantId,x.caseId])).rows;
+ const events=await history(),audit=(await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1",[x.context.tenantId])).rows;
+ const writeOff={version:"recovery-case-command.v1",action:"transition",eventType:"write_off",caseId:x.caseId,commandId:randomUUID(),expectedRevision:before.revision};
+ for(let attempt=0;attempt<2;attempt++)await expect(cases.command(x.context,x.jobId,writeOff,x.actor)).rejects.toMatchObject({code:"RECOVERY_TRANSITION_FORBIDDEN"});
+ expect(await current()).toEqual(before);
+ expect(await history()).toEqual(events);
+ expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1",[x.context.tenantId])).rows).toEqual(audit);
+ expect(await execute(x,approval)).toEqual({...result,replayed:true});
+ expect(result.facts.net).toEqual({numerator:"80000",denominator:"1"});
+});
+it("write-off and stored-cash approval serialize: exactly one can win",async()=>{
+ const x=await realReceiptFixture(f,"F7"),cases=new RecoveryCaseRepository(x.scoped);
+ for(const eventType of ["assemble_evidence","start_pursuit"]){
+  const current=(await cases.listForMember(x.context,x.jobId,x.actor)).find(c=>c.id===x.caseId)!;
+  await cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType,caseId:x.caseId,commandId:randomUUID(),expectedRevision:current.revision},x.actor);
+ }
+ const p=await command(x),review=await execute(x,p);
+ const outcomes=await Promise.allSettled([
+  execute(x,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash}),
+  cases.command(x.context,x.jobId,{version:"recovery-case-command.v1",action:"transition",eventType:"write_off",caseId:x.caseId,commandId:randomUUID(),expectedRevision:p.expectedCaseRevision},x.actor),
+ ]);
+ expect(outcomes.filter(o=>o.status==="fulfilled")).toHaveLength(1);
+ const current=(await cases.listForMember(x.context,x.jobId,x.actor)).find(c=>c.id===x.caseId)!;
+ const cash=(await f.admin.query("SELECT count(*)::int n FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND case_id=$2",[x.context.tenantId,x.caseId])).rows[0].n;
+ expect(current.state==="closed_no_recovery"?cash===0&&current.writtenOffPence===80000:cash===1&&current.writtenOffPence===0).toBe(true);
 });
