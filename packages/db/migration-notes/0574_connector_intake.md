@@ -29,3 +29,10 @@ concurrent duplicate identity, key/token rotation, revocation/expiry, changed pa
 reordering, reversal facts, tenant spoofing, malformed/oversized input, forbidden
 command types and statements/shadow access. Database/browser tests cannot run in this
 sandbox and are not claimed executed here. No browser workflow changes.
+
+Catch-up proof isolation: `0574_connector_intake.proof.json` holds this piece's exact
+LP-0 additions. Its explicit empty `upgrade` and `tenancy` sections preserve the main
+snapshots: serious-b5 observes app/identity/control_plane/audit_control, and tenancy
+observes app tables; this migration creates only connector objects. The connector
+integration suite separately checks its two FORCE-RLS tables, privileges and tenant
+authentication. No expected facts are inferred from a database.
