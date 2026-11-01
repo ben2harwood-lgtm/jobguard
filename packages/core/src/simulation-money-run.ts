@@ -19,6 +19,9 @@ export const simulationMoneySnapshotV1=z.object({
  receipt_allocation_fact_source:rows(row({...identity,allocation_revision_id:id,payment_id:id,invoice_id:id})),
  receipt_allocation_fact_line:rows(row({...identity,source_id:id,net_numerator:z.string(),net_denominator:z.string(),gross_numerator:z.string(),gross_denominator:z.string()})),
  stored_receipt_case_allocation:rows(row({...identity,fact_line_id:id,net_numerator:z.string(),net_denominator:z.string()})),
+ recovery_case_allocation:rows(row({...identity,payment_id:id,invoice_id:id,gross_pence:amount,eligible_net_pence:amount})).optional(),
+ recovery_case_allocation_reversal:rows(row({...identity,allocation_id:id,gross_pence:amount,eligible_net_pence:amount,payment_reversal_id:id.nullable(),credit_note_id:id.nullable()})).optional(),
+ receipt_line_allocation:rows(row({...identity,allocation_id:id,reversal_id:id.nullable(),gross_numerator:z.string(),gross_denominator:z.string(),net_numerator:z.string(),net_denominator:z.string()})).optional(),
  success_fee_derivation:rows(row({...identity,revision:z.number().int(),fee_pence:amount,delta_pence:amount})),
  success_fee_journal:rows(row({...identity,derivation_id:id,amount_pence:amount})),
  success_fee_journal_line:rows(row({journal_id:id,side:z.enum(["debit","credit"]),amount_pence:amount})),
@@ -91,12 +94,31 @@ export function reconcileSimulationMoney(raw:unknown){
   if(!l)add("success_fee","ORPHAN_CASE_ALLOCATION",[a.id,a.fact_line_id]);
   else if(BigInt(l.net_numerator)*BigInt(a.net_denominator)!==BigInt(a.net_numerator)*BigInt(l.net_denominator))add("success_fee","CASE_ALLOCATION_MISMATCH",[a.id,l.id]);
  }
+ const withheld=s.recovery_case_allocation??[],withheldReversals=s.recovery_case_allocation_reversal??[],withheldLines=s.receipt_line_allocation??[];
+ for(const a of withheld){
+  const payment=s.customer_payment.find(p=>p.id===a.payment_id),reversals=withheldReversals.filter(r=>r.allocation_id===a.id);
+  if(!payment||payment.invoice_id!==a.invoice_id)add("customer","ORPHAN_CASE_ALLOCATION",[a.id,a.payment_id]);
+  if(sum(reversals,"gross_pence")>n(a.gross_pence)||sum(reversals,"eligible_net_pence")>n(a.eligible_net_pence))add("success_fee","ALLOCATION_EXCEEDS_RECEIPT",[a.id]);
+  if(s.customer_payment_reversal.some(r=>r.payment_id===a.payment_id)&&sum(reversals,"gross_pence")!==n(a.gross_pence))add("customer","LATE_RECEIPT_REVERSAL",[a.id,a.payment_id]);
+  const originals=withheldLines.filter(l=>l.allocation_id===a.id&&l.reversal_id===null);
+  const gross=sumExactPence(originals.map(l=>parseExactPence({numerator:l.gross_numerator,denominator:l.gross_denominator})));
+  const net=sumExactPence(originals.map(l=>parseExactPence({numerator:l.net_numerator,denominator:l.net_denominator})));
+  if(gross.numerator!==n(a.gross_pence)*gross.denominator||net.numerator!==n(a.eligible_net_pence)*net.denominator)add("success_fee","CASE_ALLOCATION_MISMATCH",[a.id]);
+ }
+ for(const r of withheldReversals){
+  if(!has(withheld,r.allocation_id)||!(r.payment_reversal_id?has(s.customer_payment_reversal,r.payment_reversal_id):has(s.customer_credit_note,r.credit_note_id)))add("customer","ORPHAN_REVERSAL",[r.id]);
+  const lines=withheldLines.filter(l=>l.reversal_id===r.id);
+  const gross=sumExactPence(lines.map(l=>parseExactPence({numerator:l.gross_numerator,denominator:l.gross_denominator})));
+  const net=sumExactPence(lines.map(l=>parseExactPence({numerator:l.net_numerator,denominator:l.net_denominator})));
+  if(gross.numerator!==-n(r.gross_pence)*gross.denominator||net.numerator!==-n(r.eligible_net_pence)*net.denominator)add("success_fee","CASE_ALLOCATION_MISMATCH",[r.id]);
+ }
+ for(const l of withheldLines)if(!has(withheld,l.allocation_id)||(l.reversal_id!==null&&!has(withheldReversals,l.reversal_id)))add("success_fee","ORPHAN_ALLOCATION_LINE",[l.id]);
  const posted=sum(s.success_fee_journal,"amount_pence");
  if(s.liveFee===null||"unavailable" in s.liveFee)add("success_fee","CURRENT_ELIGIBILITY_UNAVAILABLE",[s.liveFee&&"unavailable" in s.liveFee&&typeof s.liveFee.dependency==="string"?s.liveFee.dependency:"approved attribution and fee derivation"]);
  else if(posted!==n(s.liveFee.feePence))add("success_fee","FEE_COMPENSATION_REQUIRED",s.success_fee_journal.map(j=>j.id));
  if(s.customer_invoice.length===0)add("customer","CUSTOMER_INVOICE_MISSING",[s.jobId]);
  if(s.receipt_allocation_fact_line.length===0)add("customer","RECEIPT_LINE_ALLOCATION_MISSING",[s.jobId]);
- if(s.stored_receipt_case_allocation.length===0)add("success_fee","CASE_ALLOCATION_MISSING",[s.jobId]);
+ if(s.stored_receipt_case_allocation.length===0&&withheld.length===0)add("success_fee","CASE_ALLOCATION_MISSING",[s.jobId]);
  for(const d of s.success_fee_derivation)if(sum(s.success_fee_journal.filter(j=>j.derivation_id===d.id),"amount_pence")!==n(d.delta_pence))add("success_fee","DERIVATION_JOURNAL_MISMATCH",[d.id]);
  for(const j of s.success_fee_journal){const lines=s.success_fee_journal_line.filter(l=>l.journal_id===j.id);
   if(!has(s.success_fee_derivation,j.derivation_id))add("success_fee","ORPHAN_JOURNAL",[j.id]);

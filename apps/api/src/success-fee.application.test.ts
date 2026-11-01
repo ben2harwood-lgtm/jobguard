@@ -97,6 +97,14 @@ it.each(["settle","fail"])("a session cannot submit fake-rail %s even with an au
  expect(successFeeFailure(new SuccessFeeError("SUCCESS_FEE_FORBIDDEN"))?.status).toBe(403);
 });
 
+it("the demo settle step authenticates before body access and refuses outside synthetic_demo",async()=>{
+ const body=vi.fn().mockResolvedValue({version:"simulation-fee-demo-settle-command.v1",commandId:randomUUID(),attemptId:randomUUID()});
+ job.mockRejectedValueOnce(new PracticeAccessError("UNAUTHENTICATED"));await expect(app().demoSettle(id,body)).rejects.toThrow("UNAUTHENTICATED");expect(body).not.toHaveBeenCalled();
+ await expect(app().demoSettle(id,body,{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");expect(body).not.toHaveBeenCalled();
+ vi.stubEnv("JOBGUARD_ENV","production");
+ await expect(app().demoSettle(id,body)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");expect(body).not.toHaveBeenCalled();
+});
+
 it("money checks authenticate before body access and use the current tenant, job and digest",async()=>{
  const body=vi.fn().mockResolvedValue({version:"simulation-money-command.v1",commandId:randomUUID(),action:"run"});
  job.mockRejectedValueOnce(new PracticeAccessError("UNAUTHENTICATED"));await expect(app().reconcileMoney(id,body)).rejects.toThrow("UNAUTHENTICATED");expect(body).not.toHaveBeenCalled();
