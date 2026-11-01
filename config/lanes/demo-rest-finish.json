@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-rest-finish": {
+      "branches": [
+        "codex/sandbox/demo-rest-finish"
+      ],
+      "note": "Remaining small-builder demo pieces on top of demo-finish-2: core-1000, trial, meter, chooser report and scenarios. Own lane file is implicitly owned.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/quotes/activation/route.ts",
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/demo-s/chooser.test.tsx",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/core-1000/journey-model.ts",
+        "apps/web/app/demo-s/core-1000/journey.test.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/core-1000/page.tsx",
+        "apps/web/app/demo-s/core-1000/result.tsx",
+        "apps/web/app/demo-s/journey-launch.ts",
+        "apps/web/app/jobs/[id]/value/page.tsx",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
+        "apps/web/e2e/helpers/chooser-sign-in.ts"
+      ]
+    }
+  }
+}

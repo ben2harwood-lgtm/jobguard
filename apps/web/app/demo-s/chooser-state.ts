@@ -9,7 +9,7 @@ export function demoLink(tenantId: string, runId: string, snapshotId?: string) {
   return `/demo-s?${new URLSearchParams({ tenantId, runId, ...(snapshotId ? { snapshotId } : {}) })}`;
 }
 export const journeyChoices = [
-  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "The separate core-1000 guide is available. Selection-linked launch and end-to-end completion are not ready yet." },
+  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "Launch a fresh fictional job from this selection, finish it through the real job screens, then read its saved report." },
   { scenario: "recovery-18800", journey: "DEMO-J2", title: "Recovery £18,800 job", reason: "The guided recovery journey, collection, refund and money reconciliation bindings are not ready yet." },
   { scenario: "shadow-30000", journey: "DEMO-J3", title: "Final Check £30,000 job", reason: "The guide, final-account lock and practice customer approval are available. Full end-to-end completion is not ready yet." },
   { scenario: "meter", journey: "DEMO-J4", title: "Jobs-on-the-go meter", reason: "Reference producer previews are available after saving. Persisted billing and trial journeys are not ready yet." },
@@ -25,4 +25,6 @@ export const meterProfiles = [
 ] as const;
 
 // Enable only journeys whose real guide and result reader exist in this checkout.
-export function journeyAvailable(scenario: string) { return scenario === "shadow-30000"; }
+const availability: Record<string, string> = { "core-1000": "Available end to end", "shadow-30000": "Available to the lock" };
+export function journeyAvailable(scenario: string) { return scenario in availability; }
+export function journeyAvailability(scenario: string) { return availability[scenario] ?? "Not ready yet"; }

@@ -9,12 +9,12 @@ vi.stubGlobal("React", React);
 const id = "d1500000-0000-4000-8000-000000000001";
 const facts = { version: "small-builder-demo-run.v1", environment: "synthetic_demo", runId: id, scenario: "shadow-30000", revision: 1, status: "blocked", reason: "Not ready yet: Final Check journey execution is unavailable.", createdAt: "2026-10-28T00:00:00Z", archivedAt: null, predecessorId: null, successorId: null };
 describe("DEMO-S chooser and honest lifecycle report", () => {
-  it("enables only the guide and report reader present on main", () => {
+  it("enables only journeys with a real guide and saved report reader", () => {
     expect(journeyChoices.map(item => item.journey)).toEqual(["DEMO-J1", "DEMO-J2", "DEMO-J3", "DEMO-J4", "DEMO-J5"]);
     expect(new Set(journeyChoices.map(item => item.scenario)).size).toBe(5);
     expect(meterProfiles).toHaveLength(13); expect(meterProfiles[9]).toContain("13–17");
-    expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["shadow-30000"]);
-    for (const item of journeyChoices) expect(item.reason).toContain("not ready yet");
+    expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["core-1000", "shadow-30000"]);
+    for (const item of journeyChoices.filter(choice => !journeyAvailable(choice.scenario) || choice.scenario === "shadow-30000")) expect(item.reason).toContain("not ready yet");
   });
   it("links only persisted lifecycle identities and records missing A1 and observations", () => {
     const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts });

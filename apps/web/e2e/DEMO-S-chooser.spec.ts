@@ -45,7 +45,7 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
   test.setTimeout(90_000);
   await signIn(page); await page.goto("/demo-s");
   await expect(page.getByRole("heading", { name: "Choose a journey" })).toBeVisible();
-  for (const scenario of ["core-1000", "recovery-18800", "meter", "trial"]) {
+  for (const scenario of ["recovery-18800", "meter", "trial"]) {
     await page.getByRole("button", { name: `Save ${scenario} selection`, exact: true }).click();
     const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
     await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
