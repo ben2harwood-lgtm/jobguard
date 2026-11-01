@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-m4-12-collect-review": {
+      "branches": [
+        "codex/sandbox/fix-m4-12-collect-review"
+      ],
+      "note": "RED M4-12-S money hold: require exact approved SV-6 review before payment_fee.collect authorization. PostgreSQL suites and independent RED review remain CI/router gates. Forward-fix only; no live providers or money.",
+      "allow": [
+        "apps/api/src/payment-fee.application.ts",
+        "apps/api/src/payment-fee.application.test.ts",
+        "packages/db/migrations/0561_payment_fee_collect_review.sql",
+        "packages/db/test/payment-fee-statements.integration.test.ts"
+      ]
+    }
+  }
+}
