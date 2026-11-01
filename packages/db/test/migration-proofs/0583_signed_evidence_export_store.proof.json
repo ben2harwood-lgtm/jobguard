@@ -14,7 +14,7 @@
       "before": null,
       "after": {
         "key": "acl|rel|table|app.signed_evidence_export|jobguard_runtime|INSERT|-",
-        "group": "x-audit-event-insert"
+        "group": "x-evidence-writes"
       }
     },
     {
@@ -39,6 +39,25 @@
       "after": {
         "key": "owner|rel:table|app.signed_evidence_export|jobguard_migration",
         "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_signed_evidence_export()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
       }
     }
   ],
