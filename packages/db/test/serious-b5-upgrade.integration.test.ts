@@ -1309,6 +1309,16 @@ async function demoSettleAddition(before: Awaited<ReturnType<typeof snapshot>>) 
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
 }
+// 0517: one read-only meter routine, which only the runtime role can run.
+async function trackReviewAddition(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const routines = after.routines.filter(r => r.nspname === "app" && r.proname === "mon1_track_review_decision");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({args:"t uuid, digest text",prosecdef:true,proconfig:["search_path=pg_catalog"]});
+ expect(before.routines.some(r => r.nspname === "app" && r.proname === "mon1_track_review_decision")).toBe(false);
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+}
 // m4-withheld-source / 0489: one private validator, with no runtime execute grant.
 async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1388,6 +1398,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await customerSigninAdditions(expected));
  Object.assign(expected, await withheldSourceAddition(expected));
  Object.assign(expected, await demoSettleAddition(expected));
+ Object.assign(expected, await trackReviewAddition(expected));
  Object.assign(expected, await timelineStoreAdditions(expected));
  if (proofs.length) {
   expect(await snapshot()).toEqual(expected);
