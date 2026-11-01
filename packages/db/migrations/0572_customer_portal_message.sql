@@ -127,6 +127,7 @@ BEGIN
  -- Builder storage/receipts retain the sponsor; redact only the customer result,
  -- including authorized replays of the original stored receipt.
  -- No signal access, counts, detector scheduling or inferred approval/price in this path.
+ SET CONSTRAINTS ALL IMMEDIATE;
  RETURN result #- '{record,actualTesterMembershipId}';
 END $$;
 ALTER FUNCTION identity.customer_portal_message(uuid,uuid,uuid,text,jsonb) OWNER TO jobguard_migration;
