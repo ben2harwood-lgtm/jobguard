@@ -78,8 +78,12 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.receipt_allocation_fact_review":[],
  "app.receipt_allocation_fact_revision":[],
  "app.receipt_allocation_fact_source":[],
+ "app.platform_fee_attempt":[],
+ "app.platform_fee_attempt_event":[],
+ "app.platform_fee_collection_command":[],
  "app.platform_fee_statement":[],
  "app.platform_fee_statement_command":[],
+
  "app.success_fee_command":[],
  "app.success_fee_derivation":[],
  "app.success_fee_journal":[],
