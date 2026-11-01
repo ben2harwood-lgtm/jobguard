@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { ValueV3Reader } from "@jobguard/db";
+import { ShadowDemoApprovalReader, ValueV3Reader } from "@jobguard/db";
 import { recoveryAttributionRevisionV1 } from "@jobguard/core";
 import { PracticeAccess } from "./practice-access.js";
 import { FinalAccountLockApplication } from "./final-account-lock.application.js";
@@ -44,9 +44,10 @@ export class ShadowDemoApplication {
   const finalCheck = await new FinalCheckApplication(this.pool, this.sessionId).get(jobId);
   if (finalCheck.lockId !== account.lock.id) throw new Error("SHADOW_DEMO_SOURCE_REJECTED");
   if (finalCheck.state !== "completed") return { ...visible, finalCheck };
-  // Portal approval rows are bound in the catch-up after #451 lands. Builder
-  // attestation (including an approved variation) cannot establish customer consent.
-  if (finalCheck.items.length > 0) visible.customerApproval.state = "awaiting_customer";
+  const customer = await new ShadowDemoApprovalReader(this.pool, this.sessionId).read(jobId);
+  visible.customerApproval.approvals = customer.approvals;
+  if (customer.complete) visible.customerApproval.state = "approved";
+  else if (finalCheck.items.length > 0 || customer.approvals.length > 0) visible.customerApproval.state = "awaiting_customer";
   const history = await new RecoveryAttributionApplication(this.pool, this.sessionId).get(jobId);
   const latest = new Map<string, z.infer<typeof recoveryAttributionRevisionV1>>();
   for (const raw of history.revisions) {
