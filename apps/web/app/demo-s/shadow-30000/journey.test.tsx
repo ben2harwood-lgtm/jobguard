@@ -21,14 +21,14 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
  const html = renderToStaticMarkup(<ShadowJourney />);
- for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "not ready yet (MON-5)"]) expect(html).toContain(text);
+ for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "customer portal"]) expect(html).toContain(text);
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {
  const raw = report();
  const parsed = parseShadowReport({ ...raw, account: { ...raw.account, captures: ["draft", "priced", "approved", "rejected", "withdrawn"].map((state, i) => ({ id: randomUUID(), state, description: `Fictional capture ${i}`, origin: i === 0 ? "final_review" : "builder_logged", netPence: i === 0 ? 40000 : 320000 })) } }, jobId);
  const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
- expect(html.match(/recovery fee £0/gu)).toHaveLength(5); expect(html).toContain("No invoice issued"); expect(html).toContain("MON-5");
+ expect(html.match(/recovery fee £0/gu)).toHaveLength(5); expect(html).toContain("No invoice issued"); expect(html).toContain("complete the Final Check first");
  expect(html).toContain("CH-8"); expect(html).toContain("CH-9"); expect(html).not.toContain("SV-6 historical assessments");
 });
 it("rejects another job, pre-lock reveal/count/history/pack leaks and client completion flags", () => {
@@ -71,4 +71,9 @@ it("rejects stale v1 reports, unbound value shortcuts and unknown approval field
   { value: { status: "incomplete", reason: "producer_bindings_held" } },
   { value: { ...raw.value, hiddenCount: 0 } },
  ]) expect(() => parseShadowReport({ ...raw, ...patch }, jobId)).toThrow();
+});
+
+it("shows step 6 approved only for persisted customer portal approval", () => {
+ const parsed = parseShadowReport({ ...report(), customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00Z", method: "customer_portal" }] } }, jobId);
+ expect(renderToStaticMarkup(<ShadowSavedReport report={parsed} />)).toContain("Step 6: approved by the customer");
 });
