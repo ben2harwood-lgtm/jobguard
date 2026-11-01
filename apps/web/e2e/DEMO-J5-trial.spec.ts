@@ -24,7 +24,12 @@ test("guide calls existing trial commands, retains card setup on reload and repo
  // Independently supplied source fixture: this does not claim the refused activation started a trial.
  started=true;await page.getByRole("button",{name:"Resume saved run"}).click();
  await page.getByRole("button",{name:"Try second job without a card"}).click();await expect(page.getByRole("main").getByRole("alert")).toContainText("Add a card");
- await page.getByRole("button",{name:"Add a card",exact:true}).click();await page.reload();
+ await page.getByRole("button",{name:"Add a card",exact:true}).click();
+ // Reload only after the confirmed response has saved the original card attempt.
+ // A click alone does not wait for the asynchronous command to finish.
+ await expect(page.getByRole("button",{name:"Complete fictional card setup"})).toBeEnabled();
+ await expect(page.getByRole("button",{name:"Add a card",exact:true})).toBeDisabled();
+ await page.reload();
  await page.getByRole("button",{name:"Complete fictional card setup"}).click();await expect(page.getByText("Simulated card on file.")).toBeVisible();
  await expect(page.getByRole("button",{name:"Skip for now",exact:true})).toHaveCount(0);
  await page.getByRole("button",{name:"Save source report"}).click();await expect(page).toHaveURL(/snapshotId=/);
