@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { S3Client } from "@aws-sdk/client-s3";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocalMinioWormStorage, SyntheticRetentionWorkflow, type SyntheticWormCommand, type WormVersion } from "./worm.js";
 const tenantId = "10000000-0000-4000-8000-000000000001";
 const actorId = "20000000-0000-4000-8000-000000000001";
@@ -74,10 +75,29 @@ describe("dark D07 retention workflow", () => {
   });
 });
 describe("local-only storage gate", () => {
+  afterEach(() => vi.restoreAllMocks());
   const config = { S3_ENDPOINT: "http://127.0.0.1:9000", S3_BUCKET: "synthetic-worm", S3_ACCESS_KEY_ID: "fake", S3_SECRET_ACCESS_KEY: "fake" };
   it("defaults off and refuses remote endpoints and ordinary buckets", () => {
     expect(() => new LocalMinioWormStorage(config)).toThrow("DARK_ONLY");
     expect(() => new LocalMinioWormStorage({ ...config, S3_ENDPOINT: "https://s3.eu-west-2.amazonaws.com" }, true)).toThrow("DARK_ONLY");
     expect(() => new LocalMinioWormStorage({ ...config, S3_BUCKET: "evidence-private" }, true)).toThrow("DARK_ONLY");
+  });
+  const version = { tenantId, key: command().evidence.key, versionId: "version-one" };
+  it("reads an existing version without retention or hold configuration", async () => {
+    vi.spyOn(S3Client.prototype, "send").mockResolvedValue({} as never);
+    await expect(new LocalMinioWormStorage(config, true).read(version)).resolves.toEqual({ retainUntil: null, held: false });
+  });
+  it.each(["NoSuchObjectLockConfiguration", "ObjectLockConfigurationNotFoundError"])("handles explicit missing-lock error %s", async name => {
+    vi.spyOn(S3Client.prototype, "send").mockRejectedValue(Object.assign(new Error("No lock configured"), { name }));
+    await expect(new LocalMinioWormStorage(config, true).read(version)).resolves.toEqual({ retainUntil: null, held: false });
+  });
+  it.each(["AccessDenied", "NoSuchKey", "NoSuchVersion", "ServiceUnavailable"])("propagates %s instead of declaring a version unlocked", async name => {
+    const error = Object.assign(new Error(name), { name });
+    vi.spyOn(S3Client.prototype, "send").mockRejectedValue(error);
+    await expect(new LocalMinioWormStorage(config, true).read(version)).rejects.toBe(error);
+  });
+  it("rejects a malformed hold status", async () => {
+    vi.spyOn(S3Client.prototype, "send").mockResolvedValueOnce({} as never).mockResolvedValueOnce({ LegalHold: { Status: "invalid" } } as never);
+    await expect(new LocalMinioWormStorage(config, true).read(version)).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 });

@@ -69,13 +69,21 @@ export class LocalMinioWormStorage implements WormStorage {
   }
   async read(version: WormVersion) {
     const target = this.#target(version);
-    const retention = await this.#client.send(new GetObjectRetentionCommand(target));
-    const hold = await this.#client.send(new GetObjectLegalHoldCommand(target));
-    if (hold.LegalHold?.Status !== "ON" && hold.LegalHold?.Status !== "OFF") {
+    // An existing version can have no retention or legal-hold configuration yet.
+    // Only the provider's explicit missing-lock errors mean unlocked; access and
+    // missing-object failures must still propagate.
+    const missingLock = (error: unknown) => {
+      if (error instanceof Error && ["NoSuchObjectLockConfiguration", "ObjectLockConfigurationNotFoundError"].includes(error.name)) return {};
+      throw error;
+    };
+    const retention = await this.#client.send(new GetObjectRetentionCommand(target)).catch(missingLock);
+    const hold = await this.#client.send(new GetObjectLegalHoldCommand(target)).catch(missingLock);
+    const status = "LegalHold" in hold ? hold.LegalHold?.Status : undefined;
+    if (status !== undefined && status !== "ON" && status !== "OFF") {
       throw new WormBoundaryError("INVALID_INPUT");
     }
-    return { retainUntil: retention.Retention?.RetainUntilDate?.toISOString() ?? null,
-      held: hold.LegalHold.Status === "ON" };
+    return { retainUntil: "Retention" in retention ? retention.Retention?.RetainUntilDate?.toISOString() ?? null : null,
+      held: status === "ON" };
   }
   async retain(version: WormVersion, until: string) {
     if (!z.iso.datetime().safeParse(until).success) throw new WormBoundaryError("INVALID_INPUT");

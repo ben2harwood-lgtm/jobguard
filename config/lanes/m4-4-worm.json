@@ -10,6 +10,7 @@
         ".github/workflows/worm-local-minio.yml",
         "docs/operations/evidence-storage.md",
         "packages/storage/src/index.ts",
+        "packages/storage/src/index.test.ts",
         "packages/storage/src/timestamp.test.ts",
         "packages/storage/src/timestamp.ts",
         "packages/storage/src/worm-minio.integration.test.ts",
