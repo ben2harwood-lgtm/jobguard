@@ -23,6 +23,7 @@
         "packages/db/src/index.ts",
         "packages/db/src/privacy-operations-repository.ts",
         "packages/db/test/privacy-operations.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
     }
