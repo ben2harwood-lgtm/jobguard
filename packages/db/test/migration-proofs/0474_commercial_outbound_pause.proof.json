@@ -132,6 +132,49 @@
       "section": "rls",
       "before": null,
       "after": "outbound_control.state|rls=f|forced=f"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:outbound_control.claims_enabled()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "fde1b336b746a4b837925c5297fcc51d81e795a272b19e2264616e7f4fa0df7c",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:outbound_control.command(uuid,text,integer,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_outbound_operator"
+        ],
+        "definitionSha256": "af5b7333e6bd4e05dd6a9e06398239fd4062bfa6c94b02e92037c7282e451ca6",
+        "staticWrites": [
+          "outbound_control.event",
+          "outbound_control.state"
+        ],
+        "staticCalls": []
+      }
     }
   ],
   "upgrade": [],

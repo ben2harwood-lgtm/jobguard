@@ -1,4 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -359,9 +360,11 @@ describe("commercial outbound pause", () => {
     const action = await appendAction();
     const before = (await admin.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows;
     const uploadId = randomUUID();
-    await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
+    const jobId = randomUUID();
+    await importWatchdogFixtureJob(admin, TENANT, jobId, "Fictional outbound pause evidence job");
+    await withTenant(admin, context, db => db.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
       VALUES($1,$2,$3,$4,$5,'text/plain',100,'standard_evidence','2099-01-01')`,
-      [uploadId,TENANT,randomUUID(),`synthetic-pause/${uploadId}`,hash("Synthetic evidence")]);
+      [uploadId,TENANT,jobId,`synthetic-pause/${uploadId}`,hash("Synthetic evidence")]));
     const evidence = (await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows;
     const pause = randomUUID(), request = randomUUID(), approval = randomUUID();
     let revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
