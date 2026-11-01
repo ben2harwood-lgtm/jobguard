@@ -26,34 +26,20 @@
       }
     },
     {
-      "section": "rls",
+      "section": "entries",
       "before": null,
-      "after": "app.purchase_order_manual_attestation|rls=t|forced=t"
+      "after": {
+        "key": "owner|routine|function:app.guard_dark_order_revision()|jobguard_migration",
+        "group": "a-owner-routines"
+      }
     },
     {
-      "section": "triggers",
+      "section": "entries",
       "before": null,
-      "after": "app.purchase_order_revision|guard_dark_order_revision|app.guard_dark_order_revision|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_placement|guard_manual_order_effect|app.guard_manual_order_effect|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|guard_manual_order_effect|app.guard_manual_order_effect|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|a_watchdog_live_before_insert|app.guard_watchdog_input|BEFORE INSERT|O"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.purchase_order_manual_attestation|b_watchdog_command_id_before_insert|app.reserve_watchdog_command_id|BEFORE INSERT|O"
+      "after": {
+        "key": "owner|routine|function:app.guard_manual_order_effect()|jobguard_migration",
+        "group": "a-owner-routines"
+      }
     }
   ],
   "upgrade": [
@@ -63,36 +49,6 @@
       "after": {
         "table": "app.purchase_order_manual_attestation",
         "data": []
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "guard_dark_order_revision",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": null,
-      "after": {
-        "nspname": "app",
-        "proname": "guard_manual_order_effect",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
       }
     },
     {
@@ -168,6 +124,36 @@
       }
     },
     {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_dark_order_revision",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_manual_order_effect",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
       "section": "policies",
       "before": null,
       "after": {
@@ -175,10 +161,7 @@
         "tablename": "purchase_order_manual_attestation",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_migration",
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"

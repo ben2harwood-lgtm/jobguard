@@ -5,6 +5,7 @@ import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repo
 import { FakeMerchantOrderPort, merchantOrderContent, orderContentHash, type MerchantOrder } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox, reconcileOutbox, type OutboundAction } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -75,7 +76,7 @@ function fixture() {
     throw new Error(`Unexpected SQL: ${sql}`);
   });
   const pool = { connect: async () => ({ query, release() {} }) } as unknown as Pool;
-  const repo = new PurchaseOrderActionRepository(pool), context = testTenantContext(tenant);
+  const repo = new PurchaseOrderActionRepository(pool), context = verifiedTenantContextFromMembership({ tenantId: tenant, membershipId: member, identityUserId: randomUUID() } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
   const scope = { version: "merchant-order-scope.v1", jobId: job, revisionId: revision };
   const port = new FakeMerchantOrderPort();
   const deliver = vi.spyOn(port, "deliver").mockImplementation(async action => { expect(active).toBe(false); return FakeMerchantOrderPort.prototype.deliver.call(port, action); });
@@ -87,10 +88,10 @@ function fixture() {
       action: { actionType: "purchase_order.send.dark", recipient: view.order.recipient, contentHash: view.contentHash,
         aggregateRevision: 1, amountPence: view.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1", expiresAt: new Date("2099-01-01") } };
   }
-  return { repo, context, scope, command, orderRow, query, pool, port, deliver, executor, state: () => state,
+  return { repo, context, member, scope, command, orderRow, query, pool, port, deliver, executor, state: () => state,
     supersede: () => { current = false; }, lock: () => { locked = true; }, revoke: () => { owner = false; },
     manual: { version: "manual-order-attestation.v1", jobId: job, revisionId: revision, commandId: randomUUID(),
-      actorMembershipId: member, supplierReference: "synthetic-order-1" } };
+      supplierReference: "synthetic-order-1" } };
 }
 
 describe("M2-1 dark exact approved merchant action", () => {
@@ -161,9 +162,42 @@ describe("M2-1 dark exact approved merchant action", () => {
     await expect(f.repo.attestManual(f.context, f.manual)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
     expect(f.state().effects).toHaveLength(0);
   });
+  it("refuses a caller-supplied different owner without any persisted effect", async () => {
+    const f = fixture();
+    await expect(f.repo.attestManual(f.context, { ...f.manual, actorMembershipId: randomUUID() })).rejects.toThrow();
+    expect(f.state().attestations).toHaveLength(0);
+    expect(f.state().audits).toHaveLength(0);
+    expect(f.state().identities).toHaveLength(0);
+  });
+  it("does not replay another authenticated owner's attestation command", async () => {
+    const f = fixture(); await f.repo.attestManual(f.context, f.manual);
+    const other = verifiedTenantContextFromMembership({ tenantId: f.context.tenantId, membershipId: randomUUID(),
+      identityUserId: randomUUID() } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+    await expect(f.repo.attestManual(other, f.manual)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    expect(f.state().attestations).toHaveLength(1);
+    expect(f.state().audits).toHaveLength(1);
+  });
+  it("requires the original membership context, never a queued or copied context", async () => {
+    const f = fixture();
+    for (const context of [verifiedTenantContextForQueuedJob(f.context.tenantId), { ...f.context }]) {
+      await expect(f.repo.attestManual(context, f.manual)).rejects.toThrow("A verified tenant context");
+    }
+    expect(f.state().attestations).toHaveLength(0);
+  });
+  it("refuses a revoked owner, including replay after revocation", async () => {
+    const f = fixture(); f.revoke();
+    await expect(f.repo.attestManual(f.context, f.manual)).rejects.toThrow("ORDER_ACTION_INVALID");
+    expect(f.state().attestations).toHaveLength(0);
+    const g = fixture(); await g.repo.attestManual(g.context, g.manual); g.revoke();
+    await expect(g.repo.attestManual(g.context, g.manual)).rejects.toThrow("ORDER_ACTION_INVALID");
+    expect(g.state().attestations).toHaveLength(1);
+    expect(g.state().audits).toHaveLength(1);
+  });
   it("manual placement is a replayable separate fact, without a Decision, send or fee", async () => {
     const f = fixture(), fact = await f.repo.attestManual(f.context, f.manual);
     expect(fact).toMatchObject({ fact: "owner_attestation", providerConfirmed: false, realExternalActions: 0 });
+    expect(f.state().attestations[0][6]).toBe(f.member);
+    expect(f.state().audits[0][4]).toBe(`membership:${f.member}`);
     expect(await f.repo.attestManual(f.context, f.manual)).toEqual(fact);
     await expect(f.repo.attestManual(f.context, { ...f.manual, supplierReference: "synthetic-other" })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(f.repo.approve(f.context, f.scope, await f.command())).rejects.toThrow("ORDER_ALREADY_COMMITTED");

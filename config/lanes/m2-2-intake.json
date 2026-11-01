@@ -2,14 +2,19 @@
   "version": 2,
   "lanes": {
     "m2-2-intake": {
-      "branches": ["codex/sandbox/m2-2-intake"],
+      "branches": [
+        "codex/sandbox/m2-2-intake"
+      ],
       "allow": [
         "docs/decisions/d04-providers-residency.md",
+        "packages/db/migrations/0465_dark_merchant_order.sql",
         "packages/db/src/index.ts",
         "packages/db/src/merchant-intake-port.ts",
-        "packages/db/test/merchant-intake-port.test.ts"
+        "packages/db/test/merchant-intake-port.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/migration-proofs/0465_dark_merchant_order.proof.json"
       ],
-      "note": "M2-2 DARK in-memory intake contract on M2-1; no live routes, business writes, providers or migration. M5-4 shared supplier-intake hardening left for merge."
+      "note": "M2-2 DARK in-memory intake contract on M2-1; inherited migration 0465 is unchanged. Its exact LP-0, upgrade and tenancy expectations live in its migration proof. No live routes, providers or release. M5-4 shared supplier-intake hardening left for merge."
     }
   }
 }

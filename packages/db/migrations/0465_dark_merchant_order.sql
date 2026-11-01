@@ -5,7 +5,7 @@ ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identi
  'readiness.record','readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede',
  'supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place',
  'supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete',
- 'WorkState.resume','WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link',
+ 'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link','WorkState.resume',
  'JobSource.diary','JobSource.customer_message','purchase_order.attest_manual'));
 -- Existing orders need no backfill. No old migration is changed.
 CREATE UNIQUE INDEX purchase_order_revision_draft_identity
@@ -26,7 +26,7 @@ CREATE TABLE app.purchase_order_manual_attestation (
 ALTER TABLE app.purchase_order_manual_attestation OWNER TO jobguard_migration;
 ALTER TABLE app.purchase_order_manual_attestation ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.purchase_order_manual_attestation FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON app.purchase_order_manual_attestation FOR ALL TO jobguard_runtime,jobguard_migration
+CREATE POLICY tenant_isolation ON app.purchase_order_manual_attestation FOR ALL TO jobguard_runtime
   USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)
   WITH CHECK(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
 GRANT SELECT,INSERT ON app.purchase_order_manual_attestation TO jobguard_runtime;
