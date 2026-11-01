@@ -11,7 +11,6 @@ import { WormBoundaryError } from "@jobguard/storage";
 import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { WormCommandRepository } from "../src/worm-command-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
@@ -52,7 +51,11 @@ beforeAll(async () => {
   for (const [id, uid] of [[actor, user], [second, otherUser], [samePerson, user]]) {
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, uid]);
   }
-  await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
+  // WORM needs a persisted job, not an adoption command for a nonexistent job.
+  // LP-2 explicitly permits owner-connected ordinary draft fixtures.
+  await withTenant(admin, context, db => db.$client.query(
+    "INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Synthetic retention')", [job, tenant]));
+  expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   const key = `synthetic/tenants/${tenant}/manifest`;
   await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
     VALUES($1,$2,$3,$4,$5,'application/json',100,'standard_evidence',now()+interval '1 day')`, [evidence, tenant, job, key, "a".repeat(64)]);

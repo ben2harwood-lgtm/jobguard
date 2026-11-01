@@ -27,46 +27,6 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.assert_journal_balanced()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.assert_journal_balanced()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.assert_journal_balanced()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.assert_journal_balanced()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.assert_journal_balanced()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.guard_authorization_revocation()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
@@ -75,131 +35,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_authorization_revocation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_authorization_revocation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_authorization_revocation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_authorization_revocation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_authorization_revocation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.guard_fixed_baseline()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_fixed_baseline()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_fixed_baseline()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_fixed_baseline()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_fixed_baseline()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_fixed_baseline()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_imported_job()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_imported_job()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_imported_job()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_imported_job()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.guard_imported_job()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
     },
     {
       "section": "entries",
@@ -307,99 +147,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_migration|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_audit_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.reject_capture_mutation()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_capture_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_capture_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_capture_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_capture_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_capture_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
     },
     {
       "section": "entries",
@@ -411,91 +163,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_evidence_object_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_evidence_object_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_evidence_object_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_evidence_object_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_evidence_object_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.reject_immutable_authorization_record()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_authorization_record()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_authorization_record()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_authorization_record()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_authorization_record()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_authorization_record()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
     },
     {
       "section": "entries",
@@ -507,91 +179,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_commercial_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_commercial_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_commercial_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_commercial_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_immutable_commercial_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.reject_ledger_mutation()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_ledger_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_ledger_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_ledger_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_ledger_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_ledger_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
     },
     {
       "section": "entries",
@@ -603,46 +195,6 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_mandatory_finding_suppression()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_mandatory_finding_suppression()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_mandatory_finding_suppression()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_mandatory_finding_suppression()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_mandatory_finding_suppression()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.reject_recovery_mutation()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
@@ -651,91 +203,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_recovery_mutation()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_recovery_mutation()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_recovery_mutation()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_recovery_mutation()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.reject_recovery_mutation()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.require_approved_resolution()|PUBLIC|EXECUTE|-",
         "group": "a-public-trigger-and-pure-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.require_approved_resolution()|jobguard_meter_owner|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.require_approved_resolution()|jobguard_meter|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.require_approved_resolution()|jobguard_runtime|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.require_approved_resolution()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.require_approved_resolution()|jobguard_shadow|EXECUTE|-",
-        "group": "a-public-trigger-and-pure-functions"
-      }
     },
     {
       "section": "entries",
@@ -779,91 +251,11 @@
     },
     {
       "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.review_invalidated_recovery_evidence()|jobguard_meter_owner|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.review_invalidated_recovery_evidence()|jobguard_meter|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.review_invalidated_recovery_evidence()|jobguard_runtime|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.review_invalidated_recovery_evidence()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.review_invalidated_recovery_evidence()|jobguard_shadow|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
       "before": {
         "key": "acl|routine|function:app.signal_outbox()|PUBLIC|EXECUTE|-",
         "group": "x-public-definer-trigger-functions"
       },
       "after": null
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.signal_outbox()|jobguard_meter_owner|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.signal_outbox()|jobguard_meter|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.signal_outbox()|jobguard_runtime|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.signal_outbox()|jobguard_shadow_emergency_access|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|routine|function:app.signal_outbox()|jobguard_shadow|EXECUTE|-",
-        "group": "x-public-definer-trigger-functions"
-      }
     },
     {
       "section": "groups",
@@ -890,12 +282,12 @@
       },
       "after": {
         "id": "a-public-trigger-and-pure-functions",
-        "title": "Explicit app-role EXECUTE on legacy invoker trigger functions and pure helpers",
+        "title": "Owner-only legacy trigger functions and explicit app-role pure helpers",
         "kind": "trigger_function",
         "status": "approved_current",
         "target": {
           "state": "retain",
-          "note": "0488 withdraws PUBLIC EXECUTE on exactly 17 legacy routines; explicit grants preserve the existing app-schema roles while excluding WORM operators"
+          "note": "0488 withdraws PUBLIC EXECUTE on exactly 16 legacy routines to exclude WORM operators; trigger helpers need no caller EXECUTE, arithmetic helpers retain explicit app-role grants, and guard_imported_job remains owner-only"
         },
         "cards": [],
         "responsibilities": {},
@@ -936,15 +328,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "1299a7db5a0e084c85846b2a4c12133def5bc0a93f7b2323c9fe45afa660b378",
         "staticWrites": [],
         "staticCalls": []
@@ -974,15 +361,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "36b4ca9ade5e38cf7e5d86fbf05dcffc0c2e66ac9540b324c4c9eca13b5346d1",
         "staticWrites": [],
         "staticCalls": []
@@ -1012,15 +394,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "4653727ddbeb492183d9d5ac7a0ab0384e14ff00a493728e872c4ac0c361174a",
         "staticWrites": [],
         "staticCalls": []
@@ -1050,15 +427,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "59906f45d702d2d3a05c84886438240503766f0ea4b8dbe9f90058507779256d",
         "staticWrites": [],
         "staticCalls": []
@@ -1088,15 +460,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "5bb2ffa542db327dab8aeef1c32efcff79c84a2a7571f731566eabd845571d43",
         "staticWrites": [],
         "staticCalls": []
@@ -1126,15 +493,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "5dee07f23c7cc442bbd4ed4cd44ff7a3aa31df46cde544b966927bd2734a1ab6",
         "staticWrites": [],
         "staticCalls": []
@@ -1164,15 +526,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "65d5615b0cff0bf6dbe15e12c15dafea1429fc48d9f4ef505de567699bd3b532",
         "staticWrites": [],
         "staticCalls": []
@@ -1202,15 +559,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "68f356bbc3d62c8ed84eba80d9fa470e1e68b9231f16dbac91177ecb55550da1",
         "staticWrites": [],
         "staticCalls": []
@@ -1242,15 +594,10 @@
         "searchPath": "search_path=pg_catalog, infrastructure",
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "7a0c46e6c9d758b5ec19f88dec3b7ac9a9eaaf74922a05a43b3a9a94a55ec1a3",
         "staticWrites": [
           "infrastructure.outbox_signal"
@@ -1360,15 +707,10 @@
         "searchPath": "search_path=pg_catalog, app",
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "bbe9a43e6f31e538689b419f89212f5fbf78c915421d0cf31bed86406f6e13b3",
         "staticWrites": [
           "app.recovery_review"
@@ -1400,15 +742,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "becf225a0f8414917d22a0347e2c4d9a1643c80e08dad77dcda7d8ced4b3ff66",
         "staticWrites": [],
         "staticCalls": []
@@ -1438,15 +775,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "cdbfa4b68b088a9b38fc80968c65a87fce4a17f874c8293071cf47d09286dfe2",
         "staticWrites": [],
         "staticCalls": []
@@ -1476,15 +808,10 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
+        "reachable": false,
+        "runtimeExecute": false,
         "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
+        "otherExecute": [],
         "definitionSha256": "d09ed3e858e981ce846b8e40d1072d6ccf5898e2c75860c4f07c3bcc7d6e94ed",
         "staticWrites": [],
         "staticCalls": []
@@ -1514,64 +841,13 @@
         "searchPath": null,
         "returnsTrigger": true,
         "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
-        "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
-        "definitionSha256": "d9876fadb90a197e4cd0d2750b13a0cd39d5d815e4e99e18833b1248ef989463",
-        "staticWrites": [],
-        "staticCalls": []
-      }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "identity": "function:app.guard_imported_job()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": true,
-        "extension": null,
         "reachable": false,
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [
-          "app.lp_job_insert_permit"
-        ],
-        "staticCalls": [
-          "app.lp_job_insert_shape"
-        ]
-      },
-      "after": {
-        "identity": "function:app.guard_imported_job()",
-        "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
-        "returnsTrigger": true,
-        "extension": null,
-        "reachable": true,
-        "runtimeExecute": true,
-        "publicExecute": false,
-        "otherExecute": [
-          "jobguard_meter",
-          "jobguard_meter_owner",
-          "jobguard_shadow",
-          "jobguard_shadow_emergency_access"
-        ],
-        "definitionSha256": null,
-        "staticWrites": [
-          "app.lp_job_insert_permit"
-        ],
-        "staticCalls": [
-          "app.lp_job_insert_shape"
-        ]
+        "definitionSha256": "d9876fadb90a197e4cd0d2750b13a0cd39d5d815e4e99e18833b1248ef989463",
+        "staticWrites": [],
+        "staticCalls": []
       }
     },
     {
@@ -1623,6 +899,110 @@
         "staticWrites": [],
         "staticCalls": []
       }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.assert_journal_balanced()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.guard_authorization_revocation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.guard_fixed_baseline()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_capture_mutation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_evidence_object_mutation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_immutable_authorization_record()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_immutable_commercial_mutation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_ledger_mutation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_mandatory_finding_suppression()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.reject_recovery_mutation()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.require_approved_resolution()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.review_invalidated_recovery_evidence()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "owner|routine|function:app.signal_outbox()|jobguard_migration",
+        "group": "a-owner-routines"
+      },
+      "after": null
     }
   ],
   "upgrade": [
@@ -1630,95 +1010,70 @@
       "section": "routines",
       "before": {
         "nspname": "app",
-        "proname": "guard_imported_job",
+        "proname": "review_invalidated_recovery_evidence",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": null,
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "review_invalidated_recovery_evidence",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "signal_outbox",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": null,
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, infrastructure"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "signal_outbox",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, infrastructure"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "assert_journal_balanced",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": null,
+        "prosecdef": false,
+        "proconfig": null
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "assert_journal_balanced",
         "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog"
-        ]
-      },
-      "after": {
-        "nspname": "app",
-        "proname": "guard_imported_job",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
-        "prosecdef": false,
-        "proconfig": [
-          "search_path=pg_catalog"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "nspname": "app",
-        "proname": "review_invalidated_recovery_evidence",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": null,
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
-      },
-      "after": {
-        "nspname": "app",
-        "proname": "review_invalidated_recovery_evidence",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, app"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "nspname": "app",
-        "proname": "signal_outbox",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": null,
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, infrastructure"
-        ]
-      },
-      "after": {
-        "nspname": "app",
-        "proname": "signal_outbox",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
-        "prosecdef": true,
-        "proconfig": [
-          "search_path=pg_catalog, infrastructure"
-        ]
-      }
-    },
-    {
-      "section": "routines",
-      "before": {
-        "nspname": "app",
-        "proname": "assert_journal_balanced",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": null,
-        "prosecdef": false,
-        "proconfig": null
-      },
-      "after": {
-        "nspname": "app",
-        "proname": "assert_journal_balanced",
-        "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
-        "prosecdef": false,
         "proconfig": null
       }
     },
@@ -1738,7 +1093,7 @@
         "proname": "guard_authorization_revocation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1759,7 +1114,7 @@
         "proname": "guard_fixed_baseline",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1770,7 +1125,7 @@
         "nspname": "app",
         "proname": "reject_audit_mutation",
         "args": "",
-        "proowner": "jobguard_migration",
+        "proowner": "postgres",
         "proacl": null,
         "prosecdef": false,
         "proconfig": null
@@ -1779,8 +1134,8 @@
         "nspname": "app",
         "proname": "reject_audit_mutation",
         "args": "",
-        "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proowner": "postgres",
+        "proacl": "{postgres=X/postgres}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1801,7 +1156,7 @@
         "proname": "reject_capture_mutation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1822,7 +1177,7 @@
         "proname": "reject_evidence_object_mutation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1843,7 +1198,7 @@
         "proname": "reject_immutable_authorization_record",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1864,7 +1219,7 @@
         "proname": "reject_immutable_commercial_mutation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1885,7 +1240,7 @@
         "proname": "reject_ledger_mutation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1906,7 +1261,7 @@
         "proname": "reject_mandatory_finding_suppression",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1927,7 +1282,7 @@
         "proname": "reject_recovery_mutation",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }
@@ -1948,7 +1303,7 @@
         "proname": "require_approved_resolution",
         "args": "",
         "proowner": "jobguard_migration",
-        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_shadow=X/jobguard_migration,jobguard_shadow_emergency_access=X/jobguard_migration,jobguard_meter=X/jobguard_migration,jobguard_meter_owner=X/jobguard_migration}",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
         "proconfig": null
       }

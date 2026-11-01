@@ -17,15 +17,38 @@ describe("M4-4 source-reviewed migration proofs", () => {
     expect(() => combineLp0(baseline, [...proofs, proofs[2]!])).toThrow(/before allowance mismatch/);
   });
 
+  it("keeps the imported-job guard unchanged and trigger helpers owner-only", () => {
+    const recovery = proofs[1]!;
+    expect(JSON.stringify(recovery)).not.toContain("function:app.guard_imported_job()");
+    const baseline = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
+    const inventory = parseInventory(combineLp0(baseline, proofs));
+    const guard = "function:app.guard_imported_job()";
+    expect(inventory.recorded.routines.find(r => r.identity === guard))
+      .toEqual(baseline.recorded.routines.find((r: { identity: string }) => r.identity === guard));
+    const triggers = recovery.lp0.filter(c => c.section === "routines" && c.before?.returnsTrigger);
+    expect(triggers).toHaveLength(14);
+    for (const c of triggers) {
+      if (c.section !== "routines") throw new Error("expected routine");
+      expect(c.after).toMatchObject({ reachable: false, runtimeExecute: false, publicExecute: false, otherExecute: [] });
+    }
+    const audit = recovery.upgrade.find(c => c.section === "routines" && c.before?.proname === "reject_audit_mutation");
+    expect(audit).toEqual({ section: "routines",
+      before: { nspname: "app", proname: "reject_audit_mutation", args: "", proowner: "postgres",
+        proacl: null, prosecdef: false, proconfig: null },
+      after: { nspname: "app", proname: "reject_audit_mutation", args: "", proowner: "postgres",
+        proacl: "{postgres=X/postgres}", prosecdef: false, proconfig: null },
+    });
+  });
+
   it("applies all exact upgrade attributes and preserves unrelated objects", () => {
     const prior = proofs.flatMap(p => p.upgrade.flatMap(c => c.section === "routines" && c.before !== null ?
-      [{ ...c.before, proowner: 42 }] : []));
+      [{ ...c.before, proowner: c.before.proowner === "postgres" ? 10 : 42 }] : []));
     const untouched = { nspname: "app", relname: "unrelated", relowner: 42, relacl: null, relrowsecurity: true, relforcerowsecurity: true };
     const upgraded = applyUpgradeProofs({ rows: { "app.unrelated": [{ value: "preserved" }] }, routines: prior,
-      relations: [untouched], policies: [] }, proofs, { jobguard_migration: 42 });
+      relations: [untouched], policies: [] }, proofs, { jobguard_migration: 42, postgres: 10 });
     expect(upgraded.rows["app.unrelated"]).toEqual([{ value: "preserved" }]);
     expect(upgraded.relations).toContainEqual(untouched);
-    expect(upgraded.routines).toHaveLength(23);
+    expect(upgraded.routines).toHaveLength(22);
     expect(upgraded.relations).toHaveLength(8);
     expect(upgraded.policies).toHaveLength(3);
     expect(applyTenancyProofs([], proofs, "rls")).toEqual(["worm_attempt", "worm_command", "worm_synthetic_version"].map(relname =>
@@ -33,7 +56,7 @@ describe("M4-4 source-reviewed migration proofs", () => {
     const corrupted = structuredClone(proofs);
     const changed = corrupted[1]!.upgrade.find(c => c.section === "routines" && c.before !== null)!;
     if (changed.section === "routines" && changed.before) changed.before.proacl = "{unexpected=X/jobguard_migration}";
-    expect(() => applyUpgradeProofs({ rows: {}, routines: prior, relations: [], policies: [] }, corrupted, { jobguard_migration: 42 }))
+    expect(() => applyUpgradeProofs({ rows: {}, routines: prior, relations: [], policies: [] }, corrupted, { jobguard_migration: 42, postgres: 10 }))
       .toThrow(/before allowance mismatch/);
   });
 });

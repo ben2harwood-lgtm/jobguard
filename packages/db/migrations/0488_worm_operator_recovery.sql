@@ -9,13 +9,14 @@ END $$;
 -- Recovery needs no direct table reads: both routines return the scoped receipt.
 GRANT USAGE ON SCHEMA app TO jobguard_worm_operator;
 -- PUBLIC execute would otherwise expose unrelated routines through app USAGE.
--- Preserve access for the existing app-schema roles, without granting it to operators.
+-- Trigger execution does not require caller EXECUTE: leave trigger helpers owner-only.
+-- Preserve direct arithmetic calls for existing app roles, excluding operators.
+-- guard_imported_job is already owner-only (0356); do not alter its ACL.
 DO $$ DECLARE signature text; BEGIN
  FOREACH signature IN ARRAY ARRAY[
   'app.assert_journal_balanced()',
   'app.guard_authorization_revocation()',
   'app.guard_fixed_baseline()',
-  'app.guard_imported_job()',
   'app.half_even_ratio(bigint,bigint,bigint)',
   'app.reference_recovery_cap(bigint)',
   'app.reject_audit_mutation()',
@@ -30,7 +31,9 @@ DO $$ DECLARE signature text; BEGIN
   'app.review_invalidated_recovery_evidence()',
   'app.signal_outbox()'] LOOP
  EXECUTE 'REVOKE EXECUTE ON FUNCTION '||signature||' FROM PUBLIC';
- EXECUTE 'GRANT EXECUTE ON FUNCTION '||signature||' TO jobguard_runtime,jobguard_shadow,jobguard_shadow_emergency_access,jobguard_meter,jobguard_meter_owner,jobguard_migration';
+ IF signature IN ('app.half_even_ratio(bigint,bigint,bigint)','app.reference_recovery_cap(bigint)') THEN
+ EXECUTE 'GRANT EXECUTE ON FUNCTION '||signature||' TO jobguard_runtime,jobguard_shadow,jobguard_shadow_emergency_access,jobguard_meter,jobguard_meter_owner';
+ END IF;
  END LOOP;
 END $$;
 

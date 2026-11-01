@@ -20,7 +20,8 @@
         "packages/db/test/migration-proofs/0455_worm_durable_commands.proof.json",
         "packages/db/test/migration-proofs/0488_worm_operator_recovery.proof.json",
         "packages/db/test/migration-proofs/0499_worm_operator_alerts.proof.json",
-        "packages/db/test/worm-migration-proofs.test.ts"
+        "packages/db/test/worm-migration-proofs.test.ts",
+        "packages/db/migrations/0488_worm_operator_recovery.sql"
       ]
     }
   }
