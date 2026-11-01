@@ -104,6 +104,11 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await click(page, "Close job");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
   await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
+  const closed = await eventIds(page);
+  expect(closed.map(item => item.split(":")[0])).toEqual(["resumed", "finished_on_site", "finished_cancelled", "closed"]);
+  await page.reload();
+  await expect.poll(() => eventIds(page)).toEqual(closed);
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
   await click(page, "Reopen job");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
   await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Job reopened");
@@ -157,11 +162,37 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   }
 });
 
-test("after lock, new site work is refused and the screen offers a linked job", async ({ page }) => {
+test("locked close can reopen for invoicing while new site work still requires a linked job", async ({ page }) => {
   const { jobId, account } = await prepareLockJob(page);
   await prepareInvoiceFinalCheck(page, jobId, account);
   await page.goto(`/jobs/${jobId}#site-work`);
   await expect(panel(page).getByTestId("linked-job-offer")).toContainText(LINKED);
+  const workPath = `/api/jobs/${jobId}/work-state`;
+  const original = await (await page.request.get(workPath)).json();
+  await panel(page).getByLabel("Reason").selectOption("completed_outside_jobguard");
+  await panel(page).getByLabel("Note (required)").fill("Fictional post-lock administration");
+  await click(page, "Close job");
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Completed outside JobGuard: Fictional post-lock administration");
+  const issue = () => page.request.post(`/api/jobs/${jobId}/customer-invoices`, { data: {
+    version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: account.id,
+    expectedSourceHash: account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-11-01",
+  } });
+  const closedInvoice = await issue();
+  expect(closedInvoice.ok()).toBe(false);
+  expect(await closedInvoice.text()).toContain("JOB_WORK_CLOSED");
+  await page.reload();
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
+  await click(page, "Reopen job");
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
+  const reopened = await (await page.request.get(workPath)).json();
+  expect(reopened.lock).toEqual(original.lock);
+  expect(reopened.events.map((event: { kind: string }) => event.kind)).toEqual([
+    ...original.events.map((event: { kind: string }) => event.kind), "closed", "reopened",
+  ]);
+  await expect(panel(page).getByRole("button", { name: "Resume site work", exact: true })).toBeDisabled();
+  const invoice = await issue();
+  expect(invoice.ok(), await invoice.text()).toBe(true);
   const before = await eventIds(page);
   const { scopeItemId } = await (await page.request.get(`/api/jobs/${jobId}/proof`)).json();
   const refused = await page.request.post(`/api/jobs/${jobId}/proof`, { data: { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", fixture: "completion-photo", scopeItemId } });

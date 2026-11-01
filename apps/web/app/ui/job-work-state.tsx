@@ -67,10 +67,10 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
    <div className={styles.actions}>
     {!closed && !view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
     {!closed && view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
-    {closed && <button type="button" disabled={busy || view.locked} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
+    {closed && <button type="button" disabled={busy} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
     {!closed && <button type="button" disabled={busy || view.locked} onClick={() => act("resume")}>Resume site work</button>}
    </div>
-   <p>Resuming or reopening checks the saved jobs-on-the-go meter before it records the event.</p>
+   <p>{view.locked ? "Reopening permits administration only. New site work needs a linked job." : "Resuming or reopening checks the saved jobs-on-the-go meter before it records the event."}</p>
    {!closed && <fieldset className={styles.actions}>
     <legend>Close job</legend>
     <div className={styles.field}><label htmlFor="close-reason">Reason</label><select id="close-reason" value={reason} disabled={busy} onChange={e => setReason(e.target.value as CloseReason)}>{(Object.keys(closeReasonLabels) as CloseReason[]).map(key => <option key={key} value={key}>{closeReasonLabels[key]}</option>)}</select></div>
