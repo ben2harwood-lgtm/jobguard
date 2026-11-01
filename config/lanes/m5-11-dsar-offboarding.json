@@ -17,7 +17,8 @@
         "config/lanes/m5-11-dsar-offboarding.json",
         "packages/db/test/migration-proofs/0539_privacy_operations.proof.json",
         "packages/db/test/migration-proofs/0546_dsar_offboarding.proof.json",
-        "packages/db/test/dsar-migration-proofs.test.ts"
+        "packages/db/test/dsar-migration-proofs.test.ts",
+        "packages/db/test/privacy-operations.integration.test.ts"
       ]
     }
   }

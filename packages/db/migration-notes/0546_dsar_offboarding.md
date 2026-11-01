@@ -29,3 +29,21 @@ expectations stay in 0539 rather than claiming duplicate proof identities.
 The unmerged M0-13c dependency (0539) needs its included proof. Main’s missing
 0510_read_value_job_combined_final.sql proof remains owned by #502; the full
 loader may refuse the registry until it lands. No loader check is weakened.
+
+Repair: the inherited nine-class deletion test's backup `retained` assertion was
+stale after 0546, not a behavior regression. BUILD_PLAN §11.6 M5-11 explicitly
+requires pending expiry/backup handling in receipts and forbids immediate backup
+erasure claims. The test now requires `pending`, unchanged backup payloads,
+`verified_expiry_required`, and absence from completed actions, while retaining
+legal/accounting, tenant-isolation and access/work assertions. SQL is unchanged.
+The inherited 0539 SQL and proof are byte-identical to the local
+`codex/sandbox/m0-13c-privacy-ops` ref. The existing 0539 authority metadata remains
+unchanged: 0546 introduces no new runtime grant. Its proof owns only the new private fence routine and triggers;
+expanded behavior is documented here and tested by the M5-11 integration suite.
+The proof loader forbids duplicate identities across fragments, so M5-11 does not
+redeclare or amend 0539's group or authority path.
+
+Repair validation: database TypeScript check passed; DSAR migration-proof tests
+passed (4 tests); core privacy boundary tests passed (4 tests); `git diff --check`
+passed. No PostgreSQL or browser suites could run in this sandbox; the repaired
+integration assertion is source-inspected and requires real PostgreSQL CI.

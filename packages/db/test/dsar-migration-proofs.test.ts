@@ -21,6 +21,14 @@ describe("M5-11 and its M0-13c dependency proof composition", () => {
       { key: "acl|routine|function:app.privacy_read(uuid,text,uuid)|jobguard_runtime|EXECUTE|-", group: "a-exec-privacy-rehearsal" },
     ]);
   });
+  it("keeps the dependency proof separate from M5-11's private fence", () => {
+    expect(proofs[0]!.lp0.some(c => JSON.stringify(c).includes("0546_dsar_offboarding.sql"))).toBe(false);
+    expect(proofs[1]!.lp0.filter(c => c.section === "routines")).toEqual([
+      expect.objectContaining({ before: null, after: expect.objectContaining({
+        identity: "function:app.privacy_inventory_fence()", runtimeExecute: false, publicExecute: false,
+      }) }),
+    ]);
+  });
   it("extends tenancy exactly once and preserves forced RLS on every privacy table", () => {
     expect(applyTenancyProofs([], proofs, "rls")).toEqual(tables.map(relname => ({ relname, relrowsecurity: true, relforcerowsecurity: true, guarded: true })));
     expect(proofs[1]!.tenancy).toEqual([]);

@@ -38,7 +38,7 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
       expect(exported.document).toHaveLength(5); expect(JSON.stringify(exported)).toContain(`${a.tenantId}:source`); expect(JSON.stringify(exported)).toContain(`${a.tenantId}:derived`);
     }
   });
-  it("deletes source/derived, clears previous exports, fences access/work, retains legal/accounting/backups and preserves another tenant", async () => {
+  it("deletes source/derived, clears previous exports, fences access/work, retains legal/accounting, preserves backups pending expiry and preserves another tenant", async () => {
     const a = await meterCompany(f), b = await meterCompany(f), sa = await subject(a), sb = await subject(b);
     const untouched = await artifacts(b,sb), exp = await open(a,sa); await instruct(a,exp.requestId);
     await command(a, { action: "execute", requestId: exp.requestId, expectedRevision: 1 });
@@ -47,11 +47,20 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
     const after = await artifacts(a,sa);
     for (const row of after) {
       if (["source","derived","log"].includes(row.category)) expect(row).toMatchObject({ state: "redacted", payload: null });
-      if (["accounting","legal","backup"].includes(row.category)) expect(row).toMatchObject({ state: "retained", payload: expect.any(Object) });
+      if (["accounting","legal"].includes(row.category)) expect(row).toMatchObject({ state: "retained", payload: expect.any(Object) });
+      // M5-11 tracks backup expiry separately from mandatory legal retention.
+      if (row.category === "backup") expect(row).toMatchObject({ state: "pending", payload: { fictional: `${a.tenantId}:backup` } });
       if (row.category === "queued_work") expect(row).toMatchObject({ state: "cancelled", payload: null });
       if (row.category === "inflight_work") expect(row.state).toBe("outcome_unknown");
       if (row.category === "access_grant") expect(row).toMatchObject({ state: "revoked", payload: null });
     }
+    const deletion = await read(a,del.requestId);
+    expect(deletion).toMatchObject({ backupsErased: false, receipt: { backupsErased: false } });
+    const receipt = deletion.receipt as { pending: unknown[]; completed: { category: string }[] };
+    expect(receipt.pending).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: "backup", reason: "verified_expiry_required", expiryAt: null }),
+    ]));
+    expect(receipt.completed.some(row => row.category === "backup")).toBe(false);
     expect((await read(a,exp.requestId)).document).toBeNull();
     expect((await f.admin.query("SELECT revoked_at FROM app.privacy_subject WHERE tenant_id=$1 AND id=$2", [a.tenantId,sa])).rows[0].revoked_at).not.toBeNull();
     expect(await artifacts(b,sb)).toEqual(untouched);

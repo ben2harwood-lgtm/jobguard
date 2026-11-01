@@ -19,14 +19,12 @@
         "responsibilities": {
           "LP-6d": "preserve signed-session/tenant binding and absence of real-data writer composition"
         },
-        "downstream": "Four private synthetic rehearsal tables app.privacy_subject, app.privacy_artifact, app.privacy_request and app.privacy_command. Runtime has no direct table grants. Two routines validate a current synthetic owner/admin session; resident/client execution requires a recorded contractor instruction; only fictional inventory is tombstoned. M5-11 extends these same tables/routines with v2 identity/authority/retention review, tenant exit, expanded disposition receipts and an owner-only inventory fence trigger; no new runtime grant or real-data writer. Real job, money, identity, evidence, hidden and provider records are untouched.",
+        "downstream": "Four private synthetic rehearsal tables app.privacy_subject, app.privacy_artifact, app.privacy_request and app.privacy_command. Runtime has no direct table grants. Two routines validate a current synthetic owner/admin session; resident/client execution requires a recorded contractor instruction; only fictional inventory is tombstoned. Real job, money, identity, evidence, hidden and provider records are untouched.",
         "sources": [
-          "packages/db/migrations/0539_privacy_operations.sql",
-          "packages/db/migrations/0546_dsar_offboarding.sql"
+          "packages/db/migrations/0539_privacy_operations.sql"
         ],
         "tests": [
-          "packages/db/test/privacy-operations.integration.test.ts",
-          "packages/db/test/dsar-offboarding.integration.test.ts"
+          "packages/db/test/privacy-operations.integration.test.ts"
         ],
         "gaps": [
           "PostgreSQL and independent RED review pending; no live erasure adapters or D07/D12 approval."
@@ -81,7 +79,6 @@
         },
         "sources": [
           "packages/db/migrations/0539_privacy_operations.sql",
-          "packages/db/migrations/0546_dsar_offboarding.sql",
           "apps/api/src/privacy-operations.application.ts"
         ],
         "tests": [
