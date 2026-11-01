@@ -30,3 +30,37 @@ Router must push for required CI and arrange the one independent Claude RED revi
 Shared files (`packages/core/src/index.ts`, route/privilege expectations, builder quote display and customer sign-in page) require narrow catch-up unions with sibling MON-5 slices. No whole-file replacement of those siblings is intended.
 
 LATER / SIMPLICITY — `packages/db/src/acceptance-repository.ts`, `QuoteAcceptanceRepository.view`: extract the existing repeated projection into small named functions when that file has a dedicated maintenance task. This would make customer/builder attribution and immutable acceptance fields easier to inspect without expanding this slice into a repository refactor. Non-blocking; source inspection only.
+
+## NOPR catch-up — 1 November 2026
+
+READY for the router to stage and commit the pending merge of main
+`e9d6c8b2bec984fb2edc604a1fe90005e67e7f0f` (equal to MERGE_HEAD and the supplied origin/main).
+All 14 conflicted working files are resolved. Git's index remains unmerged because this sandbox
+cannot write `.git`; the router must stage the resolutions and migration rename before committing.
+No fetch, commit, push, PR, database server or browser server was attempted.
+
+Preserved main's variation portal, shared exports, registries, latest Next proxy and test expectations,
+and added quote acceptance alongside them. Both review links remain on customer sign-in.
+Renamed only the migration filename stem from `0388_customer_quote_acceptance` to
+`0570_customer_quote_acceptance` and updated its test/lane lookups. SQL bytes are unchanged
+(SHA-256 `1f4775e4372add24634ab4f93f76067080887a1a6440d20e4bc42561277c90e5`).
+No main migration changed. No existing routine is recreated by this catch-up.
+
+The new `0570_customer_quote_acceptance.proof.json` supplies explicit LP-0, upgrade and tenancy
+changes. It owns the quote routine/RLS and additive catalog expectations, leaving main's frozen
+LP-0 inventory and historical SERIOUS-B5/tenancy baselines intact. The known main 0510 missing
+proof is unchanged. `docs/contracts/lp-downstream-effects-v1.md` is unchanged.
+
+Current local validation (installed tools; no downloads):
+
+- `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=1 src/customer-quote-acceptance.test.ts` — 1 passed.
+- `apps/api`: `./node_modules/.bin/vitest run --maxWorkers=1 src/auth/customer-quote.test.ts src/auth/customer-signin.test.ts src/watchdog-registry.test.ts` — 162 passed after rebuilding core. The initial run reported two registry failures from stale built core output; the unchanged tests pass with refreshed output.
+- `apps/web`: `./node_modules/.bin/vitest run --maxWorkers=1 proxy.test.ts` — 32 passed, including both quote portal exceptions alongside variation exceptions.
+- `./node_modules/.bin/tsc -p tsconfig.json --noEmit` in API, DB and web — passed. Core and DB `tsc -p tsconfig.json` builds also passed.
+- `apps/api`: `node --import tsx src/generate-openapi.ts --check` — passed after rebuilding DB. The initial attempt could not import a newly merged DB export from stale output.
+- Isolated 0570 proof discovery/schema validation with the existing loader, LP-0 union/parse without duplicate entry keys, upgrade composition and both tenancy projections — passed. This intentionally isolates this proof from main's known 0510 proof gap; it is not a full-catalog or PostgreSQL result.
+- Migration byte equality against the original branch, JSON duplicate-key validation, conflict-marker scan, and `git diff --check` — passed.
+
+No stalled check remains. This is builder test evidence, not independent review. RED remains:
+CI must run the required full PostgreSQL/migration and browser checks, followed by the independent
+exact-head RED review. NOPR remains in force; the router controls opening and merge order.

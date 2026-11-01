@@ -80,6 +80,8 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
     "app.mon1_lifecycle_rebuild(uuid,text,uuid)",
     "app.mon1_lifecycle_read(uuid,text,uuid)",
     "app.mon1_counted_meter_today(uuid,text)",
+    "app.mon1_fresh_counted_meter_today(uuid,text)",
+    "app.mon1_today_source(uuid,text)",
   ];
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   if (owner === "jobguard_migration") throw new Error("Meter ownership requires the administrative bootstrap principal");
@@ -103,6 +105,9 @@ export async function finalizeMeterLifecycleOwnership(admin: PoolClient): Promis
       await admin.query(`ALTER FUNCTION ${signature} OWNER TO jobguard_meter_owner`);
       await admin.query("SET LOCAL ROLE jobguard_meter_owner");
       await admin.query(`ALTER FUNCTION ${signature} SECURITY DEFINER`);
+      if (signature === "app.mon1_counted_meter_today(uuid,text)") {
+        await admin.query("REVOKE EXECUTE ON FUNCTION app.mon1_counted_meter_today(uuid,text) FROM jobguard_runtime");
+      }
       await admin.query("RESET ROLE");
     }
     await admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");

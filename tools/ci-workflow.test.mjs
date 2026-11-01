@@ -104,8 +104,8 @@ for (const [gate, dependencies] of Object.entries({
 });
 
 test("only superseded PR runs cancel; main never cancels in progress", () => {
-  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.ref }}"));
-  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' && github.ref != 'refs/heads/main' }}"));
+  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"));
+  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
 test("DB and browser matrices cover all four shards without fail-fast or test selection", () => {

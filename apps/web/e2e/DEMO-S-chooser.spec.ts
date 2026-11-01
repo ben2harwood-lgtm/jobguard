@@ -1,8 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
-// These are lifecycle/chooser journeys. Full DEMO-J1–J5 and A1 remain explicitly not ready.
+import { z } from "zod";
+import { createHmac } from "node:crypto";
+import { Pool } from "pg";
+import { E2E_ADMIN_DATABASE_URL, E2E_AUTH_CODE_SECRET } from "./global-setup";
+const recoveredCaptureV1 = z.object({ version: z.literal(1), environment: z.literal("synthetic_demo"),
+  captureId: z.string().uuid(), jobId: z.string().uuid() });
+// Like ENT-10d, release only this spec's disposable request-window fixtures.
+// Unique addresses isolate the 60-second resend key, but the web adapter also
+// shares the web-bootstrap 10-per-ten-minute bucket with M0-6L. Limits stay
+// active throughout each journey; challenges, sessions and memberships remain.
+const challengeEmails: string[] = [];
+test.afterEach(async () => {
+  if (!challengeEmails.length) return;
+  const pool = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
+  try {
+    await pool.query(`DELETE FROM identity.request_window w USING identity.challenge c
+      WHERE c.email=ANY($1::text[]) AND w.requested_at=c.requested_at AND w.ip_digest=$2`,
+    [challengeEmails, createHmac("sha256", E2E_AUTH_CODE_SECRET).update("ip:web-bootstrap").digest("hex")]);
+  } finally { await pool.end(); challengeEmails.length = 0; }
+});
+// Launch only available journeys; retain honest blockers for unmerged guides.
 async function signIn(page: Page) {
   await page.goto("/sign-in");
-  await page.getByLabel("Fictional email address").fill(`demo-s-${crypto.randomUUID()}@practice.invalid`);
+  const email = `demo-s-${crypto.randomUUID()}@practice.invalid`;
+  challengeEmails.push(email);
+  await page.getByLabel("Fictional email address").fill(email);
   await page.getByRole("button", { name: "Request code", exact: true }).click();
   const code = await page.getByTestId("fixture-code").textContent();
   await page.getByLabel("Eight-digit code").fill(code!);
@@ -23,13 +45,13 @@ test("DEMO-S chooser saves honest blockers for all families on both browser proj
   test.setTimeout(90_000);
   await signIn(page); await page.goto("/demo-s");
   await expect(page.getByRole("heading", { name: "Choose a journey" })).toBeVisible();
-  for (const scenario of ["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"]) {
+  for (const scenario of ["core-1000", "recovery-18800", "meter", "trial"]) {
     await page.getByRole("button", { name: `Save ${scenario} selection`, exact: true }).click();
     const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
-    await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("No product journey completion is recorded");
+    await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
     await page.reload(); await expect(saved).toBeVisible();
   }
-  await page.getByText("Meter profiles — all not ready yet", { exact: true }).click();
+  await page.getByText("Meter profiles — reference previews available", { exact: true }).click();
   await expect(page.getByText("DM-10 · Builder 13–17 places and track review")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -43,7 +65,7 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
     if (sent.length === 1) { expect(response.status()).toBe(201); await route.abort("failed"); }
     else await route.fulfill({ response });
   });
-  await page.getByRole("button", { name: "Save shadow-30000 selection", exact: true }).click();
+  await page.getByRole("button", { name: "Choose shadow-30000 selection", exact: true }).click();
   await expect(page.getByRole("button", { name: "Retry saved request" })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Retry saved request" }).click();
@@ -76,4 +98,75 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
     expect((await api(foreign, "read", undefined, runId)).status).toBe(404);
     expect((await api(foreign, "reset", reset)).status).toBe(404);
   } finally { await other.close(); }
+});
+
+test("DEMO-S launches a fresh shadow job, resumes it and resets without inventing results", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page); await page.goto("/demo-s");
+  await page.getByRole("button", { name: "Choose shadow-30000 selection", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Saved shadow-30000 selection" })).toBeVisible();
+  const selectionUrl = page.url();
+  const runId = new URL(selectionUrl).searchParams.get("runId");
+  const requests: { captureId: string }[] = [];
+  await page.route("**/api/jobs/capture", async route => {
+    requests.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    if (requests.length === 1) { expect(response.ok()).toBe(true); await route.abort("failed"); }
+    else await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  // Next's route announcer also has role=alert. Require this journey's actual
+  // lost-response outcome before reload, so we cannot cancel the first attempt.
+  await expect(page.getByRole("region", { name: "Journey results", exact: true }).getByRole("alert"))
+    .toHaveText("Capture outcome unconfirmed. Retry this selection to recover the same request.");
+  expect(requests).toHaveLength(1); expect(requests[0]!.captureId).toBe(runId);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Saved shadow-30000 selection", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Journey results", exact: true }).getByRole("alert")).toHaveCount(0);
+  const replayResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  const replay = await replayResponse;
+  const replayBody: unknown = await replay.json();
+  expect(replay.status(), JSON.stringify(replayBody)).toBe(201);
+  const recovered = recoveredCaptureV1.parse(replayBody);
+  expect(recovered.captureId).toBe(runId);
+  await expect(page.getByRole("heading", { name: "Final Check £30,000 journey" })).toBeVisible();
+  const jobId = new URL(page.url()).searchParams.get("jobId");
+  expect(jobId).toBeTruthy(); expect(requests).toHaveLength(2);
+  await expect(page.getByRole("link", { name: "← Practice chooser", exact: true })).toHaveAttribute("href", new URL(selectionUrl).pathname + new URL(selectionUrl).search);
+  await page.getByRole("button", { name: "Create or recover the J3 capture", exact: true }).click();
+  await expect(page.getByLabel("Saved job reference")).toHaveValue(jobId!);
+  expect(requests[0]).toEqual(requests[1]); expect(requests[0]!.captureId).toBe(runId);
+  await page.getByRole("link", { name: "Continue this job through its real controls", exact: true }).click();
+  await page.getByRole("button", { name: "Save customer and site", exact: true }).click();
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) {
+    await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
+  }
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
+  await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+  await page.goto(selectionUrl);
+  const savedResponse = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/shadow-demo`) && response.request().method() === "GET");
+  await page.getByRole("button", { name: "Create or resume and read saved results", exact: true }).click();
+  const response = await savedResponse;
+  expect(response.ok()).toBe(true);
+  expect(await response.json()).toMatchObject({ version: "shadow-demo-report.v2", jobId,
+    customerApproval: { state: "not_ready_yet", approvals: [] } });
+  const results = page.getByRole("region", { name: "Saved shadow journey report" });
+  await expect(results).toContainText("Not built yet"); await expect(results).toContainText("Not locked");
+  await expect(results).toContainText("No invoice issued"); await expect(results).toContainText("Customer approval: Not ready yet (MON-5)");
+  await expect(results.getByRole("link", { name: "Open the same saved job" })).toHaveAttribute("href", `/jobs/${jobId}`);
+  await expect(results).not.toContainText("£80.00");
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`jobId=${jobId}`));
+  await page.goto(selectionUrl);
+  await page.getByRole("button", { name: "Reset selection", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Open archived selection", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Saved shadow journey report" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Final Check £30,000 journey" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("jobId")).not.toBe(jobId);
+  expect(requests.at(-1)!.captureId).not.toBe(runId);
 });
