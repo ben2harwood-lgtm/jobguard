@@ -160,4 +160,5 @@ export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
+export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";

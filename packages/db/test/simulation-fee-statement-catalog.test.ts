@@ -23,11 +23,22 @@ it("the live LP inventory enumerates exactly the three 0490 routines and their a
 });
 
 
-it("the frozen downstream design snapshot excludes the later 0490 objects",async()=>{
+it("the downstream snapshot records called 0490 dependencies without adding statement capability entries",async()=>{
  const raw=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",import.meta.url),"utf8"));parseInventory(raw);
  const ownObject=/app\.(?:platform_fee_statement(?:_sources|_command)?|read_platform_fee_statements|write_platform_fee_statement)(?=[(|]|$)/u;
  expect(raw.entries.filter((e:{key:string})=>ownObject.test(e.key))).toEqual([]);
- expect(raw.recorded.routines.filter((r:{identity:string})=>ownObject.test(r.identity))).toEqual([]);
+ const dependencies=raw.recorded.routines.filter((r:{identity:string})=>ownObject.test(r.identity));
+ expect(dependencies.map((r:{identity:string})=>r.identity).sort()).toEqual([
+  "function:app.platform_fee_statement_sources(uuid,uuid,uuid)",
+  "function:app.write_platform_fee_statement(uuid,text,jsonb)",
+ ]);
+ const live=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+ for(const record of dependencies){
+  expect(record).toEqual(live.recorded.routines.find((r:{identity:string})=>r.identity===record.identity));
+ }
+ expect(dependencies.find((r:{identity:string})=>r.identity.includes("app.platform_fee_statement_sources("))).toMatchObject({
+  owner:"jobguard_migration",securityDefiner:false,reachable:false,runtimeExecute:false,publicExecute:false,otherExecute:[],staticWrites:[],
+ });
  for(const section of ["rls","policies","triggers"]){
   expect(raw.recorded[section].filter((row:string)=>ownObject.test(row))).toEqual([]);
  }

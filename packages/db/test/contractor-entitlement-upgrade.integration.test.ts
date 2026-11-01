@@ -84,6 +84,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.platform_fee_statement":[],
  "app.platform_fee_statement_command":[],
 
+ "app.simulation_money_review":[],
+ "app.simulation_money_run":[],
  "app.success_fee_command":[],
  "app.success_fee_derivation":[],
  "app.success_fee_journal":[],
