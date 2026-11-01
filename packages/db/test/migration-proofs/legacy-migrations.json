@@ -171,5 +171,6 @@
   "0505_onsite_diary_admission.sql",
   "0506_recovery_timeline_store.sql",
   "0507_mobile_auth_store.sql",
-  "0508_tenant_key_registry.sql"
+  "0508_tenant_key_registry.sql",
+  "0509_simulation_fee_collection.sql"
 ]
