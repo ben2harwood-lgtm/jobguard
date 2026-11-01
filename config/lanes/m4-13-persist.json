@@ -11,12 +11,12 @@
         "packages/core/src/subscription-agreement.test.ts",
         "packages/db/src/index.ts",
         "packages/db/src/subscription-mandate-repository.ts",
-        "packages/db/migrations/0452_subscription_mandate.sql",
-        "packages/db/migration-notes/0452_subscription_mandate.md",
+        "packages/db/migrations/0580_subscription_mandate.sql",
+        "packages/db/migration-notes/0580_subscription_mandate.md",
         "packages/db/test/subscription-mandate.test.ts",
         "packages/db/test/subscription-mandate.integration.test.ts",
         "packages/db/test/subscription-mandate-upgrade.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/migration-proofs/0580_subscription_mandate.proof.json"
       ]
     }
   }
