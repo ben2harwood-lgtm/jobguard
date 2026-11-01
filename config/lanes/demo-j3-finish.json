@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-finish": {
+      "branches": [
+        "codex/sandbox/demo-j3-finish"
+      ],
+      "note": "Finish DEMO-J3 shadow-30000 on demo-finish-2: report completion and the shared-tenant receipt retry. No migration. Own lane file is implicitly owned.",
+      "allow": [
+        "apps/api/src/shadow-demo.application.test.ts",
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/demo-s/chooser.test.tsx",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/journey-result.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "packages/db/src/receipt-line-allocation-repository.ts",
+        "packages/db/src/receipt-line-command-producer.test.ts"
+      ]
+    }
+  }
+}

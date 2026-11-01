@@ -215,3 +215,22 @@ producer chain; Q £800 / fee £80 / kept £720 remain targets, as do the invoic
 verified settlement, CH-8 pack and CH-9 value completion. Existing SV-6 tests
 exercise its separate genuine settled-source chain; they are not evidence of
 settlement for this J3 run. No live provider, personal data or release is enabled.
+
+### DEMO-J3 completion report
+
+The older J3 notes above describe earlier stages; this section is current. `GET /api/jobs/:id/shadow-demo`
+returns `status: "complete"` only when `shadowJourneyComplete` finds all nine DEMO-S steps on saved records for
+that job at their exact figures: £30,000 baseline, £3,200 and £400 approved captures, a £33,600 lock, two customer
+portal approvals of £500 and £300, one £34,400 / £41,280 invoice on the current bill with no balance, a settled
+allocated payment behind each catch, current £800 / £80 / £720, £3,600 at £0, and an approved matching pack for
+each catch. Otherwise it stays `incomplete`. The client refuses a complete status that contradicts its own parts.
+
+The two held signals come from the photo and the diary note. The supplier document is frozen, examined and kept in
+each pack but raises no signal, because a supplier bill alone does not assert extra work. Saving a source still does
+not schedule pre-lock detection: the browser journey invokes the real reader, detector and sink, and the Final Check
+worker detects from the frozen sources at run time. Issuing the customer link, allocating the receipt and reviewing
+the assessment use real command routes with no screens yet, and the issuer's owner membership in the practice
+tenant is test identity setup. The independent verdict and two builder observations are still missing.
+
+Receipt-fact commands run SERIALIZABLE and lock the tenant's audit head, so another writer on the shared practice
+tenant can abort one. The repository re-runs that rolled-back command up to five attempts with the same command id.

@@ -125,6 +125,11 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  const approvedCustomerApproval = { state: "approved", approvals: [...customerApprovals].sort((a, b) => a.variationId.localeCompare(b.variationId)) };
  expect(approvedReport.version).toBe("shadow-demo-report.v2");
  expect(approvedReport.customerApproval).toEqual(approvedCustomerApproval);
+ // Approved but unbilled is honestly still incomplete on the saved report.
+ expect(approvedReport.status).toBe("incomplete");
+ await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
+ await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await expect(page.getByRole("region", { name: "Saved shadow journey report" }).getByText("Incomplete. Step 6: approved by the customer. No fee is charged.", { exact: true })).toBeVisible();
  // Legs 7–9: one combined invoice, matched settled receipt, exact source-backed
  // allocations, SV-6 reviews, MON-4A statement and CH-8 offline-verified packs.
  const settled = await settleJ3(page, jobId, reveal.lockId!, catches, testInfo);
@@ -150,7 +155,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  const byAssessment = (a: { assessment: { assessmentId: string } }, b: { assessment: { assessmentId: string } }) => a.assessment.assessmentId.localeCompare(b.assessment.assessmentId);
  const byCase = (a: { caseId: string }, b: { caseId: string }) => a.caseId.localeCompare(b.caseId);
  expect({ ...report, assessments: [...report.assessments].sort(byAssessment), packs: [...report.packs].sort(byCase) }).toEqual({
-  version: "shadow-demo-report.v2", environment: "synthetic_demo", jobId, status: "incomplete", realExternalActions: 0,
+  version: "shadow-demo-report.v2", environment: "synthetic_demo", jobId, status: "complete", realExternalActions: 0,
   customerApproval: approvedCustomerApproval,
   account: await read("final-account/lock"), invoices: await read("customer-invoices"),
   value: await read("value/v3"), finalCheck: await read("final-check"),
@@ -161,9 +166,13 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
  const saved = page.getByRole("region", { name: "Saved shadow journey report" });
  for (const text of ["£34,400.00", "£41,280.00", "£500.00", "£300.00", "fitted garden drainage", "fitted loft hatch", "recovery fee £0"]) await expect(saved).toContainText(text);
- // The reviewed UI still labels this report incomplete; the portal and pack
- // steps above remain active and must succeed independently of that wording.
- await expect(saved.getByText("Incomplete. Step 6: approved by the customer. No fee is charged.", { exact: true })).toBeVisible();
+ await expect(saved.getByText("Complete. All nine steps are saved on this job.", { exact: true })).toBeVisible();
+ const figures = saved.getByRole("definition");
+ for (const text of ["£800.00", "£80.00", "£720.00", "£3,600.00 · fee £0.00"]) await expect(figures.getByText(text, { exact: true })).toBeVisible();
+ await expect(saved).toContainText("an approved pack proves each extra's source chain");
+ // Step 3: the photo and diary signals were received before lock; the supplier document is in each pack.
+ expect(report.finalCheck.items.flatMap((item: { evidence: { source: string; evidenceAfterLock: boolean }[] }) => item.evidence).map((row: { source: string; evidenceAfterLock: boolean }) => [row.source, row.evidenceAfterLock]).sort()).toEqual([["electrical_certificate", false], ["job_diary_text", false]]);
+ for (const pack of report.packs) expect(pack.result.packs[0].sources.some((source: { sourceId: string }) => source.sourceId.startsWith("supplier_document_version:"))).toBe(true);
  // Reload the report to prove the same persisted bindings survive navigation.
  await page.reload(); await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
  await expect(saved).toContainText("£34,400.00");
