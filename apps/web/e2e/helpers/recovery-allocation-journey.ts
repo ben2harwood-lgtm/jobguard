@@ -35,7 +35,12 @@ export async function readyAllocations(page: Page) {
 /** Synthetic source setup uses real quote, proof, invoice, eligibility and feed commands.
  * No success response or allocation output is mocked. All workbench allocations use its public routes.
  */
-export async function recovery18800(page: Page) {
+export type Recovery18800Hooks = {
+  afterStart?: (jobId: string) => Promise<void>;
+  afterCaseOpen?: (jobId: string, caseId: string) => Promise<void>;
+  afterEligibility?: (jobId: string, caseId: string) => Promise<void>;
+};
+export async function recovery18800(page: Page, hooks: Recovery18800Hooks = {}) {
   const { parsePoundsToPence } = await loadCore();
   await openQuotingWatchdogJob(page);
   for (const input of await page.getByLabel(/Unit rate/u).all()) await input.fill("1.00");
@@ -50,6 +55,7 @@ export async function recovery18800(page: Page) {
   }
   await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+  await hooks.afterStart?.(jobId);
   const proofPath = `/api/jobs/${jobId}/proof`;
   const source = await jsonResult(page.request.get(proofPath), "Read source scope");
   async function evidence() {
@@ -74,12 +80,14 @@ export async function recovery18800(page: Page) {
   for (const [net, gross, movement, evidenceId] of [[32000, 38400, "receipt-384", evidence1], [250000, 300000, "receipt-3000", evidence2]] as const) {
     const opened = await post(page, `/api/jobs/${jobId}/recovery-cases`, { version: "recovery-case-command.v1", action: "open", commandId: id(), caseType: "withheld_customer_payment", claimedNetPence: net, counterparty: "Fictional customer", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: [invoiceId], expectedRevision: 0 });
     const caseId = opened.affectedCaseId as string;
+    await hooks.afterCaseOpen?.(jobId, caseId);
     let current = opened.cases.find((row: { id: string }) => row.id === caseId);
     const assembled = await post(page, `/api/jobs/${jobId}/recovery-cases`, { version: "recovery-case-command.v1", action: "transition", commandId: id(), caseId, eventType: "assemble_evidence", expectedRevision: current.revision });
     current = assembled.cases.find((row: { id: string }) => row.id === caseId);
     const reviewed = await post(page, `/api/jobs/${jobId}/recovery-cases/eligibility`, { version: "recovery-eligibility-command.v1", action: "review", commandId: id(), caseId, scenario: "evidence_backed_withheld_payment", expectedCaseRevision: current.revision, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1 });
     current = reviewed.cases.find((row: { id: string }) => row.id === caseId);
     await post(page, `/api/jobs/${jobId}/recovery-cases/eligibility`, { version: "recovery-eligibility-command.v1", action: "approve", commandId: id(), caseId, expectedCaseRevision: current.revision, expectedEvidenceRevision: current.eligibility.evidenceRevision, expectedPolicyRevision: current.eligibility.policyRevision, expectedReviewRevision: current.eligibility.revision });
+    await hooks.afterEligibility?.(jobId, caseId);
     const receipt = await post(page, receiptPath, { version: "practice-customer-receipt.record.v1", commandId: id(), invoiceId, paidOn: "2026-10-13", amountPence: gross, method: "bank_transfer", reference: `Fictional ${movement}` });
     const paymentId = receipt.receipts.at(-1).id as string;
     feed = await post(page, `/api/jobs/${jobId}/practice-feed`, { version: "practice-feed-command.v1", commandId: id(), expectedRevision: feed.revision, action: "advance", movement, step: "settled" });

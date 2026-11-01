@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j2-finish": {
+      "branches": [
+        "codex/sandbox/demo-j2-finish"
+      ],
+      "note": "Ben, 1 Nov 2026: finish DEMO-J2 recovery-18800 on top of demo-finish-2. Own lane file is implicitly owned.",
+      "allow": [
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/lib/recovery-journey.test.ts",
+        "apps/web/app/lib/recovery-journey.ts",
+        "apps/web/app/ui/recovery-journey.tsx",
+        "apps/web/app/ui/simulation-fee-statements.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/DEMO-J2.spec.ts",
+        "apps/web/e2e/helpers/recovery-allocation-journey.ts",
+        "packages/db/test/simulation-money-run.integration.test.ts",
+        "packages/db/test/withheld-payment-statement-source-catalog.test.ts"
+      ]
+    }
+  }
+}
