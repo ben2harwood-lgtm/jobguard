@@ -13,7 +13,6 @@
         "apps/api/src/offline-upload.application.ts",
         "apps/api/src/offline-upload.contracts.ts",
         "apps/api/src/offline-upload.controller.ts",
-        "config/lanes/m3-4-server.json",
         "docs/contracts/offline-contract-v1.md",
         "packages/db/src/index.ts",
         "packages/db/src/offline-upload.test.ts",
