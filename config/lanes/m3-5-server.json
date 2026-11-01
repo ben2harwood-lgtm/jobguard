@@ -2,8 +2,10 @@
   "version": 2,
   "lanes": {
     "m3-5-server": {
-      "branches": ["codex/sandbox/m3-5-server"],
-      "note": "M3-5 server slice. RED, dark synthetic resumable evidence only; migration 0419.",
+      "branches": [
+        "codex/sandbox/m3-5-server"
+      ],
+      "note": "M3-5 server slice. RED, dark synthetic resumable evidence only; migration 0573_resumable_evidence.",
       "allow": [
         "packages/db/src/evidence.ts",
         "packages/db/src/index.ts",
@@ -12,9 +14,11 @@
         "packages/db/src/tenant-context.test.ts",
         "packages/db/src/resumable-evidence.test.ts",
         "packages/db/test/evidence.integration.test.ts",
-        "packages/db/migrations/0419_resumable_evidence.sql",
-        "packages/db/migration-notes/0419_resumable_evidence.md",
-        "docs/contracts/resumable-evidence-v1.md"
+        "packages/db/migrations/0573_resumable_evidence.sql",
+        "packages/db/migration-notes/0573_resumable_evidence.md",
+        "docs/contracts/resumable-evidence-v1.md",
+        "packages/db/test/migration-proofs/0573_resumable_evidence.proof.json",
+        "packages/db/test/resumable-evidence-catalog.test.ts"
       ]
     }
   }
