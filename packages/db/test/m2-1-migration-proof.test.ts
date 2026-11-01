@@ -26,9 +26,8 @@ describe("M2-1 migration compatibility (source checks, not PostgreSQL evidence)"
     }
     for (const name of ["guard_dark_order_revision", "guard_manual_order_effect"]) {
       const identity = `function:app.${name}()`;
-      expect(inventory.entries.filter(entry => entry.key === `owner|routine|${identity}|jobguard_migration`)).toEqual([
-        { key: `owner|routine|${identity}|jobguard_migration`, group: "a-owner-routines" },
-      ]);
+      // Unreachable helpers carry no owner row, the same as guard_receipt_fact_line on main.
+      expect(inventory.entries.filter(entry => entry.key === `owner|routine|${identity}|jobguard_migration`)).toEqual([]);
       expect(inventory.recorded.routines.filter(r => r.identity === identity)).toEqual([{
         identity, owner: "jobguard_migration", securityDefiner: false,
         searchPath: "search_path=pg_catalog, app", returnsTrigger: true, extension: null,

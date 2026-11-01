@@ -26,22 +26,6 @@
       }
     },
     {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_dark_order_revision()|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_manual_order_effect()|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
       "section": "routines",
       "before": null,
       "after": {
