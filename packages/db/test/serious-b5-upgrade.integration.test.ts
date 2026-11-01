@@ -1,3 +1,4 @@
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { catalogueAdditions } from "./upgrade-proof-utils.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
@@ -1207,23 +1208,6 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
-// M2-4: exactly 0494's two immutable proposal tables and audit guard extend the catalogue.
-async function supplierLineCorrectionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after=await snapshot(), tables=["supplier_line_match_snapshot","supplier_line_match_correction"];
- const names=[...tables,...tables.flatMap(t=>[`${t}_pkey`,`${t}_tenant_id_command_id_key`,`${t}_tenant_id_audit_event_id_key`]),
-  "supplier_line_match_snapshot_tenant_id_job_id_id_key","slmc_revision"];
- const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
- expect(relations.map(r=>r.relname).sort()).toEqual([...names].sort());
- const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="supplier_line_match_audit_guard"&&r.args==="");
- expect(routines).toHaveLength(1);
- expect(routines[0]).toMatchObject({prosecdef:false,proconfig:["search_path=pg_catalog"]});
- const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
- expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"tenant_isolation"]).sort());
- for(const t of tables)expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
- const add=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
- return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
-  routines:add(before.routines,routines,after.routines),relations:add(before.relations,relations,after.relations),policies:add(before.policies,policies,after.policies)};
-}
 // 0520 adds exactly one restricted synthetic identity snapshot and its primary key.
 async function mobileAuthStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1311,7 +1295,17 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const a = await seedAccount(f.admin);
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
- await migrate(f.admin);
+ const { proofs, legacy } = loadMigrationProofs();
+ if (proofs.length) {
+  // Historical helpers must inspect their frozen schema, before a later migration can change it.
+  // This is the same explicit SQL fixture path used above for the predecessor schema.
+  for (const url of MIGRATION_URLS.slice(position)) {
+   const name = url.pathname.split("/").at(-1)!;
+   if (!legacy.includes(name)) continue;
+   await f.admin.query(await readFile(url, "utf8"));
+   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
+  }
+ } else await migrate(f.admin);
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
@@ -1330,7 +1324,6 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
- Object.assign(expected, await supplierLineCorrectionAdditions(expected));
  Object.assign(expected, await keyRegistryAdditions(expected));
  Object.assign(expected, await mobileAuthStoreAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
@@ -1338,9 +1331,23 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
  Object.assign(expected, await timelineStoreAdditions(expected));
- expect(await snapshot()).toEqual(expected);
+ if (proofs.length) {
+  expect(await snapshot()).toEqual(expected);
+  await migrate(f.admin);
+ }
+ const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
+ const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
+ // Sort only committed expected values using the server collation, never select live objects as allowances.
+ if (proofs.length) for (const [section, fields] of [
+  ["routines", ["nspname", "proname", "args"]], ["relations", ["nspname", "relname"]],
+  ["policies", ["schemaname", "tablename", "policyname"]],
+ ] as const) {
+  const sorted = await f.admin.query(`SELECT value FROM jsonb_array_elements($1::jsonb) ORDER BY ${fields.map(field => `value->>'${field}'`).join(",")}`, [JSON.stringify(withProofs[section])]);
+  withProofs[section] = sorted.rows.map(r => r.value);
+ }
+ expect(await snapshot()).toEqual(withProofs);
  await migrate(f.admin);
- expect(await snapshot()).toEqual(expected);
+ expect(await snapshot()).toEqual(withProofs);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 60000);
 

@@ -6,7 +6,6 @@
         "codex/sandbox/m2-4-corrections"
       ],
       "allow": [
-        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/supplier-line-matching-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/supplier-match-corrections.test.ts",
@@ -15,9 +14,10 @@
         "packages/db/src/index.ts",
         "packages/db/src/supplier-line-correction-repository.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
-        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/supplier-line-corrections.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/migration-proofs/0494_supplier_line_corrections.proof.json",
+        "packages/db/test/migration-proofs/0465_dark_merchant_order.proof.json",
+        "packages/db/test/supplier-line-migration-proofs.test.ts"
       ],
       "note": "M2-4 RED: synthetic immutable reviewer mappings and audited revision conflicts, migration 0494. Built on m2-4-lines; router opens PR after base merges. Own lane file implicitly allowed."
     }

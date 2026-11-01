@@ -1,3 +1,4 @@
+import { applyTenancyProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -214,7 +215,7 @@ describe("migration and privilege catalog", () => {
       GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
       ORDER BY c.relname
     `);
-    expect(result.rows).toEqual([
+    expect(result.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -415,7 +416,6 @@ describe("migration and privilege catalog", () => {
       { relname: "proposal_review_question", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "provider_event_inbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "purchase_order_draft", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "purchase_order_manual_attestation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "purchase_order_placement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "purchase_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "quote_acceptance", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -535,8 +535,6 @@ describe("migration and privilege catalog", () => {
       { relname: "supplier_document_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_fact_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_fact_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "supplier_line_match_correction", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "supplier_line_match_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_match_allocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_match_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_match_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -568,7 +566,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-    ]);
+    ], loadMigrationProofs().proofs, "rls"));
   });
 
   it("keeps runtime and infrastructure roles unprivileged", async () => {
@@ -601,7 +599,7 @@ describe("migration and privilege catalog", () => {
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
-    expect(ownership.rows).toEqual([
+    expect(ownership.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
@@ -802,7 +800,6 @@ describe("migration and privilege catalog", () => {
       { relname: "proposal_review_question", owner: "jobguard_migration" },
       { relname: "provider_event_inbox", owner: "jobguard_migration" },
       { relname: "purchase_order_draft", owner: "jobguard_migration" },
-      { relname: "purchase_order_manual_attestation", owner: "jobguard_migration" },
       { relname: "purchase_order_placement", owner: "jobguard_migration" },
       { relname: "purchase_order_revision", owner: "jobguard_migration" },
       { relname: "quote_acceptance", owner: "jobguard_migration" },
@@ -922,8 +919,6 @@ describe("migration and privilege catalog", () => {
       { relname: "supplier_document_version", owner: "jobguard_migration" },
       { relname: "supplier_fact_proposal", owner: "jobguard_migration" },
       { relname: "supplier_fact_revision", owner: "jobguard_migration" },
-      { relname: "supplier_line_match_correction", owner: "jobguard_migration" },
-      { relname: "supplier_line_match_snapshot", owner: "jobguard_migration" },
       { relname: "supplier_match_allocation", owner: "jobguard_migration" },
       { relname: "supplier_match_proposal", owner: "jobguard_migration" },
       { relname: "supplier_match_revision", owner: "jobguard_migration" },
@@ -955,7 +950,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", owner: "jobguard_migration" },
       { relname: "work_order_line", owner: "jobguard_migration" },
       { relname: "work_order_revision", owner: "jobguard_migration" },
-    ]);
+    ], loadMigrationProofs().proofs, "owner"));
   });
 });
 
