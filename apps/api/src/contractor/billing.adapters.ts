@@ -16,6 +16,16 @@ const fakeActionV1 = z.object({ version: z.literal("outbound-action.v1"), id: z.
 }).strict();
 type Observation = { binding: string; result: FakeDeliveryResult; accepted: boolean };
 
+/** Shared validation for fictional billing transports; does not grant execution authority. */
+export function validateSyntheticBillingAction(raw: unknown) {
+  const validated = fakeActionV1.safeParse(raw);
+  if (!validated.success) throw new BillingDataError("BILLING_INVALID");
+  const action = validated.data;
+  const artifact = verifyBillingExportArtifact(action.immutableContent, action.contentHash);
+  if (action.amountPence !== artifact.totalNet.pence) throw new BillingDataError("BILLING_INVALID");
+  return { action, artifact };
+}
+
 /** Process-local fictional provider. No credentials, networking, execution claim or authorization decision.
  * This is deliberately not registered in ActionExecutor or the worker. Its state is not durable evidence.
  */
@@ -29,11 +39,8 @@ export function createSyntheticBillingAdapter(raw: unknown): OutboundAdapter & {
     name: settings.channel, supportsProviderDeduplication: true,
     get simulatedEffects() { return effects; },
     async deliver(rawAction: Readonly<OutboundAction>): Promise<FakeDeliveryResult> {
-      const validated = fakeActionV1.safeParse(rawAction);
-      if (!validated.success || validated.data.adapter !== settings.channel) throw new BillingDataError("BILLING_INVALID");
-      const action = validated.data;
-      const artifact = verifyBillingExportArtifact(action.immutableContent, action.contentHash);
-      if (action.amountPence !== artifact.totalNet.pence) throw new BillingDataError("BILLING_INVALID");
+      const { action } = validateSyntheticBillingAction(rawAction);
+      if (action.adapter !== settings.channel) throw new BillingDataError("BILLING_INVALID");
       // Fixed tuple, independent of object property insertion order.
       const binding = JSON.stringify([action.adapter, action.actionType, action.recipient, action.contentHash,
         action.aggregateRevision, action.amountPence, action.currency, action.policyVersion]);
