@@ -5,7 +5,7 @@ import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { proofBefore,proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
-const own="0557_small_builder_trial_demo.sql";let c:Cluster;
+const own="0513_small_builder_trial_demo.sql";let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(own);},240000);afterAll(async()=>{await c?.close();});
 it("0557 preserves populated predecessors and every installed routine; repeat migrations retain rows",async()=>{
  await meterCompany(c as unknown as WorkFixture);

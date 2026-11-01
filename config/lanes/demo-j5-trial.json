@@ -27,7 +27,7 @@
         "docs/contracts/small-builder-demo-run-v1.md",
         "packages/core/src/index.ts",
         "packages/core/src/small-builder-trial-demo.ts",
-        "packages/db/migrations/0557_small_builder_trial_demo.sql",
+        "packages/db/migrations/0513_small_builder_trial_demo.sql",
         "packages/db/src/index.ts",
         "packages/db/src/small-builder-trial-demo-repository.test.ts",
         "packages/db/src/small-builder-trial-demo-repository.ts",
