@@ -145,9 +145,7 @@
         "tablename": "inbox_metric_receipt",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
