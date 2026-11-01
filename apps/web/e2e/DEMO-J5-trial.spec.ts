@@ -20,10 +20,10 @@ test("guide calls existing trial commands, retains card setup on reload and repo
   await r.fulfill({json:{hypothetical:true}});
  });
  await page.goto(`/demo-s/trial?tenantId=${tenant}&runId=${run}`);
- await page.getByRole("button",{name:"Skip for now",exact:true}).click();await expect(page.getByRole("alert")).toContainText("has not gone live");
+ await page.getByRole("button",{name:"Skip for now",exact:true}).click();await expect(page.getByRole("main").getByRole("alert")).toContainText("has not gone live");
  // Independently supplied source fixture: this does not claim the refused activation started a trial.
  started=true;await page.getByRole("button",{name:"Resume saved run"}).click();
- await page.getByRole("button",{name:"Try second job without a card"}).click();await expect(page.getByRole("alert")).toContainText("Add a card");
+ await page.getByRole("button",{name:"Try second job without a card"}).click();await expect(page.getByRole("main").getByRole("alert")).toContainText("Add a card");
  await page.getByRole("button",{name:"Add a card",exact:true}).click();await page.reload();
  await page.getByRole("button",{name:"Complete fictional card setup"}).click();await expect(page.getByText("Simulated card on file.")).toBeVisible();
  await expect(page.getByRole("button",{name:"Skip for now",exact:true})).toHaveCount(0);
