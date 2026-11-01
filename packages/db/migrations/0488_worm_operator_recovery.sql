@@ -27,7 +27,7 @@ END $$;
 CREATE FUNCTION worm_control.worm_reconcile(cid uuid, n integer, observed_held boolean) RETURNS app.worm_command
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c app.worm_command;
- outcome text; material jsonb; operator_ref text;
+ final_outcome text; material jsonb; operator_ref text;
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||'/worm',0));
  SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid FOR UPDATE;
@@ -37,14 +37,14 @@ BEGIN
  IF c.status='applied' THEN RETURN c; END IF;
  -- Readback can confirm only this exact command's intended hold state. Absence,
  -- failure or mismatch never queues another mutation, release, overwrite or delete.
- outcome := CASE WHEN observed_held IS NOT NULL AND observed_held=(c.action='apply_hold')
+ final_outcome := CASE WHEN observed_held IS NOT NULL AND observed_held=(c.action='apply_hold')
  THEN 'applied' ELSE 'outcome_unknown' END;
- material := jsonb_build_object('status',outcome,'reason',
- CASE WHEN outcome='applied' THEN 'operator_readback_confirmed' ELSE 'operator_readback_unresolved' END);
- UPDATE app.worm_attempt SET outcome=worm_reconcile.outcome,result=material
+ material := jsonb_build_object('status',final_outcome,'reason',
+ CASE WHEN final_outcome='applied' THEN 'operator_readback_confirmed' ELSE 'operator_readback_unresolved' END);
+ UPDATE app.worm_attempt SET outcome=final_outcome,result=material
  WHERE tenant_id=t AND command_id=cid AND attempt=n;
  IF NOT FOUND THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
- UPDATE app.worm_command SET status=outcome,result=material WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ UPDATE app.worm_command SET status=final_outcome,result=material WHERE tenant_id=t AND id=cid RETURNING * INTO c;
  -- Domain rows are locked/updated before taking the audit head lock.
  operator_ref:='worm-operator:'||encode(sha256(convert_to(session_user::text,'UTF8')),'hex');
  PERFORM app.worm_audit(c,'reconciled',operator_ref);
