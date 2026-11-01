@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect,it } from "vitest";
-import { parseInventory,staticScan } from "./lp-0-catalog.js";
+import { loadReviewedInventory,staticScan } from "./lp-0-catalog.js";
 
 const migration=(name:string)=>readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
 const writer=(sql:string)=>sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.write_success_fee_v3"),sql.lastIndexOf("COMMIT;"));
@@ -30,22 +30,19 @@ it("0489 retains the reviewed 0406 authorization, replay and catch validation be
  expect(current).toContain("terms_auth.id=terms.authorization_id AND terms_auth.revoked_at IS NULL");
 });
 
-it("both inventories record the final compensation routines without widening their runtime grants",async()=>{
+it("the proof-combined inventory records the final compensation routines without widening their runtime grants",async()=>{
  const sql=await migration("0511_success_fee_recovery_compensation.sql");
  const definitions=[...sql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)];
  expect(definitions.map(m=>m[1])).toEqual(["check_success_fee_journal","check_success_fee_derivation","write_success_fee_v3"]);
- const live=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+ const {inventory:live}=await loadReviewedInventory();
  const known=new Set<string>(live.recorded.routines.map((r:{identity:string})=>r.identity.slice(9).split("(")[0]));
  const relations=new Set<string>(live.recorded.routines.flatMap((r:{staticWrites:string[]})=>r.staticWrites));
- for(const file of ["lp-0-effective-privileges-v1.json","lp-downstream-lp-0-recorded-input-v1.json"]){
-  const raw=JSON.parse(await readFile(new URL(`../../../docs/contracts/${file}`,import.meta.url),"utf8"));parseInventory(raw);
   for(const [,name,body] of definitions){
-   const facts=raw.recorded.routines.filter((r:{identity:string})=>r.identity.startsWith(`function:app.${name}(`));
+   const facts=live.recorded.routines.filter((r:{identity:string})=>r.identity.startsWith(`function:app.${name}(`));
    expect(facts).toHaveLength(1);
    expect(staticScan(body!,known,relations)).toEqual({staticCalls:facts[0].staticCalls,staticWrites:facts[0].staticWrites});
    expect(facts[0].runtimeExecute).toBe(name==="write_success_fee_v3");
    expect(facts[0].publicExecute).toBe(false);expect(facts[0].otherExecute).toEqual([]);
   }
- }
  expect(sql).not.toMatch(/GRANT /u);
 });

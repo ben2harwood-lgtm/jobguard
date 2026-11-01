@@ -906,3 +906,60 @@ PostgreSQL suite for this RED migration. Green CI and one independent RED
 review at the resulting exact head remain required. Migration 0510 (#460)
 must precede 0511 at merge; this piece lands ahead of #500. No production
 authority, live provider, fee collection, release or external refund is enabled.
+
+## M4-9-S-COMPENSATE-CATCHUP — migration proof isolation, 1 November 2026
+
+RED money; PR #501. This entry supersedes the preceding statement that #499
+is absent. HEAD already contains local origin/main (merge 8a875375), including
+#499 and the legacy registration of main's top migration 0510. No fetch or
+git mutation was performed. Migration 0511_success_fee_recovery_compensation
+retains its filename and byte-identical SQL.
+
+The new per-migration proof carries the exact ap-recovery-money before/after
+and write_success_fee_v3 static-call before/after formerly in the shared LP-0
+inventory. Its upgrade allowances remove exactly the old journal uniqueness
+index and add exactly the two journal and two source indexes, with explicit
+owner, null ACL and disabled index RLS attributes. The replaced source primary
+key retains the same catalogue attributes. Replaced routines retain their
+owner/ACL/definer/config attributes; no upgrade routine, policy, or row allowance
+is needed. The B5 fixture has no success-fee source rows to backfill. No tenancy
+attribute changes occur, so tenancy is empty. Historical populated source rows
+remain covered by success-fee-recovery-upgrade.integration.test.ts.
+
+Both shared LP-0 JSON files, serious-b5-upgrade, tenancy, the proof loader and
+the legacy list now match origin/main byte for byte. The downstream LP-0 input
+is a frozen historical inventory; the compensation catalogue test now reads
+the authoritative proof-combined inventory through loadReviewedInventory.
+It retains exact routine identity, static-call/write, runtime/PUBLIC/other-role
+execution and no-GRANT assertions. Own lane drops the reverted shared paths
+and permits the proof path; no other lane or loader changes.
+
+Actual local checks (installed Node 24.17.0 / Vitest 4.1.12, maxWorkers=2):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts
+  test/success-fee-recovery-compensation-catalog.test.ts`: 3 files, 56 tests pass.
+- From packages/core: `./node_modules/.bin/vitest run --maxWorkers=2
+  src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts
+  src/success-fee-catch-posting.test.ts`: 3 files, 80 tests pass.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: pass.
+- Initial pnpm invocations stalled before starting the tools and were stopped;
+  the existing installed binaries above completed. No dependencies downloaded.
+- `git diff --check`: pass.
+- `node tools/agent-lane-boundary-lint.mjs`: fails on the three shared paths
+  reverted to main. Its local mode unions committed and unstaged paths, so
+  these disappear only once the router commits the catch-up. Do not widen
+  the lane to accommodate these reversions. Rerun the standard lint afterward.
+- Deterministic check using existing lanePathAllowed/migrationOrderViolations
+  against the final working-tree diff to origin/main plus untracked files:
+  pass, 12 paths. Checked SQL equality against HEAD and six baseline files
+  against origin/main. This is a deterministic scope check, not RED review.
+
+PostgreSQL/browser execution is unavailable in this read-only-git sandbox.
+Required CI: success-fee-recovery-compensation integration/catalogue,
+success-fee-recovery-upgrade, serious-b5-upgrade, lp-0-grant-freeze,
+lp-0-catalog, tenancy and migration-proof-loader; retain the full required
+PostgreSQL suite for this RED migration. Use at most two workers and at most
+three named Vitest files per invocation. No tests were disabled or loosened.
+Router commits/pushes; green CI and independent RED review at the exact head
+remain required before merge.

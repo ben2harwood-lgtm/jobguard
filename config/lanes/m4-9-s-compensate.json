@@ -6,21 +6,19 @@
         "codex/sandbox/m4-9-s-compensate"
       ],
       "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
-      "note": "RED M4-9-S recovery qualification and linked compensation; 0511_success_fee_recovery_compensation. Reconciled with local origin/main, preserving main helper additions. Own lane file is implicitly owned.",
+      "note": "RED M4-9-S recovery qualification and linked compensation; 0511_success_fee_recovery_compensation. Includes origin/main through 0510; exact migration proof replaces shared-list edits. Own lane file is implicitly owned.",
       "allow": [
-        "docs/contracts/lp-0-effective-privileges-v1.json",
-        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json",
         "docs/contracts/success-fee-posting-v3.md",
         "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
         "packages/core/src/success-fee-catch-posting.test.ts",
         "packages/core/src/success-fee-posting.ts",
         "packages/db/migrations/0511_success_fee_recovery_compensation.sql",
-        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/success-fee-catch-posting.integration.test.ts",
         "packages/db/test/success-fee-recovery-compensation-catalog.test.ts",
         "packages/db/test/success-fee-recovery-compensation.integration.test.ts",
         "packages/db/test/success-fee-recovery-fixture.ts",
-        "packages/db/test/success-fee-recovery-upgrade.integration.test.ts"
+        "packages/db/test/success-fee-recovery-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0511_success_fee_recovery_compensation.proof.json"
       ]
     }
   }
