@@ -139,7 +139,8 @@ async function darkFixture() {
   const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
   // MaterialApplication and PurchaseOrderApplication write the catalogue with
   // this authenticated session digest. The dark seam must use the same RLS scope.
-  const repo = new PurchaseOrderActionRepository(practiceMaterialPool(runtime, f.auth.digest));
+  const scoped = practiceMaterialPool(runtime, f.auth.digest);
+  const repo = new PurchaseOrderActionRepository(scoped);
   const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
   const preview = await repo.preview(f.auth.context, scope);
   const approved = { version: "command.v1", commandId: randomUUID(), commandType: "purchase_order.send.dark",
@@ -149,7 +150,7 @@ async function darkFixture() {
       aggregateRevision: revision.revision, amountPence: preview.amountPence, currency: "GBP", policyVersion: "dark-merchant-order.v1",
       expiresAt: "2099-01-01T00:00:00Z" } };
   const port = new FakeMerchantOrderPort();
-  const executor = new ActionExecutor(runtime, new Map([[port.name, port]]), { emit() {} });
+  const executor = new ActionExecutor(scoped, new Map([[port.name, port]]), { emit() {} });
   const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
     commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
   return { ...f, revision, repo, scope, preview, approved, port, executor, manual };
