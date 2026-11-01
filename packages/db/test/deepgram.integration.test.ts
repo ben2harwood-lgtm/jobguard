@@ -27,8 +27,8 @@ let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{
   dir=await mkdtemp(join(tmpdir(),"deepgram-pg-"));const port=await freePort(56000,500);
   pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,
-    createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
-  await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic-test-only"});
+    createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+  await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});
   // Upgrade from every predecessor, retaining a real legacy source row.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS){const name=url.pathname.split("/").at(-1)!;if(name===own)break;
@@ -43,7 +43,7 @@ beforeAll(async()=>{
   expect((await admin.query("SELECT * FROM app.capture_source")).rows).toEqual(before);
   expect((await admin.query("SELECT relname,relowner,relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY(ARRAY['app.capture_source'::regclass,'app.synthetic_evidence_original'::regclass]) ORDER BY relname")).rows).toEqual(authority);
   await admin.query("CREATE ROLE speech_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO speech_login");
-  runtime=new Pool({host:"127.0.0.1",port,user:"speech_login",password:"synthetic"});
+  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"speech_login",password:"synthetic"});
 },120_000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 async function prepare(){
