@@ -110,6 +110,6 @@ it("M4-1 dark preserves terminal prevention on amendment and refuses generic cre
  const amended=await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:101,expectedRevision:x.revision}));
  expect(amended.state).toBe("prevented");
  await expect(repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:101,expectedRevision:amended.revision}))).rejects.toThrow();
- await expect(repo.command(ctx,job,command({...open,caseType:"missed_variation_final_account"}))).rejects.toThrow("FINAL_CHECK_CONFIRMATION_HELD");
+ await expect(repo.command(ctx,job,command({...open,caseType:"missed_variation_final_account"}))).rejects.toThrow("Final Check cases are created by server confirmation");
  expect((await repo.list(ctx,job)).find(c=>c.id===x.id)?.history).toEqual(amended.history);
 });
