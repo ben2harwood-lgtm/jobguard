@@ -1,3 +1,4 @@
+import { applyTenancyProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -214,7 +215,7 @@ describe("migration and privilege catalog", () => {
       GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
       ORDER BY c.relname
     `);
-    expect(result.rows).toEqual([
+    expect(result.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -405,10 +406,6 @@ describe("migration and privilege catalog", () => {
       { relname: "practice_feed_receipt_match", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "practice_supplier_credit_case_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "practice_supplier_credit_review_payment", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "privacy_artifact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "privacy_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "privacy_request", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "privacy_subject", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "prompt_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "property_constraint_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -569,7 +566,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-    ]);
+    ], loadMigrationProofs().proofs, "rls"));
   });
 
   it("keeps runtime and infrastructure roles unprivileged", async () => {
@@ -602,7 +599,7 @@ describe("migration and privilege catalog", () => {
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
-    expect(ownership.rows).toEqual([
+    expect(ownership.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
@@ -793,10 +790,6 @@ describe("migration and privilege catalog", () => {
       { relname: "practice_feed_receipt_match", owner: "jobguard_migration" },
       { relname: "practice_supplier_credit_case_binding", owner: "jobguard_migration" },
       { relname: "practice_supplier_credit_review_payment", owner: "jobguard_migration" },
-      { relname: "privacy_artifact", owner: "jobguard_migration" },
-      { relname: "privacy_command", owner: "jobguard_migration" },
-      { relname: "privacy_request", owner: "jobguard_migration" },
-      { relname: "privacy_subject", owner: "jobguard_migration" },
       { relname: "prompt_resolution", owner: "jobguard_migration" },
       { relname: "proof_application_response", owner: "jobguard_migration" },
       { relname: "property_constraint_fact", owner: "jobguard_migration" },
@@ -957,7 +950,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", owner: "jobguard_migration" },
       { relname: "work_order_line", owner: "jobguard_migration" },
       { relname: "work_order_revision", owner: "jobguard_migration" },
-    ]);
+    ], loadMigrationProofs().proofs, "owner"));
   });
 });
 

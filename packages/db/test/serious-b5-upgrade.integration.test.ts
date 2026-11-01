@@ -1,3 +1,4 @@
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { catalogueAdditions } from "./upgrade-proof-utils.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
@@ -1266,38 +1267,6 @@ async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
   relations:union(before.relations,relations,after.relations),routines:union(before.routines,routines,after.routines),policies:union(before.policies,policies,after.policies)};
 }
-// M0-13c adds only the four private rehearsal tables and two checked entry points.
-async function privacyAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- const after = await snapshot();
- const tables = ["privacy_artifact", "privacy_command", "privacy_request", "privacy_subject"];
- const names = [...tables, ...tables.map(t => `${t}_pkey`)];
- const relations = after.relations.filter(r => r.nspname === "app" && names.includes(r.relname));
- expect(relations.map(r => r.relname).sort()).toEqual([...names].sort());
- for (const r of relations) {
-  expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
-  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner", [r.relowner])).rows).toEqual([{owner:"jobguard_migration"}]);
- }
- for (const table of tables) {
-  expect(before.rows).not.toHaveProperty(`app.${table}`);
-  expect(after.rows[`app.${table}`]).toEqual([]);
-  expect(relations.find(r => r.relname === table)).toMatchObject({relrowsecurity:true,relforcerowsecurity:true});
- }
- const identities = [["privacy_command", "t uuid, digest text, v jsonb"], ["privacy_read", "t uuid, digest text, r uuid"]];
- const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name,args]) => r.proname === name && r.args === args));
- expect(routines).toHaveLength(2);
- for (const r of routines) {
-  expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
-  expect(r).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog"]});
-  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl).toEqual(["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]);
- }
- const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
- expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
- for (const p of policies) expect((await f.admin.query("SELECT $1::name[]::text[] roles", [p.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
-  relations:catalogueAdditions(before.relations,relations,after.relations),
-  routines:catalogueAdditions(before.routines,routines,after.routines),
-  policies:catalogueAdditions(before.policies,policies,after.policies)};
-}
 // CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
 async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1326,7 +1295,17 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const a = await seedAccount(f.admin);
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
- await migrate(f.admin);
+ const { proofs, legacy } = loadMigrationProofs();
+ if (proofs.length) {
+  // Historical helpers must inspect their frozen schema, before a later migration can change it.
+  // This is the same explicit SQL fixture path used above for the predecessor schema.
+  for (const url of MIGRATION_URLS.slice(position)) {
+   const name = url.pathname.split("/").at(-1)!;
+   if (!legacy.includes(name)) continue;
+   await f.admin.query(await readFile(url, "utf8"));
+   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
+  }
+ } else await migrate(f.admin);
  const expected = await separableFinalCheckAdditions(await workStateCommandAdditions(await with0200Additions(await contractorAgreementAdditions(await with0188And0192Additions(before)))));
  Object.assign(expected, await smallTripAdditions(expected));
  Object.assign(expected, await lifecycleSourceAdditions(expected));
@@ -1352,10 +1331,23 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await valueSourceAdditions(expected));
  Object.assign(expected, await customerSigninAdditions(expected));
  Object.assign(expected, await timelineStoreAdditions(expected));
- Object.assign(expected, await privacyAdditions(expected));
- expect(await snapshot()).toEqual(expected);
+ if (proofs.length) {
+  expect(await snapshot()).toEqual(expected);
+  await migrate(f.admin);
+ }
+ const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
+ const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
+ // Sort only committed expected values using the server collation, never select live objects as allowances.
+ if (proofs.length) for (const [section, fields] of [
+  ["routines", ["nspname", "proname", "args"]], ["relations", ["nspname", "relname"]],
+  ["policies", ["schemaname", "tablename", "policyname"]],
+ ] as const) {
+  const sorted = await f.admin.query(`SELECT value FROM jsonb_array_elements($1::jsonb) ORDER BY ${fields.map(field => `value->>'${field}'`).join(",")}`, [JSON.stringify(withProofs[section])]);
+  withProofs[section] = sorted.rows.map(r => r.value);
+ }
+ expect(await snapshot()).toEqual(withProofs);
  await migrate(f.admin);
- expect(await snapshot()).toEqual(expected);
+ expect(await snapshot()).toEqual(withProofs);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 60000);
 

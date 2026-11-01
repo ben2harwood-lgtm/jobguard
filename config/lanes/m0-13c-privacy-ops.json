@@ -13,7 +13,7 @@
         "apps/api/src/privacy-operations.application.test.ts",
         "apps/api/src/privacy-operations.application.ts",
         "apps/api/src/privacy-operations.controller.ts",
-        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "config/lanes/m0-13c-privacy-ops.json",
         "docs/operations/privacy-operations.md",
         "packages/core/src/index.ts",
         "packages/core/src/privacy-operations.test.ts",
@@ -22,9 +22,8 @@
         "packages/db/migrations/0539_privacy_operations.sql",
         "packages/db/src/index.ts",
         "packages/db/src/privacy-operations-repository.ts",
-        "packages/db/test/privacy-operations.integration.test.ts",
-        "packages/db/test/serious-b5-upgrade.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/migration-proofs/0539_privacy_operations.proof.json",
+        "packages/db/test/privacy-operations.integration.test.ts"
       ]
     }
   }
