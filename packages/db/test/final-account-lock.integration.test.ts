@@ -297,11 +297,29 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
     await expect(asFixtureTenant(pool,a.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:pool===f.owner?'55000':'42501'});
   }
  });
+ it("SV-5 direct lock inserts require that tenant's terms accepted by the lock time",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);
+  const template=await lockRow(f,a.tenantId,a.jobId);
+  const target=await seedAccount(f.admin);
+  const insert=(lockedAt:string)=>asFixtureTenant(f.admin,target.tenantId,db=>db.query(
+   `INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,$1::jsonb)).*`,
+   [{...template,tenant_id:target.tenantId,job_id:target.jobId,id:randomUUID(),final_account_revision_id:target.revisionId,
+    baseline_quote_version_id:target.baselineId,locked_at:lockedAt}]));
+  // Another tenant's acceptance cannot authorize this lock, even for a privileged writer.
+  await expect(insert(new Date().toISOString())).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
+  const beforeAcceptance=(await f.admin.query("SELECT clock_timestamp()::text AS recorded_at")).rows[0].recorded_at;
+  await repo.acceptTerms(target.context,{actorMembershipId:LOCK_OWNER,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+  await expect(insert(beforeAcceptance)).rejects.toThrow("DISCLOSURE_TERMS_NOT_ACCEPTED");
+  // The normal command remains valid after acceptance and dispositions.
+  await repo.disposition(target.context,{jobId:target.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),scopeItemId:target.scopeItemId,disposition:"done"});
+  await expect(repo.lock(target.context,target.input)).resolves.toBeDefined();
+ });
  it("C4 lock and disposition composite keys reject foreign tenants and same-tenant wrong jobs",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);
   const same=await seedAccount(f.admin,a.tenantId),foreign=await seedAccount(f.admin);
   for(const target of [same,foreign]){
-   await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,to_jsonb(l)||jsonb_build_object('id',$3::uuid,'tenant_id',$4::uuid,'job_id',$5::uuid))).* FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
+   await repo.acceptTerms(target.context,{actorMembershipId:LOCK_OWNER,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+   await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,to_jsonb(l)||jsonb_build_object('id',$3::uuid,'tenant_id',$4::uuid,'job_id',$5::uuid,'locked_at',clock_timestamp()))).* FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
    await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_scope_disposition SELECT (jsonb_populate_record(NULL::app.final_account_scope_disposition,to_jsonb(d)||jsonb_build_object('id',$3::uuid,'command_id',$4::uuid,'tenant_id',$5::uuid,'job_id',$6::uuid))).* FROM app.final_account_scope_disposition d WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
   }
  });

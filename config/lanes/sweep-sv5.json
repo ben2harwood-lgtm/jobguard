@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "sweep-sv5": {
+      "branches": [
+        "codex/sandbox/sweep-sv5"
+      ],
+      "note": "RED. Stage-end SV-5/SV-6 sweep; synthetic only. SV-6 gaps already fixed on main. DB/browser CI and exact-head independent review required.",
+      "allow": [
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/helpers/final-check-source-fixtures.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
+        "packages/db/migrations/0567_final_lock_disclosure_terms.sql",
+        "packages/db/migration-notes/0567_final_lock_disclosure_terms.md"
+      ]
+    }
+  }
+}
