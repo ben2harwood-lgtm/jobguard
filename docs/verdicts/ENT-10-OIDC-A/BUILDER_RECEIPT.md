@@ -138,3 +138,18 @@ Checks use installed dependencies, Node 24.17.0 and cached pnpm 10.28.1; no inst
 - `pnpm --filter @jobguard/api typecheck`: STALLED at `tsc -p tsconfig.json --noEmit`, no result or diagnostic returned at handoff. Not claimed as a pass; GitHub CI must complete typecheck. Per this catch-up's explicit brief, stalled typecheck with passing own unit tests permits a READY commit message.
 
 RED identity piece. NOPR handoff only: router retains commit/push/PR ownership. Full GitHub CI and a fresh independent exact-head RED review remain required before merge; PostgreSQL and browser suites were not run under the issued sandbox constraints. Today's READY handoff concerns this bounded catch-up, not remediation of the historical secrets-scan report or parent ENT-10 completion.
+
+## PR current-main catch-up — 1 November 2026
+
+ENT-10-OIDC-A, RED. Read the live SIMPLE_LOOP.md and simplicity rule, repository instructions, ENT-10 plan section, adapter contracts, source and adversarial tests. The launcher had already completed merge `52e1b777`, incorporating supplied `origin/main` `cf9039df529c6fed8090a1cf3020d6dd6b522cb5`. No unmerged index entries or additional merge resolutions were needed. No Git metadata write, fetch, dependency installation or package download was performed.
+
+The implementation already matches supplied main. The only branch delta is the existing exact-branch lane registration and this receipt. All database files (including LP-0, tenancy, B5/upgrade helpers and migrations), BUILD_PLAN.md and protected `docs/contracts/lp-downstream-effects-v1.md` match main exactly. No routine was recreated; no migration was added or edited. Existing lane branches and allowed paths are preserved.
+
+Checks on installed dependencies, Node 24.17.0 and cached pnpm 10.28.1:
+
+- `pnpm --filter @jobguard/api exec vitest run src/auth/sso/oidc.test.ts src/auth/sso/oidc.contracts.test.ts src/auth/sso/saml.test.ts --maxWorkers=2`: PASS, 3 files / 92 tests.
+- `pnpm --filter @jobguard/api typecheck`: PASS, exit 0.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: PASS, lane registration and receipt only.
+- `git diff --check`: PASS. Supplied main is an ancestor of HEAD; `git ls-files -u` is empty.
+
+READY for router commit, push and PR opening (no NOPR). Full GitHub CI, including PostgreSQL and browser suites unavailable in this sandbox, and one independent exact-head RED review remain required before merge. Historical secrets-scan findings above were not rechecked or repaired by this evidence-only catch-up; no current secrets-gate pass is claimed. This handoff does not close parent ENT-10 or authorize real providers, data or release.
