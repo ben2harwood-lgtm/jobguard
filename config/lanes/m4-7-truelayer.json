@@ -11,7 +11,9 @@
         "packages/db/src/ais-repository.test.ts",
         "packages/db/src/ais-repository.ts",
         "packages/db/migrations/0427_dark_ais.sql",
-        "packages/db/test/ais.integration.test.ts"
+        "packages/db/test/ais.integration.test.ts",
+        "packages/db/test/migration-proofs/0427_dark_ais.proof.json",
+        "packages/db/test/ais-migration-proof.test.ts"
       ]
     }
   }
