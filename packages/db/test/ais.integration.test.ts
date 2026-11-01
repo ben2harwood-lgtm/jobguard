@@ -19,10 +19,9 @@ const page = (observations: AisObservation[], nextCursor: string | null = null):
 let f: WorkFixture;
 beforeAll(async () => {
  f = await createWorkFixture(false);
- await f.admin.query("CREATE DATABASE jobguard_synthetic_demo");
- const options = { ...f.admin.options, database: "jobguard_synthetic_demo" };
- await f.admin.end(); await f.runtime.end();
- f.admin = new Pool(options);
+ // The fixture already created the synthetic database, without installing its schema.
+ const options = { ...f.admin.options };
+ await f.runtime.end();
  // Upgrade proof: install the exact previous supported schema, then discover 0427.
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for (const url of MIGRATION_URLS.filter(url => !url.pathname.endsWith("0427_dark_ais.sql"))) {
