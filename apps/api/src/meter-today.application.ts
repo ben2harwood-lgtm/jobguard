@@ -25,13 +25,21 @@ export function meterTodayFailure(error: unknown) {
  * as the meter read; actor and tenant are derived on the server. */
 export class MeterWorkStateApplication {
   constructor(private readonly identity: IdentityApplication,
-    private readonly repository: Pick<import("@jobguard/db").JobWorkStateRepository, "command">) {}
+    private readonly repository: Pick<import("@jobguard/db").JobWorkStateRepository, "command" | "read">) {}
+  async read(credentials: TenantRequestCredentials, jobId: string) {
+    const { context, membership } = await this.authority(credentials);
+    return this.repository.read(context, jobId, membership.id);
+  }
   async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
+    const { context, membership } = await this.authority(credentials);
+    return this.repository.command(context, jobId, membership.id, raw);
+  }
+  private async authority(credentials: TenantRequestCredentials) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
     const principal = await this.identity.provider.authenticate(credentials.sessionToken!);
     const membership = principal && await this.identity.provider.findMembership(principal, context.tenantId);
     if (!membership) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
-    return this.repository.command(context, jobId, membership.id, raw);
+    return { context, membership };
   }
 }

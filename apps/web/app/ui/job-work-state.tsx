@@ -8,7 +8,9 @@ type View = ReturnType<typeof workStateView>;
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
 
 /** Work-state controls over the persisted CH-4 commands. The server picks actor, tenant and time. */
-export function JobWorkState({ jobId }: { jobId: string }) {
+export function JobWorkState({ jobId, company }: { jobId: string; company?: { tenantId: string; csrfToken: string } }) {
+ const endpoint = company ? `/api/meter/jobs/${jobId}/work-state` : `/api/jobs/${jobId}/work-state`;
+ const tenantId = company?.tenantId, csrfToken = company?.csrfToken;
  const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState(""), [offer, setOffer] = useState(false);
  const [reason, setReason] = useState<CloseReason>("cancelled_by_customer"), [note, setNote] = useState("");
  const currentJob = useRef(jobId), inFlight = useRef(false), epoch = useRef(0), pending = useRef<Record<string, unknown> | null>(null);
@@ -17,21 +19,21 @@ export function JobWorkState({ jobId }: { jobId: string }) {
  const read = useCallback(async () => {
   const requestEpoch = ++epoch.current; inFlight.current = true; setBusy(true);
   try {
-   const response = await fetch(`/api/jobs/${jobId}/work-state`, { cache: "no-store" });
+   const response = await fetch(endpoint, { cache: "no-store", headers: tenantId && csrfToken ? { "x-tenant-id": tenantId, "x-csrf-token": csrfToken } : {} });
    if (!response.ok) throw new Error("Site work could not load. Try loading it again.");
    const saved = jobWorkStateReadV1.parse(await response.json());
    if (saved.jobId !== jobId) throw new Error("Unexpected job response.");
    if (current(requestEpoch)) setView(workStateView(saved));
   } catch (e) { if (current(requestEpoch)) setError(e instanceof Error ? e.message : "Site work could not load."); }
   finally { if (epoch.current === requestEpoch) { inFlight.current = false; setBusy(false); } }
- }, [jobId]);
+ }, [jobId, endpoint, tenantId, csrfToken]);
  useEffect(() => { pending.current = null; setView(null); setError(""); setOffer(false); void read(); return () => { epoch.current++; }; }, [read]);
  // A retry after an unknown outcome resends the exact pending command, never a new identity.
  const send = async (command: Record<string, unknown>) => {
   if (inFlight.current) return;
   const requestEpoch = ++epoch.current; inFlight.current = true; pending.current = command; setBusy(true); setError("");
   try {
-   const response = await fetch(`/api/jobs/${jobId}/work-state`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) });
+   const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", ...(tenantId && csrfToken ? { "x-tenant-id": tenantId, "x-csrf-token": csrfToken } : {}) }, body: JSON.stringify(command) });
    if (response.status >= 400 && response.status < 500) {
     const body = await response.json().catch(() => ({})) as { code?: string };
     if (!current(requestEpoch)) return;

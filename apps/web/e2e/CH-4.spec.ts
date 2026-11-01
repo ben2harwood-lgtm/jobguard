@@ -2,12 +2,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test, type Page } from "@playwright/test";
-import { activateMeterJob } from "../../../packages/db/test/meter-journey-fixtures.js";
+import { ch4Company, capturedCompanyJob } from "./helpers/ch4-company-fixture";
 import { subscriptionConsentText } from "../../../packages/core/src/subscription-plan-view.js";
-import { insertPhoto, seedWorkJob, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
+import { type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 import { prepareLockJob } from "./helpers/final-account-lock-journey";
 import { prepareInvoiceFinalCheck } from "./helpers/customer-invoice-journey";
-import { openLiveWatchdogJob } from "./helpers/capture-journey";
+
+test.setTimeout(180_000);
 
 const LINKED = "Start a linked job for this customer and site";
 const E2E_RUNTIME_URL = "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo";
@@ -38,24 +39,26 @@ async function acceptSolo(fixture: WorkFixture, tenantId: string, digest: string
 }
 
 test("resume and unlocked reopen persist, retry exactly after an unknown outcome, and refuse the Solo cap", async ({ page, context }) => {
-  const admin = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "postgres", password: "sbox-e2e-owner", max: 1 });
   const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
-  const fixture = { admin, runtime } as WorkFixture;
+  const fixture = { runtime } as WorkFixture;
   try {
-    await openLiveWatchdogJob(page);
-    const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
-    const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1", [jobId])).rows[0].tenant_id as string;
-    const session = (await context.cookies()).find(cookie => cookie.name === "jg_session");
-    if (!session) throw new Error("Synthetic practice session cookie is missing");
-    const digest = createHash("sha256").update(session.value).digest("hex");
-    await acceptSolo(fixture, tenantId, digest);
-    await page.goto(`/jobs/${jobId}#site-work`);
+    const { JobWorkStateRepository } = await import("@jobguard/db");
+    const company = await ch4Company(runtime);
+    await acceptSolo(fixture, company.tenantId, company.digest);
+    const job = await capturedCompanyJob(company), { jobId } = job;
+    await context.addCookies([{ name: "jobguard_session", value: company.sessionToken, url: "http://127.0.0.1:3000" }]);
+    const jobUrl = `/jobs/${jobId}?company=${company.tenantId}#site-work`;
+    const credentials = { "x-tenant-id": company.tenantId, "x-csrf-token": company.csrfToken, origin: "http://127.0.0.1:3000" };
+    await page.goto(jobUrl);
+    await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id", jobId);
+    await expect(page.getByRole("heading", { name: job.title, exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Captured scope" })).toContainText(job.title);
     await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
 
   // The real browser request commits, but its successful response is lost at
   // the client boundary. Avoid route.fetch(): it issues a second API-context
   // request rather than exercising the button's original browser transport.
-  const commandPath = `/api/jobs/${jobId}/work-state`;
+  const commandPath = `/api/meter/jobs/${jobId}/work-state`;
   const resumeCommands: unknown[] = [];
   page.on("request", request => {
     if (new URL(request.url()).pathname !== commandPath || request.method() !== "POST") return;
@@ -100,6 +103,7 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await panel(page).getByLabel("Note (required)").fill("Fictional customer stopped the work");
   await click(page, "Close job");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
   await click(page, "Reopen job");
   await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
   await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Job reopened");
@@ -109,11 +113,13 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await panel(page).getByLabel("Note (required)").fill("Fictional pause before the cap");
   await click(page, "Close job");
   const beforeCap = await eventIds(page);
+  expect(beforeCap.map(item => item.split(":")[0])).toEqual(["resumed", "finished_on_site", "finished_cancelled", "closed", "reopened", "closed"]);
   const revisionBeforeCap = await panel(page).getByTestId("work-state-revision").textContent();
     for (let i = 0; i < 6; i++) {
-      const counted = await seedWorkJob(fixture, tenantId);
-      await activateMeterJob(fixture, counted);
-      await insertPhoto(fixture, counted, "now");
+      const counted = await capturedCompanyJob(company);
+      await new JobWorkStateRepository(runtime).resume(company.context, counted.jobId, company.actorId, {
+        version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "resume",
+      });
     }
   await click(page, "Reopen job");
   await expect(panel(page).getByRole("alert")).toContainText("Move to Builder");
@@ -124,14 +130,23 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
   await expect.poll(() => eventIds(page)).toEqual(beforeCap);
 
   const second = await context.newPage();
-  await second.goto(`/jobs/${jobId}#site-work`);
+  await second.goto(jobUrl);
   await expect.poll(() => eventIds(second)).toEqual(beforeCap);
 
   // A stale revision is refused and records nothing.
-  const stale = await page.request.post(`/api/jobs/${jobId}/work-state`, { data: { version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "finish" } });
+  const stale = await page.request.post(commandPath, { headers: credentials, data: { version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "finish" } });
   expect(stale.status()).toBe(409);
   await page.reload();
   await expect.poll(() => eventIds(page)).toEqual(beforeCap);
+
+  // Company reads and writes keep their current-session/tenant/CSRF boundaries.
+  const foreign = await ch4Company(runtime), foreignJob = await capturedCompanyJob(foreign);
+  expect((await page.request.get(`/api/meter/jobs/${foreignJob.jobId}/work-state`, { headers: credentials })).status()).toBe(404);
+  expect((await page.request.get(commandPath, { headers: { ...credentials, "x-tenant-id": foreign.tenantId } })).status()).toBe(403);
+  expect((await page.request.post(commandPath, { headers: { ...credentials, "x-csrf-token": "x".repeat(24) }, data: resumeCommands[0] })).status()).toBe(403);
+  await second.goto(`/jobs/${foreignJob.jobId}?company=${company.tenantId}`);
+  await expect(second.getByRole("heading", { name: "You cannot open this job" })).toBeVisible();
+  await expect(panel(second)).toHaveCount(0);
 
   // Layout: no sideways scroll on this viewport and 44px actions.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -139,7 +154,6 @@ test("resume and unlocked reopen persist, retry exactly after an unknown outcome
     expect(box!.height).toBeGreaterThanOrEqual(44);
   } finally {
     await runtime.end();
-    await admin.end();
   }
 });
 
