@@ -5,6 +5,7 @@
       "branches": ["codex/sandbox/m2-3-lines"],
       "allow": [
         "docs/contracts/merchant-extraction-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/ai/src/index.ts",
         "packages/ai/src/merchant-extraction.ts",
         "packages/ai/src/merchant-extraction.test.ts"
