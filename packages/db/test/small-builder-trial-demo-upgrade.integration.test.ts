@@ -7,7 +7,7 @@ import { proofBefore,proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
 const own="0513_small_builder_trial_demo.sql";let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(own);},240000);afterAll(async()=>{await c?.close();});
-it("0557 preserves populated predecessors and every installed routine; repeat migrations retain rows",async()=>{
+it("0513 preserves populated predecessors and every installed routine; repeat migrations retain rows",async()=>{
  await meterCompany(c as unknown as WorkFixture);
  const before=await proofBefore(c.admin,["control_plane.tenant","identity.session","app.membership","app.job","app.trial_start","app.trial_identity_key_claim","app.subscription_agreement_revision","app.subscription_period","app.command_receipt","app.small_builder_demo_run","app.audit_event","app.journal"]);
  const routines=(await c.admin.query("SELECT oid,pg_get_functiondef(oid) definition,proacl::text FROM pg_proc WHERE pronamespace IN('app'::regnamespace,'identity'::regnamespace) AND prokind='f' ORDER BY oid")).rows;

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import type { TrialDemoReport } from "@jobguard/db";
+import type { TrialDemoReport } from "./report-type";
 import { parseTrialIntent,readTrialIntent,type TrialIntent } from "./journey-model";
 import type { TrialDemoCommand } from "@jobguard/core";
 const button={minHeight:44,padding:"10px 16px",margin:4};
