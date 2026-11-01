@@ -23,6 +23,17 @@ export async function prepareLockJob(page: Page) {
   return { jobId, tenantId, evidenceId: finalized.upload.evidenceId as string, account: final.account };
 }
 
+/** A held original permits locking but cannot be certified as a processed source. */
+export async function preparePendingCheckJob(page: Page) {
+  const fixture = await prepareLockJob(page);
+  const intake = await jsonResult(page.request.post(`/api/jobs/${fixture.jobId}/supplier-documents/intake`, { data: {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "unreadable",
+    channel: "picker", expectedRevision: 0,
+  } }), "Hold an unreadable pre-lock supplier document");
+  expect(intake.result).toBe("held");
+  return fixture;
+}
+
 export async function finishDispositionsAndTerms(page: Page) {
   const panel = page.getByTestId("final-account-lock");
   // The panel is on screen while it still reads "Loading final account…"; count the dispositions only once the persisted view has loaded.

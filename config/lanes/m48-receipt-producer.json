@@ -9,7 +9,7 @@
       "note": "RED M4-8-S: v1 commands use the existing synthetic receipt producer; no new privileges. Lane file implicitly owned.",
       "allow": [
         "docs/contracts/receipt-line-allocation-source-v1.md",
-        "packages/db/migrations/0384_receipt_line_command_producer.sql",
+        "packages/db/migrations/0398_receipt_line_command_producer.sql",
         "packages/db/src/receipt-line-allocation-repository.ts",
         "packages/db/src/receipt-line-command-producer.test.ts",
         "packages/db/src/stored-receipt-case-allocation-repository.test.ts",
