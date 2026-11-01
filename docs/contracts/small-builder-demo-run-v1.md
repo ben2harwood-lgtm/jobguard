@@ -36,6 +36,66 @@ The browser saves an unconfirmed metadata intent in session storage scoped to co
 
 The saved selection report links to the persisted run and immutable snapshot. It contains lifecycle facts and the stored refusal, with no product source totals or completion verdict. A1 awaits all five completed journeys and persisted product-source reports; independent review and two genuine builder observations remain missing. Existing P2 structural validation is not relabelled as acceptance. The CI browser suite `DEMO-S-chooser.spec.ts` covers chooser/lifecycle behaviour in mobile-360 and desktop, not full J1–J5 acceptance. No new migration is needed; reserved 0329 is unused.
 
+## DEMO-J4 reference producer preview (incomplete journey)
+
+Owned meter run reads and lifecycle command responses now include an optional
+`meterPreview` (`demo-meter-preview.v1`). It is derived only after the existing
+PostgreSQL routine authorizes and returns the owned run. It is a deterministic,
+run-bound reference projection, **not persisted domain execution**. The ten
+DM-01–DM-10 examples call MON-1 `countMeterDays`, MON-2A
+`computeSubscriptionPeriod` and `detectSubscriptionTrackReview` directly.
+Fictional activation, first-evidence, activity and lock inputs have reproducible
+run-scoped identities. The approved `london-midnight-stops.v1` recipe supplies
+London local days; calendar-month bounds are explicit, annual prepayment is off,
+and the upgrade preview changes plan on the eleventh day of the 30-day period.
+The 13–17 example detects the grace crossing on 2 April at 14 places, without
+waiting for the month-end calculation or changing the account track.
+
+If the reference producer fails after the owned run is committed, the response
+still returns that saved lifecycle run with `meterPreviewNote: "Preview unavailable."`
+and no preview. The chooser displays the note; the stored reason and immutable
+reports remain unchanged. A later authorized read can regenerate the preview.
+Producer error details are never returned. Database/authorization failures retain
+the existing typed error path.
+
+These figures can be inspected from `/demo-s` after saving/resuming a meter
+selection. Snapshot/report operations remain **strictly persisted lifecycle
+facts**, without this preview. Reset creates a new run namespace; replay of the
+original command produces the original reference projection. No business table,
+subscription agreement, Decision, statement, trial key, allocation, journal or
+provider action is created by the preview. Every read still rechecks current
+membership/ownership, including archived runs and replay.
+
+Full DEMO-J4 remains incomplete. Actual source-linked admissions, accepted
+reference-period subscription commands, issued statements and simulated
+settlements are not implemented by this change. The current MON-2 persisted
+acceptance path uses the server date; its historical integration fixtures use
+administrator-only backdating. This preview does not expose that fixture bypass
+or assert historical authorization. MON-3 and DM-11–DM-13 are plainly not ready
+yet in this journey. No new migration is needed for these reference projections;
+reserved migration 0406 is unused. Database and browser execution await CI.
+
+## DEMO-J1 core-1000 guided practice entry (29 October 2026, RED)
+
+The chooser now links to `/demo-s/core-1000`. This is a guided exercise on the existing practice-job commands, separate from the signed-in company's blocked DEMO-I selection. It does not upgrade that selection, invent a completed run or write an A1 report. The practice session owns the captured job under the existing practice access rules; the company membership in the chooser grants no access to it. Opening a fresh guide reads the existing practice session. A button explicitly starts a session when absent, and Make my draft captures the five supplied priced lines using the existing versioned capture contract. There is no seeded end state, automatic action dispatcher or added provider.
+
+After capture, `/demo-s/core-1000?jobId=<uuid>` embeds the existing authenticated job workspace. The URL is only a locator. Reload, the guide's resume link and the ordinary saved-job link all read persisted job history; an inaccessible job is refused without creating a replacement. Malformed or duplicate locators never mount a workspace. Instructions and expected figures are labelled as such and contain no hidden reads, counts or completion verdict. Shared capture defaults are unchanged; the guide supplies its own five-line text and continuation URL.
+
+The exercise follows £900 quote revision 1, £1,000 revision 2, builder-recorded practice acceptance, v3 no-charge activation, +£125/−£25 approved changes and an unapproved £50 extra, verified generated proof, £1,320 final account, baseline dispositions, terms, immutable lock and the actual practice Final Check worker. It then issues the invoice, records £500 and £820, reverses the second receipt, and approves a £100 net / £120 gross credit note, leaving £700 due. Existing source-linked job value remains inspectable; the CH-9 business availability link preserves its existing held state. Manual receipts are not bank settlement or qualifying recovery. MON-5 customer journeys remain **not ready yet**, and acceptance is explicitly builder-attested practice acceptance.
+
+`DEMO-J1-core-1000.spec.ts` is registered in both mobile-360 and desktop. It uses real UI/HTTP commands and the existing CI worker, with no SQL fixture completion or mocked successful responses. Attacks cover activation/receipt/reversal/correction replay, changed receipt payload, negative/fractional/over-limit amounts, injected allocation authority, excessive correction, invoice issue before completed Final Check, wrong locked-source hash, unchanged lock/invoice artifacts, pre-lock hidden-result absence, and foreign-session reads/writes. These are browser tests awaiting CI execution, not local database proof.
+
+Value-source navigation now opens the existing variation or invoice panel for source UUID fragments and focuses the referenced saved element when it loads. Draft/lost jobs still cannot open commercial sections, and pre-live jobs cannot open work or invoice sections through a source fragment. The browser journey follows actual extra and invoice source links; seven lifecycle tests exercise those permission boundaries.
+
+Local verification: installed TypeScript compiler builds core/config; web typecheck passes; installed Vitest runs `app/demo-s/core-1000/journey.test.tsx`, `app/demo-s/chooser.test.tsx` and `app/ui/workspace-lifecycle.test.ts` (39 tests). Playwright `--list` discovers both browser-project cases; no browser execution is claimed. Money arithmetic and commercial boundary checks pass, `git diff --check` passes, and the existing lane-policy API verifies all 11 uncommitted paths against the exact lane list. Commit-range lane lint correctly refuses the uncommitted self-comparison (HEAD equals origin/main), so CI must run it after the router commits. The pnpm launcher could not resolve/verify pinned 10.28.1 with the registry unreachable; installed binaries were used instead and no dependency was added. Database, browser, full build and full mandatory suites remain CI gates. No migration is needed; reserved 0410 is unused. Independent exact-head Claude RED review and two real builder observations remain missing. No release, provider, fee policy or commercial decision is approved by this change.
+
+LATER / SIMPLICITY (initial self-review): `apps/web/app/ui/jobguard-app.tsx`, `WalkIt` — move the existing capture form into its own component file when that area next changes, retaining the current defaults and continuation callback. The guided route currently reuses it by importing the app module; extraction would reduce unrelated UI dependencies and keep capture maintenance in one small file. This is non-blocking and no unrelated extraction is included here.
+Catch-up verification (31 October 2026): reconciled the router-started merge of `origin/main` at `c47ae08e`, retaining both chooser links and both journey contract sections verbatim. Installed Vitest passed the three named J1/chooser/workspace lifecycle files (39 tests, at most two workers); installed TypeScript passed web `--noEmit`; Playwright `--list --workers=2 DEMO-J1-core-1000.spec.ts` discovered phone and desktop cases. The lane-policy API covers all 11 paths relative to main, and `git diff --check` passes. No migration or SQL routine is changed; `docs/contracts/lp-downstream-effects-v1.md` is untouched. The router must stage the resolved files and complete the merge because this sandbox cannot write Git metadata. Database/browser execution, required CI and exact-head independent RED review remain outstanding.
+
+CI repair try 1 (31 October 2026, PR #448): the mobile J1 trace failed at `captured.review.lines` because the test issued its proposal GET immediately after clicking Confirm scope, before the asynchronous review save/confirmation completed. The journey now asserts persisted-status UI acknowledgement and five confirmed lines before that read. It also waits for the completed lock indicator before reading the immutable lock and reloading. Existing money, identity, replay and isolation assertions remain unchanged; no sleeps, command retries, SQL or product behaviour changes are introduced. Local verification: installed Vitest passed the three J1/chooser/workspace lifecycle files (39 tests, at most two workers), installed TypeScript passed web `--noEmit`, Playwright `--list --workers=2` discovered both browser projects, lane checks passed for the two repair paths, and `git diff --check` passed. Browser execution remains a GitHub CI gate.
+
+CI repair try 2 (31 October 2026, PR #448): both browser projects reached the Final Check terms button and found it disabled. Final Check terms acceptance is tenant-wide, so acceptance from an earlier practice job legitimately disables this control. J1 now reads the authorized lock view, accepts only when its saved boolean is false, and always asserts both the disabled accepted-state control and persisted `termsAccepted: true` before completing the account. Each baseline disposition must also retain its saved Done value. The guide explains previously accepted terms. Existing downstream journey assertions and financial controls remain intact; no SQL or exception changes are included. Local verification: installed Vitest passed the three J1/chooser/workspace lifecycle files (39 tests, at most two workers), installed TypeScript passed web `--noEmit`, Playwright `--list --workers=2` discovered both projects, lane checks passed for the three repair paths, and `git diff --check` passed. Browser execution remains a CI gate.
+
 ### DEMO-J3 shadow-30000 guide (built ahead on SV-6 hookup)
 
 `/demo-s/shadow-30000` creates or recovers a real capture using the shadow recipe
@@ -71,3 +131,33 @@ and £33,600 lock in both browser projects; execution is deferred to CI in the
 restricted builder environment. Existing SV-6 integration tests remain the
 real-PostgreSQL allocation/amount/reversal/locked-bill gate. Independent RED
 review and two builder observations are still missing.
+
+### DEMO-J3 part 2: executable source recipe (dark)
+
+`DEMO-J3-shadow.spec.ts` now drives the source-to-reveal slice in mobile-360 and
+desktop. All job, variation, proof, supplier and diary originals are created
+through the existing product routes. The new `j3-drainage-photo` is a generated
+PNG with an exact fictional caption (£500 proposed work); the exact fictional
+loft-hatch diary supplies £300. The existing £320 material invoice is examined
+as a zero-result source: a supplier bill alone does not assert extra work.
+The photo caption decoder is shared by the source recipe and Final Check.
+Unknown photo hashes and arbitrary diary text remain unsupported.
+
+The executable pre-lock worker leg is `e2e/helpers/shadow-source-recipe.ts`.
+It invokes the real ordinary-runtime source reader, pure detector and restricted
+shadow sink, twice to exercise replay. It checks the two held rows through the
+shadow login; no end-state row is inserted. This is an explicit worker invocation
+by the test driver, not a claim that saving a source schedules pre-lock detection
+in the UI. Holding/replaying those rows leaves the public report unchanged.
+The post-lock leg requests the existing scheduled practice worker, waits for its
+published completion and confirms/prices the two genuine revealed drafts.
+The £33,600 account and its lock remain unchanged. The £3,600 captures remain
+fee-free. No migration is needed; reserved 0451 is unused. No dependency added.
+
+MON-5 is still **not ready yet**. The recipe does not attest to customer approval
+of the catches, issue an invoice, create payment/allocation facts or produce a
+positive SV-6 assessment. Exactly £800 of priced catches is prepared for that
+producer chain; Q £800 / fee £80 / kept £720 remain targets, as do the invoice,
+verified settlement, CH-8 pack and CH-9 value completion. Existing SV-6 tests
+exercise its separate genuine settled-source chain; they are not evidence of
+settlement for this J3 run. No live provider, personal data or release is enabled.

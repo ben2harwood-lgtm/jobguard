@@ -124,3 +124,71 @@ Follow-up local validation (installed binaries; at most two workers):
 PostgreSQL/migration/catalogue and browser execution remain CI-only under the
 sandbox constraint. Exact-head independent Claude RED review and green CI remain
 required. No git write, commit, push, provider call or release was performed.
+
+## 1 November 2026 NOPR catch-up
+
+RED; MON-5 / M5-MESSAGE. Working files resolve both customer-message and main's
+customer-variation routes, screens, proxy boundary and shared expectations.
+The Git index is untouched because the sandbox makes .git read-only; the router
+must stage resolved paths. origin/main and MERGE_HEAD both identify
+e9d6c8b2bec984fb2edc604a1fe90005e67e7f0f. No fetch, git write or PR was attempted.
+
+Renamed 0391_customer_portal_message.sql to 0572_customer_portal_message.sql
+without changing SQL bytes, updated filename lookups, and added the strict proof
+fragment with seven LP-0 changes, two explicit routine additions and no tenancy
+changes (no tables are added). LP-0 baseline is current main; the proof composes
+its customer-message additions without duplicate identities. Removed the new
+routines from legacy upgrade expectations because proof application owns them.
+The downstream-effects contract is unchanged; the unrelated main 0510 proof gap
+is not altered.
+
+Local checks actually run:
+- API Vitest: customer-message.test.ts, customer-variation.test.ts and
+  watchdog-registry.test.ts, maxWorkers=2: 149/149 PASS after rebuilding stale
+  local core/API output.
+- DB Vitest: customer-message-fixtures.test.ts and selected migration-proof-loader
+  tests, maxWorkers=2: 27 PASS, 1 excluded (the zero-fragments live loader case
+  reaches the known main proof gap).
+- Installed tsc: core, API and DB emission PASS; API and web --noEmit PASS.
+- OpenAPI regenerated from the merged module; --check PASS.
+- Direct proofSchema/parseInventory/combineLp0 check PASS; effective inventory
+  has no duplicate group, entry, authority-path or routine identities.
+- PL/pgSQL CASE-in-IF lint PASS: 176 migrations.
+- Initial pnpm commands stalled before runner output and were interrupted;
+  installed repository binaries ran the checks above.
+
+## 1 November 2026 resolved 0572 union — READY
+
+Ben resolved the earlier byte-preservation hold: 0572 is not on main and may
+change. Applied /tmp/m5-message-0572-proposed-main-body.sql exactly. A deterministic
+assertion confirms its replacement writer equals main 0505's body with only the
+customer source-authority seam and exact candidate B safety fixture added.
+On-site diary admission, tenant advisory lock, open-job check, stored and returned
+onSite values, and replay-before-admission order are preserved. Customer receipt
+redaction remains at the identity entrypoint. No check was weakened.
+
+Updated only the proof's replacement-writer staticCalls listing to include
+app.ch4_admit_place and app.ch4_require_open. definitionSha256 remains null under
+the existing inventory contract; there is no committed digest to refresh. The
+LP-0 baseline, downstream-effects contract and known main 0510 proof gap are
+unchanged.
+
+Checks executed for this resolution:
+- API installed Vitest, --maxWorkers=2, customer-message.test.ts,
+  customer-variation.test.ts, watchdog-registry.test.ts: 149/149 PASS.
+- DB installed Vitest, --maxWorkers=2, customer-message-fixtures.test.ts:
+  2/2 PASS.
+- Python exact-union/0505-body comparison, diary admission/replay-order assertions,
+  and conflict-marker scan of all eleven index-unmerged working files: PASS.
+- Strict proofSchema/parseInventory/combineLp0 check of the 0572 fragment with the
+  committed LP-0 baseline: PASS. Initial root invocation could not resolve tsx;
+  rerun from apps/api with its installed tsx passed. No package download.
+- node tools/plpgsql-case-in-if-lint.mjs: PASS, 176 migrations.
+- git diff --check: PASS.
+
+READY for router staging and commit, NOPR. The read-only index still records merge
+conflicts; working files contain their prepared resolutions. No git write, fetch,
+commit, push or PR was performed. No origin/main refresh is required by this brief.
+
+PostgreSQL and browser suites were not run under the sandbox restriction.
+Independent exact-head RED review and green CI remain required.

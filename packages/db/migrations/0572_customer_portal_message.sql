@@ -21,7 +21,7 @@ END $$;
 ALTER FUNCTION app.sv7a_require_source_owner(uuid,uuid,text,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.sv7a_require_source_owner(uuid,uuid,text,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access;
 
--- Latest definition is 0303. Only the message authority seam and exact candidate B fixture change.
+-- Starts from main 0505, preserving on-site diary admission; only message authority and the exact candidate B fixture change.
 CREATE OR REPLACE FUNCTION app.sv7a_intake_job_source(t uuid,j uuid,digest text,source text,input jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; cid uuid; request_digest text; prior app.command_receipt; allowed text[]; txt text; raw bytea; h text;
@@ -59,9 +59,13 @@ BEGIN
   RETURN prior.result;
  END IF;
  -- New writes only below. Holds precede every effect.
- IF source='diary' AND (input->>'onSite')::boolean THEN RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'; END IF;
  IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
  PERFORM app.require_watchdog_live(j);
+ IF source='diary' AND (input->>'onSite')::boolean THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,184));
+  PERFORM app.ch4_require_open(t,j);
+  PERFORM app.ch4_admit_place(t,j,'restart');
+ END IF;
  IF app.ch4_legacy_command_owned(t,cid) THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
  INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
  VALUES(t,cid,ctype,cid::text,request_digest,'processing',actor);
@@ -77,14 +81,14 @@ BEGIN
  VALUES(t,j,ev,source,sid,okey,ver,raw,h,octet_length(raw),at_time,clock_timestamp(),ref);
  IF source='diary' THEN
   INSERT INTO app.job_diary_entry(tenant_id,job_id,id,command_id,actor_membership_id,entry_mode,on_site,evidence_id,object_version_id,sha256,source_received_at)
-  VALUES(t,j,sid,cid,actor,input->>'entryMode',false,ev,ver,h,at_time);
+  VALUES(t,j,sid,cid,actor,input->>'entryMode',(input->>'onSite')::boolean,ev,ver,h,at_time);
  ELSE
   INSERT INTO app.customer_message_source(tenant_id,job_id,id,command_id,actor_membership_id,fictional_role_name,evidence_id,object_version_id,sha256,source_received_at)
   VALUES(t,j,sid,cid,actor,input->'fictionalCustomer'->>'name',ev,ver,h,at_time);
  END IF;
  rec_json:=jsonb_build_object('id',sid,'commandId',cid,'text',txt,'actualTesterMembershipId',actor,
   'evidence',jsonb_build_object('id',ev,'objectVersionId',ver,'sha256',h,'serverReceivedAt',to_char(at_time AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')))
-  ||CASE WHEN source='diary' THEN jsonb_build_object('entryMode',input->>'entryMode','onSite',false)
+  ||CASE WHEN source='diary' THEN jsonb_build_object('entryMode',input->>'entryMode','onSite',(input->>'onSite')::boolean)
    ELSE jsonb_build_object('fictionalCustomer',jsonb_build_object('kind','named_fictional_customer','name',input->'fictionalCustomer'->>'name')) END;
  out_result:=jsonb_build_object('version','job-source-intake-receipt.v1','jobId',j,'sourceKind',source,'record',rec_json,'environment','synthetic_demo','realExternalActions',0)
   ||CASE WHEN source='diary' THEN jsonb_build_object('notice','Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.','noticeVersion','job-diary-notice.v1') ELSE '{}'::jsonb END;

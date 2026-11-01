@@ -35,7 +35,7 @@ describe("MON-2A exact-path subscription access (Ben, 28 Oct)", () => {
     const authority = subscriptionAuthority(identity(async () => ({})));
     expect(await authority.resolve({ sessionToken: "real", origin: "o" })).toEqual({ credentials: { sessionToken: "real", origin: "o" }, digest: "digest(session:real)" });
     await expect(authority.resolve({})).rejects.toBeInstanceOf(SubscriptionPersistenceError);
-    expect(["INVALID_SUBSCRIPTION_INPUT", "SUBSCRIPTION_FORBIDDEN", "SUBSCRIPTION_PROJECTION_MISMATCH", "SUBSCRIPTION_UNAVAILABLE"].map(subscriptionHttpStatus)).toEqual([400, 403, 409, 503]);
+    expect(["INVALID_SUBSCRIPTION_INPUT", "SUBSCRIPTION_FORBIDDEN", "SUBSCRIPTION_PROJECTION_MISMATCH", "SUBSCRIPTION_UNAVAILABLE", "SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY", "SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE"].map(subscriptionHttpStatus)).toEqual([400, 403, 409, 503, 409, 409]);
   });
   it("the controller forwards exact credentials and refuses a malformed envelope before the application", async () => {
     const application = { read: vi.fn(async () => ({ version: "subscription-persisted-read.v1" })), command: vi.fn(async () => ({ ok: true })) };

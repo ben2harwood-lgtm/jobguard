@@ -9,6 +9,14 @@ const tableIdent = (table: string) => {
   return parts.map(ident).join(".");
 };
 
+// Freeze the table set across upgrades; explicit names also make a dropped table fail.
+export async function snapshotRows(db: Queryable, names?: string[]) {
+  const tables = names ?? (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows.map(row => `${row.schemaname}.${row.tablename}`);
+  const rows: Record<string, unknown> = {};
+  for (const table of tables) rows[table] = (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') data FROM ${tableIdent(table)} t`)).rows[0].data;
+  return rows;
+}
+
 export async function proofRows(db: Queryable, table: string, names: string[], key: string[]) {
   const found = (await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${key.map(name => `t.${ident(name)}`).join(",")}) k) AS identity,
     (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name => `t.${ident(name)}`).join(",")}) s) AS bytes FROM ${tableIdent(table)} t) x ORDER BY identity COLLATE "C"`)).rows;
@@ -60,4 +68,11 @@ export async function scratchReplaceFunction(db: Queryable, signature: string) {
   if (!definition.includes("$function$")) throw new Error(`${signature}: expected $function$ delimiter`);
   await db.query(definition.replace("$function$", "$function$/* mo4 scratch */"));
   return (await read()).includes("mo4 scratch");
+}
+
+/** Union only approved catalogue rows, preserving earlier metadata and the database's final ordering. */
+export function catalogueAdditions<T>(previous: T[], added: T[], live: T[]): T[] {
+  const positions = new Map(live.map((row, index) => [JSON.stringify(row), index]));
+  const position = (row: T) => positions.get(JSON.stringify(row)) ?? -1;
+  return [...previous, ...added].sort((a, b) => position(a) - position(b));
 }

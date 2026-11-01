@@ -1,0 +1,277 @@
+{
+  "migration": "0572_customer_portal_message.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": {
+        "id": "a-customer-signin",
+        "title": "MON-5 synthetic customer sign-in boundary",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0387_customer_signin.sql",
+          "apps/api/src/auth/customer-signin.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-signin.integration.test.ts",
+          "apps/api/src/auth/customer-signin.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation authorized by Ben on 29 October; this entry records capability, not an independent review."
+        },
+        "downstream": "Three synthetic identity-only entrypoints issue, consume/resolve/sign out, and revoke customer sign-in grants. The two app tables and three helpers remain private to jobguard_migration. Owner/finance membership, current party binding, ten-minute grant lifetime and one-hour customer session cap are checked in SQL. No commercial customer action or shadow read is granted.",
+        "path": "ap-customer-signin"
+      },
+      "after": {
+        "id": "a-customer-signin",
+        "title": "MON-5 synthetic customer sign-in boundary",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0387_customer_signin.sql",
+          "apps/api/src/auth/customer-signin.ts",
+          "packages/db/migrations/0572_customer_portal_message.sql",
+          "apps/api/src/auth/customer-message.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-signin.integration.test.ts",
+          "apps/api/src/auth/customer-signin.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts",
+          "packages/db/test/customer-portal-message.integration.test.ts",
+          "apps/api/src/auth/customer-message.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation authorized by Ben on 29 October; this entry records capability, not an independent review."
+        },
+        "downstream": "Three synthetic identity-only entrypoints issue, consume/resolve/sign out, and revoke customer sign-in grants. The two app tables and three helpers remain private to jobguard_migration. Owner/finance membership, current party binding, ten-minute grant lifetime and one-hour customer session cap are checked in SQL. No commercial customer action or shadow read is granted. M5-MESSAGE adds identity-only customer_portal_message, rechecking the same session around the existing SV-7A intake. Its owner-only source helper permits customer messages only, retains the synthetic issuer sponsor and records separate customer-session audit provenance. It grants no diary or other command authority.",
+        "path": "ap-customer-signin"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)|jobguard_identity|EXECUTE|-",
+        "group": "a-customer-signin"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": {
+        "id": "ap-customer-signin",
+        "title": "MON-5 synthetic customer sign-in boundary",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0387_customer_signin.sql",
+          "apps/api/src/auth/customer-signin.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-signin.integration.test.ts",
+          "apps/api/src/auth/customer-signin.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "description": "Three synthetic identity-only entrypoints issue, consume/resolve/sign out, and revoke customer sign-in grants. The two app tables and three helpers remain private to jobguard_migration. Owner/finance membership, current party binding, ten-minute grant lifetime and one-hour customer session cap are checked in SQL. No commercial customer action or shadow read is granted."
+      },
+      "after": {
+        "id": "ap-customer-signin",
+        "title": "MON-5 synthetic customer sign-in boundary",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0387_customer_signin.sql",
+          "apps/api/src/auth/customer-signin.ts",
+          "packages/db/migrations/0572_customer_portal_message.sql",
+          "apps/api/src/auth/customer-message.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-signin.integration.test.ts",
+          "apps/api/src/auth/customer-signin.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts",
+          "packages/db/test/customer-portal-message.integration.test.ts",
+          "apps/api/src/auth/customer-message.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "description": "Three synthetic identity-only entrypoints issue, consume/resolve/sign out, and revoke customer sign-in grants. The two app tables and three helpers remain private to jobguard_migration. Owner/finance membership, current party binding, ten-minute grant lifetime and one-hour customer session cap are checked in SQL. No commercial customer action or shadow read is granted. M5-MESSAGE adds identity-only customer_portal_message, rechecking the same session around the existing SV-7A intake. Its owner-only source helper permits customer messages only, retains the synthetic issuer sponsor and records separate customer-session audit provenance. It grants no diary or other command authority."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.sv7a_require_source_owner(uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_command_owner",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.sv7a_intake_job_source",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.sv7a_intake_job_source(uuid,uuid,text,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_command_owner"
+        ]
+      },
+      "after": {
+        "identity": "function:app.sv7a_intake_job_source(uuid,uuid,text,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_admit_place",
+          "app.ch4_require_command_owner",
+          "app.ch4_require_open",
+          "app.sv7a_require_source_owner"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "sv7a_require_source_owner",
+        "args": "t uuid, j uuid, digest text, source text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "customer_portal_message",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
