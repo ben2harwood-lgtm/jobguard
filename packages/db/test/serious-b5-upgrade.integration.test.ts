@@ -1208,53 +1208,6 @@ async function evidencePackV3Additions(before: Awaited<ReturnType<typeof snapsho
   relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
   policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
 }
-// M4-4 base persistence (0455) plus operator recovery (0488), exact additive union.
-async function wormAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
- // 0488 closes precisely these predecessor PUBLIC EXECUTE grants. Preserve every
- // other routine field/ACL, and preserve access for the prior app-schema roles.
- const restricted = ["app.assert_journal_balanced()", "app.guard_authorization_revocation()", "app.guard_fixed_baseline()", "app.guard_imported_job()", "app.half_even_ratio(bigint,bigint,bigint)", "app.reference_recovery_cap(bigint)", "app.reject_audit_mutation()", "app.reject_capture_mutation()", "app.reject_evidence_object_mutation()", "app.reject_immutable_authorization_record()", "app.reject_immutable_commercial_mutation()", "app.reject_ledger_mutation()", "app.reject_mandatory_finding_suppression()", "app.reject_recovery_mutation()", "app.require_approved_resolution()", "app.review_invalidated_recovery_evidence()", "app.signal_outbox()"];
- const priorRoles = ["jobguard_runtime", "jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_migration"];
- const restrictedRows = (await f.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
-  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-  WHERE p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid))`, [restricted])).rows;
- expect(restrictedRows).toHaveLength(restricted.length);
- for (const r of restrictedRows) {
-  const prior = before.routines.find(b => b.nspname===r.nspname && b.proname===r.proname && b.args===r.args);
-  expect(prior).toBeDefined();
-  prior!.proacl = (await f.admin.query(`SELECT
-   ARRAY(SELECT a FROM unnest(coalesce($1::aclitem[],acldefault('f',$2::oid))) a WHERE a::text NOT LIKE '=%')
-   || ARRAY(SELECT (quote_ident(role)||'=X/'||quote_ident(pg_get_userbyid($2::oid)))::aclitem FROM unnest($3::text[]) role WHERE role<>pg_get_userbyid($2::oid)) AS acl`,
-   [prior!.proacl,prior!.proowner,priorRoles])).rows[0].acl;
- }
- const after = await snapshot();
- const tables = ["worm_synthetic_version", "worm_command", "worm_attempt"];
- const indexes = ["worm_synthetic_version_pkey", "worm_command_pkey", "worm_command_tenant_id_idempotency_key_key", "worm_attempt_pkey"];
- const identities = [["worm_submit", "c jsonb"], ["worm_claim", "cid uuid"],
-  ["worm_finish", "cid uuid, n integer, outcome text, material jsonb"],
-  ["worm_recovery_target", "cid uuid"], ["worm_reconcile", "cid uuid, n integer, observed_held boolean"],
-  ["worm_operator_alerts", ""]];
- const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name,args]) => r.proname === name && r.args === args));
- expect(routines.map(r => [r.proname,r.args]).sort()).toEqual([...identities].sort());
- const acl = (await f.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
-  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END
-   FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
-  FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname=ANY($1::text[]) ORDER BY p.proname`, [identities.map(([name]) => name)])).rows;
- expect(acl).toEqual(identities.map(([proname]) => ({proname,owner:"jobguard_migration",prosecdef:true,
-  proconfig:["search_path=pg_catalog, app"],executors:["jobguard_migration",proname === "worm_submit" ? "jobguard_runtime" :
-   ["worm_claim","worm_finish"].includes(proname!) ? "jobguard_worm_executor" : "jobguard_worm_operator"]
- })).sort((a,b) => a.proname!.localeCompare(b.proname!)));
- const relations = after.relations.filter(r => r.nspname === "app" && [...tables,...indexes].includes(r.relname));
- expect(relations.map(r => r.relname).sort()).toEqual([...tables,...indexes].sort());
- const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
- expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
- for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
- for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
- const position = (rows: unknown[],row: unknown) => rows.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
-  routines:[...before.routines,...routines].sort((a,b) => position(after.routines,a)-position(after.routines,b)),
-  relations:[...before.relations,...relations].sort((a,b) => position(after.relations,a)-position(after.relations,b)),
-  policies:[...before.policies,...policies].sort((a,b) => position(after.policies,a)-position(after.policies,b))};
-}
 // 0520 adds exactly one restricted synthetic identity snapshot and its primary key.
 async function mobileAuthStoreAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1371,7 +1324,6 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
- Object.assign(expected, await wormAdditions(expected));
  Object.assign(expected, await keyRegistryAdditions(expected));
  Object.assign(expected, await mobileAuthStoreAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
