@@ -26,7 +26,10 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
   tables: (await f.admin.query("SELECT oid,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows,
   policies: (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname='app' ORDER BY tablename,policyname")).rows,
  });
- const prior = await catalogue(); await migrate(f.admin); await migrate(f.admin);
+ const prior = await catalogue();
+ // Prove 0505 alone against its predecessors, before later migrations add objects.
+ await f.admin.query(await readFile(MIGRATION_URLS[position]!, "utf8"));
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  const after = await catalogue(); expect(after.tables).toEqual(prior.tables); expect(after.policies).toEqual(prior.policies);
  expect(after.routines).toHaveLength(prior.routines.length);
@@ -36,6 +39,14 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
   if (changed.includes(now.proname)) { expect(now.prosrc).not.toBe(was.prosrc); expect({ ...now, prosrc: was.prosrc }).toEqual(was); }
   else expect(now).toEqual(was);
  }
+ // Compare the same complete migration set across replay, including later objects.
+ await migrate(f.admin);
+ expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
+ const upgradedCatalogue = await catalogue();
+ const upgradedRows = await proofBefore(f.admin, Object.keys(before));
+ await migrate(f.admin);
+ expect(await proofDifferences(f.admin, upgradedRows)).toEqual({ rows: [], types: [] });
+ expect(await catalogue()).toEqual(upgradedCatalogue);
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rows[0].n).toBe(1);
 });
