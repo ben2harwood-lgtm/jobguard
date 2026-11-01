@@ -5,7 +5,7 @@ import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
-const migration="0484_accounting_export_persistence.sql";
+const migration="0582_accounting_export_persistence.sql";
 let c:Cluster;
 beforeAll(async()=>{c=await startBeforeMigration(migration);},240000);
 afterAll(async()=>{await c?.close();});
