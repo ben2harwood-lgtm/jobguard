@@ -13,7 +13,7 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     expect(journeyChoices.map(item => item.journey)).toEqual(["DEMO-J1", "DEMO-J2", "DEMO-J3", "DEMO-J4", "DEMO-J5"]);
     expect(new Set(journeyChoices.map(item => item.scenario)).size).toBe(5);
     expect(meterProfiles).toHaveLength(13); expect(meterProfiles[9]).toContain("13–17");
-    expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["core-1000", "shadow-30000"]);
+    expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["core-1000", "shadow-30000", "trial"]);
     for (const item of journeyChoices.filter(choice => !journeyAvailable(choice.scenario) || choice.scenario === "shadow-30000")) expect(item.reason).toContain("not ready yet");
   });
   it("links only persisted lifecycle identities and records missing A1 and observations", () => {
