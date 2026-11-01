@@ -5,8 +5,9 @@ Only the owner command dispatcher can elect through the checked SQL routine;
 source triggers serialize on the existing case advisory lock. Historical pursuit
 messages/events and progressed legacy cases backfill start markers. No earlier
 migration or routine is replaced. Direct runtime writes are revoked. Existing
-LP-0, tenancy, entitlement-upgrade and SERIOUS-B5 expectations are unioned with
-the exact additions.
+LP-0, tenancy and SERIOUS-B5 expectations are unioned through the explicit
+0584_managed_recovery_election.proof.json fragment; the entitlement upgrade
+retains its two exact empty-table additions.
 
 The repository requires the server's opaque session digest alongside the verified
 tenant context. mon9_session resolves identity from an active synthetic identity
@@ -30,6 +31,12 @@ Forward fix: retain append-only election/start history and install a correcting
 migration; disable the calling surface if needed. Never delete an opt-in or
 pursuit marker to reverse this migration. No destructive rollback is supported.
 
-Local evidence is in the router's commit-message handoff. PostgreSQL fresh-install,
-upgrade, RLS/grants, race and source/reversal tests are written for GitHub CI and
-cannot run in the builder sandbox. They are not claimed as executed evidence.
+Local validation on 1 November 2026: the managed-recovery repository, integration
+and upgrade tests, migration-proof-loader, SERIOUS-B5 upgrade, LP-0 grant-freeze
+and tenancy suites passed together (7 files, 81 tests) using real embedded
+PostgreSQL 16 and at most two Vitest workers. Another 13 core tests and six contractor
+entitlement-upgrade tests passed; core, storage and database builds passed.
+The known main-side missing legacy
+entry for 0510_read_value_job_combined_final.sql was added only in a scratch test
+copy; the committed legacy list is unchanged. Proof expectations come from SQL
+and reviewed source expectations, never from a database catalogue.
