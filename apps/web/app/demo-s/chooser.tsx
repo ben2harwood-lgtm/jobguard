@@ -148,6 +148,7 @@ export function DemoChooser() {
         {run.meterPreviewNote && <p role="status">{run.meterPreviewNote}</p>}
         {run.meterPreview && <MeterPreview preview={run.meterPreview} />}
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
+        {run.scenario === "trial" && <p><a href={`/demo-s/trial?${new URLSearchParams({tenantId,runId:run.runId})}`}>Open guided first-job trial</a></p>}
         <p>Saved selection revision {run.revision}. Selection metadata does not record journey completion.</p>
         {run.successorId && <p><a href={demoLink(tenantId, run.successorId)}>Open replacement selection</a></p>}
         {run.predecessorId && <p><a href={demoLink(tenantId, run.predecessorId)}>Open archived selection</a></p>}

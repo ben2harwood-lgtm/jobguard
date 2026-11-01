@@ -1113,6 +1113,37 @@ async function simulationCollectionAdditions(before: Awaited<ReturnType<typeof s
  const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
+async function simulationMoneyAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const tables=["simulation_money_run", "simulation_money_review"];
+ const indexes=["simulation_money_run_pkey","simulation_money_run_tenant_id_job_id_id_key","simulation_money_review_pkey"];
+ const identities=[
+  ["simulation_money_sources","t uuid, j uuid, actor uuid"],
+  ["simulation_money_run","p_job uuid, p_session text, p_command jsonb"],
+ ];
+ const routines=after.routines.filter(r=>r.nspname==="app"&&identities.some(([name,args])=>r.proname===name&&r.args===args));
+ expect(routines.map(r=>[r.proname,r.args]).sort()).toEqual([...identities].sort());
+ for(const r of routines){
+  expect(r.proconfig).toEqual(["search_path=pg_catalog"]);
+  const exposed=r.proname==="simulation_money_run";
+  expect(r.prosecdef).toBe(exposed);
+  const acl=(await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl;
+  expect(acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration",...(exposed?["jobguard_runtime=X/jobguard_migration"]:[])].sort());
+  expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
+ }
+ const relations=after.relations.filter(r=>r.nspname==="app"&&[...tables,...indexes].includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual([...tables,...indexes].sort());
+ for(const t of tables){
+  expect(before.rows).not.toHaveProperty(`app.${t}`);expect(after.rows[`app.${t}`]).toEqual([]);
+  const relation=relations.find(r=>r.relname===t)!;expect(relation.relrowsecurity).toBe(true);expect(relation.relforcerowsecurity).toBe(true);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[relation.relacl])).rows[0].acl).toEqual(["jobguard_migration=arwdDxt/jobguard_migration"]);
+ }
+ const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
+ expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
+ for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
+}
 // 0306 adds only these objects; every predecessor catalogue row still compares in full.
 // LP-2 adds a private, tenant-checked permit table and five exact routines.
 // Keep predecessor facts intact except the three explicitly withdrawn EXECUTE ACLs.
@@ -1321,9 +1352,11 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await successFeeCatchAdditions(expected));
  Object.assign(expected, await simulationStatementAdditions(expected));
  Object.assign(expected, await simulationCollectionAdditions(expected));
+ Object.assign(expected, await simulationMoneyAdditions(expected));
  Object.assign(expected, await sourceIntakeAdditions(expected));
  Object.assign(expected, await evidencePackV3Additions(expected));
  Object.assign(expected, await demoRunAdditions(expected));
+ Object.assign(expected, await demoTrialAdditions(expected));
  Object.assign(expected, await keyRegistryAdditions(expected));
  Object.assign(expected, await mobileAuthStoreAdditions(expected));
  Object.assign(expected, await jobDoorAdditions(expected));
@@ -1370,6 +1403,22 @@ async function trialAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  return { rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])), routines, relations, policies };
+}
+
+// DEMO-J5 exact additive union. Existing rows, grants, policies and routines stay compared.
+async function demoTrialAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after=await snapshot();
+ const routines=after.routines.filter(r=>r.nspname==="app"&&r.proname==="demo_trial"&&r.args==="t uuid, digest text, v jsonb");
+ expect(routines).toHaveLength(1);
+ expect(routines[0]).toMatchObject({prosecdef:true,proconfig:["search_path=pg_catalog"],proacl:"{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}"});
+ const names=["demo_trial_binding","demo_trial_binding_pkey"];
+ const relations=after.relations.filter(r=>r.nspname==="app"&&names.includes(r.relname));
+ expect(relations.map(r=>r.relname).sort()).toEqual(names);
+ const policies=after.policies.filter(r=>r.schemaname==="app"&&r.tablename==="demo_trial_binding");
+ expect(policies.map(r=>r.policyname)).toEqual(["tenant_scope"]);
+ expect(before.rows["app.demo_trial_binding"]).toBeUndefined();
+ const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ return {rows:{...before.rows,"app.demo_trial_binding":[]},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 
 // MON-5: union 0387's sign-in foundation and 0410's private approval provenance.

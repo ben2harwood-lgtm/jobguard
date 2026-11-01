@@ -1,4 +1,5 @@
 "use client";
+import { SimulationMoneyCheck } from "./simulation-money-check";
 import { useEffect, useState } from "react";
 import { simulationFeeStatementViewV1, type IssuedSimulationFeeStatement } from "@jobguard/core";
 import { SimulationFeeCollection } from "./simulation-fee-collection";
@@ -46,5 +47,5 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
    {approved===d.statementId&&<p role="status">Exact statement approved; no money collected.</p>}
   </article>;})}{records.at(-1)&&<SimulationFeeCollection jobId={jobId} statementId={records.at(-1)!.document.statementId} statementHash={records.at(-1)!.documentHash}/>}
   {error&&<p role="alert" aria-label="Simulation statement error">{error}</p>}
- </section>;
+ <SimulationMoneyCheck key={jobId} jobId={jobId}/></section>;
 }
