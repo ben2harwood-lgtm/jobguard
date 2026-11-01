@@ -175,5 +175,6 @@
   "0509_simulation_fee_collection.sql",
   "0510_read_value_job_combined_final.sql",
   "0512_simulation_money_trail_run.sql",
-  "0513_small_builder_trial_demo.sql"
+  "0513_small_builder_trial_demo.sql",
+  "0514_withheld_payment_statement_source.sql"
 ]
