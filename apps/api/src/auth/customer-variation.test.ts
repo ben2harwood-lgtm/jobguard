@@ -68,12 +68,12 @@ describe("MON-5 exact customer extra approval", () => {
   try {
    const {fileURLToPath}=await import("node:url");
    const route=await import(fileURLToPath(new URL(`../../../web/app/api/customer-portal/${action}/route.ts`,import.meta.url)));
-   const {middleware}=await import(fileURLToPath(new URL("../../../web/middleware.ts",import.meta.url)));
+   const {proxy}=await import(fileURLToPath(new URL("../../../web/proxy.ts",import.meta.url)));
    const url=`${origin}/api/customer-portal/${action}`;
    const raw=action==="variations/read"?{version:"customer-variations-read.v1",jobId:job}:command;
    const response=await route.POST(new Request(url,{method:"POST",headers,body:JSON.stringify(raw)}));
    expect(response.status).toBe(401);expect(await response.json()).toEqual({code:"CUSTOMER_REFUSED"});expect(f.query).toHaveBeenCalledOnce();
-   expect(middleware({cookies:{has:()=>true},nextUrl:new URL(url)}).headers.get("x-middleware-next")).toBe("1");
+   expect(proxy({cookies:{has:()=>true},nextUrl:new URL(url)}).headers.get("x-middleware-next")).toBe("1");
   }finally{if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;}
  });
  it("a revocation between read and approval is refused by the SQL writer",async()=>{
