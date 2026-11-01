@@ -169,8 +169,8 @@ describe("M4-7 DARK AIS PostgreSQL boundary", () => {
   await expect(f.admin.query("DELETE FROM app.ais_connection WHERE tenant_id=$1", [s.a.tenantId])).rejects.toThrow("AIS_IMMUTABLE");
   expect((await f.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows[0].tenant).toBeNull();
   // Same runtime login against a differently named database must fail before session/data access.
-  const liveName = new Pool({ ...f.runtime.options, database: "postgres" });
-  const liveAdmin = new Pool({ ...f.admin.options, database: "postgres" });
+  const liveName = new Pool({ ...f.runtime.options, password: f.runtime.options.password, database: "postgres" });
+  const liveAdmin = new Pool({ ...f.admin.options, password: f.admin.options.password, database: "postgres" });
   try {
    await migrate(liveAdmin);
    await expect(new DarkAisRepository(liveName, s.adapter, s.vault, "synthetic_demo").read(s.a.context, s.a.digest, s.id)).rejects.toThrow("AIS_DARK_ONLY");

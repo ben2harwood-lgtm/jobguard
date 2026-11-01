@@ -100,8 +100,8 @@ BEGIN
   IF conn.expires_at<=clock_timestamp() OR last.kind IS DISTINCT FROM 'linked' THEN RAISE EXCEPTION 'AIS_INACTIVE' USING ERRCODE='23514'; END IF;
   IF v-ARRAY['window','page']<>'{}'::jsonb OR NOT v ?& ARRAY['window','page']
    OR v->'window'->>'version' IS DISTINCT FROM 'ais-window.v1' OR v->'page'->>'version' IS DISTINCT FROM 'ais-page.v1'
-   OR v->'window'-ARRAY['version','from','to','cursor']<>'{}'::jsonb
-   OR v->'page'-ARRAY['version','observations','nextCursor']<>'{}'::jsonb
+   OR (v->'window')-ARRAY['version','from','to','cursor']<>'{}'::jsonb
+   OR (v->'page')-ARRAY['version','observations','nextCursor']<>'{}'::jsonb
    OR NOT (v->'window') ?& ARRAY['version','from','to','cursor']
    OR NOT (v->'page') ?& ARRAY['version','observations','nextCursor']
    OR jsonb_typeof(v->'page'->'observations') IS DISTINCT FROM 'array'
@@ -128,7 +128,7 @@ BEGIN
     IF o-ARRAY['version','accountRef','movementRef','providerRef','revision','status','amount','bookedOn']<>'{}'::jsonb
      OR NOT o ?& ARRAY['version','accountRef','movementRef','providerRef','revision','status','amount','bookedOn']
      OR o->>'version' IS DISTINCT FROM 'ais-observation.v1' OR o->>'accountRef' IS DISTINCT FROM linked_account
-     OR o->'amount'-ARRAY['pence','currency']<>'{}'::jsonb OR NOT (o->'amount') ?& ARRAY['pence','currency']
+     OR (o->'amount')-ARRAY['pence','currency']<>'{}'::jsonb OR NOT (o->'amount') ?& ARRAY['pence','currency']
      OR jsonb_typeof(o->'revision') IS DISTINCT FROM 'number' OR o->>'revision' !~ '^[1-9][0-9]*$'
      OR jsonb_typeof(o->'amount'->'pence') IS DISTINCT FROM 'number' OR o->'amount'->>'pence' !~ '^-?(0|[1-9][0-9]*)$'
      OR (o->>'bookedOn')::date NOT BETWEEN (v->'window'->>'from')::date AND (v->'window'->>'to')::date

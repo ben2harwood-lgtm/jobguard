@@ -259,7 +259,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "88b723dcd46b1eff3bcadd2973c03ddc9d886dfb33f88a98c5a4af11aab091ec",
+        "definitionSha256": "2fad7e44ce95ae0699f50027dd914a664251ecdf3ae8904e75de9ce31869e012",
         "staticWrites": [
           "app.ais_connection",
           "app.ais_lifecycle",
