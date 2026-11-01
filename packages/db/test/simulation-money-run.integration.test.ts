@@ -87,7 +87,9 @@ it("withheld payments collect GBP282, compensate and refund GBP250, and reconcil
  const x=await recoveryFeeFixture(f),statements=new SimulationFeeStatementRepository(f.runtime),collection=new SimulationFeeCollectionRepository(f.runtime);
  const issue=()=>statements.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()});
  const run=(raw:unknown)=>collection.command(x.context,x.jobId,x.auth.digest,raw);
- const settle=async(attemptId:string)=>{const c={version:"simulation-fee-collection-command.v1",action:"settle",commandId:randomUUID(),attemptId};await run(c);await run(c);};
+ // Terminal fake-rail facts come only from the operator connection, as in the collection suite; the repository refuses them.
+ const rail=(raw:unknown)=>finalCheckTenant(f.admin,x.context.tenantId,async db=>{await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[x.jobId,x.auth.digest,raw])).rows[0].result;});
+ const settle=async(attemptId:string)=>{const c={version:"simulation-fee-collection-command.v1",action:"settle",commandId:randomUUID(),attemptId};await rail(c);await rail(c);};
  await x.allocate(0);await x.approve(await x.review());
  await x.allocate(1);await x.approve(await x.review(1));
  const command={version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()};
