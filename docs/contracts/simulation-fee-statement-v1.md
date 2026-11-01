@@ -1,40 +1,89 @@
-# Simulation fee statement: independent representation v1
+# Simulation fee statements — M4-10-S
 
-Status: pure representation implemented; issuance, persistence, delivery and full server acceptance HELD. This document does not define a working command or approval/source interface. Decision 74 permits stacked preparation on M4-9-S `04fea7be692d9ea254a6ff62238cc68c43663adb`; dependency merges are still outstanding.
+Synthetic only, RED (money). Migration 0490 adds immutable numbered success-fee
+statements in the `app.platform_*` document namespace. Subscription statements
+remain separate in `app.platform_statement`; their period constraints, amounts,
+0374 issuance routine and collection path are unchanged. No production policy,
+VAT decision, provider or collection authority is introduced.
 
-`packages/core/src/simulation-fee-statement.ts` exports `simulationFeeStatementDocumentV1`, `SimulationFeeStatementDocument`, `SimulationFeeStatementError` and `formatSimulationFeeStatement(unknown)`. The schema parses representation data only. Nothing in this module authenticates, authorizes, derives entitlement, assigns identifiers/numbers, issues a statement or proves a source exists. It must not be wired directly to client input. A future server consumer must construct it from authenticated, tenant/job-qualified, immutable persisted facts through the approved command lifecycle.
+The existing `simulation-fee-statement-document.v1` representation remains
+compatible. The persisted/download contract is
+`issued-simulation-fee-statement.v1`: it adds the server-selected job,
+`success_fee.synthetic.v1` namespace and an immutable source snapshot.
+`DEMO-FEE-000001` numbering is tenant-wide, serialized across that tenant's jobs.
+The number, exact rational Q, policy v3, cumulative principal, signed documentary
+delta, posting history, attribution/allocation/approval references and original
+statement identity/hash are included in the document's SHA-256.
 
-| Field | Representation |
-| --- | --- |
-| `version` | `simulation-fee-statement-document.v1` |
-| `statementId`, `number` | Supplied UUID and nonempty display text, at most 80 characters; no allocation, prefix or correction-numbering policy implemented |
-| `environment`, `policyVersion` | Exactly `synthetic_demo`, `reference_fee_policy_v3` |
-| `qualifyingPrincipal` | Q as exact rational pence with decimal integer strings; existing `exactPenceV1`/`parseExactPence` validation, nonnegative and within the existing money magnitude limit; no reduction or rounding |
-| `cumulativeFeePrincipal` | Supplied F as nonnegative GBP Money |
-| `documentPrincipal` | Supplied signed GBP principal, including negative correction examples |
-| `postingHistory` | Ordered documentary journal UUID/principal pairs, at most 10,000; signed history is preserved, never summed into F |
-| `original` | Nullable original document UUID/SHA-256 representation; no relational/linkage or compensation authority is established |
-| `settlementHistory` | Exactly `{ state: 'integration_unavailable', dependency: 'M4-12-S' }`; no collected, paid, outstanding or refund facts inferred |
-| `warning`, `vatLabel`, `sandboxLabel` | Exact literals below |
+Sources come from approved M4-9-S derivations and the existing SV-6 current-source
+validator. The statement does not allocate receipts or qualify new positive
+principal. It cannot expand the latest posted entitlement. Each live source is also
+bounded by its own immutable reviewed remaining principal: exact cross-multiplication
+compares the fractions before any fee rounding. Growth returns
+`SUCCESS_FEE_SOURCE_CHANGED`, requiring a new source review/posting rather than
+allowing another source's reversal to offset unreviewed principal. The snapshot also binds immutable payment-reversal, customer-adjustment and
+evidence-invalidation IDs, and the latest stored assessment identity. Lost eligibility is
+recorded as zero qualifying principal. A reversal can reduce the documentary
+balance before M4-9-S's negative journal execution is available; it does not
+pretend to have posted that compensation. Original journal history is preserved.
+Settlement history explicitly says `integration_unavailable`, dependency
+`M4-12-S`; customer receipts are never presented as platform fee settlements.
 
-Money uses the existing `money()` validator and its magnitude limit of ±1,000,000,000,000 pence. Unsafe integers, fractions, other currencies and excess magnitudes fail. UUIDs and lowercase 64-character hexadecimal hashes are syntactically checked. Every object is strict; unknown nested or top-level fields fail, including tenant/actor/mode, price, settlement claims, v1 base/cap/credit-used fields, tax amounts and subscription offsets. Invalid input produces `SimulationFeeStatementError` with code `INVALID_SIMULATION_FEE_STATEMENT`.
+`simulation-fee-statement-command.v1` accepts only:
 
-Required labels:
+- `issue`: version, commandId, action;
+- `approve`: those fields plus statementId and the exact statementHash.
 
-- `Simulation statement — proposed policy, principal only; not a tax invoice or real amount due`
-- `VAT not calculated`
-- `Practice sandbox — synthetic data; nothing is sent or charged`
+No input accepts tenant, actor, amounts, sources, policy or provider facts.
+Authentication, current owner membership, synthetic database, job/session, track
+and final-account lock are checked before source access or replay. Before lock,
+the read response is empty and independent of hidden data. New issue/approval
+commands use the existing posting source fence and lock order, plus a tenant
+number/replay lock. The receipt and audit event commit atomically with the
+statement or exact Decision/resolution/authorization. An exact command replay
+returns its original result; changed payloads conflict. Different issue IDs for
+the same snapshot return one document. Original documents cannot be updated,
+deleted or truncated, and runtime/infrastructure/shadow roles have no table
+access. All references are tenant-qualified; the original link also binds job.
 
-The formatter returns a parsed `document`, `canonicalJson`, UTF-8 `bytes`, `byteLength` and separate `documentHash`. Canonical JSON sorts object keys by ECMAScript code-unit ordering, preserves array order and rational strings, uses JSON escaping and numeric encoding, and has no whitespace, BOM or trailing newline. SHA-256 covers those exact UTF-8 bytes using the existing portable SHA-256 implementation; the current document hash is outside its bytes. A correction's original-document hash, when supplied, is ordinary represented content. The output is an in-memory representation, not an immutable issued record or saved download.
+Approval is bound to the saved document hash, recipient statement, GBP amount
+magnitude, direction, posting revision, policy and session/membership expiry.
+Negative documentary deltas use `success_fee.statement_correction_approve` on
+both the Decision and authorization; nonnegative deltas use
+`success_fee.statement_approve`. This preserves the shared nonnegative amount
+invariant while recording direction explicitly. Neither action authorizes
+collection, and a correction approval cannot substitute for a positive approval.
 
-The formatter copies validated inputs and has no database/provider/payment ports. It preserves F even if supplied reference facts disagree with Q: calculating or validating entitlement belongs to M4-9-S. The £2,820 / £282 example preserves £32 and £250 history without adding it to £282. A separate pure example represents −£250 document principal and £32 cumulative principal with an original-document reference; it does not execute negative compensation. These are synthetic object fixtures, never evidence of a persisted approval, journal or correction.
+After expiry, a fresh `approve` command can create a new Decision, approved
+resolution and authorization for the same immutable statement. The original
+Decision/authorization remain unchanged. Every new approval command rechecks
+current sources and requires the latest document/hash. A still-current approval
+is reused; expired or revoked authorizations are never reused. Command replay
+returns its historical result, including an expired authorization ID, without
+renewing it. Execution must still check current expiry and exact action identity.
+Renewals append the normal approval audit event atomically with their new records. Approval of an old hash,
+old document or changed source snapshot fails. This is a statement approval
+(`success_fee.statement_approve`), never a collection authorization. M4-12-S
+must define/check its own exact collection authority and current eligibility.
 
-## Held interfaces and completion
+GET `/jobs/:id/success-fees/statements` (Next prefix `/api`) reads saved records.
+POST on that path issues or approves. GET `.../statements/:statementId` returns
+versioned JSON bytes and an attachment filename. The repository verifies the
+saved digest against the shared canonical encoder before returning a download.
+The Next download also supplies `X-Content-SHA256`. Foreign/missing document IDs
+within an authorized job return no document (404 on HTTP). No GET, renderer,
+download, statement issue or statement approval posts or collects money.
 
-Q1: successive positive statements, supersession/supplementation and collectible balance semantics remain undecided. Q2: exact approved artifact, issuance/correction command schemas, source manifests, approval/source binding, numbered persistence, namespace allocation, replay, audit, repository, Nest/Next transports and saved downloads remain unbuilt. No guessed M4-9-S source columns or approval contract are exported here.
+Downloads preserve all inputs and the original number, with the digest supplied
+separately to avoid a self-referential hash. Required labels are unchanged:
 
-Migration 0219 (C259) is reserved by the dispatcher but neither created nor registered: number assignment does not release Q2. No namespace is created. Namespace scope, prefixes and correction numbering must be coordinated with MON-2A under Q3/Q7 before the held persistence work. No new database objects, grants, catalogue entries or mutation registry actions are introduced, so existing catalogue freezes remain unchanged.
+- Simulation statement — proposed policy, principal only; not a tax invoice or real amount due
+- VAT not calculated
+- Practice sandbox — synthetic data; nothing is sent or charged
 
-Source-backed integration remains DEPENDENCY-BOUND on M4-9-S/SV-6/SV-5 and their merged authoritative proof path. M4-8-S alone owns allocation; this module imports its shared exact-value representation and does no allocation. Non-catch qualification and negative-compensation execution are held; M4-12-S owns future authoritative fee settlements. Customer receipts and v1 payments are not v3 fee settlements. Screens and browser assertions remain parked under Q8. D01/D02 remain proposed; no production, tax or collection authority follows from this document.
-
-FS-01/03/06/07/18 have independent pure coverage only. FS-22 has a builder run receipt only; exact-commit independent verdict and separate acceptance remain owed. All dependent assertions in those IDs and full FS-02/04/05/08–17/19–21 remain held. The complete plan card stays open.
+The UI shows cumulative fee principal separately from the document delta. A
+£282 original followed by a £32 balance has a −£250 linked documentary correction.
+It offers source/approval drill-down, historical postings and a saved download.
+There are no base, cap, credit or subscription-offset lines. New positive
+non-catch fee qualification, negative journal execution and fee settlement
+remain with their own tasks; this statement path does not open those gates.
