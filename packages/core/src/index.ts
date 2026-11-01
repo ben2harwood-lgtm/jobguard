@@ -130,6 +130,7 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
 
 export * from "./value-source-receipt.js";
