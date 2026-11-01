@@ -130,6 +130,7 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./recovery-billability-policy.js";
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
 
@@ -140,3 +141,5 @@ export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
 export * from "./customer-variation-approval.js";
 export * from "./interim-applications.js";
+
+export * from "./contractor-mandate.js";
