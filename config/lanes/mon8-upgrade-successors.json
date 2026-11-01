@@ -6,7 +6,7 @@
         "codex/sandbox/mon8-upgrade-successors"
       ],
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-      "note": "MON-8 RED final authorized CI repair (31 October): preserve the three re-pinned ENT-4b sources; retain read-only access and gate new work. Router owns Git merge ancestry, commit/push, CI and exact-head RED review.",
+      "note": "MON-8 RED authorized fresh try (1 November): preserve entitlement refusal; seed a properly entitled operative for customer-signin issuer coverage; retain both merge sides and rename migrations to 0558/0559 without changing SQL bytes. Router owns Git merge ancestry, commit/push, CI and exact-head RED review.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",
@@ -37,8 +37,8 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/plan-entitlements-v1.md",
         "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-        "packages/db/migrations/0408_server_plan_entitlements.sql",
-        "packages/db/migrations/0409_contractor_feature_guards.sql",
+        "packages/db/migrations/0558_server_plan_entitlements.sql",
+        "packages/db/migrations/0559_contractor_feature_guards.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/contractor-entitlement-authority-repository.ts",
         "packages/db/src/enterprise-identity-repository.ts",
@@ -68,6 +68,7 @@
         "packages/db/test/contractor-retained-read.integration.test.ts",
         "packages/db/test/contractor-session-context.integration.test.ts",
         "packages/db/test/contractor.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
         "packages/db/test/enterprise-fee-posting.integration.test.ts",
         "packages/db/test/enterprise-identity.integration.test.ts",
         "packages/db/test/extra-approval-chain.integration.test.ts",

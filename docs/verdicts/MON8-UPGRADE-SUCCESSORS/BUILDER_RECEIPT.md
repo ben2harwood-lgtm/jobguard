@@ -1131,3 +1131,70 @@ and push for CI, then arrange exact-head independent RED review. This local
 handoff does not claim either demo passed. If this authorised try remains red,
 it goes to a person under Journey-first rule 5, not another repair round.
 Commit message: /tmp/mon8-upgrade-successors-20261031T020854Z-commit-msg.txt.
+
+## Authorized fresh try — 1 November 2026
+
+READY for router staging/commit and CI, not a claim of PostgreSQL acceptance.
+
+Root cause of core-db customer-signin's `operative cannot issue`: the fixture
+inserted an operative into a newly created, unentitled tenant without transaction-local
+tenant context. MON-8 correctly refused that insert before the portal issuer was
+called. The fixture now reuses startSession's fictional contractor agreement setup
+for the operative only and ownerTx for the membership insert. The sign-in issue
+still runs with that operative's own persisted identity/session, so the existing
+CUSTOMER_REFUSED expectation proves the issuer refusal. Owner and finance remain
+the positive issuer cases. All refused-role cases also assert unchanged grant and
+outbox counts. No entitlement, issuer rule, SQL body or refusal was relaxed.
+
+Resolved the three textual merge conflicts: site-extra imports retain MON-8's
+authority repository and main's offline parser; LP-0 retains every main object and
+MON-8 additions with unique recorded routine identities; the contractor upgrade
+proof retains its predecessor-preservation/replay proof and all main successor
+empty-table expectations. Main's B5 helper definitions and calls, tenancy file,
+and all 385 main migration/lane files remain present and unchanged. MERGE_HEAD
+matches the already-fetched origin/main. No fetch or Git write was run.
+
+Renamed this branch's 0408/0409 migrations to
+0558_server_plan_entitlements.sql and 0559_contractor_feature_guards.sql.
+Both files compare byte-for-byte with their starting HEAD versions. Updated active
+filename consumers and the lane. No main migration or
+`docs/contracts/lp-downstream-effects-v1.md` was edited. The filesystem diff against
+origin/main has 99 paths including the lane itself, with zero lane violations.
+
+Checks actually run using the installed Node 24.17.0 executables:
+- `node ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`
+  from packages/db: passed.
+- `node node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noEmit`:
+  passed. Core and db were also built with their installed TypeScript executable.
+- From packages/db: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/mon8-combined-migration.test.ts src/plan-entitlement-service.test.ts
+  test/lp-0-catalog.test.ts`: 3 files, 42 tests passed.
+- From apps/api: `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  src/auth/customer-signin.test.ts
+  src/contractor/operative-entitlements.application.test.ts
+  src/contractor/operative-offline.application.test.ts`: 3 files, 39 tests passed.
+  Initial run found stale core/db dist exports; rebuilding those dependencies
+  resolved both failures without changing their tests or source behavior.
+- Focused TypeScript program over customer-signin, contractor-entitlement-upgrade
+  and serious-b5-upgrade integration tests: zero diagnostics. Syntax/braces also
+  checked for those files, tenancy and the merged site-extra application.
+- `node tools/plpgsql-case-in-if-lint.mjs`: 175 migrations checked, passed.
+- `node tools/money-arithmetic-lint.mjs`: passed.
+- `node tools/commercial-boundary-lint.mjs`: passed.
+- `git diff --check`: passed. No textual conflict markers remain in resolved files.
+
+The initial pnpm commands could not switch to the pinned version because the
+restricted registry route failed signature retrieval. No package was installed;
+checks instead used installed Node/TypeScript/Vitest directly. Root `node
+tools/lint.mjs` passed core purity and stopped at the lane check: the read-only
+index still includes both the uncompleted merge and old migration names. An
+explicit filesystem/main comparison using the existing lanePathAllowed predicate
+passed; it does not replace the final CI lane check after router staging.
+
+PostgreSQL and browser suites were not started in this sandbox. Router must stage
+resolved contents and renames, complete the existing merge, commit/push, and run
+the whole PostgreSQL suite plus required CI and exact-head independent RED review.
+The Git index necessarily still reports unmerged entries until the router stages
+these resolved contents. Neither demo has been claimed to pass.
+
+Commit message: /tmp/mon8-upgrade-successors-20261101T142221Z-commit-msg.txt.

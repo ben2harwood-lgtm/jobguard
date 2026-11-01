@@ -25,3 +25,22 @@ it("query refusals remain typed without exposing internal diagnostics", async ()
  const result = await GET(new Request("https://fictional.invalid?approved=true"), params);
  expect(result.status).toBe(400); expect(await result.json()).toEqual({ code: "INVALID_SHADOW_DEMO_QUERY" });
 });
+
+it("returns the v2 report and preserves the complete mapped value union", async () => {
+ const report = { version: "shadow-demo-report.v2", jobId: "saved-job",
+  customerApproval: { state: "awaiting_customer", approvals: [] },
+  value: { version: "job-value.v3", status: "mapped", receipt: { sources: { jobId: "saved-job" } } } };
+ state.read.mockResolvedValue(report);
+ const response = await GET(new Request("https://fictional.invalid"), params);
+ expect(response.status).toBe(200); expect(await response.json()).toEqual(report);
+ expect(response.headers.get("Cache-Control")).toBe("no-store");
+});
+
+it.each(["not_ready_yet", "awaiting_customer", "approved"])("returns 200 with the persisted customer approval state %s", async approvalState => {
+ const customerApproval = { state: approvalState, approvals: approvalState === "approved"
+  ? [{ variationId: "fictional-variation", approvedAt: "2026-10-31T08:00:00.000Z", method: "customer_portal" }] : [] };
+ state.read.mockResolvedValue({ version: "shadow-demo-report.v2", customerApproval });
+ const response = await GET(new Request("https://fictional.invalid"), params);
+ expect(response.status).toBe(200);
+ expect((await response.json()).customerApproval).toEqual(customerApproval);
+});
