@@ -9,7 +9,8 @@
         "packages/core/src/index.ts",
         "apps/web/app/ui/prevention-checks.tsx",
         "apps/web/app/ui/exposure-curve.test.tsx",
-        "docs/contracts/prevention-checks-v1.md"
+        "docs/contracts/prevention-checks-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
       ],
       "note": "MON-7b: disabled synthetic stage exposure preview only; no persistence, providers, fee/value-receipt or meter effects. Shares core index with the base and prevention panel with MON-7a; serialize overlapping edits."
     }
