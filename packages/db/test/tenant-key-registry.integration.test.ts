@@ -35,7 +35,8 @@ it("upgrade adds exactly empty registry tables; repeat migration preserves every
   const after = await snapshot(c.admin);
   expect(after).toEqual({ ...before, "control_plane.tenant": after["control_plane.tenant"], "app.tenant_key_version": [], "app.tenant_key_revocation": [] });
   await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual(after);
+  // Freeze the own-step table set; later migrations may add unrelated tables.
+  expect(await snapshot(c.admin, Object.keys(after))).toEqual(after);
 });
 
 it("rotation retains old signatures, retires signing, and persists revocation across fresh pools and services", async () => {
