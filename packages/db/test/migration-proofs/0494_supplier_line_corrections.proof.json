@@ -316,10 +316,7 @@
         "tablename": "supplier_line_match_snapshot",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_migration",
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
@@ -333,10 +330,7 @@
         "tablename": "supplier_line_match_correction",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_migration",
-          "jobguard_runtime"
-        ],
+        "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
