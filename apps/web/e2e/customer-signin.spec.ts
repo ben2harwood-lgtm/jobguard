@@ -42,8 +42,14 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab.getByRole("main").getByText("You are signed in to this job.", { exact: true })).toBeVisible();
   // Owner-connected synthetic lifecycle fixture only; message/evidence rows are created by SV-7A.
-  await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT DO NOTHING", [tenant, fixture.job]);
-  await admin.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, fixture.job]);
+  const lifecycle = await admin.connect();
+  try {
+    await lifecycle.query("BEGIN");
+    await lifecycle.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+    await lifecycle.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT DO NOTHING", [tenant, fixture.job]);
+    await lifecycle.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, fixture.job]);
+    await lifecycle.query("COMMIT");
+  } finally { lifecycle.release(); }
   await tab.getByLabel("Message", { exact: true }).fill("I agree, perhaps £500? This is only a fictional message.");
   await tab.getByRole("button", { name: "Save message", exact: true }).click();
   await expect(tab.getByRole("status")).toHaveText("Message saved for your builder with its evidence.");
