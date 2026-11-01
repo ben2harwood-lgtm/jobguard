@@ -11,7 +11,8 @@
         "apps/api/src/accounting-export.test-fixtures.ts",
         "apps/api/src/accounting-xero.fake.ts",
         "apps/api/src/accounting-xero.fake.test.ts",
-        "docs/contracts/accounting-export-v1.md"
+        "docs/contracts/accounting-export-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
       ],
       "note": "M5-2 RED dark direct Xero fake atop unmerged M5-1; own lane file is implicitly permitted. Shared contract and conformance files serialize with M5-1 repairs.",
       "test": "apps/api/src/accounting-export.sandbox.test.ts apps/api/src/accounting-xero.fake.test.ts"
