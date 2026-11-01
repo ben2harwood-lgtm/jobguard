@@ -54,7 +54,7 @@ export class SignedEvidenceExportStore {
       // FK checks and authorization must happen before the audit head lock, so insert first
       // with a deferred event reference, then append the matching event in this transaction.
       const auditId = randomUUID();
-      await db.$client.query("SET CONSTRAINTS signed_evidence_export_audit_event_fk DEFERRED");
+      await db.$client.query("SET CONSTRAINTS app.signed_evidence_export_audit_event_fk DEFERRED");
       await db.$client.query(`INSERT INTO app.signed_evidence_export(tenant_id,id,job_id,case_id,actor_membership_id,
         authorization_id,recipient,signer_id,key_version,signer_fingerprint,bundle_text,bundle_hash,audit_event_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
