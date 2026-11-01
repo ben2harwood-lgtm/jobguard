@@ -3,12 +3,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { sessionResponseV1 } from "../../lib/contracts";
-import { parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
+import { shadowApprovalLabel, parseShadowReport, shadowCaptureText, shadowSteps, type ShadowReport } from "./journey-model";
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
  const view = report.account, account = view.account;
  return <section aria-label="Saved shadow journey report">
-  <h2>Saved job evidence</h2><p>Incomplete. Customer approval is not ready yet (MON-5). No fee is charged.</p>
+  <h2>Saved job evidence</h2><p>Incomplete. {shadowApprovalLabel(report)} No fee is charged.</p>
   <p><a href={`/jobs/${report.jobId}`}>Open the same saved job</a></p>
   <dl><dt>Final account</dt><dd>{account ? `${pounds(account.totals.net.pence)} net · revision ${account.revision}` : "Not built yet"}</dd>
    <dt>Lock</dt><dd>{view.lock ? `${view.lock.id} · ${view.lock.lockedAt}` : "Not locked"}</dd>
