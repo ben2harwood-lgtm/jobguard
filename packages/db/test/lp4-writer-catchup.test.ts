@@ -6,10 +6,10 @@ const directory = new URL("../migrations/", import.meta.url);
 const functions = (sql: string) => [...sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(.*?\bAS\s+(\$\w*\$).*?\2\s*;/gis)]
   .map(m => ({ name: m[1]!, sql: m[0] }));
 const main = new Map<string, { file: string; sql: string }>();
-for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f) && f !== "0456_lp4_database_audit.sql").sort()) {
+for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f) && f !== "0515_lp4_database_audit.sql").sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) main.set(fn.name, { file, sql: fn.sql });
 }
-const replacements = new Map(functions(readFileSync(new URL("0456_lp4_database_audit.sql", directory), "utf8")).map(fn => [fn.name, fn.sql]));
+const replacements = new Map(functions(readFileSync(new URL("0515_lp4_database_audit.sql", directory), "utf8")).map(fn => [fn.name, fn.sql]));
 const directWrite = /INSERT\s+INTO\s+app\.audit_event/i;
 const normalize = (sql: string) => sql.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim();
 

@@ -8,8 +8,8 @@ permissions:
   contents: read
   pull-requests: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   core-checks:
     runs-on: ubuntu-latest
