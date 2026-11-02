@@ -6,6 +6,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 declare const verifiedTenantContextBrand: unique symbol;
 declare const authenticatedMembershipBrand: unique symbol;
 const genuineTenantContexts = new WeakSet<object>();
+const contextMemberships = new WeakMap<VerifiedTenantContext, string>();
 
 /** Proof created only after authentication and an active membership lookup. */
 export interface AuthenticatedMembership {
@@ -38,7 +39,15 @@ export function verifiedTenantContextFromMembership(
   }
   const context = Object.freeze({ tenantId: membership.tenantId }) as VerifiedTenantContext;
   genuineTenantContexts.add(context);
+  contextMemberships.set(context, membership.membershipId);
   return context;
+}
+
+/** Returns the authenticated actor; queued system contexts cannot attest as a user. */
+export function authenticatedMembershipId(context: VerifiedTenantContext): string {
+  const membershipId = contextMemberships.get(context);
+  if (!membershipId) throw new InvalidTenantContextError();
+  return membershipId;
 }
 
 /**

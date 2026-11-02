@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-4-lines": {
+      "branches": ["codex/sandbox/m2-4-lines"],
+      "allow": [
+        "docs/contracts/supplier-line-matching-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/supplier-line-matching.ts",
+        "packages/core/src/supplier-line-matching.test.ts"
+      ],
+      "note": "M2-4 RED pure synthetic line matching on m2-3-lines. No migration, live route or financial write. Router opens PR after base merges; own lane file is implicitly allowed."
+    }
+  }
+}
