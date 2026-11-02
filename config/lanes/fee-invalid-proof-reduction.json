@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "fee-invalid-proof-reduction": {
+      "branches": [
+        "codex/sandbox/fee-invalid-proof-reduction"
+      ],
+      "note": "RED M4-9-S / M4-12-S / MON-4A. NOPR=1; PostgreSQL CI and independent RED review remain required. Stacks on fee-cap-net-reversals; same writer serializes.",
+      "allow": [
+        "config/lanes/fee-invalid-proof-reduction.json",
+        "packages/db/migrations/0586_fee_invalid_proof_reduction.sql",
+        "packages/db/test/migration-proofs/0586_fee_invalid_proof_reduction.proof.json",
+        "packages/db/test/fee-invalid-proof-reduction.test.ts",
+        "packages/db/test/fee-invalid-proof-reduction.integration.test.ts",
+        "packages/db/test/success-fee-recovery-fixture.ts",
+        "packages/db/test/fee-compensation-gate-demo-settle.integration.test.ts"
+      ]
+    }
+  }
+}
