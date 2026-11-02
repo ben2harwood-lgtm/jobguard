@@ -1,7 +1,11 @@
 BEGIN;
 -- ENT-13a slice 1, RED, DARK. Stages fictional source facts only, never domain commands.
 -- No LOGIN, role membership, binding, credential or endpoint is provisioned by migration.
-CREATE ROLE jobguard_connector NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_connector') THEN
+  CREATE ROLE jobguard_connector NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+ END IF;
+END $$;
 CREATE SCHEMA connector AUTHORIZATION jobguard_migration;
 REVOKE ALL ON SCHEMA connector FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 GRANT USAGE ON SCHEMA connector TO jobguard_connector;

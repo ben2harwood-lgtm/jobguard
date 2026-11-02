@@ -29,6 +29,10 @@ it("#346: populated F5/F7 survive upgrade; SQL refuses a same-tenant movement fr
   const login=(await pool.query("SELECT current_user AS name")).rows[0].name as string;
   await f.admin.query(`GRANT ${role} TO "${login.replaceAll('"','""')}"`);
  }
+ const pause="0527_commercial_outbound_pause.sql";
+ const pauseUrl=MIGRATION_URLS.find(url=>url.pathname.endsWith(`/${pause}`))!;
+ await f.admin.query(await readFile(pauseUrl,"utf8"));
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[pause]);
  await installLegacySyntheticPartyFixtures(f.admin);
  const a=await realReceiptFixture(f,"F5"),b=await realReceiptFixture(f,"F7");
  const tables=["receipt_allocation_fact_source","receipt_allocation_fact_line","customer_payment","customer_invoice","final_account_lock"].map(n=>`app.${n}`);
