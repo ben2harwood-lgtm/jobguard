@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-5-conformance-kit": {
+      "branches": ["codex/sandbox/m5-5-conformance-kit"],
+      "allow": [
+        "packages/core/src/merchant-conformance-kit.ts",
+        "packages/core/src/merchant-conformance-fakes.ts",
+        "packages/core/src/merchant-conformance-kit.test.ts",
+        "docs/contracts/merchant-conformance-kit-v1.md"
+      ],
+      "note": "AMBER M5-5 synthetic conformance kit only. Own lane file is implicitly permitted. NOPR=1; no adapter, migration, external action or release. Pilot route selection, actual adapter/partner conformance, outbound outbox and M5-6 real data remain open for people."
+    }
+  }
+}
