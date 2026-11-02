@@ -157,6 +157,7 @@ export * from "./small-builder-demo-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
+export * from "./platform-tax-invoice-fixture-repository.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";

@@ -132,6 +132,7 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./platform-tax-invoice.js";
 export * from "./inbox-outcome-metrics.js";
 
 export * from "./dunning.js";
