@@ -5,8 +5,9 @@
       "branches": [
         "codex/sandbox/batch-1"
       ],
-      "note": "Ben, 2 Nov 2026 'Yes, batch them': combines reviewed #490 to #498 for one test run; allow is exactly the combined diff. No migrations. Own lane file is implicitly allowed.",
+      "note": "Ben, 2 Nov 2026 'Yes, batch them': #490 to #498 plus main fix #517, test speed #515 and #504, for one test run. No migrations.",
       "allow": [
+        ".github/workflows/ci.yml",
         "apps/api/src/accounting-export.contracts.ts",
         "apps/api/src/accounting-export.sandbox.test.ts",
         "apps/api/src/accounting-export.sandbox.ts",
@@ -24,6 +25,8 @@
         "apps/web/app/ui/recovery-cases.behaviour.test.ts",
         "apps/web/app/ui/recovery-cases.tsx",
         "apps/web/app/ui/recovery-messages.test.tsx",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
         "apps/web/e2e/M4-1-S.spec.ts",
         "apps/web/e2e/M4-8-S.spec.ts",
         "apps/web/e2e/helpers/recovery-allocation-journey.ts",
@@ -32,8 +35,17 @@
         "docs/contracts/recovery-allocation-v1.md",
         "docs/contracts/signed-evidence-export-v1.md",
         "docs/contracts/subscription-success-agreement-v1.md",
+        "docs/fixtures/ai/EVALUATION.md",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/operations/ci-checks.md",
         "docs/operations/email-forwarding-data-flow.md",
         "docs/operations/subscription-synthetic.md",
+        "packages/ai/src/capture-evaluation.ts",
+        "packages/ai/src/evaluation-cli.ts",
+        "packages/ai/src/evaluation-runner.ts",
+        "packages/ai/src/golden-run-record.test.ts",
+        "packages/ai/src/golden-run-record.ts",
+        "packages/ai/src/inbox-wording.ts",
         "packages/core/src/dunning.test.ts",
         "packages/core/src/dunning.ts",
         "packages/core/src/index.ts",
@@ -62,6 +74,7 @@
         "packages/db/test/signed-evidence-export.test.ts",
         "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
         "packages/db/tools/verify-signed-evidence-export.mjs",
+        "tools/ci-workflow.test.mjs",
         "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
