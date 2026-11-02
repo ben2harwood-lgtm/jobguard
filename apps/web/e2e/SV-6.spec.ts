@@ -37,7 +37,9 @@ async function caughtInvoice(page: Page, browser: Browser, combined: boolean) {
  if(!combined)await issue("final");
  await page.goto(`/jobs/${jobId}#final-check`);
  const panel=page.getByTestId("final-check-reveal");await expect(panel).toHaveAttribute("aria-busy","false");
- await panel.locator("article").filter({hasText:check.items[0].description}).getByRole("button",{name:"Yes — this was extra work",exact:true}).click();
+ const item=panel.locator("article").filter({hasText:check.items[0].description});
+ await item.getByRole("button",{name:"Yes — this was extra work",exact:true}).click();
+ await expect(item.getByTestId("final-check-disposition")).toContainText("extra work");
  const variations=await get(page,`${base}/variations`);expect(variations.variations).toHaveLength(1);
  const id=variations.variations[0].id;
  await page.goto(`/jobs/${jobId}#variation-${id}`);
