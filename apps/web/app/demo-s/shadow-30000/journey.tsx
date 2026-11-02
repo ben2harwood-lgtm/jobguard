@@ -9,7 +9,13 @@ const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "curre
 export function ShadowSavedReport({ report }: { report: ShadowReport }) {
  const view = report.account, account = view.account;
  return <section aria-label="Saved shadow journey report">
-  <h2>Saved job evidence</h2><p>Incomplete. {shadowApprovalLabel(report)} No fee is charged.</p>
+  <h2>Saved job evidence</h2><p>{report.status === "complete" ? "Complete. All nine steps are saved on this job." : `Incomplete. ${shadowApprovalLabel(report)} No fee is charged.`}</p>
+  {report.status === "complete" && report.value.status === "mapped" && <dl aria-label="Saved journey figures">
+   <dt>Found after lock (Q)</dt><dd>{pounds(report.value.receipt.found.recovered?.pence ?? 0)}</dd>
+   <dt>Proposed fee (simulation)</dt><dd>{pounds(report.value.receipt.found.fee?.pence ?? 0)}</dd>
+   <dt>Yours before VAT and tax</dt><dd>{pounds(report.value.receipt.found.yoursBeforeVatAndTax?.pence ?? 0)}</dd>
+   <dt>Your captures</dt><dd>{pounds(report.value.receipt.tracked.pence)} · fee {pounds(report.value.receipt.trackedFee.pence)}</dd>
+   <dt>Settlement</dt><dd>Verified: a settled practice-feed payment is allocated to each extra</dd></dl>}
   <p>Customer approval: {report.customerApproval.state === "not_ready_yet" ? "Not ready yet (MON-5)" : report.customerApproval.state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal"}.</p>
   <ul>{report.customerApproval.approvals.map(approval => <li key={approval.variationId}>
    <a href={`/jobs/${report.jobId}#final-check`}>Variation {approval.variationId}</a> · approved {approval.approvedAt} · customer portal
@@ -30,7 +36,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
   {report.assessments && <section><h3>SV-6 historical assessments</h3><p>Latest saved revision per catch and line. Unreviewed; not current qualification or a fee posting. Reversals require a new assessment.</p>
    <ul>{report.assessments.map(({ assessment: a, illustrationAsAssessed: illustration }) => <li key={a.assessmentId}>Revision {a.revision} · {a.assessmentOutcome} · illustration as assessed: recovered {illustration.display.recovered ?? "Exact fraction; inspect source"}, proposed fee {illustration.display.fee}, yours {illustration.display.yoursBeforeVatAndTax ?? "Exact fraction; inspect source"} before VAT and tax
     <a href={`/api/jobs/${report.jobId}/success-fee-attribution`}> Inspect saved source manifest {a.assessmentId}</a></li>)}</ul></section>}
-  <p>CH-8 evidence-pack generation: not ready yet; producer binding held.</p>
+  <p>CH-8 evidence packs: {report.status === "complete" ? "an approved pack proves each extra's source chain" : "not all approved yet"}.</p>
   <p>CH-9 value report: {report.value.status}{report.value.status === "incomplete" ? "; producer bindings held" : "; source-linked receipt saved"}.</p>
   <p>Independent verdict: missing. Non-technical builder observations: 0 of 2 recorded here.</p>
   <p><a href={`/api/jobs/${report.jobId}/shadow-demo`}>Inspect this report's persisted source references</a></p>
@@ -94,7 +100,7 @@ export function ShadowJourney() {
   <button disabled={busy} onClick={() => void start()}>Create or recover the J3 capture</button>
   <form onSubmit={event => void load(event)}><label>Saved job reference<input value={jobId} disabled={busy} onChange={event => { setJobId(event.target.value); setReport(null); }}/></label>
    <button disabled={busy} type="submit">Load saved J3 evidence</button></form>
-  {jobId && z.string().uuid().safeParse(jobId).success && <p><a href={`/jobs/${jobId}`}>Continue this job through its real controls</a> · <a href={`/jobs/${jobId}#final-account-title`}>Final account and lock</a></p>}
+  {jobId && z.string().uuid().safeParse(jobId).success && <p><a href={`/jobs/${jobId}`}>Continue this job through its real controls</a> · <a href={`/jobs/${jobId}#final-account-title`}>Final account and lock</a> · <a href={`/jobs/${jobId}/shadow-journey`}>Open the shadow-30000 practice guide</a></p>}
   {error && <p role="alert">{error}</p>}
   {report && <ShadowSavedReport report={report} />}
  </main>;
