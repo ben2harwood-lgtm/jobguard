@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-17-restore-proof": {
+      "branches": ["codex/sandbox/m4-17-restore-proof"],
+      "note": "RED M4-17 synthetic financial cold-restore regression; PostgreSQL execution and independent review remain CI/router obligations. NOPR=1, no live actions.",
+      "allow": [
+        "packages/db/tools/synthetic-restore.mjs",
+        "packages/db/test/financial-restore-proof.integration.test.ts",
+        "docs/contracts/money-trail-reconciliation-v1.md"
+      ]
+    }
+  }
+}

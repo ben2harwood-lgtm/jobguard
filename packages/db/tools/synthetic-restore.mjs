@@ -69,7 +69,9 @@ function practicePng() {
 }
 
 /** The API parameter is the real db package: source in Vitest, compiled package in the CLI. */
-export async function runSyntheticRestoreRehearsal(options = {}, api) {
+// Optional in-process fixture hooks let integration tests populate another synthetic
+// database in this same cold-copied cluster. They are never CLI/options inputs.
+export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => key !== "environment")) throw new Error("REHEARSAL_OPTIONS_REFUSED");
   const environment = Object.hasOwn(options, "environment") ? options.environment : "synthetic_demo";
   requiredMode(environment);
@@ -84,7 +86,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
-  const pool = (port, user = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres", max: 4 }); pools.add(p); return p; };
+  const pool = (port, user = "postgres", database = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
   const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
@@ -189,6 +191,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
       actionIds.push(actionId);
     }
     const sourceOrigin = await createBuilderOrigin(runtime, ids.variation);
+    await fixture?.beforeBackup({ admin, postgres: source, directory: sourcePath, pool: (user, database) => pool(sourcePort, user, database) });
     // The snapshot covers every row, including money/audit/control metadata, not only the examples above.
     const tables = (await admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','audit_control','identity','control_plane','infrastructure','public') AND tablename NOT LIKE 'pg_%' ORDER BY schemaname,tablename")).rows;
     const quote = identifier => '"' + identifier.replaceAll('"', '""') + '"';
@@ -236,6 +239,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
+    await fixture?.afterRestore({ admin, postgres: restored, directory: restoredPath, pool: (user, database) => pool(restoredPort, user, database) });
     assert.deepEqual(await trackRows(runtime), sourceTrack);
     assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
     await createBuilderOrigin(runtime, randomUUID());

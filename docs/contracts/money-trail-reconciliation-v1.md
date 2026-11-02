@@ -202,7 +202,7 @@ positive test is replaced with privileged fixture success.
 
 Actual source-chain reading/allocation validation and immutable run persistence,
 MT-01's command-built £320/£22,176/£32/£250 fixture, no-offset integration,
-event restart/race/rebuild and cold-restore proofs remain DEPENDENCY-BOUND on
+event restart/race/rebuild and production cold-restore proofs remain DEPENDENCY-BOUND on
 the actual missing source contracts. The independent reference tests do not
 close those assertions. Non-catch qualification authority and negative-
 compensation execution remain unbuilt. Screens and exact plan V(...) IDs,
@@ -287,7 +287,7 @@ No contractor formula or historical v1 cap/credit policy is silently substituted
 NOT built: authoritative invoice/journal/reservation/provider source adapters,
 durable scheduled runs/queue/adjustments, real membership/Decision verification,
 provider webhook authentication or live rails, cross-rail collection control,
-financial restore/replay certification, UI, external security review and the
+production financial restore/replay certification, UI, external security review and the
 G4-S/G4-C evidence packs. The base source/authority holds above remain. This
 slice does not complete the whole M4-17 card or release either track.
 
@@ -353,7 +353,7 @@ exact indexes/policies, and the one new routine's LP-0 owner/EXECUTE/protection
 record. Existing expectations and migrations remain intact. No data migration or
 backfill occurs. Forward-fix by additive migration; do not edit or remove stored
 history. Restore uses these immutable snapshots for deterministic report rebuild;
-this does not certify full financial restore, external replay prevention or a
+this alone does not certify full financial restore, external replay prevention or a
 production gate. External execution remains absent/disabled.
 
 Initial self-review: LATER / SIMPLICITY at
@@ -366,3 +366,42 @@ Validation is recorded in the router commit-message handoff. PostgreSQL queue,
 approval, privilege, upgrade and RLS tests are CI-only in this sandbox. Full
 workspace checks and the independent exact-head Claude RED review remain owed.
 This is not completion of M4-17's production reconciliation/security/restore gate.
+
+## M4-17 synthetic cold-restore regression (m4-17-restore-proof)
+
+`packages/db/test/financial-restore-proof.integration.test.ts` adds one PostgreSQL
+integration test using the existing disposable whole-cluster cold-copy tool.
+Its in-process fixture hooks populate a separate `jobguard_synthetic_demo`
+database in that same cluster; the CLI accepts no new options or destinations.
+Existing command writers allocate £320 and £2,500 of qualifying net principal,
+post £282 of fees, collect through the fake rail, reverse the second receipt,
+post linked compensation and refund £250. Collection/refund reservations are
+asserted before settlement; their pending/settled histories and final zero
+reservations are retained. No qualifying financial rows are inserted by the test.
+
+The test asserts exact full-row equality for every `app` table in the financial
+database immediately after restore, including invoice bytes, balanced journal
+lines, derivations and source links, version-specific evidence metadata,
+allocations/reversals, authorizations, attempts/events and audit history. It then
+compares collection balances and rebuilt reconciliation snapshots, hashes and
+reports. Exact command replay and fresh attempts to settle completed work must
+leave those rows unchanged; another tenant cannot replay the saved run.
+The restored financial database is paused before runtime connections and stays
+paused through reconciliation and the negative control. Deliberate privileged
+corruption of one restored debit line must produce `UNBALANCED_JOURNAL` and
+invalidate the old restore checkpoint; this tests detection, not automatic repair.
+
+The same cold-copy rehearsal retains its existing actual outbox-executor checks:
+no attempts while paused, reconciliation required before independently approved
+fixture resume, one pending fake delivery despite concurrent/repeated execution,
+no resend of succeeded work, and unknown outcomes held. Those outbox actions are
+synthetic messages; they do not certify a fee-provider dispatcher. The test has
+explicit `NOT COVERED` todos for the absent live fee dispatcher, deployed/object
+backup and independent security review. Evidence here is database metadata;
+the existing rehearsal separately checks its DB-backed synthetic object bytes.
+
+**Execution status:** the new PostgreSQL test is not executed in this sandbox,
+which cannot start PostgreSQL or bind localhost. Its assertions are CI obligations,
+not a completed restore rehearsal or a release claim. Local verification is in
+the existing router commit-message handoff. No migration or production behavior
+changes; the independent exact-head RED review and all G0–G5 gates remain owed.
