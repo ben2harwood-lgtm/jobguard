@@ -8,12 +8,12 @@ import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
 import {testTenantContext} from "./tenant-context-test-utils.js";
-import {freePort,closeTestPools,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
+import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
 export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[]};
 export async function createFinalCheckFixture(install=true):Promise<FinalCheckFixture>{
  const directory=await mkdtemp(join(tmpdir(),"sv5-pg16-")),port=await freePort(58000,200),credential=randomUUID(),logs:string[]=[];
- const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
+ const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
  await postgres.initialise();await postgres.start();
  const config={host:"127.0.0.1",port,user:"postgres",password:credential},bootstrap=new Pool({...config,database:"postgres"});
  await bootstrap.query('CREATE DATABASE jobguard_synthetic_demo');await bootstrap.end();const admin=new Pool({...config,database:"jobguard_synthetic_demo"});
@@ -25,7 +25,7 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  if(install){await admin.query(`GRANT jobguard_runtime TO ${runtimeLogin}`);await admin.query(`GRANT jobguard_shadow TO ${shadowLogin}`);}
  return {postgres,admin,runtime:new Pool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:new Pool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs};
 }
-export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestPools(f.runtime,f.shadow,f.admin);await f.postgres.stop();}
+export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestDatabase(f.postgres,f.directory,f.runtime,f.shadow,f.admin);}
 export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
 export async function seedFinalCheckJob(f:FinalCheckFixture){
  const tenantId=FINAL_CHECK_TENANT,jobId=randomUUID(),scopeItemId=randomUUID(),baselineId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID(),lineId=randomUUID(),accountId=randomUUID(),sessionId=randomUUID(),digest=createHash('sha256').update(sessionId).digest('hex'),hash="a".repeat(64);
