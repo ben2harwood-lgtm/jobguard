@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_MONEY_PENCE, moneyFromBigInt, type Money } from "./money.js";
 import { multiplyRatio } from "./rational.js";
+import { reconcileRetentionBook, retentionBookV1 } from "./retention-balances.js";
 
 /** M4-21 fixture calculations only. No command, invoice executor or M1 policy is changed. */
 export const VAT_TREATMENTS_ENABLED = false as const;
@@ -163,6 +164,43 @@ export function reconcileVatTreatmentFixtures(input: unknown) {
     supplierReference: book.supplierReference, customerReference: book.customerReference,
     taxBasis: book.taxBasis, roundingVersion: book.roundingVersion, label: VAT_FIXTURE_LABEL, approval: "not adviser-approved",
     issueBlockers: ["FEATURE_DISABLED", "D02_D06_ADVISER_APPROVAL_REQUIRED", "EXACT_DECISION_EXECUTOR_REQUIRED"], documents });
+}
+/** Compose the two dark books; standalone VAT arithmetic does not verify retention sources.
+ * A receipt reversal linked to a release blocks this composition, without reopening retention.
+ */
+export function reconcileVatRetentionFixtures(vatInput: unknown, retentionInput: unknown) {
+  const vat = reconcileVatTreatmentFixtures(vatInput);
+  const parsed = retentionBookV1.safeParse(retentionInput);
+  if (!parsed.success) fail("INVALID_INPUT", "Invalid versioned synthetic retention book");
+  const book = parsed.data;
+  reconcileRetentionBook(book);
+  if (book.tenantId !== vat.tenantId || book.jobId !== vat.jobId) {
+    fail("INVALID_LINEAGE", "VAT and retention books belong to different tenants or jobs");
+  }
+  const records = new Map(book.records.map(record => [record.id, record]));
+  const reversedReleases = new Set<string>();
+  for (const record of book.records) {
+    if (record.version !== "retention.reversal.v1") continue;
+    const receipt = records.get(record.receiptId);
+    if (receipt?.version === "retention.receipt.v1") reversedReleases.add(receipt.releaseId);
+  }
+  for (const document of vat.documents) {
+    if (document.source.kind !== "retention_release") continue;
+    const release = records.get(document.source.retentionReleaseId!);
+    const resolution = release?.version === "retention.release.v1" ? records.get(release.resolutionId) : undefined;
+    const review = resolution?.version === "retention.resolution.v1" ? records.get(resolution.reviewId) : undefined;
+    if (release?.version !== "retention.release.v1" || resolution?.version !== "retention.resolution.v1"
+      || review?.version !== "retention.review.v1" || review.profileId !== document.source.retentionProfileId
+      || reversedReleases.has(release.id)) {
+      fail("INVALID_LINEAGE", "VAT release requires a matching unreversed retention release and profile");
+    }
+    if (BigInt(resolution.amount.netPence) !== -BigInt(document.delta.retained.pence)
+      || resolution.amount.taxPence !== document.delta.vatToSupplier.pence
+      || BigInt(resolution.amount.netPence) + BigInt(resolution.amount.taxPence) !== BigInt(document.delta.expectedCash.pence)) {
+      fail("VALUE_LIMIT", "VAT release principal, supplier tax and cash must match its retention allocation");
+    }
+  }
+  return vat;
 }
 /** Caller-supplied flags, model output or approval claims cannot activate issue. */
 export function assertVatTreatmentIssueAllowed(): never {

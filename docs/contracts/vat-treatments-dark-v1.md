@@ -79,6 +79,17 @@ Source IDs describe fictional lineage only. A future adapter must load verified 
 scoped immutable sources and enforce certified ceilings, actual release allocations,
 approvals and idempotency; this pure fixture model does not authenticate those sources.
 
+When using the VAT and retention books together, `reconcileVatRetentionFixtures` validates
+both complete synthetic histories and requires the same tenant and job. Each VAT release
+must reference an existing retention release, through its approved resolution and review,
+for the exact `retentionProfileId` that authorized it. Any linked receipt reversal blocks
+that release in this combined check; the retention book's released balances remain unchanged.
+Released principal must equal the decrease in VAT retained principal, released tax must
+equal the increase in supplier VAT, and their sum must equal the increase in expected cash.
+Customer-accounted DRC VAT is separate from supplier tax. Standalone
+`reconcileVatTreatmentFixtures` remains a VAT calculation only, without source verification.
+Neither entry point enables issue or chooses the pending D02 credit-rounding policy.
+
 Mixed standard/zero/reduced and compatible DRC groups are calculated independently. All
 groups must agree on supplier/customer registration and end-user/intermediary statuses;
 non-VAT and registered-supplier groups cannot coexist. Within a history, groups, original

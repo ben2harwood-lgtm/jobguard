@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "./money.js";
 import { candidateM1TaxPolicy } from "./tax.js";
 import { money } from "./money.js";
+import { RETENTION_REVIEW_OWNER, type RetentionBook } from "./retention-balances.js";
 import {
   VAT_SUPPORT_MATRIX, VAT_SUPPORT_MATRIX_VERSION, VAT_FIXTURE_LABEL, VAT_TREATMENTS_ENABLED,
-  VatTreatmentError, reconcileVatTreatmentFixtures, assertVatTreatmentIssueAllowed,
+  VatTreatmentError, reconcileVatTreatmentFixtures, reconcileVatRetentionFixtures, assertVatTreatmentIssueAllowed,
   type DarkVatTreatment, type VatTreatmentFixtureBook,
 } from "./vat-treatments.js";
 
@@ -60,6 +61,100 @@ function reconciles(book: VatTreatmentFixtureBook) {
       doc.cumulative.gross, doc.cumulative.expectedCash].map(value => BigInt(value.pence)));
   }
 }
+
+function retentionFixture(netPence = 1000, taxPence = 50): RetentionBook {
+  const context = { tenantId: id(1), jobId: id(2) };
+  const humanSource = { actorId: id(3), inputId: id(4) };
+  const source = { kind: "human_input" as const, ...humanSource };
+  return { version: "retention.book.v1", environment: "synthetic", ...context, records: [
+    { ...context, id: id(30), version: "retention.profile.v1", revision: 1, previousProfileId: null,
+      contractProfileVersion: "fictional-contract-v1", fixtureApprovalId: id(5), taxTreatmentVersion: "fictional-tax-v1",
+      retained: { netPence: 2000, taxPence: 400 }, alreadyBilled: { netPence: 0, taxPence: 0 },
+      conditions: [{ id: id(6), milestone: "completion", description: "Fictional completion", source,
+        dueDate: "2026-10-31", dateSource: source, cumulativeLimit: { netPence: 2000, taxPence: 400 } }] },
+    { ...context, id: id(40), version: "retention.review.v1", profileId: id(30), conditionId: id(6),
+      owner: RETENTION_REVIEW_OWNER, trigger: "human", raisedOn: "2026-10-31" },
+    { ...context, id: id(50), version: "retention.resolution.v1", reviewId: id(40), outcome: "approved",
+      conditionSatisfied: true, humanSource, amount: { netPence, taxPence } },
+    { ...context, id: id(111), version: "retention.release.v1", resolutionId: id(50) },
+  ] };
+}
+
+describe("M4-21 / M4-20 release linkage", () => {
+  function vatRelease(code: DarkVatTreatment = "reduced_5") {
+    const book = fixture(code); append(book, "retention_release", 10000, 0); return book;
+  }
+  it("rejects unknown release IDs and IDs belonging to another kind of record", () => {
+    for (const releaseId of [id(999), id(50), id(30)]) {
+      const vat = vatRelease(); vat.documents[1]!.retentionReleaseId = releaseId;
+      expect(() => reconcileVatRetentionFixtures(vat, retentionFixture())).toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+    }
+  });
+  it.each(["tenantId", "jobId"] as const)("rejects a valid retention book for another %s", field => {
+    const retention = retentionFixture(); retention[field] = id(999);
+    retention.records.forEach(record => { record[field] = id(999); });
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retention)).toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+  });
+  it("requires the profile that authorized the release, even after a date revision", () => {
+    const retention = retentionFixture(); const profile = retention.records[0]!;
+    if (profile.version !== "retention.profile.v1") throw new Error("Expected profile fixture");
+    retention.records.push({ ...structuredClone(profile), id: id(31), revision: 2, previousProfileId: profile.id });
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retention)).not.toThrow();
+    const vat = vatRelease(); vat.documents.forEach(doc => { doc.retentionProfileId = id(31); });
+    expect(() => reconcileVatRetentionFixtures(vat, retention)).toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+  });
+  it.each([1, 1050])("rejects a release with a linked receipt reversal of %ip", grossPence => {
+    const retention = retentionFixture(); const context = { tenantId: id(1), jobId: id(2) };
+    retention.records.push(
+      { ...context, id: id(60), version: "retention.receipt.v1", releaseId: id(111), grossPence: 1050 },
+      { ...context, id: id(61), version: "retention.reversal.v1", receiptId: id(60), grossPence },
+    );
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retention)).toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+  });
+  it.each([[999, 50], [1000, 49], [1001, 49]])("rejects mismatched net/tax allocation %ip/%ip", (net, tax) => {
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retentionFixture(net, tax)))
+      .toThrow(expect.objectContaining({ code: "VALUE_LIMIT" }));
+  });
+  it.each(codes)("%s matches exact release principal, supplier tax and cash under both bases", code => {
+    for (const basis of ["full_net", "net_after_retention"] as const) {
+      const vat = vatRelease(code); vat.taxBasis = basis;
+      const tax = basis === "full_net" || code.startsWith("drc") || ["zero", "non_vat"].includes(code)
+        ? 0 : code === "reduced_5" ? 50 : 200;
+      const retention = retentionFixture(1000, tax);
+      const before = JSON.stringify({ vat, retention });
+      const result = reconcileVatRetentionFixtures(vat, retention);
+      expect(result).toEqual(reconcileVatTreatmentFixtures(vat));
+      expect(reconcileVatRetentionFixtures(vat, retention)).toEqual(result);
+      expect(JSON.stringify({ vat, retention })).toBe(before);
+      expect(Object.isFrozen(result.documents)).toBe(true);
+      expect(result.issueBlockers).toContain("FEATURE_DISABLED");
+    }
+  });
+  it("rejects reused VAT release allocations and duplicate retention records", () => {
+    const vat = fixture(); append(vat, "retention_release", 10000, 500); append(vat, "retention_release", 10000, 0);
+    vat.documents[2]!.retentionReleaseId = id(111);
+    expect(() => reconcileVatRetentionFixtures(vat, retentionFixture(500, 25)))
+      .toThrow(expect.objectContaining({ code: "INVALID_LINEAGE" }));
+    const retention = retentionFixture(); retention.records.push(structuredClone(retention.records[3]!));
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retention))
+      .toThrow(expect.objectContaining({ code: "REPLAY_CONFLICT" }));
+  });
+  it("validates allocation limits and stale approvals before accepting a source release", () => {
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retentionFixture(2001, 50)))
+      .toThrow(expect.objectContaining({ code: "VALUE_LIMIT" }));
+    const retention = retentionFixture(); const profile = retention.records[0]!;
+    if (profile.version !== "retention.profile.v1") throw new Error("Expected profile fixture");
+    retention.records.splice(3, 0, { ...structuredClone(profile), id: id(31), revision: 2, previousProfileId: profile.id });
+    expect(() => reconcileVatRetentionFixtures(vatRelease(), retention))
+      .toThrow(expect.objectContaining({ code: "STALE_PROFILE" }));
+  });
+  it("rejects malformed and production retention books", () => {
+    for (const input of [undefined, {}, { ...retentionFixture(), environment: "production" }]) {
+      expect(() => reconcileVatRetentionFixtures(vatRelease(), input))
+        .toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+    }
+  });
+});
 
 describe("M4-21 fixture, awaiting adviser approval", () => {
   it.each(codes)("%s remains disabled with no caller-supplied approval route", code => {
