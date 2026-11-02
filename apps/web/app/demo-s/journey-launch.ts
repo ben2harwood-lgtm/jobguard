@@ -4,7 +4,8 @@ import { parseShadowReport, shadowCaptureText } from "./shadow-30000/journey-mod
 
 /** A selection's server-issued identity is also its capture idempotency key.
  * Browser storage is never treated as evidence that a journey completed. */
-export async function recoverShadowCapture(runId: string) {
+export const recoverShadowCapture = (runId: string) => recoverCapture(runId, shadowCaptureText);
+export async function recoverCapture(runId: string, text: string) {
   let response = await fetch("/api/session", { cache: "no-store" });
   if (response.status === 401) {
     const started = await fetch("/api/session", { method: "POST" });
@@ -20,7 +21,7 @@ export async function recoverShadowCapture(runId: string) {
   try {
     captured = await fetch("/api/jobs/capture", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ contractVersion: "job_capture_v1", requested_tenant_id: tenantId,
-        captureId: runId, source: { kind: "text", text: shadowCaptureText }, fixtureId: "deterministic-local-v1" }) });
+        captureId: runId, source: { kind: "text", text }, fixtureId: "deterministic-local-v1" }) });
   } catch {
     // A lost reply does not mean capture failed. Keep the saved selection's
     // identity so a reload/retry recovers the committed job rather than replacing it.
