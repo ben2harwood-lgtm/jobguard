@@ -45,10 +45,15 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   expect(await decisions(a)).toEqual([]);
   await admitActivation(a);
   expect((await decisions(a)).map(d => d.action_type)).toEqual(["subscription.upgrade"]);
+  const savedDecision = () => workTenant(f.runtime, a.tenantId, async db => (await db.query("SELECT app.mon1_track_review_decision($1,$2) id", [a.tenantId, a.digest])).rows[0].id);
+  expect(await savedDecision()).toBeNull();
   const crossing = await seedWorkJob(f, a.tenantId);
   await admitActivation(crossing);
   const first = await decisions(a);
   expect(first.map(d => d.action_type)).toEqual(["subscription.track_review", "subscription.upgrade"]);
+  expect(await savedDecision()).toBe(first.find(d => d.action_type === "subscription.track_review")!.id);
+  const stranger = await meterCompany(f);
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon1_track_review_decision($1,$2)", [a.tenantId, stranger.digest]))).rejects.toThrow("METER_FORBIDDEN");
   for (const d of first) expect(d.id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-8[a-f0-9]{3}-[a-f0-9]{12}$/u);
   expect(first.every(d => d.subject_type === "subscription" && d.subject_ref === a.tenantId)).toBe(true);
   const before = await money(a), id = randomUUID();
