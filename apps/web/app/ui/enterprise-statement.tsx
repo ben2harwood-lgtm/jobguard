@@ -56,6 +56,10 @@ export function EnterpriseStatement() {
     {view && <StatementDetails view={view} />}
     {s && !s.superseded && !s.dispute && <div>
       {!s.approval && <button disabled={busy} onClick={() => void run(async () => { await post("approve", { version: "enterprise-fee-approve-statement.v1", commandId: crypto.randomUUID(), statementId: s.id, contentHash: s.contentHash, totalDeltaPence: s.totalDeltaPence, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }); await read(s.id); })}>Approve exact statement (practice)</button>}
+      {s.approval && <button disabled={busy} onClick={() => void run(async () => {
+        const invoice = await post<{ totalPence: number }>("simulate-invoice", { version: "enterprise-fee-simulate-invoice.v1", commandId: crypto.randomUUID(), statementId: s.id, authorizationId: s.approval!.authorizationId });
+        await read(s.id); setMessage(`Simulated invoice: ${pounds(invoice.totalPence)}. No payment due.`);
+      })}>Simulate invoice for approved statement (practice)</button>}
       {s.approval && <button disabled={busy} onClick={() => void run(async () => { await post("post", { version: "enterprise-fee-post-statement.v1", commandId: crypto.randomUUID(), statementId: s.id, authorizationId: s.approval!.authorizationId }); await read(s.id); })}>Post approved statement (practice)</button>}
     </div>}
   </main>;

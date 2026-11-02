@@ -502,3 +502,50 @@ Full `pnpm test`, PostgreSQL/database/migration suites and browser/e2e suites: *
 ### Handoff and acceptance
 
 Intended conventional commit subject/body is written to **both** `/private/tmp/jg-msg-ent-7-r1.txt` and `/private/tmp/jg-msg-ent-7.txt`. No git add, commit, push, checkout, reset, merge or other git write was performed. The dispatcher owns committing and pushing this working-tree diff. No new independent r1 verdict or acceptance is claimed: a different model must review the dispatcher's exact repair commit, followed by separate acceptance. Existing persistence, Q-02–Q-07, commercial policy and production release holds remain unchanged.
+
+## 2 November 2026 — simulated invoice hook follow-up (RED)
+
+Scope: Ben's card `jobguard-ent-7-invoice-hook-q02-2026-11-02`, "Run simulated hook".
+Read ENT-7, the Q-02/03/04/05 records above and the row audit at
+`~/.local/share/full-steam/evidence/jobguard-row-audit-8e7e6be0b.md`.
+The approved exception is fictional simulation only. Q-02's historic reference-only
+executor remains closed; persisted finance approval and the synthetic database's
+existing posting command now back the actual hook. The screen can request it.
+
+The invoice projects the immutable approved statement delta exactly, through the
+existing transaction, posting, authorization, audit and replay machinery. No new
+persistence or migration is needed. The statement ID is the stable simulation ID;
+there is no tax invoice number, provider call, payment, collection or live release.
+Real/pilot/unknown modes refuse before connection; the existing database guard
+also refuses databases other than jobguard_synthetic_demo. Synthetic posting may
+occur when the button is used on an approved statement that was not posted yet.
+
+The base branch's command-backed withdrawn/rejected/unexported/unpaid tests are
+retained and extended to project zero invoices, then the qualifying control's
+1500p invoice, with same/new-key replay and invalid-authority refusals. This is
+source-authored PostgreSQL coverage for CI, not local database execution.
+
+Initial review LATER / SIMPLICITY: `apps/api/src/contractor/enterprise-fee.executor.ts`
+and `docs/contracts/enterprise-fee-statement-v1.md` retain the old supplied-reference
+execution surface beside the persisted one. Once its consumers are retired,
+archive that reference-only execution API and keep one persisted hook; this reduces
+future confusion about which path establishes current authority. It does not block
+this scoped repair or weaken its refusal tests.
+
+Validation results are recorded in the router commit message at
+`/tmp/demo-ent7-hook-20261102T225641Z-commit-msg.txt`. PostgreSQL, browser, full CI
+and exact-head independent RED review remain owed. No independent verification,
+commercial approval or release is claimed. The lane uses the current local
+`origin/main` (42bb496ce); local `main` is an old checkout ref (694e9e175).
+
+Local validation for this follow-up (installed binaries; Vitest 4.1.12, one worker):
+- `packages/db`: `vitest run --maxWorkers=1 src/enterprise-fee-invoice.test.ts src/enterprise-fee-repository.test.ts` — 8 passed initially; after adding read-failure rollback, the invoice file was rerun — 4 passed (9 distinct DB unit tests total).
+- `apps/web`: `vitest run --maxWorkers=1 app/api/contractor/statements/[action]/route.test.ts` — 8 passed.
+- Core/config/storage/DB dependency TypeScript builds passed. DB and web typechecks passed; the integration test and its transitive imports passed a temporary no-emit TypeScript configuration.
+- `vitest list --maxWorkers=1 test/enterprise-fee-command-fixtures.integration.test.ts` — 28 tests collected, including the new concurrent invoice case. Collection does not execute PostgreSQL assertions.
+- Exact lane source-path inventory against local `origin/main` and `git diff --check` passed. Inherited #526 lane metadata is excluded from this lane's source inventory, as instructed; land/rebase #526 first.
+
+The installed pnpm wrapper stalled before running checks and was interrupted;
+local binaries were used. Initial Vitest collection lacked built core outputs;
+building the installed workspace dependencies resolved it. No downloads occurred.
+The added browser assertion in ENT-11b is authored/typechecked, not executed here.
