@@ -168,6 +168,8 @@ export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
+
+export { AccountingObservationReceiptRepository } from "./accounting-observation-receipt-repository.js";
 export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
