@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-sb-cash": {
+      "branches": [
+        "codex/sandbox/m4-23-sb-cash"
+      ],
+      "note": "RED M4-23 cash acceptance. Union of inherited fixture signatures; fake AIS ingestion regression and precise dependency gaps. NOPR=1; no new migration.",
+      "allow": [
+        "config/lanes/m4-23-sb-cash.json",
+        "packages/db/test/m4-23-small-builder-acceptance.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/success-fee-catch-fixture.ts"
+      ]
+    }
+  }
+}

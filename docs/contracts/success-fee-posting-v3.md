@@ -42,6 +42,31 @@ RED review remain required; this is synthetic principal only, without fee VAT,
 providers, collection or production activation.
 
 
+## 2 November 2026: `0590_success_fee_production_safety.sql` catch-up
+
+M4-9 production safety remains dark. The production entrypoint always raises
+`FEE_GATE_CLOSED`; production policies and G4-S remain closed.
+
+The writer starts with main's latest `0515_fee_compensation_gate_and_demo_settle.sql`
+body. Its withheld-payment qualification, invalid-proof reduction, replay, source
+fences and compensation links remain in place. Catch proof changes may only reduce
+previously posted principal. A per-job lock and journal insert guard bound accruals
+and consumption of each original journal.
+
+Negative statements retain main's `compensationLinks` and additionally bind the
+branch's `compensatesDerivationId` and `compensations` with exact original journal,
+derivation and positive pence. Catch-only cancellations consume oldest outstanding
+journals first; withheld-payment statements preserve main's newest-first ordering.
+The exact totals and journal identities must agree in both representations.
+Historical statements and journals are unchanged.
+
+An additional private deferred guard independently rebuilds both source kinds,
+statement authorization and split attribution without replacing main's existing
+deferred checks. Its input reconstruction mirrors the writer's current source path.
+The migration proof contains the exact new routines and triggers; protected shared
+inventories and historical expectation lists stay unchanged. PostgreSQL execution,
+current-main CI and independent RED review remain required.
+
 ## 29 October 2026: migrations 0405–0406 (current)
 
 The current stacked SV-6 review and M4-8-S v1 producer replace the historical
