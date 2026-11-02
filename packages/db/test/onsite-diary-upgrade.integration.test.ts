@@ -54,7 +54,7 @@ it("0505 preserves off-site receipts, all predecessor privileges, rows and unrel
  expect(await catalogue()).toEqual(upgradedCatalogue);
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [name])).rows[0].n).toBe(1);
- // The successor installs above preserve the old receipt; 0536 keeps
+ // The successor installs above preserve the old receipt; 0523 keeps
  // 0505's admission while taking over checked completion.
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
  expect(await repo.intake(a.context, a.jobId, a.actorId, "diary", input)).toEqual(saved);

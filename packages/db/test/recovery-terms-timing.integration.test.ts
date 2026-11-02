@@ -19,7 +19,7 @@ const previousEnvironment=process.env.JOBGUARD_ENV;
 async function start(){
  process.env.JOBGUARD_ENV="synthetic_demo";
  const directory=await mkdtemp(join(tmpdir(),"jg-dw3-")),port=await freePort(62000,100),value=randomUUID();
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:value,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:value,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");
  adminConfig={host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:value};admin=new Pool(adminConfig);
  await admin.query(`CREATE ROLE dw3_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);

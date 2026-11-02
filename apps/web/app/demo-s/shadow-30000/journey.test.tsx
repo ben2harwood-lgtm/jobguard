@@ -21,7 +21,7 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
  const html = renderToStaticMarkup(<ShadowJourney />);
- for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "customer portal"]) expect(html).toContain(text);
+ for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval", "customer portal"]) expect(html).toContain(text);
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {
@@ -45,7 +45,16 @@ it("rejects a reveal from a different locked bill", () => {
 it.each(["not_ready_yet", "awaiting_customer", "approved"])("accepts the v2 customer approval state %s", state => {
  const customerApproval = { state, approvals: state === "approved"
   ? [{ variationId: randomUUID(), approvedAt: "2026-10-31T04:00:00Z", method: "customer_portal" }] : [] };
- expect(parseShadowReport({ ...report(), customerApproval }, jobId).customerApproval).toEqual(customerApproval);
+ const parsed = parseShadowReport({ ...report(), customerApproval }, jobId);
+ expect(parsed.customerApproval).toEqual(customerApproval);
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
+ expect(html).toContain(state === "not_ready_yet" ? "Not ready yet (MON-5)" : state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal");
+ if (state !== "not_ready_yet") expect(html).not.toContain("MON-5");
+ for (const approval of customerApproval.approvals) {
+  expect(html).toContain(approval.variationId); expect(html).toContain(approval.approvedAt);
+ }
+ expect(html).toContain("Incomplete"); expect(html).toContain("No invoice issued");
+ expect(html).not.toContain("£80");
 });
 it("accepts the full mapped v3 value receipt for the same locked job", () => {
  const raw = report(), lockId = randomUUID();
@@ -55,7 +64,11 @@ it("accepts the full mapped v3 value receipt for the same locked job", () => {
    lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt,
    checked: [], tracked: [], assessments: [] }) };
  const saved = { ...raw, account: { ...raw.account, lock }, value };
- expect(parseShadowReport(saved, jobId).value).toEqual(value);
+ const parsed = parseShadowReport(saved, jobId);
+ expect(parsed.value).toEqual(value);
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
+ expect(html).toContain("CH-9 value report: mapped; source-linked receipt saved");
+ expect(html).not.toContain("CH-9 value report: mapped; producer bindings held");
  expect(() => parseShadowReport({ ...saved, value: { ...value, jobId: randomUUID() } }, jobId)).toThrow();
  expect(() => parseShadowReport({ ...saved, value: { ...value, receipt: { ...value.receipt,
   sources: { ...value.receipt.sources, lockId: randomUUID() } } } }, jobId)).toThrow();
@@ -76,4 +89,29 @@ it("rejects stale v1 reports, unbound value shortcuts and unknown approval field
 it("shows step 6 approved only for persisted customer portal approval", () => {
  const parsed = parseShadowReport({ ...report(), customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00Z", method: "customer_portal" }] } }, jobId);
  expect(renderToStaticMarkup(<ShadowSavedReport report={parsed} />)).toContain("Step 6: approved by the customer");
+});
+
+function completeReport() {
+ const lock = { id: randomUUID(), finalAccountRevisionId: randomUUID(), lockedAt: "2026-10-31T04:00:00Z", digest: "a".repeat(64) };
+ const receipt = { ...mapValueReceipt({ tenantId: randomUUID(), jobId, lockId: lock.id, lockedRevisionId: lock.finalAccountRevisionId, lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt, checked: [], tracked: [], assessments: [] }) };
+ const raw = report();
+ return { ...raw, status: "complete", customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00Z", method: "customer_portal" }] },
+  account: { ...raw.account, lock }, packs: [{ caseId: randomUUID(), result: {} }],
+  invoices: { ...raw.invoices, invoices: [{ id: randomUUID(), number: "DEMO-CUST-000001", issuedOn: "2026-10-31", recipient: "practice-customer@example.invalid", pdfSha256: "b".repeat(64), finalAccountRevisionId: randomUUID(), sourceHash: "c".repeat(64), netPence: 3440000, taxPence: 688000, totalPence: 4128000, balancePence: 0, customerCreditPence: 0, paidPence: 4128000, creditedPence: 0, delivery: "simulated_delivery" }] },
+  value: { version: "job-value.v3", environment: "synthetic_demo", jobId, status: "mapped", receipt } };
+}
+it("shows complete only for the server's complete status and never for an incomplete one", () => {
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(completeReport(), jobId)} />);
+ expect(html).toContain("Complete. All nine steps are saved on this job."); expect(html).not.toContain("Incomplete");
+ expect(html).toContain("an approved pack proves"); expect(html).toContain("Settlement");
+ const incomplete = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(report(), jobId)} />);
+ expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("not all approved yet");
+});
+it("refuses a complete status that contradicts its own saved parts", () => {
+ const good = completeReport();
+ for (const patch of [
+  { customerApproval: { state: "awaiting_customer", approvals: [] } }, { value: report().value },
+  { invoices: { ...good.invoices, invoices: [] } }, { packs: [] }, { packs: undefined },
+ ]) expect(() => parseShadowReport({ ...good, ...patch }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...report(), status: "finished" }, jobId)).toThrow();
 });

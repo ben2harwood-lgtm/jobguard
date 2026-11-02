@@ -1,4 +1,4 @@
-// TEST ONLY: current repositories running against real pre-0535 upgrade schemas.
+// TEST ONLY: current repositories running against real pre-0522 upgrade schemas.
 // Current or partially damaged LP-5 schemas always use the production module.
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
