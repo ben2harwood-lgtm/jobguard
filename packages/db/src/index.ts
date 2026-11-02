@@ -123,6 +123,7 @@ export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
 export * from "./subscription-simulated-payment-adapter.js";
+export * from "./subscription-stripe-sandbox-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
@@ -155,6 +156,8 @@ export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./mobile-auth-store.js";
 
+export * from "./evidence-bundle.js";
+export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
@@ -164,3 +167,4 @@ export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
+export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
