@@ -23,18 +23,10 @@
         "apps/web/app/ui/recovery-case-history.tsx",
         "apps/web/app/ui/recovery-cases.behaviour.test.ts",
         "apps/web/app/ui/recovery-cases.tsx",
+        "apps/web/app/ui/recovery-messages.test.tsx",
         "apps/web/e2e/M4-1-S.spec.ts",
         "apps/web/e2e/M4-8-S.spec.ts",
         "apps/web/e2e/helpers/recovery-allocation-journey.ts",
-        "config/lanes/m4-1-full.json",
-        "config/lanes/m4-13-terms.json",
-        "config/lanes/m4-16-dunning.json",
-        "config/lanes/m4-8-landing.json",
-        "config/lanes/m5-1-export.json",
-        "config/lanes/m5-9-signing.json",
-        "config/lanes/mon-2b.json",
-        "config/lanes/mon-9-core.json",
-        "config/lanes/sv7b-store.json",
         "docs/contracts/accounting-export-v1.md",
         "docs/contracts/dunning-dark-v1.md",
         "docs/contracts/recovery-allocation-v1.md",
@@ -69,7 +61,8 @@
         "packages/db/test/recovery-cases.integration.test.ts",
         "packages/db/test/signed-evidence-export.test.ts",
         "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
-        "packages/db/tools/verify-signed-evidence-export.mjs"
+        "packages/db/tools/verify-signed-evidence-export.mjs",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
