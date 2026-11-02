@@ -8,6 +8,7 @@ export class SubscriptionExecutor {
  async executeApprovedSimulation(context:VerifiedTenantContext,digest:string,commandId:string,workId:string,expectedRevision:number){
   const before=await this.repository.read(context,digest);
   if(before.attempts.some(row=>row.work_id===workId))throw new SubscriptionPersistenceError("SUBSCRIPTION_UNAVAILABLE");
+  // The repository checks the shared outbound pause in the same transaction as this claim.
   const claim=await this.repository.command(context,digest,commandId,{version:"subscription-command.v1",kind:"execute_simulation",workId,expectedRevision});
   const work=subscriptionSimulatedWorkV1.parse({version:"subscription-simulated-work.v1",environment:claim.environment,workId:claim.workId,statementId:claim.statementId,amountPence:claim.amountPence,contentHash:claim.contentHash,currency:claim.currency});
   let result;

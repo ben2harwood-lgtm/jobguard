@@ -15,11 +15,12 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     authorization_expires_at: new Date("2099-01-01"), created_at: new Date(),
     next_attempt_at: new Date(0), claimed_at: new Date(0), updated_at: new Date(0) };
   let audit: unknown[][] = [], snapshot: { row: typeof row; audit: unknown[][] };
-  let inTransaction = false, failAudit = false;
+  let inTransaction = false, failAudit = false, claimsEnabled = true;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit] }; inTransaction = true; }
     if (sql === "COMMIT") inTransaction = false;
     if (sql === "ROLLBACK") { Object.assign(row, snapshot.row); audit = snapshot.audit; inTransaction = false; }
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: claimsEnabled }] };
     if (sql.startsWith("SELECT o.*")) {
       const dueGuard = sql.includes("o.next_attempt_at<=clock_timestamp()");
       return { rows: dueGuard && row.status !== "executing" && row.next_attempt_at.getTime() > Date.now() ? [] : [{ ...row }], rowCount: 1 };
@@ -45,10 +46,18 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     reconcile: vi.fn(async () => { expect(inTransaction).toBe(false); return "not_found" as const; }) };
   return { row, context, id, pool, adapter, query, audit: () => audit,
     failAudit: () => { failAudit = true; },
+    pause: () => { claimsEnabled = false; },
     execute: () => new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(context, id) };
 }
 
 describe("LATER-B9 synthetic outcome protocol", () => {
+  it.each(["pending", "retryable"])("M0-13a pause preserves %s work and creates no attempt or audit write", async status => {
+    const f = fixture(status); const before = { ...f.row }; f.pause();
+    await f.execute(); await f.execute();
+    expect(f.row).toEqual(before); expect(f.audit()).toHaveLength(0);
+    expect(f.adapter.deliver).not.toHaveBeenCalled();
+    expect(f.query.mock.calls.some(([sql]) => /^(INSERT|UPDATE)/u.test(sql))).toBe(false);
+  });
   it("L019 safeRetry boolean cannot release outcome_unknown", async () => {
     const f = fixture("outcome_unknown");
     await expect(operateOutbox(f.pool, f.context, f.id, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");

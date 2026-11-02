@@ -21,7 +21,10 @@ describe("disposable synthetic restore rehearsal", () => {
     expect(receipt.liveProviderCalls).toBe(0);
     expect(receipt.realDataUsed).toBe(false);
     expect(receipt.releaseDecision).toBe("NOT_AUTHORIZED");
-    expect(receipt.notRun).toContain("Application-wide outbound kill switch and independently authorized unpause");
+    expect(receipt.outboundControl).toMatchObject({ sourceClaimsEnabled: true, restoredPausedBeforeRuntime: true, finalPaused: true,
+      attemptsWhilePaused: 0, independentlyApprovedByFixtureOperator: true });
+    expect(receipt.outboundControl.reconciliationReceipt).toMatch(/^[a-f0-9-]{36}$/);
+    expect(receipt.notRun).toContain("Deployed restore, reconciliation and independently authorized unpause; fixture operators only");
     expect(receipt.productionRpoRto).toBe("NOT_ESTABLISHED");
   }, 120_000);
 });

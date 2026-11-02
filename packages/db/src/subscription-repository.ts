@@ -2,7 +2,8 @@ import { subscriptionConsentText } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { projectMeterFixture, meterLondonDateV1 } from "./meter-persistence.js";
 const uuid=z.guid({ error: "Invalid uuid" }), revision=z.number().int().safe().nonnegative();
 const hash=z.string().regex(/^[a-f0-9]{64}$/u);
@@ -59,10 +60,13 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
   const input=parseSubscriptionCommand(raw);
   if(!uuid.safeParse(commandId).success||!hash.safeParse(digest).success)throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
   return this.run(context,async db=>{
-   const value=(await db.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb) result",[context.tenantId,digest,commandId,JSON.stringify(input)])).rows[0]?.result;
+   // The pause lock and the SQL claim share one transaction, including direct
+   // repository callers. No attempt or command effect is recorded while paused.
+   if(input.kind==="execute_simulation" && !(await commercialOutboundClaimsEnabled(db)))throw new SubscriptionPersistenceError("SUBSCRIPTION_UNAVAILABLE");
+   const value=(await db.$client.query("SELECT app.mon2_command($1,$2,$3,$4::jsonb) result",[context.tenantId,digest,commandId,JSON.stringify(input)])).rows[0]?.result;
    const result:Record<string,unknown>=subscriptionCommandResultV1.parse(value);
    if(input.kind==="issue"){
-    const source=(await db.query("SELECT app.mon2_source($1,$2,$3) result",[context.tenantId,digest,result.sourceId])).rows[0]?.result;
+    const source=(await db.$client.query("SELECT app.mon2_source($1,$2,$3) result",[context.tenantId,digest,result.sourceId])).rows[0]?.result;
     const recomputed=projectMeterFixture(context.tenantId,source);
     if(recomputed.result.principal.pence!==Number(result.basePrincipalPence))throw new SubscriptionPersistenceError("SUBSCRIPTION_PROJECTION_MISMATCH");
    }
@@ -71,10 +75,10 @@ export class SubscriptionRepository implements SubscriptionRepositoryPort {
  }
  async read(context:VerifiedTenantContext,digest:string):Promise<SubscriptionPersistedRead>{
   if(!hash.safeParse(digest).success)throw new SubscriptionPersistenceError("INVALID_SUBSCRIPTION_INPUT");
-  return this.run(context,async db=>subscriptionPersistedReadV1.parse((await db.query("SELECT app.mon2_read($1,$2) result",[context.tenantId,digest])).rows[0]?.result));
+  return this.run(context,async db=>subscriptionPersistedReadV1.parse((await db.$client.query("SELECT app.mon2_read($1,$2) result",[context.tenantId,digest])).rows[0]?.result));
  }
- private async run<T>(context:VerifiedTenantContext,fn:(db:import("pg").PoolClient)=>Promise<T>):Promise<T>{
-  try{return await withTenant(this.pool,context,db=>fn(db.$client));}
+ private async run<T>(context:VerifiedTenantContext,fn:(db:TenantTransaction)=>Promise<T>):Promise<T>{
+  try{return await withTenant(this.pool,context,fn);}
   catch(error){
    if(error instanceof SubscriptionPersistenceError)throw error;
    if(error instanceof Error&&["METER_FORBIDDEN","SUBSCRIPTION_FORBIDDEN"].includes(error.message))throw new SubscriptionPersistenceError("SUBSCRIPTION_FORBIDDEN");
