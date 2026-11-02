@@ -1,21 +1,21 @@
 {
-  "migration": "0562_customer_evidence_approval_guard.sql",
+  "migration": "0533_final_lock_disclosure_terms.sql",
   "lp0": [
     {
       "section": "routines",
       "before": null,
       "after": {
-        "identity": "function:app.variation_customer_evidence_guard()",
+        "identity": "function:app.guard_final_lock_disclosure_terms()",
         "owner": "jobguard_migration",
-        "securityDefiner": false,
-        "searchPath": "search_path=pg_catalog",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
         "returnsTrigger": true,
         "extension": null,
         "reachable": false,
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "c560155f18168617a38c358f987e2853a44a64ae5746ca403f1846379765a7b8",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -23,7 +23,7 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.variation_approval|variation_customer_evidence_guard|app.variation_customer_evidence_guard|BEFORE INSERT|O"
+      "after": "app.final_account_lock|final_lock_disclosure_terms|app.guard_final_lock_disclosure_terms|BEFORE INSERT|O"
     }
   ],
   "upgrade": [
@@ -32,13 +32,13 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "proname": "variation_customer_evidence_guard",
+        "proname": "guard_final_lock_disclosure_terms",
         "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
-        "prosecdef": false,
+        "prosecdef": true,
         "proconfig": [
-          "search_path=pg_catalog"
+          "search_path=pg_catalog, app"
         ]
       }
     }

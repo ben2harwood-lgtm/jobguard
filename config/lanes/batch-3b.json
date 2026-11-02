@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-3b": {
+      "branches": [
+        "codex/sandbox/batch-3b"
+      ],
+      "note": "Batch 3b replaces #521: collect review, customer evidence guard, stored-cash prevention, CH and SV-5 sweeps, and receipt movement job binding. RED.",
+      "allow": [
+        "apps/api/src/payment-fee.application.test.ts",
+        "apps/api/src/payment-fee.application.ts",
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/helpers/final-check-source-fixtures.ts",
+        "packages/db/migration-notes/0530_customer_evidence_approval_guard.md",
+        "packages/db/migration-notes/0532_job_import_v3_original_source.md",
+        "packages/db/migration-notes/0533_final_lock_disclosure_terms.md",
+        "packages/db/migrations/0529_payment_fee_collect_review.sql",
+        "packages/db/migrations/0530_customer_evidence_approval_guard.sql",
+        "packages/db/migrations/0531_prevent_allocated_case.sql",
+        "packages/db/migrations/0532_job_import_v3_original_source.sql",
+        "packages/db/migrations/0533_final_lock_disclosure_terms.sql",
+        "packages/db/migrations/0534_receipt_movement_job_fk.sql",
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/src/receipt-movement-job-fk.test.ts",
+        "packages/db/src/recovery-case-repository.ts",
+        "packages/db/test/customer-evidence-approval-proof.test.ts",
+        "packages/db/test/customer-evidence-approval.integration.test.ts",
+        "packages/db/test/final-account-lock.integration.test.ts",
+        "packages/db/test/job-import-v3-fixtures.ts",
+        "packages/db/test/job-import-v3-invoiced.integration.test.ts",
+        "packages/db/test/job-import-v3-original-source-upgrade.integration.test.ts",
+        "packages/db/test/job-import-v3.integration.test.ts",
+        "packages/db/test/migration-proofs/0529_payment_fee_collect_review.proof.json",
+        "packages/db/test/migration-proofs/0530_customer_evidence_approval_guard.proof.json",
+        "packages/db/test/migration-proofs/0531_prevent_allocated_case.proof.json",
+        "packages/db/test/migration-proofs/0532_job_import_v3_original_source.proof.json",
+        "packages/db/test/migration-proofs/0533_final_lock_disclosure_terms.proof.json",
+        "packages/db/test/migration-proofs/0534_receipt_movement_job_fk.proof.json",
+        "packages/db/test/payment-fee-statements.integration.test.ts",
+        "packages/db/test/prevent-allocated-case-upgrade.integration.test.ts",
+        "packages/db/test/receipt-movement-job-fk-upgrade.integration.test.ts",
+        "packages/db/test/receipt-source-job-binding-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-outcome.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/recovery-follow-up.integration.test.ts",
+        "packages/db/test/recovery-messages.integration.test.ts",
+        "packages/db/test/stored-receipt-case-allocation.integration.test.ts"
+      ]
+    }
+  }
+}

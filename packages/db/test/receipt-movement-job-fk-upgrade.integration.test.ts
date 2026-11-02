@@ -10,13 +10,13 @@ import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
 
 let f:FinalCheckFixture;
 const environment=process.env.JOBGUARD_ENV;
-const target="0579_receipt_movement_job_fk.sql";
+const target="0534_receipt_movement_job_fk.sql";
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{
  await closeFinalCheckFixture(f);
  if(environment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=environment;
 });
-it("0579_receipt_movement_job_fk preserves populated F5/F7 and validates both movement FKs",async()=>{
+it("0534_receipt_movement_job_fk preserves populated F5/F7 and validates both movement FKs",async()=>{
  const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(`/${target}`));
  expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");

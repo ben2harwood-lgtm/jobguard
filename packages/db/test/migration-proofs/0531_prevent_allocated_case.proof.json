@@ -1,5 +1,5 @@
 {
-  "migration": "0564_prevent_allocated_case.sql",
+  "migration": "0531_prevent_allocated_case.sql",
   "lp0": [
     {
       "section": "routines",

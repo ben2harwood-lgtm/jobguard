@@ -28,7 +28,7 @@ localhost. Independent RED review and green CI remain required.
 Forward fix: add a successor migration if necessary. Preserve the immutable imports
 and their original receipts. Do not edit 0362 or rewrite old ownership/audit chains.
 
-Migration proof: `0566_job_import_v3_original_source.proof.json` deliberately
+Migration proof: `0532_job_import_v3_original_source.proof.json` deliberately
 contains empty lp0, upgrade and tenancy delta lists. Source comparison with 0362
 shows only CREATE OR REPLACE and the source-provenance guard. The existing routine
 keeps its signature, owner, ACL, SECURITY DEFINER, search_path, static calls and

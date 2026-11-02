@@ -1,0 +1,6 @@
+{
+  "migration": "0534_receipt_movement_job_fk.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
