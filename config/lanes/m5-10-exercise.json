@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-10-exercise": {
+      "branches": ["codex/sandbox/m5-10-exercise"],
+      "note": "AMBER M5-10 disposable synthetic exercise wrapper; no live recovery or approval. NOPR=1.",
+      "allow": [
+        "packages/db/tools/synthetic-restore.mjs",
+        "packages/db/tools/resilience-exercises.mjs",
+        "packages/db/test/resilience-exercises.test.ts",
+        "packages/db/test/resilience-exercises.integration.test.ts",
+        "docs/operations/resilience-exercises.md"
+      ]
+    }
+  }
+}
