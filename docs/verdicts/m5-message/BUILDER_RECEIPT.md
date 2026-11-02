@@ -192,3 +192,47 @@ commit, push or PR was performed. No origin/main refresh is required by this bri
 
 PostgreSQL and browser suites were not run under the sandbox restriction.
 Independent exact-head RED review and green CI remain required.
+
+## 2 November 2026 — m5-journey step 1 — READY (NOPR)
+
+RED: MON-5 customer sign-in/session and tenant boundaries. Resolved the working
+files for the in-progress m5-message / m5-quote-accept merge as an exact union.
+Both controllers, application providers, existing guards and exports remain;
+only exact customer POST routes delegate to their existing customer guards.
+Parser refusals remain generic with no-store/no-referrer, and the Next proxy
+retains both message and quote exceptions with its anchored path boundary.
+Signed-in customers retain quote/extras links and the message form. No sign-in,
+link, approval, session or commercial application check was changed.
+
+Added combined-route regression coverage to customer-signin.test.ts (exact POST
+only, non-POST and trailing/extra-path refusals, generic parser refusals) and
+retained messages alongside quote actions in proxy.test.ts. No new product
+behavior or substantial complexity was introduced.
+
+Validation actually run using installed Node v24.17.0, TypeScript and Vitest
+v4.1.12; every Vitest invocation used --maxWorkers=2 and at most three files:
+
+- API: vitest run --maxWorkers=2 src/auth/customer-signin.test.ts
+  src/auth/customer-message.test.ts src/auth/customer-quote.test.ts — 61 passed.
+- API: vitest run --maxWorkers=2 src/auth/auth.test.ts
+  src/auth/customer-variation.test.ts src/watchdog-registry.test.ts — 155 passed.
+- Web: vitest run --maxWorkers=2 proxy.test.ts — 33 passed.
+- Installed root tsc -p apps/api/tsconfig.json --noEmit and
+  tsc -p apps/web/tsconfig.json --noEmit — passed, no stall.
+- Dependency output preparation: tsc -p packages/{core,config,storage,db,ai}/tsconfig.json
+  (each separately), then API tsc emission — passed. Initial test collection lacked
+  core output; the next run lacked built API identity exports. Both resolved by
+  these local builds; no package download or source workaround was needed.
+- API node --import tsx src/generate-openapi.ts --check — passed unchanged.
+- Deterministic exact module registration/import union, unchanged original
+  guard/session/application boundary checks, tracked-file conflict-marker scan
+  and git diff --check — passed.
+- Migrations 0570 and 0572 and both proof files are byte-identical to their
+  respective incoming-index / HEAD versions. The protected
+  docs/contracts/lp-downstream-effects-v1.md is byte-identical to HEAD.
+
+The index remains unmerged because .git is read-only. Router must stage these
+working resolutions and commit. No fetch, git write, push or PR was performed.
+PostgreSQL and browser suites were not run under the sandbox restriction;
+required CI and independent exact-head RED review remain outstanding. This is
+builder test evidence, not independent verification. Step 1 only is READY.

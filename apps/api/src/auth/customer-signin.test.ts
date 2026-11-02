@@ -96,6 +96,18 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
       await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 401 });
     }
   });
+  it.each(["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"])("delegates only exact POST %s to the customer boundary", async action => {
+    const guard = new ApplicationAuthGuard(() => { throw new Error("builder authentication must not run"); });
+    const context = (path: string, method: string) => ({ switchToHttp: () => ({ getRequest: () => ({ path, method, headers }) }) }) as ExecutionContext;
+    const path = `/customer-portal/${action}`;
+    await expect(guard.canActivate(context(path, "POST"))).resolves.toBe(true);
+    for (const method of ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      await expect(guard.canActivate(context(path, method))).rejects.toMatchObject({ status: 401 });
+    }
+    for (const suffix of ["/", "/extra"]) {
+      await expect(guard.canActivate(context(`${path}${suffix}`, "POST"))).rejects.toMatchObject({ status: 401 });
+    }
+  });
   it.each(["issue", "revoke", "signin", "signout", "read"] as const)("production Next %s adapter preserves the SQL refusal", async action => {
     const f = fixture(); f.query.mockRejectedValue({ code: "42501" }); routeIdentity.current = f.identity;
     const previous = process.env.JOBGUARD_ENV; process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -108,13 +120,13 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
       expect(f.query).toHaveBeenCalledOnce(); expect(result.headers.get("cache-control")).toBe("no-store");
     } finally { if(previous===undefined) delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous; }
   });
-  it("malformed JSON gets the same generic refusal before Nest controllers or Next applications", async () => {
+  it.each(["signin", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"])("malformed JSON on %s gets the same generic refusal before Nest controllers or Next applications", async action => {
     const f=fixture();
     const next=await customerHttp(f.app,"signin",new Request(`${origin}/api/customer-portal/signin`,{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{"}));
     expect(next.status).toBe(401);expect(await next.json()).toEqual({code:"CUSTOMER_REFUSED"});expect(f.query).not.toHaveBeenCalled();
     const response={setHeader:vi.fn(),status:vi.fn().mockReturnThis(),json:vi.fn()};
     const filter=new OidcParseExceptionFilter(()=>{throw new Error("OIDC must not run");}, {} as never);
-    await filter.catch(new BadRequestException(),{switchToHttp:()=>({getRequest:()=>({path:"/customer-portal/signin"}),getResponse:()=>response})} as ArgumentsHost);
+    await filter.catch(new BadRequestException(),{switchToHttp:()=>({getRequest:()=>({path:`/customer-portal/${action}`}),getResponse:()=>response})} as ArgumentsHost);
     expect(response.status).toHaveBeenCalledWith(401);expect(response.json).toHaveBeenCalledWith({code:"CUSTOMER_REFUSED"});
     expect(response.setHeader).toHaveBeenCalledWith("Cache-Control","no-store");
   });
