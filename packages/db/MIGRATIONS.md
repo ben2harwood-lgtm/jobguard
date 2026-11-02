@@ -1234,7 +1234,8 @@ PUBLIC/infrastructure get none, shadow gets none, ownership is migration-only
 and search_path is pg_catalog. No table, row, type, policy, existing routine or
 existing grant changes. FORCE RLS and tenant table catalogues have no new table
 to enumerate. LP-0 adds two exact ACL/owner keys, one routine protection record
-and path evidence; serious-B5 adds the exact routine identity only.
+and path evidence through its migration proof; serious-B5 applies the exact
+committed routine attributes from that proof without a live-derived allowance.
 
 No backfill. Forward fix with an additive migration once authoritative sources
 and action authority are accepted; never enable runs by simply removing the
@@ -1249,3 +1250,9 @@ source tables through unchanged runtime SELECT/RLS after that access check.
 One statement binds the available snapshot; the returned envelope is always
 incomplete and names absent adapters. This adds no definer source access,
 source grant or run permission, and cannot produce a completed report.
+
+## 0519 — M4-6-store synthetic timeline history (RED)
+
+Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_migration`, with forced tenant RLS and tenant/subject-qualified foreign keys to the existing follow-up. Runtime has SELECT only on both tables and EXECUTE on apply_recovery_timeline_signal(uuid,jsonb). Direct run INSERT/UPDATE and signal INSERT are revoked; the old record_recovery_timeline_signal(uuid,uuid,uuid,text) helper is owner-only. The aggregate uses search_path=pg_catalog, checks the synthetic database, tenant, current persisted practice session and recursive job ownership, validates the full follow-up reference, derives state/references and computes the canonical normalized JSONB SHA-256 fingerprint before atomically upserting the run and recording the signal. No caller-chosen fingerprint or state is accepted. No DELETE/TRUNCATE, reference changes or signal edits are granted. A private invoker trigger makes stopped terminal. There are no provider, scheduling-owner, financial, audit or existing-routine changes. No backfill: existing in-memory fake history is not promoted to trusted database history.
+
+Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-inbox-gateway": {
+      "branches": [
+        "codex/sandbox/fix-inbox-gateway"
+      ],
+      "note": "Fix: #482's inbox wording passes the session and source labels #505's gateway requires. Same change #505 made to sor-suggestion.ts. Own lane file is implicitly allowed.",
+      "allow": [
+        "packages/ai/src/inbox-wording.ts"
+      ]
+    }
+  }
+}
