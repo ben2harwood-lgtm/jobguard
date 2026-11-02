@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-21-release-link": {
+      "branches": ["codex/sandbox/m4-21-release-link"],
+      "allow": [
+        "packages/core/src/vat-treatments.ts",
+        "packages/core/src/vat-treatments.test.ts",
+        "docs/contracts/vat-treatments-dark-v1.md"
+      ],
+      "note": "M4-21 / M4-20 RED: pure synthetic VAT-retention release linkage; no migration or real issue. NOPR=1."
+    }
+  }
+}
