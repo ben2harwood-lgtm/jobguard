@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp3-settlement-binding": {
+      "branches": [
+        "codex/sandbox/lp3-settlement-binding"
+      ],
+      "note": "LP-3 RED synthetic settlement approval binding; NOPR router handoff after #414.",
+      "allow": [
+        "packages/db/migrations/0604_lp3_settlement_binding.sql",
+        "packages/db/test/migration-proofs/0604_lp3_settlement_binding.proof.json",
+        "packages/db/src/activation-repository.ts",
+        "packages/db/src/lp3-mutations.test.ts",
+        "packages/db/test/activation.integration.test.ts",
+        "packages/db/test/lp3-activation-acceptance.integration.test.ts",
+        "packages/db/migration-notes/0604_lp3_settlement_binding.md"
+      ]
+    }
+  }
+}

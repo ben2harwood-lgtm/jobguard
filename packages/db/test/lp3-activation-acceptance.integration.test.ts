@@ -32,6 +32,29 @@ async function fixture(){
       amountPence:7900,currency:"GBP",policyVersion:"synthetic_demo_illustrative.v1",expiresAt:new Date("2099-01-01")}};
   return {job,d,input,command,mutation:new SwitchJobLiveMutation(T,"synthetic_demo",input)};
 }
+async function settlementFixture(){
+  const f=await fixture();
+  await new UserCommandDispatcher(db.runtime).dispatch(context,f.command,f.mutation);
+  const input={version:"simulated-settlement.v1",settlementId:randomUUID(),obligationId:f.input.syntheticObligationId,
+    providerEventId:randomUUID(),amountPence:7900,currency:"GBP",simulatedAt:at};
+  const command:ConsequentialCommand={...f.command,commandId:randomUUID(),semanticKey:`settle:${input.obligationId}`,
+    commandType:"synthetic.settlement",subjectType:"synthetic_obligation",subjectRef:input.obligationId,
+    action:{...f.command.action,actionType:"synthetic_obligation.simulate_settlement",contentHash:lp3MutationHash(T,M,input),aggregateRevision:1}};
+  const mutation=new RecordSimulatedSettlementMutation(T,"synthetic_demo",input);
+  return {f,input,command,mutation};
+}
+function settlementArgs(input:Awaited<ReturnType<typeof settlementFixture>>["input"],command:ConsequentialCommand):unknown[]{
+  return [T,input.settlementId,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt,M,command.commandId,command.authorizationId];
+}
+const settlementCall="SELECT * FROM app.record_simulated_settlement($1,$2,$3,$4,$5,$6,$7,$8,$9)";
+async function sqlSettlementHash(input:Awaited<ReturnType<typeof settlementFixture>>["input"]){
+  const result=await db.owner.query(`SELECT app.lp3_input_hash(ARRAY['lp3-input.v1','synthetic.settlement',$1::uuid::text,$2::uuid::text,
+    $3::uuid::text,$3::uuid::text,$4,$5::bigint::text,'GBP','synthetic_demo_illustrative.v1',
+    to_char($6::timestamptz AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')]) hash`,
+    [T,M,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt]);
+  return result.rows[0].hash as string;
+}
+
 async function counts(){
   const result:Record<string,number>={};
   for(const table of ["job_activation","cap_snapshot","synthetic_obligation","simulated_settlement_event","activation_acceptance_operation_use","command_receipt","action_authorization","audit_event","journal"])
@@ -74,11 +97,67 @@ describe("LP-3 actual runtime attack and compatibility checks",()=>{
     await expect(dispatcher.dispatch(context,f.command,new SwitchJobLiveMutation(T,"synthetic_demo",{...f.input,activatedAt:new Date(at.getTime()+1)}))).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
     const settlement={version:"simulated-settlement.v1",settlementId:randomUUID(),obligationId:f.input.syntheticObligationId,providerEventId:randomUUID(),amountPence:7900,currency:"GBP",simulatedAt:at};
     const command:ConsequentialCommand={...f.command,commandId:randomUUID(),semanticKey:`settle:${settlement.obligationId}`,commandType:"synthetic.settlement",subjectType:"synthetic_obligation",subjectRef:settlement.obligationId,
-      action:{...f.command.action,actionType:"synthetic_obligation.simulate_settlement",policyVersion:"synthetic_demo_illustrative.v1"}};
+      action:{...f.command.action,contentHash:lp3MutationHash(T,M,settlement),actionType:"synthetic_obligation.simulate_settlement",policyVersion:"synthetic_demo_illustrative.v1"}};
     const mutation=new RecordSimulatedSettlementMutation(T,"synthetic_demo",settlement);
     await dispatcher.dispatch(context,command,mutation);
-    await expect(dispatcher.dispatch(context,{...command,commandId:randomUUID(),semanticKey:`second:${randomUUID()}`},new RecordSimulatedSettlementMutation(T,"synthetic_demo",{...settlement,settlementId:randomUUID(),providerEventId:randomUUID()}))).rejects.toMatchObject({code:"22023"});
+    const second={...settlement,settlementId:randomUUID(),providerEventId:randomUUID()};
+    await expect(dispatcher.dispatch(context,{...command,commandId:randomUUID(),semanticKey:`second:${randomUUID()}`,action:{...command.action,contentHash:lp3MutationHash(T,M,second)}},new RecordSimulatedSettlementMutation(T,"synthetic_demo",second))).rejects.toMatchObject({code:"22023"});
     expect((await db.owner.query("SELECT count(*)::int n FROM app.simulated_settlement_event WHERE tenant_id=$1 AND obligation_id=$2",[T,settlement.obligationId])).rows[0].n).toBe(1);
+  });
+  it.each(["other-obligation","other-amount","other-amount-hash","arbitrary-hash","zero-hash","document-hash","event","timestamp","tenant","actor","policy","revoked","expired"])("settlement SQL refuses %s approval without trusting mutation prechecks",async attack=>{
+    const f=await settlementFixture(),before=await counts();
+    let contentHash=f.command.action.contentHash;
+    if(attack==="other-obligation"){
+      const other=await settlementFixture();
+      contentHash=lp3MutationHash(T,M,{...f.input,obligationId:other.input.obligationId});
+    }
+    if(attack==="other-amount-hash")contentHash=await sqlSettlementHash({...f.input,amountPence:7901});
+    if(attack==="arbitrary-hash")contentHash="a".repeat(64);
+    if(attack==="zero-hash")contentHash="0".repeat(64);
+    if(attack==="document-hash")contentHash=f.f.d.content_hash;
+    // A separate fixture above adds legitimate activation records; compare after its setup.
+    const ready=attack==="other-obligation"?await counts():before;
+    // This dispatcher writes the supplied hash verbatim into a fresh authorization row.
+    // Bypass mutation.mutate so only the database can reject these hand-made approvals.
+    await expect(new UserCommandDispatcher(db.runtime).dispatch(context,{...f.command,action:{...f.command.action,contentHash,
+      amountPence:attack==="other-amount"?7901:7900,
+      expiresAt:attack==="expired"?new Date(Date.now()+500):f.command.action.expiresAt,
+      policyVersion:attack==="policy"?"other-policy.v1":f.command.action.policyVersion}},{
+      inputHash:c=>f.mutation.inputHash(c),
+      async mutate(database,c){
+        const values=settlementArgs(f.input,c);
+        if(attack==="event")values[3]=randomUUID();
+        if(attack==="timestamp")values[5]=new Date(at.getTime()+1);
+        if(attack==="tenant")values[0]=randomUUID();
+        if(attack==="actor")values[6]=randomUUID();
+        if(attack==="revoked")await database.$client.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,c.authorizationId]);
+        if(attack==="expired")await database.$client.query("SELECT pg_sleep(0.6)");
+        return (await database.$client.query(settlementCall,values)).rows[0];
+      },
+    })).rejects.toMatchObject({code:"42501"});
+    expect(await counts()).toEqual(ready);
+  });
+  it("settlement races and receipt replays give one effect, with rollback preserving approval availability",async()=>{
+    const f=await settlementFixture(),dispatcher=new UserCommandDispatcher(db.runtime),before=await counts();
+    await expect(dispatcher.dispatch(context,f.command,{inputHash:c=>f.mutation.inputHash(c),async mutate(database,c){
+      await f.mutation.mutate(database,c);throw new Error("FICTIONAL_SETTLEMENT_ROLLBACK");
+    }})).rejects.toThrow("FICTIONAL_SETTLEMENT_ROLLBACK");
+    expect(await counts()).toEqual(before);
+    const results=await Promise.all([dispatcher.dispatch(context,f.command,f.mutation),dispatcher.dispatch(context,f.command,f.mutation)]);
+    expect(results[0]).toEqual(results[1]);
+    await expect(dispatcher.dispatch(context,f.command,new RecordSimulatedSettlementMutation(T,"synthetic_demo",{...f.input,simulatedAt:new Date(at.getTime()+1)}))).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.simulated_settlement_event WHERE tenant_id=$1 AND obligation_id=$2",[T,f.input.obligationId])).rows[0].n).toBe(1);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.activation_acceptance_operation_use WHERE tenant_id=$1 AND command_id=$2",[T,f.command.commandId])).rows[0].n).toBe(1);
+    const g=await settlementFixture();
+    const competing=await Promise.allSettled([dispatcher.dispatch(context,g.command,g.mutation),
+      dispatcher.dispatch(context,{...g.command,commandId:randomUUID(),semanticKey:`competing:${randomUUID()}`},g.mutation)]);
+    expect(competing.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+    expect(competing.filter(result=>result.status==="rejected")).toHaveLength(1);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.simulated_settlement_event WHERE tenant_id=$1 AND obligation_id=$2",[T,g.input.obligationId])).rows[0].n).toBe(1);
+  });
+  it("SQL settlement digest matches the approval issuer's canonical LP-3 input",async()=>{
+    const f=await settlementFixture();
+    expect(await sqlSettlementHash(f.input)).toBe(f.command.action.contentHash);
   });
   it("rejects a consumed authorization even while its receipt remains processing",async()=>{
     const f=await fixture();
