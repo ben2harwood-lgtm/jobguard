@@ -24,7 +24,7 @@ it("forbids production, forged money and unexpected read switches without writin
  expect(mocks.command).not.toHaveBeenCalled();expect(mocks.read).not.toHaveBeenCalled();
 });
 it("maps pauses and stale bindings to explicit conflicts without converting unknown failures into success",()=>{
- for(const code of ["PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"])
+ for(const code of ["PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_REVIEW_REQUIRED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"])
   expect(paymentFeeFailure(new Error(code))).toEqual({status:409,body:{code}});
  expect(paymentFeeFailure(new PaymentFeeStatementError())).toEqual({status:400,body:{code:"INVALID_PAYMENT_FEE_COMMAND"}});
  expect(paymentFeeFailure(new Error("FINAL_CHECK_FORBIDDEN"))).toEqual({status:404,body:{code:"NOT_FOUND"}});
