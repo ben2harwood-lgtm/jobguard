@@ -1,6 +1,8 @@
 "use client";
+import { SimulationMoneyCheck } from "./simulation-money-check";
 import { useEffect, useState } from "react";
 import { simulationFeeStatementViewV1, type IssuedSimulationFeeStatement } from "@jobguard/core";
+import { SimulationFeeCollection } from "./simulation-fee-collection";
 const pounds=(p:number)=>`${p<0?"−":""}£${(Math.abs(p)/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 // Finish bounded reads and their response bodies even when navigation replaces the panel.
 export async function readSimulationFeeStatements(jobId:string){
@@ -27,7 +29,7 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
   }catch{setError("Statements could not be loaded.");}finally{setBusy(false);}
  }
  if(!available)return null;
- return <section className="workspace-panel" aria-label="Simulation fee statements"><h2>Simulation fee statements</h2>
+ return <section id="simulation-fee-statements" className="workspace-panel" aria-label="Simulation fee statements"><h2>Simulation fee statements</h2>
   <button disabled={busy} onClick={()=>void command("issue")}>Save current simulation statement or correction</button>
   {records.map((record,index)=>{const d=record.document;return <article key={d.statementId}>
    <h3 data-testid="fee-statement-number">{d.number}</h3><p>{d.warning}</p><p>{d.vatLabel}</p><p>{d.sandboxLabel}</p>
@@ -36,13 +38,14 @@ export function SimulationFeeStatements({jobId}:{jobId:string}) {
    <p>Q: <a href={`#sources-${d.statementId}`}>{d.qualifyingPrincipal.denominator==="1"?pounds(Number(d.qualifyingPrincipal.numerator)):`${d.qualifyingPrincipal.numerator}/${d.qualifyingPrincipal.denominator} pence (exact)`}</a></p>
    {d.original&&<a href={`#statement-${d.original.statementId}`}>Correction or supplement to {d.original.statementId}</a>}
    <p id={`statement-${d.statementId}`}>Hash: <code>{record.documentHash}</code></p>
-   <details id={`sources-${d.statementId}`}><summary>Sources, allocations and approvals</summary>{d.sourceSnapshot.sources.map(s=><p key={s.assessmentId}><a href={`/api/jobs/${jobId}/success-fee-attribution`}>Assessment {s.assessmentId}</a>; source {s.sourceHash}; allocation links {s.allocationIds.join(", ")}; review approval {s.reviewAuthorizationId}</p>)}
+   <details id={`sources-${d.statementId}`}><summary>Sources, allocations and approvals</summary>{d.sourceSnapshot.sources.map(s=><p key={"assessmentId" in s?s.assessmentId:s.recoveryAllocationId}>{"assessmentId" in s?<a href={`/api/jobs/${jobId}/success-fee-attribution`}>Assessment {s.assessmentId}</a>:<span>Withheld payment case {s.caseId}; payment {s.paymentId}; invoice {s.invoiceId}; reversals {s.reversalIds.join(", ")||"None"}</span>}; source {s.sourceHash}; allocation links {"allocationIds" in s?s.allocationIds.join(", "):s.recoveryAllocationId}; review approval {s.reviewAuthorizationId}</p>)}
     <p>Receipt reversals: {d.sourceSnapshot.adjustments.paymentReversalIds.join(", ")||"None"}; customer adjustments: {d.sourceSnapshot.adjustments.creditNoteIds.join(", ")||"None"}; evidence invalidations: {d.sourceSnapshot.adjustments.evidenceInvalidationIds.join(", ")||"None"}.</p>
     {d.sourceSnapshot.derivations.map(x=><p key={x.derivationId}>Derivation {x.derivationId}; posting approval {x.authorizationId}; review {x.reviewId}</p>)}</details>
-   <details><summary>Prior postings and compensation history</summary>{d.postingHistory.map(h=><p key={h.journalId}>{h.journalId}: {pounds(h.principal.pence)}</p>)}<p>Fee settlement integration unavailable — M4-12-S.</p><p>Corrections are documentary; they do not post compensation or collect money.</p></details>
+   <details><summary>Prior postings and compensation history</summary>{d.postingHistory.map(h=><p key={h.journalId}>{h.journalId}: {pounds(h.principal.pence)}</p>)}<p>Corrections are documentary; they do not post compensation or collect money.</p></details>
    <a href={`${url}/${d.statementId}`} download={`${d.number}.v1.json`}>Download {d.number} (v1)</a>
    {index===records.length-1&&<button disabled={busy} onClick={()=>void command("approve",record)}>Approve this exact simulation statement</button>}
    {approved===d.statementId&&<p role="status">Exact statement approved; no money collected.</p>}
-  </article>;})}{error&&<p role="alert">{error}</p>}
- </section>;
+  </article>;})}{records.at(-1)&&<SimulationFeeCollection jobId={jobId} statementId={records.at(-1)!.document.statementId} statementHash={records.at(-1)!.documentHash}/>}
+  {error&&<p role="alert" aria-label="Simulation statement error">{error}</p>}
+ <SimulationMoneyCheck key={jobId} jobId={jobId}/></section>;
 }

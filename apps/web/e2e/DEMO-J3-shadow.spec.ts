@@ -112,6 +112,11 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  // A fresh post-lock note is refused; exact earlier command can still replay.
  const late = await page.request.post(`/api/jobs/${jobId}/diary`, { data: { ...diary, commandId: randomUUID() } });
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);
+ // Keep the unapproved checkpoint before continuing main's full paid journey.
+ await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
+ await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ const unapproved = page.getByRole("region", { name: "Saved shadow journey report" });
+ for (const text of ["£33,600.00 net", "Customer approval: Awaiting customer", "fitted garden drainage", "fitted loft hatch", "No invoice issued", "recovery fee £0"]) await expect(unapproved).toContainText(text);
  // Leg 6b: send the priced catches, then the customer signs in and approves
  // each exact revision in an isolated portal context. No builder attestation.
  const customerApprovals = await approveJ3Catches(page, browser, jobId, catches);
@@ -172,11 +177,8 @@ test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice,
  await completeJ3(page, browser, testInfo);
 });
 
-// J3-VALUE-COMBINED is not on origin/main (8970e6e6): read_value_job still
-// joins tracked captures to an invoice of the ORIGINAL locked revision. Keep
-// only the combined-invoice value assertion fixme; all steps 6–9 above run.
-// Remove fixme when J3-VALUE-COMBINED lands; this reruns the same fresh journey.
-test.fixme("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async ({ page, browser }, testInfo) => {
+// Verify combined-invoice value figures through the same fresh journey.
+test("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async ({ page, browser }, testInfo) => {
  const { jobId, report } = await completeJ3(page, browser, testInfo);
  expect(report.value).toMatchObject({ version: "job-value.v3", jobId, status: "mapped", receipt: {
   tracked: { pence: 360000, currency: "GBP" }, trackedFee: { pence: 0, currency: "GBP" },

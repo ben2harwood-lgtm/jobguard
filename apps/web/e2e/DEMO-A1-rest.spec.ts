@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { finishDispositionsAndTerms, prepareLockJob } from "./helpers/final-account-lock-journey";
 import { enterQuote, recordThroughUi } from "./helpers/customer-invoice-journey";
 import { get, post } from "./helpers/recovery-sources";
+import { approveJ3Catches, type PricedCatch } from "./helpers/j3-customer-approval";
+import { allocateThroughUi, readAllocations, recovery18800 } from "./helpers/recovery-allocation-journey";
 
 // DEMO-A1's remaining five scenarios. Both configured projects run each test
 // from a new practice session/job. Setup and outcomes use HTTP/UI only: even
@@ -71,6 +73,7 @@ async function incompleteShadowReport(page: Page, jobId: string) {
   await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
   await button(page, "Load saved J3 evidence").click();
   const saved = page.getByRole("region", { name: "Saved shadow journey report" });
+  await expect(saved).toContainText("Customer approval: Awaiting customer");
   await expect(saved.getByText("Incomplete. Step 6: awaiting customer approval. No fee is charged.", { exact: true })).toBeVisible();
   await expect(saved).toContainText("No fee is charged");
   await expect(saved).toContainText("No invoice issued");
@@ -140,8 +143,8 @@ test("DEMO-S unpaid catches: a real revealed catch stays unpaid and fee-free at 
   await expect(page.getByTestId("final-check-disposition")).toContainText("nothing is charged until your customer approves");
   await zeroRecovery(page, jobId);
   await incompleteShadowReport(page, jobId);
-  // Remaining blocker: authenticated customer approval and the downstream
-  // invoiced/settled catch are not ready. A priced proposal is never payment.
+  // No customer approval was requested or granted in this scenario.
+  // A priced proposal is never approval, an issued invoice or payment.
 });
 
 test("DEMO-S partial and duplicate receipts: one command reduces the balance once and never qualifies as settlement", async ({ page }) => {
@@ -195,4 +198,43 @@ test("DEMO-S unknown outcomes: a committed receipt with a lost reply pauses chan
   expect(await get(page, receiptPath)).toEqual(saved);
   expect(commands).toHaveLength(1);
   await zeroRecovery(page, jobId);
+});
+
+test("DEMO-S partial receipts: a part allocation uses the invoice ratio and leaves the rest unallocated", async ({ page }) => {
+  const { jobId, cases } = await recovery18800(page), source = cases[1]!;
+  expect(source.grossPence).toBe(300000);
+  await allocateThroughUi(page, source, "1200.00", "£1,200.00 = £1,000.00 net + £200.00 tax");
+  const saved = await readAllocations(page, jobId);
+  expect(saved.allocations).toHaveLength(1);
+  expect(saved.allocations[0]).toMatchObject({ caseId: source.caseId, paymentId: source.paymentId, grossPence: 120000, eligibleNetPence: 100000, taxPence: 20000, held: false });
+  // The receipt keeps its full gross and its balance stays available; the claim stays open.
+  expect(saved.receipts.find(row => row.paymentId === source.paymentId)).toMatchObject({ grossPence: 300000, availablePence: 180000, reversed: false });
+  expect(saved.cases.find(row => row.caseId === source.caseId)).toMatchObject({ claimedNetPence: 250000, outstandingNetPence: 150000 });
+  await page.reload();
+  expect(await readAllocations(page, jobId)).toEqual(saved);
+});
+
+test("DEMO-S unpaid catches: a customer-approved, invoiced catch with no receipt still earns no fee", async ({ page, browser }) => {
+  const { jobId, check } = await checkedJob(page, true), signal = check.items[0];
+  const caught = await post(page, path(jobId, "final-check/catches"), { version: "final-check.catch.v1", commandId: randomUUID(), lockId: check.lockId,
+    runId: check.runId, signalId: signal.signalId, expectedSignalRevision: signal.signalRevision });
+  const revised = await post(page, path(jobId, "variations"), { version: "variation-command.v1", action: "revise", variationId: caught.variationId, revisionId: randomUUID(),
+    expectedRevisionId: null, description: signal.description, price: { quantity: "1", unit: "item", unitRatePence: 50000, direction: "addition" } });
+  const priced = revised.variations.find((row: { id: string }) => row.id === caught.variationId) as PricedCatch;
+  const approvals = await approveJ3Catches(page, browser, jobId, [priced]);
+  expect(approvals).toHaveLength(1);
+  const current = await get(page, path(jobId, "final-account"));
+  await post(page, path(jobId, "final-account"), { version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: current.account.revision });
+  const bill = await get(page, path(jobId, "final-account/lock"));
+  const issued = await post(page, path(jobId, "final-account/lock"), { version: "lock-bound-invoice.issue.v1", commandId: randomUUID(), invoiceKind: "final",
+    finalAccountRevisionId: bill.account.id, expectedSourceHash: bill.account.sourceHash, recipient: "fictional@example.invalid", issuedOn: "2026-10-31" });
+  expect(issued.invoices).toHaveLength(1);
+  const invoice = issued.invoices[0];
+  expect(invoice.balancePence).toBe(invoice.totalPence);
+  expect(invoice.paidPence ?? 0).toBe(0);
+  await zeroRecovery(page, jobId);
+  const report = await get(page, path(jobId, "shadow-demo"));
+  expect(report).toMatchObject({ status: "incomplete", realExternalActions: 0, assessments: [] });
+  expect(report.customerApproval.state).toBe("approved");
+  expect((await get(page, path(jobId, `customer-invoices/${invoice.id}/receipts`))).receipts).toEqual([]);
 });

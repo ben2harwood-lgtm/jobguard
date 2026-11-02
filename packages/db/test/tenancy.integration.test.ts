@@ -1,3 +1,4 @@
+import { applyTenancyProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -214,7 +215,7 @@ describe("migration and privilege catalog", () => {
       GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
       ORDER BY c.relname
     `);
-    expect(result.rows).toEqual([
+    expect(result.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -266,6 +267,7 @@ describe("migration and privilege catalog", () => {
       { relname: "customer_variation_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "decision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "decision_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "demo_trial_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_finding_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "discrepancy_review_outcome", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "enterprise_agreement_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -391,6 +393,9 @@ describe("migration and privilege catalog", () => {
       { relname: "planned_work_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_enterprise_fee", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_enterprise_fee_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_attempt_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "platform_fee_collection_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_fee_statement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_fee_statement_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "platform_statement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -490,6 +495,8 @@ describe("migration and privilege catalog", () => {
       { relname: "shadow_signal_evidence", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "shadow_signal_ineligibility", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "simulated_settlement_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "simulation_money_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "simulation_money_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "site", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "site_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "site_visit", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -562,7 +569,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "work_order_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-    ]);
+    ], loadMigrationProofs().proofs, "rls"));
   });
 
   it("keeps runtime and infrastructure roles unprivileged", async () => {
@@ -595,7 +602,7 @@ describe("migration and privilege catalog", () => {
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
-    expect(ownership.rows).toEqual([
+    expect(ownership.rows).toEqual(applyTenancyProofs([
       { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
@@ -647,6 +654,7 @@ describe("migration and privilege catalog", () => {
       { relname: "customer_variation_approval", owner: "jobguard_migration" },
       { relname: "decision", owner: "jobguard_migration" },
       { relname: "decision_resolution", owner: "jobguard_migration" },
+      { relname: "demo_trial_binding", owner: "jobguard_migration" },
       { relname: "discrepancy_finding_revision", owner: "jobguard_migration" },
       { relname: "discrepancy_review_outcome", owner: "jobguard_migration" },
       { relname: "enterprise_agreement_version", owner: "jobguard_migration" },
@@ -772,6 +780,9 @@ describe("migration and privilege catalog", () => {
       { relname: "planned_work_revision", owner: "jobguard_migration" },
       { relname: "platform_enterprise_fee", owner: "jobguard_migration" },
       { relname: "platform_enterprise_fee_line", owner: "jobguard_migration" },
+      { relname: "platform_fee_attempt", owner: "jobguard_migration" },
+      { relname: "platform_fee_attempt_event", owner: "jobguard_migration" },
+      { relname: "platform_fee_collection_command", owner: "jobguard_migration" },
       { relname: "platform_fee_statement", owner: "jobguard_migration" },
       { relname: "platform_fee_statement_command", owner: "jobguard_migration" },
       { relname: "platform_statement", owner: "jobguard_migration" },
@@ -871,6 +882,8 @@ describe("migration and privilege catalog", () => {
       { relname: "shadow_signal_evidence", owner: "jobguard_migration" },
       { relname: "shadow_signal_ineligibility", owner: "jobguard_migration" },
       { relname: "simulated_settlement_event", owner: "jobguard_migration" },
+      { relname: "simulation_money_review", owner: "jobguard_migration" },
+      { relname: "simulation_money_run", owner: "jobguard_migration" },
       { relname: "site", owner: "jobguard_migration" },
       { relname: "site_revision", owner: "jobguard_migration" },
       { relname: "site_visit", owner: "jobguard_migration" },
@@ -943,7 +956,7 @@ describe("migration and privilege catalog", () => {
       { relname: "work_order_current", owner: "jobguard_migration" },
       { relname: "work_order_line", owner: "jobguard_migration" },
       { relname: "work_order_revision", owner: "jobguard_migration" },
-    ]);
+    ], loadMigrationProofs().proofs, "owner"));
   });
 });
 
