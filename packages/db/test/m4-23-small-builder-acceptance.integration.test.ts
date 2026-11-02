@@ -74,8 +74,17 @@ async function issue(x: Subject) {
 }
 function collection(x: Subject) {
   const repo = new SimulationFeeCollectionRepository(f.runtime);
+  // Only the CI fake-rail operator connection supplies terminal outcomes. No HTTP path.
+  const rail = (raw: unknown) => finalCheckTenant(f.admin, x.context.tenantId, async db => {
+    await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [x.auth.digest]);
+    return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",
+      [x.jobId, x.auth.digest, raw])).rows[0].result;
+  });
   return {
-    run: (raw: unknown) => repo.command(x.context, x.jobId, x.auth.digest, raw),
+    run: (raw: unknown) => {
+      const action = (raw as { action: string }).action;
+      return action === "settle" || action === "fail" ? rail(raw) : repo.command(x.context, x.jobId, x.auth.digest, raw);
+    },
     view: () => repo.view(x.context, x.jobId, x.auth.digest),
   };
 }

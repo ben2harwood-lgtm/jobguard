@@ -18,8 +18,8 @@ export class FakeRateLimit extends Error {
 export class FakeAccountingTransport implements AccountingAdapter {
   next: "success" | "reject" | "unknown_before" | "unknown_after" | "rate_limit" = "success";
   pushes = 0;
-  constructor(readonly route: AccountingRoute, readonly objects: FakeExternal[] = []) {}
-  assertConnection(_tenantId: string, _companyId: string): number { return 1; }
+  constructor(readonly route: AccountingRoute, readonly objects: FakeExternal[] = [],
+    readonly assertConnection: AccountingAdapter["assertConnection"] = () => 1) {}
   push(reference: string, contentHash: string, input: unknown, access: FakeAccess): FakeExternal {
     const payload = parseAccounting(accountingTargetV1, input);
     this.assertConnection(access.tenantId, access.companyId);
@@ -40,6 +40,16 @@ export class FakeAccountingTransport implements AccountingAdapter {
       o.reference === reference).map(o => structuredClone(o));
   }
 }
-export class FakeCodatAdapter extends FakeAccountingTransport {
-  constructor(objects: FakeExternal[] = []) { super("codat", objects); }
+export class FakeCodatAdapter implements AccountingAdapter {
+  readonly route = "codat";
+  private readonly transport: FakeAccountingTransport;
+  constructor(readonly objects: FakeExternal[] = []) { this.transport = new FakeAccountingTransport(this.route, objects); }
+  get next() { return this.transport.next; }
+  set next(value: FakeAccountingTransport["next"]) { this.transport.next = value; }
+  get pushes() { return this.transport.pushes; }
+  assertConnection(tenantId: string, companyId: string): number { return this.transport.assertConnection(tenantId, companyId); }
+  push(reference: string, contentHash: string, input: unknown, access: FakeAccess): FakeExternal {
+    return this.transport.push(reference, contentHash, input, access);
+  }
+  find(reference: string, access: FakeAccess): FakeExternal[] { return this.transport.find(reference, access); }
 }

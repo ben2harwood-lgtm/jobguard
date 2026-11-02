@@ -103,9 +103,7 @@
         "tablename": "demo_trial_binding",
         "policyname": "tenant_scope",
         "permissive": "PERMISSIVE",
-        "roles": [
-          "jobguard_migration"
-        ],
+        "roles": "{jobguard_migration}",
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
