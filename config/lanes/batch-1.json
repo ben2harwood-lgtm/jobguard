@@ -45,7 +45,6 @@
         "packages/ai/src/evaluation-runner.ts",
         "packages/ai/src/golden-run-record.test.ts",
         "packages/ai/src/golden-run-record.ts",
-        "packages/ai/src/inbox-wording.ts",
         "packages/core/src/dunning.test.ts",
         "packages/core/src/dunning.ts",
         "packages/core/src/index.ts",
