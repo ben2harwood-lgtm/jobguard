@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-16-persist": {
+      "branches": [
+        "codex/sandbox/m4-16-persist"
+      ],
+      "note": "M4-16 RED synthetic durable workbench and preview Decision approvals; migration 0581_dunning_workbench with live-only snapshot uniqueness and immutable reminder history; server/database clocks govern overdue eligibility, with fixture-only repository clock injection.",
+      "allow": [
+        "packages/db/migrations/0581_dunning_workbench.sql",
+        "packages/db/src/dunning-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/dunning-repository.test.ts",
+        "packages/db/test/dunning.integration.test.ts",
+        "packages/db/test/lp-0-catalog.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/dunning-dark-v1.md",
+        "packages/db/test/dunning-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0581_dunning_workbench.proof.json"
+      ]
+    }
+  }
+}

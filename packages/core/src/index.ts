@@ -135,7 +135,6 @@ export * from "./small-builder-demo-lifecycle.js";
 export * from "./merchant-connectors.js";
 export * from "./inbox-outcome-metrics.js";
 
-export * from "./dunning.js";
 export * from "./subscription-agreement.js";
 export * from "./recovery-billability-policy.js";
 export * from "./mobile-auth-state.js";
@@ -151,3 +150,5 @@ export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
 
 export * from "./contractor-mandate.js";
+
+export * from "./dunning.js";
