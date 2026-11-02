@@ -1,6 +1,6 @@
 # M4-9 contractor production safety preparation (RED, dark)
 
-Migration 0429 adds a separate production command that always refuses, before any
+Migration `0589_enterprise_fee_production_safety.sql` adds a separate production command that always refuses, before any
 business read or write. No request approval, environment variable or GUC activates
 it. Synthetic routines keep their existing environment, finance-session, exact
 statement authority and stale-fact checks. No D16 or G4-C approval is created.
