@@ -2,6 +2,7 @@
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,type FinalCheckFixture} from "./final-check-fixture.js";
+import {RecoveryCaseRepository} from "../src/recovery-case-repository.js";
 import {FinalCheckRepository} from "../src/final-check-repository.js";
 let f:FinalCheckFixture;beforeAll(async()=>{f=await createFinalCheckFixture()},60000);afterAll(async()=>closeFinalCheckFixture(f));
 const count=async(table:string,tenant:string,job:string)=>Number((await f.admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n);
@@ -48,6 +49,7 @@ it("the builder's priced approval opens the catch case with no claim; the custom
  expect(cases[0].source_refs).toEqual([`variation:${confirmed.variationId}`,`revision:${priced.id}`,`signal:${r.signalId}`]);
  const claims=async()=>(await f.admin.query("SELECT revision,claimed_net_pence FROM app.recovery_claim_revision WHERE tenant_id=$1 AND case_id=$2",[a.tenantId,cases[0].id])).rows;
  expect(await claims()).toEqual([]);
+ expect(await new RecoveryCaseRepository(f.runtime).list(a.context,a.jobId)).toEqual([]);
  // The raw runtime boundary still cannot create such a case directly.
  await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type) VALUES($1,$2,$3,1,'GBP','identified',0,true,'missed_variation_final_account')",[randomUUID(),a.tenantId,a.jobId]))).rejects.toBeDefined();
  // Forging the trigger's session setting does not help: only the migration-owned trigger may insert.
@@ -60,5 +62,9 @@ it("the builder's priced approval opens the catch case with no claim; the custom
  const approval=approveVariation({...priced,state:"priced"} as never,{id:randomUUID(),revisionId:priced.id,revision:priced.revision,contentHash:priced.contentHash,signedDeltaPence:priced.signedDeltaPence,method:"builder_attestation",actorMembershipId:FINAL_CHECK_ACTOR,evidenceId:null,approvedAt:new Date("2026-10-28T10:00:00.000Z")});
  await withTenant(f.runtime,a.context,db=>approvePricedVariation(db,a.tenantId,confirmed.variationId,approval));
  expect(await claims()).toEqual([{revision:1,claimed_net_pence:"50000"}]);
+ const workbench=(await new RecoveryCaseRepository(f.runtime).list(a.context,a.jobId))[0]!;
+ expect(workbench).toMatchObject({caseType:"missed_variation_final_account",claimedNetPence:50000,landedNetPence:0,claimRevision:1});
+ expect(workbench.sources.filter(source=>source.recorded)).toHaveLength(2);
+ expect(workbench.history?.map(entry=>entry.kind)).toEqual(expect.arrayContaining(["opened","claim_revision"]));
  expect(await count("recovery_case",a.tenantId,a.jobId)).toBe(1);
 });
