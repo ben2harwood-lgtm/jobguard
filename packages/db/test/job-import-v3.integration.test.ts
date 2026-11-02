@@ -32,6 +32,21 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
       await expect(action()).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("job_party_current"))).toBe(false);
   });
+  it("an imported source cannot chain through preview, adoption or direct mutation", async () => {
+    const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
+    f.state.provenance = "imported";
+    const mutation = new AdoptInFlightJobV3Mutation(T, D, J, intent, approved);
+    await expect(repo.preview(f.context, D, J, preview)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    await expect(repo.adopt(f.context, D, J, intent)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    await withTenant(f.pool, f.context, async db => {
+      await expect(mutation.lock(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+      await expect(mutation.mutate(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
+    });
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory|adopt_invoiced_job_v3/u.test(sql))).toBe(false);
+    // Ownership denial still wins over the informative source-state error.
+    f.state.owns = false;
+    await expect(repo.preview(f.context, D, J, preview)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
   it("strict request, binding and preview hash cannot be overridden", async () => {
     const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
     await expect(repo.preview(f.context, D, J, { ...preview, tenantId: T })).rejects.toMatchObject({ code: "INVALID_IMPORT" });
