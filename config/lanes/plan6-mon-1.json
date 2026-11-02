@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-mon-1": {
+      "branches": [
+        "codex/sandbox/demo-mon1"
+      ],
+      "note": "MON-1 RED: company jobs-list meter line and tenant-checked read-only ledger drill-down. Migration 0612; CI PostgreSQL/browser suites and independent RED review remain required.",
+      "allow": [
+        "apps/api/src/meter-today.application.ts",
+        "apps/web/app/api/meter/current/jobs/route.ts",
+        "apps/web/app/api/meter/current/route.test.ts",
+        "apps/web/app/meter/meter-screen.test.tsx",
+        "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/MON1-J.spec.mts",
+        "packages/core/src/meter-today.ts",
+        "packages/db/migrations/0612_meter_today_jobs.sql",
+        "packages/db/src/meter-today-repository.test.ts",
+        "packages/db/src/meter-today-repository.ts",
+        "packages/db/test/meter-today-journey.integration.test.ts",
+        "packages/db/test/migration-proofs/0612_meter_today_jobs.proof.json"
+      ]
+    }
+  }
+}
