@@ -4,10 +4,9 @@ import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs
 import { parseInventory, pathCompleteness } from "./lp-0-catalog.js";
 import { fileURLToPath } from "node:url";
 
-// Check this branch's fragments independently of main's missing 0510 proof (#502).
-// The unchanged whole-registry loader test and PostgreSQL suites remain CI gates.
-const legacy: string[] = JSON.parse(readFileSync(`${PROOF_DIRECTORY}/legacy-migrations.json`, "utf8"));
-const { proofs } = loadMigrationProofs(PROOF_DIRECTORY, [...legacy, "0539_privacy_operations.sql", "0546_dsar_offboarding.sql"]);
+// Validate the full registry, then compose only this piece and its dependency.
+const proofs = loadMigrationProofs(PROOF_DIRECTORY).proofs.filter(proof =>
+  ["0539_privacy_operations.sql", "0546_dsar_offboarding.sql"].includes(proof.migration));
 const tables = ["privacy_artifact", "privacy_command", "privacy_request", "privacy_subject"];
 const owner = "jobguard_migration";
 
