@@ -180,6 +180,42 @@ it("ENT-F8: office, client instructions and order lines contribute zero even whe
   const r = await derive(t), ref = reference(t, [{ approved: 50000, billed: 50000, paid: exact(50000), kind: "office_entry" }, { approved: 80000, billed: 80000, paid: exact(80000), kind: "client_instruction" }]);
   expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence); expect(r.qualifyingPrincipal).toEqual(exact(0)); expect((await post(t)).postings).toEqual([]);
 });
+for (const excluded of ["withdrawn", "rejected", "unexported", "unpaid"] as const) it(`ENT-7: ${excluded} amounts contribute zero through commands, then a qualifying control posts`, async () => {
+  const t = await setup(), { w } = t;
+  if (excluded === "withdrawn" || excluded === "rejected") {
+    const repo = new ExtraApprovalRepository(c.runtime), extraId = await raiseOn(c, w.w, w.s.jobId);
+    await repo.priceExtra(w.ctx, w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: 15000 });
+    const request = await repo.submitExtra(w.ctx, w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId });
+    const result = excluded === "withdrawn"
+      ? await repo.withdrawExtra(w.ctx, w.w.members.supervisor.member, { version: "withdraw-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, reasonCode: "not_done" })
+      : await repo.rejectExtra(w.ctx, w.w.members.supervisor.member, { ...approveInput({ jobId: w.s.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 15000 }, 0), version: "reject-extra.v1", reasonCode: "price_not_agreed" });
+    expect(result).toMatchObject({ state: excluded });
+  }
+  if (excluded === "unpaid") await invoice(t, { [w.s.extraId]: 15000 });
+  const r = await derive(t), ref = reference(t, [{ approved: 15000, billed: excluded === "unpaid" ? 15000 : 0, paid: exact(0) }]);
+  expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence);
+  expect(r.qualifyingPrincipal).toEqual(exact(0));
+  expect((await post(t)).postings).toEqual([]);
+
+  // The same tenant/agreement must accrue once the approved control is exported, billed and paid.
+  if (excluded !== "unpaid") await invoice(t, { [w.s.extraId]: 15000 });
+  await pay(t, 15000);
+  const p = next(t.p), control = await derive(t, p);
+  expect(control.qualifyingPrincipal).toEqual(exact(15000));
+  expect(control.cumulativeFeePence).toBe(reference(t, [{ approved: 15000, billed: 15000, paid: exact(15000) }]).cumulativeFee.pence);
+  expect(control.contributions.map(x => x.extraId)).toEqual([w.s.extraId]);
+  expect((await post(t, p)).postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+});
+it("ENT-7: direct runtime INSERT cannot manufacture contributions or journal headers", async () => {
+  const t = await setup();
+  for (const sql of [
+    "INSERT INTO app.enterprise_fee_contribution DEFAULT VALUES",
+    "INSERT INTO app.platform_enterprise_fee DEFAULT VALUES",
+  ]) await expect(withTenant(c.runtime, t.w.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+  await invoice(t, { [t.w.s.extraId]: 15000 }); await pay(t, 15000);
+  await check(t, 15000, 15000, 15000, 1500);
+  expect((await post(t)).postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+});
 it("ENT-F9: origins either side of a version boundary keep 10% / 8%; a later X credit stays under v1", async () => {
   const t = await setup();
   // Use the CI server's real instants instead of rewriting immutable origin timestamps to November dates.

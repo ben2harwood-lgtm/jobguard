@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-ent-7": {
+      "branches": ["codex/sandbox/plan6-ent-7"],
+      "note": "ENT-7 AMBER: excluded-amount PostgreSQL tests only; invoice hook remains held under Q-02.",
+      "allow": [
+        "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts"
+      ]
+    }
+  }
+}
