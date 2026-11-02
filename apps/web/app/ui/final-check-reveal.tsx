@@ -1,4 +1,5 @@
 "use client";
+import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem } from "./final-check-reveal-view";
 import styles from "./practice-receipts.module.css";
@@ -51,6 +52,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     <button type="button" disabled={busy} onClick={() => void requestRun()}>Run the final check (practice)</button>
     {requested && <span data-testid="final-check-run-requested"> Asked for. It takes about a minute; then load the saved final check.</span>}
    </p>}
+   {read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load}/>}
    {read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} onAnswer={answer}/>)}
    {(read.postLockItems ?? []).length > 0 && <>
     <h3>Found after the lock</h3>
@@ -85,4 +87,45 @@ function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: 
    </div>
   </>}
  </article>;
+}
+
+/** Historical import is intentionally separate from the diary and customer-message controls. */
+function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<void>}) {
+ const [name,setName]=useState(""),[text,setText]=useState(""),[date,setDate]=useState("");
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState("");
+ const [saved,setSaved]=useState<ReturnType<typeof lateSourceReceiptV1.parse>[]>([]);
+ const loadHistory=useCallback(async()=>{
+  const response=await fetch(`/api/jobs/${jobId}/historical-evidence`,{cache:"no-store"});
+  if(!response.ok)throw new Error("Imported evidence could not load.");
+  const raw:unknown=await response.json();
+  if(!Array.isArray(raw))throw new Error("Imported evidence could not load.");
+  setSaved(raw.map(row=>lateSourceReceiptV1.parse(row)));
+ },[jobId]);
+ useEffect(()=>{setSaved([]);void loadHistory().catch(()=>setMessage("Imported evidence could not load."));},[loadHistory]);
+ const pending=useRef<{key:string;commandId:string}|null>(null);
+ const save=async()=>{
+  if(busy||!name.trim()||!text.trim()||!date)return;
+  const statedSentAt=new Date(date).toISOString(),key=JSON.stringify([jobId,name,text,statedSentAt]);
+  if(pending.current?.key!==key)pending.current={key,commandId:crypto.randomUUID()};
+  setBusy(true);setMessage("");
+  try {
+   const response=await fetch(`/api/jobs/${jobId}/historical-evidence`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+    version:"late-source-import.v1",commandId:pending.current.commandId,fictionalCustomer:{kind:"named_fictional_customer",name},text,statedSentAt})});
+   if(!response.ok){setMessage("Import refused. Use an old message dated before the final-account lock.");return;}
+   setMessage("Evidence saved. The practice worker will examine it; load the saved final check in about a minute. It can never earn JobGuard a fee.");
+   setText("");pending.current=null;await loadHistory();await onSaved();
+  } catch {setMessage("The result is unknown. Retry the same import to check its saved receipt.");}
+  finally {setBusy(false);}
+ };
+ return <fieldset disabled={busy} data-testid="historical-evidence-import"><legend>Import old evidence (practice)</legend>
+  <p>File an old fictional message as evidence only. Its stated date cannot change when JobGuard received it.</p>
+  <label>Fictional sender<input value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
+  <label>Stated message date<input type="datetime-local" value={date} onChange={e=>setDate(e.target.value)}/></label>
+  <label>Old fictional message<textarea value={text} maxLength={8000} onChange={e=>setText(e.target.value)}/></label>
+  <button type="button" disabled={busy||!name.trim()||!text.trim()||!date} onClick={()=>void save()}>Import as evidence only</button>
+  {message&&<p role="status">{message}</p>}
+  {saved.map(source=><details key={source.record.id} data-testid="imported-historical-message"><summary>Old message from {source.record.fictionalCustomer.name}</summary>
+   <p>{source.record.text}</p><p>Stated message date: {when(source.statedSentAt)}. Received by JobGuard: {when(source.record.evidence.serverReceivedAt)}.</p>
+  </details>)}
+ </fieldset>;
 }

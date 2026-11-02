@@ -1,3 +1,4 @@
+import {createHash} from "node:crypto";
 import type {Observation} from "@jobguard/core";
 /** Only these reviewed fictional originals have structured facts. No heuristic or model inference. */
 export function decodeJobSourceFixture(reference:string|null,text:string,kind:Observation["kind"]):Pick<Observation,"text"|"facts"|"citations">|null {
@@ -9,4 +10,12 @@ export function decodeJobSourceFixture(reference:string|null,text:string,kind:Ob
  const requested=reference==="job-source:request-tap.v1" && text==="Please fit an outside tap." && kind==="customer_request";
  if(!completed&&!requested)return null;
  return {text,citations:[{start:0,end:text.length,quote:text}],facts:{workReference:"synthetic:outside-tap",scopeArea:"job",description:"outside tap",status:completed?"completed":"requested",estimatedValuePence:null,safetyImplication:false,customerClearlyRequested:requested,needsPriorWrittenAgreement:false,significantWork:null,activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false}};
+}
+
+/** Explicit batch-3 sourceFixture recipe only. Email is a fictional original, never a connector. */
+export function decodeFinalCheckSourceFixture(kind:string,sha256:string) {
+ const text="Outside tap fitted";
+ if(!["email","message","completion_photo"].includes(kind)||sha256!==createHash("sha256").update(text).digest("hex"))return null;
+ return {text,citations:[{start:0,end:text.length,quote:text}],facts:{workReference:"synthetic-outside-tap",scopeArea:"job",description:"Outside tap",status:"completed" as const,
+ estimatedValuePence:null,safetyImplication:false,customerClearlyRequested:false,needsPriorWrittenAgreement:false,significantWork:null,activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false}};
 }
