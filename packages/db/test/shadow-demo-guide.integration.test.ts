@@ -33,6 +33,7 @@ describe("0518 demo-only guide helpers", () => {
   // Positive controls: the owner's own session gets past the same check, so the refusals below come from ownership.
   expect(await read("demo_source_hold_state", open, open.digest)).toMatchObject({ ok: { result: { state: "not_requested" } } });
   expect(await read("demo_shadow_review_inputs", a, a.digest)).toHaveProperty("ok");
+  expect(await read("demo_shadow_review_inputs", b, b.digest)).toHaveProperty("ok");
   expect(await read("demo_source_hold_state", open, b.digest)).toEqual(forbidden);
   expect(await read("demo_request_source_hold", open, b.digest)).toEqual(forbidden);
   expect(await holds(open)).toBe(0);

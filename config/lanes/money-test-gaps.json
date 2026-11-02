@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "money-test-gaps": {
+      "branches": [
+        "codex/sandbox/money-test-gaps"
+      ],
+      "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+      "note": "RED tests only; NOPR=1. PostgreSQL execution and independent review remain pending. Own lane file is implicitly allowed by the lane validator.",
+      "allow": [
+        "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+        "packages/db/test/free-first-job-lifecycle-fixtures.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts",
+        "packages/db/test/simulation-fee-statement.integration.test.ts",
+        "packages/db/test/success-fee-recovery-compensation.integration.test.ts",
+        "packages/db/test/success-fee-recovery-fixture.ts",
+        "packages/db/test/trial-lock-order.integration.test.ts"
+      ]
+    }
+  }
+}
