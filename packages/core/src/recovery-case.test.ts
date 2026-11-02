@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type RecoveryCaseState, assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
+import { type RecoveryCaseState, assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseCommandV1, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -291,4 +291,22 @@ describe("repair 15: effective post-event principal determines manual receipt st
   expect(()=>run("evidence_assembled","record_landing",0,250000,250001)).toThrow();
   expect(()=>run("evidence_assembled","record_landing",0,100000,100001,150000)).toThrow();
  });
+});
+
+describe("M4-1 dark full-case attacks",()=>{
+ it("claim amendments cannot relabel terminal prevention as a recovery",()=>{
+  for(const claimedPence of [1,100,200])expect(stateAfterClaimAmendment({state:"prevented",currentClaimedPence:100,claimedPence,landedPence:0,writtenOffPence:0})).toBe("prevented");
+ });
+ it("records a bounded dispute without manufacturing or reversing money",()=>{
+  const base={state:"partially_landed",event:"dispute",claimedPence:100,landedPence:40} as const;
+  expect(transitionRecoveryCase({...base,amountPence:60})).toEqual({state:"negotiating",landedPence:40,writtenOffPence:0});
+  for(const amountPence of [0,-1,101,1.1,Number.MAX_SAFE_INTEGER])expect(()=>transitionRecoveryCase({...base,amountPence})).toThrow();
+ });
+});
+
+it("keeps Final Check creation outside client open commands", () => {
+ const command = {version:"recovery-case-command.v1", action:"open", commandId:"11111111-1111-4111-8111-111111111111", claimedNetPence:80000,
+  counterparty:"Synthetic customer", book:"builder_customer", sourceType:"customer_invoice", sourceRefs:["11111111-1111-4111-8111-111111111111"], expectedRevision:0};
+ expect(recoveryCaseCommandV1.safeParse({...command,caseType:"withheld_customer_payment"}).success).toBe(true);
+ expect(recoveryCaseCommandV1.safeParse({...command,caseType:"missed_variation_final_account"}).success).toBe(false);
 });
