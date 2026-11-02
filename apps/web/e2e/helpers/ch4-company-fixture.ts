@@ -45,8 +45,12 @@ export async function capturedCompanyJob(a: Ch4Company) {
     version: "command.v1", commandId: randomUUID(), commandType: type, semanticKey: `${type}:${jobId}`,
     actorMembershipId: actorId, subjectType, subjectRef, action });
   const action = { recipient: null, amountPence: null, currency: null, expiresAt: new Date("2099-01-01T00:00:00Z") };
-  await dispatcher.dispatch(context, command("confirm_proposal_review", "job", jobId, { ...action, actionType: "confirm_scope",
-    contentHash: reviewContentHash(review), aggregateRevision: review.revision, policyVersion: "synthetic-uiwire-1" }), new ConfirmProposalReview(review));
+  await dispatcher.dispatch(context, {
+    ...command("confirm_proposal_review", "job", jobId, { ...action, actionType: "confirm_scope",
+      contentHash: reviewContentHash(review), aggregateRevision: review.revision, policyVersion: "synthetic-uiwire-1" }),
+    // Match the real capture route: the routine binds confirmation to this proposal.
+    semanticKey: `job:${jobId}:confirm:${review.proposalId}`,
+  }, new ConfirmProposalReview(review));
   const parties = new JobPartiesRepository(runtime);
   const customer = await parties.command(context, actorId, jobId, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_customer",
     customer: { version: "customer.v1", name: "Fictional CH-4 customer", type: "person", email: "customer@ch4.invalid" } });
