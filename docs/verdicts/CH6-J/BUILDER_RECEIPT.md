@@ -522,7 +522,7 @@ Actual local checks (installed Node v24.17.0, Vitest 4.1.12):
 - node tools/agent-lane-boundary-lint.mjs --lane=ch6-j — FAIL: inherited
   config/lanes/ch6-a.json and config/lanes/ch6-p.json are outside this lane.
 - The checker's exported migrationOrderViolations against origin/main reports
-  inherited 0523_commercial_integrity_v3_receipts.sql must be above main's 0301.
+  inherited 0527_commercial_integrity_v3_receipts.sql must be above main's 0301.
   It is not present on main and is not a byte-identical copy of another main
   migration. It was preserved, not dropped or assigned an unreserved number.
 
@@ -1403,8 +1403,8 @@ Checks actually executed with installed Node 24.17.0 / Vitest 4.1.12:
   0376 and 0377 must be numbered above main's 0380.
 
 The brief says existing branch migrations are all above 0380, but this checkout
-has 0523_commercial_integrity_v3_receipts.sql and
-0524_commercial_integrity_sources.sql. Preserved their numbers per the explicit
+has 0527_commercial_integrity_v3_receipts.sql and
+0528_commercial_integrity_sources.sql. Preserved their numbers per the explicit
 instruction; no reservation was invented and the check was not weakened.
 Handoff: do not commit until the router supplies/resolves valid migration
 reservations. Database and browser suites were not run because this sandbox
@@ -1559,8 +1559,8 @@ privilege and tenancy expectations remains present.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0410 to generate 0402_commercial_integrity_v3_receipts ->
-0523_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
-0524_commercial_integrity_sources. Applied filesystem moves and bounded full
+0527_commercial_integrity_v3_receipts and 0403_commercial_integrity_sources ->
+0528_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements to branch-owned references and migration notes;
 no bare-digit replacements. CLI --write was not used because it stages Git
 changes and this sandbox's .git is read-only. Logged the reservation and moves
@@ -1607,8 +1607,8 @@ blocks, retaining CH-6 and main policies and triggers.
 
 Used tools/migration-renumber.mjs's exported planRenumber with reservation
 boundary 0502: 0411_commercial_integrity_v3_receipts ->
-0523_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
-0524_commercial_integrity_sources. Applied filesystem moves and bounded full
+0527_commercial_integrity_v3_receipts; 0412_commercial_integrity_sources ->
+0528_commercial_integrity_sources. Applied filesystem moves and bounded full
 filename-stem replacements only; no bare-digit replacements. CLI --write
 stages Git changes, so it was not used in this read-only Git sandbox. Updated
 migration notes, references, coordinator reservation and the existing lane.
@@ -1999,8 +1999,8 @@ these resolutions because this sandbox cannot write the Git index.
   were removed; retaining those entries produces an orphan-proof error. Main's
   legacy list plus CH-6's two new names is the resulting exact legacy union.
 - Renamed complete filename stems 0568_commercial_integrity_v3_receipts to
-  0523_commercial_integrity_v3_receipts and 0569_commercial_integrity_sources to
-  0524_commercial_integrity_sources throughout references, notes and lookups.
+  0527_commercial_integrity_v3_receipts and 0569_commercial_integrity_sources to
+  0528_commercial_integrity_sources throughout references, notes and lookups.
   The test's numeric prefix lookup now names the full sources filename stem.
   SQL content is unchanged by the rename. A scan of every current-main migration
   found no main CH-6 routine definition to supersede these bodies; the only
@@ -2043,3 +2043,49 @@ No git writes/fetch, PostgreSQL startup, browser suite or production build run.
 GitHub CI must run PostgreSQL/migration/browser checks after router push, and
 one independent RED review must PASS at the exact resulting head before merge.
 Builder checks only; no independent acceptance or demo pass is claimed.
+
+
+## 2 Nov 2026 — independent FAIL repair at 006ea610
+
+CH-6 / PR #392, RED. Applied only the requested sealed-audit/fixture repair
+and migration stem renumbering for #431 landing first.
+
+- `ch6_append_integrity_review_audit` delegates the existing operational event
+  to `app.lp4_seal_audit` with `checked_operation`; no direct audit-event write
+  or manual head/hash calculation remains. LP-4 guards are unchanged.
+- The direct-DML test now permits only `app.command_receipt`; LP-0 records
+  no direct write and the sealed-route call for this helper.
+- The shared integrity fixture creates the two NOLOGIN writer roles before
+  either migration path, using the reviewer's supplied role setup.
+- Renamed full filename stems to `0527_commercial_integrity_v3_receipts` and
+  `0528_commercial_integrity_sources` across SQL filenames, notes, proofs,
+  tests, lists and lookups. No bare-number replacement. Historical statements
+  above that SQL was unchanged describe the previous catch-up; this repair
+  changes only the audit helper in the receipts migration. Sources SQL stays
+  byte-identical. All 187 migrations in locally available `origin/main`
+  (`42bb496ce`, #474) remain byte-identical; no fetch was run.
+- Lane lists all 58 net changed paths outside `config/lanes/`, measured against
+  that available main ref, including the four renamed migration/note files.
+
+Checks actually run with Node 24.17.0 / installed Vitest 4.1.12:
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts
+  test/commercial-integrity-v3-input.test.ts` — PASS, 115 tests.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp4-writer-catchup.test.ts
+  test/commercial-integrity-v3-query-isolation.integration.test.ts
+  -t 'LP-4 catch-up|local family and architecture checks'` — PASS, 21 tests;
+  3 PostgreSQL tests excluded by the explicit local-only name filter.
+- `node --test --test-concurrency=2
+  tools/commercial-integrity-boundary.test.mjs
+  tools/commercial-integrity-current-source-guard.test.mjs` — PASS, 253 tests.
+- Both commercial-integrity boundary guard CLIs — PASS, zero diagnostics.
+- packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — PASS.
+- Main migration byte preservation, source migration byte preservation,
+  old-stem absence, exact lane coverage and `git diff --check` — PASS.
+
+No test was weakened. No git writes, package downloads, PostgreSQL startup,
+localhost binding or browser execution. Database/API HTTP integration and
+browser suites remain for GitHub CI after router push. Independent RED review
+must check the resulting committed head; no independent PASS is claimed here.
+Existing initial LATER / SIMPLICITY observation remains; no new review round.

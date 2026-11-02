@@ -12,7 +12,7 @@ import { canonicalCommercialIntegritySnapshot } from "../../core/src/commercial-
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 export const tenant="11111111-1111-4111-8111-111111111111", member="d1500000-0000-4000-8000-000000000003", user="d1500000-0000-4000-8000-000000000001";
 export const actor={membershipId:member,identityUserId:user};
-export const migrationUrl=new URL("../migrations/0523_commercial_integrity_v3_receipts.sql",import.meta.url);
+export const migrationUrl=new URL("../migrations/0527_commercial_integrity_v3_receipts.sql",import.meta.url);
 export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF8" | "SQL_ASCII" = "UTF8") {
  const dir=await mkdtemp(join(tmpdir(),"ch6-p-")),port=await freePort(59200,300),password=randomUUID();
  const logs:string[]=[];
@@ -20,6 +20,7 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  // LP-2 practice issuance requires this trusted database and mints its private job permits.
  await pg.initialise();await pg.start();await pg.createDatabase("jobguard_synthetic_demo");
  const admin=new Pool({host:"127.0.0.1",port,user:"postgres",password,database:"jobguard_synthetic_demo"});
+ for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
  if(throughCurrent)await migrate(admin);
  else {
   for(const url of MIGRATION_URLS.filter(url=>url.pathname<migrationUrl.pathname))await admin.query(await readFile(url,"utf8"));

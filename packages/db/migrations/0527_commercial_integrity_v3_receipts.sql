@@ -104,17 +104,12 @@ CREATE TRIGGER ch6_integrity_review_receipt_guard BEFORE INSERT OR UPDATE OR DEL
 
 CREATE FUNCTION app.ch6_append_integrity_review_audit(t uuid,j uuid,actor uuid,command_id uuid,request_hash text,snapshot_hash text) RETURNS uuid
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE head record;seq bigint;ts timestamptz;ts_text text;payload jsonb;ph text;eh text;eid uuid:=gen_random_uuid();
+DECLARE eid uuid:=gen_random_uuid();
 BEGIN
  -- Final lock: all source, authority and receipt FK locks have already been acquired.
- SELECT * INTO head FROM app.lock_audit_head();seq:=coalesce(head.sequence,0)+1;
- ts:=date_trunc('milliseconds',clock_timestamp());ts_text:=to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
- payload:=jsonb_build_object('references',jsonb_build_object('jobId',j,'commandId',command_id),'hashes',jsonb_build_object('requestHash',request_hash,'snapshotHash',snapshot_hash),'classifications',jsonb_build_object('action','operational'));
- ph:=encode(sha256(convert_to(app.ch6_integrity_canonical(payload),'UTF8')),'hex');
- eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,'membership:'||actor::text,'commercial_integrity.reviewed.v3','job',j::text,ts_text,ph,coalesce(head.event_hash::text,'')),'UTF8')),'hex');
- INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
- VALUES(eid,t,seq,'audit.v1','membership:'||actor::text,'commercial_integrity.reviewed.v3','job',j::text,ts,payload,ph,head.event_hash,eh);
- PERFORM app.advance_audit_head(seq,eh::char(64));
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',eid,'version','audit.v1','actorRef','membership:'||actor::text,
+  'eventType','commercial_integrity.reviewed.v3','subjectType','job','subjectRef',j::text,
+  'payload',jsonb_build_object('references',jsonb_build_object('jobId',j,'commandId',command_id),'hashes',jsonb_build_object('requestHash',request_hash,'snapshotHash',snapshot_hash),'classifications',jsonb_build_object('action','operational')))),'checked_operation');
  RETURN eid;
 END $$;
 

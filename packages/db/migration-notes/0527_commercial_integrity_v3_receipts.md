@@ -52,4 +52,9 @@ check retains tenant, authenticated session and immutable import-lineage checks,
 but walks ancestors from the requested job instead of expanding every session
 job. UNION retains cycle termination. No grant or routine identity changed.
 
-2 Nov after #474: branch filename stem renumbered to 0523_commercial_integrity_v3_receipts.sql. SQL body unchanged; no CH-6 routine definition exists on current main to supersede it.
+2 Nov after #474: branch filename stem renumbered to 0527_commercial_integrity_v3_receipts.sql. SQL body unchanged; no CH-6 routine definition exists on current main to supersede it.
+
+2 Nov independent-check repair: the audit append helper now delegates to LP-4's
+sealed checked-operation route. Direct-DML expectation and LP-0 call inventory
+match the sealed route; no LP-4 guard changes. Renumbering to this stem applies
+only to the branch migration, preserving every migration on main.
