@@ -77,3 +77,47 @@ No migration is needed. Provider stream configuration/enforcement, a production 
 approved-region deployment, D08 lease/revocation policy, physical-device cleanup, migration/resync and G3 remain
 HELD. A returned tombstone is a cleanup instruction, not evidence that any device erased its cache. The core-only
 limitations above still apply to the pure specimen; synthetic signing now exists only in this server slice.
+
+## M3-3 snapshot/checkpoint slice (dark)
+
+`apps/api/src/sync/snapshot.adapter.ts` implements the internal snapshot store through a fake sync-provider
+transaction port. It is unmounted and defaults off; production and pilot configurations are refused before
+provider access. Only `SyntheticSyncDownloadApplication.download` serves projected rows, through its existing
+session-bound scoped token check. Every refused page now includes `resync: "required"` alongside cleanup;
+a successful page includes `resync: "none"`. Clients must purge the listed identities and resubscribe rather
+than replay the old cursor/token. These instructions do not prove physical-device cleanup.
+
+The port authenticates an opaque session and atomically supplies current server authority/source facts under
+locks held through checkpoint commit, with verified transaction-local tenant context. Its server-owned durable
+`authorityRevision` advances for every membership, role, assignment and active-tenant lifecycle change,
+including revoke/regrant or switch-away/switch-back with no intervening download. An implementation that merely
+hashes the currently observed authority cannot meet that contract. This slice intentionally provides no live
+identity/provider implementation; deterministic fakes exercise the seam.
+
+Migration `0454_sync_snapshot_checkpoint.sql` persists one generation per tenant/user with forced RLS and
+foreign keys to the tenant and identity user. Runtime can read its tenant's checkpoint metadata, but cannot
+insert, update, delete or truncate it directly. A narrowly granted, tenant-bound definer routine serializes
+concurrent checkpoint advancement. Identical revision/schema/hash replays retain the generation; newer authority
+revision or server schema version advances it once. Lower authority/schema versions and conflicting hashes at
+the same authority revision fail closed. The safe-integer bound refuses overflow; it never wraps or resets.
+Schema versions are monotonically increasing server-owned integers. A schema upgrade invalidates old tokens
+and forces cleanup/resubscription; an older server cannot downgrade a persisted checkpoint. A deployment rollback
+requires a forward fix preserving checkpoint generations, rather than deleting or resetting state. Existing users
+start at generation 1 on first use; no prior checkpoint table/data needs backfill.
+
+The checkpoint contains only tenant/user identity, authority revision, schema version, authority hash and generation.
+Source content, hidden fields, session tokens and credentials never enter it. Source deletion still uses the
+existing identity-only tombstones, without generation churn. RLS is a backstop for correct authenticated tenant
+context; this routine does not authenticate a principal or protect against a compromised privileged runtime.
+No external action, money/allocation mutation, commercial revision write, audit event or new operational alert
+is introduced. Amount limits, reversal posting and locked-bill mutation tests are therefore inapplicable;
+locked-bill, financial, resident, secret and shadow source fields remain excluded from downloads.
+
+Verification is split: fake-provider application tests exercise scoped tokens, replay, two tenants/users,
+allowed/disallowed roles, lifecycle reversals, unobserved revoke/regrant, schema upgrade/downgrade, hidden-data
+exclusion and deletion. The PostgreSQL integration suite covers upgrade, concurrent first use, rollback,
+reconnection, stale/conflicting revisions, generation overflow, RLS and privileges; it must run in CI because
+the builder sandbox cannot start PostgreSQL. The existing tenancy suite covers fresh migration/catalog checks.
+Production authentication/source queries, actual PowerSync stream enforcement, approved-region hosting, native
+schema/cache migration and physical-device evidence remain NOT built, behind D08/G3 and independent RED review.
+No dependencies, providers, keys, HTTP endpoints or deployments were added.
