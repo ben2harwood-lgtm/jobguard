@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeSubscriptionPeriod, syntheticMeterPolicyV1 } from "@jobguard/core";
 import { SubscriptionExecutor } from "./subscription-executor.js";
 import { SubscriptionStripeSandboxAdapter, signSubscriptionSandboxEvent } from "./subscription-stripe-sandbox-adapter.js";
+
+beforeEach(() => vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"));
+afterEach(() => vi.unstubAllEnvs());
 
 const tenantId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const work = {

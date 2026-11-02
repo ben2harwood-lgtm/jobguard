@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-2b-webhook-verifier": {
+      "branches": [
+        "codex/sandbox/mon-2b-webhook-verifier"
+      ],
+      "note": "MON-2B verifier candidate; RED; NOPR=1. Provider sandbox, signing secret, test events, D05, G4-S and routes remain open for people.",
+      "allow": [
+        "packages/db/src/subscription-stripe-sandbox-adapter.ts",
+        "packages/db/src/subscription-stripe-sandbox-adapter.test.ts",
+        "packages/db/src/subscription-webhook-verifier.ts",
+        "packages/db/src/subscription-webhook-verifier.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
+        "docs/operations/subscription-synthetic.md"
+      ]
+    }
+  }
+}
