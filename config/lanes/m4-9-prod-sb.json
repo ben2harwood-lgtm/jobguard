@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-prod-sb": {
+      "branches": [
+        "codex/sandbox/m4-9-prod-sb"
+      ],
+      "receipt": "packages/db/migration-notes/0590_success_fee_production_safety.md",
+      "note": "RED M4-9 small-builder production safety, dark NOPR catch-up. PostgreSQL CI and independent RED review remain required.",
+      "allow": [
+        "docs/contracts/success-fee-posting-v3.md",
+        "packages/core/src/success-fee-catch-posting.test.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/db/migration-notes/0590_success_fee_production_safety.md",
+        "packages/db/migrations/0590_success_fee_production_safety.sql",
+        "packages/db/test/migration-proofs/0590_success_fee_production_safety.proof.json",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/success-fee-catch-fixture.ts",
+        "packages/db/test/success-fee-production-safety-catalog.test.ts",
+        "packages/db/test/success-fee-production-safety.integration.test.ts",
+        "packages/db/test/success-fee-production-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
