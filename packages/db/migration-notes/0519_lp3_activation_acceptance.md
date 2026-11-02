@@ -139,3 +139,117 @@ migration and browser suites are deferred to GitHub CI by the issued sandbox
 constraint. The known main-wide meter-track-review-upgrade table-count failure
 was left untouched as instructed. No new behavior; RED exact-head review and
 green current-main CI remain separate merge gates.
+
+## PR #414 current-main catch-up — 31 October 2026
+
+Resolved the launcher's pending origin/main merge as the union of current main
+and LP-3. LP-0 has 1,453 unique privilege entries, 70 groups, 45 authority paths
+and 548 unique recorded routines, retaining main's latest unchanged records and
+LP-3's explicit legacy-route replacements. SERIOUS-B5 retains all 38 main
+helpers byte-for-byte, plus the separate top-level LP-3 helper; both LP-3 and
+timeline helper calls remain. Tenancy and entitlement expectations retain main
+plus LP-3's table entries. No routine bodies were recreated; no new behavior.
+
+Renamed only the migration stem from 0404 to reserved 0510, and updated its
+current lane, LP-0 and upgrade-test references. SQL SHA-256 remains
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+All main migrations and lane files are byte-identical to origin/main; the
+downstream-effects contract is unchanged. Earlier dated notes remain history.
+
+Local checks: installed package-local Vitest, --maxWorkers=2, ran
+src/lp3-operation.test.ts, src/lp3-mutations.test.ts and
+test/lp-0-catalog.test.ts: 3 files, 86 tests passed. Database source
+TypeScript --noEmit passed. TypeScript parser checks passed for B5, tenancy,
+entitlement upgrade and LP-3 upgrade tests. Core purity, money arithmetic,
+commercial boundary and PL/pgSQL CASE-in-IF checks passed. Read-only exported
+lane-path/migration-order checks passed against origin/main and final files.
+The lane CLI refuses detached HEAD; the router must rerun it on the registered
+branch after staging and committing the merge. git diff --check passed.
+
+The first local test invocation preceded conflict resolution because the repair
+helper was invoked from the package directory; two catalogue tests failed on
+conflict-marker JSON. Re-running the helper from the repository root and the
+same three test files produced the passing result above.
+
+PostgreSQL, migration execution and browser suites were not run under the
+issued sandbox restriction; GitHub CI must run them. RED exact-head independent
+review and green current-main CI remain merge gates. Git's pending merge index
+was not written: the router must stage the resolved working files and renamed
+migration/note before committing.
+
+## 1 November 2026 catch-up for PR #414 (0514 reservation)
+
+READY for router commit and push; RED exact-head review and green CI remain
+merge gates. Renamed the migration and this note from 0510 to 0514, updated
+current filename references and the lane, and explicitly legacy-listed
+0514_lp3_activation_acceptance.sql for #499's proof loader. SQL bytes remain
+SHA-256 8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+LP-3 does not depend on main's proof-only 0510 read-value routines.
+
+Resolved the pending merge as main plus LP-3's reviewed changes: LP-0 has
+70 groups, 1,461 unique privilege entries, 45 authority paths and 552 unique
+routine identities. Main's latest routine records are retained except the four
+reviewed LP-3 legacy-signature withdrawals. All 41 current-main B5 helpers
+remain byte-identical, with every main helper call retained and the separate
+LP-3 helper added with its own closing brace. Tenancy and entitlement lists
+retain main plus LP-3. All main migration and lane files are byte-identical to
+origin/main. docs/contracts/lp-downstream-effects-v1.md is unchanged.
+
+Local verification using installed package-local binaries from packages/db:
+- ./node_modules/.bin/tsc -p tsconfig.json --noEmit: PASS.
+- ./node_modules/.bin/vitest run --maxWorkers=2 src/lp3-operation.test.ts
+  src/lp3-mutations.test.ts test/lp-0-catalog.test.ts: 84 passed, 3 failed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts: 25 passed, 1 failed.
+All four failures are ENOENT for main's missing
+0510_read_value_job_combined_final.proof.json, the issued #502 dependency;
+this repair does not change that migration, its classification or the loader.
+The initial pnpm wrappers could not verify/switch to the pinned pnpm version
+because registry fetches failed; the installed test runner/compiler above ran
+without changing dependencies.
+
+TypeScript parser checks passed for B5, tenancy, entitlement and LP-3 upgrade
+suites. Explicit union/uniqueness, B5 helper/call preservation, final lane paths,
+migration order, SQL byte identity and git diff --check passed. Core purity,
+money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF checks passed.
+PostgreSQL and browser suites were not run in this sandbox; GitHub CI must run
+them after router push. The router must stage the resolved files and both
+renames to clear the read-only pending merge index before committing.
+
+## 2 November 2026 catch-up for PR #414 (0519 reservation)
+
+Resolved the launcher's pending main merge, preserving main and LP-3's reviewed
+shared-list edits. Removed five identical duplicate routine identities from the
+LP-0 union; final inventory has 70 groups, 1,480 unique privilege entries,
+45 authority paths and 562 unique routines. Main's new records remain intact;
+the four reviewed LP-3 legacy-route withdrawals remain in place.
+
+Renamed the migration and this note from 0514 to 0519 and updated current lane,
+LP-0 source/description and upgrade lookup references. Registered 0519 in order
+on the legacy migration path. Historical dated notes above retain their numbers.
+SQL bytes remain SHA-256
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+All 183 main migration files and 238 main lane files are byte-identical to the
+fetched origin/main, through 0518. The downstream-effects contract is unchanged.
+
+Local checks using installed package-local binaries from packages/db:
+- ./node_modules/.bin/tsc -p tsconfig.json --noEmit: PASS.
+- ./node_modules/.bin/vitest run --maxWorkers=2 src/lp3-operation.test.ts
+  src/lp3-mutations.test.ts test/lp-0-catalog.test.ts: 88 tests passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts: 26 tests passed.
+Core purity, money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF
+checks passed. Explicit inventory union/uniqueness and unchanged-main-file
+comparisons passed. No tests were weakened; no new product behavior was added.
+
+PostgreSQL/migration execution and browser suites were not run because this
+sandbox cannot start PostgreSQL or bind localhost. GitHub CI must run them after
+the router pushes. RED exact-head independent review remains a merge gate.
+The router must stage the resolved files and both renames to finish the pending
+merge; this session did not write Git metadata, commit, fetch or push.
+Final filesystem changed-path checks using the exported lane and migration-order
+validators passed against origin/main; git diff --check passed. Git's unresolved
+index still requires router staging, as expected in the read-only sandbox.
+An initial overly broad filesystem lane comparison hit Node's output-buffer
+limit while reading an unrelated large reports input. Replaced it with the
+successful changed-path-only comparison above; no repository checks changed.

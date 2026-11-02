@@ -61,5 +61,12 @@
     "fingerprint": "a03814ad97eb55bfe1dca02eca37c87717afeb72090091c8703d5a9d14d1222d",
     "reason": "Receipt result->>'outboxActionId' only joins the first authorization grant to return its expiry; no advisory result reaches money.",
     "code": "UNRESOLVED_COVERED_EDGE"
+  },
+  {
+    "file": "packages/db/src/subscription-stripe-sandbox-adapter.ts",
+    "line": 103,
+    "fingerprint": "cca1e585bf32c7408b19ff8bbb7a528bc17aa2440a1daa23e3bfc71f8526682c",
+    "reason": "Calls the synthetic payment adapter's execute method with a typed work object; this is not a database query.",
+    "code": "UNRESOLVED_COVERED_EDGE"
   }
 ]
