@@ -58,7 +58,6 @@
         "packages/db/src/resumable-evidence.test.ts",
         "packages/db/src/resumable-evidence.ts",
         "packages/db/src/signed-evidence-export-store.ts",
-        "packages/db/src/subscription-executor.ts",
         "packages/db/src/subscription-repository.ts",
         "packages/db/src/tenant-context.test.ts",
         "packages/db/src/tenant-context.ts",
