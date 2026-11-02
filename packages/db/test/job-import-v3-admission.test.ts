@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { JobImportV3Repository, AdoptInFlightJobV3Mutation } from "../src/job-import-v3-repository.js";
@@ -68,4 +69,14 @@ describe("CH-5 part 2 source/authority boundaries (scripted transport only)", ()
   await expect(new JobImportV3Repository(f.pool).assessCatch(f.context, D, J, {})).rejects.toMatchObject({ code: "SYNTHETIC_MODE_REQUIRED" });
   expect(f.query).not.toHaveBeenCalled();
  });
+});
+
+it("the replacement SQL keeps the original-source refusal under the job lock", () => {
+ const sql = readFileSync(new URL("../migrations/0536_import_work_admission.sql", import.meta.url), "utf8");
+ const body = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION app.adopt_invoiced_job_v3"));
+ const lock = body.indexOf("PERFORM 1 FROM app.job WHERE tenant_id=t AND id=source_job FOR UPDATE;");
+ const refusal = body.indexOf("IF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=source_job AND provenance='imported') THEN\n  RAISE EXCEPTION 'IMPORT_ALREADY_ADOPTED'; END IF;");
+ expect(lock).toBeGreaterThan(0);
+ expect(refusal).toBeGreaterThan(lock);
+ expect(refusal).toBeLessThan(body.indexOf("INSERT INTO app.lp_job_insert_permit"));
 });

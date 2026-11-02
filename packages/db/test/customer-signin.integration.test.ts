@@ -1,6 +1,5 @@
 import { lp5RegistryRows } from "./lp5-command-catalog.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
-import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
@@ -19,15 +18,13 @@ beforeAll(async () => {
   const expected = { ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] };
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
-  await migrate(c.admin); await migrate(c.admin);
-  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
-  const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   // Apply main's successors first; retain its exact preservation assertion before seeding legacy credentials.
   for (const url of MIGRATION_URLS) {
     const name = url.pathname.split("/").at(-1)!;
-    if (name > own && name < "0538_customer_signin_redact.sql") await applyMigration(c, name);
+    if (name > own && name < "0535_customer_signin_redact.sql") await applyMigration(c, name);
   }
-  const successors = { ...expected, "app.customer_variation_approval": [] };
+  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
+  const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
   const w = await world();
   const token = randomBytes(32).toString("base64url"), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;
@@ -45,6 +42,8 @@ beforeAll(async () => {
   expect(stored.content_hash).not.toBe(originalHash);
   const history = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='action_outbox.redacted'",[w.tenant])).rows;
   expect(history).toHaveLength(1);
+  await assertLp4SealedEvents(c.admin,w.tenant,"action_outbox.redacted");
+  await assertLp4SealedEvents(c.admin,w.tenant,"customer_portal.redacted");
   expect(history[0]).toMatchObject({subject_type:"action_outbox",subject_ref:stored.id,payload:{
     references:{outboxId:stored.id}, hashes:{originalContentHash:originalHash,redactedContentHash:redactedHash},
     classifications:{action:"security"}

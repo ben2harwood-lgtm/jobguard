@@ -38,7 +38,7 @@ END $$;
 
 -- Historical plaintext links must also stop being usable. Keep rows and audit history.
 DO $$ DECLARE t uuid; gid uuid; affected uuid[]; redactions jsonb; redaction jsonb;
- seq bigint; previous text; ts timestamptz; payload jsonb; ph text; eh text;
+ payload jsonb; events jsonb;
 BEGIN
  FOR t IN SELECT id FROM control_plane.tenant LOOP
   PERFORM set_config('app.tenant_id',t::text,true);
@@ -57,18 +57,16 @@ BEGIN
     WHERE tenant_id=t AND action_type='customer_portal.signin.send' AND immutable_content LIKE '/customer/sign-in#%'
     RETURNING id,content_hash,split_part(immutable_content,':',2) AS original_hash
   ) SELECT coalesce(jsonb_agg(to_jsonb(redacted) ORDER BY id),'[]'::jsonb) INTO redactions FROM redacted;
+  events:='[]'::jsonb;
   FOR redaction IN SELECT value FROM jsonb_array_elements(redactions) LOOP
-   SELECT sequence,event_hash INTO seq,previous FROM app.lock_audit_head();
-   seq:=seq+1; ts:=date_trunc('milliseconds',clock_timestamp());
    payload:=jsonb_build_object('references',jsonb_build_object('outboxId',redaction->>'id'),
     'hashes',jsonb_build_object('originalContentHash',redaction->>'original_hash','redactedContentHash',redaction->>'content_hash'),
     'classifications',jsonb_build_object('action','security'));
-   ph:=app.final_lock_hash(payload);
-   eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,'system:customer-portal','action_outbox.redacted','action_outbox',redaction->>'id',to_char(ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(previous,'')),'UTF8')),'hex');
-   INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
-   VALUES(gen_random_uuid(),t,seq,'audit.v1','system:customer-portal','action_outbox.redacted','action_outbox',redaction->>'id',ts,payload,ph,previous,eh);
-   PERFORM app.advance_audit_head(seq,eh);
+   events:=events||jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
+    'actorRef','system:customer-portal','eventType','action_outbox.redacted','subjectType','action_outbox',
+    'subjectRef',redaction->>'id','payload',payload));
   END LOOP;
+  PERFORM app.lp4_seal_audit(events,'checked_operation');
   FOREACH gid IN ARRAY affected LOOP
    PERFORM app.customer_portal_audit(t,gid,'redacted');
   END LOOP;

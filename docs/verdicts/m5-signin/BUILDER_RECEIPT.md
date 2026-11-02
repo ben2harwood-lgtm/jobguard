@@ -394,7 +394,7 @@ successors are applied before the branch forward fix so the fixture exercises
 the latest main schema. No test expectation was weakened or replaced.
 
 Renamed only the branch migration filename stem from
-`0388_customer_signin_redact` to `0538_customer_signin_redact` and updated the lane.
+`0388_customer_signin_redact` to `0535_customer_signin_redact` and updated the lane.
 The SQL bytes are unchanged (SHA-256
 `a6d5b244e35060b26f3eb9cd34b760d86c5a0f4bfe18e46839326b761941b269`).
 The latest main issuer body is still in 0387; the branch body retains that
@@ -425,3 +425,61 @@ router stages the resolved working file and migration rename/proof. PostgreSQL,
 migrations, browser checks, green CI and one independent exact-head Claude RED
 review remain required before merge. Synthetic data only; all release gates stay
 closed.
+
+## Batch 4b follow-up — 2 November 2026
+
+RED. Plan piece CH-5, with the retained sign-in redaction and fee safety fixes.
+This follow-up supersedes the older migration-number and audit-route statements above.
+
+- Renumbered only the five full filename stems to 0535_customer_signin_redact,
+  0536_import_work_admission, 0537_import_pre_adoption,
+  0538_success_fee_cap_nets_reversals and 0539_fee_invalid_proof_reduction,
+  including proofs, notes, tests and lane references. No bare-digit substitution.
+- Historical outbox redaction now submits its security events through
+  app.lp4_seal_audit with checked_operation, following 0521/0522. It no longer
+  inserts audit rows or calls the withdrawn audit-head functions. The other
+  batch routines contain no direct audit inserts or old audit-head calls.
+- Fixed duplicate imports/declarations and premature full migration in the
+  sign-in upgrade fixture. It now installs predecessors, seeds historical
+  credentials, then runs the upgrade twice. All preservation assertions remain;
+  sealed audit.v2/trust/chain assertions cover both redaction event types.
+- Shared disposable PostgreSQL fixtures create jobguard_audit_writer and
+  jobguard_command_writer before migrations, including staged upgrade fixtures.
+- The locked IMPORT_ALREADY_ADOPTED refusal in import_work_admission already
+  matches codex/sandbox/batch-3b's 0566_job_import_v3_original_source migration.
+  Added a source regression check retaining its position before insert permits.
+  The requested origin/codex/sandbox/batch-3b ref is absent in this checkout;
+  used the existing local branch without fetching.
+- Lane exactly lists all 65 changed files against the available origin/main,
+  excluding config/lanes/. All 187 migrations on origin/main remain byte-identical;
+  the four other renamed batch SQL files also match their original bytes.
+
+Validation actually executed (installed binaries, no downloads):
+
+- From packages/db: ./node_modules/.bin/vitest run --maxWorkers=1
+  test/success-fee-cap-net-reversals.test.ts
+  test/fee-invalid-proof-reduction.test.ts test/job-import-v3-admission.test.ts
+  — 3 files, 14 tests passed.
+- From packages/db: ./node_modules/.bin/vitest run --maxWorkers=1
+  test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts src/outbox.test.ts
+  — 3 files, 116 tests passed. These are unit/source/catalogue checks, not live DB proof.
+- ./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit — passed.
+- ./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit — passed.
+- ./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit — passed.
+- ./node_modules/.bin/tsc --noEmit --target ES2023 --module NodeNext
+  --moduleResolution NodeNext --strict --skipLibCheck
+  packages/db/test/customer-signin.integration.test.ts
+  packages/db/test/job-import-v3-admission.test.ts
+  packages/db/test/job-work-state-fixtures.ts
+  packages/db/test/final-check-fixture.ts packages/db/test/lp-0-catalog.ts — passed.
+- node tools/plpgsql-case-in-if-lint.mjs — passed (192 migrations).
+- Python read-only comparison of main migration bytes, four renamed SQL files,
+  and lane membership — passed. Old full stems absent from packages/apps/docs
+  and the batch lane. git diff --check — passed.
+- pnpm --filter @jobguard/db typecheck stalled without reaching the compiler;
+  stopped with Ctrl-C. Direct installed compiler checks above passed.
+
+No PostgreSQL, database migration suite or browser suite ran: this sandbox cannot
+start PostgreSQL or bind localhost. GitHub CI must run those after router push.
+No git writes, fetch, provider actions or releases. Router stages/commits/pushes;
+one independent exact-head RED review and green CI remain required before merge.

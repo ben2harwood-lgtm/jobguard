@@ -1,5 +1,5 @@
 {
-  "migration": "0542_fee_invalid_proof_reduction.sql",
+  "migration": "0539_fee_invalid_proof_reduction.sql",
   "lp0": [
     {
       "section": "routines",

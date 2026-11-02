@@ -18,8 +18,8 @@ const capacityPredicate = (sql: string) => sql.match(/  IF (\(SELECT coalesce\(s
  .replace(/\bca.tenant_id=t\b/gu, "ca.tenant_id='tenant-a'")
  .replace(/\bca.job_id=(?:p_job|j)\b/gu, "ca.job_id='job-a'");
 const predicates = [
- capacityPredicate(readFileSync(new URL("../migrations/0541_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8")),
- capacityPredicate(readFileSync(new URL("../migrations/0542_fee_invalid_proof_reduction.sql", import.meta.url), "utf8").split("FUNCTION app.success_fee_withheld_source")[1]!),
+ capacityPredicate(readFileSync(new URL("../migrations/0538_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8")),
+ capacityPredicate(readFileSync(new URL("../migrations/0539_fee_invalid_proof_reduction.sql", import.meta.url), "utf8").split("FUNCTION app.success_fee_withheld_source")[1]!),
 ];
 type Allocation = { id: string; tenant_id: string; job_id: string; case_id: string; payment_id: string; eligible_net_pence: number; gross_pence: number };
 type Reversal = Pick<Allocation, "tenant_id" | "job_id" | "eligible_net_pence" | "gross_pence"> & { allocation_id: string };
