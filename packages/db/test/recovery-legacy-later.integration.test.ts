@@ -21,7 +21,7 @@ beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), "later-b17-pg-"));
   const port = await freePort(57800, 100), credential = randomUUID();
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential,
-    persistent: true, createPostgresUser: process.getuid?.() === 0,
+    persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential, database: "jobguard_synthetic_demo" });
