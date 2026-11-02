@@ -16,6 +16,27 @@ async function allocateBoth(page: Page) {
   return fixture;
 }
 
+test("M4-8 suggested matches prefill the form but require evidence, review and exact approval", async ({ page }) => {
+  const fixture = await recovery18800(page, true), panel = allocationPanel(page), source = fixture.cases[1]!;
+  const before = await readAllocations(page, fixture.jobId);
+  expect(before.suggestions?.some(row => row.caseId === source.caseId && row.paymentId === source.paymentId)).toBe(true);
+  await panel.getByRole("button", { name: "Choose suggested £3,000.00 match", exact: true }).click();
+  await expect(panel.getByRole("combobox", { name: "Recovery case", exact: true })).toHaveValue(source.caseId);
+  await expect(panel.getByRole("combobox", { name: "Matched receipt", exact: true })).toHaveValue(source.paymentId);
+  await expect(panel.getByLabel("Allocation gross (£)", { exact: true })).toHaveValue("3000.00");
+  await expect(panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true })).toHaveValue("");
+  await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
+  await expect(panel.getByRole("alert")).toHaveText("Choose a case, a matched receipt and evidence on file.");
+  expect((await readAllocations(page, fixture.jobId)).allocations).toEqual(before.allocations);
+  await panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
+  await expect(panel.getByTestId("allocation-review-split")).toHaveText("£3,000.00 = £2,500.00 net + £500.00 tax");
+  expect((await readAllocations(page, fixture.jobId)).allocations).toEqual(before.allocations);
+  await panel.getByRole("button", { name: "Approve exact receipt allocation", exact: true }).click();
+  await value(page, "eligible-net", "£2,500.00");
+  expect((await readAllocations(page, fixture.jobId)).allocations).toHaveLength(1);
+});
+
 test("DW1 persists exact approved allocations and source identities across reload, Jobs navigation and a second context", async ({ page, browser, context }, testInfo) => {
   const fixture = await allocateBoth(page), saved = await readAllocations(page, fixture.jobId);
   expect(saved.allocations).toHaveLength(2);
