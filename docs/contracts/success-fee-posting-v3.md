@@ -1,4 +1,46 @@
-# M4-9-S — synthetic catch success-fee posting
+# M4-9-S — synthetic success-fee posting
+
+## Recovery qualification and compensation: 0511_success_fee_recovery_compensation.sql
+
+This slice extends the merged catch-posting migrations. Approved builder-opened withheld-payment case
+receipts from the existing M4-8-S `recovery_case_allocation` writer join catch
+sources in the same cumulative calculation. Each source retains its allocation,
+case, authorization and a hash of current proof, eligibility, terms, movement
+and reversals. Current approved case eligibility, settled identified money
+received after opening and terms approval, matching finalized evidence and
+unrevoked allocator authority are required. Insurer proceeds stay excluded.
+Missing reversal allocations, invalidated proof and changed approvals fail
+closed. Supplier qualification and catch reassessment remain outside this slice.
+
+The exact statement and hash now support a signed `deltaPence` and, only for a
+negative delta, `compensationLinks` containing original journal IDs and positive
+amounts to reverse. Authorization records bind the absolute magnitude under the
+existing nonnegative authorization contract; the signed amount and original
+journals are bound by the exact statement hash. Balanced negative journals link
+to earlier positive journals of the same tenant/job, newest first, with an
+aggregate reversal limit on each original. A reversal spanning two postings
+creates two journals; result `journalId` identifies the first, while the statement
+lists every original. Zero still retains its derivation without any journal.
+Historical statements remain valid under the extended strict schema.
+
+F10/F11: 32,000p qualifying principal gives 3,200p; 282,000p gives a cumulative
+28,200p and a 25,000p delta; returning to 32,000p posts −25,000p against the
+original 25,000p journal. Exact approval, revision checks, replay and the same
+synthetic source fence apply to every direction. No external refund is executed.
+
+No table/routine ACL, role, RLS policy or runtime INSERT grant changes. The same
+six private tables and existing checked entrypoint signatures are retained, so
+LP-0 and tenancy retain main’s complete lists. SERIOUS-B5 records the replacement
+positive/compensation indexes and exclusive source indexes; inventory
+call metadata includes the existing payer-type helper. The source ledger adds a
+nullable, job-qualified recovery allocation reference alongside the existing
+catch references, with an exclusive shape constraint and per-derivation source
+uniqueness. Posted predecessor facts are preserved. Deploy by forward migration;
+roll back behavior by disabling the route or a reviewed forward fix, never by
+removing financial history. PostgreSQL migration/behavior tests and independent
+RED review remain required; this is synthetic principal only, without fee VAT,
+providers, collection or production activation.
+
 
 ## 29 October 2026: migrations 0405–0406 (current)
 
