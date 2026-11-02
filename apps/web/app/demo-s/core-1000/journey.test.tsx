@@ -2,6 +2,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Core1000Guide, Core1000Journey, core1000Link, core1000Source } from "./journey";
+import { readCore1000Report } from "./journey-model";
 vi.mock("../../ui/jobguard-app", () => ({ WalkIt: () => null }));
 vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: () => null }));
 vi.stubGlobal("React", React);
@@ -33,5 +34,15 @@ describe("DEMO-J1 core-1000 guided entry", () => {
     const id = "11111111-1111-4111-8111-111111111111";
     expect(core1000Link(id)).toBe(`/demo-s/core-1000?jobId=${id}`);
     expect(() => core1000Link(`${id}&completed=true`)).toThrow();
+  });
+  it("marks a step done only from its saved read; refused reads stay not done", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const report = await readCore1000Report(id, (async (path: string) => String(path).endsWith("/final-account")
+      ? new Response(JSON.stringify({ account: { id, issueBlocked: false, totals: { total: { pence: 132000 } } } }))
+      : new Response("{}", { status: 403 })) as typeof fetch);
+    expect(report.complete).toBe(false);
+    expect(report.rows.filter(row => row.done).map(row => row.id)).toEqual(["final-account"]);
+    expect(report.rows.find(row => row.id === "final-account")).toMatchObject({ state: "£1,320.00 gross", record: id });
+    expect(report.rows.find(row => row.id === "invoice")).toMatchObject({ done: false, state: "No invoice issued", record: null });
   });
 });

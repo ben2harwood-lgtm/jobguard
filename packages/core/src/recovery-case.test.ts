@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type RecoveryCaseState, assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
+import { type RecoveryCaseState, assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseCommandV1, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -302,4 +302,11 @@ describe("M4-1 dark full-case attacks",()=>{
   expect(transitionRecoveryCase({...base,amountPence:60})).toEqual({state:"negotiating",landedPence:40,writtenOffPence:0});
   for(const amountPence of [0,-1,101,1.1,Number.MAX_SAFE_INTEGER])expect(()=>transitionRecoveryCase({...base,amountPence})).toThrow();
  });
+});
+
+it("keeps Final Check creation outside client open commands", () => {
+ const command = {version:"recovery-case-command.v1", action:"open", commandId:"11111111-1111-4111-8111-111111111111", claimedNetPence:80000,
+  counterparty:"Synthetic customer", book:"builder_customer", sourceType:"customer_invoice", sourceRefs:["11111111-1111-4111-8111-111111111111"], expectedRevision:0};
+ expect(recoveryCaseCommandV1.safeParse({...command,caseType:"withheld_customer_payment"}).success).toBe(true);
+ expect(recoveryCaseCommandV1.safeParse({...command,caseType:"missed_variation_final_account"}).success).toBe(false);
 });
