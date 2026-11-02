@@ -55,6 +55,8 @@ export const successFeeStatementV1=z.object({
  version:z.literal("success-fee-statement.v1"),jobId:id,policyVersion:z.literal("reference_fee_policy_v3"),
  roundingPolicy:z.literal("commercial_half_even.v1"),qualifyingPrincipal:exactPenceV1,
  feePence:pence,priorPence:pence,deltaPence:z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE),expectedPostingRevision:revision,
+ compensatesDerivationId:id.optional(),
+ compensations:z.array(z.object({journalId:id,derivationId:id,amountPence:pence.positive()}).strict()).min(1).max(10000).optional(),
  compensationLinks:z.array(z.object({journalId:id,amountPence:pence.refine(n=>n>0)}).strict()).min(1).max(10000).optional(),
  sources:z.array(z.union([z.object({assessmentId:id,sourceHash:z.string().regex(/^[a-f0-9]{64}$/u),
   reviewAuthorizationId:id,allocationIds:z.array(id).min(1).max(10000)}).strict(),
@@ -63,11 +65,19 @@ export const successFeeStatementV1=z.object({
 }).strict().superRefine((value,ctx)=>{
  try {
  const proposal=calculateSuccessFeeProposal({version:"success-fee-proposal.v1",environment:"synthetic_reference",
-  qualifyingPrincipal:value.qualifyingPrincipal,priorPostedPrincipalPence:value.priorPence,compensatesDerivationId:value.deltaPence<0?value.compensationLinks?.[0]?.journalId??null:null});
- if(value.deltaPence<0 ? !value.compensationLinks ||
-  value.compensationLinks.reduce((sum,l)=>sum+BigInt(l.amountPence),0n)!==-BigInt(value.deltaPence) ||
-  new Set(value.compensationLinks.map(l=>l.journalId)).size!==value.compensationLinks.length : value.compensationLinks!==undefined)
+  qualifyingPrincipal:value.qualifyingPrincipal,priorPostedPrincipalPence:value.priorPence,compensatesDerivationId:value.deltaPence<0?value.compensatesDerivationId??value.compensationLinks?.[0]?.journalId??null:null});
+ const links=value.compensationLinks, splits=value.compensations;
+ if(links!==undefined && (value.deltaPence>=0 || links.reduce((sum,l)=>sum+BigInt(l.amountPence),0n)!==-BigInt(value.deltaPence)
+  || new Set(links.map(l=>l.journalId)).size!==links.length))
   ctx.addIssue({code:"custom",message:"invalid compensation links"});
+ if(splits!==undefined || value.compensatesDerivationId!==undefined){
+  if(value.deltaPence>=0 || !splits || splits[0]?.derivationId!==value.compensatesDerivationId
+   || splits.reduce((sum,l)=>sum+BigInt(l.amountPence),0n)!==-BigInt(value.deltaPence)
+   || new Set(splits.map(l=>l.journalId)).size!==splits.length
+   || (links!==undefined && (links.length!==splits.length || links.some(l=>!splits.some(s=>s.journalId===l.journalId && s.amountPence===l.amountPence)))))
+   ctx.addIssue({code:"custom",message:"invalid compensation splits"});
+ }
+ if(value.deltaPence<0 && !links && !splits)ctx.addIssue({code:"custom",message:"compensation link required"});
  if(proposal.successFeePrincipal.pence!==value.feePence || proposal.postingDelta.pence!==value.deltaPence)
   ctx.addIssue({code:"custom",message:"inconsistent fee arithmetic"});
  } catch { ctx.addIssue({code:"custom",message:"invalid fee arithmetic"}); }
