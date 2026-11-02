@@ -1,0 +1,19 @@
+{
+  "migration": "0552_recovery_attribution_one_review.sql",
+  "lp0": [],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "recovery_attribution_one_review_per_assessment",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": []
+}

@@ -1,7 +1,7 @@
 # SV-6 one review per assessment (RED)
 
-Piece: `sv6-one-review-index`, before-live follow-up to #422. Migration 0400 is
-present in the neighboring `lock-order-418` worktree, so this piece uses 0401.
+Piece: `sv6-one-review-index`, before-live follow-up to #422. After catching up
+with main, the migration is `0552_recovery_attribution_one_review.sql`.
 
 Adds a partial unique index on `(tenant_id, assessment_id)` for command rows whose
 payload action is `approve_review`. The existing routine, locking, error handling,
@@ -30,22 +30,23 @@ separately reviewed forward fix. A rollback requires a new reviewed migration
 dropping only this index; that would restore the code-only guard, so retain the
 before-live gate until the invariant is restored. Never edit applied migrations.
 
-Local validation (Node 24.17.0, cached pinned pnpm 10.28.1; no downloads):
+Catch-up validation (2 November 2026; Node 24.17.0, cached pinned pnpm
+10.28.1, installed Vitest 4.1.12; no downloads):
 
-- `pnpm --filter @jobguard/core build`: passed (dependency prerequisite).
 - `pnpm --filter @jobguard/db typecheck`: passed.
-- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src/recovery-attribution-repository.test.ts`:
-  seven tests passed. Initial attempt lacked core build output; rerun after the
-  dependency build passed.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/migration-proof-loader.test.ts src/migrate-discovery.test.ts src/recovery-attribution-repository.test.ts`:
+  36 tests passed across three files, including real proof discovery and composition.
 - `pnpm --filter @jobguard/db exec vitest list --maxWorkers=1 test/recovery-attribution-review.integration.test.ts`:
-  26 cases registered, including all three new regressions; not DB execution.
-- Money arithmetic, commercial boundary and PL/pgSQL CASE lint: passed.
+  26 cases registered, including the three existing branch regressions; not DB execution.
 - Working-tree diagnostic using existing lane and migration-order validators:
-  passed, four changed paths, own lane file implicit, 0401 above current main.
+  passed; exactly five changed paths against `origin/main`, own lane file implicit.
+  Local `main` is stale; `origin/main` is the base merged by the launcher.
+- The renamed SQL is byte-for-byte identical to the original branch migration.
+  Its table, columns and review action remain present in main's latest schema.
+- The proof records only the new index relation owned by `jobguard_migration`;
+  no row, routine, privilege, RLS or tenancy allowance changes.
+- Money arithmetic, commercial boundary and PL/pgSQL CASE lint: passed.
 - `git diff --check`: passed.
-- Root `LANE_BASE_REF=origin/main node tools/lint.mjs`: core purity passed; lane
-  check refused a self-comparison range because this worktree is uncommitted and
-  HEAD equals main. Router/CI must rerun after commit; no check was weakened.
 
 Database/browser suites were not run: this sandbox cannot start PostgreSQL or
 bind localhost. No git writes or provider actions. One independent exact-head
