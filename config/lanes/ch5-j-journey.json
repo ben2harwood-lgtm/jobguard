@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch5-j-journey": {
+      "branches": [
+        "codex/sandbox/ch5-j-journey"
+      ],
+      "note": "CH5-A/CH5-J RED, stacked on ch5-p2. Persisted capacity notices, overlapping-job links, API authority and reload journeys. No migration. Historical catch adapter remains unavailable; Builder threshold clarification pending.",
+      "allow": [
+        "apps/api/src/job-import-v3.application.test.ts",
+        "apps/web/app/api/meter/jobs/[id]/import-v3/[action]/route.test.ts",
+        "apps/web/app/ui/job-import-v3.tsx",
+        "apps/web/e2e/CH-5.spec.ts",
+        "apps/web/e2e/CH5-part2.spec.mts"
+      ]
+    }
+  }
+}
