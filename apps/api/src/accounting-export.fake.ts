@@ -1,6 +1,6 @@
 import { AccountingExportError, accountingTargetV1, parseAccounting, type AccountingTarget } from "./accounting-export.contracts.js";
 
-export type AccountingRoute = "codat" | "xero";
+export type AccountingRoute = "codat" | "xero" | "quickbooks";
 export type FakeAccess = { tenantId: string; companyId: string };
 export type FakeExternal = { id: string; tenantId: string; reference: string; contentHash: string; paid: boolean; payload: AccountingTarget };
 export interface AccountingAdapter {

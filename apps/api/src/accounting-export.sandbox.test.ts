@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 import { AccountingExportSandbox, FakeCodatAdapter } from "./accounting-export.sandbox.js";
 import { FakeXeroAdapter } from "./accounting-xero.fake.js";
+import { FakeQuickBooksAdapter } from "./accounting-quickbooks.fake.js";
 import type { AccountingSource } from "./accounting-export.contracts.js";
 import { ctx, consent, source, scope, command, adjustment, scopeFor } from "./accounting-export.test-fixtures.js";
 
 describe.each([
   ["Codat", () => new FakeCodatAdapter()],
   ["Xero", () => new FakeXeroAdapter(["demo-company", "demo-company-two"].map(companyId => ({
+    version: 1, tenantId: ctx.tenantId, companyId, revision: 1, state: "connected", synthetic: true,
+  })))],
+  ["QuickBooks", () => new FakeQuickBooksAdapter(["demo-company", "demo-company-two"].map(companyId => ({
     version: 1, tenantId: ctx.tenantId, companyId, revision: 1, state: "connected", synthetic: true,
   })))],
 ] as const)("%s common dark export conformance", (_name, makeAdapter) => {
