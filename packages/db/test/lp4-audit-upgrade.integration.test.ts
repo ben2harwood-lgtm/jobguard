@@ -9,7 +9,7 @@ import { jobDoorsActor, jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 describe("LP-4 compatible upgrade and database-independent sealing", () => {
   it("requires administrative role provisioning before the restricted migration", async () => {
-    const db = await jobDoorsDatabase(true, "0521_lp4_database_audit.sql");
+    const db = await jobDoorsDatabase(true, "0520_lp4_database_audit.sql");
     try {
       await db.owner.query("ALTER ROLE jobguard_audit_writer RENAME TO lp4_missing_role_fixture");
       try {
@@ -23,7 +23,7 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
     } finally { await db.close(); }
   }, 300_000);
   it("preserves historical bytes/checkpoint and appends v2 without granting runtime legacy writers", async () => {
-    const db = await jobDoorsDatabase(true, "0521_lp4_database_audit.sql");
+    const db = await jobDoorsDatabase(true, "0520_lp4_database_audit.sql");
     try {
       const { tenant } = await jobDoorsActor(db.owner);
       const legacy = { id: randomUUID(), tenantId: tenant, sequence: 1, version: "audit.v1" as const,

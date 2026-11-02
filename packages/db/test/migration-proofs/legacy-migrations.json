@@ -181,8 +181,8 @@
   "0516_trial_first_activation_capacity.sql",
   "0517_meter_track_review_read.sql",
   "0518_shadow_demo_guide.sql",
-  "0520_lp3_activation_acceptance.sql",
-  "0521_lp4_database_audit.sql",
-  "0522_lp5a_commands.sql",
-  "0523_lp5b_writers.sql"
+  "0519_lp3_activation_acceptance.sql",
+  "0520_lp4_database_audit.sql",
+  "0521_lp5a_commands.sql",
+  "0522_lp5b_writers.sql"
 ]

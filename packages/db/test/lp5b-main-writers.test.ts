@@ -2,7 +2,7 @@ import { MIGRATION_URLS } from "../src/migrate.js";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const read = (name: string) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
-const sql = read("0523_lp5b_writers.sql");
+const sql = read("0522_lp5b_writers.sql");
 const routine = (text: string, name: string) => text.slice(text.indexOf(`CREATE OR REPLACE FUNCTION app.${name}(`)).split("END $$;")[0]!;
 const section = (text: string, start: string, end: string) => {
  const at = text.indexOf(start); expect(at).toBeGreaterThanOrEqual(0);
@@ -35,9 +35,9 @@ it("checks fresh effect identity and the invoice outbox on completion and deferr
 
 it("discovers the renamed LP block exactly once after the main on-site admission definition", () => {
  const files=MIGRATION_URLS.map(url=>url.pathname.split("/").at(-1)!);
- const main=files.indexOf("0505_onsite_diary_admission.sql"),begin=files.indexOf("0522_lp5a_commands.sql"),writers=files.indexOf("0523_lp5b_writers.sql");
+ const main=files.indexOf("0505_onsite_diary_admission.sql"),begin=files.indexOf("0521_lp5a_commands.sql"),writers=files.indexOf("0522_lp5b_writers.sql");
  expect(main).toBeGreaterThan(-1);expect(begin).toBeGreaterThan(main);expect(writers).toBeGreaterThan(begin);
- expect(files.filter(name=>name==="0522_lp5a_commands.sql")).toHaveLength(1);
- expect(files.filter(name=>name==="0523_lp5b_writers.sql")).toHaveLength(1);
+ expect(files.filter(name=>name==="0521_lp5a_commands.sql")).toHaveLength(1);
+ expect(files.filter(name=>name==="0522_lp5b_writers.sql")).toHaveLength(1);
  expect(files).not.toContain("0475_lp5a_commands.sql");expect(files).not.toContain("0496_lp5b_writers.sql");
 });

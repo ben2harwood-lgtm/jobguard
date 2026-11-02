@@ -11,7 +11,7 @@
         "apps/api/src/contractor/practice-worker-switch.application.test.ts",
         "docs/contracts/audit-v1.md",
         "docs/contracts/lp-0-effective-privileges-v1.json",
-        "packages/db/migrations/0521_lp4_database_audit.sql",
+        "packages/db/migrations/0520_lp4_database_audit.sql",
         "packages/db/src/audit-checkpoint-handoff.test.ts",
         "packages/db/src/audit-checkpoint-handoff.ts",
         "packages/db/src/audit-export-repository.ts",

@@ -1,4 +1,4 @@
-// Exact LP-5a additions, independently asserted against migration 0522 and PostgreSQL.
+// Exact LP-5a additions, independently asserted against migration 0521 and PostgreSQL.
 export const lp5aReadTables = [
   "proposal_review",
   "imported_job_baseline",

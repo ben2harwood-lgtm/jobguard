@@ -1023,7 +1023,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
     const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
     const historicalRepair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
-    const sealedMigration = await readFile(new URL("../migrations/0521_lp4_database_audit.sql", import.meta.url), "utf8");
+    const sealedMigration = await readFile(new URL("../migrations/0520_lp4_database_audit.sql", import.meta.url), "utf8");
     const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
     // Restore the repaired semantics with the currently installed sealed writer,
     // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
