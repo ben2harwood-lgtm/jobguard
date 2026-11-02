@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-sb-pack": {
+      "branches": [
+        "codex/sandbox/m4-23-sb-pack"
+      ],
+      "note": "RED M4-23-SB acceptance pack caught up to current main. Existing money-chain migrations are already on main and remain byte-identical. PostgreSQL execution and independent RED review required. Own lane file is implicitly owned.",
+      "allow": [
+        "packages/db/test/m4-23-small-builder-acceptance.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts"
+      ]
+    }
+  }
+}
