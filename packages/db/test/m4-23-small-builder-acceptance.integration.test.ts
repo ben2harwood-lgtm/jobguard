@@ -380,6 +380,11 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
 // merchant-cash qualification/allocation source (0489 accepts withheld only).
 // Neither a supplier credit nor a customer receipt may stand in for that source.
 it.todo("NOT COVERED — Chain A merchant cash qualification/allocation into the v3 £32 fee source (M4-2, M4-7, M4-8, M4-9-S); the fee statement/collection/reconciliation depend on this missing merchant adapter");
-it.todo("NOT COVERED — competing payment rails: M4-15 is absent from this base; only the simulation collection command is exercised");
-it.todo("NOT COVERED — duplicate/out-of-order incoming provider notifications: M4-15 / live provider webhook adapter is absent; command replays and simulated terminal events are covered above");
+// M4-15's fake executor seam is tested in apps/api/src/fee-collection/m4-23-sb-rails.test.ts.
+// It has no PostgreSQL ReservationStore/LockedCollectionSources implementation
+// connecting these exact issued statements to the shared card/DD balance, and
+// no provider-event writer into the simulation collection/reconciliation rows.
+// Do not substitute asserted in-memory sources for this pack's approved fee.
+it.todo("NOT COVERED — competing payment rails on the pack fee: missing PostgreSQL ReservationStore and LockedCollectionSources bridge from SimulationFeeStatementRepository to DarkFeeCollectionExecutor; the fake card/DD shared-balance seam is tested separately");
+it.todo("NOT COVERED — duplicate/out-of-order/batch provider notifications on the pack fee: missing writer from DarkFeeCollectionExecutor.directDebitWebhook to SimulationFeeCollectionRepository and SimulationMoneyRunRepository; fake signed notification deduplication is tested separately, not PostgreSQL settlement/reconciliation");
 it.todo("NOT COVERED — actual part receipt ingestion: M4-7 / live provider ingestion is absent; the partial test bounds allocation from an existing settled receipt");

@@ -1,6 +1,7 @@
 /** Domain-only package. Network, database, vendor and platform imports are forbidden. */
 export const CORE_PACKAGE = "@jobguard/core" as const;
 export * from "./shadow-pilot-measurement.js";
+export * from "./shadow-pilot-report.js";
 export * from "./allocation.js";
 export * from "./fee.js";
 export * from "./fee-statement.js";
@@ -130,11 +131,9 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
-<<<<<<< e766dcc49f5c95959e43258dc92d015d44b89520
+export * from "./inbox-outcome-metrics.js";
 export * from "./recovery-billability-policy.js";
-=======
 export * from "./subscription-agreement.js";
->>>>>>> b708229850974e5e3caf1c14182268c943425993
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
 
