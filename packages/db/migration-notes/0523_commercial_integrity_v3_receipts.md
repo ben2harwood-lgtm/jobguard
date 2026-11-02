@@ -51,3 +51,5 @@ three non-trim neighbours. These PostgreSQL tests are NOT RUN in this sandbox.
 check retains tenant, authenticated session and immutable import-lineage checks,
 but walks ancestors from the requested job instead of expanding every session
 job. UNION retains cycle termination. No grant or routine identity changed.
+
+2 Nov after #474: branch filename stem renumbered to 0523_commercial_integrity_v3_receipts.sql. SQL body unchanged; no CH-6 routine definition exists on current main to supersede it.

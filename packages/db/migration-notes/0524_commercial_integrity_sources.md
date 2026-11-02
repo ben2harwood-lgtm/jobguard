@@ -116,3 +116,5 @@ customer/site binding. Each candidate must independently reach an authenticated
 session-owned ancestor through immutable import events. This preserves related
 quote advice, including nested imports, without expanding the session's whole
 job tree. Other source, review-lock and authorization checks are retained.
+
+2 Nov after #474: branch filename stem renumbered to 0524_commercial_integrity_sources.sql. SQL body unchanged; no CH-6 routine definition exists on current main to supersede it.

@@ -100,7 +100,16 @@ describe("LP-3 actual runtime attack and compatibility checks",()=>{
     await dispatcher.dispatch(context,cancel,new RecordQuoteDispositionMutation(T,disposition));
     const input={version:"quote-acceptance.v1",acceptanceId:randomUUID(),jobId:f.job,documentId:f.d.id,documentVersion:f.d.document_version,documentHash:f.d.content_hash,expectedJobRevision:f.d.revision+1,acceptedTotalPence:120120,statedCustomerName:"Fictional 🧱 Café",statedMethod:"email",acceptedAt:at,evidenceId:null};
     const accept:ConsequentialCommand={...cancel,commandId:randomUUID(),semanticKey:`accept:${f.job}`,commandType:"quote.acceptance.attest",action:{...cancel.action,actionType:"quote.acceptance.attest",recipient:input.statedCustomerName,amountPence:120120,currency:"GBP",policyVersion:"builder-attestation.v1"}};
-    await dispatcher.dispatch(context,accept,new RecordBuilderAcceptanceMutation(T,input));
+    const acceptanceMutation=new RecordBuilderAcceptanceMutation(T,input);
+    let expectedAcceptance:Record<string,unknown>|undefined;
+    const accepted=await dispatcher.dispatch(context,accept,{
+      inputHash:c=>acceptanceMutation.inputHash(c),
+      async mutate(database,c){expectedAcceptance=await acceptanceMutation.mutate(database,c);return expectedAcceptance;},
+      auditEvents:(result,c)=>acceptanceMutation.auditEvents(result,c),
+    });
+    expect(accepted).toEqual(expectedAcceptance);
+    expect(accepted.acceptanceId).toBe(input.acceptanceId);
+    expect((await db.owner.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[T,accept.commandId])).rows[0].result).toEqual(accepted);
     await dispatcher.dispatch(context,{...f.command,commandId:randomUUID()},new SwitchJobLiveMutation(T,"synthetic_demo",{...f.input,expectedJobRevision:f.d.revision+2}));
     const before=await counts();
     await expect(dispatcher.dispatch(context,{...cancel,commandId:randomUUID(),semanticKey:`late:${f.job}`},new RecordQuoteDispositionMutation(T,{...disposition,eventId:randomUUID(),expectedJobRevision:f.d.revision+3}))).rejects.toMatchObject({code:"22023"});

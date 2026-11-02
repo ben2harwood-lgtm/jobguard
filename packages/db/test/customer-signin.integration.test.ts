@@ -1,3 +1,5 @@
+import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
@@ -16,7 +18,8 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  const successors = { ...expected, "app.customer_variation_approval": [] };
+  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
+  const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);
 afterAll(async () => { await c?.close(); });
@@ -52,6 +55,7 @@ const refused = { code: "42501", message: "CUSTOMER_REFUSED" };
 it.each(["admin", "estimator", "foreman", "operative", "read_only"])("%s cannot issue", async role => { await expect(issue(await world(role))).rejects.toMatchObject(refused); });
 it.each(["owner", "finance"])("%s can issue only an outbox fake email, no plaintext in grants or audit", async role => {
   const w = await world(role), k = await issue(w);
+  await assertLp4SealedEvents(c.admin,w.tenant,"customer_portal.issued");
   const grant = (await c.admin.query("SELECT row_to_json(g) g FROM app.customer_portal_grant g WHERE tenant_id=$1 AND id=$2", [w.tenant, k.grant])).rows[0].g;
   expect(JSON.stringify(grant)).not.toContain(k.path.split("/").at(-1));
   expect(grant.company_id).toBe(w.account);

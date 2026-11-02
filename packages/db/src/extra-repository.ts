@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -42,15 +43,13 @@ async function lockJob(db: TenantTransaction, tenant: string, job: string): Prom
  await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, job]);
  if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rowCount) throw new ExtraPersistenceError("NOT_FOUND");
 }
-async function claim<T>(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, actor: string): Promise<T | null> {
- const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
- VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, hash, actor]);
- if (inserted.rowCount) return null;
- const rows = (await db.$client.query<{ request_hash: string; status: string; result: T }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
- if (rows.length !== 1 || rows[0]!.request_hash !== hash || rows[0]!.status !== "succeeded") throw new ExtraPersistenceError("COMMAND_CONFLICT"); return rows[0]!.result;
+async function claim<T>(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, content: unknown, actor: string, jobId: string): Promise<T | null> {
+ const claimed=await beginRepositoryCommand<T>(db,{tenantId:tenant,actorMembershipId:actor,commandId,commandType:type,
+  semanticKey:semantic,jobId,legacyJson:canonicalJson(content)});
+ return claimed.kind==="replay"?claimed.result:null;
 }
-async function complete(db: TenantTransaction, tenant: string, commandId: string, result: RaisedExtra | ExtraLinkResult | ExtraUnlinkResult): Promise<void> {
- await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId, canonicalJson(result)]);
+async function complete<T>(db: TenantTransaction, _tenant: string, commandId: string, _result: T): Promise<T> {
+ return completeRepositoryCommand<T>(db,commandId);
 }
 function audit(tenant: string, actor: string, type: string, subject: string, references: Record<string, string>, hashes?: Record<string, string>, id = randomUUID()): AuditEventInput {
  // tenant is deliberately not an audit payload input; appendAuditBatch reads the transaction context.
@@ -61,7 +60,6 @@ export class ExtraRepository {
  constructor(private readonly pool: Pool) {}
  async raiseExtra(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<RaisedExtra> {
   const input = parse(raiseExtraV1, raw), { commandId: _commandId, ...content } = input;
-  const requestHash = sha256Hex(canonicalJson(content));
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase();
    // Match revision/revocation order: tenant administration before job locks and origin foreign keys.
@@ -72,18 +70,20 @@ export class ExtraRepository {
    const variationId = derivedUuid(`extra:${tenant}:${input.jobId}:${input.clientCaptureId ?? input.commandId}`);
    // Capture retries bind their own command receipt without creating another origin.
    if (input.clientCaptureId) {
-    const prior = (await db.$client.query("SELECT c.request_hash,c.status,c.result FROM app.extra_origin o JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.client_capture_id=$3", [tenant, input.jobId, input.clientCaptureId])).rows[0];
+    const prior = (await db.$client.query("SELECT c.command_id,c.command_type,c.semantic_key FROM app.extra_origin o JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.client_capture_id=$3", [tenant, input.jobId, input.clientCaptureId])).rows[0];
     if (prior) {
-     if (prior.request_hash !== requestHash || prior.status !== "succeeded") throw new ExtraPersistenceError("COMMAND_CONFLICT");
+     const original=await claim<RaisedExtra>(db,tenant,prior.command_id,prior.command_type,prior.semantic_key,content,input.actorMembershipId,input.jobId);
+     if(!original)throw new ExtraPersistenceError("COMMAND_CONFLICT");
+     if(prior.command_id===input.commandId)return original;
      // The original semantic key is unique. A retry uses the same receipt type,
      // with a command-specific key, and permanently binds this ID/hash/result.
-     const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin-retry:${input.jobId}:${variationId}:${input.commandId}`, requestHash, input.actorMembershipId);
+     const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin-retry:${input.jobId}:${variationId}:${input.commandId}`, content, input.actorMembershipId,input.jobId);
      if (replay) return replay;
-     const result = prior.result as RaisedExtra;
-     await complete(db, tenant, input.commandId, result); return result;
+     const result = original;
+     return complete(db, tenant, input.commandId, result);
     }
    }
-   const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin:${input.jobId}:${variationId}`, requestHash, input.actorMembershipId);
+   const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin:${input.jobId}:${variationId}`, content, input.actorMembershipId,input.jobId);
    if (replay) return replay;
    const origin = originForCommand(input.commandType, "contractor");
    const member = (await db.$client.query<{ role: string }>("SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())", [tenant, input.actorMembershipId])).rows[0];
@@ -103,7 +103,7 @@ export class ExtraRepository {
    await db.$client.query("INSERT INTO app.extra_event(tenant_id,id,job_id,variation_id,kind,command_id,actor_membership_id) VALUES($1,$2,$3,$4,'logged',$5,$6)", [tenant, randomUUID(), input.jobId, variationId, input.commandId, input.actorMembershipId]);
    await seam?.(db, { kind: "raise", commandId: input.commandId, jobId: input.jobId, variationId });
    await appendAuditBatch(db, [audit(tenant, input.actorMembershipId, "contractor.extra.raised", variationId, { command: input.commandId, job: input.jobId, extra: variationId }, { origin: originRow.origin_hash })]);
-   const result = { variationId }; await complete(db, tenant, input.commandId, result); return result;
+   const result = { variationId }; return complete(db, tenant, input.commandId, result);
   }); } catch (error) { failure(error); }
  }
  async linkDuplicate(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<ExtraLinkResult> {
@@ -111,24 +111,24 @@ export class ExtraRepository {
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase(); await lockJob(db, tenant, input.jobId);
    for (const id of [input.duplicateId, input.canonicalId]) await this.readInTransaction(db, tenant, input.jobId, id);
-   const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "MarkDuplicate", `extra-duplicate:${input.jobId}:${input.duplicateId}:${input.canonicalId}:${input.commandId}`, sha256Hex(canonicalJson(content)), input.actorMembershipId); if (replay) return replay;
+   const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "MarkDuplicate", `extra-duplicate:${input.jobId}:${input.duplicateId}:${input.canonicalId}:${input.commandId}`, content, input.actorMembershipId,input.jobId); if (replay) return replay;
    const linkId = randomUUID();
    await db.$client.query("INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,'link',$6,$7)", [tenant, linkId, input.jobId, input.duplicateId, input.canonicalId, input.commandId, input.actorMembershipId]);
    await seam?.(db, { kind: "duplicate_link", commandId: input.commandId, jobId: input.jobId, variationId: input.duplicateId, linkId });
    await appendAuditBatch(db, [audit(tenant, input.actorMembershipId, "contractor.extra.duplicate_linked", input.duplicateId, { command: input.commandId, job: input.jobId, duplicate: input.duplicateId, canonical: input.canonicalId, link: linkId }, undefined, linkId)]);
-   const result = { linkId, variationId: input.duplicateId }; await complete(db, tenant, input.commandId, result); return result;
+   const result = { linkId, variationId: input.duplicateId }; return complete(db, tenant, input.commandId, result);
   }); } catch (error) { failure(error, "DUPLICATE_LINK_REFUSED"); }
  }
  async linkOrderLine(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<ExtraLinkResult> {
   const input = parse(extraOrderLineLinkV1, raw), { commandId: _commandId, ...content } = input;
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase(); await lockJob(db, tenant, input.jobId); await this.readInTransaction(db, tenant, input.jobId, input.variationId);
-   const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "RecordClientInstruction", `extra-order-line:${input.jobId}:${input.variationId}`, sha256Hex(canonicalJson(content)), input.actorMembershipId); if (replay) return replay;
+   const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "RecordClientInstruction", `extra-order-line:${input.jobId}:${input.variationId}`, content, input.actorMembershipId,input.jobId); if (replay) return replay;
    const linkId = randomUUID();
    await db.$client.query("INSERT INTO app.extra_order_line_link(tenant_id,id,job_id,variation_id,work_order_id,revision_id,scope_item_id,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)", [tenant, linkId, input.jobId, input.variationId, input.workOrderId, input.revisionId, input.scopeItemId, input.commandId, input.actorMembershipId]);
    await seam?.(db, { kind: "order_line_link", commandId: input.commandId, jobId: input.jobId, variationId: input.variationId, linkId });
    await appendAuditBatch(db, [audit(tenant, input.actorMembershipId, "contractor.extra.order_line_linked", input.variationId, { command: input.commandId, job: input.jobId, extra: input.variationId, link: linkId, work_order: input.workOrderId, revision: input.revisionId, scope: input.scopeItemId }, undefined, linkId)]);
-   const result = { linkId, variationId: input.variationId }; await complete(db, tenant, input.commandId, result); return result;
+   const result = { linkId, variationId: input.variationId }; return complete(db, tenant, input.commandId, result);
   }); } catch (error) { failure(error, "ORDER_LINE_LINK_REFUSED"); }
  }
  private async readInTransaction(db: TenantTransaction, tenant: string, job: string, extra: string): Promise<ExtraReadRecord> {
@@ -186,7 +186,6 @@ export class ExtraRepository {
   const parsed = parse(extraDuplicateUnlinkV1, raw);
   const input = { ...parsed, commandId: parsed.commandId.toLowerCase(), jobId: parsed.jobId.toLowerCase(), actorMembershipId: parsed.actorMembershipId.toLowerCase(), linkId: parsed.linkId.toLowerCase() };
   const { commandId: _commandId, ...content } = input;
-  const requestHash = sha256Hex(canonicalJson(content));
   try { return await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase();
    await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))", [tenant]);
@@ -195,7 +194,7 @@ export class ExtraRepository {
    await lockJob(db, tenant, input.jobId);
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");
-   const replay = await claim<ExtraUnlinkResult>(db, tenant, input.commandId, extraUnlinkCommandType, unlinkSemantic(input.jobId, input.linkId, input.commandId), requestHash, input.actorMembershipId);
+   const replay = await claim<ExtraUnlinkResult>(db, tenant, input.commandId, extraUnlinkCommandType, unlinkSemantic(input.jobId, input.linkId, input.commandId), content, input.actorMembershipId,input.jobId);
    if (replay) return replay;
    const link = (await db.$client.query<{ duplicate_id: string; canonical_id: string }>("SELECT duplicate_id,canonical_id FROM app.extra_duplicate_link WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND kind='link'", [tenant, input.jobId, input.linkId])).rows[0];
    if (!link) throw new ExtraPersistenceError("NOT_LINKED");
@@ -211,7 +210,7 @@ export class ExtraRepository {
    await seam?.(db, { kind: "duplicate_unlink", commandId: input.commandId, jobId: input.jobId, variationId: link.duplicate_id, linkId: unlinkId, reversesLinkId: input.linkId });
    await appendAuditBatch(db, [audit(tenant, input.actorMembershipId, "contractor.extra.duplicate_unlinked", link.duplicate_id, { command: input.commandId, job: input.jobId, duplicate: link.duplicate_id, canonical: link.canonical_id, link: unlinkId, reverses: input.linkId }, undefined, unlinkId)]);
    const result = { unlinkId, linkId: input.linkId, variationId: link.duplicate_id, revision: input.expectedRevision + 1 };
-   await complete(db, tenant, input.commandId, result); return result;
+   return complete(db, tenant, input.commandId, result);
   }); } catch (error) { unlinkFailure(error); }
  }
 }
@@ -227,6 +226,7 @@ function unlinkSemantic(job: string, link: string, commandId: string): string {
 function unlinkFailure(error: unknown): never {
  if (error instanceof ExtraPersistenceError || error instanceof InvalidTenantContextError) throw error;
  const e = error as { code?: string; message?: string };
+ if(e?.message === "FORBIDDEN")throw new ExtraPersistenceError("UNLINK_FORBIDDEN");
  const known = extraPersistenceErrorCodes.find(code => e?.message === code);
  if (known) throw new ExtraPersistenceError(known);
  if (e?.code === "23505") throw new ExtraPersistenceError("ALREADY_UNLINKED");
