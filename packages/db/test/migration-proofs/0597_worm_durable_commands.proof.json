@@ -1,0 +1,428 @@
+{
+  "migration": "0597_worm_durable_commands.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-worm-recovery",
+        "title": "M4-4 dark durable WORM and operator recovery",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Exact synthetic-only grants; no production approval inferred."
+        },
+        "downstream": "Runtime submits owner-authorized synthetic commands and reads tenant receipts. Separate executors claim/finish. Separate operators execute only the two recovery routines; reconciliation appends its own restricted audit event. No direct table reads/writes, runtime membership or executor rights.",
+        "path": "ap-worm-recovery",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review separated runtime, executor and operator credentials and exact-version reconciliation."
+        },
+        "sources": [
+          "packages/db/migrations/0597_worm_durable_commands.sql",
+          "packages/db/migrations/0598_worm_operator_recovery.sql"
+        ],
+        "tests": [
+          "packages/db/test/worm-command.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required. D07 and production remain held."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_attempt|jobguard_runtime|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_command|jobguard_runtime|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.worm_synthetic_version|jobguard_runtime|SELECT|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.worm_claim(uuid)|jobguard_worm_executor|EXECUTE|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.worm_finish(uuid,integer,text,jsonb)|jobguard_worm_executor|EXECUTE|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.worm_submit(jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "member|jobguard_runtime|jobguard_worm_executor|admin=f,inherit=t,set=t",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.worm_attempt|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.worm_command|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.worm_synthetic_version|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.worm_claim(uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.worm_finish(uuid,integer,text,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.worm_submit(jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "reach|jobguard_worm_executor|jobguard_runtime|inherit",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "reach|jobguard_worm_executor|jobguard_runtime|set",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_worm_executor|super=f,inherit=t,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-worm-recovery"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-worm-recovery",
+        "title": "M4-4 dark durable WORM and operator recovery",
+        "description": "Runtime submits owner-authorized synthetic commands and reads tenant receipts. Separate executors claim/finish. Separate operators execute only the two recovery routines; reconciliation appends its own restricted audit event. No direct table reads/writes, runtime membership or executor rights.",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review separated runtime, executor and operator credentials and exact-version reconciliation."
+        },
+        "sources": [
+          "packages/db/migrations/0597_worm_durable_commands.sql",
+          "packages/db/migrations/0598_worm_operator_recovery.sql"
+        ],
+        "tests": [
+          "packages/db/test/worm-command.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required. D07 and production remain held."
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.worm_synthetic_version",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_synthetic_version",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "worm_synthetic_version",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": [
+          "jobguard_migration",
+          "jobguard_runtime"
+        ],
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.worm_command",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_command",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "worm_command",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": [
+          "jobguard_migration",
+          "jobguard_runtime"
+        ],
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.worm_attempt",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_attempt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "worm_attempt",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": [
+          "jobguard_migration",
+          "jobguard_runtime"
+        ],
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_synthetic_version_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_command_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_command_tenant_id_idempotency_key_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "worm_attempt_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "worm_submit",
+        "args": "c jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "worm_claim",
+        "args": "cid uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worm_executor=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "worm_finish",
+        "args": "cid uuid, n integer, outcome text, material jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worm_executor=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "worm_synthetic_version",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "worm_command",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "worm_attempt",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
