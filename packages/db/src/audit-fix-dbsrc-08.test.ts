@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -18,7 +19,8 @@ const poolWithQuery = (query: Query) => ({
   connect: async () => ({ query, release: () => undefined }),
 }) as unknown as Pool;
 const transactionSql = (sql: string) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)
-  || sql.startsWith("SELECT set_config");
+  || sql.startsWith("SELECT set_config")
+  || sql.startsWith("SELECT pg_advisory_xact_lock(");
 const deferred = () => {
   let resolve!: () => void;
   const promise = new Promise<void>(r => { resolve = r; });
@@ -73,6 +75,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
         return { rows: permitted ? [{ ...row, status }] : [] };
       }
       if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }] };
+      if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(values?.[0]), tenantId) };
+      if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: tenantId }] };
       if (sql.startsWith("UPDATE app.action_outbox SET status='executing'")) status = "executing";
       if (sql.startsWith("UPDATE app.action_outbox SET status=$2")) status = String(values[1]);
       if (transactionSql(sql) || sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
@@ -96,17 +100,24 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
       merchant: [], sku: [], rate: [],
     };
     const bothReads = deferred();
-    let reads = 0, lockTail = Promise.resolve();
+    let reads = 0;
+    const lockTails = new Map<string, Promise<void>>();
     const pool = { connect: async () => {
       const staged = { merchant: [] as unknown[][], sku: [] as unknown[][], rate: [] as unknown[][] };
-      let locked = false, unlock: (() => void) | undefined;
+      let locked = false;
+      const heldLocks = new Set<string>(), unlocks: Array<() => void> = [];
       const query: Query = async (sql, values = []) => {
         if (sql.startsWith("SELECT pg_advisory_xact_lock")) {
-          const previous = lockTail, acquired = deferred();
-          lockTail = acquired.promise;
-          await previous;
+          // PostgreSQL locks serialize by key and are reentrant within a transaction.
+          const key = JSON.stringify([sql, values]);
+          if (!heldLocks.has(key)) {
+            const previous = lockTails.get(key) ?? Promise.resolve(), acquired = deferred();
+            lockTails.set(key, acquired.promise);
+            await previous;
+            heldLocks.add(key);
+            unlocks.push(acquired.resolve);
+          }
           locked = true;
-          unlock = acquired.resolve;
         } else if (sql.startsWith("SELECT m.id")) {
           const rows = committed.rate.map(r => ({ merchantId: r[2], skuId: r[3], version: r[4] }));
           // Force the unprotected implementation's two reads to see no identity.
@@ -123,8 +134,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
           committed.merchant.push(...staged.merchant);
           committed.sku.push(...staged.sku);
           committed.rate.push(...staged.rate);
-          unlock?.();
-        } else if (sql === "ROLLBACK") unlock?.();
+          for (const unlock of unlocks) unlock();
+        } else if (sql === "ROLLBACK") { for (const unlock of unlocks) unlock(); }
         else if (!transactionSql(sql)) throw new Error(`Unexpected SQL: ${sql}`);
         return { rows: [] };
       };

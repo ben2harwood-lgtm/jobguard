@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon2a-p": {
+      "branches": [
+        "codex/sandbox/mon2a-p"
+      ],
+      "note": "RED: MON-2A P1/P2/C2 read-only subscription screen using existing C1 company-session route. Synthetic only; C3 and MON-2B excluded. No migration. Own lane file is implicitly allowed by lane policy.",
+      "allow": [
+        "docs/contracts/subscription-plan-read-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/subscription-plan-view.ts",
+        "packages/core/src/subscription-plan-view.test.ts",
+        "apps/web/app/plans/page.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen-headers.test.ts",
+        "apps/web/e2e/M0-6L.spec.ts"
+      ]
+    }
+  }
+}

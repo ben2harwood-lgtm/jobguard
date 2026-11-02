@@ -1,9 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-export const scimDeactivationV1=z.object({version:z.literal("scim-deactivation.v1"),eventId:z.string().uuid(),subject:z.string().min(1).max(200),active:z.literal(false)}).strict();
+export const scimDeactivationV1=z.object({version:z.literal("scim-deactivation.v1"),eventId:z.guid({ error: "Invalid uuid" }),subject:z.string().min(1).max(200),active:z.literal(false)}).strict();
 const outcomes=["deactivated","ignored","refused"] as const;
 const causes=["SCIM_DEACTIVATED","SCIM_SUBJECT_NOT_LINKED","SCIM_ALREADY_INACTIVE","SCIM_OWNER_PROTECTED"] as const;
-export const scimDeactivationResultV1=z.object({version:z.literal("scim-deactivation-result.v1"),environment:z.literal("synthetic_demo"),eventId:z.string().uuid(),outcome:z.enum(outcomes),cause:z.enum(causes)}).strict().refine(r=>r.outcome===(r.cause==="SCIM_DEACTIVATED"?"deactivated":r.cause==="SCIM_OWNER_PROTECTED"?"refused":"ignored"));
+export const scimDeactivationResultV1=z.object({version:z.literal("scim-deactivation-result.v1"),environment:z.literal("synthetic_demo"),eventId:z.guid({ error: "Invalid uuid" }),outcome:z.enum(outcomes),cause:z.enum(causes)}).strict().refine(r=>r.outcome===(r.cause==="SCIM_DEACTIVATED"?"deactivated":r.cause==="SCIM_OWNER_PROTECTED"?"refused":"ignored"));
 export function scimSeed(raw:unknown):string|"unset" {return typeof raw==="string"&&/^[A-Za-z0-9_-]{43,200}$(?![\s\S])/u.test(raw)?raw:"unset";}
 export function scimBearerFor(seed:string,connectionId:string):string {
  return createHmac("sha256",seed).update("scim-bearer.v1:"+connectionId.toLowerCase()).digest("base64url");

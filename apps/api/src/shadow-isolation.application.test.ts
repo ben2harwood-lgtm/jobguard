@@ -105,14 +105,22 @@ beforeAll(async()=>{
  await owner.query("ALTER SYSTEM SET log_line_prefix='SV3:%u:%d:%c: '");await owner.query("SELECT pg_reload_conf()");
  await owner.query(`CREATE ROLE sv3_isolation_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  await owner.query("ALTER ROLE sv3_isolation_runtime SET log_statement='all'");
- await owner.query("CREATE DATABASE sv3_isolation_zero");const p=pool("postgres","sv3_isolation_zero");try{await migrate(p);await installLegacySyntheticPartyFixtures(p);
+ await owner.query("CREATE DATABASE jobguard_synthetic_demo");const p=pool("postgres","jobguard_synthetic_demo");try{
+ for(const role of ["jobguard_audit_writer","jobguard_command_writer"])await p.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
+ await migrate(p);await installLegacySyntheticPartyFixtures(p);
  await p.query("GRANT jobguard_runtime TO sv3_isolation_runtime");
  await p.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await p.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
  await p.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SV-3 builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
  await p.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
  await p.query("SELECT app.issue_practice_session($1)",[digest]);
- await p.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);
+ // Ruling 103 (Q3): one explicit owner transaction carries the exact practice-home permit and the unchanged INSERT.
+ {const owner=await p.connect();try{await owner.query("BEGIN");await owner.query("SELECT set_config('app.tenant_id',$1,true)",[DEMO_TENANT_ID]);
+ await owner.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+  VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',$1::uuid,'id',$2::uuid,'title','Fictional SV-3 isolation job','status','live','revision',0,
+    'practice_session_digest',$3::text,'practice_scenario','home','provenance','system_generated_quote'))),$4)`,[DEMO_TENANT_ID,jobId,digest,DEMO_MEMBERSHIP_ID]);
+ await owner.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);await owner.query("COMMIT")}catch(error){await owner.query("ROLLBACK");throw error}finally{owner.release()}}
  await p.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES($1,$2,$3,'confirmed',$4)",[baselineScopeId,DEMO_TENANT_ID,jobId,fixed]);
  await withTenant(p,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){
@@ -123,7 +131,7 @@ beforeAll(async()=>{
  });
  }finally{await closeTestPools(p)}
  // Clone the freshly migrated and deterministically seeded baseline, preserving exact server timestamps and identities.
- await owner.query("CREATE DATABASE sv3_isolation_many TEMPLATE sv3_isolation_zero");
+ await owner.query("CREATE DATABASE sv3_isolation_many TEMPLATE jobguard_synthetic_demo");
  const many=pool("postgres","sv3_isolation_many");try{
   await many.query(`CREATE ROLE sv3_isolation_shadow LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO sv3_isolation_shadow`);
   const shadow=pool("sv3_isolation_shadow","sv3_isolation_many");try{await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
@@ -169,7 +177,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
     return {compared:{output,statements},retrievals,nestEtagOf:(text:string)=>nestEtag(Buffer.from(text,"utf8"))};
    }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await app.close();await closeTestPools(runtime)}
   }
-  const many=await replay("sv3_isolation_many"),zero=await replay("sv3_isolation_zero");
+  const many=await replay("sv3_isolation_many"),zero=await replay("jobguard_synthetic_demo");
   // Everything compared exactly, except the two named-limit items (placeholders stand in for them on exactly the two prevention-checks GETs).
   expect(many.compared).toEqual(zero.compared);
   for(const route of retrievedAtRoutes){
@@ -192,7 +200,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
  it("successful Log an extra, retries, mutation errors and current builder counts/inbox responses ignore held signals",async()=>{
   const {createWorkspaceApplication}=await import("./workspace/application.js");
   const responses=[];
-  for(const database of ["sv3_isolation_zero","sv3_isolation_many"]){const p=pool("sv3_isolation_runtime",database);try{
+  for(const database of ["jobguard_synthetic_demo","sv3_isolation_many"]){const p=pool("sv3_isolation_runtime",database);try{
    const app=createWorkspaceApplication({pool:p,sessionId:session}),out:unknown[]=[];
    const extra={version:"variation-command.v1",action:"propose",proposalId,scopeItemId,existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional builder addition",captureText:"Fictional builder addition",price:null};
    const initial=await app.variation.command(jobId,extra);expect(initial.variations.some(v=>v.id===proposalId)).toBe(true);out.push(initial);
@@ -286,7 +294,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  const {seedAccount}=await import(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url).href);
  const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(new URL("../../../packages/db/src/outbox.ts",import.meta.url).href);
  // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
- const initial=pool("postgres","sv3_isolation_zero"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
+ const initial=pool("postgres","jobguard_synthetic_demo"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
  const signalEvidence=randomUUID(),signalUpload=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
  try{await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
   await db.$client.query("SET LOCAL session_replication_role='replica'"); // Fixture ownership binding only, as in SV-4's exported fixture.
@@ -296,9 +304,12 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
   await db.$client.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID,a.jobId,a.scopeItemId]);
  });
  await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  // Freeze the disposable fixture clock before receipt; immutable upload receipts cannot be rewritten after lock.
+  await db.$client.query("CREATE OR REPLACE FUNCTION pg_catalog.clock_timestamp() RETURNS timestamptz LANGUAGE sql AS 'SELECT ''2026-10-01T00:00:00Z''::timestamptz'");
   // An original evidence object needs its upload parent row (evidence_object_kind_ck, evidence_object_upload_fk).
   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[signalUpload,DEMO_TENANT_ID,a.jobId,signalUpload]);
   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$6,$3,$4,'original','photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence',$5,$5)",[signalEvidence,DEMO_TENANT_ID,a.jobId,a.scopeItemId,fixed,signalUpload]);
+  await db.$client.query("UPDATE app.evidence_upload SET state='verified',object_version_id='Q:v1',server_verified_at=$3::timestamptz WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,signalUpload,fixed]);
   await db.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'synthetic_notification')",[decision,DEMO_TENANT_ID,a.jobId]);
   await db.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[approval,DEMO_TENANT_ID,decision,DEMO_MEMBERSHIP_ID]);
   const hash=createHash("sha256").update(artifact).digest("hex");
@@ -307,7 +318,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  });
  }finally{await closeTestPools(initial)}
  const databases=["sv3_effect_zero","sv3_effect_many"];
- for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE sv3_isolation_zero`);
+ for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE jobguard_synthetic_demo`);
  const manyAdmin=pool("postgres",databases[1]!);
  try{const hidden=pool("sv3_isolation_shadow",databases[1]!);try{await withTenant(hidden,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){const id=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',$4,'Private fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,a.jobId,id,fixed]);
@@ -336,7 +347,6 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    await success("Log an extra: retry",()=>app.variation.command(a.jobId,extra));
    const revision=proposed.variations.find((v:any)=>v.id===extra.proposalId).currentRevisionId;
    await success("approve captured extra",()=>app.variation.command(a.jobId,{version:"variation-command.v1",action:"approve",variationId:extra.proposalId,revisionId:revision,approvalId:randomUUID(),attestation:"Builder-recorded practice acceptance — not an authenticated customer signature"}));
-   await inspect.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) SELECT gen_random_uuid(),r.tenant_id,r.job_id,$3,'variation',r.id,v.scope_item_id,r.id,ap.id,'Fictional approved extra',0,2 FROM app.variation v JOIN app.variation_revision r ON(r.tenant_id,r.id)=(v.tenant_id,v.current_revision_id) JOIN app.variation_approval ap ON(ap.tenant_id,ap.revision_id)=(r.tenant_id,r.id) WHERE v.tenant_id=$1 AND v.id=$2",[DEMO_TENANT_ID,extra.proposalId,a.revisionId]); // MIGFIX-5: the account must carry the approved variation, or the lock guard refuses it as stale
    await success("Log an extra: unpriced",()=>app.variation.command(a.jobId,{...extra,proposalId:randomUUID(),scopeItemId:randomUUID(),price:null}));
    const rate=await success("save rate",()=>app.materials.addRate({version:"material-rate-command.v1",merchantName:"Fictional Q merchant",sku:"Q-TAP",description:"Fictional tap",pricePence:2000,priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-10-01",sourceLabel:"synthetic:Q",expectedVersion:0}));
    await success("save requirement",()=>app.materials.addRequirement(a.jobId,{version:"material-requirement-command.v1",scopeItemId:a.scopeItemId,skuId:rate.skuId,quantity:"2",unit:"each",expectedRevision:0}));
@@ -356,14 +366,45 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    const selected=await success("proof select",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"select_generated",commandId:randomUUID(),scopeItemId:proofScope,fixture:"completion-photo"}));
    const verified=await success("proof finalize",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"finalize",commandId:randomUUID(),uploadId:selected.upload.id,objectVersionId:selected.upload.objectVersionId}));
    await success("proof complete",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"complete",commandId:randomUUID(),scopeItemId:proofScope,evidenceId:verified.upload.evidenceId}));
-   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}));
+   const {assembleDraftFinalAccount}=await import("@jobguard/core");
+   const rebuilt=await withTenant(inspect,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+    const lines=(await db.$client.query(`
+     SELECT line_kind kind,source_id "sourceId",scope_item_id "scopeItemId",commercial_revision_id "commercialRevisionId",approval_id "approvalId",description,net_pence "netPence"
+     FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'
+     UNION ALL
+     SELECT 'variation',r.id,r.scope_item_id,r.id,ap.id,r.description,r.signed_delta_pence
+     FROM app.variation_revision r JOIN app.variation_approval ap ON(ap.tenant_id,ap.job_id,ap.revision_id)=(r.tenant_id,r.job_id,r.id)
+     WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.id=$4 AND ap.variation_id=$5`,[DEMO_TENANT_ID,a.jobId,a.revisionId,revision,extra.proposalId])).rows
+     .map((line:any)=>({...line,netPence:Number(line.netPence)})) as import("@jobguard/core").FinalAccountSourceLine[];
+    const proof=(await db.$client.query(`SELECT evidence_id "evidenceId",object_version_id "objectVersionId",scope_item_id "scopeItemId",evidence_type "evidenceType",sha256,mandatory
+     FROM app.final_account_proof WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3`,[DEMO_TENANT_ID,a.jobId,a.revisionId])).rows as import("@jobguard/core").FinalAccountProof[];
+    const assembled=assembleDraftFinalAccount({baselineLines:lines.filter(line=>line.kind==="baseline"),approvedVariationLines:lines.filter(line=>line.kind==="variation"),proof,mandatoryProofRequirements:[]});
+    const revisionId=randomUUID(),sourceHash=createHash("sha256").update(assembled.canonicalSource).digest("hex");
+    await db.$client.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+     SELECT $1,tenant_id,job_id,final_account_draft_id,2,id,$2,baseline_quote_version_id,currency,tax_policy_version,$3,$4,$5,issue_blocked,findings
+     FROM app.final_account_revision WHERE tenant_id=$6 AND job_id=$7 AND id=$8`,[revisionId,sourceHash,assembled.totals.net.pence,assembled.totals.tax.pence,assembled.totals.total.pence,DEMO_TENANT_ID,a.jobId,a.revisionId]);
+    for(const [index,line] of assembled.lines.entries())await db.$client.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[randomUUID(),DEMO_TENANT_ID,a.jobId,revisionId,line.kind,line.sourceId,line.scopeItemId,line.commercialRevisionId,line.approvalId,line.description,line.netPence,index+1]);
+    for(const item of assembled.proof)await db.$client.query(`INSERT INTO app.final_account_proof(id,tenant_id,job_id,final_account_revision_id,evidence_id,object_version_id,scope_item_id,evidence_type,sha256,mandatory)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[randomUUID(),DEMO_TENANT_ID,a.jobId,revisionId,item.evidenceId,item.objectVersionId,item.scopeItemId,item.evidenceType,item.sha256,item.mandatory]);
+    await db.$client.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",[revisionId,DEMO_TENANT_ID,a.jobId,a.draftId]);
+    return {revisionId,sourceHash};
+   });
+   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedRevision:2,declarationVersion:"final_account_declaration.v1"}));
    await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
    // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
    let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
    const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
-   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
-   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
+   // Setup only: simulate authoritative processing of every frozen source without advancing public UUIDs per signal.
+   const {publishFixtureCompletion}=await import(new URL("../../../packages/db/test/sv5pre-fixtures.ts",import.meta.url).href);
+   const completionWorker=pool("sv3_isolation_shadow",database);
+   try{await publishFixtureCompletion(completionWorker,inspect,DEMO_TENANT_ID,a.jobId,{deterministicIds:true})}finally{await closeTestPools(completionWorker)}
+   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedSourceHash:rebuilt.sourceHash,recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
    const invoice=(await app.customerInvoice.get(a.jobId)).invoices[0]!;
    const pdf=await app.customerInvoice.pdf(a.jobId,invoice.id);expect(pdf.byteLength).toBeGreaterThan(0);trace.exports.push(Buffer.from(pdf).toString("base64"));
    const receipt=await success("record receipt",()=>app.customerInvoice.recordReceipt(a.jobId,{version:"practice-customer-receipt.record.v1",commandId:randomUUID(),invoiceId:invoice.id,paidOn:"2026-10-13",amountPence:1000,method:"bank_transfer",reference:"Fictional payment"}));
@@ -393,8 +434,8 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    for(const table of ["action_outbox","action_attempt"])trace.outbox.push({table,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t ORDER BY row_to_json(t)::text`)).rows});
    const tables=(await inspect.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','infrastructure') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
    for(const table of tables){const name=`"${table.schemaname}"."${table.tablename}"`;
-    // claimed_xact stores the cluster-wide PostgreSQL transaction number, which differs between any two replays in one cluster whatever the signals; every other byte of every row is compared.
-    const bytes=table.tablename==="watchdog_command_identity"?"(to_jsonb(t)-'claimed_xact')::text":"row_to_json(t)::text";
+    // claimed_xact and transaction_id store the cluster-wide PostgreSQL transaction number, which differs between any two replays in one cluster whatever the signals; every other byte of every row is compared.
+    const bytes=table.tablename==="watchdog_command_identity"?"(to_jsonb(t)-'claimed_xact')::text":table.tablename==="command_lifecycle_claim"?"(to_jsonb(t)-'transaction_id')::text":"row_to_json(t)::text";
     trace.publicRows.push({table:name,rows:(await inspect.query(`SELECT ${bytes} bytes FROM ${name} t ORDER BY 1`)).rows})}
    // Analytics has no separate persisted or network emitter in the current builder composition; public facts cover its inputs.
    trace.analytics.push(relevance);

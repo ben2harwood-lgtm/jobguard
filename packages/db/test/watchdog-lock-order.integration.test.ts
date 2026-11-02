@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { watchdogCommandGuards } from "@jobguard/core";
+import { watchdogCommandGuards, watchdogRoutineGuards } from "@jobguard/core";
 import { appendAuditBatch, requireLiveJob, withTenant } from "../src/index.js";
 import { analyseLockOrder, mutableTables, type ObservedTransaction, type Ownership } from "./lock-observer.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
@@ -55,7 +55,7 @@ describe("the lock observer itself (it must be able to fail)", () => {
   });
   it("reports a row lock on a mutable row taken after the audit append", async () => {
     const receipt = randomUUID();
-    await h.admin.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1,$2,'lock_order.probe',$3,$4,'processing',$5)", [receipt, h.tenant, `probe:${receipt}`, "a".repeat(64), h.member]);
+    await h.admin.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)VALUES($1,$2,'lock_order.probe',$3,$4,'succeeded',$5,'{}',clock_timestamp())", [receipt, h.tenant, `probe:${receipt}`, "a".repeat(64), h.member]);
     const { transactions } = await record(async (db, id) => { await requireLiveJob(db, id); await appendAuditBatch(db, [event(id)]); await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 FOR UPDATE", [h.tenant, receipt]); });
     const analysis = analyseLockOrder(transactions[0]!, ownership);
     expect(analysis.afterAudit.map(violation => violation.locks).flat().join()).toMatch(/UPDATE app\.command_receipt#/u);
@@ -70,7 +70,7 @@ describe("the lock observer itself (it must be able to fail)", () => {
 
 describe("every guarded command: the job share lock first, no contending lock after the audit append", () => {
   it("has a case for every guarded command in the registry", () => {
-    expect(cases.map(c => c.key).sort()).toEqual(watchdogCommandGuards.map(entry => `${entry.file}#${entry.method}`).sort());
+    expect(cases.map(c => c.key).sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
   });
 
   it.each(cases.map(c => [c.key, c] as const))("%s", async (key, c) => {

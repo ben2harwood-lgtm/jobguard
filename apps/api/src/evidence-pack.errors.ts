@@ -1,5 +1,10 @@
 import { ZodError } from "zod";
 
+export class EvidencePackV3HeldError extends Error {
+  readonly code = "EVIDENCE_PACK_V3_DEPENDENCY_HELD";
+  constructor() { super("EVIDENCE_PACK_V3_DEPENDENCY_HELD"); }
+}
+
 /**
  * One server-side mapping from an internal failure to a client-safe status and code.
  * Only typed pack codes pass through; PostgreSQL, driver, parser and programming error text never reaches a client.
@@ -11,6 +16,7 @@ export function evidencePackFailure(error: unknown): { status: number; code: str
   if (message === "UNAUTHENTICATED") return { status: 401, code: message };
   if (message === "FORBIDDEN") return { status: 403, code: message };
   if (message === "SYNTHETIC_MODE_REQUIRED") return { status: 400, code: message };
+  if (message === "EVIDENCE_PACK_V3_DEPENDENCY_HELD") return { status: 409, code: message };
   if (/^EVIDENCE_PACK_[A-Z_]+$/u.test(message)) {
     return { status: message.includes("NOT_FOUND") ? 404 : /STALE|CONFLICT/u.test(message) ? 409 : 400, code: message };
   }

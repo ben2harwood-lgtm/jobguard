@@ -5,7 +5,7 @@ import { instantV1 } from "./receipt-allocation.js";
 import { enterpriseGroupV1, enterpriseModeV1, enterpriseStatementV1, compareServerInstants } from "./enterprise-domain/contracts.js";
 import { deriveEnterpriseReferenceStatement } from "./enterprise-domain/fee.js";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const text = z.string().min(1).max(300);
 const signedPence = z.number().int().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE);
@@ -46,7 +46,7 @@ export const enterpriseFeeReconciliationV1 = z.object({ version: z.literal("ente
   correctionManifestHash: hash, decisionId: uuid, authorizationId: uuid, reasonCode: z.literal("duplicate_work"),
 }).strict().refine(v => unique(v.memberIds) && v.memberIds.includes(v.canonicalId), "Invalid member identity");
 export const enterpriseFeeListV1 = z.object({ version: z.literal("enterprise-fee-list.v1"), period: period.optional(),
-  afterStatementId: uuid.optional(), limit: z.number().int().min(1).max(100).default(25) }).strict();
+  afterStatementId: uuid.optional(), limit: z.number().int().min(1).max(100).prefault(25) }).strict();
 export const enterpriseFeeReadV1 = z.object({ version: z.literal("enterprise-fee-read.v1"), statementId: uuid,
   revision: z.number().int().min(1).max(1_000_000).optional() }).strict();
 

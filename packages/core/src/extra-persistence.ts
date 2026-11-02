@@ -3,7 +3,7 @@ import { extraOriginV1 } from "./extra-origin.js";
 import { enterpriseStates } from "./enterprise-domain/contracts.js";
 import { instantV1 } from "./receipt-allocation.js";
 import { sha256 } from "./evidence-pack.js";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[0-9a-f]{64}$/u);
 export const raiseExtraV1 = z.object({
  version: z.literal("raise-extra.v1"), commandId: uuid, commandType: z.enum(["LogSiteExtra", "ConfirmPrompt", "RecordOfficeExtra", "RecordClientInstruction"]),

@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "@jobguard/core";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
@@ -15,20 +16,20 @@ export async function registerNorthsideRun(pool: Pool, owner: AuthenticatedMembe
       payload: { references: { environment: "synthetic_demo", settings: northsideSettings.version, classification: "demo_settings" }, classifications: { action: "operational" } } }]);
   });
 }
-const runV1 = z.object({ settings: northsideSettingsV1, settingsHash: z.string().regex(/^[a-f0-9]{64}$/u), testerMembershipId: z.string().uuid() }).strict();
+const runV1 = z.object({ settings: northsideSettingsV1, settingsHash: z.string().regex(/^[a-f0-9]{64}$/u), testerMembershipId: z.guid({ error: "Invalid uuid" }) }).strict();
 export async function northsideRun(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => {
     const row = (await db.$client.query('SELECT settings,settings_hash "settingsHash",owner_membership_id "testerMembershipId" FROM app.northside_run WHERE tenant_id=$1', [member.tenantId])).rows[0];
     return row ? runV1.parse(row) : null;
   });
 }
-/** Only the four named fictional journey targets, for the owner-controlled practice switch. No wider organisation read. */
+/** Only the named fictional journey targets, for the owner-controlled practice switch. No wider organisation read. */
 export async function northsideSwitchTargets(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => (await db.$client.query<{ membershipId: string; role: string }>(
     `SELECT m.id "membershipId",m.role FROM app.membership m JOIN app.contractor_member c ON(c.tenant_id,c.membership_id)=(m.tenant_id,m.id)
      WHERE m.tenant_id=$1 AND app.contractor_member_active(m.id) AND (m.role,c.email) IN
      (('operative','demo.operative@fictional.invalid'),('surveyor','surveyor@northside-fictional.invalid'),
-      ('supervisor','supervisor@northside-fictional.invalid'),('client_approver','client.approver@northside-fictional.invalid')) ORDER BY m.role`, [member.tenantId])).rows);
+      ('supervisor','supervisor@northside-fictional.invalid'),('finance','finance@northside-fictional.invalid'),('client_approver','client.approver@northside-fictional.invalid')) ORDER BY m.role`, [member.tenantId])).rows);
 }
 /** The actor's own attribution references only; this reveals no other client's extra or commercial content. */
 export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
@@ -39,8 +40,8 @@ export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembe
       FROM app.northside_action_attribution WHERE tenant_id=$1 AND actor_membership_id=$2 ORDER BY recorded_at DESC,source_id LIMIT 8`, [member.tenantId, member.membershipId])).rows);
 }
 
-const localArtifact = z.object({ version: z.literal("extra-client-approval-message.v1"), linkId: z.string().uuid(), requestId: z.string().uuid(), revision: z.number().int(),
-  recipient: z.string().email().refine(s => s.endsWith(".invalid")), netPence: z.number().int().positive(), expiresAt: z.string().datetime(), path: z.string(), token: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u) }).strict();
+const localArtifact = z.object({ version: z.literal("extra-client-approval-message.v1"), linkId: z.guid({ error: "Invalid uuid" }), requestId: z.guid({ error: "Invalid uuid" }), revision: z.number().int(),
+  recipient: z.email({ error: "Invalid email" }).refine(s => s.endsWith(".invalid")), netPence: z.number().int().positive(), expiresAt: utcDatetimeV1, path: z.string(), token: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u) }).strict();
 /** Recover server-generated replay inputs from this owner's exact command, including closed/expired artifacts.
  * The merged dispatcher still verifies the complete command hash and returns its stored result. */
 export async function northsideApprovalArtifact(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext, commandId: string) {

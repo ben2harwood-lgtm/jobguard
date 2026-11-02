@@ -3,7 +3,7 @@ import { z } from "zod";
 import { computeSuppliedMeterPeriod,suppliedMeterPeriodResultV1 } from "@jobguard/core";
 import { withTenant,type VerifiedTenantContext } from "./tenant-context.js";
 import { MeterPersistenceError,meterLondonDateV1 } from "./meter-persistence.js";
-const uuid=z.string().uuid();
+const uuid=z.guid({ error: "Invalid uuid" });
 export const meterReadRequestV1=z.object({version:z.literal("meter-read.v1"),computationId:uuid}).strict();
 export const meterRebuildRequestV1=z.object({version:z.literal("meter-rebuild.v1"),startDate:meterLondonDateV1}).strict();
 const parentResult=z.unknown().transform((raw,ctx)=>{

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11a-hub-get-recovery": {
+      "branches": [
+        "codex/sandbox/ent-11a-hub-get-recovery"
+      ],
+      "receipt": "docs/verdicts/ENT-11A-HUB-GET-RECOVERY/BUILDER_RECEIPT.md",
+      "note": "ENT-11a C1/C7 bounded initial GET recovery only; no 401/403/POST/auth/session/role/tenant/hidden-state change. Coordinator routine own-plan registration under Ben27Oct authority.",
+      "allow": [
+        "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/e2e/ENT-11a.spec.ts",
+        "docs/verdicts/ENT-11A-HUB-GET-RECOVERY/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

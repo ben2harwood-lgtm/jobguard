@@ -4,8 +4,8 @@ import { PracticeWorkerSwitchError, practiceWorkerSwitchOnV1, practiceWorkerSwit
 import { withTenant, type VerifiedTenantContext, type AuthenticatedMembership } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 import { derivedUuid } from "./work-order-repository.js";
-const uuid = z.string().uuid();
-const time = z.string().datetime({ precision: 6 });
+const uuid = z.guid({ error: "Invalid uuid" });
+const time = z.iso.datetime({ precision: 6, error: "Invalid datetime" });
 const internalOn = z.object({ switch: uuid, session: uuid, owner: uuid, worker: uuid, startedAt: time, expiresAt: time, marker: z.enum(["acquired", "present"]), state: z.literal("acting"), replayed: z.boolean() }).strict();
 const internalOff = z.object({ switch: uuid, session: uuid, owner: uuid, worker: uuid, endedAt: time, endReason: z.enum(["switched_back", "expired"]), endEvent: uuid, state: z.literal("owner"), replayed: z.boolean() }).strict();
 const internalState = z.object({ state: z.enum(["owner", "acting", "unclosed"]), switch: uuid.nullable(), worker: uuid.nullable(), startedAt: time.nullable(), expiresAt: time.nullable() }).strict();

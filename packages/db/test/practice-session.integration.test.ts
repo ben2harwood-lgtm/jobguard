@@ -17,7 +17,7 @@ let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
 beforeAll(async () => {
  dir = await mkdtemp(join(tmpdir(), "sbox-session-pg-")); const port=await freePort(57000,500);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await pg.initialise(); await pg.start(); admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+ await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo"); admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic", database: "jobguard_synthetic_demo"});
  // Upgrade from the immediately preceding supported schema with an unbound legacy job.
  for (const url of precedingMigrations) await admin.query(await (await import("node:fs/promises")).readFile(url,"utf8"));
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);
@@ -30,7 +30,7 @@ beforeAll(async () => {
  for(const url of precedingMigrations)await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);
  await migrate(admin);
  await admin.query("CREATE ROLE sbox_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO sbox_login");
- runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sbox_login",password:"synthetic"});
+ runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"sbox_login",password:"synthetic"});
  process.env.JOBGUARD_ENV="synthetic_demo";
 },60000);
 afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
@@ -285,7 +285,16 @@ it("S24: independent practice owners keep their own advisory budgets and command
  expect((await admin.query("SELECT 1 FROM app.inbox_preference_revision WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,input.commandId])).rowCount).toBe(1);
  // The budget follows one session across its own jobs, rather than becoming job-local.
  const sameOwnerJob=randomUUID();
- await admin.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional same-owner inbox','quoting',$3,'home')",[DEMO_TENANT_ID,sameOwnerJob,a.digest]);
+ await withTenant(admin,a.context,async db=>{
+  await db.$client.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,
+   insert_shape,actor_membership_id)
+   VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+    app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object(
+     'tenant_id',$1::uuid,'id',$2::uuid,'title','Fictional same-owner inbox','status','quoting','revision',0,
+     'practice_session_digest',$3::text,'practice_scenario','home','provenance','system_generated_quote'))),$4)`,
+   [DEMO_TENANT_ID,sameOwnerJob,a.digest,a.membershipId]);
+  await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional same-owner inbox','quoting',$3,'home')",[DEMO_TENANT_ID,sameOwnerJob,a.digest]);
+ });
  expect((await repo.view(a.context,sameOwnerJob,a.membershipId,a.digest)).advisoryBudget).toBe(0);
  await expect(repo.setBudget(a.context,sameOwnerJob,input,a.membershipId,a.digest)).rejects.toMatchObject({code:"IDEMPOTENCY_CONFLICT"});
  // Different session writes share the physical membership revision sequence safely.

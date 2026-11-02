@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "lint-plpgsql-case-in-if": {
+      "branches": [
+        "codex/sandbox/lint-plpgsql-case-in-if"
+      ],
+      "note": "Router JOB-20261029-001: reporting-only CASE-in-IF migration lint; fixed immutable historical exceptions. No SQL edits, runtime or workflow changes.",
+      "allow": [
+        "tools/plpgsql-case-in-if-lint.mjs",
+        "tools/plpgsql-case-in-if-lint.test.mjs",
+        "tools/lint.mjs"
+      ]
+    }
+  }
+}

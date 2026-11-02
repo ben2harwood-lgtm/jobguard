@@ -7,7 +7,7 @@ export const IMPORT_FEE_POLICY_CANDIDATE = "reference_fee_policy_v1" as const;
 export const IMPORT_LINEAGE_LABEL = "Imported — builder-attested baseline; weaker than a JobGuard-generated and customer-accepted quote." as const;
 export const PRODUCTION_IMPORT_ENABLED = false as const;
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const adoptJobV1 = z.object({
   parties: z.object({customerRevisionId: uuid, siteRevisionId: uuid, payingPartyRevisionId: uuid.optional()}).optional(),

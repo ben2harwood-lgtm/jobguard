@@ -10,8 +10,8 @@ export const variationOriginV1 = z.discriminatedUnion("jobTrack", [
 export type VariationOrigin = z.infer<typeof variationOriginV1>;
 /** This schema validates provenance; it confers no billability or fee entitlement. */
 export const extraOriginV1 = z.object({
-  version: z.literal("extra-origin.v1"), tenantId: z.string().uuid(), jobId: z.string().uuid(), variationId: z.string().uuid(),
-  origin: variationOriginV1, commandId: z.string().uuid(), raisingMembershipId: z.string().uuid(), raisingRole: z.string().min(1).max(40),
+  version: z.literal("extra-origin.v1"), tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), variationId: z.guid({ error: "Invalid uuid" }),
+  origin: variationOriginV1, commandId: z.guid({ error: "Invalid uuid" }), raisingMembershipId: z.guid({ error: "Invalid uuid" }), raisingRole: z.string().min(1).max(40),
   serverRecordedAt: instantV1, deviceId: z.string().min(1).max(200).nullable(),
   deviceCapturedAt: instantV1.nullable(), evidenceHash: z.string().regex(/^[a-f0-9]{64}$/u).nullable(),
 }).strict();

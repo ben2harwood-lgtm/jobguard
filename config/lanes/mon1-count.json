@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-count": {
+      "branches": [
+        "codex/sandbox/mon1-count"
+      ],
+      "note": "MON-1 remainder part 1: pure counting intervals and per-day places under Ben's 28 Oct London-midnight stop ruling. Core only; held API unchanged.",
+      "allow": [
+        "packages/core/src/meter-lifecycle.ts",
+        "packages/core/src/job-work-timing.ts",
+        "packages/core/src/meter-counting.test.ts"
+      ]
+    }
+  }
+}

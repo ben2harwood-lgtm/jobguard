@@ -1,5 +1,7 @@
 /** Domain-only package. Network, database, vendor and platform imports are forbidden. */
 export const CORE_PACKAGE = "@jobguard/core" as const;
+export * from "./shadow-pilot-measurement.js";
+export * from "./shadow-pilot-report.js";
 export * from "./allocation.js";
 export * from "./fee.js";
 export * from "./fee-statement.js";
@@ -38,6 +40,7 @@ export * from "./evidence-pack.js";
 export * from "./job-parties.js";
 export * from "./cumulative-fee.js";
 export * from "./receipt-allocation.js";
+export * from "./receipt-line-allocation-source.js";
 export * from "./extra-origin.js";
 export * from "./enterprise-domain/index.js";
 export * from "./shadow-domain/index.js";
@@ -62,6 +65,7 @@ export * from "./recovery-case-terms.js";
 export * from "./contractor-practice-session.js";
 export * from "./site-extra.js";
 export * from "./recovery-allocation.js";
+export * from "./landing-suggestions.js";
 export * from "./site-extra-pricing.js";
 export * from "./site-visit.js";
 export * from "./site-extra-evidence.js";
@@ -78,9 +82,78 @@ export * from "./enterprise-live-prompts.js";
 export * from "./mobile-auth.js";
 export * from "./mobile-device-lifecycle.js";
 export * from "./job-sources.js";
+export * from "./job-source-intake.js";
 export * from "./subscription.js";
 export * from "./subscription-period.js";
 export * from "./subscription-track-review.js";
+export * from "./free-first-job.js";
+
+export * from "./plan-entitlements.js";
 export * from "./contractor-billing.js";
+export * from "./contractor-billing-commands.js";
 export * from "./enterprise-fee-statement.js";
+export * from "./enterprise-dashboard.js";
+export * from "./enterprise-signal.js";
+export * from "./enterprise-dashboard-billing.js";
 export * from "./enterprise-baseline.js";
+export * from "./sync-download.js";
+
+export * from "./subscription-persistence.js";
+export * from "./subscription-allocation.js";
+
+export * from "./enterprise-live-prompt-persistence.js";
+
+export * from "./job-work-timing.js";
+
+export * from "./contractor-entitlement-authority.js";
+
+export * from "./free-first-job-persistence.js";
+export { utcDatetimeV1 } from "./datetime.js";
+
+export * from "./free-first-job-calendar.js";
+export * from "./free-first-job-conversion.js";
+export * from "./recovery-attribution-persistence.js";
+export * from "./success-fee-posting.js";
+export * from "./simulation-fee-statement.js";
+export * from "./payment-fee-authority.js";
+export * from "./final-check.js";
+
+export * from "./meter-lifecycle.js";
+
+export * from "./enterprise-dashboard-stored-billing.js";
+export * from "./subscription-plan-view.js";
+export * from "./job-import-v3.js";
+
+export { ImportedBaselineSourceError, requireImportedBaselineSource } from "./imported-baseline-sources.js";
+
+export * from "./payment-fee-statements.js";
+export * from "./evidence-pack-v3.js";
+export * from "./evidence-pack-v3-assembly.js";
+export * from "./meter-today.js";
+
+export * from "./small-builder-demo-lifecycle.js";
+export * from "./inbox-outcome-metrics.js";
+
+export * from "./dunning.js";
+export * from "./subscription-agreement.js";
+export * from "./recovery-billability-policy.js";
+export * from "./mobile-auth-state.js";
+export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
+
+export * from "./value-source-receipt.js";
+export * from "./issued-simulation-fee-statement.js";
+
+export * from "./small-builder-trial-demo.js";
+export * from "./simulation-fee-collection.js";
+export * from "./customer-approval-method.js";
+export * from "./simulation-money-run.js";
+export * from "./customer-variation-approval.js";
+export * from "./interim-applications.js";
+export * from "./construction-notices.js";
+export * from "./retention-balances.js";
+export * from "./vat-treatments.js";
+export * from "./cis-deductions.js";
+export * from "./exposure-curve.js";
+
+export * from "./pay-now-synthetic.js";
+export * from "./contractor-mandate.js";

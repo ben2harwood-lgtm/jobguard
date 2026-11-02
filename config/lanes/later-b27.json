@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b27": {
+      "branches": ["codex/sandbox/later-b27"],
+      "allow": [
+        "packages/db/src/job-repository.ts",
+        "packages/db/src/ledger.ts",
+        "packages/db/src/commands.ts",
+        "packages/db/src/later-money-boundaries.test.ts",
+        "packages/db/test/later-proposal-totals.integration.test.ts",
+        "docs/verdicts/LATER-B27/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B27.md"
+      ],
+      "receipt": "docs/verdicts/LATER-B27/BUILDER_RECEIPT.md",
+      "note": "Shared money boundaries; RED review then PARK under decision 74. No migration."
+    }
+  }
+}

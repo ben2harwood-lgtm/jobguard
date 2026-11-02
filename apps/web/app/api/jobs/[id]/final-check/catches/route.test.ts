@@ -1,0 +1,14 @@
+import { afterEach, expect, it, vi } from 'vitest';
+const state=vi.hoisted(()=>({session:'session',confirmCatch:vi.fn(),failure:vi.fn()}));
+vi.mock('next/headers',()=>({cookies:async()=>({get:()=>state.session?{value:state.session}:undefined})}));
+vi.mock('../../../../../lib/synthetic-server',()=>({hasSyntheticSession:(value:unknown)=>Boolean(value),practiceFailure:(error:unknown)=>error instanceof Error && error.message==='NOT_FOUND'?Response.json({code:'NOT_FOUND'},{status:404}):null}));
+vi.mock('../../../../../lib/workspace-server',()=>({workspaceApplication:async()=>({finalCheck:state})}));
+import { POST } from './route';
+const params={params:Promise.resolve({id:'fictional-job'})};
+const request=(body='{}')=>new Request('https://fictional.invalid/api/jobs/fictional-job/final-check/catches',{method:'POST',body});
+afterEach(()=>{vi.clearAllMocks();state.session='session';});
+it('missing session records nothing',async()=>{state.session='';const response=await POST(request(),params);expect(response.status).toBe(401);expect(state.confirmCatch).not.toHaveBeenCalled();});
+it('malformed JSON records nothing',async()=>{const response=await POST(request('{'),params);expect(response.status).toBe(400);expect(state.confirmCatch).not.toHaveBeenCalled();});
+it('passes the raw catch confirmation to the checked application and returns its receipt',async()=>{state.confirmCatch.mockResolvedValue({disposition:'confirmed_extra'});const response=await POST(request('{"version":"final-check.catch.v1"}'),params);expect(response.status).toBe(201);expect(await response.json()).toEqual({disposition:'confirmed_extra'});expect(state.confirmCatch).toHaveBeenCalledWith('fictional-job',{version:'final-check.catch.v1'});expect(response.headers.get('Cache-Control')).toBe('no-store');});
+it('typed refusals keep their status',async()=>{state.confirmCatch.mockRejectedValue(new Error('STALE_REVISION'));state.failure.mockReturnValue({status:409,body:{code:'STALE_REVISION'}});const response=await POST(request(),params);expect(response.status).toBe(409);expect(await response.json()).toEqual({code:'STALE_REVISION'});});
+it('foreign session keeps the non-disclosing refusal',async()=>{state.confirmCatch.mockRejectedValue(new Error('NOT_FOUND'));expect((await POST(request(),params)).status).toBe(404);});

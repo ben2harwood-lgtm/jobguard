@@ -1,3 +1,4 @@
+import { loadMigrationProofs, proofSourceDigests } from "./migration-proof-loader.js";
 /**
  * LP-0 grant freeze guard, real PostgreSQL 16, complete migration registry.
  *
@@ -19,6 +20,7 @@ import { rolledBack } from "./upgrade-proof-utils.js";
 let db: Lp0Database;
 let inventory: Inventory;
 let rawInventory: any;
+let reviewedSourcesBefore: Record<string, string>;
 let baselineMigrationOnly: Fact[]; // runtime NOLOGIN: exactly as the migrations leave it
 let baselineBootstrapLogin: Fact[]; // runtime LOGIN: the synthetic-bootstrap posture used to exercise the real role
 let registryBefore: { migration_name: string; applied_at: string }[];
@@ -41,6 +43,7 @@ const has = async (c: PoolClient, sql: string, values: unknown[] = []) => (await
 
 beforeAll(async () => {
   ({ raw: rawInventory, inventory } = await loadReviewedInventory());
+  reviewedSourcesBefore = proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources]);
   db = await startLp0Database(58600);
   // Catalogue of the migrated base BEFORE any test-only login posture is applied.
   baselineMigrationOnly = deriveFacts(await readCatalogue(db.admin));
@@ -94,6 +97,24 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     // The runtime role in this database really is the least-privilege posture the inventory records (inspected, not assumed).
     const role = (await readCatalogue(db.admin)).roles.find(r => r.name === APPLICATION_ROLE)!;
     expect(role).toMatchObject({ super: false, bypassrls: false, createrole: false, createdb: false, replication: false, inherit: false });
+  });
+
+  it("[LP0-meter-revoke] the retired reader is refused and re-granting it fails the freeze", async () => {
+    const signature = "app.mon1_counted_meter_today(uuid,text)";
+    expect((await db.admin.query(`SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).rows).toEqual([{ allowed: false }]);
+    const runtime = await db.runtimeClient();
+    try {
+      await expect(runtime.query("SELECT app.mon1_counted_meter_today(NULL::uuid,NULL::text)")).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    const result = await control(async c => {
+      await c.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${APPLICATION_ROLE}`);
+    }, async c => {
+      expect(await has(c, `SELECT has_function_privilege('${APPLICATION_ROLE}',$1,'EXECUTE') AS allowed`, [signature])).toBe(true);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ROUTINE_EXPOSED", object: `function:${signature}`, grantee: APPLICATION_ROLE, privilege: "EXECUTE" }),
+    ]));
   });
 
   it("[LP0-03] dangerous column grant fails the freeze", async () => {
@@ -333,7 +354,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     const find = (key: string) => rows.find(r => r.key === key);
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
-      ["acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-", ["LP-4", "LP-6e"]],
+      ["acl|rel|table|app.audit_event|jobguard_audit_writer|INSERT|-", ["LP-4", "LP-6e"]],
       ["acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-", ["LP-5a", "LP-5b", "LP-5c"]],
       ["acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-", ["LP-5c"]],
       ["acl|rel|table|app.customer_invoice|jobguard_runtime|INSERT|-", ["LP-8a"]],
@@ -346,6 +367,9 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(row!.cards, key).toEqual(expect.arrayContaining([...cards]));
       expect(row!.target).not.toBe("retain");
     }
+    // LP-4 deliberately withdraws direct runtime audit INSERT; its dedicated
+    // NOLOGIN writer is the remaining, separately reviewed capability above.
+    expect(find("acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-")).toBeUndefined();
     // LP-1 closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
     for (const key of [
       "acl|rel|table|app.membership|jobguard_runtime|DELETE|-",
@@ -367,7 +391,11 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(find(key), key).toMatchObject({ disposition: "existing_exception", target: "revoke" });
       expect(find(key)!.cards, key).toContain("LP-1");
     }
-    expect(find(keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false))).toMatchObject({ disposition: "existing_exception", cards: ["LP-2"] });
+    const closedTransition = keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false);
+    expect(find(closedTransition)).toBeUndefined();
+    expect(exceptions.has(closedTransition)).toBe(false);
+    expect(baselineBootstrapLogin.some(fact => fact.key === closedTransition)).toBe(false);
+    expect((await db.admin.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,varchar,varchar,uuid,bigint,varchar,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
     // Reads are approved current capability, rebound at LP-11; they are not an exception.
     expect(find("acl|rel|table|app.job|jobguard_runtime|SELECT|-")).toMatchObject({ disposition: "approved_current" });
     // Target state is a separate section and names no live key.
@@ -425,7 +453,8 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(leftovers.rows[0]).toEqual({ roles: 0, relations: 0, routines: 0, defaults: 0, memberships: 0, tenants: 0, accounts: 0, jobs: 0, login: true });
     } finally { second.release(); }
     // The reviewed file on disk is untouched by any of the above.
-    expect(parseInventory(JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"))).entries.length).toBe(inventory.entries.length);
+    expect(proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources])).toEqual(reviewedSourcesBefore);
+    expect((await loadReviewedInventory()).inventory).toEqual(inventory);
   });
 });
 

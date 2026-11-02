@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-7a": {
+      "branches": [
+        "codex/sandbox/ent-7a"
+      ],
+      "note": "ENT-7a (stacked on ENT-6 #351): migration 0276 agreement versions and locked finance-only fee derivation; no posting or approval.",
+      "allow": [
+        "packages/db/migrations/0276_enterprise_fee_derivation.sql",
+        "packages/db/migration-notes/0276_enterprise_fee_derivation.md",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/src/enterprise-fee-repository.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/enterprise-fee-derivation.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -40,9 +40,22 @@ export function allocateEnterpriseReceipt(raw: unknown): readonly EnterpriseRece
       const original = input.original;
       if (!original || original.sourceRef !== original.receipt.sourceRef || original.receipt.direction !== "receipt" || original.sourceRef === receipt.sourceRef ||
         compareServerInstants(receipt.effectiveAt, original.receipt.effectiveAt) !== 0 || receipt.invoiceId !== original.receipt.invoiceId ||
-        receipt.explicit !== null || receipt.separateInvoiceId !== original.receipt.separateInvoiceId) return refuse("INVALID_ALLOCATION");
-      const originallySettled = new Map(allocateReceiptToLines(original.receipt).map(l => [l.lineId, l]));
+        receipt.separateInvoiceId !== original.receipt.separateInvoiceId) return refuse("INVALID_ALLOCATION");
+      // A source reference already recorded as a reversal on any supplied extra cannot reverse a second time.
+      if (input.groups.some(g => g.members.some(m => m.billingFacts.some(f => f.kind === "reversed" && f.sourceRef === receipt.sourceRef)))) return refuse("INVALID_ALLOCATION");
+      let originalAllocation: readonly ReceiptLineAllocation[];
+      try { originalAllocation = allocateReceiptToLines(original.receipt); } catch { return refuse("INVALID_ALLOCATION"); }
+      const originallySettled = new Map(originalAllocation.map(l => [l.lineId, l]));
       const remaining = new Map(original.remainingGross.map(l => [l.lineId, parseExactPence(l.gross)]));
+      // Explicit reversal (BUILD_PLAN 9.1.8, same order in reverse) is only the reverse of an explicit original:
+      // every named line must carry an explicit original share and may not take more than that share.
+      if (receipt.explicit !== null) {
+        if (original.receipt.explicit === null) return refuse("INVALID_ALLOCATION");
+        for (const share of receipt.explicit) {
+          const settled = originallySettled.get(share.lineId);
+          if (!settled || settled.rule !== "explicit" || compareExactPence(parseExactPence(share.gross), settled.gross) > 0) return refuse("INVALID_ALLOCATION");
+        }
+      }
       if (remaining.size !== original.remainingGross.length || receipt.lines.length !== original.receipt.lines.length || remaining.size !== receipt.lines.length) return refuse("INVALID_ALLOCATION");
       for (const l of receipt.lines) {
         const prior = original.receipt.lines.find(p => p.id === l.id), balance = remaining.get(l.id), allocated = originallySettled.get(l.id)?.gross ?? exactPence(0n);
@@ -56,7 +69,7 @@ export function allocateEnterpriseReceipt(raw: unknown): readonly EnterpriseRece
   });
 }
 export type EnterpriseStatementLine = Readonly<{ extraId: string; contributionChange: ExactPence; fee: Money }>;
-const changeV1 = z.array(z.object({ extraId: z.string().uuid(), change: z.object({ numerator: z.bigint(), denominator: z.bigint().positive() }).strict() }).strict()).max(10000);
+const changeV1 = z.array(z.object({ extraId: z.guid({ error: "Invalid uuid" }), change: z.object({ numerator: z.bigint(), denominator: z.bigint().positive() }).strict() }).strict()).max(10000);
 /** Same-sign apportionment delegates to allocateMoney; mixed signs use signed floors of exact changes. */
 export function statementLines(deltaPence: number, supplied: readonly Readonly<{ extraId: string; change: ExactPence }>[]): readonly EnterpriseStatementLine[] {
   return checked(() => {

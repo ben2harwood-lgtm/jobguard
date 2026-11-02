@@ -75,7 +75,7 @@ export const readList = (body: unknown): RecoveryCaseResponse | undefined => {
 };
 
 // Recorded sources are identified by id. A row without a usable id could only ever become a command naming nothing.
-const recordedId = z.string().uuid();
+const recordedId = z.guid({ error: "Invalid uuid" });
 // A material row's rate is absent when no agreed price applies (null from the database), and its per-unit price only exists once a rate applies.
 const materialRow = z.object({ quantity: z.string(), rateId: recordedId.nullish(), eachPence: z.number().int().optional() });
 const supplierFactRow = z.object({ document_number: z.string().nullable(), version_id: recordedId });

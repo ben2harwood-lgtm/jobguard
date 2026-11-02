@@ -10,7 +10,7 @@ import { compareServerInstants } from "./enterprise-domain/contracts.js";
 
 /** Independent data tools only. These functions establish no approval, match or execution authority. */
 export const BILLING_SANDBOX_LABEL = "Practice sandbox — synthetic data; nothing is sent or charged";
-const uuid = z.string().uuid().transform(v => v.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase());
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const identity = z.string().min(1).max(200).refine(v => !/[\u0000-\u001f\u007f]/u.test(v));
 const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
@@ -54,7 +54,7 @@ export const billingStatusV1 = z.object({ version: z.literal("billing-status.v1"
   effectiveAt: instantV1, remittanceReference: z.string().min(1).max(300).nullable(), reconciliationId: identity.nullable(),
   originalEventId: identity.nullable(), amount: billingAmountsV1, composition: billingCompositionV1.nullable(),
   explicit: z.array(explicitShare).max(MAX_ALLOCATION_LINES).nullable(), separateInvoice: z.boolean(),
-  lineAdjustments: z.array(adjustment).max(MAX_ALLOCATION_LINES).default([]),
+  lineAdjustments: z.array(adjustment).max(MAX_ALLOCATION_LINES).prefault([]),
 }).strict().superRefine((v, ctx) => {
   if ((v.factType !== "paid" && v.factType !== "payment_reversed" && (v.explicit !== null || v.separateInvoice)) ||
       (v.factType !== "credited" && v.factType !== "rejected" && v.lineAdjustments.length !== 0) ||
@@ -100,7 +100,7 @@ export class BillingDataError extends Error {
   toJSON(): z.infer<typeof billingErrorV1> { return { version: "billing-error.v1", code: this.code }; }
 }
 function invalid(): never { throw new BillingDataError("BILLING_INVALID"); }
-function read<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown): T {
+function read<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) return invalid();
   return result.data;

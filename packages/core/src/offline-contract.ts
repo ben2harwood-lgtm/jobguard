@@ -1,18 +1,19 @@
+import { utcDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 import { logSiteExtraV1 } from "./site-extra.js";
 
 const counter = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const uuidV7 = z.string().uuid().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
+const uuidV7 = z.guid({ error: "Invalid uuid" }).regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
 /** Every value here is client supplied. None is trusted server time, identity or authorization. */
 export const offlineClientMetadataV1 = z.object({
- capturedAt: z.string().datetime(),
+ capturedAt: utcDatetimeV1,
  hlc: z.object({ wallTimeMs: counter, logical: counter, nodeId: z.string().min(1).max(100).refine(value => /\S/u.test(value)) }).strict(),
 }).strict();
 
 /** A synthetic transport profile, not a new upload endpoint or a durable device queue. */
 export const offlineIntentV1 = z.object({
  version: z.literal("offline-intent.v1"),
- jobId: z.string().uuid(),
+ jobId: z.guid({ error: "Invalid uuid" }),
  clientMetadata: offlineClientMetadataV1,
  body: logSiteExtraV1.extend({ commandId: uuidV7 }).strict(),
 }).strict();

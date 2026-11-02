@@ -1203,3 +1203,27 @@ in `docs/contracts/practice-worker-switch-v1.md`. This disables acting and new
 switches while retaining switch-off/state access. PostgreSQL execution, catalogue,
 upgrade and rollback proofs require dispatcher/CI verification; they were not run
 in the builder sandbox.
+
+### 0302 — M4-9-S dependency boundary (renumbered from 0218, then 0251)
+
+Adds only `app.read_success_fee_v3(uuid,text)` and
+`app.write_success_fee_v3(uuid,text,jsonb,jsonb)`. Migration directory discovery
+registers 0302; the closed historical list is unchanged. No table, row backfill,
+existing routine, existing grant or ledger kind changes. Runtime receives only
+these exact EXECUTE signatures; PUBLIC and infrastructure receive none. Both
+calls reauthenticate the persisted session/current owner and require an owned,
+synthetic small-builder v3 job. Reads expose constant dependency status;
+writes always refuse without business effects. No source or hidden table is read.
+
+Deploy before using the new server route. Source-backed reviews, approvals,
+derivations, journal/source tables and posting remain DEPENDENCY-BOUND on the
+accepted SV-6 source/proof seam; this is not a completed fee-posting migration.
+Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
+disable the route and append a reviewed migration; preserve any future financial
+history. Never enable posting by removing the refusal alone.
+
+## 0519 — M4-6-store synthetic timeline history (RED)
+
+Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_migration`, with forced tenant RLS and tenant/subject-qualified foreign keys to the existing follow-up. Runtime has SELECT only on both tables and EXECUTE on apply_recovery_timeline_signal(uuid,jsonb). Direct run INSERT/UPDATE and signal INSERT are revoked; the old record_recovery_timeline_signal(uuid,uuid,uuid,text) helper is owner-only. The aggregate uses search_path=pg_catalog, checks the synthetic database, tenant, current persisted practice session and recursive job ownership, validates the full follow-up reference, derives state/references and computes the canonical normalized JSONB SHA-256 fingerprint before atomically upserting the run and recording the signal. No caller-chosen fingerprint or state is accepted. No DELETE/TRUNCATE, reference changes or signal edits are granted. A private invoker trigger makes stopped terminal. There are no provider, scheduling-owner, financial, audit or existing-routine changes. No backfill: existing in-memory fake history is not promoted to trusted database history.
+
+Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.

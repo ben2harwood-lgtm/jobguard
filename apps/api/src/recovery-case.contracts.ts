@@ -22,6 +22,7 @@ export const recoveryCommandRefusalRulesV1 = {
  PAYER_MARK_NOT_CUSTOMER_PAYMENT: { status: 400, stage: "after_replay", settlesUnknown: false },
  PAYER_MARK_NOT_INSURER_JOB: { status: 400, stage: "after_replay", settlesUnknown: false },
  PAYER_MARK_EVIDENCE_REQUIRED: { status: 400, stage: "after_replay", settlesUnknown: false },
+ FINAL_CHECK_CONFIRMATION_HELD: { status: 409, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_FORBIDDEN: { status: 403, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_CASE_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_COMMAND_CONFLICT: { status: 409, stage: "recorded_conflict", settlesUnknown: true },
@@ -67,8 +68,16 @@ export const recoveryCommandRefusalV1 = z.object({
 const signedPence = z.number().refine(value => { try { money(value); return true; } catch { return false; } }, "Invalid bounded integer pence");
 const nonnegativePence = signedPence.refine(value => value >= 0, "Principal/posting magnitude must be non-negative");
 const eligibilityViewV1=z.object({revision:z.number().int(),caseRevision:z.number().int(),evidenceRevision:z.number().int(),policyVersion:z.literal("reference-d03.v1"),policyRevision:z.number().int(),classification:z.string(),eligibleNetPence:nonnegativePence.nullable(),reason:z.string(),citations:z.array(z.string()),status:z.enum(["reviewed","approved","superseded"]),reviewerRef:z.string()});
-const eligibilityRecordV3=z.object({id:z.string().uuid(),revision:z.number().int().positive(),caseRevision:z.number().int().positive(),sourceEventId:z.string().uuid().nullable(),result:recoveryEligibilityViewV3}).strict();
-export const recoveryCaseViewV1=z.object({id:z.string().uuid(),jobId:z.string().uuid(),caseType:recoveryCaseTypeV1,state:recoveryCaseStateFullV1,claimedNetPence:nonnegativePence,landedNetPence:nonnegativePence,outstandingNetPence:nonnegativePence,writtenOffPence:nonnegativePence,currency:z.literal("GBP"),counterparty:z.string(),book:z.string(),sourceType:z.string(),sourceRefs:z.array(z.string()),sources:z.array(z.object({ref:z.string(),kind:z.string(),label:z.string(),recorded:z.boolean()})),feeJobLiabilityPence:signedPence,feeObligationsPostedPence:nonnegativePence,feeCompensationsPostedPence:nonnegativePence,approvedLandedNetPence:nonnegativePence,revision:z.number().int(),reviewerRef:z.string(),createdDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),eligibility:eligibilityViewV1.nullable(),eligibilityV3:eligibilityRecordV3.nullable().optional()});
+const eligibilityRecordV3=z.object({id:z.guid({ error: "Invalid uuid" }),revision:z.number().int().positive(),caseRevision:z.number().int().positive(),sourceEventId:z.guid({ error: "Invalid uuid" }).nullable(),result:recoveryEligibilityViewV3}).strict();
+const recoveryWorkbenchDetails = {
+ canCommand:z.boolean().optional(),claimRevision:z.number().int().nonnegative().optional(),
+ lastDisputedNetPence:nonnegativePence.nullable().optional(),manualReversedNetPence:nonnegativePence.optional(),approvedReversedNetPence:nonnegativePence.optional(),
+ evidenceStatus:z.enum(["sources_unresolved","not_assembled","assembled"]).optional(),ambiguity:z.array(z.string()).optional(),
+ history:z.array(z.object({id:z.guid(),kind:z.string(),revision:z.number().int().nullable(),amountPence:nonnegativePence.nullable(),fromState:z.string().nullable(),toState:z.string().nullable(),reviewerRef:z.string().nullable(),recordedAt:z.string().datetime(),hash:z.string().nullable(),previousHash:z.string().nullable()})).optional(),
+};
+// Confirmed Final Check catches are server-created read models only. Client open
+// commands continue to use the narrower recoveryCaseTypeV1 contract above.
+export const recoveryCaseViewV1=z.object({...recoveryWorkbenchDetails,id:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),caseType:z.union([recoveryCaseTypeV1,z.literal("missed_variation_final_account")]),state:recoveryCaseStateFullV1,claimedNetPence:nonnegativePence,landedNetPence:nonnegativePence,outstandingNetPence:nonnegativePence,writtenOffPence:nonnegativePence,currency:z.literal("GBP"),counterparty:z.string(),book:z.string(),sourceType:z.string(),sourceRefs:z.array(z.string()),sources:z.array(z.object({ref:z.string(),kind:z.string(),label:z.string(),recorded:z.boolean()})),feeJobLiabilityPence:signedPence,feeObligationsPostedPence:nonnegativePence,feeCompensationsPostedPence:nonnegativePence,approvedLandedNetPence:nonnegativePence,revision:z.number().int(),reviewerRef:z.string(),createdDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),eligibility:eligibilityViewV1.nullable(),eligibilityV3:eligibilityRecordV3.nullable().optional()});
 const workbenchEnvelope={version:z.literal("recovery-case-workbench.v1"),environment:z.literal("synthetic_demo"),realExternalActions:z.literal(0),cases:z.array(recoveryCaseViewV1)};
 /** A plain read of the workbench: the job's cases. It names no affected case because no command produced it. */
 export const recoveryCaseListResponseV1=z.object(workbenchEnvelope);
@@ -79,6 +88,6 @@ export const recoveryCaseListResponseV1=z.object(workbenchEnvelope);
  * opened, so a client may only select the case a command touched by this id. An answer without it, or naming a case that is not in the list, is not a valid answer: the client treats it
  * as unreadable (the command may or may not have been saved) and never picks a case from the list order.
  */
-export const recoveryCaseCommandResponseV1=z.object({...workbenchEnvelope,affectedCaseId:z.string().uuid(),eligibilityV3CommandResult:eligibilityRecordV3.optional(),paymentPayerMarkCommandResult:recoveryPaymentPayerMarkResultV1.optional()}).refine(response=>response.cases.some(item=>item.id===response.affectedCaseId),{message:"affectedCaseId must be one of the listed cases",path:["affectedCaseId"]});
+export const recoveryCaseCommandResponseV1=z.object({...workbenchEnvelope,affectedCaseId:z.guid({ error: "Invalid uuid" }),eligibilityV3CommandResult:eligibilityRecordV3.optional(),paymentPayerMarkCommandResult:recoveryPaymentPayerMarkResultV1.optional()}).refine(response=>response.cases.some(item=>item.id===response.affectedCaseId),{message:"affectedCaseId must be one of the listed cases",path:["affectedCaseId"]});
 export type RecoveryCaseResponse=z.infer<typeof recoveryCaseListResponseV1>;
 export type RecoveryCaseCommandResponse=z.infer<typeof recoveryCaseCommandResponseV1>;

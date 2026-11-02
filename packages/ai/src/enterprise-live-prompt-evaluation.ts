@@ -3,7 +3,7 @@ import { z } from "zod";
 import { calculateCompletionWorkFindings, completionWorkInputV1 } from "@jobguard/core";
 
 const caseId = z.string().min(1).max(200);
-const ids = z.array(z.string().uuid()).max(10000).refine(values => new Set(values).size === values.length);
+const ids = z.array(z.guid({ error: "Invalid uuid" })).max(10000).refine(values => new Set(values).size === values.length);
 const uniqueCases = (values: readonly { id: string }[]) => new Set(values.map(value => value.id)).size === values.length;
 const corpusV1 = z.object({ version: z.literal("enterprise-completion-corpus.v1"),
   cases: z.array(z.object({ id: caseId, input: completionWorkInputV1 }).strict()).max(10000).refine(uniqueCases),

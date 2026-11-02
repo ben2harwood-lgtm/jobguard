@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-4a": {
+      "branches": [
+        "codex/sandbox/mon-4a"
+      ],
+      "receipt": "docs/verdicts/MON-4A/BUILDER_RECEIPT.md",
+      "note": "MON-4A RED catch-up against merged SV-6 persist-b (#373) and current main. Existing boundary preparation only; no new behaviour, attribution/allocation writer, migration or UI. The allow list is the exact PR delta excluding this implicitly owned lane file. Full payment-screen flow is not claimed complete.",
+      "allow": [
+        "docs/contracts/payment-fee-authority-v1.md",
+        "docs/verdicts/MON-4A/BUILDER_RECEIPT.md",
+        "packages/core/src/payment-fee-authority.ts",
+        "packages/core/src/payment-fee-authority.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/test/payment-fee-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

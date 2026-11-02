@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-q2-catch-journey": {
+      "branches": [
+        "codex/sandbox/sv5-q2-catch-journey"
+      ],
+      "note": "RED. SV-5 Q2 small-builder catch journey through app confirmation, pricing and customer_evidence approval; preserves 0282 behaviour and all refusal coverage. Synthetic only; PostgreSQL execution and RED review remain CI/reviewer gates.",
+      "allow": [
+        "docs/contracts/final-check-v1.md",
+        "packages/db/test/final-check-catch-journey.integration.test.ts",
+        "apps/api/src/variation/contracts.ts",
+        "apps/api/src/variation/variation.application.ts",
+        "apps/api/src/variation/variation.application.test.ts",
+        "packages/db/src/variation-repository.ts"
+      ]
+    }
+  }
+}

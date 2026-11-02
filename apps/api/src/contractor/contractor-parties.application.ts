@@ -14,14 +14,14 @@ export class ContractorPartiesApplication {
   }
   async linkCustomer(principal: unknown, clientId: string, raw: unknown) {
     const session = this.session(principal);
-    if (!z.string().uuid().safeParse(clientId).success) throw new ContractorPartyError("NOT_FOUND");
+    if (!z.guid({ error: "Invalid uuid" }).safeParse(clientId).success) throw new ContractorPartyError("NOT_FOUND");
     const parsed = contractorCustomerLinkV1.safeParse(raw);
     if (!parsed.success) throw new ContractorPartyError("INVALID_COMMAND");
     return this.repository.linkCustomer(await this.repository.resolveSession(session), clientId, parsed.data);
   }
   async readResident(principal: unknown, jobId: string) {
     const session = this.session(principal);
-    if (!z.string().uuid().safeParse(jobId).success) throw new ContractorPartyError("NOT_FOUND");
+    if (!z.guid({ error: "Invalid uuid" }).safeParse(jobId).success) throw new ContractorPartyError("NOT_FOUND");
     return this.repository.readResident(await this.repository.resolveSession(session), jobId);
   }
 }

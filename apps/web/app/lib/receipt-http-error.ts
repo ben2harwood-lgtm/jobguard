@@ -1,8 +1,8 @@
 export function receiptHttpError(error:unknown,writing:boolean):{status:number;code:string} {
  const value=error instanceof Error?error:null;
- const message=value?.message;
  if(value?.name==="SyntaxError")return {status:400,code:"INVALID_JSON"};
  if(value?.name==="ZodError")return {status:400,code:"INVALID_RECEIPT_COMMAND"};
+ const message=value?.message;
  if(message==="FORBIDDEN")return {status:403,code:"FORBIDDEN"};
  if(message==="INVOICE_NOT_FOUND"||message==="PAYMENT_NOT_FOUND")return {status:404,code:message};
  if(message==="IDEMPOTENCY_PAYLOAD_CONFLICT"||message==="PAYMENT_ALREADY_REVERSED")return {status:409,code:message};

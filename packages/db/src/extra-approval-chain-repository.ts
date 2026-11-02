@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -33,7 +34,7 @@ function failure(error: unknown): never {
   throw new ExtraApprovalError("DATABASE_UNAVAILABLE", { cause: error });
 }
 
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const reason = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u);
 const pence = z.number().int().min(1).max(1_000_000_000_000);
 const common = { commandId: uuid, jobId: uuid };
@@ -46,11 +47,11 @@ export const rejectExtraV1 = z.object({ version: z.literal("reject-extra.v1"), .
 export const withdrawExtraV1 = z.object({ version: z.literal("withdraw-extra.v1"), ...common, extraId: uuid, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
 export const markDuplicateV1 = z.object({ version: z.literal("mark-duplicate.v1"), ...common, duplicateId: uuid, canonicalId: uuid }).strict();
 /** Owner-only send: the owner approves THIS request, recipient, amount and expiry. Practice recipients end in .invalid and nothing is delivered. */
-export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.string().email().refine(s => s.toLowerCase().endsWith(".invalid")),
+export const issueClientApprovalV1 = z.object({ version: z.literal("issue-client-approval.v1"), ...common, requestId: uuid, approverMembershipId: uuid, recipient: z.email({ error: "Invalid email" }).refine(s => s.toLowerCase().endsWith(".invalid")),
   linkToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u), expiresAt: z.coerce.date() }).strict();
 export const revokeClientApprovalV1 = z.object({ version: z.literal("revoke-client-approval.v1"), ...common, linkId: uuid }).strict();
-export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email() }).strict();
-export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.string().email(), revisionHash: hash, netPence: pence,
+export const clientApprovalViewV1 = z.object({ version: z.literal("client-approval-view.v1"), jobId: uuid, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }) }).strict();
+export const decideClientApprovalV1 = z.object({ version: z.literal("decide-client-approval.v1"), ...common, requestId: uuid, linkToken: z.string().min(16).max(200), email: z.email({ error: "Invalid email" }), revisionHash: hash, netPence: pence,
   decision: z.enum(["approve", "reject"]), reasonCode: reason.optional(),
   /** Ben decision 20: a named fictional role, with the real tester recorded beside it. Neither may be omitted. */
   fictionalRoleName: z.string().trim().min(1).max(100), actualTesterReference: z.string().trim().min(1).max(100) }).strict();
@@ -75,20 +76,15 @@ export class ExtraApprovalRepository {
   /** One transaction: claim the receipt, run the checked routine, append the audit chain last, complete the receipt. A failure leaves nothing behind. */
   private async run(context: VerifiedTenantContext, actor: AuthenticatedMembership, type: string, commandId: string, semantic: string, content: unknown,
     work: (db: TenantTransaction, tenant: string, member: string) => Promise<{ result: Result; audits: AuditEventInput[] }>): Promise<Result> {
-    const member = this.checkActor(context, actor), tenant = lc(context.tenantId), requestHash = sha256Hex(canonicalJson({ type, actor: member, content }));
+    const member = this.checkActor(context, actor), tenant = lc(context.tenantId), legacyJson = canonicalJson({ type, actor: member, content });
     try {
       return await withTenant(this.pool, context, async db => {
-        const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-          VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, requestHash, member]);
-        if (!inserted.rowCount) {
-          const rows = (await db.$client.query<{ request_hash: string; status: string; result: Result }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
-          if (rows.length !== 1 || rows[0]!.request_hash !== requestHash || rows[0]!.status !== "succeeded") throw new ExtraApprovalError("COMMAND_CONFLICT");
-          return rows[0]!.result;
-        }
-        const { result, audits } = await work(db, tenant, member);
+        const claimed=await beginRepositoryCommand<Result>(db,{tenantId:tenant,actorMembershipId:member,commandId,
+          commandType:type,semanticKey:semantic,jobId:(content as {jobId:string}).jobId,legacyJson});
+        if(claimed.kind==="replay")return claimed.result;
+        const { audits } = await work(db, tenant, member);
         await appendAuditBatch(db, audits);
-        await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId, canonicalJson(result)]);
-        return result;
+        return completeRepositoryCommand<Result>(db,commandId);
       });
     } catch (error) { failure(error); }
   }

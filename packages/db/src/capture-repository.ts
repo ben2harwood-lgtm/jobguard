@@ -18,13 +18,25 @@ export class CaptureRepository {
         const auth = (await db.$client.query("SELECT * FROM app.authenticate_practice_session($1)", [input.practiceSessionDigest])).rows[0];
         if (!auth || auth.tenant_id !== context.tenantId) throw new Error("UNAUTHENTICATED");
       }
-      const existing = (await db.$client.query(`SELECT p.*,s.content_text FROM app.job_record_proposal p JOIN app.capture_source s ON (s.tenant_id,s.id)=(p.tenant_id,p.source_id) WHERE p.tenant_id=$1 AND p.capture_id=$2`, [context.tenantId,input.captureId])).rows[0];
+      // Serialize the tenant/capture identity before looking for a prior result, including
+      // the absent-row case. This business lock precedes all inserts and any audit work.
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1::uuid::text),hashtext('capture:' || $2::uuid::text))", [context.tenantId, input.captureId]);
+      const existing = (await db.$client.query(`SELECT p.*,s.content_text,s.kind AS source_kind,
+        s.acquisition_metadata IS NOT DISTINCT FROM $3::jsonb AS acquisition_matches,
+        p.proposal = $4::jsonb AS proposal_matches
+        FROM app.job_record_proposal p JOIN app.capture_source s ON (s.tenant_id,s.id)=(p.tenant_id,p.source_id)
+        WHERE p.tenant_id=$1 AND p.capture_id=$2`, [context.tenantId,input.captureId,input.acquisition??null,proposal])).rows[0];
       if (existing) {
         if (input.practiceSessionDigest) {
           const owner = (await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId,existing.job_id,input.practiceSessionDigest])).rows[0];
           if (!owner) throw new Error("NOT_FOUND");
         }
-        if (existing.source_sha256 !== hash) throw new CaptureConflictError("A capture id cannot be reused for different source data");
+        if (existing.source_sha256 !== hash || existing.content_text !== input.text ||
+          existing.source_kind !== (input.sourceKind??"text") || !existing.acquisition_matches ||
+          !existing.proposal_matches || existing.prompt_version !== input.promptVersion ||
+          existing.schema_version !== input.schemaVersion || existing.model !== input.model) {
+          throw new CaptureConflictError("A capture id cannot be reused for different source data");
+        }
         return existing;
       }
       const jobId=randomUUID(), proposalId=randomUUID();

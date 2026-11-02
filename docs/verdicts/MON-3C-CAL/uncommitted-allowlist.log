@@ -1,0 +1,21 @@
+Supplementary uncommitted path audit only; not the root lane comparison check.
+{
+  "lane": "mon-3c-cal",
+  "files": [
+    "config/lanes/mon-3c-cal.json",
+    "docs/verdicts/MON-3C-CAL/BUILDER_RECEIPT.md",
+    "docs/verdicts/MON-3C-CAL/build.log",
+    "docs/verdicts/MON-3C-CAL/byte-identity.log",
+    "docs/verdicts/MON-3C-CAL/lint-commercial.log",
+    "docs/verdicts/MON-3C-CAL/lint-lanes.log",
+    "docs/verdicts/MON-3C-CAL/lint-money.log",
+    "docs/verdicts/MON-3C-CAL/lint-workspaces.log",
+    "docs/verdicts/MON-3C-CAL/lint.log",
+    "docs/verdicts/MON-3C-CAL/typecheck-no-dist.log",
+    "docs/verdicts/MON-3C-CAL/uncommitted-allowlist.log",
+    "docs/verdicts/MON-3C-CAL/unit-calendar.log",
+    "docs/verdicts/MON-3C-CAL/unit-regressions.log",
+    "packages/core/src/free-first-job-calendar.test.ts",
+    "packages/core/src/free-first-job-calendar.ts"
+  ]
+}

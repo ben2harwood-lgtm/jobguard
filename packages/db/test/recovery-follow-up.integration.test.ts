@@ -1,3 +1,4 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,14 +6,19 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createSyntheticInvoicePdf, money, followUpCaseFacts, RECOVERY_FOLLOW_UP_CASE_STOP_EVENTS, RECOVERY_FOLLOW_UP_REOPEN_EVENTS } from "@jobguard/core";
+import { createSyntheticInvoicePdf, money, recoveryCaseTermsHash, followUpCaseFacts, RECOVERY_FOLLOW_UP_CASE_STOP_EVENTS, RECOVERY_FOLLOW_UP_REOPEN_EVENTS } from "@jobguard/core";
 import {
-  DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, EvidencePackRepository, RecoveryCaseRepository, RecoveryFollowUpRepository, RecoveryMessageRepository, SandboxRepository,
+  DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, EvidencePackRepository, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryFollowUpRepository, RecoveryMessageRepository, SandboxRepository,
   bootstrapSyntheticDemo, issuePracticeSession, withTenant,
   type RecoveryFollowUpState, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from "../src/index.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
+
+import { StoredRecoveryWorkflowRuntime } from "../../../apps/api/src/recovery-timeline.workflow.js";
+import { PostgresRecoveryWorkflowStore } from "../../../apps/api/src/recovery-timeline.store.js";
+import { PracticeRecoveryTimelineActivities } from "../../../apps/api/src/recovery-timeline.activities.js";
 
 // Real PostgreSQL 16, the real migrations applied as the migration owner, the real non-owner runtime role, and the real SBOX-2 and M4-5-S
 // repositories: no mock stands in for a guarantee here. Every number below is read back from the database.
@@ -34,6 +40,20 @@ async function code(run: () => Promise<unknown>): Promise<string> {
   throw new Error("expected the call to fail");
 }
 
+/** Fixture-only exact activation inputs; the existing v3 routine checks the
+ * owner, accepted document, authorization and lifecycle before binding v3. */
+async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
+  const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
+  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
+  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
+  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
+  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
+  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  return result;
+}
+
 /** The practice demo tenant's invoiced job, owned by one practice session, exactly as the persisted recovery journey leaves it. */
 async function seedDemoFixture(db: Pool, sessionDigest: string) {
   const tenantId = DEMO_TENANT_ID, memberId = DEMO_MEMBERSHIP_ID, jobId = randomUUID();
@@ -44,6 +64,7 @@ async function seedDemoFixture(db: Pool, sessionDigest: string) {
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    await permitPracticeHomeJob(client, { tenantId, jobId, title: "Recovery follow-up fixture job", practiceSessionDigest: sessionDigest, actorMembershipId: memberId });
     await client.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery follow-up fixture job',$3,'home')", [jobId, tenantId, sessionDigest]);
     await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
     await client.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, tenantId, jobId]);
@@ -54,11 +75,11 @@ async function seedDemoFixture(db: Pool, sessionDigest: string) {
       client.query("SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)", [tenantId, jobId, expected, to, reason, quote, net, policy, cap]);
     await transition(0, "quoting", "start_quote"); await transition(1, "accepted", "accept_quote", quoteId);
     await client.query("INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at) VALUES($1,$2,$3,$4,1,$5,2256000,'GBP','builder_attestation',$6,'Fictional Customer','verbal','2026-09-20T12:00:00Z')", [acceptanceId, tenantId, jobId, quoteId, hash("quote immutable fixture"), memberId]);
-    await transition(2, "live", "switch_live", quoteId, 1880000, "reference_fee_policy_v1", 28200);
+    await activatePursuitFixture(client, tenantId, jobId, 2);
     await client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,'fixture/proof',$5,'image/png',$6,'standard_evidence','verified','proof-object-v1',now(),now()+interval '1 hour')", [uploadId, tenantId, jobId, scopeId, proofHash, proofBytes.length]);
     await client.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'fixture/proof','proof-object-v1','synthetic_demo','image/png',$5)", [tenantId, uploadId, jobId, scopeId, proofBytes]);
     await client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','site_photo','fixture/proof','proof-object-v1',$6,$7,'image/png','standard_evidence',now(),now())", [proofId, tenantId, uploadId, jobId, scopeId, proofHash, proofBytes.length]);
-    await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [tenantId, jobId]);
+    await client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING", [tenantId, jobId]);
     await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,$4,'text','Fictional additional work','Synthetic fixture extra','approved')", [variationId, tenantId, jobId, scopeId]);
     await client.query("INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Synthetic fixture extra','1','each',12500,12500,$6,$7,'human_entered','fixture',$6,'fixture.v1')", [variationRevisionId, tenantId, jobId, variationId, scopeId, hash("approved variation fixture"), memberId]);
     await client.query("INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,approved_at) VALUES($1,$2,$3,$4,$5,1,$6,12500,'builder_attestation',$7,now())", [randomUUID(), tenantId, jobId, variationId, variationRevisionId, hash("approved variation fixture"), memberId]);
@@ -82,6 +103,11 @@ async function newCase(claimPence = 32000) {
   await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,$4,'GBP','identified',0,true,'withheld_customer_payment','Fictional counterparty','builder_customer','customer_invoice',$5)", [id, fixture.tenantId, fixture.jobId, claimPence, JSON.stringify([fixture.invoiceId])]);
   await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,$6,'GBP','fixture-owner',$5)", [randomUUID(), fixture.tenantId, fixture.jobId, id, hash(id), claimPence]);
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)", [randomUUID(), fixture.tenantId, fixture.jobId, id, randomUUID(), hash(`open:${id}`)]);
+  await new RecoveryCaseTermsRepository(runtime).approve(ctx, fixture.jobId, {
+    version: "recovery-case-terms-command.v1", action: "approve", commandId: randomUUID(), caseId: id,
+    termsVersion: "synthetic_recovery_fee_terms.v1", feePolicyVersion: "reference_fee_policy_v3",
+    eligibilityPolicyVersion: "reference_recovery_eligibility_policy_v3", termsHash: recoveryCaseTermsHash(id),
+  }, reviewer);
   return id;
 }
 const previewCommand = (state: RecoveryMessageState) => ({ version: "recovery-message-preview.v1" as const, commandId: randomUUID(), expectedCaseRevision: state.readiness.caseRevision, packId: state.readiness.packId! });
@@ -996,7 +1022,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const base = await scheduled(), commandId = randomUUID();
     const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
     const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
-    const repair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const historicalRepair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const sealedMigration = await readFile(new URL("../migrations/0520_lp4_database_audit.sql", import.meta.url), "utf8");
+    const sealedEvaluator = sealedMigration.match(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0];
+    // Restore the repaired semantics with the currently installed sealed writer,
+    // never 0115's obsolete direct INSERT/head-lock client under runtime grants.
+    const repair = historicalRepair.replace(/CREATE OR REPLACE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u, () => sealedEvaluator);
     const owner = await admin.connect();
     try {
       // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
@@ -1086,11 +1117,11 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();
@@ -1131,4 +1162,264 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [DEMO_TENANT_ID])).toBe(before);
     await verifyChain();
   }, 30_000);
+});
+
+// Privileged negative setup removes only this case's synthetic agreement. All
+// reminder commands still run through the non-owner runtime and original gates.
+it("ReminderUsesSameGuard: a due reminder cannot preview after its terms prerequisite is absent", async () => {
+  const base = await due(), state = await messages.read(ctx, base.caseId);
+  const setup = await admin.connect();
+  try { await setup.query("BEGIN"); await setup.query("SET LOCAL session_replication_role=replica"); await setup.query("DELETE FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2", [DEMO_TENANT_ID, base.caseId]); await setup.query("COMMIT"); }
+  finally { setup.release(); }
+  const before = await tenantCounts(), input = reviewCommand(base.followUp, state);
+  await expect(repo.openReview(ctx, base.caseId, input, actor)).rejects.toMatchObject({ code: "RECOVERY_TERMS_NOT_APPROVED" });
+  expect(await tenantCounts()).toEqual(before);
+  expect((await messages.read(ctx, base.caseId)).sinkCount).toBe(1);
+});
+
+describe("LP-5b recovery follow-up marker lifecycle",()=>{
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s stores one checked marker, preserves exact replay, conflicts and refuses revoked replay",async action=>{
+    let caseId:string,run:(changed?:boolean)=>Promise<RecoveryFollowUpState>;
+    const commandId=randomUUID();
+    if(action==="schedule"){
+      const base=await deliveredCase();caseId=base.caseId;await newRun();
+      const input=scheduleCommand(base.message,base.state.readiness.caseRevision,commandId);
+      run=(changed=false)=>repo.schedule(ctx,caseId,changed?{...input,expectedCaseRevision:input.expectedCaseRevision+1}:input,actor);
+    }else if(action==="advance"){
+      const base=await scheduled();caseId=base.caseId;
+      const input={version:V,action:"advance_time" as const,commandId,followUpId:base.followUp.id};
+      run=(changed=false)=>repo.advanceTime(ctx,caseId,changed?{...input,followUpId:randomUUID()}:input,actor,
+        (runId,command)=>sandbox.advance(token,runId,command));
+    }else if(action==="open_review"){
+      const base=await due();caseId=base.caseId;
+      const input=reviewCommand(base.followUp,await messages.read(ctx,caseId),commandId);
+      run=(changed=false)=>repo.openReview(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }else{
+      const base=await scheduled();caseId=base.caseId;
+      const input=cancelCommand(base.followUp,commandId);
+      run=(changed=false)=>repo.cancel(ctx,caseId,changed?{...input,expectedRevision:input.expectedRevision+1}:input,actor);
+    }
+    const first=await run();
+    const marker=()=>admin.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId]).then(r=>r.rows);
+    expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+    expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(1);
+    const before=await tenantCounts(),auditBefore=await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID]);
+    expect(await run()).toEqual(first);
+    expect(await tenantCounts()).toEqual(before);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[DEMO_TENANT_ID])).toBe(auditBefore);
+    expect(await code(()=>run(true))).toBe("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>run())).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await marker()).toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:action}}]);
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
+  it.each(["schedule","advance","open_review","cancel"] as const)("%s cannot complete without its business effect and refuses unknown types",async action=>{
+    const caseId=await newCase();
+    for(const commandType of [`recovery.follow_up.${action}`,"unknown.recovery.follow_up"]){
+      const commandId=randomUUID();
+      await expect(withTenant(runtime,ctx,async db=>{
+        const claim=await beginRepositoryCommand(db,{tenantId:DEMO_TENANT_ID,actorMembershipId:actor.membershipId,commandId,commandType,
+          semanticKey:commandId,jobId:fixture.jobId,legacyJson:JSON.stringify({caseId,membershipId:actor.membershipId,commandId,
+            action,followUpId:randomUUID(),sourceMessageId:randomUUID()})});
+        expect(claim.kind).toBe("claim");
+        await completeRepositoryCommand(db,commandId);
+      })).rejects.toMatchObject({message:"AUTHORIZATION_INVALID"});
+      expect(await count("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+      expect(await count("SELECT count(*) n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,commandId])).toBe(0);
+    }
+  });
+  it("approveReminder rechecks the current owner before inspecting a prior approval on replay",async()=>{
+    const base=await previewed(),input=approveReminderCommand(base.followUp,base.reminder);
+    await repo.approveReminder(ctx,base.caseId,input,actor);
+    const before=await tenantCounts();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);
+    try{
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,input,actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await code(()=>repo.approveReminder(ctx,base.caseId,{...input,body:"Changed fictional replay body"},actor))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+      expect(await tenantCounts()).toEqual(before);
+    }finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,actor.membershipId]);}
+  });
+});
+
+// M4-6-store: real history, actual permission bridge and actual due/cancel application commands.
+describe("M4-6 PostgreSQL timeline history", () => {
+  const timeline = (pool = runtime) => new StoredRecoveryWorkflowRuntime(
+    new PracticeRecoveryTimelineActivities(pool, async () => token, "synthetic_demo"),
+    new PostgresRecoveryWorkflowStore(pool, async () => token, "synthetic_demo"),
+    "synthetic_demo");
+  const event = (base: Awaited<ReturnType<typeof scheduled>>, kind: "timer" | "cancel" | "builder_response" = "timer") => ({
+    version: "recovery-timeline-signal.v1", signalId: randomUUID(), eventId: randomUUID(), kind,
+    ref: { tenantId: DEMO_TENANT_ID, jobId: fixture.jobId, caseId: base.caseId, runId: base.runId, followUpId: base.followUp.id },
+  });
+  async function missedClock(base: Awaited<ReturnType<typeof scheduled>>) {
+    await admin.query("ALTER TABLE app.sandbox_run_event DISABLE TRIGGER recovery_follow_up_due_on_advance");
+    try { await sandbox.advance(token, base.runId, randomUUID()); }
+    finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
+  }
+  it("a pool of size one completes activities and duplicate signals with one effect", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const single = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password,
+      database: "jobguard_synthetic_demo", max: 1, connectionTimeoutMillis: 2000 });
+    try {
+      await expect(timeline(single).signal(signal)).resolves.toBe("review");
+      await expect(Promise.all([timeline(single).signal(signal), timeline(single).signal(signal)]))
+        .resolves.toEqual(["review", "review"]);
+      expect(await dueDecisions(base.followUp.id)).toBe(1);
+      expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2",
+        [DEMO_TENANT_ID, signal.signalId])).toBe(1);
+      await expect(timeline(single).signal(event(base, "cancel"))).resolves.toBe("stopped");
+    } finally { await closeTestPools(single); }
+  });
+  it("runtime cannot pre-seed a fingerprint even for its own existing history", async () => {
+    const base = await scheduled();
+    await timeline().signal(event(base));
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint) VALUES($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, testTenantContext(randomUUID()), db => db.$client.query(
+      "SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+  });
+  it("chosen fingerprints and pre-seeded runs cannot pre-empt the real signal", async () => {
+    const base = await scheduled(), signal = event(base), forged = hash("attacker-chosen fingerprint");
+    await missedClock(base);
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state) VALUES($1,$2,$3,$4,$5,'stopped')",
+      [DEMO_TENANT_ID, base.followUp.id, fixture.jobId, base.caseId, base.runId]))).rejects.toMatchObject({ code: "42501" });
+    // Owner-only fixture setup also attacks the old bypass with a run already present.
+    await withTenant(admin, ctx, db => db.$client.query(
+      "INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state) VALUES($1,$2,$3,$4,$5,'waiting')",
+      [DEMO_TENANT_ID, base.followUp.id, fixture.jobId, base.caseId, base.runId]));
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, signal.signalId, base.followUp.id, forged]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "SELECT app.apply_recovery_timeline_signal($1,$2::jsonb)",
+      [DEMO_TENANT_ID, JSON.stringify({ ...signal, fingerprint: forged })]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, async db => {
+      await db.$client.query("SELECT set_config('app.practice_material_digest',$1,true)", [digest]);
+      return db.$client.query("SELECT app.apply_recovery_timeline_signal($1,$2::jsonb)",
+        [DEMO_TENANT_ID, JSON.stringify({ ...signal, fingerprint: forged })]);
+    })).rejects.toMatchObject({ code: "42501" });
+    // Even a structurally valid signal needs an authenticated, persisted practice owner.
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "SELECT app.apply_recovery_timeline_signal($1,$2::jsonb)",
+      [DEMO_TENANT_ID, JSON.stringify(signal)]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, async db => {
+      await db.$client.query("SELECT set_config('app.practice_material_digest',$1,true)", [hash("invented session")]);
+      return db.$client.query("SELECT app.apply_recovery_timeline_signal($1,$2::jsonb)", [DEMO_TENANT_ID, JSON.stringify(signal)]);
+    })).rejects.toMatchObject({ code: "42501" });
+    expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2",
+      [DEMO_TENANT_ID, signal.signalId])).toBe(0);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    const rows = (await admin.query("SELECT fingerprint FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2",
+      [DEMO_TENANT_ID, signal.signalId])).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].fingerprint).not.toBe(forged);
+    const expected = (await admin.query("SELECT encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') fingerprint",
+      [JSON.stringify({ ...signal, version: "recovery-timeline-signal.v2" })])).rows[0].fingerprint;
+    expect(rows[0].fingerprint).toBe(expected);
+    // The old writer is refused even after a valid run exists.
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      "SELECT app.record_recovery_timeline_signal($1,$2,$3,$4)",
+      [DEMO_TENANT_ID, randomUUID(), base.followUp.id, forged]))).rejects.toMatchObject({ code: "42501" });
+  });
+  it("restart, concurrent duplicate delivery and version upgrade leave one due Decision and immutable signal hash", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    // New connection pool and runtime/store objects have no retained JavaScript history.
+    const restarted = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password, database: "jobguard_synthetic_demo", max: 6 });
+    try {
+      await Promise.all([timeline(restarted).signal(signal), timeline().signal(signal)]);
+      await expect(timeline(restarted).signal({ ...signal, version: "recovery-timeline-signal.v2" })).resolves.toBe("review");
+      await expect(timeline(restarted).signal({ ...signal, kind: "cancel" })).rejects.toThrow("CONFLICT");
+      expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='cancelled'", [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
+      expect(await count(`SELECT count(*) n FROM app.command_lifecycle_claim c JOIN app.command_receipt r USING(tenant_id,command_id)
+        WHERE c.tenant_id=$1 AND r.command_type='recovery.follow_up.cancel' AND c.significant_input->'input'->>'followUpId'=$2`, [DEMO_TENANT_ID,base.followUp.id])).toBe(0);
+    } finally { await closeTestPools(restarted); }
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(1);
+    expect((await admin.query("SELECT state FROM app.recovery_timeline_run WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).rows).toEqual([{ state: "review" }]);
+  });
+  it("activity failure rolls back its effect and history, then retries one idempotent effect", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const real = new PracticeRecoveryTimelineActivities(runtime, async () => token, "synthetic_demo");
+    const store = new PostgresRecoveryWorkflowStore(runtime, async () => token, "synthetic_demo");
+    const crash = new StoredRecoveryWorkflowRuntime({ async execute(activity, transactionPool) { await real.execute(activity, transactionPool); throw new Error("synthetic crash"); } }, store, "synthetic_demo");
+    await expect(crash.signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    expect(await count("SELECT count(*) n FROM app.recovery_timeline_signal WHERE tenant_id=$1 AND signal_id=$2", [DEMO_TENANT_ID, signal.signalId])).toBe(0);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
+  it("early timers redeliver after the clock becomes due", async () => {
+    const base = await scheduled(), signal = event(base);
+    await expect(timeline().signal(signal)).resolves.toBe("waiting");
+    await missedClock(base);
+    await expect(timeline().signal(signal)).resolves.toBe("review");
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
+  it("cancel persists across restart; delayed timer and response never create a Decision", async () => {
+    const base = await scheduled();
+    await expect(timeline().signal(event(base, "cancel"))).resolves.toBe("stopped");
+    // Real timeline savepoints create subtransaction tuples. The private INSERT
+    // handoff, not equality with the top xid, proves this exact business effect.
+    expect((await admin.query(`SELECT r.status,r.result,
+      (c.effect_ref->>'followUpEventId'=e.id::text) event_bound,
+      (e.xmin::text<>c.transaction_id::text) subtransaction_effect
+      FROM app.recovery_follow_up_event e JOIN app.command_receipt r ON(r.tenant_id,r.command_id)=(e.tenant_id,e.command_id)
+      JOIN app.command_lifecycle_claim c ON(c.tenant_id,c.command_id)=(r.tenant_id,r.command_id)
+      WHERE e.tenant_id=$1 AND e.follow_up_id=$2 AND e.kind='cancelled'`, [DEMO_TENANT_ID,base.followUp.id])).rows)
+      .toEqual([{status:"succeeded",result:{recoveryFollowUpCommand:"cancel"},event_bound:true,subtransaction_effect:true}]);
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("SELECT app.lp5b_bind_follow_up_cancel()"))).rejects.toMatchObject({code:"42501"});
+    await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.command_lifecycle_claim SET effect_ref='{}' WHERE tenant_id=$1",[DEMO_TENANT_ID]))).rejects.toMatchObject({code:"42501"});
+    await missedClock(base);
+    await expect(timeline().signal(event(base))).resolves.toBe("stopped");
+    await expect(timeline().signal(event(base, "builder_response"))).resolves.toBe("stopped");
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    await expect(withTenant(runtime, ctx, db => db.$client.query("UPDATE app.recovery_timeline_run SET state='waiting' WHERE follow_up_id=$1", [base.followUp.id]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(admin, ctx, db => db.$client.query("UPDATE app.recovery_timeline_run SET state='waiting' WHERE follow_up_id=$1", [base.followUp.id]))).rejects.toThrow("RECOVERY_TIMELINE_STOPPED");
+  });
+  it("revoked membership is honoured when a saved timer executes and when a signal replays", async () => {
+    const base = await scheduled(), signal = event(base);
+    await timeline().signal(signal);
+    await missedClock(base);
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    try {
+      await expect(timeline().signal(signal)).rejects.toThrow("ACTIVITY_FAILED");
+      await expect(timeline().signal(event(base))).rejects.toThrow("ACTIVITY_FAILED");
+      expect(await dueDecisions(base.followUp.id)).toBe(0);
+    } finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]); }
+  });
+  it("signalDue and history are tenant scoped in real PostgreSQL, including missing context and cross-job references", async () => {
+    const base = await scheduled(), signal = event(base);
+    await missedClock(base);
+    const foreign = testTenantContext(randomUUID());
+    expect(await repo.signalDue(foreign, base.runId)).toBe(0);
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    await expect(timeline().signal({ ...signal, ref: { ...signal.ref, tenantId: foreign.tenantId } })).rejects.toThrow("NOT_FOUND");
+    for (const field of ["jobId", "caseId", "runId", "followUpId"]) {
+      await expect(timeline().signal({ ...signal, ref: { ...signal.ref, [field]: randomUUID() } })).rejects.toThrow();
+    }
+    await timeline().signal(signal);
+    for (const table of ["recovery_timeline_run", "recovery_timeline_signal"]) {
+      expect((await runtime.query(`SELECT * FROM app.${table}`)).rows).toEqual([]);
+      expect(await withTenant(runtime, foreign, db => db.$client.query(`SELECT * FROM app.${table}`))).toMatchObject({ rows: [] });
+      for (const sql of [`DELETE FROM app.${table}`, `TRUNCATE app.${table}`, `UPDATE app.${table} SET tenant_id=tenant_id`]) {
+        await expect(withTenant(runtime, ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+      }
+    }
+    await expect(withTenant(runtime, foreign, db => db.$client.query("INSERT INTO app.recovery_timeline_signal(tenant_id,signal_id,follow_up_id,fingerprint) VALUES($1,$2,$3,$4)", [DEMO_TENANT_ID, randomUUID(), base.followUp.id, hash("synthetic")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query("UPDATE app.recovery_timeline_signal SET fingerprint=$1", [hash("changed")]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state) VALUES($1,$2,$3,$4,$5,'waiting')", [DEMO_TENANT_ID, randomUUID(), fixture.jobId, base.caseId, base.runId]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(admin, ctx, db => db.$client.query("INSERT INTO app.recovery_timeline_run(tenant_id,follow_up_id,job_id,case_id,run_id,state) VALUES($1,$2,$3,$4,$5,'waiting')", [DEMO_TENANT_ID, randomUUID(), fixture.jobId, base.caseId, base.runId]))).rejects.toMatchObject({ code: "23503" });
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  });
 });

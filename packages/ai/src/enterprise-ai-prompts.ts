@@ -6,7 +6,7 @@ import { FixtureAiProvider, type RecordedFixture } from "./fixture-provider.js";
 import { AiGateway, type RepairOutput } from "./gateway.js";
 import { aiCitationSchema, type AiGatewayRequest, type AiGatewayResponse } from "./types.js";
 
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const name = z.string().min(1).max(200);
 const unique = (values: readonly string[]) => new Set(values).size === values.length;
 const citationV1 = z.object({ sourceId: uuid, sha256: hash, objectVersion: name,
@@ -28,7 +28,7 @@ const sourceV1 = z.object({ evidenceId: uuid, tenantId: uuid, jobId: uuid,
 const caseV1 = z.object({ id: name, tenantId: uuid, jobId: uuid,
   baseline: z.object({ revisionId: uuid, orderedWork: z.array(z.string().min(1).max(4000)).max(1000) }).strict(),
   sources: z.array(sourceV1).min(1).max(100).refine(values => unique(values.map(value => value.evidenceId))),
-  response: z.object({ output: z.record(z.unknown()), citations: z.array(aiCitationSchema.strict()).max(400) }).strict(),
+  response: z.object({ output: z.record(z.string(), z.unknown()), citations: z.array(aiCitationSchema.strict()).max(400) }).strict(),
 }).strict();
 export const enterpriseFixtureCorpusV1 = z.object({ version: z.literal("enterprise-ai-corpus.v1"),
   cases: z.array(caseV1).min(1).max(1000).refine(values => unique(values.map(value => value.id))),
@@ -45,8 +45,8 @@ export const ENTERPRISE_AI_EVALUATION_VERSION = "enterprise-ai-evaluation.v1" as
 export function enterpriseFixtureRequest(row: EnterpriseFixtureCase): AiGatewayRequest {
   return { contractVersion: "ai_gateway_request_v1", fixtureId: row.id,
     operation: "enterprise_possible_extras", promptVersion: "enterprise-extra-detection.fixture.v1", schemaVersion: "enterprise-ai-output.v1",
-    sources: [{ id: row.baseline.revisionId, content: JSON.stringify(row.baseline), sha256: digest(JSON.stringify(row.baseline)) },
-      ...row.sources.map(source => ({ id: source.evidenceId, content: source.text, sha256: source.sha256 }))],
+    sources: [{ tenantId: row.tenantId, visibility: "public", id: row.baseline.revisionId, content: JSON.stringify(row.baseline), sha256: digest(JSON.stringify(row.baseline)) },
+      ...row.sources.map(source => ({ tenantId: source.tenantId, visibility: "public" as const, id: source.evidenceId, content: source.text, sha256: source.sha256 }))],
     timeoutMs: 1000, maxOutputTokens: 2048 };
 }
 
@@ -94,7 +94,7 @@ export async function detectEnterpriseFixture(raw: unknown, options: {
   const development = await loadEnterpriseFixtureCorpus("development"), held = await loadEnterpriseFixtureCorpus("held-out-inputs");
   const row = [...development.cases, ...held.cases].find(value => value.id === parsed.data.fixtureId);
   if (!row) throw new AiGatewayError("fixture_not_found", "Unknown enterprise fixture");
-  const gateway = new AiGateway(new FixtureAiProvider(options.responses ?? { [row.id]: row.response }));
+  const gateway = new AiGateway(new FixtureAiProvider(options.responses ?? { [row.id]: row.response }), () => ({ tenantId: row.tenantId }));
   let result: AiGatewayResponse<EnterpriseAiOutput>;
   try {
     result = await gateway.generate(enterpriseFixtureRequest(row), enterpriseAiOutputV1, options.repair ? { repair: options.repair } : {});

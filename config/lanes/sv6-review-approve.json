@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-review-approve": {
+      "branches": [
+        "codex/sandbox/sv6-review-approve"
+      ],
+      "note": "RED SV-6 exact owner-only synthetic review; no production policy or fee authority. Own lane file implicitly allowed. PR #422 CI repair try 1: isolate the unchanged error mapper from the Nest filter in the shared workspace graph; scope subscription status locators to main and their result text.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/recovery-attribution.application.test.ts",
+        "apps/api/src/recovery-attribution.application.ts",
+        "apps/api/src/recovery-attribution.controller.ts",
+        "apps/api/src/recovery-attribution.controller.test.ts",
+        "apps/api/src/recovery-attribution.http.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/recovery-attribution-v1.md",
+        "packages/db/migration-notes/0383_recovery_attribution_review.md",
+        "packages/db/migrations/0383_recovery_attribution_review.sql",
+        "packages/db/src/recovery-attribution-repository.test.ts",
+        "packages/db/src/recovery-attribution-repository.ts",
+        "packages/db/test/recovery-attribution-review.integration.test.ts",
+        "packages/db/test/recovery-attribution-review-upgrade.integration.test.ts",
+        "apps/api/src/job-work-state.errors.ts",
+        "apps/api/src/job-work-state.failure.ts",
+        "apps/api/src/job-source.errors.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/framework-boundary.test.ts",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/api/src/workspace/index.ts"
+      ]
+    }
+  }
+}

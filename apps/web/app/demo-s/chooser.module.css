@@ -1,0 +1,9 @@
+.main { max-width: 960px; margin: 24px auto; padding: 20px; overflow-wrap: anywhere; }
+.main section, .main form { margin-block: 24px; }
+.main button, .main input, .main select { min-height: 44px; max-width: 100%; padding: 10px; margin: 8px 8px 8px 0; }
+.main input, .main select { display: block; width: 100%; box-sizing: border-box; }
+.main a { display: inline-block; min-height: 44px; padding-block: 10px; }
+.main dt { font-weight: 700; margin-top: 12px; }
+.main dd { margin-left: 0; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.choices article { padding: 16px; border: 1px solid #b9c9c1; border-radius: 12px; }

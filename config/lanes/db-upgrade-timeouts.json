@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "db-upgrade-timeouts": {
+      "branches": [
+        "codex/sandbox/db-upgrade-timeouts"
+      ],
+      "note": "Test-only CI unblock: DB integration suite default per-test timeout 120 s (upgrade proofs install every predecessor migration). Assertions unchanged.",
+      "allow": [
+        "packages/db/vitest.config.ts"
+      ]
+    }
+  }
+}

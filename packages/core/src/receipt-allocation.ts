@@ -1,3 +1,4 @@
+import { offsetDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 import { MAX_MONEY_PENCE } from "./money.js";
 import {
@@ -13,7 +14,7 @@ const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
  * contracts (receipt allocation and `extra-origin.v1` provenance), so no field can accept an offset the reader rejects.
  */
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/u;
-export const instantV1 = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
+export const instantV1 = offsetDatetimeV1.refine(value => INSTANT.test(value), "Invalid UTC offset");
 const INTEGER_TEXT = /^-?\d+$/u;
 const isComparable = (line: { outstandingGross: { numerator: string; denominator: string }; grossPence: number }) =>
   typeof line.outstandingGross?.numerator === "string" && INTEGER_TEXT.test(line.outstandingGross.numerator) &&
@@ -67,6 +68,11 @@ function compareInstants(a: Instant, b: Instant): -1 | 0 | 1 {
   const width = Math.max(a.fraction.length, b.fraction.length);
   const left = a.fraction.padEnd(width, "0"), right = b.fraction.padEnd(width, "0");
   return left === right ? 0 : left < right ? -1 : 1;
+}
+
+/** Compare source instants without dropping sub-millisecond precision. */
+export function compareReceiptInstants(left: string, right: string): -1 | 0 | 1 {
+  return compareInstants(parseInstant(instantV1.parse(left)), parseInstant(instantV1.parse(right)));
 }
 
 /** For reversals, supply the original settlement's remaining line balances and ratios. */

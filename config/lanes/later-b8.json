@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b8": {
+      "branches": [
+        "codex/sandbox/later-b8"
+      ],
+      "receipt": "docs/verdicts/LATER-B8/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B8 (coordinator queue-fill 16 Oct night). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B8.md",
+        "docs/verdicts/LATER-B8/BUILDER_RECEIPT.md",
+        "packages/core/src/later-review-boundary.test.ts",
+        "packages/core/src/review.ts",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/test/later-capture-review.integration.test.ts"
+      ]
+    }
+  }
+}

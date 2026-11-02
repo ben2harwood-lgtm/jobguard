@@ -1,0 +1,187 @@
+{
+  "version": "full-demo-package-fixture.v1",
+  "label": "Practice sandbox \u2014 synthetic data; nothing is sent or charged",
+  "classification": "reference_example",
+  "methodVersion": "baseline-method.reference.v1",
+  "cohorts": {
+    "version": "baseline-cohorts.v1",
+    "pilotTeamIds": [
+      "fictional-pilot"
+    ],
+    "restTeamIds": [
+      "fictional-rest"
+    ]
+  },
+  "history": {
+    "version": "baseline-history.v1",
+    "environment": "synthetic_demo",
+    "sourceNamespace": "northside-example.invalid",
+    "sourceBatchId": "six-month-example",
+    "sourceRevision": "v1",
+    "startMonth": "2026-01",
+    "endMonthExclusive": "2026-07",
+    "teamIds": [
+      "fictional-pilot",
+      "fictional-rest"
+    ],
+    "jobs": [
+      {
+        "sourceJobId": "fictional-pilot-1",
+        "teamId": "fictional-pilot",
+        "month": "2026-01",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-pilot-1-extra",
+            "sourceWorkId": "fictional-pilot-1-work",
+            "reportedNet": {
+              "pence": 10001,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-rest-1",
+        "teamId": "fictional-rest",
+        "month": "2026-01",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-rest-1-extra",
+            "sourceWorkId": "fictional-rest-1-work",
+            "reportedNet": {
+              "pence": 10001,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-pilot-2",
+        "teamId": "fictional-pilot",
+        "month": "2026-02",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-pilot-2-extra",
+            "sourceWorkId": "fictional-pilot-2-work",
+            "reportedNet": null
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-rest-2",
+        "teamId": "fictional-rest",
+        "month": "2026-02",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-rest-2-extra",
+            "sourceWorkId": "fictional-rest-2-work",
+            "reportedNet": null
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-pilot-3",
+        "teamId": "fictional-pilot",
+        "month": "2026-03",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-pilot-3-extra",
+            "sourceWorkId": "fictional-pilot-3-work",
+            "reportedNet": {
+              "pence": 10003,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-rest-3",
+        "teamId": "fictional-rest",
+        "month": "2026-03",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-rest-3-extra",
+            "sourceWorkId": "fictional-rest-3-work",
+            "reportedNet": {
+              "pence": 10003,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-pilot-4",
+        "teamId": "fictional-pilot",
+        "month": "2026-04",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-pilot-4-extra",
+            "sourceWorkId": "fictional-pilot-4-work",
+            "reportedNet": {
+              "pence": 10004,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-rest-4",
+        "teamId": "fictional-rest",
+        "month": "2026-04",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-rest-4-extra",
+            "sourceWorkId": "fictional-rest-4-work",
+            "reportedNet": {
+              "pence": 10004,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-pilot-5",
+        "teamId": "fictional-pilot",
+        "month": "2026-05",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-pilot-5-extra",
+            "sourceWorkId": "fictional-pilot-5-work",
+            "reportedNet": {
+              "pence": 10005,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-rest-5",
+        "teamId": "fictional-rest",
+        "month": "2026-05",
+        "extras": [
+          {
+            "sourceExtraId": "fictional-rest-5-extra",
+            "sourceWorkId": "fictional-rest-5-work",
+            "reportedNet": {
+              "pence": 10005,
+              "currency": "GBP"
+            }
+          }
+        ]
+      },
+      {
+        "sourceJobId": "fictional-pilot-6",
+        "teamId": "fictional-pilot",
+        "month": "2026-06",
+        "extras": []
+      },
+      {
+        "sourceJobId": "fictional-rest-6",
+        "teamId": "fictional-rest",
+        "month": "2026-06",
+        "extras": []
+      }
+    ]
+  },
+  "csv": "version,environment,sourceNamespace,sourceBatchId,sourceRevision,startMonth,endMonthExclusive,rowType,teamId,sourceJobId,month,sourceExtraId,sourceWorkId,reportedNetPence,currency\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,team,fictional-pilot,,,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,team,fictional-rest,,,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-1,2026-01,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-pilot-1,,fictional-pilot-1-extra,fictional-pilot-1-work,10001,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-1,2026-01,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-rest-1,,fictional-rest-1-extra,fictional-rest-1-work,10001,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-2,2026-02,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-pilot-2,,fictional-pilot-2-extra,fictional-pilot-2-work,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-2,2026-02,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-rest-2,,fictional-rest-2-extra,fictional-rest-2-work,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-3,2026-03,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-pilot-3,,fictional-pilot-3-extra,fictional-pilot-3-work,10003,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-3,2026-03,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-rest-3,,fictional-rest-3-extra,fictional-rest-3-work,10003,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-4,2026-04,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-pilot-4,,fictional-pilot-4-extra,fictional-pilot-4-work,10004,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-4,2026-04,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-rest-4,,fictional-rest-4-extra,fictional-rest-4-work,10004,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-5,2026-05,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-pilot-5,,fictional-pilot-5-extra,fictional-pilot-5-work,10005,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-5,2026-05,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,extra,,fictional-rest-5,,fictional-rest-5-extra,fictional-rest-5-work,10005,GBP\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-pilot,fictional-pilot-6,2026-06,,,,\r\nbaseline-history.v1,synthetic_demo,northside-example.invalid,six-month-example,v1,2026-01,2026-07,job,fictional-rest,fictional-rest-6,2026-06,,,,\r\n"
+}

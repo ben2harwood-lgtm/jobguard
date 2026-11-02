@@ -42,3 +42,18 @@ describe('standalone evidence pack verifier CLI', () => {
     expect(report).toMatchObject({ findings: ['Wrong source version'], contentMatches: false, complete: false });
   });
 });
+
+it('dispatches v3 to the same integrity verifier with a separate trusted digest', async () => {
+  const { assembleEvidencePackV3, verifyStandalonePackV3 } = await import('@jobguard/core');
+  const pack = assembleEvidencePackV3({
+    tenantId:'11111111-1111-4111-8111-111111111111', jobId:'11111111-1111-4111-8111-111111111112', caseId:'11111111-1111-4111-8111-111111111113',
+    lifecycle:{state:'pre_lock'}, records:[{kind:'ordinary',sourceId:'source:1',recordedAt:'2026-10-28T12:00:00.123456Z',content:'Fictional original £320.00'}],
+  });
+  const directory = await mkdtemp(join(tmpdir(), 'jg-verify-v3-')), file = join(directory, 'pack.txt');
+  await writeFile(file, pack.artifactText);
+  for (const trusted of [false,true]) {
+    const result=spawnSync(process.execPath,[cli,file,...(trusted?['--trusted-manifest-sha256',pack.manifestHash]:[])],{encoding:'utf8'});
+    expect(result.status).toBe(trusted?0:1);
+    expect(JSON.parse(result.stdout)).toMatchObject(verifyStandalonePackV3(pack.artifactText,trusted?{trustedManifestDigest:pack.manifestHash}:{}));
+  }
+});

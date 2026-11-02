@@ -45,3 +45,25 @@ test("SH-1 registers the reserved migration and keeps its trigger functions inac
   assert.match(sql,/REVOKE ALL ON FUNCTION [\s\S]*FROM PUBLIC,jobguard_runtime;/u);
   assert.doesNotMatch(sql,/GRANT\s+(?:UPDATE|DELETE|TRUNCATE|EXECUTE)/iu);
 });
+
+test("LATER-B19 the recursive scanner finds no competing SH-1 kernel and every nested consumer reaches its kernel", async () => {
+  const { loadRepoProject, checkSharedMoneyOrigin, kernelConsumers, KERNELS } = await import("./shared-money-origin-scan.mjs");
+  const repo = loadRepoProject();
+  assert.deepEqual(checkSharedMoneyOrigin(repo), []);
+  assert.ok(kernelConsumers(repo, KERNELS[0]).includes("packages/core/src/enterprise-domain/fee.ts"));
+  assert.ok(kernelConsumers(repo, KERNELS[0]).includes("packages/core/src/shadow-domain/success-fee.ts"));
+  assert.ok(kernelConsumers(repo, KERNELS[1]).includes("packages/db/src/recovery-allocation-repository.ts"));
+});
+
+test("LATER-B19 the recursive scanner rejects a fictional competing kernel and a comment-only SH-1 mention", async () => {
+  const { createProject, checkSharedMoneyOrigin } = await import("./shared-money-origin-scan.mjs");
+  const base = {
+    "packages/core/src/cumulative-fee.ts": "export function calculateCumulativeFee(i: unknown) { return i; }",
+    "packages/core/src/receipt-allocation.ts": "export function allocateReceiptToLines(i: unknown) { return i; }",
+  };
+  assert.deepEqual(checkSharedMoneyOrigin(createProject(base)), []);
+  const competing = checkSharedMoneyOrigin(createProject({ ...base, "packages/core/src/enterprise-domain/nested/fee.ts": "export function calculateCumulativeFee() { return 0; }" }));
+  assert.ok(competing.some(m => m.includes("nested/fee.ts")));
+  const mention = checkSharedMoneyOrigin(createProject({ ...base, "packages/core/src/shadow-domain/success-fee.ts": "// uses calculateCumulativeFee from ../cumulative-fee.js\nexport const x = 1;" }));
+  assert.ok(mention.some(m => m.includes("success-fee.ts")));
+});

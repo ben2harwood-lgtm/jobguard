@@ -4,11 +4,11 @@ export const ssoRequiredCodes=["INVALID_SSO_REQUIRED_INPUT","SSO_REQUIRED_FORBID
 export class SsoRequiredError extends Error {
   constructor(readonly code:typeof ssoRequiredCodes[number],options?:ErrorOptions,readonly unlinked?:SsoRequiredDetail["unlinked"]) {super(code,options);this.name="SsoRequiredError";}
 }
-const tenant=z.string().uuid(),reason=z.string().min(20).max(500);
+const tenant=z.guid({ error: "Invalid uuid" }),reason=z.string().min(20).max(500);
 export const ssoRequiredCommandV1=z.object({version:z.literal("sso-required-command.v1"),requested_tenant_id:tenant,required:z.boolean(),expectedRevision:z.number().int().min(0).max(2147483646),reason}).strict();
 export const ssoRequiredViewV1=z.object({version:z.literal("sso-required-view.v1"),requested_tenant_id:tenant}).strict();
-export const ssoEmergencyV1=z.object({version:z.literal("sso-emergency.v1"),requested_tenant_id:tenant,email:z.string().email().max(320),code:z.string().regex(/^\d{8}$/u),reason}).strict();
-export const ssoEmergencyV2=z.object({version:z.literal("sso-emergency.v2"),requested_tenant_id:tenant,commandId:z.string().uuid(),email:z.string().email().max(320),code:z.string().regex(/^\d{8}$/u),reason}).strict();
+export const ssoEmergencyV1=z.object({version:z.literal("sso-emergency.v1"),requested_tenant_id:tenant,email:z.email({ error: "Invalid email" }).max(320),code:z.string().regex(/^\d{8}$/u),reason}).strict();
+export const ssoEmergencyV2=z.object({version:z.literal("sso-emergency.v2"),requested_tenant_id:tenant,commandId:z.guid({ error: "Invalid uuid" }),email:z.email({ error: "Invalid email" }).max(320),code:z.string().regex(/^\d{8}$/u),reason}).strict();
 export const ssoRequiredDetailViewV1=z.object({version:z.literal("sso-required-detail-view.v1"),requested_tenant_id:tenant}).strict();
 /** Default 60 minutes; allowed 15 to 240. A present invalid value is never defaulted or clamped. */
 export function ssoEmergencyWindowMinutes(raw:unknown):number|"invalid" {

@@ -1,0 +1,34 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { startBeforeMigration, applyMigration, company, start, end, lookup, repo, on } from "./practice-worker-switch-fixtures.js";
+import { currentCommand } from "./contractor-practice-session-fixtures.js";
+import { ContractorRepository, registerNorthsideRun, migrate } from "../src/index.js";
+import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+const migration = "0332_northside_finance_switch.sql";
+let c: Awaited<ReturnType<typeof startBeforeMigration>>;
+beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await startBeforeMigration(migration); }, 240000);
+afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
+it("populated upgrade preserves rows and routine security while admitting only the Northside finance fixture", async () => {
+  const f = await company(c), foreign = await company(c), contractors = new ContractorRepository(c.runtime);
+  await registerNorthsideRun(c.runtime, f.p, f.context);
+  const member = await contractors.command(f.p, await currentCommand(c, f, { kind: "member.invite", role: "finance", email: "finance@northside-fictional.invalid", scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null }));
+  await contractors.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: member.id, role: "read_only", scope: { kind: "tenant", id: f.p.tenantId }, contractId: null }));
+  const switchFinance = () => repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: member.id });
+  await expect(switchFinance()).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await start(c, foreign);
+  const before = await proofBefore(c.admin, ["app.membership", "app.role_grant", "app.northside_run", "app.audit_event", "control_plane.practice_worker_switch"]);
+  const metadata = async () => (await c.admin.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid='app.practice_worker_switch_decision(uuid,uuid)'::regprocedure")).rows;
+  const security = await metadata(), actor = await lookup(c, foreign);
+  await applyMigration(c, migration); await migrate(c.admin); await migrate(c.admin);
+  expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] }); expect(await metadata()).toEqual(security);
+  expect(await lookup(c, foreign)).toEqual(actor);
+  await end(c, foreign);
+  await switchFinance(); expect((await lookup(c, f)).membershipId).toBe(member.id);
+  // The active-switch grant trigger still prevents acquiring approval/admin authority.
+  await expect(c.admin.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id,contract_id) VALUES($1,$2,$3,'commercial_manager','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), member.id])).rejects.toMatchObject({ message: "PRACTICE_WORKER_GRANT_FORBIDDEN" });
+  await end(c, f);
+  await expect(start(c, f, "finance")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(repo(c).switchOn(foreign.context, foreign.p, foreign.session, { ...on(), workerId: member.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  const unregistered = await contractors.command(foreign.p, await currentCommand(c, foreign, { kind: "member.invite", role: "finance", email: "finance@northside-fictional.invalid", scope: { kind: "tenant", id: foreign.p.tenantId }, clientId: null, contractId: null }));
+  await expect(repo(c).switchOn(foreign.context, foreign.p, foreign.session, { ...on(), workerId: unregistered.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+}, 240000);

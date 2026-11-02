@@ -242,10 +242,19 @@ describe("LP-0 authority paths", () => {
       await expect(runtime.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES (gen_random_uuid(),$1,$2,$3,'owner') RETURNING role", [tenant, account, user])).rejects.toMatchObject({ code: "42501" });
       await runtime.query("ROLLBACK");
       expect(await committed()).toEqual(before);
-      // LP-2: the legacy transition routine is executable (it fails on its own checks, not on permission).
+      // LP-2 (ruling 103): the runtime login no longer holds EXECUTE on the legacy transition routine; it is refused on permission, not on the routine's own checks.
       await runtime.query("BEGIN");
-      await expect(runtime.query("SELECT app.transition_job(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)")).rejects.not.toMatchObject({ code: "42501" });
+      await expect(runtime.query("SELECT app.transition_job(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)")).rejects.toMatchObject({ code: "42501" });
       await runtime.query("ROLLBACK");
+      // Runtime-refusal coverage for the other two withdrawn doors: the thirteen-argument adoption routine and the PUBLIC-executable imported-job guard.
+      await runtime.query("BEGIN");
+      await expect(runtime.query("SELECT app.adopt_in_flight_job(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)")).rejects.toMatchObject({ code: "42501" });
+      await runtime.query("ROLLBACK");
+      await runtime.query("BEGIN");
+      await expect(runtime.query("SELECT app.guard_imported_job()")).rejects.toMatchObject({ code: "42501" });
+      await runtime.query("ROLLBACK");
+      // Owner fixture backstop (ruling 103): the routine itself still exists and still fails on its own checks for the explicit owner connection. Only runtime EXECUTE was withdrawn.
+      await expect(db.admin.query("SELECT app.transition_job(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)")).rejects.not.toMatchObject({ code: "42501" });
     } finally {
       await runtime.query("ROLLBACK").catch(() => undefined);
       await runtime.end();

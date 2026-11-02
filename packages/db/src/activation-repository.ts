@@ -1,3 +1,5 @@
+import { lp3MutationHash } from "./lp3-operation.js";
+import { FreeFirstJobPersistenceError } from "./free-first-job-repository.js";
 import { activationTermsV1, switchLiveV3, type ActivationTermsV1 } from "@jobguard/core";
 import { randomUUID } from "node:crypto";
 import { ACTIVATION_POLICY_VERSION, ILLUSTRATIVE_BASE_PRINCIPAL_PENCE, PILOT_NO_CHARGE_TERMS, SYNTHETIC_DEMO_TERMS, assertSwitchLiveTerms, money, recoveryCap, simulatedSettlementV1, switchLiveV1 } from "@jobguard/core";
@@ -14,20 +16,22 @@ const audit=(command:ConsequentialCommand,eventType:string,subjectRef:string,ref
 
 export class SwitchJobLiveMutation implements CommandMutation<Record<string,unknown>> {
   constructor(private readonly tenantId:string,private readonly deploymentMode:Exclude<DeploymentMode,"production_billing">,private readonly raw:unknown){}
+  inputHash(command:ConsequentialCommand){return lp3MutationHash(this.tenantId,command.actorMembershipId,this.raw as Record<string,unknown>);}
   async mutate(db:TenantTransaction,command:ConsequentialCommand){const input=switchLiveV1.parse(this.raw);assertSwitchLiveTerms(input);
     if(input.mode!==this.deploymentMode)throw new Error("DEPLOYMENT_MODE_MISMATCH");
     const expectedAmount=input.mode==="synthetic_demo"?7900:null;
     if(command.action.actionType!=="job.switch_live"||command.subjectType!=="job"||command.subjectRef!==input.jobId||command.action.contentHash!==input.acceptedDocumentHash||command.action.aggregateRevision!==input.acceptedDocumentVersion||command.action.amountPence!==expectedAmount||command.action.currency!==(expectedAmount===null?null:"GBP")||command.action.policyVersion!==input.activationTermsVersion)throw new Error("EXACT_ACTIVATION_AUTHORIZATION_MISMATCH");
-    await db.$client.query(`SELECT * FROM app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,[this.tenantId,input.activationId,input.capSnapshotId,input.syntheticObligationId,input.jobId,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,command.actorMembershipId,input.activatedAt]);
+    await db.$client.query(`SELECT * FROM app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[this.tenantId,input.activationId,input.capSnapshotId,input.syntheticObligationId,input.jobId,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,input.acceptedNetValuePence,input.recoveryCapPence,input.mode,input.activationTermsVersion,input.feePolicyVersion,command.actorMembershipId,input.activatedAt,command.commandId,command.authorizationId]);
     return{activationId:input.activationId,capSnapshotId:input.capSnapshotId,syntheticObligationId:input.syntheticObligationId,jobId:input.jobId,state:"live",mode:input.mode,acceptedNetValuePence:input.acceptedNetValuePence,recoveryCapPence:input.recoveryCapPence,label:input.mode==="pilot_no_charge"?"no charge":"illustrative only"};}
   auditEvents(_result:Record<string,unknown>,command:ConsequentialCommand){const input=switchLiveV1.parse(this.raw);return[audit(command,"job.switched_live",input.jobId,{activationId:input.activationId,capSnapshotId:input.capSnapshotId,acceptedDocumentId:input.acceptedDocumentId},input.acceptedDocumentHash)];}
 }
 
 export class RecordSimulatedSettlementMutation implements CommandMutation<Record<string,unknown>> {
   constructor(private readonly tenantId:string,private readonly deploymentMode:DeploymentMode,private readonly raw:unknown){}
+  inputHash(command:ConsequentialCommand){return lp3MutationHash(this.tenantId,command.actorMembershipId,this.raw as Record<string,unknown>);}
   async mutate(db:TenantTransaction,command:ConsequentialCommand){if(this.deploymentMode!=="synthetic_demo")throw new Error("SIMULATED_SETTLEMENT_ENVIRONMENT_FORBIDDEN");const input=simulatedSettlementV1.parse(this.raw);
     if(command.action.actionType!=="synthetic_obligation.simulate_settlement"||command.subjectRef!==input.obligationId||command.action.amountPence!==input.amountPence||command.action.currency!=="GBP"||command.action.policyVersion!=="synthetic_demo_illustrative.v1")throw new Error("EXACT_SIMULATION_AUTHORIZATION_MISMATCH");
-    await db.$client.query(`SELECT * FROM app.record_simulated_settlement($1,$2,$3,$4,$5,$6)`,[this.tenantId,input.settlementId,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt]);return{settlementId:input.settlementId,obligationId:input.obligationId,label:"simulated — not collected"};}
+    await db.$client.query(`SELECT * FROM app.record_simulated_settlement($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[this.tenantId,input.settlementId,input.obligationId,input.providerEventId,input.amountPence,input.simulatedAt,command.actorMembershipId,command.commandId,command.authorizationId]);return{settlementId:input.settlementId,obligationId:input.obligationId,label:"simulated — not collected"};}
   auditEvents(_result:Record<string,unknown>,command:ConsequentialCommand){const input=simulatedSettlementV1.parse(this.raw);return[audit(command,"synthetic_obligation.simulated_settlement",input.obligationId,{settlementId:input.settlementId,providerEventId:input.providerEventId})];}
 }
 
@@ -76,4 +80,36 @@ export class PracticeActivationRepository{
   return this.view(context,jobId);
  }
   private async startLegacy(context:VerifiedTenantContext,jobId:string,input:{commandId:string;scenario:"no_charge"|"simulated_base_obligation"}){const current=await this.view(context,jobId);if(current.activation)return current;const accepted=await withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT j.status,j.revision,j.accepted_quote_version_id,d.document_version,d.content_hash,(d.snapshot->>'netPence')::bigint net_pence FROM app.job j LEFT JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.tenant_id=$1 AND j.id=$2`,[context.tenantId,jobId])).rows[0]);if(!accepted||accepted.status!=="accepted"||!accepted.accepted_quote_version_id)throw new Error("ACCEPTED_PRICED_QUOTE_REQUIRED");const mode=input.scenario==="simulated_base_obligation"?"synthetic_demo" as const:"pilot_no_charge" as const;const net=Number(accepted.net_pence),cap=recoveryCap(money(net)).pence,terms=mode==="synthetic_demo"?SYNTHETIC_DEMO_TERMS:PILOT_NO_CHARGE_TERMS;const activation={version:"switch-live.v1" as const,activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:mode==="synthetic_demo"?randomUUID():null,jobId,acceptedDocumentId:accepted.accepted_quote_version_id,acceptedDocumentVersion:Number(accepted.document_version),acceptedDocumentHash:accepted.content_hash,expectedJobRevision:Number(accepted.revision),acceptedNetValuePence:net,recoveryCapPence:cap,mode,activationTermsVersion:terms,feePolicyVersion:ACTIVATION_POLICY_VERSION,activatedAt:new Date()};try{await new UserCommandDispatcher(this.pool).dispatch(context,{version:"command.v1",commandId:input.commandId,commandType:"job.switch_live",semanticKey:`practice-start:${jobId}`,actorMembershipId:DEMO_MEMBERSHIP_ID,subjectType:"job",subjectRef:jobId,action:{actionType:"job.switch_live",recipient:null,contentHash:accepted.content_hash,aggregateRevision:Number(accepted.document_version),amountPence:mode==="synthetic_demo"?ILLUSTRATIVE_BASE_PRINCIPAL_PENCE:null,currency:mode==="synthetic_demo"?"GBP":null,policyVersion:terms,expiresAt:new Date("2099-01-01T00:00:00.000Z")}},new SwitchJobLiveMutation(context.tenantId,mode,activation));}catch(error){for(let attempt=0;attempt<20;attempt++){const winner=await this.view(context,jobId);if(winner.activation)return winner;await new Promise(resolve=>setTimeout(resolve,25));}throw error}return this.view(context,jobId);}
+}
+
+/** MON-3-P-B checked transaction seam. Not selected by the existing practice facade.
+ * C must compose its clock/conversion guarantees before any admission can succeed.
+ * Dispatcher retains current owner/exact approval/replay and audit-last ordering.
+ */
+export class DisabledFreeFirstJobActivationMutation implements CommandMutation<Record<string,unknown>> {
+ constructor(private readonly tenantId:string,private readonly digest:string,private readonly raw:unknown){}
+ private input(){
+  const parsed=switchLiveV3.safeParse(this.raw);
+  if(!parsed.success)throw new FreeFirstJobPersistenceError("INVALID_FREE_FIRST_JOB_INPUT");
+  return parsed.data;
+ }
+ async lock(db:TenantTransaction,command:ConsequentialCommand){
+  if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_SYNTHETIC_ONLY");
+  // Tenant lock and persisted-session/owner check precede receipt lookup, including replay.
+  const row=(await db.$client.query("SELECT app.mon3_owner($1,$2) actor",[this.tenantId,this.digest])).rows[0];
+  if(row?.actor!==command.actorMembershipId)throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_ACCESS_DENIED");
+  if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_SYNTHETIC_ONLY");
+ }
+ async mutate(db:TenantTransaction,command:ConsequentialCommand):Promise<Record<string,unknown>>{
+  if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_SYNTHETIC_ONLY");
+  const input=this.input();
+  if(command.action.actionType!=="job.switch_live"||command.subjectType!=="job"||command.subjectRef!==input.jobId||command.action.contentHash!==input.acceptedDocumentHash||command.action.aggregateRevision!==input.acceptedDocumentVersion||command.action.amountPence!==null||command.action.currency!==null||command.action.recipient!==null||command.action.policyVersion!=="synthetic_demo_activation.v3")throw new FreeFirstJobPersistenceError("EXACT_ACTIVATION_AUTHORIZATION_MISMATCH");
+  await db.$client.query("SELECT app.mon3_admit($1,$2,$3,$4::jsonb)",[this.tenantId,this.digest,command.commandId,JSON.stringify({...input,version:"trial-admission.v1",authorizationId:command.authorizationId})]);
+  throw new FreeFirstJobPersistenceError("FREE_FIRST_JOB_ADMISSION_DISABLED_AWAITING_C");
+ }
+ auditEvents(result:Record<string,unknown>,command:ConsequentialCommand):AuditEventInput[]{
+  // Dispatcher cannot reach this while mutate always refuses. C must retain audit-last.
+  const input=this.input();
+  return [audit(command,"job.switched_live",input.jobId,{activationId:String(result.activationId),termsId:String(result.termsId),acceptedDocumentId:input.acceptedDocumentId},input.acceptedDocumentHash)];
+ }
 }

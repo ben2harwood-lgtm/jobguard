@@ -8,6 +8,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(await (await workspaceApplication()).evidencePacks.approveAttachment((await cookies()).get("jg_session")?.value, id, packId, await request.json()));
   } catch (error) {const denied=practiceFailure(error);if(denied)return denied;
     const { status, code } = (await workspaceApplication()).evidencePacks.failure(error);
-    return NextResponse.json({ code }, { status });
+    return NextResponse.json({ code }, { status, headers: { "Cache-Control": "no-store" } });
   }
 }

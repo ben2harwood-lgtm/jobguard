@@ -1,0 +1,9 @@
+
+ RUN  v4.1.12 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core
+
+
+ Test Files  3 passed (3)
+      Tests  26 passed (26)
+   Start at  15:21:16
+   Duration  485ms (transform 113ms, setup 0ms, import 261ms, tests 300ms, environment 0ms)
+

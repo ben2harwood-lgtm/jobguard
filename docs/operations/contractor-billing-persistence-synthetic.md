@@ -1,0 +1,15 @@
+# ENT-6B synthetic billing
+
+Enable only with JOBGUARD_ENV=synthetic_demo and the trusted jobguard_synthetic_demo database. This does not authorize customer data or a live provider. Use the pinned install and dispatcher/CI PostgreSQL gate before enabling these routes even for a demo.
+
+POST contractor/jobs/:id/billing/export accepts billing-finalise.v1 (commandId, clientContractId). POST .../import accepts billing-import-request.v1 (commandId, input), where input is the existing billing-import.v1 CSV/API envelope. GET .../billing reads persistent exports, latest allocation runs and reconciliation. Every action uses the current persisted finance session and the same application service in Nest and Next. Browser writes also check Origin and all responses use no-store.
+
+POST .../approve-delivery accepts billing-approve-delivery.v1 with commandId, batchId, fake_download/fake_sftp/fake_api, destination under .invalid, exact JSON contentHash and a caller-chosen explicit expiresAt. No default lifetime is supplied. The approved fake outbox action executes after commit, with its own checked claims and result. Next GET .../billing/download?batchId=... or Nest GET .../billing/:batchId/download returns exact stored CSV only after a fake_download succeeds. Preparing this download means no remote receipt and no customer settlement.
+
+ContractorBillingDelivery.reconcile is the server-only reconciliation seam for fake provider observations. It inspects a durable unknown/interrupted action, calls the fake adapter outside the transaction, then persists an observation. Do not use the generic owner-only executor to deliver finance actions. Do not change an unknown status to retryable by hand. Missing fake-provider memory is unknown; a new process must not treat memory absence as definite nonacceptance. New delivery needs current exact authorization and live jobs; expired or revoked authority stays refused.
+
+Watch the existing outbox statuses for retryable, executing and outcome_unknown, and billing_quarantine for composition/match/movement/prerequisite holds. They are operational review queues; a hold creates no extra, fee or commercial send. No automatic quarantine dismissal or composition correction endpoint exists. Correct source facts through a new immutable source event; reusing an event ID with different content conflicts. Historical quarantine rows remain; current holds are in the latest run's projection.
+
+The reconciliation identity belongs to one anchor job per source invoice. Full mixed-job invoice composition is retained under that anchor, with each matched extra's actual job identity; never import the same payment under a second anchor. Reuse across another anchor refuses. Ordering ties and conflicting compositions remain held, rather than choosing money precedence from arrival or IDs.
+
+No new credentials, environment variables, real provider destinations, storage route, migration runner registration or worker deployment are required. Aged-export thresholds come from the approved immutable client-contract version. New production alerts, residency verification and G4-C/G5 activation remain release work.

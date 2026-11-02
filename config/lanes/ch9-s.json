@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-s": {
+      "branches": [
+        "codex/sandbox/ch9-s"
+      ],
+      "receipt": "docs/verdicts/CH9-S/BUILDER_RECEIPT.md",
+      "note": "CH9-S illustrative schema only; H-VALUE-SOURCES and S02/S07 held. No runtime integration.",
+      "allow": [
+        "docs/contracts/value-v3.md",
+        "packages/core/src/value-v3.ts",
+        "packages/core/src/value-v3.fixtures.ts",
+        "packages/core/src/value-v3.test.ts",
+        "docs/verdicts/CH9-S/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

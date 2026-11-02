@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-p-a": {
+      "branches": [
+        "codex/sandbox/ent-13a-p-a"
+      ],
+      "receipt": "docs/verdicts/ENT-13A-P-A/BUILDER_RECEIPT.md",
+      "note": "AMBER: synthetic configuration and requirements only; no runtime, money/access rule, migration, network, billing-data dependency or UI.",
+      "allow": [
+        ".env.example",
+        "packages/config/src/index.ts",
+        "packages/config/src/connector-environment.ts",
+        "packages/config/src/connector-environment.test.ts",
+        "docs/contracts/connector-capabilities-v1.md",
+        "docs/operations/connector-data-flow.md",
+        "docs/operations/connector-reconciliation.md",
+        "docs/ledger/ENT-13A-P.md",
+        "docs/ledger/ENT-13A-P-A.md",
+        "docs/verdicts/ENT-13A-P-A/BUILDER_RECEIPT.md",
+        "docs/verdicts/ENT-13A-P-A/INDEPENDENT_VERDICT.md",
+        "docs/verdicts/ENT-13A-P-A/ACCEPTANCE.md"
+      ]
+    }
+  }
+}

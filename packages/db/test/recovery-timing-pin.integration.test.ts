@@ -1,3 +1,4 @@
+import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -40,11 +41,11 @@ beforeAll(async () => {
   port = await freePort(62500, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool(connectionOptions("postgres", "postgres"));
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool(connectionOptions("jobguard_synthetic_demo", "postgres"));
   await migrate(admin); await seed(admin);
   await admin.query("CREATE ROLE stored_times_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO stored_times_login");
-  runtime = new Pool(connectionOptions("postgres", login));
+  runtime = new Pool(connectionOptions("jobguard_synthetic_demo", login));
 }, 40_000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
@@ -116,6 +117,7 @@ async function rawAdvance(f: Fixture, chosen: string) {
 async function assertReview(f: Fixture, caseId: string, name: "F18" | "F19", before: boolean) {
   const current = (await f.db.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2", [T, caseId])).rows[0]!;
   const command = { version: "recovery-eligibility-command.v3", action: "review", commandId: randomUUID(), caseId, expectedCaseRevision: current.revision, expectedReviewRevision: 0, fixture: name };
+  if (name === "F18" && !before) { await advanceInterestFact(f, "receipt-interest-120"); await advanceInterestFact(f, "receipt-compensation-70"); }
   const saved = await f.repo.review(ctx, f.jobId, command, actor, f.auth.digest);
   const lines = recoveryFixtureDefinitionV3(name).lines;
   const full = lines.filter(line => line.kind === "principal" || line.kind === "statutory_interest" && line.debtorType === "business").reduce((sum, line) => sum + line.netPence, 0);
@@ -125,6 +127,13 @@ async function assertReview(f: Fixture, caseId: string, name: "F18" | "F19", bef
   expect((await f.db.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2", [T, saved.id])).rows).toEqual([{ result: saved.result }]);
   expect(await f.repo.review(ctx, f.jobId, command, actor, f.auth.digest)).toEqual(saved);
   return saved;
+}
+
+// Ruling 66: the same separate-component setup path used by ruling 55(a).
+async function advanceInterestFact(f: Fixture, movement: "receipt-interest-120" | "receipt-compensation-70", step = "settled") {
+  const feed = new PracticeFeedRepository(f.business, "synthetic_demo");
+  const current = await feed.factsView(ctx, actor, f.auth.digest, f.jobId);
+  return feed.factsCommand(ctx, actor, f.auth.digest, f.jobId, { version: "practice-facts-command.v1", commandId: randomUUID(), expectedRevision: current.revision, action: "advance", movement, step });
 }
 
 it("[AC1] ordinary insert triggers and invoker function have the exact catalog shape", async () => {
@@ -312,15 +321,11 @@ async function rolledBack<T>(db: Pool, work: (client: PoolClient) => Promise<T>)
   try { await client.query("BEGIN"); return await work(client); } finally { await client.query("ROLLBACK"); client.release(); }
 }
 it("[AC9] populated upgrade preserves every stored row, earlier routine and table shape; reapply is inert", async () => {
-  const database = `stored_times_upgrade_${randomUUID().replaceAll("-", "")}`;
-  await admin.query(`CREATE DATABASE ${database}`);
-  const upgradeAdmin = new Pool(connectionOptions(database, "postgres")), upgradeRuntime = new Pool(connectionOptions(database, login));
+  // The post-upgrade journey issues sessions too: use an isolated trusted database,
+  // without treating an arbitrary caller-selected database name as practice authority.
+  const upgrade = await jobDoorsDatabase(true, migrationName);
+  const upgradeAdmin = upgrade.owner, upgradeRuntime = upgrade.runtime;
   try {
-    await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-    for (const url of MIGRATION_URLS.filter(url => basename(fileURLToPath(url)) < migrationName)) {
-      await upgradeAdmin.query(await readFile(url, "utf8"));
-      await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [basename(fileURLToPath(url))]);
-    }
     await seed(upgradeAdmin);
     const f = await fixture(upgradeAdmin, upgradeRuntime); await f.advance(); const c = await f.open();
     const review = await assertReview(f, c.id, "F18", true);
@@ -375,8 +380,7 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     expect(await rawAdvance(await fixture(upgradeAdmin, upgradeRuntime), past)).toMatchObject({ pinned: true, kept_chosen: false });
     expect((await f.cases.listForMember(ctx, f.jobId, actor)).find(row => row.id === c.id)?.eligibilityV3).toEqual(review);
   } finally {
-    await closeTestPools(upgradeRuntime, upgradeAdmin);
-    await admin.query(`DROP DATABASE ${database}`);
+    await upgrade.close();
   }
 }, 15_000);
 it("[AC10] registry is sorted, unique and places the pin after its two dependencies", () => {

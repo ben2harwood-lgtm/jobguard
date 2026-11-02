@@ -1,3 +1,4 @@
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written before persistence; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,6 +19,7 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const context = testTenantContext(DEMO_TENANT_ID);
@@ -51,10 +53,10 @@ beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   directory = await mkdtemp(join(tmpdir(), "jg-integration-"));
   const port = await freePort(63000, 180);
-  const options = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: passphrase };
+  const options = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: passphrase };
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: passphrase, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool(options); await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
@@ -76,6 +78,7 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
   const db = await admin.connect();
   try {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await permitPracticeHomeJob(db, { tenantId: DEMO_TENANT_ID, jobId, title: "Recovery £18,800 allocation fixture", practiceSessionDigest: digest, actorMembershipId: DEMO_MEMBERSHIP_ID });
     await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery £18,800 allocation fixture',$3,'home')", [jobId, DEMO_TENANT_ID, digest]);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);
     await db.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, DEMO_TENANT_ID, jobId]);
@@ -97,8 +100,6 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     await db.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
-  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
-    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const evidenceIds: string[] = [];
   for (let index = 0; index < 2; index++) {
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
@@ -112,6 +113,9 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
+  await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
+  const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const cases = new RecoveryCaseRepository(scoped), packs = new EvidencePackRepository(scoped), views = [];
   for (const claim of [claim1, claim2]) {
     let view = await cases.command(context, jobId, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), expectedRevision: 0,
@@ -166,6 +170,45 @@ async function originals(f: Fixture) {
   return Object.fromEntries(await Promise.all(tables.map(async table => [table,
     (await admin.query(`SELECT row_to_json(t)::text AS bytes FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, [DEMO_TENANT_ID, f.jobId])).rows.map(row => row.bytes)])));
 }
+
+it("M4-8: matching suggestions read settled facts and approved cases without creating authority", async () => {
+  const f = await fixture(), before = await countRows(f), view = await read(f);
+  expect(view.suggestions).toHaveLength(4);
+  expect(view.suggestions).toContainEqual({ caseId: f.case1.id, paymentId: f.payment1, expectedCaseRevision: f.case1.revision,
+    grossPence: 38400, eligibleNetPence: 32000, taxPence: 6400, ambiguous: true, requiresHumanReview: true });
+  expect(view.suggestions).toContainEqual({ caseId: f.case2.id, paymentId: f.payment2, expectedCaseRevision: f.case2.revision,
+    grossPence: 300000, eligibleNetPence: 250000, taxPence: 50000, ambiguous: true, requiresHumanReview: true });
+  expect(await countRows(f)).toEqual(before);
+  expect((await read(await fixture({ settle: false }))).suggestions).toEqual([]);
+  const other = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, other);
+  await expect(repo().view(context, actor, auth.digest, f.jobId)).rejects.toMatchObject({ code: "ALLOCATION_NOT_FOUND" });
+  await run(f, await reviewed(f));
+  expect((await read(f)).suggestions?.every(row => row.caseId !== f.case1.id && row.paymentId !== f.payment1)).toBe(true);
+});
+
+it("M4-8: partial refund replays append once, retain the locked bill and reopen only the returned principal", async () => {
+  const f = await fixture(); await run(f, await reviewed(f));
+  const before = await originals(f), allocation = (await read(f)).allocations[0]!;
+  const creditInput = { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 5000, reason: "Fictional partial refund" };
+  const preview = await f.invoices.previewCredit(context, creditInput);
+  const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), previewHash: preview.previewHash });
+  expect((await read(f)).paused).toBe(true);
+  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
+  const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id,
+    creditNoteId: credit.creditNoteId, expectedCaseRevision: current.revision, grossPence: 6000 };
+  const review = await run(f, input);
+  const confirm = { ...input, action: "reverse", commandId: randomUUID(), approvalHash: review.review!.approvalHash };
+  await run(f, confirm); const counts = await countRows(f); await run(f, confirm);
+  expect(await countRows(f)).toEqual(counts);
+  const view = await read(f);
+  expect(view).toMatchObject({ eligibleNetPence: 27000, allocatedTaxPence: 5400, paused: true });
+  expect(view.cases.find(row => row.caseId === f.case1.id)).toMatchObject({ outstandingNetPence: 5000 });
+  const after = await originals(f);
+  for (const table of ["customer_invoice", "customer_payment", "practice_feed_event", "practice_feed_receipt_match", "recovery_case_allocation"]) expect(after[table]).toEqual(before[table]);
+  await expect(run(f, { ...input, commandId: randomUUID(), expectedCaseRevision: current.revision + 1 })).rejects.toBeTruthy();
+  expect(await countRows(f)).toEqual(counts);
+});
 
 it("paid-invoice credit remains readable and reversible", async () => {
   const f = await fixture();
@@ -269,6 +312,7 @@ it("DW4: approved merged receipt reversal appends linked reversals, reopens case
   for (const which of [1, 2]) await run(f, await reviewed(f, allocationInput(f, which)));
   const before = await originals(f), allocation = (await read(f)).allocations.find(a => a.paymentId === f.payment2)!;
   await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment2, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic £3,000 reversed" });
+  expect((await read(f)).paused).toBe(true);
   const current = (await f.cases.listForMember(context, f.jobId, actor)).find(c => c.id === f.case2.id)!;
   const reviewInput = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id, expectedCaseRevision: current.revision, grossPence: 300000 };
   const review = await run(f, reviewInput);

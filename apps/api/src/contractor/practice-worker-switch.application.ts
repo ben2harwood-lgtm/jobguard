@@ -21,7 +21,7 @@ export class PracticeWorkerSwitchApplication {
    const sessionId = parsed.data.sessionId;
    const actor = await new ContractorRepository(this.pool).resolveSession(sessionId);
    const command = practiceWorkerSwitchOnV1.safeParse(raw); if (!command.success) throw new PracticeWorkerSwitchError("INVALID_COMMAND");
-   const worker = z.string().uuid().safeParse(workerId); if (!worker.success) throw new PracticeWorkerSwitchError("NOT_FOUND");
+   const worker = z.guid({ error: "Invalid uuid" }).safeParse(workerId); if (!worker.success) throw new PracticeWorkerSwitchError("NOT_FOUND");
    const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
    return practiceWorkerSwitchStateV1.parse(await this.repository.switchOn(context, actor, sessionId, { ...command.data, workerId: worker.data }));
   } catch (error) { throw translated(error); }

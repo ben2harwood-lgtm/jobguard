@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch-7-rest-c": {
+      "branches": [
+        "codex/sandbox/ch-7-rest-c"
+      ],
+      "receipt": "docs/verdicts/CH-7-REST-C/BUILDER_RECEIPT.md",
+      "note": "RED; build-ahead on exact #298 head 98a7a805; non-v3 withheld pursuit guard only; CI and independent exact-head gates remain.",
+      "allow": [
+        "packages/db/migrations/0259_recovery_pursuit_terms_required.sql",
+        "packages/db/migration-notes/0259_recovery_pursuit_terms_required.md",
+        "packages/db/test/recovery-pursuit-terms.integration.test.ts",
+        "packages/db/test/recovery-pursuit-terms-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/recovery-messages.integration.test.ts",
+        "packages/db/test/recovery-follow-up.integration.test.ts",
+        "docs/contracts/recovery-case-terms-v1.md",
+        "docs/ledger/CH-7-REST-C.md",
+        "docs/verdicts/CH-7-REST-C/BUILDER_RECEIPT.md",
+        "packages/db/test/later-outbox.integration.test.ts",
+        "packages/db/test/later-recovery-message-attempt.integration.test.ts",
+        "packages/db/test/migfix-8.integration.test.ts",
+        "packages/db/test/recovery-message-upgrade.integration.test.ts",
+        "apps/api/src/recovery-case-terms.application.test.ts"
+      ]
+    }
+  }
+}

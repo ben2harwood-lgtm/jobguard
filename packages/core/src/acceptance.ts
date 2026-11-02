@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { money, type Money } from "./money.js";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 
 export const builderAttestedAcceptanceV1 = z.object({

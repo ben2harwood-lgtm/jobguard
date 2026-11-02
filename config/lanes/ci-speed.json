@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-speed": {
+      "branches": ["codex/sandbox/ci-speed"],
+      "note": "RED: parallel DB/browser CI shards with fail-closed required summaries; no product workflow change (C1). Own lane file is implicitly allowed.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs",
+        "docs/operations/ci-checks.md"
+      ]
+    }
+  }
+}

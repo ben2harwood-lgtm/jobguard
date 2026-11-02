@@ -8,9 +8,9 @@ export const PRODUCTION_RECOVERY_ELIGIBILITY_ENABLED = false as const;
 export const recoveryModeV1 = z.enum(["synthetic_demo", "pilot_no_charge", "production"]);
 export const recoveryCaseStateV1 = z.enum(["identified", "active", "partially_landed", "landed", "prevented"]);
 export const syntheticLandingCommandV1 = z.object({
-  version: z.literal("recovery.landing.approve.v1"), commandId: z.string().uuid(), jobId: z.string().uuid(),
-  caseId: z.string().uuid(), receiptId: z.string().uuid(), evidenceId: z.string().uuid(),
-  eligibilityApprovalId: z.string().uuid(), landingApprovalId: z.string().uuid(),
+  version: z.literal("recovery.landing.approve.v1"), commandId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }),
+  caseId: z.guid({ error: "Invalid uuid" }), receiptId: z.guid({ error: "Invalid uuid" }), evidenceId: z.guid({ error: "Invalid uuid" }),
+  eligibilityApprovalId: z.guid({ error: "Invalid uuid" }), landingApprovalId: z.guid({ error: "Invalid uuid" }),
   grossPence: z.number().int().positive(), eligibleNetPence: z.number().int().positive(), currency: z.literal("GBP"),
   policyVersion: z.literal(SYNTHETIC_RECOVERY_POLICY_VERSION), expectedCaseRevision: z.number().int().nonnegative(),
 }).strict();

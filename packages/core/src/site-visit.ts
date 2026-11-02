@@ -1,5 +1,6 @@
+import { utcDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 /** The plan's exact words (BUILD_PLAN.md section 9.2, ENT-3); no screen shows them in this piece. */
 export const closeoutQuestionVersion = "closeout-question.v1" as const;
@@ -17,8 +18,8 @@ export function parseCompleteSiteVisit(raw: unknown): { ok: true; data: z.infer<
  return { ok: false, code: completeWithoutAnswerCheck.safeParse(raw).success ? "CLOSEOUT_ANSWER_REQUIRED" : "INVALID_COMMAND" };
 }
 const head = { environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0) };
-export const siteVisitStartedV1 = z.object({ version: z.literal("site-visit-started.v1"), ...head, jobId: uuid, visitId: uuid, startedAt: z.string().datetime() }).strict();
-export const siteVisitCompletedV1 = z.object({ version: z.literal("site-visit-completed.v1"), ...head, jobId: uuid, visitId: uuid, completedAt: z.string().datetime(), closeoutAnswer: z.enum(closeoutAnswers) }).strict();
+export const siteVisitStartedV1 = z.object({ version: z.literal("site-visit-started.v1"), ...head, jobId: uuid, visitId: uuid, startedAt: utcDatetimeV1 }).strict();
+export const siteVisitCompletedV1 = z.object({ version: z.literal("site-visit-completed.v1"), ...head, jobId: uuid, visitId: uuid, completedAt: utcDatetimeV1, closeoutAnswer: z.enum(closeoutAnswers) }).strict();
 /** No money field, no resident field and no address in either read (the site worker sees the work, not the price or the person). */
 export const siteAssignedJobsV1 = z.object({
  version: z.literal("site-assigned-jobs.v1"), ...head,

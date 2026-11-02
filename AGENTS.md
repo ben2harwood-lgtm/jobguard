@@ -198,9 +198,9 @@ Use last-writer-wins only for an explicit allowlist of non-commercial fields. Mo
 
 Offline intent may be queued, but stale approval, changed price, revoked membership, missing upload, or conflicting revision must be surfaced and re-approved/reconciled. Do not show a queued send as sent or a queued payment as settled.
 
-### 5.13 Every task carries an independent recorded verdict (rev 2.2)
+### 5.13 Independent review for RED pieces; green CI for the rest (simple loop, 28 Oct 2026)
 
-This build runs a cross-model loop: a builder agent (Codex) builds one task as one reviewable PR with a truthful run receipt; a **different** model records an independent verdict bound to the exact commit before technical acceptance; a separate actor records acceptance; the founder issues work and owns merge/push/release. A builder never accepts its own work. A deterministic check result is labelled as such and is not presented as a model review. Recorded verdicts live in `docs/verdicts/`. "Reviewed" requires a real recorded response for the relevant diff, not an assertion. Treat "source-inspected", "test-executed" and "independently-verified" as three different claims; missing evidence is a hold, not a pass. This mirrors the OWN MIND cross-model working agreement and makes it a durable JobGuard invariant rather than a one-off packet instruction.
+JobGuard builds in the simple loop recorded in `~/.local/share/full-steam/SIMPLE_LOOP.md` (Ben, 28 October 2026). A builder builds one piece as one reviewable PR. **RED** pieces (money, fees or allocation; sign-in or sessions; tenant isolation, RLS or privileges; shadow or hidden data) get one review from an independent reviewer, a different model or session from the builder, before merge, recorded against the exact head reviewed. Every other piece merges when all required CI is green against current main. A builder never reviews, accepts or merges its own work. A deterministic check result is labelled as such and is not presented as a review. "Source-inspected", "test-executed" and "independently-verified" remain three different claims, and missing evidence is a hold, not a pass. Security and commercial approvals remain separate evidence, never inferred from green CI (§2, item 10).
 
 ### 5.14 The shadow bill is hidden, fair and fee-bounded (rev 2.3; SME track only from rev 2.5)
 

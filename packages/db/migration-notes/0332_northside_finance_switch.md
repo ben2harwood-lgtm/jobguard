@@ -1,0 +1,3 @@
+ENT-11b (RED): extends the existing private switch decision only for the named fictional Northside finance worker, in a registered made-up practice company. Tenant-scoped finance and read_only grants permit the billing/dashboard journey. Other finance workers remain refused; sign-in and wider-grant fences stay in place. No table, stored row, ACL or public interface changes.
+
+Forward fix: restore the previous decision body from 0165 if necessary. End open finance switches through the existing switch-off command first. Preserve switch/audit history. CI runs the populated own-step upgrade test, existing switch tests, PostgreSQL suites and full timed browser journey. No migration or browser execution was possible in the builder sandbox.

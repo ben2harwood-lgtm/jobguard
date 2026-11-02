@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { DEMO_MEMBERSHIP_ID, FinalAccountLockRepository, FinalAccountCommandService, VariationRepository, PracticeInvoiceRepository } from "@jobguard/db";
+import { DEMO_MEMBERSHIP_ID, FinalAccountLockRepository, FinalAccountCommandService, VariationRepository, PracticeInvoiceRepository, practiceMaterialPool } from "@jobguard/db";
 import { assertFinalAccountInvoiceGuard, FinalAccountLockError } from "@jobguard/core";
 import { PracticeAccess } from "./practice-access.js";
 import { finalAccountLockCommandV1,finalAccountDispositionCommandV1,finalCheckTermsAcceptanceCommandV1,finalReviewExtraCommandV1,lockBoundInvoiceCommandV1 } from "./final-account-lock.contracts.js";
@@ -14,7 +14,7 @@ export class FinalAccountLockApplication {
  private readonly accounts:FinalAccountCommandService;
  private readonly variations:VariationRepository;
  private readonly invoices:PracticeInvoiceRepository;
- constructor(pool:Pool,sessionId?:string){this.access=new PracticeAccess(pool,sessionId);this.repo=new FinalAccountLockRepository(pool);this.accounts=new FinalAccountCommandService(pool);this.variations=new VariationRepository(pool);this.invoices=new PracticeInvoiceRepository(pool);}
+ constructor(private readonly pool:Pool,sessionId?:string){this.access=new PracticeAccess(pool,sessionId);this.repo=new FinalAccountLockRepository(pool);this.accounts=new FinalAccountCommandService(pool);this.variations=new VariationRepository(pool);this.invoices=new PracticeInvoiceRepository(pool);}
  async get(jobId:string){
   const auth=await this.access.job(jobId);
   const [view,account]=await Promise.all([this.repo.read(auth.context,jobId),this.accounts.read(auth.context,jobId)]);
@@ -38,7 +38,7 @@ export class FinalAccountLockApplication {
  }
  async issueInvoice(jobId:string,raw:unknown){
   const auth=await this.access.job(jobId),{version:_version,...c}=input(lockBoundInvoiceCommandV1,raw);
-  await this.repo.issueInvoice(auth.context,{...c,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});
+  await new FinalAccountLockRepository(practiceMaterialPool(this.pool,auth.digest)).issueInvoice(auth.context,{...c,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});
   return {version:1 as const,environment:"synthetic_demo" as const,jobId,invoices:await this.invoices.list(auth.context,jobId)};
  }
 }

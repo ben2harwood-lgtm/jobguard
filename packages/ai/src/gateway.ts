@@ -1,8 +1,8 @@
-import { z } from "zod";
 import { AiGatewayError } from "./errors.js";
 import {
   aiGatewayRequestSchema,
   aiProviderResponseSchema,
+  aiCitationSchema,
   type AiGatewayRequest,
   type AiGatewayResponse,
   type AiOutputSchema,
@@ -11,8 +11,16 @@ import {
 
 export type RepairOutput = (invalidOutput: unknown) => unknown;
 
+/** Server-owned session bridge. Resolve authentication and active membership here,
+ * never from the AI request body. No resolver means no authority to execute. */
+export type AiSessionResolver = () =>
+  { readonly tenantId: string } | null | Promise<{ readonly tenantId: string } | null>;
+
 export class AiGateway {
-  constructor(private readonly provider: AiProvider) {}
+  constructor(
+    private readonly provider: AiProvider,
+    private readonly resolveSession?: AiSessionResolver,
+  ) {}
 
   async generate<T>(
     untrustedRequest: unknown,
@@ -20,20 +28,38 @@ export class AiGateway {
     options: { signal?: AbortSignal; repair?: RepairOutput } = {},
   ): Promise<AiGatewayResponse<T>> {
     const parsedRequest = aiGatewayRequestSchema.safeParse(untrustedRequest);
-    if (!parsedRequest.success) throw typedZodError("invalid_request", "Invalid AI request", parsedRequest.error);
-    const request = parsedRequest.data;
+    if (!parsedRequest.success) throw new AiGatewayError("invalid_request", "Invalid AI request");
+    let session: Awaited<ReturnType<AiSessionResolver>> | undefined;
+    try {
+      session = await this.resolveSession?.();
+    } catch {
+      throw new AiGatewayError("invalid_request", "AI session is not permitted");
+    }
+    if (!session || typeof session.tenantId !== "string" || !session.tenantId.trim()) {
+      throw new AiGatewayError("invalid_request", "AI session is not permitted");
+    }
+    const tenantId = session.tenantId;
+    if (parsedRequest.data.tenantId !== undefined && parsedRequest.data.tenantId !== tenantId) {
+      throw new AiGatewayError("invalid_request", "AI source is not permitted");
+    }
+    const request = { ...parsedRequest.data, tenantId };
+    if (request.sources.some((source) =>
+      source.visibility !== "public" || source.tenantId !== tenantId
+    )) {
+      throw new AiGatewayError("invalid_request", "AI source is not permitted");
+    }
     if (options.signal?.aborted) throw new AiGatewayError("cancelled", "AI fixture request was cancelled");
 
     let untrustedResponse: unknown;
     try {
       untrustedResponse = await this.provider.execute(request, options.signal);
     } catch (error) {
-      if (error instanceof AiGatewayError) throw error;
-      throw new AiGatewayError("invalid_provider_response", "AI provider failed", { cause: error });
+      // Provider diagnostics and causes may contain credentials or source text.
+      throw new AiGatewayError(error instanceof AiGatewayError ? error.code : "invalid_provider_response", "AI provider failed");
     }
     const parsedResponse = aiProviderResponseSchema.safeParse(untrustedResponse);
     if (!parsedResponse.success) {
-      throw typedZodError("invalid_provider_response", "Invalid AI provider response", parsedResponse.error);
+      throw new AiGatewayError("invalid_provider_response", "Invalid AI provider response");
     }
     if (parsedResponse.data.fixtureId !== request.fixtureId) {
       throw new AiGatewayError("invalid_provider_response", "AI provider returned the wrong fixture identity");
@@ -44,9 +70,16 @@ export class AiGateway {
     let repairAttempts: 0 | 1 = 0;
     if (!parsedOutput.success && options.repair) {
       repairAttempts = 1;
-      parsedOutput = outputSchema.safeParse(options.repair(parsedResponse.data.output));
+      let repairedOutput: unknown;
+      try {
+        repairedOutput = options.repair(parsedResponse.data.output);
+      } catch {
+        throw new AiGatewayError("invalid_output", "AI output repair failed");
+      }
+      parsedOutput = outputSchema.safeParse(repairedOutput);
     }
-    if (!parsedOutput.success) throw typedZodError("invalid_output", "Invalid structured AI output", parsedOutput.error);
+    if (!parsedOutput.success) throw new AiGatewayError("invalid_output", "Invalid structured AI output");
+    validateOutputCitations(request, parsedOutput.data);
 
     return {
       output: parsedOutput.data,
@@ -66,16 +99,28 @@ export class AiGateway {
   }
 }
 
+/** Validate references retained by the output schema, including after repair.
+ * Offset-only shadow proposal citations keep their existing proposer checks. */
+function validateOutputCitations(request: AiGatewayRequest, value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const child of value) validateOutputCitations(request, child);
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if ("sourceId" in record && "start" in record && "end" in record) {
+    const citation = aiCitationSchema.safeParse(record);
+    if (!citation.success) throw new AiGatewayError("invalid_citation", "Invalid output source reference");
+    validateCitations(request, [citation.data]);
+  }
+  for (const child of Object.values(record)) validateOutputCitations(request, child);
+}
 function validateCitations(request: AiGatewayRequest, citations: readonly { sourceId: string; start: number; end: number }[]): void {
   const sources = new Map(request.sources.map((source) => [source.id, source.content]));
   for (const citation of citations) {
     const source = sources.get(citation.sourceId);
     if (source === undefined || citation.start >= citation.end || citation.end > source.length) {
-      throw new AiGatewayError("invalid_citation", `Citation is outside source bounds: ${citation.sourceId}`);
+      throw new AiGatewayError("invalid_citation", "Citation is outside source bounds");
     }
   }
-}
-
-function typedZodError(code: "invalid_request" | "invalid_provider_response" | "invalid_output", message: string, error: z.ZodError): AiGatewayError {
-  return new AiGatewayError(code, `${message}: ${error.issues.map((issue) => issue.message).join(", ")}`, { cause: error });
 }

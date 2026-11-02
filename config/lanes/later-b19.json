@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b19": {
+      "branches": [
+        "codex/sandbox/later-b19"
+      ],
+      "receipt": "docs/verdicts/LATER-B19/BUILDER_RECEIPT.md",
+      "note": "L135-L138 architecture checks. Decision 74: synthetic build, RED two-model review, then PARK.",
+      "allow": [
+        "tools/money-arithmetic-lint.mjs",
+        "tools/core-purity-lint.mjs",
+        "tools/shared-money-origin.test.mjs",
+        "tools/commercial-boundary.test.mjs",
+        "tools/shared-money-origin-scan.mjs",
+        "tools/later-money-arithmetic.test.mjs",
+        "tools/later-core-purity.test.mjs",
+        "tools/later-shared-money-discovery.test.mjs",
+        "tools/later-commercial-boundary.test.mjs",
+        "docs/contracts/later-b19-check-coverage.md",
+        "docs/ledger/LATER-B19.md",
+        "docs/verdicts/LATER-B19/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

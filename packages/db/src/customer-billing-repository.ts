@@ -1,5 +1,5 @@
 import{createHash,randomUUID}from"node:crypto";import type{Pool}from"pg";import{z}from"zod";import{createSyntheticInvoicePdf,formatCustomerInvoiceNumber,projectInvoiceBalance,CUSTOMER_INVOICE_POLICY_VERSION,REAL_CUSTOMER_INVOICE_ISSUE_ENABLED,SYNTHETIC_INVOICE_WATERMARK,customerPaymentV1,customerPaymentReversalV1,money}from"@jobguard/core";import{appendOutboundAction}from"./outbox.js";import{appendAuditBatch}from"./audit.js";import{CommandError,UserCommandDispatcher,consequentialCommandV1Schema,type ConsequentialCommand}from"./commands.js";import{withTenant,type VerifiedTenantContext}from"./tenant-context.js";
-const uuid=z.string().uuid(),issuer=z.object({legalName:z.string().trim().min(1).max(160),address:z.string().trim().min(1).max(500),vatNumber:z.string().trim().max(32).nullable()}).strict();
+const uuid=z.guid({ error: "Invalid uuid" }),issuer=z.object({legalName:z.string().trim().min(1).max(160),address:z.string().trim().min(1).max(500),vatNumber:z.string().trim().max(32).nullable()}).strict();
 export const issueCustomerInvoiceV1=z.object({version:z.literal("customer-invoice.issue.v1"),command:consequentialCommandV1Schema,finalAccountRevisionId:uuid,issuedOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),issuer}).strict();
 export const creditCustomerInvoiceV1=z.object({version:z.literal("customer-credit-note.issue.v1"),command:consequentialCommandV1Schema,invoiceId:uuid,amountPence:z.number().int().positive(),reason:z.string().trim().min(1).max(240)}).strict();
 const sha=(v:Uint8Array|string)=>createHash("sha256").update(v).digest("hex");
@@ -38,10 +38,12 @@ export class CustomerBillingCommandService{
  async credit(context:VerifiedTenantContext,raw:unknown){
   const input=creditCustomerInvoiceV1.parse(raw),c=input.command;
   if(c.commandType!=="customer_credit_note.issue"||c.action.actionType!=="customer_credit_note.issue"||c.action.amountPence!==input.amountPence||c.action.currency!=="GBP")throw new Error("CREDIT_ACTION_MISMATCH");
-  return this.dispatcher.dispatch(context,c,{
-   // Match the existing practice-credit routine's lock namespace. A separate
-   // statement acquires it before the balance snapshot and any receipt/FK locks.
-   lock:async db=>{await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);},
+  const result=await this.dispatcher.dispatch(context,c,{
+   // One shared invoice lock protects remaining debt. Receipt uniqueness serializes
+   // command and semantic identities, including retries targeting another invoice.
+   lock:async db=>{
+    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);
+   },
    mutate:async(db,command)=>{
     const invoice=(await db.$client.query<any>(`SELECT i.*,COALESCE((SELECT sum(amount_pence) FROM app.customer_credit_note n WHERE(n.tenant_id,n.invoice_id)=(i.tenant_id,i.id)),0) credited FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3`,[context.tenantId,command.subjectRef,input.invoiceId])).rows[0];
     if(!invoice||BigInt(invoice.credited)+BigInt(input.amountPence)>BigInt(invoice.total_pence))throw new Error("INVALID_CREDIT_AMOUNT");
@@ -59,8 +61,24 @@ export class CustomerBillingCommandService{
     return{creditNoteId:id,creditNumber,originalInvoiceUnchanged:true};
    }
   });
+  // Receipt uniqueness waits for competing command/semantic inserts to commit.
+  // Dispatcher replay has no effects; bind its returned immutable credit before returning.
+  // Do this after dispatch releases its invoice lock, with no further business lock.
+  return withTenant(this.pool,context,async db=>{
+   const credit=(await db.$client.query<{job_id:string;invoice_id:string;amount_pence:string;reason:string}>(`SELECT job_id,invoice_id,amount_pence,reason FROM app.customer_credit_note WHERE tenant_id=$1 AND id=$2`,[context.tenantId,result.creditNoteId])).rows[0];
+   if(!credit||credit.job_id!==c.subjectRef||credit.invoice_id!==input.invoiceId||BigInt(credit.amount_pence)!==BigInt(input.amountPence)||credit.reason!==input.reason)throw new CommandError("COMMAND_CONFLICT");
+   return result;
+  });
  }
- async reversePayment(context:VerifiedTenantContext,raw:unknown){const p=customerPaymentReversalV1.parse(raw),command:ConsequentialCommand={version:"command.v1",commandId:p.commandId,commandType:"customer_payment.reverse",semanticKey:`payment-reversal:${p.paymentId}`,actorMembershipId:p.actorMembershipId,subjectType:"job",subjectRef:p.jobId,authorizationId:randomUUID(),action:{actionType:"customer_payment.reverse",recipient:null,contentHash:sha(JSON.stringify(p)),aggregateRevision:0,amountPence:null,currency:null,policyVersion:"manual_receipt_v1",expiresAt:new Date(Date.now()+300000)}};return this.dispatcher.dispatch(context,command,{mutate:async(db,c)=>{const row=(await db.$client.query<any>(`SELECT p.invoice_id FROM app.customer_payment p JOIN app.customer_invoice i ON(i.tenant_id,i.id)=(p.tenant_id,p.invoice_id) WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];if(!row)throw new Error("PAYMENT_NOT_FOUND");const id=randomUUID();await db.$client.query(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)VALUES($1,$2,$3,$4,$5,$6)`,[id,context.tenantId,p.jobId,p.paymentId,c.authorizationId,p.reason]);return{reversalId:id,invoiceId:row.invoice_id}}});}
+ async reversePayment(context:VerifiedTenantContext,raw:unknown){const p=customerPaymentReversalV1.parse(raw),command:ConsequentialCommand={version:"command.v1",commandId:p.commandId,commandType:"customer_payment.reverse",semanticKey:`payment-reversal:${p.paymentId}`,actorMembershipId:p.actorMembershipId,subjectType:"job",subjectRef:p.jobId,authorizationId:randomUUID(),action:{actionType:"customer_payment.reverse",recipient:null,contentHash:sha(JSON.stringify(p)),aggregateRevision:0,amountPence:null,currency:null,policyVersion:"manual_receipt_v1",expiresAt:new Date(Date.now()+300000)}};return this.dispatcher.dispatch(context,command,{
+  lock:async(db,c)=>{
+   // Preserve the server-generated expiry on retries, including concurrent ones.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,475))",[`${context.tenantId}:payment-reversal:${p.paymentId}`]);
+   const prior=(await db.$client.query<{expires_at:Date}>(`SELECT a.expires_at FROM app.customer_payment_reversal x
+    JOIN app.action_authorization a ON(a.tenant_id,a.id)=(x.tenant_id,x.authorization_id)
+    WHERE x.tenant_id=$1 AND x.job_id=$2 AND x.payment_id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];
+   if(prior)c.action.expiresAt=new Date(prior.expires_at);
+  },mutate:async(db,c)=>{const row=(await db.$client.query<any>(`SELECT p.invoice_id FROM app.customer_payment p JOIN app.customer_invoice i ON(i.tenant_id,i.id)=(p.tenant_id,p.invoice_id) WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];if(!row)throw new Error("PAYMENT_NOT_FOUND");const id=randomUUID();await db.$client.query(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)VALUES($1,$2,$3,$4,$5,$6)`,[id,context.tenantId,p.jobId,p.paymentId,c.authorizationId,p.reason]);return{reversalId:id,invoiceId:row.invoice_id}}});}
  async balance(context:VerifiedTenantContext,invoiceId:string){return withTenant(this.pool,context,async db=>{const r=(await db.$client.query<any>(`SELECT i.total_pence,COALESCE((SELECT sum(amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credit_pence,COALESCE((SELECT sum(p.amount_pence) FROM app.customer_payment p WHERE(p.tenant_id,p.invoice_id)=(i.tenant_id,i.id)),0) receipt_pence,COALESCE((SELECT sum(p.amount_pence) FROM app.customer_payment p JOIN app.customer_payment_reversal r ON(r.tenant_id,r.payment_id)=(p.tenant_id,p.id) WHERE(p.tenant_id,p.invoice_id)=(i.tenant_id,i.id)),0) reversed_pence FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.id=$2`,[context.tenantId,invoiceId])).rows[0];if(!r)throw new Error("INVOICE_NOT_FOUND");return projectInvoiceBalance({totalPence:Number(r.total_pence),creditPence:Number(r.credit_pence),receiptPence:Number(r.receipt_pence),reversedReceiptPence:Number(r.reversed_pence)})})}
 }
 

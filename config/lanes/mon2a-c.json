@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon2a-c": {
+      "branches": [
+        "codex/sandbox/mon2a-c"
+      ],
+      "note": "RED: MON-2A C2/C3 subscription actions and browser journey. Synthetic only; exact company subscription paths retain Origin/CSRF checks. Internal settlement commands are not public. No migration. Own lane file is implicitly allowed.",
+      "allow": [
+        "apps/api/src/subscription.application.test.ts",
+        "apps/api/src/subscription.application.ts",
+        "apps/web/app/plans/plan-screen-headers.test.ts",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/e2e/subscription-period-fixture.ts",
+        "docs/contracts/subscription-plan-read-v1.md",
+        "packages/core/src/subscription-plan-view.test.ts",
+        "packages/core/src/subscription-plan-view.ts",
+        "packages/db/src/subscription-executor.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
+      ]
+    }
+  }
+}

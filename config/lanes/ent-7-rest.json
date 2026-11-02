@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-7-rest": {
+      "branches": [
+        "codex/sandbox/ent-7-rest"
+      ],
+      "note": "ENT-7 leftovers RED: live-only exported duplicate reconciliation and ENT-F1\u2013F12 PostgreSQL command fixtures; caught up with main including ent-7c; synthetic only.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/migration-notes/0322_enterprise_duplicate_reconciliation.md",
+        "packages/db/migrations/0322_enterprise_duplicate_reconciliation.sql",
+        "packages/db/src/enterprise-fee-repository.test.ts",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/test/contractor-billing-fixtures.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts",
+        "packages/db/test/enterprise-fee-reference-fixtures.test.ts",
+        "packages/db/test/enterprise-fee-reference-fixtures.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

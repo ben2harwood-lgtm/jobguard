@@ -1,11 +1,15 @@
 import { z } from "zod";
+import { MAX_MONEY_PENCE } from "./money.js";
+import { parseQuantity } from "./quantity.js";
 
 export const REVIEW_CONTRACT_VERSION = "proposal_review_v1" as const;
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const nullableCommercial = z.object({
-  quantity: z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u).nullable(),
+  quantity: z.string().refine((value) => {
+    try { parseQuantity(value); return true; } catch { return false; }
+  }, "Quantity must be a non-negative canonical decimal with at most six fractional places").nullable(),
   unit: z.string().min(1).max(40).nullable(),
-  unitPricePence: z.number().int().nonnegative().nullable(),
+  unitPricePence: z.number().int().nonnegative().max(MAX_MONEY_PENCE).nullable(),
 });
 
 export const reviewLineV1 = z.object({

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
+export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice", "practice-credit-300", "practice-later-invoice-1440"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
-  commandId: z.string().uuid().optional(),
+  commandId: z.guid({ error: "Invalid uuid" }).optional(),
   fixtureId: z.enum(supplierFixtureIds),
   channel: z.enum(["picker", "fixture_mail"]),
   alias: z.string().max(200).optional(),
@@ -33,7 +33,7 @@ export function formatReceiptQuantity(micros: bigint): string {
   const fraction = (magnitude % RECEIPT_SCALE).toString().padStart(6, "0").replace(/0+$/, "");
   return `${micros < 0n ? "-" : ""}${magnitude / RECEIPT_SCALE}${fraction ? `.${fraction}` : ""}`;
 }
-export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:receiptQuantityV1,rejected:receiptQuantityV1,expectedRevision:z.number().int().nonnegative()}).strict().refine(
+export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.guid({ error: "Invalid uuid" }).optional(),accepted:receiptQuantityV1,rejected:receiptQuantityV1,expectedRevision:z.number().int().nonnegative()}).strict().refine(
   input => !RECEIPT_DECIMAL.test(input.accepted) || !RECEIPT_DECIMAL.test(input.rejected)
     || receiptMicrosUnchecked(input.accepted) + receiptMicrosUnchecked(input.rejected) <= RECEIPT_MAX,
   { message: "Delivered quantity exceeds numeric(20,6)", path: ["rejected"] },
@@ -52,4 +52,6 @@ export const supplierFixtures = {
   "unreadable": {type:"invoice",number:null,media:"image/png",bytes:"generated unreadable image fixture",pages:1,hold:"Document is unreadable"},
   "password-protected": {type:"invoice",number:null,media:"application/pdf",bytes:"%PDF synthetic encrypted",pages:1,hold:"Password-protected documents cannot be reviewed"},
   "multi-page-invoice": {type:"invoice",number:"INV-MB-002",media:"application/pdf",bytes:"%PDF synthetic pages one and two",pages:2},
+  "practice-credit-300": {type:"credit",number:"CR-PF1B-001",media:"text/plain",bytes:"FICTIONAL INTERIM SUPPLIER CREDIT CR-PF1B-001\nNET GBP 300.00",pages:1},
+  "practice-later-invoice-1440": {type:"invoice",number:"INV-PF1B-001",media:"text/plain",bytes:"FICTIONAL INTERIM LATER SUPPLIER INVOICE INV-PF1B-001\nAMOUNT TO PAY GBP 1440.00",pages:1},
 } as const;

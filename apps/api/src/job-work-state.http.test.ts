@@ -41,7 +41,8 @@ describe("CH-4 Nest read adapter (no socket)",()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";
   expect(await new JobWorkStateController({} as Pool).get(result.jobId,`jg_session=${randomUUID()}`)).toEqual(result);
   expect(Reflect.getMetadata("__headers__",JobWorkStateController.prototype.get)).toEqual([{name:"Cache-Control",value:"no-store"}]);
-  expect(Object.getOwnPropertyNames(JobWorkStateController.prototype)).toEqual(["constructor","get"]);spy.mockRestore();
+  expect(Reflect.getMetadata("__headers__",JobWorkStateController.prototype.post)).toEqual([{name:"Cache-Control",value:"no-store"}]);
+  expect(Object.getOwnPropertyNames(JobWorkStateController.prototype)).toEqual(["constructor","get","post"]);spy.mockRestore();
  });
 });
 

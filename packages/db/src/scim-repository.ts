@@ -6,7 +6,7 @@ const codes=["SCIM_EVENT_CONFLICT","INVALID_SCIM_INPUT","SCIM_ROUTE_BLOCKED","SS
 export class ScimRepositoryError extends Error {
  constructor(readonly code:typeof codes[number],options?:ErrorOptions) {super(code,options);this.name="ScimRepositoryError";}
 }
-const resultSchema=z.object({outcome:z.enum(["deactivated","ignored","refused"]),cause:z.enum(["SCIM_DEACTIVATED","SCIM_SUBJECT_NOT_LINKED","SCIM_ALREADY_INACTIVE","SCIM_OWNER_PROTECTED"]),recordId:z.string().uuid(),replayed:z.boolean()}).strict().refine(r=>r.outcome===(r.cause==="SCIM_DEACTIVATED"?"deactivated":r.cause==="SCIM_OWNER_PROTECTED"?"refused":"ignored"));
+const resultSchema=z.object({outcome:z.enum(["deactivated","ignored","refused"]),cause:z.enum(["SCIM_DEACTIVATED","SCIM_SUBJECT_NOT_LINKED","SCIM_ALREADY_INACTIVE","SCIM_OWNER_PROTECTED"]),recordId:z.guid({ error: "Invalid uuid" }),replayed:z.boolean()}).strict().refine(r=>r.outcome===(r.cause==="SCIM_DEACTIVATED"?"deactivated":r.cause==="SCIM_OWNER_PROTECTED"?"refused":"ignored"));
 const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 /** Restricted identity pool; the governed transaction owns revocation, immutable receipt and final audit. */
 export class ScimRepository {

@@ -50,7 +50,7 @@ export const feeRateV1 = z.object({
 export const cumulativeFeeInputV1 = z.object({
   version: z.literal("cumulative-fee.v1"), rate: feeRateV1, cumulativeQualifyingPrincipal: exactPenceV1,
   priorNetPostedPence: z.number().int().nonnegative().max(MAX_MONEY_PENCE), priorPolicyVersion: z.string().min(1).max(80),
-  compensatesDerivationId: z.string().uuid().nullable(),
+  compensatesDerivationId: z.guid({ error: "Invalid uuid" }).nullable(),
 }).strict();
 export type CumulativeFeeInput = z.infer<typeof cumulativeFeeInputV1>;
 export class SharedMoneyError extends Error {

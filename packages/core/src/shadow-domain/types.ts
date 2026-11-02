@@ -2,7 +2,7 @@ import { z } from "zod";
 import { instantV1 } from "../receipt-allocation.js";
 import { MAX_MONEY_PENCE } from "../money.js";
 import { extraOriginV1 } from "../extra-origin.js";
-export const shadowId = z.string().uuid();
+export const shadowId = z.guid({ error: "Invalid uuid" });
 export const shadowRef = z.string().min(1).max(300);
 export const shadowBinding = { tenantId: shadowId, jobId: shadowId, workId: shadowId };
 export const shadowAmount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
@@ -11,7 +11,7 @@ export const reconciledOutcomes = ["already_in_original_scope", "builder_capture
 export const dismissalReasons = ["already_included", "in_original_scope", "not_completed", "not_chargeable", "wrong_job_or_evidence"] as const;
 export const disclosureRoutes = ["must_surface_override", "support_conversation", "export", "data_subject_access", "defect", "tell_me_now", "trial_job_live", "paid_human_review", "drawing_review", "upgrade_bridge"] as const;
 export const ineligibilityReasons = ["disclosed_before_lock", "surfaced_early", "evidence_after_lock", "pre_adoption_evidence", "attribution_disputed"] as const;
-export const shadowIneligibilityV1 = z.object({ version: z.literal("shadow-ineligibility.v1"), reason: z.enum(ineligibilityReasons), sourceRef: shadowRef, at: instantV1, disclosureRoute: z.enum(disclosureRoutes).nullable().default(null) }).strict().readonly();
+export const shadowIneligibilityV1 = z.object({ version: z.literal("shadow-ineligibility.v1"), reason: z.enum(ineligibilityReasons), sourceRef: shadowRef, at: instantV1, disclosureRoute: z.enum(disclosureRoutes).nullable().prefault(null) }).strict().readonly();
 export const shadowEvidenceV1 = z.object({ version: z.literal("shadow-evidence.v1"), ...shadowBinding, signalId: shadowId, evidenceId: shadowId, objectVersionId: shadowRef, sha256: z.string().regex(/^[a-f0-9]{64}$/u), sourceReceivedAt: instantV1, lockTiming: z.enum(["before_lock", "after_lock"]), adoptionTiming: z.enum(["before_adoption", "after_adoption"]) }).strict().readonly();
 export type ShadowEvidence = z.infer<typeof shadowEvidenceV1>;
 export const shadowProposalShape = { version: z.literal("shadow-proposal.v1"), ...shadowBinding, signalId: shadowId, signalType: shadowRef, detectorKind: z.enum(["deterministic", "ai_proposal"]), detectorVersion: shadowRef, createdAt: instantV1, evidenceCutoffAt: instantV1, description: z.string().min(1).max(4000), estimatedValuePence: shadowAmount.nullable(), confidenceBand: z.enum(["low", "medium", "high"]), mustSurfaceNow: z.boolean(), evidence: z.array(shadowEvidenceV1).min(1).readonly() };
@@ -32,12 +32,12 @@ export function freezeShadow<T>(value: T): ShadowReadonly<T> {
     }
     return value as ShadowReadonly<T>;
 }
-export function parseShadow<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function parseShadow<S extends z.ZodType>(schema: S, raw: unknown): z.output<S> {
     const p = schema.safeParse(raw);
     if (!p.success)
         throw new ShadowDomainError("INVALID_SHADOW_INPUT");
     freezeShadow(p.data);
-    return p.data;
+    return p.data as z.output<S>;
 }
 export function sameShadowBinding(a: {
     tenantId: string;

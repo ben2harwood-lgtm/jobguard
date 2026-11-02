@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11b": {
+      "branches": [
+        "codex/sandbox/ent-11b"
+      ],
+      "note": "RED. ENT-11b synthetic Northside finance, statements and timed journey, with server-enforced fifteen-minute browser approval expiry. Finance switch requires migration 0332. Human sales bible, claim review and rehearsals remain outstanding. Prerequisite merge conflicts retain the union of catalog expectations. Catch-up retains main catalogue additions and prerequisite 0322 byte-for-byte; no new product behaviour.",
+      "allow": [
+        "apps/web/app/api/contractor/statements/[action]/route.test.ts",
+        "apps/web/app/api/contractor/statements/[action]/route.ts",
+        "apps/web/app/contractor/statements/page.tsx",
+        "apps/web/app/lib/enterprise-statement-types.ts",
+        "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/app/ui/contractor-billing.test.tsx",
+        "apps/web/app/ui/contractor-billing.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "apps/web/app/ui/enterprise-statement.test.tsx",
+        "apps/web/app/ui/enterprise-statement.tsx",
+        "apps/web/app/ui/work-order-revisions.tsx",
+        "apps/web/e2e/ENT-11b.spec.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/contractor-full-demo-package.md",
+        "packages/db/migration-notes/0332_northside_finance_switch.md",
+        "packages/db/migrations/0332_northside_finance_switch.sql",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/src/northside-demo.ts",
+        "packages/db/src/northside-run.ts",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/enterprise-fee-repository.test.ts",
+        "packages/db/test/northside-demo.integration.test.ts",
+        "packages/db/test/northside-finance-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

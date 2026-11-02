@@ -1,0 +1,10 @@
+# LATER-B19 architecture-check coverage (L135-L138)
+
+Bounded static evidence only. None of these checks proves arbitrary program behaviour. Fixtures are fictional and in memory.
+
+| Check | Detector change | Negative controls | Known limits |
+|---|---|---|---|
+| `tools/money-arithmetic-lint.mjs` | Also refuses `*=` and `/=` (exports `checkMoneyArithmeticSource`; CLI unchanged) | B19-M1 to M4 | Scans only `money.ts` and `fee.ts` (file list deliberately not broadened). `**`, `%`, `Math.*` and non-assignment forms of float maths are not covered. |
+| `tools/core-purity-lint.mjs` | Syntax-aware: static, side-effect, type-only, `export ... from`, `import x = require`, `import()`, `require()`, import-type nodes; `node:` and bare built-ins `fs net http https http2 dgram tls child_process dns` (and sub-paths); `fetch()`, `globalThis.fetch()` | B19-P1 to P4, P3b | Computed module names: library refuses them by default; the CLI only REPORTS them (six merged core test files use a constant-bound `node:fs` specifier, and no exclusion or merged-file edit is allowed in this piece). Constants bound to a specifier, `require` aliases and computed property access are not followed. |
+| `tools/shared-money-origin-scan.mjs` | New recursive scanner following real imports and wrapper modules to `calculateCumulativeFee` and `allocateReceiptToLines`; flags competing declarations and direct `divideRounded`/`multiplyRatio`/`Math.round` in fee-named files | B19-S1 to S5, plus two cases appended to `shared-money-origin.test.mjs` | Reachability is module level and over-approximates (a module counts when it references any import that reaches the kernel). Candidates are chosen by path pattern. Dynamic imports and shadowed bindings are not followed. |
+| `tools/commercial-boundary-lint.mjs` (not edited) | None | B19-C1, C2 and three cases appended to `commercial-boundary.test.mjs` | The production detector is one regular expression over raw text: comments and strings can trigger it, and renamed adapter use is invisible to it. |

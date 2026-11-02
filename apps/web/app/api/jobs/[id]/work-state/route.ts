@@ -12,3 +12,14 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
   const failure=(await workspaceApplication()).workState.failure(error);if(failure)return NextResponse.json(failure.body,{status:failure.status,headers});throw error;
  }
 }
+
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
+ if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401,headers});
+ let raw:unknown;
+ try{raw=await request.json();}catch{return NextResponse.json({code:"INVALID_WORK_STATE_INPUT",environment:"synthetic_demo",realExternalActions:0},{status:400,headers});}
+ try{return NextResponse.json(await (await workspaceApplication()).workState.command((await params).id,raw),{status:201,headers});}
+ catch(error){
+  const denied=practiceFailure(error);if(denied){denied.headers.set("Cache-Control","no-store");return denied;}
+  const failure=(await workspaceApplication()).workState.failure(error);if(failure)return NextResponse.json(failure.body,{status:failure.status,headers});throw error;
+ }
+}

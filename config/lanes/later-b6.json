@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b6": {
+      "branches": ["codex/sandbox/later-b6"],
+      "receipt": "docs/verdicts/LATER-B6/BUILDER_RECEIPT.md",
+      "note": "LATER-B6: RED, fixture-only shadow reliability; decision 74 PARK. No migration, live model, disclosure-policy change or existing test edits. The new v2 labels are consumed only by the evaluator after predictions.",
+      "allow": [
+        "packages/ai/src/shadow-proposal.ts",
+        "packages/ai/src/shadow-evaluation.ts",
+        "apps/api/src/shadow-detection.worker.ts",
+        "packages/ai/src/later-shadow-proposal.test.ts",
+        "packages/ai/src/later-shadow-evaluation.test.ts",
+        "apps/api/src/later-shadow-detection.worker.test.ts",
+        "docs/fixtures/ai/shadow-labels.v2.json",
+        "docs/verdicts/LATER-B6/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B6.md"
+      ]
+    }
+  }
+}

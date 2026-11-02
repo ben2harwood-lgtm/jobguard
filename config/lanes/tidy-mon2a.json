@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "tidy-mon2a": {
+      "branches": [
+        "codex/sandbox/tidy-mon2a"
+      ],
+      "note": "RED. Stage-end MON-2A subscription-screen follow-ups from #375 and #385. Synthetic only; migration 0336. Router commits, pushes and arranges independent review.",
+      "allow": [
+        "apps/api/src/subscription.application.test.ts",
+        "apps/api/src/subscription.application.ts",
+        "apps/web/app/plans/page.tsx",
+        "apps/web/app/plans/plan-screen-headers.test.ts",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/subscription-consent.test.tsx",
+        "apps/web/app/plans/subscription-fixture.test.ts",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/e2e/global-setup.ts",
+        "apps/web/e2e/subscription-period-fixture.ts",
+        "apps/web/playwright.config.ts",
+        "packages/core/src/subscription-plan-view.ts",
+        "packages/db/migration-notes/0336_subscription_consent_text.md",
+        "packages/db/migrations/0336_subscription_consent_text.sql",
+        "packages/db/src/subscription-repository.ts",
+        "packages/db/test/subscription-actions.integration.test.ts",
+        "packages/db/test/subscription-consent-upgrade.integration.test.ts",
+        "packages/db/test/subscription-persistence-fixtures.ts"
+      ]
+    }
+  }
+}

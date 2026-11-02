@@ -1,3 +1,4 @@
+import { prepareInvoiceFinalCheck } from "./customer-invoice-journey";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pounds } from "../../app/lib/pounds";
@@ -34,7 +35,7 @@ export async function readyAllocations(page: Page) {
 /** Synthetic source setup uses real quote, proof, invoice, eligibility and feed commands.
  * No success response or allocation output is mocked. All workbench allocations use its public routes.
  */
-export async function recovery18800(page: Page) {
+export async function recovery18800(page: Page, matchingCustomer = false) {
   const { parsePoundsToPence } = await loadCore();
   await openQuotingWatchdogJob(page);
   for (const input of await page.getByLabel(/Unit rate/u).all()) await input.fill("1.00");
@@ -44,6 +45,7 @@ export async function recovery18800(page: Page) {
   await clean.fill(pounds(1880000 - otherLines).slice(1).replaceAll(",", ""));
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 18,800.00");
   for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+    if (matchingCustomer && name === "Record practice acceptance") await page.getByLabel("Stated customer", { exact: true }).fill("Fictional customer");
     await page.getByRole("button", { name, exact: true }).click();
     if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
   }
@@ -64,6 +66,7 @@ export async function recovery18800(page: Page) {
   const before = await jsonResult(page.request.get(finalPath), "Read final account revision");
   const final = await post(page, finalPath, { version: "final-account.assemble.v1", commandId: id(), expectedRevision: before.account?.revision ?? 0 });
   expect(final.account.issueBlocked).toBe(false);
+  await prepareInvoiceFinalCheck(page,jobId,final.account);
   const issued = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: id(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-12" });
   const invoice = issued.invoices.at(-1); expect(invoice).toMatchObject({ netPence: 1880000, totalPence: 2256000 });
   const invoiceId = invoice.id as string, receiptPath = `/api/jobs/${jobId}/customer-invoices/${invoiceId}/receipts`;

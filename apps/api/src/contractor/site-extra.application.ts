@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
+import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
 import { ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 import { SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
@@ -24,6 +24,23 @@ export class SiteExtraApplication {
    throw error;
   }
  }
+ /** ENT-12 server slice only; no native route or distribution is enabled. */
+ async logOffline(principal: unknown, raw: unknown) {
+  assertSiteExtraMode();
+  const session = workOrderPrincipalV1.safeParse(principal); if (!session.success) throw new SiteExtraError("UNAUTHENTICATED");
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(session.data.sessionId);
+   const context = await this.resolveContext(session.data.sessionId, member);
+   let intent;
+   try { intent = parseOfflineIntentV1(raw); } catch { throw new SiteExtraError("INVALID_COMMAND"); }
+   const result = await this.repository.logOfflineSiteExtra(context, member, intent);
+   return siteExtraLoggedV1.parse({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: intent.jobId, extraId: result.variationId, state: "logged" });
+  } catch (error) {
+   if (error instanceof SiteExtraError || error instanceof WatchdogError) throw error;
+   if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") throw new SiteExtraError("UNAUTHENTICATED");
+   throw new SiteExtraError("SITE_EXTRA_UNAVAILABLE");
+  }
+ }
  async log(principal: unknown, jobId: string, raw: unknown) {
   assertSiteExtraMode();
   const session = workOrderPrincipalV1.safeParse(principal); if (!session.success) throw new SiteExtraError("UNAUTHENTICATED");
@@ -32,7 +49,7 @@ export class SiteExtraApplication {
    // v2 and v3 are separate extensions of v1, not a sequence: a body is exactly one of them.
    const body = logBodyOf(raw), bodyV3 = body ? undefined : logSiteExtraV3.safeParse(raw);
    if (!body && !bodyV3?.success) throw new SiteExtraError("INVALID_COMMAND");
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SiteExtraError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SiteExtraError("NOT_FOUND");
    const context = await this.resolveContext(session.data.sessionId, member);
    if (bodyV3?.success) {
     const v3 = bodyV3.data, shown = v3.residentConfirmation?.shownContentSha256;
@@ -68,7 +85,7 @@ export class SiteExtraApplication {
   try {
    const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
    const body = parseLogSorSiteExtra(raw);
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note });
    return sorSiteExtraLoggedV1.parse({ version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
@@ -80,7 +97,7 @@ export class SiteExtraApplication {
   try {
    const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
    const parsed = parseSorItemsQuery(query);
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.sorItems(context, member, job.data, parsed);
    return siteSorItemsV1.parse({ version: "site-sor-items.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, sorVersionId: result.sorVersionId, items: result.items, truncated: result.truncated });
@@ -91,7 +108,7 @@ export class SiteExtraApplication {
   try {
    const member = await new ContractorRepository(this.pool).resolveSession(sessionId);
    const parsed = parseOrderCheckQuery(query);
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.orderCheck(context, member, job.data, parsed);
    return siteOrderCheckV1.parse({ version: "site-order-check.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, orderCheck: result });
@@ -109,7 +126,7 @@ export class SiteExtraApplication {
  async startVisit(principal: unknown, jobId: string, raw: unknown) {
   return this.visitRequest(principal, async (sessionId, member) => {
    const body = startSiteVisitV1.safeParse(raw); if (!body.success) throw new SiteVisitError("INVALID_COMMAND");
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SiteVisitError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SiteVisitError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.visits.startVisit(context, member, { commandId: body.data.commandId, jobId: job.data });
    return siteVisitStartedV1.parse({ version: "site-visit-started.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, visitId: result.visitId, startedAt: result.startedAt });
@@ -118,7 +135,7 @@ export class SiteExtraApplication {
  async completeVisit(principal: unknown, jobId: string, visitId: string, raw: unknown) {
   return this.visitRequest(principal, async (sessionId, member) => {
    const body = parseCompleteSiteVisit(raw); if (!body.ok) throw new SiteVisitError(body.code);
-   const job = z.string().uuid().safeParse(jobId), visit = z.string().uuid().safeParse(visitId); if (!job.success || !visit.success) throw new SiteVisitError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId), visit = z.guid({ error: "Invalid uuid" }).safeParse(visitId); if (!job.success || !visit.success) throw new SiteVisitError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.visits.completeVisit(context, member, { commandId: body.data.commandId, jobId: job.data, visitId: visit.data, closeoutAnswer: body.data.closeoutAnswer });
    return siteVisitCompletedV1.parse({ version: "site-visit-completed.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, visitId: result.visitId, completedAt: result.completedAt, closeoutAnswer: result.closeoutAnswer });
@@ -133,7 +150,7 @@ export class SiteExtraApplication {
  }
  async orderLines(principal: unknown, jobId: string) {
   return this.visitRequest(principal, async (sessionId, member) => {
-   const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SiteVisitError("NOT_FOUND");
+   const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SiteVisitError("NOT_FOUND");
    const context = await this.resolveContext(sessionId, member);
    const result = await this.visits.orderLines(context, member, job.data);
    return siteOrderLinesV1.parse({ version: "site-order-lines.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: result.jobId, workOrderId: result.workOrderId, revision: result.revision, lines: result.lines });

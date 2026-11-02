@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-9d": {
+      "branches": [
+        "codex/sandbox/ent-9d"
+      ],
+      "note": "ENT-9 routes and screens, RED. Synthetic only; unmatched-variation signal intentionally omitted by router decision because ENT-6 requires an export match for every billed extra. No migration. The lane file itself is implicitly editable under the lane validator.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/contractor/baseline/compare/route.ts",
+        "apps/web/app/api/contractor/baseline/route.ts",
+        "apps/web/app/api/contractor/dashboard/route.test.ts",
+        "apps/web/app/api/contractor/dashboard/route.ts",
+        "apps/web/app/contractor/dashboard/page.tsx",
+        "apps/web/app/lib/enterprise-dashboard-server.ts",
+        "apps/web/app/ui/enterprise-dashboard.test.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/ENT-9.spec.ts",
+        "docs/contracts/enterprise-dashboard-http-v1.md",
+        "packages/db/src/enterprise-dashboard-repository.ts",
+        "packages/db/src/enterprise-dashboard-signals.ts",
+        "packages/db/test/enterprise-dashboard-signals.test.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

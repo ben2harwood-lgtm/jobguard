@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch-7-rest-a": {
+      "branches": [
+        "codex/sandbox/ch-7-rest-a"
+      ],
+      "receipt": "docs/verdicts/CH-7-REST-A/BUILDER_RECEIPT.md",
+      "note": "RED. F21 approved explanation only; ruling 108 expectation edits; preserve historical results and all merged money/access rules.",
+      "allow": [
+        "packages/core/src/recovery-eligibility-v3.ts",
+        "packages/core/src/recovery-eligibility-v3.test.ts",
+        "packages/db/migrations/0197_ch7_f21_reason.sql",
+        "packages/db/migration-notes/0197_ch7_f21_reason.md",
+        "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+        "packages/db/test/recovery-insurer-money.integration.test.ts",
+        "packages/db/test/ch7-f21-reason.integration.test.ts",
+        "packages/db/test/ch7-f21-reason-upgrade.integration.test.ts",
+        "apps/web/e2e/CH-7.spec.ts",
+        "docs/contracts/recovery-eligibility-v3.md",
+        "docs/ledger/CH-7-REST-A.md",
+        "docs/verdicts/CH-7-REST-A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

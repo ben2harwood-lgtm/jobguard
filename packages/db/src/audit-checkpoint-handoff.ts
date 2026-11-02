@@ -19,7 +19,7 @@ export interface AuditCheckpointHandoffResult {
   database: string;
   outcomes: Array<{ tenantId: string; outcome: "handed_off" | "unchanged" | "failed"; sequence: number | null; code?: AuditCheckpointHandoffCode }>;
 }
-const optionsV1 = z.object({ ownerUrl: z.string(), tenantId: z.string().uuid().optional(), operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u) }).strict();
+const optionsV1 = z.object({ ownerUrl: z.string(), tenantId: z.guid({ error: "Invalid uuid" }).optional(), operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u) }).strict();
 function failureCode(error: unknown): AuditCheckpointHandoffCode {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
   if (code === "42501") return "AUDIT_CHECKPOINT_FORBIDDEN";
@@ -33,7 +33,7 @@ async function handleTenant(client: PoolClient, tenantId: string, operator: stri
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-    await client.query("SET LOCAL ROLE jobguard_runtime");
+    await client.query("SET LOCAL ROLE jobguard_migration");
     const head = (await client.query<Head>("SELECT sequence::text, event_hash FROM app.lock_audit_head()")).rows[0];
     await client.query("SET LOCAL ROLE jobguard_migration");
     const newest = (await client.query<Head>("SELECT sequence::text, event_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence DESC LIMIT 1", [tenantId])).rows[0];

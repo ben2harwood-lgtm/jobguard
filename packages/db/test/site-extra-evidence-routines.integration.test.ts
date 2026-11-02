@@ -1,11 +1,11 @@
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { siteExtraContentSha256V1, residentConfirmationDocumentV1 } from "@jobguard/core";
 import { SiteExtraRepository, ExtraRepository, MIGRATION_URLS, migrate } from "../src/index.js";
 import {
- cluster, siteFixture, command, ownerTx, cancel, smallJob, direct, photo, shownFor, evidenceCounts, evidenceRowsText, v3, note, description, sha,
+ cluster, siteFixture, command, ownerTx, cancel, smallJob, direct, photo, pngBytes, shownFor, evidenceCounts, evidenceRowsText, v3, note, description, sha,
  type Cluster, type SiteFixture,
 } from "./site-extra-evidence-fixtures.js";
 let c: Cluster, f: SiteFixture;
@@ -142,8 +142,48 @@ describe("ENT-3d upgrade proof (rule 9)", () => {
   try {
    const apply = async (url: URL) => { await up.admin.query(await readFile(url, "utf8")); await up.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [nameOf(url)]); };
    for (const url of MIGRATION_URLS.filter(u => nameOf(u) >= "0122_extra_origin_persistence.sql" && nameOf(u) < own)) await apply(url);
-   // Before N: a verified photo through the merged pipeline, a note-only extra, and an extra that links the photo (the governed command needs the routines of N itself, so the merged raise runs without the seam).
-   const x = await siteFixture(up), p = await photo(up, { ctx: x.ctx, jobId: x.jobId }), extras = new ExtraRepository(up.runtime);
+   // Historical state is seeded; pipeline execution is tested elsewhere (E20–E24 and the evidence suites) and is not claimed here.
+   // Before N: an already-verified synthetic photo, a note-only extra, and an extra linking the photo; the merged raise runs without N's seam.
+   expect((await up.admin.query("SELECT to_regclass('app.job_work_state_event') work_state, to_regclass('app.job_link') job_link")).rows).toEqual([{ work_state: null, job_link: null }]);
+   const x = await siteFixture(up), extras = new ExtraRepository(up.runtime);
+   const p = await ownerTx(up, x.p.tenantId, async db => {
+    // Use the normal INSERT role: 0025's FORCE-RLS policy for synthetic originals names jobguard_runtime, not the table owner.
+    await db.$client.query("SET LOCAL ROLE jobguard_runtime");
+    const scopes = await db.$client.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY id LIMIT 1", [x.p.tenantId, x.jobId]);
+    expect(scopes.rowCount, "the predecessor job has a real confirmed scope for the synthetic original's non-null FK").toBe(1);
+    const scopeId = scopes.rows[0]!.id as string, uploadId = randomUUID(), id = randomUUID();
+    const bytes = Buffer.from(pngBytes(25)), sha256 = createHash("sha256").update(bytes).digest("hex");
+    const objectKey = `tenants/${x.p.tenantId}/uploads/${uploadId}/original`, version = "e25-pre0141-v1";
+    await db.$client.query(`INSERT INTO app.evidence_upload
+     (id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_received_at,server_verified_at,expires_at)
+     VALUES($1,$2,$3,$4,$5,$6,'image/png',$7,'standard_evidence','verified',$8,transaction_timestamp(),clock_timestamp(),clock_timestamp()+interval '1 hour')`,
+    [uploadId, x.p.tenantId, x.jobId, scopeId, objectKey, sha256, bytes.length, version]);
+    await db.$client.query(`INSERT INTO app.synthetic_evidence_original
+     (tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
+     VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7)`, [x.p.tenantId, uploadId, x.jobId, scopeId, objectKey, version, bytes]);
+    await db.$client.query(`INSERT INTO app.evidence_object
+     (id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+     SELECT $1,tenant_id,id,job_id,scope_item_id,'original','site_photo',object_key,object_version_id,expected_sha256,$4,expected_content_type,retention_class,server_received_at,server_verified_at
+     FROM app.evidence_upload WHERE tenant_id=$2 AND id=$3`, [id, x.p.tenantId, uploadId, bytes.length]);
+    const stored = await db.$client.query(`SELECT u.state,e.upload_id,e.kind,e.evidence_type,e.object_version_id,e.sha256,e.byte_length,o.bytes,
+     (u.job_id=$4::uuid AND u.scope_item_id=$5::uuid AND u.object_key=$6::text AND u.expected_sha256=e.sha256
+      AND u.expected_content_type='image/png' AND e.content_type=u.expected_content_type AND o.content_type=e.content_type
+      AND u.maximum_bytes=octet_length(o.bytes) AND u.retention_class='standard_evidence' AND e.retention_class=u.retention_class
+      AND o.environment='synthetic_demo' AND u.rejection_code IS NULL
+      AND u.server_verified_at IS NOT NULL AND e.server_received_at=u.server_received_at AND e.server_verified_at=u.server_verified_at
+      AND u.expires_at>u.server_verified_at) metadata_matches
+     FROM app.evidence_upload u
+     JOIN app.evidence_object e ON (e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id)=(u.tenant_id,u.job_id,u.scope_item_id,u.id,u.object_key,u.object_version_id)
+     JOIN app.synthetic_evidence_original o ON (o.tenant_id,o.job_id,o.scope_item_id,o.upload_id,o.object_key,o.object_version_id)=(u.tenant_id,u.job_id,u.scope_item_id,u.id,u.object_key,u.object_version_id)
+     WHERE u.tenant_id=$1 AND u.id=$2 AND e.id=$3`, [x.p.tenantId, uploadId, id, x.jobId, scopeId, objectKey]);
+    expect(stored.rowCount, "one consistent verified historical upload/original pair and its synthetic bytes").toBe(1);
+    const saved = stored.rows[0]!;
+    expect(saved).toMatchObject({ state: "verified", upload_id: uploadId, kind: "original", evidence_type: "site_photo", object_version_id: version, sha256, metadata_matches: true });
+    expect(saved.bytes).toEqual(bytes);
+    expect(createHash("sha256").update(saved.bytes as Buffer).digest("hex")).toBe(saved.sha256);
+    expect(Number(saved.byte_length)).toBe(bytes.length);
+    return { id, sha256, objectKey };
+   });
    await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor)); await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor, { evidenceId: p.id }));
    const run: Run = (sql, values) => up.admin.query(sql, values);
    const preColumns: Record<string, string[]> = {}, preKeys: Record<string, string[]> = {};

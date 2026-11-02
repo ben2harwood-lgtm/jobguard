@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m48-c0": {
+      "branches": ["codex/sandbox/m48-c0"],
+      "receipt": "docs/verdicts/M48-C0/BUILDER_RECEIPT.md",
+      "note": "Issued build-only pure synthetic contracts. Source-design acceptance and persisted M48-B1 gate merge; independent reviews and acceptance pending.",
+      "allow": [
+        "packages/core/src/receipt-line-allocation-source.ts",
+        "packages/core/src/receipt-line-allocation-source.test.ts",
+        "docs/contracts/receipt-line-allocation-source-v1.md",
+        "docs/verdicts/M48-C0/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

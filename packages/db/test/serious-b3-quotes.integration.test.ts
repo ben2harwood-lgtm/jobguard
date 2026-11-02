@@ -1,3 +1,4 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,7 +19,7 @@ beforeAll(async () => {
   const port = await freePort(57500,200);
   pg = new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await pg.initialise(); await pg.start();
-  admin = new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+  admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   const user = randomUUID(), account = randomUUID();
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);
@@ -26,7 +27,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic Builder')",[account,T]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,user]);
   await admin.query("CREATE ROLE serious_b3_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO serious_b3_login");
-  runtime = new Pool({host:"127.0.0.1",port,database:"postgres",user:"serious_b3_login",password:"synthetic",max:4});
+  runtime = new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"serious_b3_login",password:"synthetic",max:4});
 },90_000);
 afterAll(async () => {
   await closeTestPools(runtime,admin); await pg?.stop(); if(dir) await rm(dir,{recursive:true,force:true});
@@ -34,8 +35,8 @@ afterAll(async () => {
 });
 async function fixture(count=1) {
   const jobId=randomUUID(), draftId=randomUUID(), lines:QuoteLine[]=[];
+  await withTenant(admin,context,db => db.$client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Synthetic quote','quoting')",[jobId,T]));
   await withTenant(runtime,context,async db => {
-    await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Synthetic quote','quoting')",[jobId,T]);
     for(let index=0;index<count;index++) {
       const scopeItemId=randomUUID(),scopeRevisionId=randomUUID();
       await db.$client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,T,jobId]);

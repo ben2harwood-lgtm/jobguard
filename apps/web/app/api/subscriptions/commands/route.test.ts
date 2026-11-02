@@ -1,0 +1,10 @@
+import { afterEach, expect, it, vi } from 'vitest';
+const state=vi.hoisted(()=>({command:vi.fn(),credentials:{sessionToken:'real',csrfToken:'csrf',origin:'o'}}));
+vi.mock('../../../lib/identity-server',()=>({identityCredentials:async()=>state.credentials,identityApplication:()=>({allowedOrigin:'o'})}));
+vi.mock('../../../lib/subscription-server',()=>({subscriptionApplication:()=>({command:state.command})}));
+import { POST } from './route';
+const id='00000000-0000-4000-8000-000000000001';
+afterEach(()=>vi.clearAllMocks());
+it('forwards the real-session credentials and command; 201 no-store',async()=>{state.command.mockResolvedValue({ok:true});const response=await POST(new Request('https://fictional.invalid',{method:'POST',body:JSON.stringify({version:'subscription-http-command.v1',commandId:id,command:{kind:'x'}})}));expect(response.status).toBe(201);expect(response.headers.get('cache-control')).toBe('no-store');expect(state.command).toHaveBeenCalledWith(state.credentials,id,{kind:'x'});});
+it('a malformed envelope never reaches the application',async()=>{const response=await POST(new Request('https://fictional.invalid',{method:'POST',body:'{'}));expect(response.status).toBe(400);expect(state.command).not.toHaveBeenCalled();});
+it('a refused session is a stable 403 with no company detail',async()=>{const {SubscriptionPersistenceError}=await import('@jobguard/db');state.command.mockRejectedValue(new SubscriptionPersistenceError('SUBSCRIPTION_FORBIDDEN'));const response=await POST(new Request('https://fictional.invalid',{method:'POST',body:JSON.stringify({version:'subscription-http-command.v1',commandId:id,command:{}})}));expect(response.status).toBe(403);expect(await response.json()).toEqual({version:'subscription-error.v1',code:'SUBSCRIPTION_FORBIDDEN'});});

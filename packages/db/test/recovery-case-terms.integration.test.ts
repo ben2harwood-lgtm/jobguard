@@ -1,3 +1,6 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
+import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -34,7 +37,11 @@ async function handMade(db:PoolClient,caseId:string,memberId:string,over:Record<
  await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[r,T,d,memberId]);
  await db.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,$6,$7,1,'reference_fee_policy_v3',$8,$9)`,[a,T,d,r,memberId,action,over.hash??recoveryCaseTermsHash(caseId),over.expired?new Date("2000-01-01"):new Date("2099-01-01"),over.revoked?new Date():null]);return {c,a};
 }
-const direct=(db:PoolClient,caseId:string,memberId:string,ids:{c:string;a:string},tenant=T,target=job)=>db.query("SELECT * FROM app.approve_recovery_case_terms($1,$2,$3,$4,$5,$6,$7)",[tenant,randomUUID(),target,caseId,memberId,ids.c,ids.a]);
+const direct=async(db:PoolClient,caseId:string,memberId:string,ids:{c:string;a:string},tenant=T,target=job)=>{
+ const result=await db.query("SELECT * FROM app.approve_recovery_case_terms($1,$2,$3,$4,$5,$6,$7)",[tenant,randomUUID(),target,caseId,memberId,ids.c,ids.a]);
+ await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant,ids.c]);
+ return result;
+};
 async function attached(caseId:string){const repo=new EvidencePackRepository(runtime),pack=await repo.generate(context,caseId,{commandId:randomUUID()},messageActor.actorRef);await repo.approveAttachment(context,caseId,pack.id,{commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash},messageActor.actorRef);return pack;}
 async function preview(caseId:string){const repo=new RecoveryMessageRepository(runtime),s=await repo.read(context,caseId);return repo.preview(context,caseId,{version:"recovery-message-preview.v1",commandId:randomUUID(),expectedCaseRevision:s.readiness.caseRevision,packId:s.readiness.packId!},messageActor);}
 const approveMessage=(v:NonNullable<Awaited<ReturnType<RecoveryMessageRepository["read"]>>["latest"]>)=>({version:"recovery-message-command.v1",action:"approve",commandId:randomUUID(),messageId:v.id,expectedRevision:v.revision,recipient:v.message.recipient,body:v.message.body,amountPence:v.message.amountPence,packId:v.message.packId,contentHash:v.message.contentHash});
@@ -64,17 +71,18 @@ async function supplierFixture(){
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-"));port=await freePort(58400,200);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});await migrate(admin);
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
- runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres",max:4});
+ runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
  job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(admin,job);
  supplierRefs=await supplierFixture();
  const final=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
+ await prepareInvoicePrerequisites(admin,runtime,T,job,M,final.id);
  invoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:job,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
  unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(admin,unbound);
- const controlFinal=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:unbound,actorMembershipId:M});unboundInvoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:unbound,finalAccountRevisionId:controlFinal.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
+ const controlFinal=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:unbound,actorMembershipId:M});await prepareInvoicePrerequisites(admin,runtime,T,unbound,M,controlFinal.id);unboundInvoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:unbound,finalAccountRevisionId:controlFinal.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
  // Privileged negative-fixture setup only: construct the historical no-policy shape; all pursuit calls below still run as runtime.
  const fixtureClient=await admin.connect();try{await fixtureClient.query("BEGIN");await fixtureClient.query("SET LOCAL session_replication_role=replica");await fixtureClient.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL WHERE tenant_id=$1 AND id=$2",[T,unbound]);await fixtureClient.query("COMMIT");}finally{fixtureClient.release();}
 });
@@ -85,7 +93,7 @@ it("[T1] stores exact owner approval, one dispatcher authorization and two audit
  expect(view).toMatchObject({caseId:id,jobId:job,actorMembershipId:M,commandId:input.commandId,termsHash:recoveryCaseTermsHash(id),policyStatus:"proposed",environment:"synthetic_demo",realExternalActions:0});
  const stored=(await admin.query("SELECT * FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2",[T,view.id])).rows[0];expect(stored.terms_hash.trim()).toBe(view.termsHash);expect(stored.authorization_id).toBe(view.authorizationId);
  expect((await admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[T,input.commandId])).rows[0].status).toBe("succeeded");
- const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"postgres"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
+ const fresh=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo"});try{expect(await new RecoveryCaseTermsRepository(fresh).read(context,job,id)).toEqual(view);}finally{await fresh.end();}
 });
 // membership.role is unconstrained varchar(40): test each known product role plus an arbitrary schema-valid value.
 it.each(["admin","estimator","foreman","operative","finance","read_only","supervisor","surveyor","commercial_manager","client_approver","member","arbitrary_schema_role"])("[T2] dispatcher refuses non-owner %s with zero writes",async role=>{
@@ -118,7 +126,7 @@ it("[T4] two different active owners racing leave one approval and a typed confl
  const id=await newCase(),other=await member("owner"),repo=new RecoveryCaseTermsRepository(runtime);const results=await Promise.allSettled([repo.approve(context,job,command(id),actor),repo.approve(context,job,command(id),other)]);
  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"RECOVERY_TERMS_COMMAND_CONFLICT"}});expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2",[T,id])).rows[0].n).toBe(1);
 });
-it("[T5] preview refusal writes nothing; [T6] approval then preview/approve/deliver succeeds unchanged",async()=>{
+it("V3ApprovedTermsStillWork: preview refusal writes nothing, approval then preview/approve/deliver succeeds unchanged",async()=>{
  const id=await newCase();await attached(id);const before=await counts();await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
  await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);const repo=new RecoveryMessageRepository(runtime),v=(await preview(id)).latest!;expect(v.status).toBe("previewed");const queued=await repo.command(context,id,approveMessage(v),messageActor);expect(queued.latest!.status).toBe("queued");
  const delivered=await repo.command(context,id,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:queued.latest!.revision,outcome:"success"},messageActor);expect(delivered.latest!.status).toBe("simulated_delivery");expect(delivered.sinkCount).toBe(1);
@@ -135,14 +143,20 @@ it("[T5] raw runtime writes on all three chase tables hit their added terms trig
  expect(await counts()).toEqual(before);
  expect((await counts()).recovery_message_sink).toBe(before.recovery_message_sink);
 });
-it("[T6] controls: non-withheld and no-policy cases require no terms",async()=>{
- for(const [type,target] of [["merchant_overcharge",job],["withheld_customer_payment",unbound]]){const id=await newCase(type,target);await attached(id);expect((await preview(id)).latest!.status).toBe("previewed");expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,target,id]))).rows[0].ok).toBe(true);}
+it("NonWithheldUnchanged: merchant control still previews without terms",async()=>{
+ const id=await newCase("merchant_overcharge",job);await attached(id);expect((await preview(id)).latest!.status).toBe("previewed");expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,job,id]))).rows[0].ok).toBe(true);
+});
+it("NullPolicyWithheldPursuitRefused: the issued C requirement supersedes the old exemption",async()=>{
+ const id=await newCase("withheld_customer_payment",unbound);await attached(id);const before=await counts();
+ expect((await withTenant(runtime,context,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[T,unbound,id]))).rows[0].ok).toBe(false);
+ await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
 });
 it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard",async()=>{
  const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);const ctx=testTenantContext(b);
  await withTenant(admin,ctx,async db=>{
  await db.$client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Tenant B fixture')",[account,b]);await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[bm,b,account,bu]);
  // Adversarial SQL fixture, not a product activation: B reuses A's case UUID, with its own job/policy and no approval.
+ await permitImportedJob(db.$client,{tenantId:b,jobId:bj,actorMembershipId:bm,title:"Tenant B guard fixture",feePolicyVersion:"reference_fee_policy_v3",netPence:100000,capPence:1500});
  await db.$client.query("INSERT INTO app.job(id,tenant_id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Tenant B guard fixture','imported',100000,'reference_fee_policy_v3',1500)",[bj,b]);
  await db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional party','builder_customer','customer_invoice','[]')",[id,b,bj]);
  await db.$client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)",[randomUUID(),b,bj,id,hash(id)]);
@@ -151,7 +165,7 @@ it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's sa
  expect(await repo.read(ctx,job,id)).toBeNull();expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT * FROM app.recovery_case_terms_approval"))).rows).toEqual([]);
  expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[b,bj,id]))).rows[0].ok).toBe(false);
  await expect(repo.approve(ctx,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});
- await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});
+ await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
  await expect(repo.approve(context,job,command(fresh),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
  await expect(repo.approve(context,bj,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  expect((await runtime.query("SELECT * FROM app.recovery_case_terms_approval")).rows).toEqual([]);
@@ -205,10 +219,12 @@ it("[T10] pinned time, immutable rows and narrow table grants",async()=>{
  for(const role of ["jobguard_runtime","jobguard_migration"]){const db=await admin.connect();try{for(const sql of ["UPDATE app.recovery_case_terms_approval SET approved_at='2000-01-01' WHERE tenant_id=$1 AND id=$2","DELETE FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2"]){await db.query("BEGIN");await db.query(`SET LOCAL ROLE ${role}`);await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await expect(db.query(sql,[T,view.id])).rejects.toMatchObject({code:role==="jobguard_runtime"?"42501":"55000"});await db.query("ROLLBACK");}}finally{db.release();}}
  for(const role of ["jobguard_infrastructure","jobguard_identity"])for(const privilege of ["SELECT","INSERT","UPDATE","DELETE"])expect((await admin.query("SELECT has_table_privilege($1,'app.recovery_case_terms_approval',$2) ok",[role,privilege])).rows[0].ok).toBe(false);
  expect(await new RecoveryCaseTermsRepository(runtime).read(context,job,id)).toEqual(view);
- for(const supplied of ["2000-01-01T00:00:00Z","2099-01-01T00:00:00Z"]){const c=await newCase();await withTenant(admin,context,async db=>{const ids=await handMade(db.$client,c,M);await db.$client.query("SET LOCAL ROLE jobguard_migration");const result=await db.$client.query(`INSERT INTO app.recovery_case_terms_approval(id,tenant_id,job_id,case_id,terms_version,fee_policy_version,eligibility_policy_version,policy_status,environment,terms_hash,actor_membership_id,command_id,authorization_id,approved_at) VALUES($1,$2,$3,$4,'synthetic_recovery_fee_terms.v1','reference_fee_policy_v3','reference_recovery_eligibility_policy_v3','proposed','synthetic_demo',$5,$6,$7,$8,$9) RETURNING approved_at=transaction_timestamp() pinned`,[randomUUID(),T,job,c,recoveryCaseTermsHash(c),M,ids.c,ids.a,supplied]);expect(result.rows[0].pinned).toBe(true);});}
+ for(const supplied of ["2000-01-01T00:00:00Z","2099-01-01T00:00:00Z"]){const c=await newCase();await withTenant(admin,context,async db=>{const ids=await handMade(db.$client,c,M);await db.$client.query("SET LOCAL ROLE jobguard_migration");const result=await db.$client.query(`INSERT INTO app.recovery_case_terms_approval(id,tenant_id,job_id,case_id,terms_version,fee_policy_version,eligibility_policy_version,policy_status,environment,terms_hash,actor_membership_id,command_id,authorization_id,approved_at) VALUES($1,$2,$3,$4,'synthetic_recovery_fee_terms.v1','reference_fee_policy_v3','reference_recovery_eligibility_policy_v3','proposed','synthetic_demo',$5,$6,$7,$8,$9) RETURNING approved_at=transaction_timestamp() pinned`,[randomUUID(),T,job,c,recoveryCaseTermsHash(c),M,ids.c,ids.a,supplied]);expect(result.rows[0].pinned).toBe(true);await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[T,ids.c]);});}
 });
 it("[T3] v1-bound job refuses terms (historical policy control)",async()=>{
- const j=randomUUID();await admin.query("INSERT INTO app.job(id,tenant_id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Historical v1 fixture','imported',100000,'reference_fee_policy_v1',1500)",[j,T]);const id=await newCase("withheld_customer_payment",j),before=await counts();await expect(new RecoveryCaseTermsRepository(runtime).approve(context,j,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_POLICY_MISMATCH"});expect(await counts()).toEqual(before);
+ const j=randomUUID();await withTenant(admin,context,async db=>{
+ await permitImportedJob(db.$client,{tenantId:T,jobId:j,actorMembershipId:M,title:"Historical v1 fixture",feePolicyVersion:"reference_fee_policy_v1",netPence:100000,capPence:1500});
+ await db.$client.query("INSERT INTO app.job(id,tenant_id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Historical v1 fixture','imported',100000,'reference_fee_policy_v1',1500)",[j,T]);});const id=await newCase("withheld_customer_payment",j),before=await counts();await expect(new RecoveryCaseTermsRepository(runtime).approve(context,j,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_POLICY_MISMATCH"});expect(await counts()).toEqual(before);
 });
 it.each([{policy_status:"approved"},{environment:"production_billing"},{fee_policy_version:"reference_fee_policy_v1"},{terms_hash:"b".repeat(64)}])("[T3] migration owner cannot store non-reference terms %j",async over=>{
  const id=await newCase(),before=await counts();await expect(withTenant(admin,context,async db=>{const ids=await handMade(db.$client,id,M);await db.$client.query("SET LOCAL ROLE jobguard_migration");return db.$client.query(`INSERT INTO app.recovery_case_terms_approval(id,tenant_id,job_id,case_id,terms_version,fee_policy_version,eligibility_policy_version,policy_status,environment,terms_hash,actor_membership_id,command_id,authorization_id) VALUES($1,$2,$3,$4,'synthetic_recovery_fee_terms.v1',$5,'reference_recovery_eligibility_policy_v3',$6,$7,$8,$9,$10,$11)`,[randomUUID(),T,job,id,over.fee_policy_version??"reference_fee_policy_v3",over.policy_status??"proposed",over.environment??"synthetic_demo",over.terms_hash??recoveryCaseTermsHash(id),M,ids.c,ids.a]);})).rejects.toMatchObject({code:"23514"});expect(await counts()).toEqual(before);

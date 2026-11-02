@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AclEntry, type Catalogue, type Inventory, type RelationRow, type RoutineRow, type RoleRow,
   compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness, staleEntries,
-  routineIdentity, staticScan, InventoryError,
+  routineIdentity, staticScan, InventoryError, loadReviewedInventory, repoFileExists,
 } from "./lp-0-catalog.js";
 
 const RT = "jobguard_runtime";
@@ -302,6 +302,10 @@ describe("[LP0-02] stale inventory entries fail the base", () => {
 });
 
 describe("recorded routine facts and static scan", () => {
+  it("the installed reviewed inventory has complete authority dispositions after legacy grant withdrawal", async () => {
+    const { inventory } = await loadReviewedInventory();
+    expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
+  });
   it("static scan finds written tables and called routines as hypotheses, ignoring comments and unknown names", () => {
     const known = new Set(["app.helper", "app.other"]);
     const rels = new Set(["app.membership", "app.audit_event"]);
@@ -316,4 +320,82 @@ describe("recorded routine facts and static scan", () => {
     expect(problems.some(p => p.includes("test file not found: t.test.ts"))).toBe(true);
     expect(pathCompleteness(inv, () => true)).toEqual([]);
   });
+});
+
+
+describe("DEMO-I exact installed capability inventory",()=>{
+ it("records only the runtime entry point and owner, retaining private tables and helpers",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const tables=["small_builder_demo_run","small_builder_demo_receipt","small_builder_demo_report"];
+  const routines=[
+   routine("small_builder_demo","uuid,text,text,uuid,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]}),
+   routine("small_builder_demo_audit","uuid,uuid,uuid,text,text,text",[],{securityDefiner:false,config:["search_path=pg_catalog"]}),
+   routine("small_builder_demo_guard","",[],{securityDefiner:false,returnsTrigger:true,config:["search_path=pg_catalog"]}),
+  ];
+  const without=base({relations:[],routines:[]});
+  const baseline=new Set(deriveFacts(without).map(f=>f.key));
+  const cat=base({relations:tables.map(name=>table(name,[])),routines});
+  const additions=(c:Catalogue)=>deriveFacts(c).filter(f=>!baseline.has(f.key));
+  const installed=additions(cat);
+  const entries=inventory.entries.filter(e=>e.key.includes("app.small_builder_demo"));
+  expect(entries.map(e=>e.key).sort()).toEqual(installed.map(f=>f.key).sort());
+  expect(entries).toHaveLength(2);
+  expect(compareInventory(inventory,installed).ok).toBe(true);
+  for(const name of tables){
+   const extra=base({...cat,relations:cat.relations.map(r=>r.name===name?{...r,acl:[...r.acl,acl(RT,"SELECT")]}:r)});
+   expect(compareInventory(inventory,additions(extra)).diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({code:"TABLE_GRANT_ADDED",object:`app.${name}`,privilege:"SELECT"})]));
+  }
+  for(const name of ["small_builder_demo_audit","small_builder_demo_guard"]){
+   for(const grantee of [RT,"PUBLIC","jobguard_infrastructure"]){
+    const extra=base({...cat,routines:routines.map(r=>r.name===name?{...r,acl:[...r.acl,acl(grantee,"EXECUTE")]}:r)});
+    expect(compareInventory(inventory,additions(extra)).ok).toBe(false);
+   }
+  }
+  const records=inventory.recorded.routines.filter(r=>r.identity.startsWith("function:app.small_builder_demo"));
+  expect(records.map(r=>r.identity).sort()).toEqual(routines.map(routineIdentity).sort());
+  expect(records.filter(r=>r.runtimeExecute).map(r=>r.identity)).toEqual([routineIdentity(routines[0]!)]);
+  expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
+ });
+});
+
+describe("M5-8 private key registry inventory", () => {
+ it("records both private routines without granting any runtime capability", async () => {
+  const { inventory } = await loadReviewedInventory();
+  const records = inventory.recorded.routines.filter(r => r.identity === "function:app.tenant_key_registry_immutable()");
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({ owner: "jobguard_migration", securityDefiner: false,
+   searchPath: "search_path=pg_catalog", returnsTrigger: true, reachable: false,
+   runtimeExecute: false, publicExecute: false, otherExecute: [] });
+  const cat = base({ relations: [table("tenant_key_version", []), table("tenant_key_revocation", [])],
+   routines: [routine("tenant_key_registry_immutable", "", [], { securityDefiner: false, returnsTrigger: true, config: ["search_path=pg_catalog"] }),
+    routine("register_tenant_key", "integer,uuid,text", [], { config: ["search_path=pg_catalog"] })] });
+  expect(inventory.recorded.routines.filter(r => r.identity === "function:app.register_tenant_key(integer,uuid,text)")).toEqual([
+   expect.objectContaining({ owner: OWNER, securityDefiner: true, searchPath: "search_path=pg_catalog",
+    returnsTrigger: false, reachable: false, runtimeExecute: false, publicExecute: false,
+    otherExecute: [], staticWrites: ["app.tenant_key_version"] })]);
+  const clean = new Set(deriveFacts(base({ relations: [], routines: [] })).map(f => f.key));
+  expect(compareInventory(inventory, deriveFacts(cat).filter(f => !clean.has(f.key))).ok).toBe(true);
+  for (const grantee of [RT, "PUBLIC", "jobguard_infrastructure"]) {
+   const extra = base({ ...cat, routines: cat.routines.map(r => r.name === "register_tenant_key" ? { ...r, acl: [...r.acl, acl(grantee, "EXECUTE")] } : r) });
+   expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);
+  }
+  for (const name of ["tenant_key_version", "tenant_key_revocation"]) {
+   const extra = base({ ...cat, relations: cat.relations.map(r => r.name === name ? { ...r, acl: [...r.acl, acl(RT, "SELECT")] } : r) });
+   expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);
+  }
+ });
+});
+
+describe("DEMO-J5 exact trial guide capability",()=>{
+ it("unions the one controlled entry point without direct table or helper grants",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const cat=base({relations:[table("demo_trial_binding",[])],routines:[routine("demo_trial","uuid,text,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]})]});
+  const facts=deriveFacts(cat).filter(f=>f.key.includes("app.demo_trial"));
+  expect(inventory.entries.filter(e=>e.key.includes("app.demo_trial")).map(e=>e.key).sort()).toEqual(facts.map(f=>f.key).sort());
+  expect(compareInventory(inventory,facts).ok).toBe(true);
+  for(const privilege of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE"]){
+   const altered=base({...cat,relations:[table("demo_trial_binding",[acl(RT,privilege)])]});
+   expect(compareInventory(inventory,deriveFacts(altered).filter(f=>f.key.includes("app.demo_trial"))).ok).toBe(false);
+  }
+ });
 });

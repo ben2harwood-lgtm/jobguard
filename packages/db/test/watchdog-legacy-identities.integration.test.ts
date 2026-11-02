@@ -8,7 +8,7 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 // kind of watchdog command may claim it, before or after that command's own first replay. The previous schema is reproduced exactly:
 // run the real command, then remove the two bookkeeping tables migration 0096 added (identity, stored result), leaving only the
 // stores that existed before it. Where an id persisted is found by looking at every uuid column in the app schema, not by trusting
-// a list in the code under test. The commands are the registry's 17.
+// a list in the code under test. Includes the registry's actual CH-4 finish/cancel commands.
 const h = createWatchdogHarness("legacy-ids", 63000);
 const { cases, live, norm, CONFLICT } = h;
 beforeAll(() => h.boot(), 120000);
@@ -31,12 +31,16 @@ const previousSchema = async (id: string) => {
 };
 const identityRows = async (id: string) => Number((await h.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE command_id=$1", [id])).rows[0].n);
 
-// The commands whose id the previous schema persisted. The other four (order revision, document intake, goods receipt, finalisation)
+// Commands with persistent history when modern identity/result bookkeeping is absent, including CH-4 events/receipts.
+// The other four (order revision, document intake, goods receipt, finalisation)
 // had no command id before migration 0096, so there is nothing to protect.
 const PERSISTED_BEFORE = [
+  "job-work-state-repository.ts#finish", "job-work-state-repository.ts#cancelFinish",
   "discrepancy-repository.ts#evaluate", "discrepancy-repository.ts#review", "discrepancy-repository.ts#supersede", "evidence.ts#beginUpload",
   "inbox-relevance-repository.ts#dismiss", "inbox-relevance-repository.ts#seed", "proof-repository.ts#complete", "purchase-order-repository.ts#place",
   "readiness-repository.ts#advance", "readiness-repository.ts#record", "supplier-document-repository.ts#confirm", "supplier-match-repository.ts#correct", "supplier-match-repository.ts#create",
+  // SV-7A intake (routine-guarded): its command_receipt holds the id.
+  "job-source-repository.ts#intake",
 ];
 
 describe("previous-schema command ids cannot be claimed by another kind of command", () => {
@@ -135,7 +139,7 @@ describe("previous-schema writers and claimed ids", () => {
     // Its own kind on its own job is admitted only from the claiming transaction; afterwards it would be a second effect of a
     // command that already completed (Codex P2 4199348149).
     const own = randomUUID(), claiming = await claimOpen(own, job, "inbox.seed");
-    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("COMMIT"); } finally { claiming.release(); }
+    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, own]); await claiming.query("COMMIT"); } finally { claiming.release(); }
     const laterJob = await live(), completed = randomUUID(); await claim(completed, laterJob, "inbox.seed");
     await expect(legacySeed(h.admin, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
     // Claim ownership comes from the database, not from anything a session can set (Codex P2 4199535957): neither a forged
@@ -178,6 +182,7 @@ describe("previous-schema writers and claimed ids", () => {
     await writer.query("BEGIN"); await legacySeed(writer, second, job);
     const claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
     expect(await stillWaiting(claimed)).toBe(true);
+    await writer.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, second]);
     await writer.query("COMMIT"); writer.release();
     expect(await claiming).toBe("conflict");
   });
@@ -210,7 +215,7 @@ describe("previous-schema writers and claimed ids", () => {
       // Prove the intended interleaving with real PostgreSQL wait information, not just a sleeping promise.
       const blocked = (await h.admin.query<{ query: string }>("SELECT query FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [oldPid])).rows;
       expect(blocked).toHaveLength(1);
-      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /lock_audit_head/u : /pg_advisory_xact_lock/u);
+      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /FROM app\.append_audit\(/u : /pg_advisory_xact_lock/u);
     } finally { resume(); await Promise.all([old, current]); }
     const outcomes = await Promise.all([old, current]);
     expect(outcomes.map(outcome => outcome.outcome).sort()).toEqual(["committed", "error"]);

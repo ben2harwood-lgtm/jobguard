@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch6-c": {
+      "branches": ["codex/sandbox/ch6-c"],
+      "receipt": "docs/verdicts/CH6-C/BUILDER_RECEIPT.md",
+      "note": "Issued CH6-C pure synthetic advisory contracts only; no shared exports, persistence, providers or enablement. Parent/source/policy and independent review holds retained.",
+      "allow": [
+        "packages/core/src/commercial-integrity-v3.ts",
+        "packages/core/src/commercial-integrity-v3.test.ts",
+        "packages/core/src/commercial-integrity-v3.boundaries.test.ts",
+        "docs/contracts/commercial-integrity-v3.md",
+        "docs/verdicts/CH6-C/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

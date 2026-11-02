@@ -13,9 +13,9 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
     const { pool, member, role, sessionId } = await demoActor();
     const tenant: VerifiedTenantContext = await demoContext(pool, sessionId);
     const { extraId: rawExtra, action } = await context.params, extraId = uuid(rawExtra);
-    const common = { version: z.literal("northside-command.v1"), jobId: z.string().uuid(), commandId: z.string().uuid().optional() };
+    const common = { version: z.literal("northside-command.v1"), jobId: z.guid({ error: "Invalid uuid" }), commandId: z.guid({ error: "Invalid uuid" }).optional() };
     if (action === "send" && role !== "owner") throw new DemoError("PERMISSION_DENIED", 403);
-    const boundSchema = z.object({ ...common, requestId: z.string().uuid(), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().positive().max(1_000_000_000_000), stepIndex: z.number().int().nonnegative().optional() }).strict();
+    const boundSchema = z.object({ ...common, requestId: z.guid({ error: "Invalid uuid" }), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().positive().max(1_000_000_000_000), stepIndex: z.number().int().nonnegative().optional() }).strict();
     const body = action === "price"
       ? parseDemoBody(z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict(), await bodyOf(request))
       : action === "approve" || action === "send" ? parseDemoBody(boundSchema, await bodyOf(request))

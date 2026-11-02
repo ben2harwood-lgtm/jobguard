@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3-p-a": {
+      "branches": [
+        "codex/sandbox/mon-3-p-a"
+      ],
+      "receipt": "docs/verdicts/MON-3-P-A/BUILDER_RECEIPT.md",
+      "note": "RED. Ben 17 Oct: dual-key must-fix and private synthetic persistence foundation. No runtime admission, new access grants, billing or provider action. Tenancy edits add only the two new table inventory entries.",
+      "allow": [
+        "packages/core/src/free-first-job.ts",
+        "packages/core/src/free-first-job-keys.test.ts",
+        "packages/db/migrations/0194_free_first_job_keys.sql",
+        "packages/db/migration-notes/0194_free_first_job_keys.md",
+        "packages/db/test/free-first-job-keys-fixtures.ts",
+        "packages/db/test/free-first-job-keys.integration.test.ts",
+        "packages/db/test/free-first-job-keys-security.integration.test.ts",
+        "packages/db/test/free-first-job-keys-races.integration.test.ts",
+        "packages/db/test/free-first-job-keys-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "docs/contracts/free-first-job-v1.md",
+        "docs/contracts/free-first-job-keys-v1.md",
+        "docs/ledger/MON-3-P-A.md",
+        "docs/verdicts/MON-3-P-A/BUILDER_RECEIPT.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

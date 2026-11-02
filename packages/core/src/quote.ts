@@ -6,7 +6,7 @@ import { candidateM1TaxPolicy, CANDIDATE_M1_TAX_POLICY_VERSION, UnsupportedTaxTr
 export const M1_QUOTE_POLICY = Object.freeze({ currency: "GBP" as const, taxTreatment: "standard_rate_20" as const, taxPolicyVersion: CANDIDATE_M1_TAX_POLICY_VERSION });
 const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
 export const quoteLineV1 = z.object({
-  id:z.string().uuid(), scopeItemId:z.string().uuid(), scopeRevisionId:z.string().uuid(), description:z.string().min(1).max(500),
+  id:z.guid({ error: "Invalid uuid" }), scopeItemId:z.guid({ error: "Invalid uuid" }), scopeRevisionId:z.guid({ error: "Invalid uuid" }), description:z.string().min(1).max(500),
   origin:z.enum(["captured","human"]), included:z.boolean(), exclusionReason:z.string().min(1).max(200).nullable(),
   quantity:z.string().regex(decimal).nullable(), unit:z.string().min(1).max(40).nullable(), unitRatePence:z.number().int().min(0).nullable(),
   discountPercent:z.string().regex(/^(?:0|[1-9]\d?)(?:\.\d{1,4})?$|^100(?:\.0{1,4})?$/), taxTreatment:z.string(),

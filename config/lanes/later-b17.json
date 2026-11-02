@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b17": {
+      "branches": [
+        "codex/sandbox/later-b17"
+      ],
+      "receipt": "docs/verdicts/LATER-B17/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B17 (coordinator queue-fill 16 Oct night). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B17.md",
+        "docs/verdicts/LATER-B17/BUILDER_RECEIPT.md",
+        "packages/db/src/recovery-demo-repository.ts",
+        "packages/db/src/recovery-legacy-later.test.ts",
+        "packages/db/src/recovery-repository.ts",
+        "packages/db/test/recovery-legacy-later.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@ export {
 } from "@jobguard/core";
 
 /** Path identifiers are plain UUIDs; the tenant, actor, mode and authority are never request fields. */
-export const recoveryFollowUpIdV1 = z.string().uuid();
+export const recoveryFollowUpIdV1 = z.guid({ error: "Invalid uuid" });
 
 /**
  * Replay contract (the same current-state contract M4-5-S fixed on 7 October 2026):

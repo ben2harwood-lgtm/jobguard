@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b11": {
+      "branches": [
+        "codex/sandbox/later-b11"
+      ],
+      "receipt": "docs/verdicts/LATER-B11/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B11; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B11.md",
+        "docs/verdicts/LATER-B11/BUILDER_RECEIPT.md",
+        "packages/db/src/audit-checkpoint-handoff.test.ts",
+        "packages/db/test/later-command-contention.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const pence = z.number().int().min(0).max(1_000_000_000_000);
 
 /** Parse user-entered pounds without binary-float multiplication or rounding. */
@@ -20,7 +20,7 @@ export function isReceiptDate(value: string): boolean {
   return day <= days[month - 1]!;
 }
 const receiptDate = z.string().refine(isReceiptDate, "Enter a valid calendar date");
-export const practiceInvoiceIssueV1=z.object({version:z.literal("practice-customer-invoice.issue.v1"),commandId:uuid,finalAccountRevisionId:uuid,expectedSourceHash:z.string().regex(/^[a-f0-9]{64}$/u),recipient:z.string().email().regex(/@example\.invalid$/u),issuedOn:receiptDate}).strict();
+export const practiceInvoiceIssueV1=z.object({version:z.literal("practice-customer-invoice.issue.v1"),commandId:uuid,finalAccountRevisionId:uuid,expectedSourceHash:z.string().regex(/^[a-f0-9]{64}$/u),recipient:z.email({ error: "Invalid email" }).regex(/@example\.invalid$/u),issuedOn:receiptDate}).strict();
 export const practiceInvoiceV1=z.object({id:uuid,number:z.string(),issuedOn:z.string(),recipient:z.string(),pdfSha256:z.string().length(64),finalAccountRevisionId:uuid,sourceHash:z.string().length(64),netPence:pence,taxPence:pence,totalPence:pence,balancePence:pence,customerCreditPence:pence,paidPence:pence.optional(),creditedPence:pence.optional(),delivery:z.literal("simulated_delivery")});
 export const practiceInvoiceResponseV1=z.object({version:z.literal(1),environment:z.literal("synthetic_demo"),jobId:uuid,invoices:z.array(practiceInvoiceV1)});
 export type PracticeInvoiceResponse=z.infer<typeof practiceInvoiceResponseV1>;

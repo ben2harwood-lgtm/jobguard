@@ -1,0 +1,15 @@
+import { afterEach, expect, it, vi } from 'vitest';
+const state=vi.hoisted(()=>({session:'session',command:vi.fn(),get:vi.fn(),failure:vi.fn()}));
+vi.mock('next/headers',()=>({cookies:async()=>({get:()=>state.session?{value:state.session}:undefined})}));
+vi.mock('../../../../lib/synthetic-server',()=>({hasSyntheticSession:(value:unknown)=>Boolean(value),practiceFailure:(error:unknown)=>error instanceof Error && error.message==='NOT_FOUND'?Response.json({code:'NOT_FOUND'},{status:404}):null}));
+vi.mock('../../../../lib/workspace-server',()=>({workspaceApplication:async()=>({workState:state})}));
+import { GET, POST } from './route';
+const params={params:Promise.resolve({id:'fictional-job'})};
+const request=(body='{}')=>new Request('https://fictional.invalid/api/jobs/fictional-job/work-state',{method:'POST',body});
+afterEach(()=>{vi.clearAllMocks();state.session='session';});
+it('missing session performs no command',async()=>{state.session='';const response=await POST(request(),params);expect(response.status).toBe(401);expect(response.headers.get('Cache-Control')).toBe('no-store');expect(state.command).not.toHaveBeenCalled();});
+it('malformed action JSON',async()=>{const response=await POST(request('{'),params);expect(response.status).toBe(400);expect(state.command).not.toHaveBeenCalled();});
+it('command parity and immutable replay',async()=>{const snapshot={version:'job-work-state-read.v1',events:[]};state.command.mockResolvedValue(snapshot);for(let i=0;i<2;i++){const response=await POST(request('{"action":"finish"}'),params);expect(response.status).toBe(201);expect(await response.json()).toEqual(snapshot);expect(response.headers.get('Cache-Control')).toBe('no-store');}expect(state.command).toHaveBeenCalledWith('fictional-job',{action:'finish'});});
+it.each(['WORK_STATE_CONFLICT','JOB_WORK_CLOSED','POST_LOCK_WORK_REQUIRES_LINKED_JOB'])('typed refusal %s',async code=>{state.command.mockRejectedValue(new Error(code));state.failure.mockReturnValue({status:409,body:{code}});const response=await POST(request(),params);expect(response.status).toBe(409);expect(await response.json()).toEqual({code});expect(response.headers.get('Cache-Control')).toBe('no-store');});
+it('foreign session preserves refusal',async()=>{state.command.mockRejectedValue(new Error('NOT_FOUND'));expect((await POST(request(),params)).status).toBe(404);});
+it('unchanged GET',async()=>{state.get.mockResolvedValue({events:[]});const response=await GET(new Request('https://fictional.invalid?version=job-work-state-read-query.v1'),params);expect(response.status).toBe(200);expect(state.get).toHaveBeenCalledWith('fictional-job',{version:'job-work-state-read-query.v1'});});

@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv5-guard": {
+      "branches": [
+        "codex/sandbox/sv5-guard"
+      ],
+      "receipt": "docs/verdicts/SV5-GUARD/BUILDER_RECEIPT.md",
+      "note": "C248 post-lock upload state guard only; DB execution in reviewer/CI. No UI or HTTP changes. Own lane file is implicitly authorized by lane policy.",
+      "allow": [
+        "packages/db/migrations/0269_post_lock_upload_guard.sql",
+        "packages/db/migration-notes/0269_post_lock_upload_guard.md",
+        "packages/db/test/post-lock-upload-guard.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/verdicts/SV5-GUARD/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

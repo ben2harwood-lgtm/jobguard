@@ -25,15 +25,15 @@ export function siteMatchKey(raw: unknown): string {
   return JSON.stringify(site.uprn ? ["uprn", site.uprn.replace(/^0+(?=\d)/u, ""), normalized(site.unit ?? "")]
     : ["address", site.postcode, site.addressLines.map(normalized), normalized(site.town), normalized(site.unit ?? "")]);
 }
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 export const jobPartiesV1 = z.object({ version: z.literal("job-parties.v1"), customerRevisionId: uuid, siteRevisionId: uuid,
-  payingPartyRevisionId: uuid.nullable().default(null),
+  payingPartyRevisionId: uuid.nullable().prefault(null),
 });
 export const jobPartiesCommandV1 = z.discriminatedUnion("action", [
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("create_customer"), customer: customerV1 }),
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("revise_customer"), customerId: uuid, expectedRevision: z.number().int().positive(), customer: customerV1 }),
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("create_site"), site: siteV1,
-    reuseSiteId: uuid.optional(), confirmSamePlace: z.boolean().default(false) }),
+    reuseSiteId: uuid.optional(), confirmSamePlace: z.boolean().prefault(false) }),
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.enum(["bind", "correct"]),
     expectedJobRevision: z.number().int().nonnegative(), parties: jobPartiesV1, reason: z.string().trim().min(1).max(500).optional() }),
 ]);

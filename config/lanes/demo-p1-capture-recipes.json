@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-p1-capture-recipes": {
+      "branches": [
+        "codex/sandbox/demo-p1-capture-recipes",
+        "codex/sandbox/demo-p1-capture-metadata-20261026"
+      ],
+      "receipt": "docs/verdicts/DEMO-P1-CAPTURE-RECIPES/BUILDER_RECEIPT.md",
+      "note": "Capture-input follow-up only; synthetic fixtures/docs/tests. Executable lifecycle mapping remains held. Metadata branch changes only this own-lane config; product branch changes only three functional paths plus receipt. No runtime, parser, pricing, fee, trial lifecycle, schema-version, ID, migration, provider or release authority.",
+      "allow": [
+        "docs/fixtures/small-builder-demo-inputs.json",
+        "packages/core/src/small-builder-demo-scenarios.test.ts",
+        "docs/contracts/small-builder-demo-v1.md",
+        "docs/verdicts/DEMO-P1-CAPTURE-RECIPES/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

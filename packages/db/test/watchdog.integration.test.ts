@@ -11,7 +11,7 @@ import {
   MIGRATION_URLS, migrate, withTenant, requireLiveJob, JobRepository,
   PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository,
   DiscrepancyRepository, ReadinessRepository, InboxRelevanceRepository,
-  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository,
+  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, JobWorkStateRepository,
 } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
@@ -55,6 +55,10 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [ids.uploadId, tenant, ids.jobId, `legacy/${ids.uploadId}`]);
   }
   await migrate(admin); await migrate(admin);
+  // These predecessor jobs use the same active owner and an explicit synthetic
+  // small-builder binding; finish/cancel must reach the live guard, not fail auth.
+  for (const { jobId } of Object.values(legacy)) await admin.query(
+    "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture',$2) ON CONFLICT DO NOTHING", [tenant, jobId]);
   await admin.query("CREATE ROLE ch2_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch2_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "ch2_login", password: "synthetic", max: 4 });
 }, 60000);
@@ -63,7 +67,10 @@ afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.sto
 function attempts(jobId: string, uploadId: string) {
   const id = randomUUID(), commandId = randomUUID();
   const po = new PurchaseOrderRepository(runtime), docs = new SupplierDocumentRepository(runtime), match = new SupplierMatchRepository(runtime), checks = new DiscrepancyRepository(runtime), ready = new ReadinessRepository(runtime), inbox = new InboxRelevanceRepository(runtime), evidence = new EvidenceService(runtime, storage), proof = new ProofCommandService(runtime, storage);
+  const work = new JobWorkStateRepository(runtime);
   return [
+    ["finish", () => work.finish(context, jobId, member, { version: "job-work-state-command.v1", action: "finish", commandId, expectedRevision: 0 })],
+    ["cancelFinish", () => work.cancelFinish(context, jobId, member, { version: "job-work-state-command.v1", action: "cancel_finish", commandId, expectedRevision: 0, markerId: id })],
     ["revise", () => po.revise(context, jobId, { version: "purchase-order-draft.v1", requirementId: id, quantity: "10", unitPricePence: 2000, recipient: "orders@fictional.invalid", requiredDate: "2026-10-01", expectedRevision: 0 })],
     ["place", () => po.place(context, jobId, { version: "command.v1", commandId, commandType: "purchase_order.simulate", semanticKey: `order:${commandId}`, actorMembershipId: member, subjectType: "purchase_order", subjectRef: id, action: { actionType: "purchase_order.simulate", recipient: "orders@fictional.invalid", contentHash: "a".repeat(64), aggregateRevision: 1, amountPence: 20000, currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: new Date("2099-01-01") } })],
     ["intake", () => docs.intake(context, jobId, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "picker", expectedRevision: 0 })],
@@ -85,7 +92,7 @@ function attempts(jobId: string, uploadId: string) {
 }
 async function counts() {
   const result: Record<string, number> = {};
-  for (const table of [...tables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
+  for (const table of [...tables, "audit_event", "action_outbox", "command_receipt", "decision_resolution", "action_authorization", "job_work_state_event", "job_link", "watchdog_command_result"]) result[table] = Number((await admin.query(`SELECT count(*) n FROM app.${table}`)).rows[0].n);
   return result;
 }
 describe("CH-2 actual PostgreSQL enforcement", () => {
@@ -150,7 +157,7 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     const first = await repo.record(context, liveId, input);
     expect(await repo.record(context, liveId, input)).toEqual(first);
     await expect(repo.record(context, liveId, { ...input, resolved: true })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
-    await new JobRepository(runtime).transition(context, ["job:update"], { jobId: liveId, expectedRevision: 1, to: "invoiced", reason: "issue_invoice" });
+    await new JobRepository(admin).transition(context, ["job:update"], { jobId: liveId, expectedRevision: 1, to: "invoiced", reason: "issue_invoice" });
     expect(await repo.view(context, liveId)).toEqual(first);
     await expect(repo.advance(context, liveId, { commandId: randomUUID(), scenarioNow: "2026-03-30T08:00:00.000Z" })).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
   });
@@ -180,7 +187,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
   it("holds the first business lock until commit; both race orders serialize", async () => {
     for (const commandFirst of [true, false]) {
       const jobId = randomUUID(); await importWatchdogFixtureJob(admin, tenant, jobId);
-      const a = await runtime.connect(), b = await runtime.connect();
+      // Ruling 103: only the legacy lifecycle side uses an owner fixture; its race transaction stays intact.
+      const a = await runtime.connect(), b = await admin.connect();
       try {
         await a.query("BEGIN"); await b.query("BEGIN");
         await a.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await b.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);

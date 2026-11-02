@@ -90,7 +90,11 @@ test("watchdog panels require the persisted live state and retain authoritative 
   await page.getByRole("button", { name: "Attach generated practice image", exact: true }).click();
   await page.getByRole("button", { name: "Check file integrity", exact: true }).click();
   await page.getByRole("button", { name: "Complete this stage", exact: true }).click();
+  // A click only starts the async command. Wait for its authoritative response
+  // to render before reading persistence or reloading (which can abort the POST).
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   const proof = await jsonResult(page.request.get(`/api/jobs/${jobId}/proof`), "Read persisted proof");
+  expect(proof.completion).toEqual({ id: expect.any(String), reviewRequired: false });
   expect(proof.scopeItemId).toBe(scopeIds[0]); expect(proof.upload.state).toBe("verified"); expect(proof.realExternalActions).toBe(0);
   await page.reload(); await assertReadable(page);
   // The demo's Jobs list shows only its seeded jobs, so a captured job is reopened by deep link.
