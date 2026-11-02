@@ -172,6 +172,8 @@ export * from "./value-business-reader.js";
 export { AccountingObservationReceiptRepository } from "./accounting-observation-receipt-repository.js";
 export * from "./small-builder-trial-demo-repository.js";
 export * from "./simulation-fee-statement-repository.js";
+
+export * from "./privacy-operations-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
