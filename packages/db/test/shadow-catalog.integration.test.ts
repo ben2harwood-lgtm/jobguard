@@ -45,7 +45,8 @@ const finalCheck:Record<string,string>={
  "app.record_final_check_disposition(uuid,uuid,text,jsonb)":"jobguard_runtime",
  "app.read_final_check_disputes(uuid,uuid,text)":"jobguard_runtime",
  // SV-5 Q2 (0281): the reviewed catch confirmation, runtime-only like the disposition.
- "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"jobguard_runtime"};
+ "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"jobguard_runtime",
+ "app.demo_shadow_review_inputs(uuid,uuid,text)":"jobguard_runtime"};
 const finalCheckCalls:Record<string,string>={
  "app.begin_final_check(uuid,uuid,text,text)":"SELECT app.begin_final_check($1::uuid,$1::uuid,'x','x')",
  "app.read_final_check_manifest(uuid,uuid,uuid)":"SELECT app.read_final_check_manifest($1::uuid,$1::uuid,$1::uuid)",
@@ -54,7 +55,8 @@ const finalCheckCalls:Record<string,string>={
  "app.read_final_check_reveal(uuid,uuid,text)":"SELECT app.read_final_check_reveal($1::uuid,$1::uuid,'x')",
  "app.record_final_check_disposition(uuid,uuid,text,jsonb)":"SELECT app.record_final_check_disposition($1::uuid,$1::uuid,'x','{}'::jsonb)",
  "app.read_final_check_disputes(uuid,uuid,text)":"SELECT app.read_final_check_disputes($1::uuid,$1::uuid,'x')",
- "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"SELECT app.confirm_final_check_catch($1::uuid,$1::uuid,'x','{}'::jsonb)"};
+ "app.confirm_final_check_catch(uuid,uuid,text,jsonb)":"SELECT app.confirm_final_check_catch($1::uuid,$1::uuid,'x','{}'::jsonb)",
+ "app.demo_shadow_review_inputs(uuid,uuid,text)":"SELECT app.demo_shadow_review_inputs($1::uuid,$1::uuid,'x')"};
 const finalCheckRuntime=Object.keys(finalCheck).filter(sig=>finalCheck[sig]==="jobguard_runtime");
 const tables=["shadow_commercial_signal","shadow_signal_evidence","shadow_signal_ineligibility","shadow_reconciliation_run","shadow_signal_classification","shadow_signal_disposition","shadow_disclosure_event","shadow_break_glass_access"];
 it("registers the issued expand migration",()=>{expect(MIGRATION_URLS.map(u=>u.pathname)).toContain(migrationURL.pathname)});
