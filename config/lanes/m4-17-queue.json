@@ -10,7 +10,7 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/money-trail-reconciliation-v1.md",
         "packages/core/src/financial-reconciliation.ts",
-        "packages/db/migrations/0479_financial_reconciliation_queue.sql",
+        "packages/db/migrations/0594_financial_reconciliation_queue.sql",
         "packages/db/src/financial-reconciliation-queue-repository.test.ts",
         "packages/db/src/financial-reconciliation-queue-repository.ts",
         "packages/db/src/index.ts",

@@ -14,6 +14,7 @@ import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
+import { requireOutboxSettlementEligibility } from "./production-settlement-guard.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
 import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
@@ -41,7 +42,8 @@ const telemetry:SafeTelemetry={emit(name,fields){logger.log({event:name,...field
 const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
 const tasks:TaskList={
  async discover_outbox(_payload,helpers){const rows=await helpers.withPgClient(client=>client.query<{action_id:string;tenant_id:string}>(`SELECT action_id,tenant_id FROM infrastructure.outbox_signal ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED`));for(const row of rows.rows){await helpers.addJob("execute_outbox",{actionId:row.action_id,tenantId:row.tenant_id},{jobKey:`outbox:${row.action_id}`,jobKeyMode:"preserve_run_at"});}},
- async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId);},
+ // Gate money operations from the persisted action type; ordinary delivery keeps its existing behavior.
+ async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));},
  async detect_shadow_evidence(payload){const parsed=z.object({version:z.literal("shadow-detection-task.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await detectionWorker.execute(queueContext({tenantId:parsed.tenantId}),parsed);},
 };
 // SV-5 practice run: the checked lock trigger or owner request queues identifiers; this worker alone
