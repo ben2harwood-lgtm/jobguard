@@ -19,8 +19,14 @@ export function trialDemoReport(tenantId:string,runId:string,raw:unknown){
  const boundary=start?trialDeadlineV1(start.startedAt,approvedTrialClockV1):null;
  const atDeadline=start&&boundary?reduceTrialEndsV1({version:"trial-end-input.v1",trialId:start.trialId,tenantId,jobId:first.jobId,
   startedAt:start.startedAt,asOf:boundary.deadlineAt,deadline:boundary,events:first.events}):null;
- return {...value,first,second,deadlinePreview:atDeadline,status:"incomplete" as const,
-  missing:["Capacity admission must succeed through the existing producer before a first trial can start.","Final Check, subscription pro-ration and collection require their downstream producer journeys."],
+ const lockedFirst=first.events.some(event=>event.kind==="lock");
+ // Each gap is derived from saved sources; none is cleared by a flag or a clock from the caller.
+ const missing=[
+  ...(start?[]:["First activation: no trial start is saved yet."]),
+  ...(lockedFirst?[]:["Final Check: a company job has no public final account route yet, so lock and Final Check cannot end a trial from this guide."]),
+  ...(value.subscription.periods.length?[]:["Pro-ration: no billing period is issued yet. A period can only be issued after it ends; conversion rules stay on the accepted terms."]),
+ ];
+ return {...value,first,second,deadlinePreview:atDeadline,status:(missing.length?"incomplete":"complete") as "incomplete"|"complete",missing,
   pricesAndLegalWording:"[BEN TO SUPPLY]" as const};
 }
 export type TrialDemoReport=ReturnType<typeof trialDemoReport>;
