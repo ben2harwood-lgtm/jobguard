@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-int-d": {
+      "branches": [
+        "codex/sandbox/sv7a-int-d"
+      ],
+      "receipt": "docs/verdicts/SV7A-INT-D/BUILDER_RECEIPT.md",
+      "note": "C268 issued build-ahead, 25 October 2026. DEPENDENCY-BOUND on SV7A-INT-A f3743e7e and P 5ca7e813: intake transport, checked writer and source admission are absent. Diary journey stays unbuilt; coordinator owns parent navigation. Dispatcher owns commit and integration.",
+      "allow": [
+        "apps/web/app/jobs/[id]/diary/page.tsx",
+        "apps/web/app/ui/job-diary.tsx",
+        "apps/web/app/ui/job-diary.test.tsx",
+        "apps/web/e2e/SV7A-INT-D.spec.ts",
+        "docs/verdicts/SV7A-INT-D/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

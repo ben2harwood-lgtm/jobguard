@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-int-a": {
+      "branches": [
+        "codex/sandbox/sv7a-int-a"
+      ],
+      "receipt": "docs/verdicts/SV7A-INT-A/BUILDER_RECEIPT.md",
+      "note": "C268 issued build-ahead, 25 October 2026. DEPENDENCY-BOUND on SV7A-INT-P 5ca7e813: no checked writer/admission/error handoff. No executable route or web journey; browser/HTTP acceptance held. Dispatcher owns commit and integration.",
+      "allow": [
+        "apps/api/src/job-source-intake.application.ts",
+        "apps/api/src/job-source-intake.controller.ts",
+        "apps/api/src/job-source-intake.errors.ts",
+        "apps/api/src/job-source-intake.application.test.ts",
+        "apps/api/src/job-source-intake.controller.test.ts",
+        "apps/api/src/job-source-intake.http.test.ts",
+        "apps/web/app/api/jobs/[id]/diary/intake/route.ts",
+        "apps/web/app/api/jobs/[id]/diary/intake/route.test.ts",
+        "apps/web/app/api/jobs/[id]/customer-messages/intake/route.ts",
+        "apps/web/app/api/jobs/[id]/customer-messages/intake/route.test.ts",
+        "docs/contracts/job-source-intake-http-v1.md",
+        "docs/verdicts/SV7A-INT-A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
