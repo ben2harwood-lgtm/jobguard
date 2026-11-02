@@ -25,9 +25,9 @@ export const INBOX_WORDING_EVALUATION_VERSION = "inbox-wording-evaluation.fixtur
  * No arbitrary generated claims, authorizations, commands, URLs or hidden inputs are accepted.
  */
 export class InboxWordingFixture {
-  private readonly gateway: AiGateway;
+  private readonly provider: FixtureAiProvider;
   constructor(fixtures: Readonly<Record<string, RecordedFixture>>) {
-    this.gateway = new AiGateway(new FixtureAiProvider(fixtures));
+    this.provider = new FixtureAiProvider(fixtures);
   }
 
   async word(raw: unknown, fixtureId: string, options: unknown = {}) {
@@ -41,9 +41,9 @@ export class InboxWordingFixture {
       evaluationVersion: INBOX_WORDING_EVALUATION_VERSION, mode: "deterministic" as const };
     if (!route.data.enabled) return deterministic;
     try {
-      const result = await this.gateway.generate({ contractVersion: "ai_gateway_request_v1", fixtureId,
+      const result = await new AiGateway(this.provider, () => ({ tenantId: snapshot.tenantId })).generate({ contractVersion: "ai_gateway_request_v1", fixtureId,
         operation: "inbox_wording", promptVersion: PROMPT, schemaVersion: "inbox-wording-output.v1",
-        sources: [{ id: snapshot.decisionId, content, sha256: sourceHash }], timeoutMs: 1000, maxOutputTokens: 128,
+        sources: [{ id: snapshot.decisionId, content, sha256: sourceHash, tenantId: snapshot.tenantId, visibility: "public" }], timeoutMs: 1000, maxOutputTokens: 128,
       }, inboxWordingOutputV1);
       if (result.output.sourceHash !== sourceHash || result.citations.length !== 1 ||
         result.citations[0]?.sourceId !== snapshot.decisionId || result.citations[0].start !== 0 ||
