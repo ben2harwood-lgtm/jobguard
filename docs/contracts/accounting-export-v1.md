@@ -1,4 +1,4 @@
-# M5-1/M5-2 accounting export — dark synthetic contract v1
+# M5-1/M5-2/M5-3 accounting export — dark synthetic contract v1
 
 This is the small-builder M5-1 slice under BUILD_PLAN.md §11.6, not a live Codat integration or a claim that M5-1 is released. M4-23, D02, D04 and G5 remain release dependencies. Base inspected: local origin/main and HEAD both `32411c4e45a094cbe65ae90ee1d5debd1f266e2a`; no accounting-export implementation existed there. No remote fetch was performed.
 
@@ -19,7 +19,7 @@ The contract and executable fake live in `apps/api/src/accounting-export.contrac
 | DRC | Unsupported | Same refusal |
 | Final account | Locked snapshot only | Source final revision must equal immutable locked revision; superseded/cancelled source refused |
 | Update, delete, cancellation or reversal delivery | Unsupported | No automatic corrections/deletes; cancelled source stops new pushes, old ledger remains inspectable/reconcilable |
-| Accounting systems | Fake Codat and fake direct Xero | Common contract and conformance suite; no real accounting-system API support |
+| Accounting systems | Fake Codat, fake direct Xero and fake direct QuickBooks | Common contract and conformance suite; no real accounting-system API support |
 | Regional data path | Process memory only | No external destination, logs, credentials, telemetry or live/sandbox-provider evidence |
 | Real Codat sandbox/live | Not built | Codat SDK is not installed; no dependencies added |
 
@@ -55,3 +55,25 @@ Route selection is limited to tenant + target company + job, never a broader ten
 The common conformance suite runs unchanged assertions against both fake routes. Xero-specific tests cover document/tax mapping, expiry/revocation and reconnection, tenant/company connection isolation, backoff, native external edits, no-paid-label proof, route switches in both directions, unchanged historic mappings/IDs, wrong/broader approval scope, unknown-outcome holds and disabled defaults. These are executable in-memory contract tests, not database/RLS, real-provider sandbox, live integration, or independent RED review evidence.
 
 NOT built: real Xero SDK/OAuth/token refresh/endpoints, provider API tax-code conformance, production persistence/outbox/unique constraints, RLS proof, HTTP/onboarding UI, automatic cancellation/reversal delivery, tax/retention/CIS/DRC calculations, settlement import or fee proof, G5/provider/data-flow approvals, deployment. Production remains held behind those gates.
+
+
+## M5-3 direct QuickBooks dark slice
+
+Built ahead on `codex/sandbox/m5-3-quickbooks` from the M5-2 Xero branch. Changes to shared transport route types, preview tax refusal, common tests and this contract serialize with M5-2 repairs. No migration, dependency, provider registration or external network path is added. This is RED (money, authorization and tenant boundaries); CI and a fresh independent Claude review of the exact head remain required before merge.
+
+`accounting-quickbooks.fake.ts` uses the shared deterministic transport and export/route authorization, ledger and reconciliation contracts. QuickBooks mapping stays local: fictional realm, customer/account references, invoice/credit-memo/payment entities, exact pence totals, source revisions and linked invoice revisions. These fields and `DEMO_*` codes are fixture conventions, not verified QuickBooks API schemas or provider conformance. No Xero fields are added to the canonical contract.
+
+The exported versioned `fakeQuickBooksCapabilities` lists the supported fixture operations and unsupported features:
+
+| Capability | QuickBooks fake boundary |
+| --- | --- |
+| Direction/objects | Push invoices, credit notes and receipts only; exact GBP pence and source IDs/revisions |
+| Tax | `no_tax`, `standard`, `zero_rated` fixture tags only; no VAT calculation or tax-policy approval |
+| Unsupported tax/features | Unmapped/unknown/mismatched tax, retention, CIS and DRC are refused before transport; no automatic reversal or external overwrite |
+| Connection | Synthetic connected, expired and revoked states per tenant/company; monotone revision; reconnection requires fresh confirmation |
+| Retry | Fixed 30-unit fake backoff; original amounts/recipients preserved; unknown acceptance requires reconciliation before retry |
+| Routes | Codat/Xero/QuickBooks can share fictional target books; exact approved job scope, historic external IDs and mappings survive switching; no historic repost |
+| Reconciliation | Exact match, confirmed absence, duplicate import, reference conflict and native/canonical external edits; external paid labels never establish settlement proof |
+| Live/provider functionality | Unsupported: OAuth, token exchange/refresh, real endpoints, provider sandbox conformance, region/consent approvals, durable execution and production access |
+
+The common conformance suite now runs the existing assertions for all three fakes. QuickBooks-specific tests cover all three objects and fixture tax tags, unsupported-tax refusal before preview and transport, revoked/expired connections and unknown acceptance after revocation, cross-tenant/company access, native edits, backoff, route approval/replay scope and three-route duplicate protection. They prove only this process-local model. G5, D02, actual provider/data-flow approval, real provider conformance, durable command/outbox/audit integration and database isolation remain release gates. No live capability is enabled.
