@@ -41,16 +41,44 @@ async function api(page: Page, operation: string, command?: unknown, runId?: str
     return { status: response.status, body: await response.json() };
   }, { operation, command, runId });
 }
+for (const [scenario, screens] of [["core-1000", []], ["meter", [["Jobs on the go and account review", "/meter"], ["Plan and saved periods", "/plans"]]], ["trial", [["Accepted terms and saved periods", "/plans"]]]] as [string, [string, string][]][]) {
+  test(`DEMO-S ${scenario}: resume by reference, saved report with its screens, and reset`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await signIn(page); await page.goto("/demo-s");
+    await page.getByRole("button", { name: `Choose ${scenario} selection`, exact: true }).click();
+    const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
+    await expect(saved).toBeVisible();
+    const runId = new URL(page.url()).searchParams.get("runId")!;
+    await page.goto("/demo-s");
+    await expect(saved).toHaveCount(0);
+    await page.getByLabel("Saved selection reference").fill(runId);
+    await page.getByRole("button", { name: "Resume", exact: true }).click();
+    await expect(saved).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`runId=${runId}`));
+    await page.getByRole("button", { name: "Save selection report", exact: true }).click();
+    const report = page.getByRole("region", { name: "Saved selection report" });
+    await expect(report).toContainText("Saved screens");
+    await expect(report).toContainText("Independent verdict: missing");
+    for (const [name, href] of screens) await expect(report.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
+    if (scenario === "trial") await expect(report.getByRole("link", { name: "trial source report", exact: true })).toHaveAttribute("href", new RegExp(`/demo-s/trial\\?.*runId=${runId}`));
+    await page.reload();
+    await expect(report).toContainText("Saved screens");
+    await page.getByRole("button", { name: "Reset selection", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Open archived selection", exact: true })).toBeVisible();
+    await expect(saved).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("runId")).not.toBe(runId);
+  });
+}
 test("DEMO-S chooser saves honest blockers for all families on both browser projects", async ({ page }) => {
   test.setTimeout(90_000);
   await signIn(page); await page.goto("/demo-s");
   await expect(page.getByRole("heading", { name: "Choose a journey" })).toBeVisible();
-  for (const scenario of ["core-1000", "recovery-18800", "meter", "trial"]) {
-    await page.getByRole("button", { name: `Save ${scenario} selection`, exact: true }).click();
-    const saved = page.getByRole("region", { name: `Saved ${scenario} selection` });
-    await expect(saved).toContainText("Not ready yet"); await expect(saved).toContainText("Selection metadata does not record journey completion");
-    await page.reload(); await expect(saved).toBeVisible();
-  }
+  await page.getByRole("button", { name: "Choose meter selection", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Saved meter selection" })).toContainText("Previews and your saved meter available");
+  await page.getByRole("button", { name: "Choose recovery-18800 selection", exact: true }).click();
+  const recovery = page.getByRole("region", { name: "Saved recovery-18800 selection" });
+  await expect(recovery).toContainText("Journey available"); await expect(recovery).toContainText("Selection metadata does not record journey completion");
+  await page.reload(); await expect(recovery).toBeVisible();
   await page.getByText("Meter profiles — reference previews available", { exact: true }).click();
   await expect(page.getByText("DM-10 · Builder 13–17 places and track review")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -83,7 +111,7 @@ test("DEMO-S lost-response replay, reset, immutable report and cross-company den
   const report = page.getByRole("region", { name: "Saved selection report" });
   await expect(report).toContainText("Not archived at snapshot time");
   await expect(page.getByRole("button", { name: "Reset selection", exact: true })).toBeDisabled();
-  await expect(report).toContainText("DEMO-A1 is not ready yet");
+  await expect(report).toContainText("Demo acceptance is not recorded here");
   await expect(report).not.toContainText("£80");
   const reset = { operation: "reset", runId: successor, input: { contractVersion: "small-builder-demo.reset.v1", commandId: crypto.randomUUID(), expectedRunRevision: 1 } };
   const first = await api(page, "reset", reset), replay = await api(page, "reset", reset);

@@ -47,6 +47,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/success-fees/collection": "post_live_billing",
   "nest:/jobs/:id/success-fees/collection": "post_live_billing",
   "/api/jobs/[id]/success-fees/money-check": "post_live_billing",
+  "/api/jobs/[id]/success-fees/collection/demo-settle": "post_live_billing",
   "/api/jobs/[id]/shadow-demo/source-hold": "post_live_billing",
   "/api/jobs/[id]/shadow-demo/review-inputs": "post_live_billing",
   "/api/jobs/[id]/shadow-demo/customer-link": "post_live_billing",
