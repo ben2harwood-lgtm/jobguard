@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-finish-2": {
+      "branches": [
+        "codex/sandbox/demo-j3-finish-2"
+      ],
+      "note": "Squashed final tree of DEMO-J3 shadow-30000 from origin/main: report completion, shared-tenant receipt retry, click-through guide and its demo-only helpers. Migration 0518; its four permissions are not approved for merge (awaiting Ben). Own lane file is implicitly owned.",
+      "allow": [
+        "apps/api/src/shadow-demo-guide.application.test.ts",
+        "apps/api/src/shadow-demo-guide.application.ts",
+        "apps/api/src/shadow-demo.application.test.ts",
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/customer-link/route.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/review-inputs/route.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/source-hold/route.test.ts",
+        "apps/web/app/api/jobs/[id]/shadow-demo/source-hold/route.ts",
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/demo-s/chooser.test.tsx",
+        "apps/web/app/demo-s/journey-result.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/jobs/[id]/shadow-journey/page.tsx",
+        "apps/web/app/ui/shadow-journey.tsx",
+        "apps/web/e2e/DEMO-J3-integrity.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/helpers/j3-customer-approval.ts",
+        "apps/web/e2e/helpers/j3-integrity-approval.ts",
+        "apps/web/e2e/helpers/j3-integrity-settlement.ts",
+        "apps/web/e2e/helpers/j3-settlement.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0518_shadow_demo_guide.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/receipt-line-allocation-repository.ts",
+        "packages/db/src/receipt-line-command-producer.test.ts",
+        "packages/db/src/shadow-demo-guide-repository.ts",
+        "packages/db/test/migration-proofs/legacy-migrations.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-demo-guide-fixture.ts",
+        "packages/db/test/shadow-demo-guide-outside.integration.test.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts"
+      ]
+    }
+  }
+}
