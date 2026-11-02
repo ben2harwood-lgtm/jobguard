@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { cluster,world,code,type World } from "./contractor-billing-fixtures.js";
@@ -8,6 +9,7 @@ it("E6-06 E6-07 E6-08 finalising again adds no lines; two racing batches only on
  const results=await Promise.all([w.exported(),w.exported()]);
  expect(results.map(r=>r.lineCount).sort()).toEqual([0,1]);
  const view=await w.repo.read(w.ctx,w.session,w.s.jobId);expect(view.exports).toHaveLength(1);
+ await assertLp4SealedEvents(c.admin, w.w.p.tenantId, "contractor.billing.finaliseexportbatch");
  expect((await w.exported()).lineCount).toBe(0);
 });
 it("E6-03 E6-10 export guard refuses wrong tenant or client contract",async()=>{

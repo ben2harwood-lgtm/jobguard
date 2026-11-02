@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
@@ -19,7 +20,8 @@ function recording(script: Script = {}) {
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     statements.push({ sql, values });
     if (script.fail && sql.includes(script.fail)) throw script.error;
-    const rows = sql === "SELECT pg_current_xact_id()::text AS x" ? [{ x: "123" }]
+    const rows = sql.includes("FROM app.append_audit(") ? fakeAuditAppend(values[0] as string, tenantId)
+      : sql === "SELECT pg_current_xact_id()::text AS x" ? [{ x: "123" }]
       : sql === "SELECT pg_current_xact_id_if_assigned()::text AS x" ? [{ x: script.secondX === undefined ? "123" : script.secondX }]
       : sql.includes(" AS same") ? [{ same: script.same === undefined ? true : script.same }]
       : sql.includes("SELECT id FROM app.membership") ? [{ id: reviewer.membershipId }]
@@ -60,7 +62,7 @@ it("[U1] unjoined landing owns one write transaction and releases once", async (
   expect(sql[0]).toBe("BEGIN");
   expect(sql[1]).toBe("SELECT set_config('app.tenant_id', $1, true)");
   expect(sql[2]).toContain("SELECT id FROM app.membership");
-  expect(sql.at(-2)).toBe("SELECT app.advance_audit_head($1, $2)");
+  expect(sql.at(-2)).toContain("FROM app.append_audit(");
   expect(sql.at(-1)).toBe("COMMIT");
   expect(sql.filter(s => s === "BEGIN")).toHaveLength(1);
   expect(client.connect).toHaveBeenCalledOnce();
@@ -94,7 +96,7 @@ it("[J-N1] joined success returns only a receipt and never controls caller resou
   assertCallerOwned(client);
   expect(repo.listForMember).not.toHaveBeenCalled();
 });
-it.each(["pg_advisory_xact_lock", "INSERT INTO app.recovery_case_event", "INSERT INTO app.audit_event"])(
+it.each(["pg_advisory_xact_lock", "INSERT INTO app.recovery_case_event", "FROM app.append_audit("])(
   "[J-N2] joined failure at %s is unchanged and stops immediately", async fail => {
     const error = new Error(fail), client = recording({ fail, error });
     await expect(new RecoveryCaseRepository(unusedPool()).commandInTransaction(client.db, context, jobId, landing(), reviewer)).rejects.toBe(error);

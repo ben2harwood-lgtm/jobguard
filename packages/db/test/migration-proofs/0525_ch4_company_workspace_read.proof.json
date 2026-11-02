@@ -1,5 +1,5 @@
 {
-  "migration": "0560_ch4_company_workspace_read.sql",
+  "migration": "0525_ch4_company_workspace_read.sql",
   "lp0": [
     {
       "section": "routines",

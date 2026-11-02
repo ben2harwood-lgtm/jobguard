@@ -241,7 +241,10 @@ describe("migration and privilege catalog", () => {
       { relname: "client_contract_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_organisation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "closeout_answer", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "command_lifecycle_claim", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "command_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      // Explicit private command-registry control-plane exception.
+      { relname: "command_type_registry", relrowsecurity: false, relforcerowsecurity: false, guarded: false },
       { relname: "commercial_integrity_activity_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "commercial_integrity_value_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "commercial_track_assignment", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -470,6 +473,8 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_timeline_run", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_timeline_signal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "repository_operational_record", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+
       { relname: "role_grant", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "role_grant_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "sandbox_adapter_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -628,7 +633,9 @@ describe("migration and privilege catalog", () => {
       { relname: "client_contract_version", owner: "jobguard_migration" },
       { relname: "client_organisation", owner: "jobguard_migration" },
       { relname: "closeout_answer", owner: "jobguard_migration" },
+      { relname: "command_lifecycle_claim", owner: "jobguard_command_writer" },
       { relname: "command_receipt", owner: "jobguard_migration" },
+      { relname: "command_type_registry", owner: "jobguard_command_writer" },
       { relname: "commercial_integrity_activity_fact", owner: "jobguard_migration" },
       { relname: "commercial_integrity_value_fact", owner: "jobguard_migration" },
       { relname: "commercial_track_assignment", owner: "jobguard_migration" },
@@ -857,6 +864,8 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_review", owner: "jobguard_migration" },
       { relname: "recovery_timeline_run", owner: "jobguard_migration" },
       { relname: "recovery_timeline_signal", owner: "jobguard_migration" },
+      { relname: "repository_operational_record", owner: "jobguard_command_writer" },
+
       { relname: "role_grant", owner: "jobguard_migration" },
       { relname: "role_grant_revocation", owner: "jobguard_migration" },
       { relname: "sandbox_adapter_receipt", owner: "jobguard_migration" },
