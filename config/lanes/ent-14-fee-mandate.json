@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-14-fee-mandate": {
+      "branches": ["codex/sandbox/ent-14-fee-mandate"],
+      "allow": [
+        "packages/core/src/enterprise-fee-mandate.ts",
+        "packages/core/src/enterprise-fee-mandate.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/enterprise-fee-statement-v1.md"
+      ],
+      "note": "RED ENT-14 synthetic mandate contract and pure preflight only; no collection start exists on base, so unwired. No migration or real provider. Human/legal approvals remain open."
+    }
+  }
+}

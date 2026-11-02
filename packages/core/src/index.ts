@@ -151,3 +151,4 @@ export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
 
 export * from "./contractor-mandate.js";
+export * from "./enterprise-fee-mandate.js";

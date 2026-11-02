@@ -53,3 +53,52 @@ When storage is authorized, retain the full upgrade contract:
 For N=0169, compare canonical `row_to_json(t)::text` over named pre-existing columns, names/full `format_type` types, and pre-existing primary-key identities. Require nonempty specimens; rolled-back microsecond/value/type/remove-row controls must fail, while later nullable columns, function replacements and inserts must pass. Later migrations must succeed twice. The upgrade suite remains owed; no proof or fresh installation was run here.
 
 Forward fix: keep accepted agreements, artifacts, lineages, receipts, statements and journals; disable entrypoints and repair additively or through linked compensation. No history deletion, pilot backfill, small-builder book change or production activation is authorized.
+
+## ENT-14 dark contractor mandate preflight
+
+`enterprise-fee-mandate.ts` follows the separate small-builder agreement shape without extending it.
+It defines a strict synthetic record bound to tenant, agreement version, exact agreement terms hash,
+rate, scope hash, recipient and validity window. Its approval binds the resulting selection hash and
+references notice-process evidence; it specifies no real wording or notice duration. A changed rate
+or scope invalidates the old record. Only a new human-approved record for the changed terms may
+pass simulation. Supplied approval fields are data, never proof of a human action.
+
+The pure check also requires current membership, disabled provider defaults, an active provider
+mandate and exact unexpired statement approval including principal, tax and source hash. Revocation,
+cancellation, provider cancellation, in-flight work and unknown outcomes block initiation. Unknown
+outcomes fence retries pending reconciliation. Retries and refunds have no authority under this
+record; separate exact approval, durable reconciliation and original-settlement refund limits remain
+future integration work. `pilot_no_charge` never permits fee collection, including with a mandate.
+The check neither creates nor alters a record and exposes no worker writer. Live execution always
+refuses. Fake-rail tests use fictional records only; no provider integration or actual cancellation,
+notice delivery, reconciliation or refund is claimed.
+
+This base has no contractor fee collection start to wire: `refuseEnterpriseFeeInvoiceWork` is
+validation/refusal machinery only, with no registered worker or provider. The enterprise repository
+records reference fee facts, not collection. Therefore the new check stays tested and unwired.
+There is no database migration, persisted mandate, API or worker registration in this piece.
+`requireEnterpriseRealData` remains unchanged and dark; G0–G5 remain closed.
+
+Still open for people: solicitor review and the contract set (MSA, DPA, sub-processors, DPIA,
+pilot runbook), Ben's dated approval, real terms wording, the notice period and approved notice
+process, D12 and D16. This implementation does not complete ENT-14 or any human/legal approval.
+RED independent review against the exact head and required CI remain outstanding.
+
+Local validation for this piece: installed Vitest 4.1.12 with `--maxWorkers=2` ran
+`enterprise-fee-mandate.test.ts`, `subscription-agreement.test.ts` and
+`enterprise-fee-statement.test.ts`: 41 tests passed (11 new named mandate tests).
+The installed core `tsc -p packages/core/tsconfig.json --noEmit` passed. Core purity,
+money arithmetic, commercial boundary, AI provider boundary, PL/pgSQL CASE lint and
+`git diff --check` passed. Full local lint stops at the pre-existing, unchanged
+`config/lanes/m4-10-invoices.json` self-grant refusal; no check was weakened.
+The pnpm wrapper commands stalled before invoking checks; equivalent installed local
+Vitest/TypeScript binaries provided the results above. PostgreSQL, migration and browser
+suites were not run: this sandbox cannot start PostgreSQL or bind localhost. Full workspace
+checks, GitHub CI and independent RED review remain for the router. No existing tests changed.
+
+The existing `contractor-mandate.ts` is a separate synthetic event reducer, also
+unwired to an application or provider. It models reference retry/refund lifecycles;
+it is not a collection start or a human agreement writer. This terms/notice and
+statement preflight does not grant its retry/refund authority or alter that reducer.
+Its existing `contractor-mandate.test.ts` also passed separately with
+`--maxWorkers=2` (24 tests); total 65 passing tests across the two bounded runs.
