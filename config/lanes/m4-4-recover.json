@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-4-recover": {
+      "branches": [
+        "codex/sandbox/m4-4-recover"
+      ],
+      "note": "M4-4 RED NOPR catch-up including persistence and operator recovery; migrations 0597 then 0598. Explicit migration proofs preserve current main baselines. Synthetic only; PostgreSQL CI and independent RED review remain required.",
+      "allow": [
+        ".github/workflows/worm-local-minio.yml",
+        "docs/operations/evidence-storage.md",
+        "packages/db/migrations/0597_worm_durable_commands.sql",
+        "packages/db/migrations/0598_worm_operator_recovery.sql",
+        "packages/db/src/worm-command-repository.test.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0597_worm_durable_commands.proof.json",
+        "packages/db/test/migration-proofs/0598_worm_operator_recovery.proof.json",
+        "packages/db/test/worm-command.integration.test.ts",
+        "packages/storage/src/index.ts",
+        "packages/storage/src/timestamp.test.ts",
+        "packages/storage/src/timestamp.ts",
+        "packages/storage/src/worm-minio.integration.test.ts",
+        "packages/storage/src/worm.test.ts",
+        "packages/storage/src/worm.ts"
+      ]
+    }
+  }
+}

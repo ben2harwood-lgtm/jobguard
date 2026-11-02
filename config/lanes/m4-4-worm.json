@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-4-worm": {
+      "branches": [
+        "codex/sandbox/m4-4-worm"
+      ],
+      "note": "M4-4 dark adapter-only synthetic retention/hold/release and fake RFC-3161 TSA. D07 and production provider remain unapproved. No migration.",
+      "allow": [
+        ".github/workflows/worm-local-minio.yml",
+        "docs/operations/evidence-storage.md",
+        "packages/storage/src/index.ts",
+        "packages/storage/src/timestamp.test.ts",
+        "packages/storage/src/timestamp.ts",
+        "packages/storage/src/worm-minio.integration.test.ts",
+        "packages/storage/src/worm.test.ts",
+        "packages/storage/src/worm.ts"
+      ]
+    }
+  }
+}
