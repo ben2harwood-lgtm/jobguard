@@ -99,7 +99,22 @@ describe("MON-2A tidy approval failure boundaries", () => {
    if(input.kind === "execute_simulation" && failure !== "claim") return {workId:id, statementId:id, environment:"synthetic_demo", amountPence:4900, contentHash:"a".repeat(64),currency:"GBP"};
    throw new Error("private failure");
   });
+  expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending",executionStatus:"unavailable"});
+ });
+ it("does not retry execution after a result-recording failure left a durable attempt", async () => {
+  const f=fixture();const snapshot={attempts:[] as {work_id:string}[],results:[]};
+  f.repository.read.mockResolvedValue(snapshot);
+  f.repository.command.mockImplementation(async(_context,_digest,_id,input)=> {
+   if(input.kind === "approve_simulation") return {workId:id};
+   if(input.kind === "execute_simulation") {
+    snapshot.attempts.push({work_id:id});
+    return {workId:id,statementId:id,environment:"synthetic_demo",amountPence:4900,contentHash:"a".repeat(64),currency:"GBP"};
+   }
+   throw new Error("private result-recording failure");
+  });
+  expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending",executionStatus:"unavailable"});
   expect(await f.app.command("session",id,raw)).toEqual({workId:id,paymentStatus:"pending"});
+  expect(f.repository.command.mock.calls.map(call=>call[3].kind)).toEqual(["approve_simulation","execute_simulation","record_simulation","approve_simulation"]);
  });
  it("does not present a failed approval as saved", async () => {
   const f=fixture();f.repository.command.mockRejectedValue(new Error("approval rolled back"));

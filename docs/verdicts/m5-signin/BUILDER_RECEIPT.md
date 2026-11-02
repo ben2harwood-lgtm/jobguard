@@ -382,3 +382,46 @@ Ready as a follow-up on the unmerged built-ahead branch. Router owns commit/push
 main catch-up/renumbering and CI. PostgreSQL/migration/upgrade and browser suites,
 green CI against current main and one independent exact-head Claude RED review
 remain merge gates. Made-up data only; no live provider, release or money action.
+
+
+## MON-5 m5-signin-redact — RED main catch-up, 2 November 2026
+
+Resolved the customer-signin integration conflict as a union: main's exact
+predecessor/successor preservation assertions run before seeding the historical
+plaintext link; the existing branch redaction, original/replacement hash history,
+append-only audit-chain, revocation and replay assertions remain intact. Main's
+successors are applied before the branch forward fix so the fixture exercises
+the latest main schema. No test expectation was weakened or replaced.
+
+Renamed only the branch migration filename stem from
+`0388_customer_signin_redact` to `0587_customer_signin_redact` and updated the lane.
+The SQL bytes are unchanged (SHA-256
+`a6d5b244e35060b26f3eb9cd34b760d86c5a0f4bfe18e46839326b761941b269`).
+The latest main issuer body is still in 0387; the branch body retains that
+body's issuer, locking, binding, expiry and rate controls plus its existing
+reference validation. The historical redaction and hash-history fix is unchanged.
+The new 0587 proof explicitly has empty lp0, upgrade and tenancy arrays:
+no objects, ACLs, owners, policies, static call/write edges or tenancy postures
+are added or changed, and the existing issuer definition hash is null in LP-0.
+The upgrade catalogue snapshot does not include routine bodies. The separate
+seeded integration assertions continue to cover historical row redaction.
+No protected shared expectation lists, demo files or main migrations changed.
+
+Validation (installed binaries, no downloads, each Vitest run maxWorkers=1;
+two Vitest workers total):
+
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/outbox.test.ts test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts` — 64 passed.
+- In apps/api: `./node_modules/.bin/vitest run --maxWorkers=1 src/auth/customer-signin.test.ts` — 26 passed.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — passed.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — passed.
+- In packages/db: `./node_modules/.bin/tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck test/customer-signin.integration.test.ts` — passed.
+- `./node_modules/.bin/turbo run typecheck --concurrency=2` — stopped after its pnpm child stalled; four dependency checks were cache hits. Direct affected-package checks above all passed. `pnpm --version` also stalled and was stopped.
+- `git diff --check` — passed; content conflict markers absent; renamed SQL compared byte-for-byte with HEAD's original.
+
+READY for the router's NOPR handoff. No git writes, fetch, PostgreSQL or browser
+runs performed. The read-only git index still records the conflict until the
+router stages the resolved working file and migration rename/proof. PostgreSQL,
+migrations, browser checks, green CI and one independent exact-head Claude RED
+review remain required before merge. Synthetic data only; all release gates stay
+closed.

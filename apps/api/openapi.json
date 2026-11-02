@@ -1,6 +1,56 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/small-builder-demo/trial": {
+      "post": {
+        "operationId": "SmallBuilderTrialDemoController_command",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SmallBuilderTrialDemo"
+        ]
+      }
+    },
+    "/customer-portal/variations/read": {
+      "post": {
+        "operationId": "CustomerVariationController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read current extra revisions for this authenticated customer's job",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/variation-approvals": {
+      "post": {
+        "operationId": "CustomerVariationController_approve",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Customer explicitly approves one exact signed variation revision",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/customer-portal/issue": {
       "post": {
         "operationId": "CustomerSigninController_issue",
@@ -272,7 +322,6 @@
                     "jobId",
                     "environment",
                     "state",
-                    "dependency",
                     "productionEnabled",
                     "realExternalActions"
                   ],
@@ -296,7 +345,8 @@
                     "state": {
                       "type": "string",
                       "enum": [
-                        "dependency_bound"
+                        "dependency_bound",
+                        "catch_review_available"
                       ]
                     },
                     "dependency": {
@@ -323,7 +373,7 @@
             }
           }
         },
-        "summary": "Read synthetic success-fee availability; source-backed calculation dependency-bound",
+        "summary": "Read synthetic catch-fee review availability after final-account lock",
         "tags": [
           "synthetic success fees"
         ]
@@ -429,11 +479,310 @@
           }
         },
         "responses": {
+          "201": {
+            "description": "Immutable synthetic statement review or approved derivation; includes statement sources, statementHash, reviewId, derivationId, journalId, postingRevision and replayed"
+          },
+          "409": {
+            "description": "Statement/source/revision changed, review missing, or command identity conflict"
+          },
           "503": {
-            "description": "No business effects; accepted attribution source adapter is missing"
+            "description": "No qualifying catch adapter/lock; Q2 and Q3 remain dependency-bound"
           }
         },
-        "summary": "Validate synthetic fee review/approval intent; posting dependency-bound",
+        "summary": "Review an exact source-backed catch fee statement or approve its local posting",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements": {
+      "get": {
+        "operationId": "SuccessFeeController_statements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned statement view with immutable source and approval links"
+          }
+        },
+        "summary": "Read immutable synthetic fee statements; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_issueStatement",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "issue"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-statement-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue a simulation statement or approve its exact hash; no posting or collection",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/statements/{statementId}": {
+      "get": {
+        "operationId": "SuccessFeeController_downloadStatement",
+        "parameters": [
+          {
+            "name": "statementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download exact versioned simulation statement JSON bytes",
+        "tags": [
+          "synthetic success fees"
+        ]
+      }
+    },
+    "/jobs/{id}/success-fees/collection": {
+      "get": {
+        "operationId": "SuccessFeeController_collection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read fake-rail fee collection reservations and reconciled principal",
+        "tags": [
+          "synthetic success fees"
+        ]
+      },
+      "post": {
+        "operationId": "SuccessFeeController_collect",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "statementId",
+                      "statementHash",
+                      "amountPence"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-collection-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "collect",
+                          "refund"
+                        ]
+                      },
+                      "statementId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "amountPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "action",
+                      "attemptId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "simulation-fee-collection-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "redirect",
+                          "unknown"
+                        ]
+                      },
+                      "attemptId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve exact synthetic collection/refund or record a redirect/unknown outcome",
         "tags": [
           "synthetic success fees"
         ]
@@ -534,10 +883,10 @@
             "description": "Stored sources, expected revisions or command replay conflict"
           },
           "503": {
-            "description": "Review approval remains dependency-bound"
+            "description": "Required runtime dependency unavailable"
           }
         },
-        "summary": "Assess a stored synthetic catch and return its unreviewed value illustration",
+        "summary": "Assess a stored synthetic catch or approve its exact owner review",
         "tags": [
           "synthetic recovery attribution"
         ]

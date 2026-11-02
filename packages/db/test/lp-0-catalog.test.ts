@@ -353,3 +353,45 @@ describe("DEMO-I exact installed capability inventory",()=>{
   expect(records.every(r=>!r.publicExecute&&r.otherExecute.length===0)).toBe(true);
  });
 });
+
+describe("M5-8 private key registry inventory", () => {
+ it("records both private routines without granting any runtime capability", async () => {
+  const { inventory } = await loadReviewedInventory();
+  const records = inventory.recorded.routines.filter(r => r.identity === "function:app.tenant_key_registry_immutable()");
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({ owner: "jobguard_migration", securityDefiner: false,
+   searchPath: "search_path=pg_catalog", returnsTrigger: true, reachable: false,
+   runtimeExecute: false, publicExecute: false, otherExecute: [] });
+  const cat = base({ relations: [table("tenant_key_version", []), table("tenant_key_revocation", [])],
+   routines: [routine("tenant_key_registry_immutable", "", [], { securityDefiner: false, returnsTrigger: true, config: ["search_path=pg_catalog"] }),
+    routine("register_tenant_key", "integer,uuid,text", [], { config: ["search_path=pg_catalog"] })] });
+  expect(inventory.recorded.routines.filter(r => r.identity === "function:app.register_tenant_key(integer,uuid,text)")).toEqual([
+   expect.objectContaining({ owner: OWNER, securityDefiner: true, searchPath: "search_path=pg_catalog",
+    returnsTrigger: false, reachable: false, runtimeExecute: false, publicExecute: false,
+    otherExecute: [], staticWrites: ["app.tenant_key_version"] })]);
+  const clean = new Set(deriveFacts(base({ relations: [], routines: [] })).map(f => f.key));
+  expect(compareInventory(inventory, deriveFacts(cat).filter(f => !clean.has(f.key))).ok).toBe(true);
+  for (const grantee of [RT, "PUBLIC", "jobguard_infrastructure"]) {
+   const extra = base({ ...cat, routines: cat.routines.map(r => r.name === "register_tenant_key" ? { ...r, acl: [...r.acl, acl(grantee, "EXECUTE")] } : r) });
+   expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);
+  }
+  for (const name of ["tenant_key_version", "tenant_key_revocation"]) {
+   const extra = base({ ...cat, relations: cat.relations.map(r => r.name === name ? { ...r, acl: [...r.acl, acl(RT, "SELECT")] } : r) });
+   expect(compareInventory(inventory, deriveFacts(extra).filter(f => !clean.has(f.key))).ok).toBe(false);
+  }
+ });
+});
+
+describe("DEMO-J5 exact trial guide capability",()=>{
+ it("unions the one controlled entry point without direct table or helper grants",async()=>{
+  const {inventory}=await loadReviewedInventory();
+  const cat=base({relations:[table("demo_trial_binding",[])],routines:[routine("demo_trial","uuid,text,jsonb",[acl(RT,"EXECUTE")],{config:["search_path=pg_catalog"]})]});
+  const facts=deriveFacts(cat).filter(f=>f.key.includes("app.demo_trial"));
+  expect(inventory.entries.filter(e=>e.key.includes("app.demo_trial")).map(e=>e.key).sort()).toEqual(facts.map(f=>f.key).sort());
+  expect(compareInventory(inventory,facts).ok).toBe(true);
+  for(const privilege of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE"]){
+   const altered=base({...cat,relations:[table("demo_trial_binding",[acl(RT,privilege)])]});
+   expect(compareInventory(inventory,deriveFacts(altered).filter(f=>f.key.includes("app.demo_trial"))).ok).toBe(false);
+  }
+ });
+});

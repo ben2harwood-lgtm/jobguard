@@ -4,7 +4,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { migrate } from "../src/migrate.js";
+import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { verifyAuditChain } from "../src/audit.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 const own = "0387_customer_signin.sql";
@@ -13,8 +13,16 @@ let c: Cluster;
 beforeAll(async () => {
   c = await startBeforeMigration(own);
   const before = await snapshot(c.admin);
+  const expected = { ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] };
   await applyMigration(c, own);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.customer_portal_grant": [], "app.customer_portal_session": [] });
+  expect(await snapshot(c.admin)).toEqual(expected);
+  // Apply main's successors first; retain its exact preservation assertion before seeding legacy credentials.
+  for (const url of MIGRATION_URLS) {
+    const name = url.pathname.split("/").at(-1)!;
+    if (name > own && name < "0587_customer_signin_redact.sql") await applyMigration(c, name);
+  }
+  const successors = { ...expected, "app.customer_variation_approval": [] };
+  expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
   const w = await world();
   const token = randomBytes(32).toString("base64url"), path = `/customer/sign-in#${w.tenant}/${w.job}/${w.customer}/${token}`;
   const grant = (await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id", [w.tenant,w.digest,w.job,w.customer,hmac(`customer-link:${token}`),path])).rows[0].id;
@@ -147,7 +155,7 @@ it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s a
   await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
 });
 it("new tables have FORCE RLS and no direct runtime, identity or infrastructure access", async () => {
-  for (const table of ["customer_portal_grant", "customer_portal_session"]) {
+  for (const table of ["customer_portal_grant", "customer_portal_session", "customer_variation_approval"]) {
     const row = (await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid=$1::regclass", [`app.${table}`])).rows[0];
     expect(row).toEqual({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
     for (const role of ["jobguard_runtime", "jobguard_identity", "jobguard_infrastructure"]) expect((await c.admin.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed", [role, `app.${table}`])).rows[0].allowed).toBe(false);
