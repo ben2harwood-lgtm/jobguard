@@ -65,7 +65,7 @@ test("CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock 
  try {
   const other = await unrelated.newPage(); await other.goto("/");
   await other.getByRole("main").getByRole("button", { name: "Start the demo", exact: true }).click();
-  await other.getByRole("main").getByRole("button", { name: "Skip tour", exact: true }).click();
+  await other.getByRole("button", { name: "Skip tour", exact: true }).click();
   const denied = await other.request.get(`/api/jobs/${jobId}/commercial-integrity/v3`);
   expect(denied.status()).toBe(404); expect(await denied.json()).toEqual({ code: "NOT_FOUND" });
  } finally { await unrelated.close(); }
