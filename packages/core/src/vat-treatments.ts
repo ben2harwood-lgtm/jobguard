@@ -173,7 +173,7 @@ export function reconcileVatRetentionFixtures(vatInput: unknown, retentionInput:
   const parsed = retentionBookV1.safeParse(retentionInput);
   if (!parsed.success) fail("INVALID_INPUT", "Invalid versioned synthetic retention book");
   const book = parsed.data;
-  reconcileRetentionBook(book);
+  const retention = reconcileRetentionBook(book);
   if (book.tenantId !== vat.tenantId || book.jobId !== vat.jobId) {
     fail("INVALID_LINEAGE", "VAT and retention books belong to different tenants or jobs");
   }
@@ -199,6 +199,11 @@ export function reconcileVatRetentionFixtures(vatInput: unknown, retentionInput:
       || BigInt(resolution.amount.netPence) + BigInt(resolution.amount.taxPence) !== BigInt(document.delta.expectedCash.pence)) {
       fail("VALUE_LIMIT", "VAT release principal, supplier tax and cash must match its retention allocation");
     }
+  }
+  const latest = vat.documents.at(-1)!;
+  if (latest.cumulative.retained.pence !== retention.remaining.netPence
+    || latest.cumulative.retainedVat.pence !== retention.remaining.taxPence) {
+    fail("VALUE_LIMIT", "VAT and retention held principal/tax do not reconcile");
   }
   return vat;
 }

@@ -69,9 +69,9 @@ function retentionFixture(netPence = 1000, taxPence = 50): RetentionBook {
   return { version: "retention.book.v1", environment: "synthetic", ...context, records: [
     { ...context, id: id(30), version: "retention.profile.v1", revision: 1, previousProfileId: null,
       contractProfileVersion: "fictional-contract-v1", fixtureApprovalId: id(5), taxTreatmentVersion: "fictional-tax-v1",
-      retained: { netPence: 2000, taxPence: 400 }, alreadyBilled: { netPence: 0, taxPence: 0 },
+      retained: { netPence: 1000, taxPence }, alreadyBilled: { netPence: 0, taxPence: 0 },
       conditions: [{ id: id(6), milestone: "completion", description: "Fictional completion", source,
-        dueDate: "2026-10-31", dateSource: source, cumulativeLimit: { netPence: 2000, taxPence: 400 } }] },
+        dueDate: "2026-10-31", dateSource: source, cumulativeLimit: { netPence: 1000, taxPence } }] },
     { ...context, id: id(40), version: "retention.review.v1", profileId: id(30), conditionId: id(6),
       owner: RETENTION_REVIEW_OWNER, trigger: "human", raisedOn: "2026-10-31" },
     { ...context, id: id(50), version: "retention.resolution.v1", reviewId: id(40), outcome: "approved",
@@ -84,6 +84,18 @@ describe("M4-21 / M4-20 release linkage", () => {
   function vatRelease(code: DarkVatTreatment = "reduced_5") {
     const book = fixture(code); append(book, "retention_release", 10000, 0); return book;
   }
+  it.each([[999, 50], [1000, 49]])("reconciles held VAT principal/tax against retention remaining: %i/%i", (net, tax) => {
+    const vat = fixture(), retention = retentionFixture();
+    retention.records = retention.records.slice(0, 1);
+    const profile = retention.records[0]!;
+    if (profile.version !== "retention.profile.v1") throw new Error("Expected profile");
+    profile.retained = { netPence: net, taxPence: tax };
+    profile.conditions[0]!.cumulativeLimit = { ...profile.retained };
+    expect(() => reconcileVatRetentionFixtures(vat, retention)).toThrow(expect.objectContaining({ code: "VALUE_LIMIT" }));
+    profile.retained = { netPence: 1000, taxPence: 50 };
+    profile.conditions[0]!.cumulativeLimit = { ...profile.retained };
+    expect(() => reconcileVatRetentionFixtures(vat, retention)).not.toThrow();
+  });
   it("rejects unknown release IDs and IDs belonging to another kind of record", () => {
     for (const releaseId of [id(999), id(50), id(30)]) {
       const vat = vatRelease(); vat.documents[1]!.retentionReleaseId = releaseId;

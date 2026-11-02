@@ -96,8 +96,14 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
   });
   it("holds contradictory out-of-order failures after settlement", async () => {
     const f = fixture(); await f.settle(); const e = f.event(id(10), "collection", id(32), "definite_failure");
-    await expect(f.executor.webhook(ctx, "stripe_card", e.body, e.signature)).rejects.toThrow("RECONCILIATION_REQUIRED");
-    expect(f.book().attempts[0]?.state).toBe("settled");
+    await f.executor.webhook(ctx, "stripe_card", e.body, e.signature);
+    await f.executor.webhook(ctx, "stripe_card", e.body, e.signature);
+    expect(f.book().attempts[0]?.state).toBe("reconciliation_required");
+    expect(f.book().events[`stripe_card:${id(32)}`]).toBeDefined();
+    expect(f.book().audit.filter(a => a.state === "reconciliation_required")).toHaveLength(1);
+    await expect(f.executor.reserveRefund(ctx, f.refund)).rejects.toThrow("RECONCILIATION_REQUIRED");
+    const restarted = new DarkFeeCollectionExecutor(f.store, [f.rail], undefined, f.sessions);
+    await expect(restarted.reserve(ctx, { ...f.intent, commandId: id(11) })).rejects.toThrow("RECONCILIATION_REQUIRED");
   });
   it("uses the executor clock rather than cached agreement time for statement and terms expiry", async () => {
     const f = fixture(); await f.executor.reserve(ctx, f.intent);
