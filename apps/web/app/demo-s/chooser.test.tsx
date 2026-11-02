@@ -14,7 +14,8 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
     expect(new Set(journeyChoices.map(item => item.scenario)).size).toBe(5);
     expect(meterProfiles).toHaveLength(13); expect(meterProfiles[9]).toContain("13–17");
     expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["core-1000", "recovery-18800", "shadow-30000", "meter", "trial"]);
-    for (const item of journeyChoices.filter(choice => !journeyAvailable(choice.scenario) || choice.scenario === "shadow-30000")) expect(item.reason).toContain("not ready yet");
+    for (const item of journeyChoices.filter(choice => !journeyAvailable(choice.scenario))) expect(item.reason).toContain("not ready yet");
+    expect(journeyChoices.find(row => row.scenario === "shadow-30000")!.reason).toContain("complete only when every one is saved");
   });
   it("links only persisted lifecycle identities and records missing A1 and observations", () => {
     const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts });
