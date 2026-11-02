@@ -18,6 +18,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/customer-portal/quote-accept": "pre_live_allowed",
   "nest:/customer-portal/quote": "pre_live_allowed",
   "nest:/customer-portal/quote-accept": "pre_live_allowed",
+  "/api/customer-portal/stages": "pre_live_allowed",
+  "/api/customer-portal/stage-acknowledge": "pre_live_allowed",
+  "nest:/customer-portal/stages": "pre_live_allowed",
+  "nest:/customer-portal/stage-acknowledge": "pre_live_allowed",
   // Customer commercial boundary: generic refusals and live status checked in 0389,
   // rather than exposing the builder watchdog's status/409 diagnostics.
   "/api/customer-portal/variations/read": "pre_live_allowed",

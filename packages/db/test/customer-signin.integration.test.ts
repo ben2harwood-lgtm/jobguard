@@ -16,7 +16,7 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  const successors = { ...expected, "app.customer_quote_approval": [], "app.customer_variation_approval": [] };
+  const successors = { ...expected, "app.customer_quote_approval": [], "app.customer_stage_acknowledgement": [], "app.customer_variation_approval": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);
 afterAll(async () => { await c?.close(); });

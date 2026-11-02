@@ -12,7 +12,7 @@ export class ApplicationAuthGuard implements CanActivate {
   constructor(@Inject(IDENTITY_APPLICATION) private readonly application:()=>IdentityApplication) {}
   async canActivate(context:ExecutionContext):Promise<boolean> {
     const request=context.switchToHttp().getRequest<IdentityHttpRequest & {path:string;method?:string}>();
-    if(request.method==="POST" && (request.path==="/customer-portal/messages" || [...customerActions,...customerQuoteActions,...customerVariationActions].some(action=>request.path===`/customer-portal/${action}`)))return true;
+    if(request.method==="POST" && (request.path==="/customer-portal/messages" || [...customerActions,...customerQuoteActions,...customerVariationActions,"stages","stage-acknowledge"].some(action=>request.path===`/customer-portal/${action}`)))return true;
     if(customerToken(request)!==undefined)throw new UnauthorizedException({code:"UNAUTHENTICATED"});
     if(request.path==="/healthz" || request.path.startsWith("/auth/"))return true;
     // MON-2A subscriptions, DEMO-J5 trial reports and CH-9 exact GET value paths use the company bridge
