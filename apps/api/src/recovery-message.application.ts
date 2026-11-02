@@ -39,7 +39,7 @@ export class RecoveryMessageApplication {
     // Repository access, source/evidence validation and replay remain authoritative.
     // The fixture draft is a proposal only, and cannot alter the stored preview.
     try {
-      const drafting = result.latest ? await draftPracticePursuit(recoveryMessageSourceOf(result.latest.message)) : null;
+      const drafting = result.latest ? await draftPracticePursuit(recoveryMessageSourceOf(result.latest.message), ctx) : null;
       return { ...result, drafting };
     } catch (error) {
       if (error instanceof z.ZodError) throw new RecoveryMessageError("RECOVERY_MESSAGE_CONTENT_INVALID");

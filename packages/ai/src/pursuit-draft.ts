@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { buildRecoveryMessage, recoveryMessageSourceOf, recoveryMessageSourceV1, sha256, type RecoveryMessageSource } from "@jobguard/core";
 import { AiGatewayError } from "./errors.js";
-import { AiGateway } from "./gateway.js";
+import { AiGateway, type AiSessionResolver } from "./gateway.js";
 import { FixtureAiProvider, createLiveAiProvider, type RecordedFixture } from "./fixture-provider.js";
 import { aiCitationSchema } from "./types.js";
 
@@ -37,11 +37,13 @@ function factsFor(source: RecoveryMessageSource) {
 }
 
 /** No writer, send callback or provider configuration. Caller must load the source
- * through the existing authenticated case repository; this does not mint authority. */
+ * through the existing authenticated case repository and pass its verified session
+ * context separately from draft input; this does not mint authority. */
 export class PursuitFixtureDrafter {
   private readonly gateway: AiGateway;
-  constructor(fixtures: Readonly<Record<string, RecordedFixture>>) {
-    this.gateway = new AiGateway(new FixtureAiProvider(fixtures));
+  constructor(fixtures: Readonly<Record<string, RecordedFixture>>,
+    private readonly session: Awaited<ReturnType<AiSessionResolver>>) {
+    this.gateway = new AiGateway(new FixtureAiProvider(fixtures), () => this.session);
   }
   async draft(raw: unknown, fixtureId: string, options: unknown = { provider: "fixture" }) {
     const route = z.object({ provider: z.enum(["fixture", "live"]) }).strict().safeParse(options);
@@ -52,7 +54,8 @@ export class PursuitFixtureDrafter {
     const { source, kind } = parsed.data, facts = factsFor(source), message = buildRecoveryMessage(source);
     const result = await this.gateway.generate({ contractVersion: "ai_gateway_request_v1", fixtureId,
       operation: "factual_pursuit_draft", promptVersion: PURSUIT_PROMPT_VERSION, schemaVersion: "pursuit-draft.v1",
-      sources: [{ id: facts.id, content: facts.content, sha256: facts.sha256 }], timeoutMs: 1000, maxOutputTokens: 2048,
+      sources: [{ id: facts.id, content: facts.content, sha256: facts.sha256,
+        tenantId: this.session?.tenantId, visibility: "public" }], timeoutMs: 1000, maxOutputTokens: 2048,
     }, pursuitDraftOutputV1);
     if (result.output.templateVersion !== PURSUIT_TEMPLATES[kind].version ||
       hasProhibitedPursuitClaim(result.output.body) || result.output.body !== message.body) {
@@ -77,11 +80,12 @@ export class PursuitFixtureDrafter {
 /** Deterministic default for the authenticated practice preview. The resulting
  * canonical message goes through M4-5-S's unchanged Decision/outbox/fake adapter.
  * Scheduled reminders remain M4-6-S pending Decisions, never approval here. */
-export async function draftPracticePursuit(source: RecoveryMessageSource, kind: "claim" | "reminder" = "claim") {
+export async function draftPracticePursuit(source: RecoveryMessageSource, session: Awaited<ReturnType<AiSessionResolver>>,
+  kind: "claim" | "reminder" = "claim") {
   const checked = recoveryMessageSourceV1.parse(source), facts = factsFor(checked), message = buildRecoveryMessage(checked);
   const fixtureId = "pursuit-default";
   const drafter = new PursuitFixtureDrafter({ [fixtureId]: { output: { version: "pursuit-draft.v1",
-    templateVersion: PURSUIT_TEMPLATES[kind].version, body: message.body, amountCitation: facts.citation }, citations: [facts.citation] } });
+    templateVersion: PURSUIT_TEMPLATES[kind].version, body: message.body, amountCitation: facts.citation }, citations: [facts.citation] } }, session);
   return drafter.draft({ version: "pursuit-draft-input.v1", environment: "synthetic_demo", kind,
     source: recoveryMessageSourceOf(message) }, fixtureId);
 }

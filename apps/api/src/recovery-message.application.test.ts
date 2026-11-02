@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+import { FixtureAiProvider } from "@jobguard/ai";
 import { buildRecoveryMessage } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import { PracticeAccessError, RecoveryMessageError } from "@jobguard/db";
@@ -74,12 +75,22 @@ describe("recovery message API boundaries", () => {
     const message = buildRecoveryMessage({ caseId, jobId: id(7), caseType: "withheld_customer_payment", caseRevision: 1,
       amountPence: 32000, sourceRefs: [id(8)], packId, packRevision: 1, manifestHash: hash, attachmentHash: "b".repeat(64) });
     repository.preview.mockResolvedValue({ ...state, latest: { message } });
+    const execute = vi.spyOn(FixtureAiProvider.prototype, "execute");
     const response = await new RecoveryMessageApplication(pool).preview(sessionId, caseId, preview);
     expect(response).toMatchObject({ drafting: { legalReview: "D10_PENDING", environment: "synthetic_demo",
       preview: { contentHash: message.contentHash, sender: message.sender, recipient: message.recipient,
         attachmentHash: message.attachmentHash, body: message.body },
       provenance: { provider: "recorded-fixture", deployment: "local-only" } } });
     expect(repository.command).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ tenantId: id(10),
+      sources: [expect.objectContaining({ tenantId: id(10), visibility: "public" })] }), undefined);
+    execute.mockClear();
+    // A later request must authenticate again even when a stored preview exists.
+    sessionQuery.mockResolvedValue({ rows: [] });
+    await expect(new RecoveryMessageApplication(pool).preview(sessionId, caseId, preview)).rejects.toThrow("UNAUTHENTICATED");
+    expect(execute).not.toHaveBeenCalled();
+    expect(repository.preview).toHaveBeenCalledTimes(1);
+    execute.mockRestore();
   });
 
   it.each([{ amountPence: 0 }, { sourceRefs: [] }, { manifestHash: "obsolete-hash" }])(
