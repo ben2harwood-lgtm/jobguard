@@ -1,4 +1,5 @@
 -- CH-4-U: preserve command replays; refuse new invoices while the job is closed.
+BEGIN;
 CREATE OR REPLACE FUNCTION app.issue_practice_customer_invoice(
  p_tenant uuid,p_job uuid,p_final_revision uuid,p_actor uuid,p_command uuid,p_recipient text,p_issued_on date
 ) RETURNS TABLE(invoice_id uuid,invoice_number text,pdf_sha256 text,total_pence bigint,source_hash text,outbox_status text)
@@ -121,3 +122,4 @@ BEGIN
  PERFORM app.append_final_lock_audit(gen_random_uuid(),p_actor,p_job,'customer_invoice.lock_bound_issued',jsonb_build_object('invoiceId',new_invoice,'lockId',lock_row.id,'checkId',check_row.check_id,'commandId',p_command),jsonb_build_object('pdf',digest));
  RETURN QUERY SELECT new_invoice,number,digest,final_row.total_pence,final_row.source_hash::text,'succeeded'::text;
 END $$;
+COMMIT;
