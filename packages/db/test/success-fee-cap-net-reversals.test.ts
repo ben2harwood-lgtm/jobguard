@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { loadMigrationProofs, proofSchema } from "./migration-proof-loader.js";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0585_success_fee_cap_nets_reversals.sql");
+const sql = read("../migrations/0547_success_fee_cap_nets_reversals.sql");
 const writer = (source: string) => source.match(/CREATE OR REPLACE FUNCTION app\.write_success_fee_v3\([\s\S]*?END \$\$;/u)![0];
 
 it("preserves the latest 0515 writer byte for byte apart from the two capacity sums", () => {
@@ -31,8 +31,8 @@ it("retains oversized reversal, authorization, exact arithmetic, invalid-proof a
 });
 
 it("declares explicit unchanged privilege metadata for the replaced routine", () => {
- const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0585_success_fee_cap_nets_reversals.proof.json")));
- expect(proof.migration).toBe("0585_success_fee_cap_nets_reversals.sql");
+ const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0547_success_fee_cap_nets_reversals.proof.json")));
+ expect(proof.migration).toBe("0547_success_fee_cap_nets_reversals.sql");
  expect(proof.tenancy).toEqual([]);
  for (const section of [proof.lp0, proof.upgrade]) {
   expect(section).toHaveLength(1);
@@ -43,7 +43,7 @@ it("declares explicit unchanged privilege metadata for the replaced routine", ()
 
 it("chains the replacement to the previous reviewed routine and loads all real proofs", () => {
  const previous = proofSchema.parse(JSON.parse(read("./migration-proofs/0511_success_fee_recovery_compensation.proof.json")));
- const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0585_success_fee_cap_nets_reversals.proof.json")));
+ const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0547_success_fee_cap_nets_reversals.proof.json")));
  expect(proof.lp0[0]!.before).toEqual(previous.lp0.find(change => change.section === "routines")!.after);
  expect(loadMigrationProofs().proofs).toContainEqual(proof);
 });

@@ -1,5 +1,5 @@
 {
-  "migration": "0578_recovery_billability_integration.sql",
+  "migration": "0542_recovery_billability_integration.sql",
   "lp0": [
     {
       "section": "groups",
@@ -65,7 +65,7 @@
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
           "packages/db/migrations/0359_payment_fee_statements.sql",
-          "packages/db/migrations/0578_recovery_billability_integration.sql"
+          "packages/db/migrations/0542_recovery_billability_integration.sql"
         ],
         "tests": [
           "packages/db/test/recovery-allocation.integration.test.ts",

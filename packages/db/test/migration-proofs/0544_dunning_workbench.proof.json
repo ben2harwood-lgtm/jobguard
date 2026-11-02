@@ -1,5 +1,5 @@
 {
-  "migration": "0581_dunning_workbench.sql",
+  "migration": "0544_dunning_workbench.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "One synthetic-only session-checked entry point reads private invoice projections, creates immutable reminder snapshots and stored Decisions, approves previews and appends audit events. No send, retry, outbox or financial authorization.",
         "sources": [
-          "packages/db/migrations/0581_dunning_workbench.sql",
+          "packages/db/migrations/0544_dunning_workbench.sql",
           "packages/db/src/dunning-repository.ts"
         ],
         "tests": [
@@ -68,7 +68,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0581_dunning_workbench.sql",
+          "packages/db/migrations/0544_dunning_workbench.sql",
           "packages/db/src/dunning-repository.ts"
         ],
         "tests": [

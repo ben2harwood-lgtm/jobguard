@@ -9,7 +9,7 @@ import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(); }, 120000);
 afterAll(async () => { if (f) await closeFinalCheckFixture(f); });
-const sql = readFileSync(new URL("../migrations/0585_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../migrations/0547_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8");
 const predicate = sql.match(/  IF (\(SELECT coalesce\(sum\(greatest[\s\S]*?)\n  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'/u)![1]!
  .replaceAll("app.recovery_case_allocation_reversal", "reversals")
  .replaceAll("app.recovery_case_allocation", "allocations")

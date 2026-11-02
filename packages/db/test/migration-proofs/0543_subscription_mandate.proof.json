@@ -1,5 +1,5 @@
 {
-  "migration": "0580_subscription_mandate.sql",
+  "migration": "0543_subscription_mandate.sql",
   "lp0": [
     {
       "section": "triggers",
@@ -62,7 +62,7 @@
         "downstream": "Owner-only immutable synthetic approvals and lifecycle events; live collection remains refused.",
         "path": "ap-m413-subscription-mandate",
         "sources": [
-          "packages/db/migrations/0580_subscription_mandate.sql"
+          "packages/db/migrations/0543_subscription_mandate.sql"
         ],
         "tests": [
           "packages/db/test/subscription-mandate.integration.test.ts"
@@ -84,7 +84,7 @@
         ],
         "responsibilities": {},
         "sources": [
-          "packages/db/migrations/0580_subscription_mandate.sql"
+          "packages/db/migrations/0543_subscription_mandate.sql"
         ],
         "tests": [
           "packages/db/test/subscription-mandate.integration.test.ts"

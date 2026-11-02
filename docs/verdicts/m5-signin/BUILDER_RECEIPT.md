@@ -394,7 +394,7 @@ successors are applied before the branch forward fix so the fixture exercises
 the latest main schema. No test expectation was weakened or replaced.
 
 Renamed only the branch migration filename stem from
-`0388_customer_signin_redact` to `0587_customer_signin_redact` and updated the lane.
+`0388_customer_signin_redact` to `0538_customer_signin_redact` and updated the lane.
 The SQL bytes are unchanged (SHA-256
 `a6d5b244e35060b26f3eb9cd34b760d86c5a0f4bfe18e46839326b761941b269`).
 The latest main issuer body is still in 0387; the branch body retains that

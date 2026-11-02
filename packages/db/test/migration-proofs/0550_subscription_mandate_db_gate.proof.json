@@ -1,0 +1,6 @@
+{
+  "migration": "0550_subscription_mandate_db_gate.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

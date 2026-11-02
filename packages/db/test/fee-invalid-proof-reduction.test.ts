@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { loadMigrationProofs, proofSchema } from "./migration-proof-loader.js";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0586_fee_invalid_proof_reduction.sql");
+const sql = read("../migrations/0548_fee_invalid_proof_reduction.sql");
 const routine = (source: string, name: string) => source.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?END \\$\\$;`, "u"))![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
 const prior = read("../migrations/0515_fee_compensation_gate_and_demo_settle.sql");
 it("preserves the demo settle happy path and replay ordering apart from source revalidation", () => {
@@ -37,15 +37,15 @@ it("preserves the latest writer except invalid-proof principal, hash and strictl
  restored = restored.replace(/\n  -- Invalidated proof supports no principal[^\n]*\n  IF EXISTS\([^\n]*\n  THEN remaining:=0; END IF;/u, "");
  restored = restored.replace(/\|\|\(CASE WHEN EXISTS\(\n     SELECT 1 FROM app.evidence_invalidation[^\n]*\n     THEN jsonb_build_object\('invalidated',true\) ELSE '\{\}'::jsonb END\)/u, "");
  restored = restored.replace("-- 0586: invalid proof permits only a strictly negative compensation delta.", "-- 0515: while invalid proof is in play this command can only reduce or leave what was posted.").replace("IF invalid_reduction AND delta>=0", "IF invalid_reduction AND delta>0");
- expect(restored).toBe(routine(read("../migrations/0585_success_fee_cap_nets_reversals.sql"), "write_success_fee_v3"));
+ expect(restored).toBe(routine(read("../migrations/0547_success_fee_cap_nets_reversals.sql"), "write_success_fee_v3"));
 });
 it("loads an explicit proof for all three replacements, retaining private ACLs", () => {
- const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0586_fee_invalid_proof_reduction.proof.json")));
+ const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0548_fee_invalid_proof_reduction.proof.json")));
  expect(proof.tenancy).toEqual([]);
  expect(proof.lp0).toHaveLength(3);
  expect(proof.upgrade).toHaveLength(3);
  for (const c of proof.upgrade) expect(c.before).toEqual(c.after);
- const previous = proofSchema.parse(JSON.parse(read("./migration-proofs/0585_success_fee_cap_nets_reversals.proof.json")));
+ const previous = proofSchema.parse(JSON.parse(read("./migration-proofs/0547_success_fee_cap_nets_reversals.proof.json")));
  expect(proof.lp0[0]!.before).toEqual(previous.lp0[0]!.after);
  expect(loadMigrationProofs().proofs).toContainEqual(proof);
 });

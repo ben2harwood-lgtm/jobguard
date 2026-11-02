@@ -3,7 +3,7 @@
 This is a synthetic-only domain seam for BUILD_PLAN §11.5 M4-16. D05 remains
 proposed; M4-15 and the applicable G4 gate remain release dependencies. Nothing
 here approves terms, sends messages, retries a payment, suspends a real account,
-or adds a scheduling owner. The pure core itself needs no migration; the durable preview seam below uses migration `0581_dunning_workbench`.
+or adds a scheduling owner. The pure core itself needs no migration; the durable preview seam below uses migration `0544_dunning_workbench`.
 
 `dunning-reference.v1` uses fixture ticks (1, 3, 7) and a three-attempt ceiling.
 These are test values, not approved commercial deadlines. Retry evaluation
@@ -88,7 +88,7 @@ and one independent Claude RED review is required before merging.
 
 ## M4-16-persist: durable practice workbench and reminder Decisions
 
-Migration `0581_dunning_workbench.sql` adds exactly two private tenant-owned tables:
+Migration `0544_dunning_workbench.sql` adds exactly two private tenant-owned tables:
 `dunning_invoice` holds administrative synthetic invoice projections, and
 `dunning_reminder` preserves immutable snapshots bound to real `app.decision` rows.
 Both tables have tenant-qualified job/source keys and FORCE RLS. Runtime has no
@@ -151,7 +151,7 @@ Do not drop business evidence or edit an already merged migration.
 
 Local validation uses `dunning.test.ts`, `dunning-repository.test.ts` and the
 LP-0 catalogue comparator. `dunning-upgrade.integration.test.ts` preserves populated predecessors and existing
-routine bodies/grants across `0581_dunning_workbench` and repeated migration runs.
+routine bodies/grants across `0544_dunning_workbench` and repeated migration runs.
 `dunning.integration.test.ts` covers real PostgreSQL
 persistence/recreation, concurrent/replayed commands, suppression, changed
 balances, wrong Decision/tenant/session, expiry/dismissal, RLS/grants and audit
@@ -170,7 +170,7 @@ policy and amount, then creates and approves a stored preview Decision. Refresh
 loads current balances and live Decisions; failed commands clear displayed approval
 controls and require another read. No ledger, evidence or export grants change.
 
-Migration `0607_dunning_workbench_preview.sql` starts with the latest base routine,
+Migration `0551_dunning_workbench_preview.sql` starts with the latest base routine,
 including retirement of expired/dismissed/rejected previews under the company lock.
 It exposes only the current unexpired snapshot's live Decision for the screen.
 The existing partial unique index continues to prevent parallel live previews;

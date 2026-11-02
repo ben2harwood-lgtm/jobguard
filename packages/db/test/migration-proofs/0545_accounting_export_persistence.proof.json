@@ -1,5 +1,5 @@
 {
-  "migration": "0582_accounting_export_persistence.sql",
+  "migration": "0545_accounting_export_persistence.sql",
   "lp0": [
     {
       "section": "groups",
@@ -23,7 +23,7 @@
         },
         "downstream": "Closed synthetic export preview, human confirmation, durable claim and reconciliation. No provider or recovery authority.",
         "sources": [
-          "packages/db/migrations/0582_accounting_export_persistence.sql",
+          "packages/db/migrations/0545_accounting_export_persistence.sql",
           "packages/db/src/accounting-export-repository.ts"
         ],
         "tests": [
@@ -67,7 +67,7 @@
           "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
         },
         "sources": [
-          "packages/db/migrations/0582_accounting_export_persistence.sql",
+          "packages/db/migrations/0545_accounting_export_persistence.sql",
           "packages/db/src/accounting-export-repository.ts"
         ],
         "tests": [

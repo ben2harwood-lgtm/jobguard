@@ -6,7 +6,7 @@ import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { DunningRepository } from "../src/dunning-repository.js";
-const migration = "0607_dunning_workbench_preview.sql";
+const migration = "0551_dunning_workbench_preview.sql";
 let c: Cluster;
 beforeAll(async () => { c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); });

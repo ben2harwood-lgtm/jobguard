@@ -29,6 +29,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.accounting_export_outbox":[],
  "app.accounting_export_attempt":[],
  "app.accounting_export_inbox":[],
+ "app.managed_recovery_election":[],
+ "app.managed_recovery_pursuit":[],
  "app.tenant_key_version":[],
  "app.tenant_key_revocation":[],
  "app.recovery_timeline_run":[],

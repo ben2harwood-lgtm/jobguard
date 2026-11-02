@@ -158,6 +158,7 @@ export * from "./small-builder-demo-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./subscription-mandate-repository.js";
 export * from "./recovery-billability-repository.js";
+export * from "./managed-recovery-repository.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";
