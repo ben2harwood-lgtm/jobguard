@@ -47,3 +47,17 @@ async function supplierSource(db: TenantTransaction, tenantId: string, jobId: st
   const kind = document.document_type === "invoice" ? "Supplier invoice" : "Delivery note";
   return { kind, label: `${kind} ${document.document_number ?? "(unnumbered)"}` };
 }
+
+/** Resolve only already approved, public variation facts after lock. No shadow-table access. */
+export async function resolveFinalCheckRecoverySources(db:TenantTransaction,tenantId:string,jobId:string,refs:readonly string[]):Promise<RecoverySourceView[]> {
+ const variation=refs.find(ref=>ref.startsWith("variation:"))?.slice(10);
+ const revision=refs.find(ref=>ref.startsWith("revision:"))?.slice(9);
+ if(!variation||!revision||!isRecordedSourceId(variation)||!isRecordedSourceId(revision))throw new RecoverySourceError();
+ const found=await db.$client.query(`SELECT r.id FROM app.variation_revision r
+  JOIN app.variation_approval a ON(a.tenant_id,a.job_id,a.variation_id,a.revision_id)=(r.tenant_id,r.job_id,r.variation_id,r.id)
+  WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.variation_id=$3 AND r.id=$4
+   AND EXISTS(SELECT 1 FROM app.final_account_lock l WHERE l.tenant_id=r.tenant_id AND l.job_id=r.job_id)`,[tenantId,jobId,variation,revision]);
+ if(!found.rowCount)throw new RecoverySourceError();
+ return refs.map(ref=>({ref,kind:ref.startsWith("variation:")?"Customer-approved variation":ref.startsWith("revision:")?"Approved commercial revision":"Final Check origin reference",
+  label:ref,recorded:ref===`variation:${variation}`||ref===`revision:${revision}`}));
+}

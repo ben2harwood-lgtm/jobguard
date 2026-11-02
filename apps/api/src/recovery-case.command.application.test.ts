@@ -130,3 +130,12 @@ describe("repair 15 response money boundaries", () => {
   expect(recoveryCaseCommandResponseV1.safeParse(envelope(row("eligibleNetPence",null))).success).toBe(true);
  });
 });
+
+it("M4-1 full workbench accepts the guarded Final Check type and preserves separate facts and history",()=>{
+ const id=randomUUID(),entry={id:randomUUID(),kind:"claim_revision",revision:1,amountPence:32000,fromState:null,toState:null,reviewerRef:"membership:synthetic",recordedAt:"2026-01-01T00:00:00.000Z",hash:"a".repeat(64),previousHash:null};
+ const details={canCommand:true,claimRevision:1,lastDisputedNetPence:null,manualReversedNetPence:100,approvedReversedNetPence:200,evidenceStatus:"sources_unresolved",ambiguity:["Unresolved source"],history:[entry]};
+ const parsed=recoveryCaseListResponseV1.parse({...envelope,cases:[{...caseView(id),caseType:"missed_variation_final_account",...details}]});
+ expect(parsed.cases[0]).toMatchObject(details);
+ expect(parsed.cases[0]?.history?.[0]).toEqual(entry);
+ expect(recoveryCaseListResponseV1.safeParse({...envelope,cases:[{...caseView(id),...details,manualReversedNetPence:-1}]}).success).toBe(false);
+});
