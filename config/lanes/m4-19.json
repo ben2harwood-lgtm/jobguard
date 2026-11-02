@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-19": {
+      "branches": ["codex/sandbox/m4-19"],
+      "note": "RED M4-19 dark fixture notices only; no migrations, providers, real generation or send. NOPR build-ahead on M4-18.",
+      "allow": [
+        "packages/core/src/construction-notices.ts",
+        "packages/core/src/construction-notices.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/construction-notices-dark-v1.md"
+      ]
+    }
+  }
+}

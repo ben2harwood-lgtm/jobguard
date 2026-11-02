@@ -149,5 +149,6 @@ export * from "./customer-approval-method.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
 export * from "./interim-applications.js";
+export * from "./construction-notices.js";
 
 export * from "./contractor-mandate.js";
