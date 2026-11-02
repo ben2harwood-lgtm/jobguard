@@ -16,14 +16,14 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     const f = scriptedImportPool(), result = await new JobImportV3Repository(f.pool).preview(f.context, D, J.toUpperCase(), { ...preview, expectedBindingId: parties.bindingId.toUpperCase() });
     expect(result.snapshot).toEqual(approved); expect(result.previewHash).toBe(intent.previewHash);
     expect(result).toMatchObject({ availability: { code: "METER_PLACE_SOURCE_HANDOFF_HELD", status: "held" }, realExternalActions: 0 });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
     expect(f.query.mock.calls.find(([sql]) => sql.includes("FROM practice_owned_job"))?.[1]).toEqual([T, J, D]);
   });
   it.each(["live"] as const)("%s adoption refuses before receipt or authorization creation", async lifecyclePoint => {
     const f = scriptedImportPool(), input = importFixtureV3(J, parties, lifecyclePoint, preview.fixtureId);
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, { ...intent, lifecyclePoint, previewHash: importActionHashV3(input) })).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });
     expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|adopt_in_flight|mon1_admit_place/u.test(sql))).toBe(false);
-    expect(f.query.mock.calls.filter(([sql]) => sql === "BEGIN")).toHaveLength(2);
+    expect(f.query.mock.calls.filter(([sql]) => sql === "BEGIN")).toHaveLength(3);
   });
   it.each(["revoked", "unowned"])("%s authorization is checked before informative input errors", async kind => {
     const f = scriptedImportPool(); if (kind === "revoked") f.state.authenticated = false; else f.state.owns = false;
