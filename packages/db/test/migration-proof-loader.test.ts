@@ -85,6 +85,28 @@ describe("strict migration proof discovery", () => {
     const f = fixture(["0001_legacy.sql", "0002_fiction.sql", "0003_other.sql"]);
     f.save(populated()); f.save({ ...populated(), migration: "0003_other.sql" }); expect(f.load).toThrow(/duplicate proof identity/);
   });
+  it("accepts only exact sequential before/after transitions across migration proofs", () => {
+    const f = fixture(["0001_legacy.sql", "0002_fiction.sql", "0003_other.sql"]);
+    const a = populated(), b = empty("0003_other.sql");
+    const entry = { key: "acl|routine|fiction", group: baseline().groups[0]!.id };
+    a.lp0 = [{ section: "entries", before: null, after: entry }];
+    b.lp0 = [{ section: "entries", before: entry, after: null }];
+    b.upgrade = [{ section: "routines", before: routine, after: { ...routine, proacl: null } }];
+    b.tenancy = [{ relname: "fiction", before: posture, after: { ...posture, guarded: false } }];
+    f.save(a); f.save(b);
+    const proofs = f.load().proofs;
+    expect(combineLp0(baseline(), proofs).entries).not.toContainEqual(entry);
+    expect(applyUpgradeProofs(snapshot(), proofs, oids).routines[0]!.proacl).toBeNull();
+    expect(applyTenancyProofs([], proofs, "rls")[0]).toMatchObject({ guarded: false });
+    for (const section of ["lp0", "upgrade", "tenancy"] as const) {
+      const broken = structuredClone(b);
+      broken[section][0]!.before = null;
+      if (section === "lp0") broken.lp0[0]!.after = entry;
+      f.save(broken); expect(f.load).toThrow(/duplicate proof identity/);
+    }
+    b.upgrade[0]!.before = { ...routine, proacl: "wrong" };
+    f.save(b); expect(f.load).toThrow(/duplicate proof identity/);
+  });
   it("refuses duplicate or removed legacy names and proofs for legacy migrations", () => {
     const f = fixture();
     f.put("legacy-migrations.json", ["0001_legacy.sql", "0001_legacy.sql"]); expect(f.load).toThrow(/duplicate/);

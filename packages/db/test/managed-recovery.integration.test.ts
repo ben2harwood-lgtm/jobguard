@@ -1,7 +1,8 @@
 // Real PostgreSQL regressions, executed in CI; builder sandbox cannot bind localhost.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ManagedRecoveryRepository } from "../src/managed-recovery-repository.js";
+import { UserCommandDispatcher } from "../src/commands.js";
 import { withTenant } from "../src/tenant-context.js";
 import { cluster, fixture, newCase, command, start, counts, qualifyingAllocation, type Cluster, type Fixture } from "./managed-recovery-fixtures.js";
 let c: Cluster, f: Fixture;
@@ -119,7 +120,7 @@ it("runtime cannot insert, alter, remove or truncate election/start facts or cal
    await expect(withTenant(c.runtime,f.context,db=>db.$client.query(sql))).rejects.toMatchObject({code:'42501'});
  }
  await expect(withTenant(c.runtime,f.context,db=>db.$client.query('SELECT app.mon9_elect($1,$2,$3,$4,$5,$6,5,$7)',
-  [f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]))).rejects.toMatchObject({message:'MANAGED_RECOVERY_FORBIDDEN'});
+  [f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]))).rejects.toMatchObject({code:'42501'});
 });
 
 it("uses only stored approved principal, subtracts reversals and fails closed on invalidated evidence", async () => {
@@ -167,4 +168,52 @@ it('persists the solicitor-letter election separately at ten points',async()=>{
  expect(elected.election?.selection).toEqual(input.selection);
  const preview=await repo().preview(f.context,f.job,id,f.actor);
  expect(preview.serviceChargeInvoice).toMatchObject({service:'solicitor_letter',points:10,principal:{pence:3200,currency:'GBP'}});
+});
+
+it.each([null, '', 'invalid', '0'.repeat(64)])('direct election refuses supplied actor without valid session (%s)', async digest => {
+ const id=await newCase(c,f),before=await counts(c);
+ await expect(withTenant(c.runtime,f.context,db=>db.$client.query(
+  'SELECT app.mon9_elect($1::text,$2,$3,$4,$5,$6,$7,5,$8)',
+  [digest,f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]
+ ))).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+ expect(await counts(c)).toEqual(before);
+});
+it('direct election refuses an owner mismatched to the session without a preceding repository check', async()=>{
+ const other=await fixture(c),id=await newCase(c,f),before=await counts(c);
+ await expect(withTenant(c.runtime,f.context,db=>db.$client.query(
+  'SELECT app.mon9_elect($1::text,$2,$3,$4,$5,$6,$7,5,$8)',
+  [other.sessionDigest,f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]
+ ))).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+ expect(await counts(c)).toEqual(before);
+});
+
+it('requires session ownership even with a matching processing receipt and approval',async()=>{
+ const other=await fixture(c),id=await newCase(c,f),input=command(id);
+ const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
+  input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
+ const elected=await new UserCommandDispatcher(c.runtime).dispatch(f.context,{
+  version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
+  semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
+  subjectType:'recovery_case',subjectRef:id,
+  action:{actionType:'managed_recovery.elect',recipient:null,contentHash:h,aggregateRevision:1,
+   amountPence:null,currency:null,policyVersion:input.termsVersion,expiresAt:new Date('2099-01-01T00:00:00Z')},
+ },{mutate:async(db,authorized)=>{
+  const args=[f.job,id,f.actor.membershipId,input.commandId,authorized.authorizationId,
+   input.selection.service,input.selection.points,input.termsVersion];
+  const call=(digest:string|null)=>db.$client.query('SELECT * FROM app.mon9_elect($1::text,$2,$3,$4,$5,$6,$7,$8,$9)',[digest,...args]);
+  // Same valid receipt/approval for every attempt: only the credential changes.
+  for(const digest of [null,'0'.repeat(64),other.sessionDigest]){
+   await db.$client.query('SAVEPOINT bad_session');
+   await expect(call(digest)).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+   await db.$client.query('ROLLBACK TO SAVEPOINT bad_session');
+   await db.$client.query('RELEASE SAVEPOINT bad_session');
+  }
+  await db.$client.query('SAVEPOINT stale_approval');
+  await db.$client.query('UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2',[f.tenant,authorized.authorizationId]);
+  await expect(call(f.sessionDigest)).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+  await db.$client.query('ROLLBACK TO SAVEPOINT stale_approval');
+  await db.$client.query('RELEASE SAVEPOINT stale_approval');
+  return (await call(f.sessionDigest)).rows[0];
+ }});
+ expect(elected).toMatchObject({case_id:id,actor_membership_id:f.actor.membershipId,points:5});
 });

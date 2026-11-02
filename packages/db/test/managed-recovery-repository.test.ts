@@ -11,9 +11,9 @@ const command={version:'managed-recovery-election-command.v1',commandId:randomUU
 const actor={membershipId,identityUserId};
 const sessionDigest="a".repeat(64);
 function pool(elected=false,principal='80000') {
- const statements: string[]=[];
- const client={release:()=>undefined,query:async (sql:string)=>{
-  statements.push(sql);
+ const statements: string[]=[],parameters: unknown[][]=[];
+ const client={release:()=>undefined,query:async (sql:string, values: unknown[] = [])=>{
+  statements.push(sql); parameters.push(values);
   if (sql.startsWith('SELECT role FROM app.membership')) return {rows:[{role:'owner'}],rowCount:1};
   if (sql.startsWith('SELECT app.mon9_session')) return {rows:[{identity_user_id:identityUserId}],rowCount:1};
   if (sql.startsWith('SELECT id FROM app.membership') || sql.startsWith('SELECT c.id FROM app.recovery_case')) return {rows:[{id:membershipId}],rowCount:1};
@@ -21,9 +21,10 @@ function pool(elected=false,principal='80000') {
    tenant_id:tenantId,job_id:jobId,case_id:caseId,command_id:command.commandId,actor_membership_id:membershipId,
    terms_version:command.termsVersion,service:'drafted_for_you',points:5,elected_at:'2026-10-30T12:00:00Z',
   }:null}]};
+  if (sql.startsWith('SELECT * FROM app.mon9_elect')) return {rows:[{tenant_id:tenantId,job_id:jobId,case_id:caseId,command_id:command.commandId,actor_membership_id:membershipId,terms_version:command.termsVersion,service:'drafted_for_you',points:5,elected_at:'2026-10-30T12:00:00Z'}]};
   return {rows:[]};
  }};
- return {pool:{connect:async()=>client} as unknown as Pool,statements};
+ return {pool:{connect:async()=>client} as unknown as Pool,statements,parameters};
 }
 describe('MON-9 repository boundary (fake source; PostgreSQL proof is separate)',()=>{
  it.each(['elect','preview'] as const)('refuses forged identity before %s can read or replay',async operation=>{
@@ -41,11 +42,16 @@ describe('MON-9 repository boundary (fake source; PostgreSQL proof is separate)'
    {environment:'synthetic_demo',tenantId,jobId,caseId,actorMembershipId:membershipId,canApprove:true,now:'2026-10-30T12:00:00.000Z'});
   // Dispatcher is a test double here; durable election/replay assertions run against PostgreSQL in CI.
   const dispatch=vi.spyOn(UserCommandDispatcher.prototype,'dispatch').mockImplementation(async (_context,_command,handler)=>{
-   await withTenant(a.pool,context,db=>handler.lock!(db,_command));
-   return expected;
+   return await withTenant(a.pool,context,async db=>{
+    await handler.lock!(db,_command);
+    return handler.mutate(db,{..._command,authorizationId:'synthetic-authorization'});
+   });
   });
   try {
    expect(await new ManagedRecoveryRepository(a.pool,sessionDigest).elect(context,jobId,command,actor)).toEqual(expected);
+   const election=a.statements.findIndex(s=>s.startsWith('SELECT * FROM app.mon9_elect'));
+   expect(a.statements[election]).toBe('SELECT * FROM app.mon9_elect($1,$2,$3,$4,$5,$6,$7,$8,$9)');
+   expect(a.parameters[election]).toEqual([sessionDigest,jobId,caseId,membershipId,command.commandId,'synthetic-authorization','drafted_for_you',5,command.termsVersion]);
    expect(a.statements.findIndex(s=>s.includes('app.mon9_session'))).toBeLessThan(a.statements.findIndex(s=>s.includes('app.membership')));
   } finally {dispatch.mockRestore();}
  });

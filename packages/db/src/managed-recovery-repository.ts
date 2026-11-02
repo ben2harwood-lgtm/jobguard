@@ -78,8 +78,8 @@ export class ManagedRecoveryRepository {
         // Before receipt/replay: recheck current session identity and membership.
         lock: db => this.authorize(db, context, job, caseId, actor),
         mutate: async (db, authorized) => fromRow((await db.$client.query(
-          "SELECT * FROM app.mon9_elect($1,$2,$3,$4,$5,$6,$7,$8)",
-          [job, caseId, actor.membershipId, command.commandId, authorized.authorizationId,
+          "SELECT * FROM app.mon9_elect($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+          [this.sessionDigest, job, caseId, actor.membershipId, command.commandId, authorized.authorizationId,
             selection.service, selection.points, termsVersion])).rows[0]),
         auditEvents: result => [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`,
           eventType: "managed_recovery.elected", subjectType: "recovery_case", subjectRef: caseId,

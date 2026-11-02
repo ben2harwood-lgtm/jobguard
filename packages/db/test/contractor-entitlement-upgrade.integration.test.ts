@@ -38,6 +38,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.lp_job_insert_permit":[],
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
+ "app.demo_trial_binding":[],
  "app.small_builder_demo_run":[],
  "app.small_builder_demo_receipt":[],
  "app.small_builder_demo_report":[],
@@ -86,6 +87,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.platform_fee_statement":[],
  "app.platform_fee_statement_command":[],
 
+ "app.simulation_money_review":[],
+ "app.simulation_money_run":[],
  "app.success_fee_command":[],
  "app.success_fee_derivation":[],
  "app.success_fee_journal":[],
