@@ -153,5 +153,6 @@ export * from "./interim-applications.js";
 export * from "./construction-notices.js";
 export * from "./retention-balances.js";
 export * from "./vat-treatments.js";
+export * from "./cis-deductions.js";
 
 export * from "./contractor-mandate.js";
