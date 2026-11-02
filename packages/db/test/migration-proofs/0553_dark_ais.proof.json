@@ -1,5 +1,5 @@
 {
-  "migration": "0427_dark_ais.sql",
+  "migration": "0553_dark_ais.sql",
   "lp0": [
     {
       "section": "groups",
@@ -26,7 +26,7 @@
         "downstream": "Only fictional AIS consent lifecycle and append-only bank observations. No live provider, durable tokens, landing, allocation, locked bill, payment or fee authority. The command rechecks normal-company membership and connection ownership and appends audit references.",
         "path": "ap-dark-ais",
         "sources": [
-          "packages/db/migrations/0427_dark_ais.sql",
+          "packages/db/migrations/0553_dark_ais.sql",
           "packages/db/src/ais-repository.ts"
         ],
         "tests": [
@@ -55,7 +55,7 @@
           "LP-12": "Review migration-owned AIS tables and SECURITY DEFINER command ownership."
         },
         "sources": [
-          "packages/db/migrations/0427_dark_ais.sql",
+          "packages/db/migrations/0553_dark_ais.sql",
           "packages/db/src/ais-repository.ts"
         ],
         "tests": [

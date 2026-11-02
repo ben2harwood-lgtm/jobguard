@@ -1,44 +1,39 @@
 {
-  "migration": "0596_accounting_observation_receipt.sql",
+  "migration": "0563_fee_reservation_archive.sql",
   "lp0": [
     {
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|rel|table|app.accounting_observation_receipt|jobguard_shadow|INSERT|-",
-        "group": "a-shadow-role-grants"
+        "key": "owner|rel:table|app.fee_reservation_archive|jobguard_migration",
+        "group": "a-m4-12-reservations"
       }
     },
     {
       "section": "entries",
       "before": null,
       "after": {
-        "key": "acl|rel|table|app.accounting_observation_receipt|jobguard_shadow|SELECT|-",
-        "group": "a-shadow-role-grants"
+        "key": "acl|rel|table|app.fee_reservation_archive|jobguard_runtime|SELECT|-",
+        "group": "a-m4-12-reservations"
       }
     },
     {
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|rel:table|app.accounting_observation_receipt|jobguard_migration",
-        "group": "a-owner-tables-views"
+        "key": "acl|rel|table|app.fee_reservation_archive|jobguard_runtime|INSERT|-",
+        "group": "a-m4-12-reservations"
       }
     },
     {
       "section": "rls",
       "before": null,
-      "after": "app.accounting_observation_receipt|rls=t|forced=t"
+      "after": "app.fee_reservation_archive|rls=t|forced=t"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.accounting_observation_receipt|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_shadow|6fa387f2f629fba6"
-    },
-    {
-      "section": "triggers",
-      "before": null,
-      "after": "app.accounting_observation_receipt|accounting_receipt_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+      "after": "app.fee_reservation_archive|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|6fa387f2f629fba6"
     }
   ],
   "upgrade": [
@@ -46,7 +41,7 @@
       "section": "rows",
       "before": null,
       "after": {
-        "table": "app.accounting_observation_receipt",
+        "table": "app.fee_reservation_archive",
         "data": []
       }
     },
@@ -55,9 +50,9 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "relname": "accounting_observation_receipt",
+        "relname": "fee_reservation_archive",
         "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_shadow=ar/jobguard_migration}",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
       }
@@ -67,7 +62,7 @@
       "before": null,
       "after": {
         "nspname": "app",
-        "relname": "accounting_observation_receipt_pkey",
+        "relname": "fee_reservation_archive_pkey",
         "relowner": "jobguard_migration",
         "relacl": null,
         "relrowsecurity": false,
@@ -79,10 +74,12 @@
       "before": null,
       "after": {
         "schemaname": "app",
-        "tablename": "accounting_observation_receipt",
+        "tablename": "fee_reservation_archive",
         "policyname": "tenant_isolation",
         "permissive": "PERMISSIVE",
-        "roles": "{jobguard_migration,jobguard_shadow}",
+        "roles": [
+          "jobguard_runtime"
+        ],
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
@@ -91,7 +88,7 @@
   ],
   "tenancy": [
     {
-      "relname": "accounting_observation_receipt",
+      "relname": "fee_reservation_archive",
       "before": null,
       "after": {
         "relrowsecurity": true,

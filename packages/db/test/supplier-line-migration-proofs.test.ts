@@ -8,7 +8,7 @@ import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs
 it("M2-4 and its sibling proofs preserve main and keep tables guarded and routines private", () => {
   // Main's separately owned pending 0510 proof must not mask validation of these fragments.
   const directory = mkdtempSync(join(tmpdir(), "jg-supplier-proofs-"));
-  const migrations = ["0465_dark_merchant_order.sql", "0494_supplier_line_corrections.sql"];
+  const migrations = ["0554_dark_merchant_order.sql", "0557_supplier_line_corrections.sql"];
   try {
     writeFileSync(join(directory, "legacy-migrations.json"), "[]");
     for (const migration of migrations) {

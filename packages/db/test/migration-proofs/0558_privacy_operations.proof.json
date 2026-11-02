@@ -1,5 +1,5 @@
 {
-  "migration": "0539_privacy_operations.sql",
+  "migration": "0558_privacy_operations.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Four private synthetic rehearsal tables app.privacy_subject, app.privacy_artifact, app.privacy_request and app.privacy_command. Runtime has no direct table grants. Two routines validate a current synthetic owner/admin session; resident/client execution requires a recorded contractor instruction; only fictional inventory is tombstoned. Real job, money, identity, evidence, hidden and provider records are untouched.",
         "sources": [
-          "packages/db/migrations/0539_privacy_operations.sql"
+          "packages/db/migrations/0558_privacy_operations.sql"
         ],
         "tests": [
           "packages/db/test/privacy-operations.integration.test.ts"
@@ -78,7 +78,7 @@
           "LP-6d": "keep exact tenant/session and controller-instruction checks on both public overloads"
         },
         "sources": [
-          "packages/db/migrations/0539_privacy_operations.sql",
+          "packages/db/migrations/0558_privacy_operations.sql",
           "apps/api/src/privacy-operations.application.ts"
         ],
         "tests": [

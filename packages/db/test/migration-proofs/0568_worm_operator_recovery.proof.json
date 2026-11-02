@@ -1,5 +1,5 @@
 {
-  "migration": "0598_worm_operator_recovery.sql",
+  "migration": "0568_worm_operator_recovery.sql",
   "lp0": [
     {
       "section": "groups",
@@ -38,7 +38,7 @@
         "downstream": "reject_*, require_approved_resolution, guard_* and assert_journal_balanced trigger functions cannot be called except as triggers; half_even_ratio and reference_recovery_cap are pure arithmetic. No writes by source scan.",
         "sources": [
           "packages/db/migrations/0018_recovery_outcomes.sql:40",
-          "packages/db/migrations/0598_worm_operator_recovery.sql"
+          "packages/db/migrations/0568_worm_operator_recovery.sql"
         ],
         "tests": [
           "packages/db/test/lp-0-authority-paths.integration.test.ts",

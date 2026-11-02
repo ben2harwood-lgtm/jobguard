@@ -89,7 +89,7 @@ describe("M0-13c synthetic PostgreSQL privacy rehearsal", () => {
   it("upgrades the immediately preceding schema without changing existing rows and can rerun migrate", async () => {
     const upgrade = await createWorkFixture(false, "postgres");
     try {
-      const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0539_privacy_operations.sql")); expect(index).toBeGreaterThan(0);
+      const index = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0558_privacy_operations.sql")); expect(index).toBeGreaterThan(0);
       await upgrade.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
       for (const url of MIGRATION_URLS.slice(0,index)) {
         await upgrade.admin.query(await readFile(url,"utf8"));

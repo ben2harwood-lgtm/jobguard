@@ -10,7 +10,7 @@ let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 it("0473 preserves populated predecessor postings and replay; fresh structural guards install exactly once",async()=>{
- const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0590_success_fee_production_safety.sql'));expect(own).toBeGreaterThan(0);
+ const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0561_success_fee_production_safety.sql'));expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,own)){
   const name=url.pathname.split('/').at(-1)!,sql=await readFile(url,"utf8");
@@ -31,5 +31,5 @@ it("0473 preserves populated predecessor postings and replay; fresh structural g
  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
  expect(await x.execute(command)).toEqual({...posted,replayed:true});
  expect((await f.admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgname='success_fee_posting_integrity' AND NOT tgisinternal")).rows).toEqual([{n:1}]);
- expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0590_success_fee_production_safety.sql'")).rows).toEqual([{n:1}]);
+ expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0561_success_fee_production_safety.sql'")).rows).toEqual([{n:1}]);
 },120000);

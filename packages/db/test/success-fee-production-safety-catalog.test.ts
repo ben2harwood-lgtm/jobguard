@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 import {expect,it} from "vitest";
 import {loadReviewedInventory,staticScan} from "./lp-0-catalog.js";
 import {loadMigrationProofs} from "./migration-proof-loader.js";
-const name="0590_success_fee_production_safety.sql";
+const name="0561_success_fee_production_safety.sql";
 const sql=readFileSync(new URL(`../migrations/${name}`,import.meta.url),"utf8");
 const body=(name:string)=>sql.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)END \\$\\$;`))![1]!;
 it("records every new production-safety routine and trigger in the explicit proof",async()=>{

@@ -5,7 +5,7 @@ import { startBeforeMigration, applyMigration, startSession, type Cluster } from
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { migrate } from "../src/migrate.js";
 let c:Cluster;
-const own="0594_financial_reconciliation_queue.sql";
+const own="0565_financial_reconciliation_queue.sql";
 const tables=["financial_reconciliation_run","financial_reconciliation_difference","financial_reconciliation_adjustment","financial_reconciliation_approval","financial_reconciliation_command"];
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await startBeforeMigration(own);},240000);
 afterAll(async()=>{await c?.close();});

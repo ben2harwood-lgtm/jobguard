@@ -1,5 +1,5 @@
 {
-  "migration": "0594_financial_reconciliation_queue.sql",
+  "migration": "0565_financial_reconciliation_queue.sql",
   "lp0": [
     {
       "section": "entries",

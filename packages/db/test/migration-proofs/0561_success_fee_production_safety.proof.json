@@ -1,5 +1,5 @@
 {
-  "migration": "0590_success_fee_production_safety.sql",
+  "migration": "0561_success_fee_production_safety.sql",
   "lp0": [
     {
       "section": "routines",

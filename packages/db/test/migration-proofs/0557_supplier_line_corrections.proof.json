@@ -1,5 +1,5 @@
 {
-  "migration": "0494_supplier_line_corrections.sql",
+  "migration": "0557_supplier_line_corrections.sql",
   "lp0": [
     {
       "section": "groups",
@@ -17,7 +17,7 @@
         "responsibilities": {},
         "downstream": "Mapping proposals feed the pure synthetic matcher only; cannot authorize debt, delivery, payment or fees.",
         "sources": [
-          "packages/db/migrations/0494_supplier_line_corrections.sql",
+          "packages/db/migrations/0557_supplier_line_corrections.sql",
           "packages/db/src/supplier-line-correction-repository.ts"
         ],
         "tests": [

@@ -1,5 +1,5 @@
 {
-  "migration": "0465_dark_merchant_order.sql",
+  "migration": "0554_dark_merchant_order.sql",
   "lp0": [
     {
       "section": "entries",

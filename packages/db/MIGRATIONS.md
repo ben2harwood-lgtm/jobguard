@@ -1267,9 +1267,9 @@ Expand-only forward fix: disable the unregistered synthetic runtime if necessary
 
 ## M4-17 report catch-up — 0593 and 0594 (RED, dark)
 
-The branch-only availability migration is now `0593_money_trail_reconciliation.sql`;
+The branch-only availability migration is now `0564_money_trail_reconciliation.sql`;
 the branch-only reference queue migration is now
-`0594_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
+`0565_financial_reconciliation_queue.sql`. Both retain their original SQL bytes.
 Main's `0512_simulation_money_trail_run.sql` remains unchanged: its simulation-run
 routine does not define either of these two entry points. No existing routine is
 re-created, and no main migration is edited. The two matching migration proof

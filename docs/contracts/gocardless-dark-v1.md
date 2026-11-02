@@ -90,8 +90,8 @@ RLS and durability before merge. No live capability is enabled by this addition.
 
 
 M4-12 reserve cleanup (RED, built ahead on reserve-pg): additive migration
-`0592_fee_reservation_archive.sql` follows the shared reservation book migration
-`0591_fee_reservation_book.sql`; both numbers are claimed for this catch-up. No earlier migration is
+`0563_fee_reservation_archive.sql` follows the shared reservation book migration
+`0562_fee_reservation_book.sql`; both numbers are claimed for this catch-up. No earlier migration is
 edited. Compaction is lazy on the next successful store transaction, under the
 same tenant book lock. Released attempts, all event fingerprints and all book
 audit entries move to INSERT-only tenant-qualified archive records before the

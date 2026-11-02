@@ -102,7 +102,7 @@ prohibits Git writes. No PR is opened in this NOPR run.
 2 November 2026 NOPR catch-up (supersedes the earlier catch-up implementation notes):
 
 Renamed the branch-only SQL and note by their complete filename stem to
-0590_success_fee_production_safety; test and lane lookups use that filename.
+0561_success_fee_production_safety; test and lane lookups use that filename.
 No recorded hash or bare numeric string was replaced. The supplied origin/main
 is e3e81167 (latest available migration 0517), not a tree containing 0585, 0586 or
 0589. No fetch was performed. The router must reconcile the claimed 0590 order

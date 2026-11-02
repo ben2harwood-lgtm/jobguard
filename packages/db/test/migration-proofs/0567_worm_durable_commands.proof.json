@@ -1,5 +1,5 @@
 {
-  "migration": "0597_worm_durable_commands.sql",
+  "migration": "0567_worm_durable_commands.sql",
   "lp0": [
     {
       "section": "groups",
@@ -22,8 +22,8 @@
           "LP-12": "Review separated runtime, executor and operator credentials and exact-version reconciliation."
         },
         "sources": [
-          "packages/db/migrations/0597_worm_durable_commands.sql",
-          "packages/db/migrations/0598_worm_operator_recovery.sql"
+          "packages/db/migrations/0567_worm_durable_commands.sql",
+          "packages/db/migrations/0568_worm_operator_recovery.sql"
         ],
         "tests": [
           "packages/db/test/worm-command.integration.test.ts"
@@ -175,8 +175,8 @@
           "LP-12": "Review separated runtime, executor and operator credentials and exact-version reconciliation."
         },
         "sources": [
-          "packages/db/migrations/0597_worm_durable_commands.sql",
-          "packages/db/migrations/0598_worm_operator_recovery.sql"
+          "packages/db/migrations/0567_worm_durable_commands.sql",
+          "packages/db/migrations/0568_worm_operator_recovery.sql"
         ],
         "tests": [
           "packages/db/test/worm-command.integration.test.ts"

@@ -42,7 +42,7 @@ RED review remain required; this is synthetic principal only, without fee VAT,
 providers, collection or production activation.
 
 
-## 2 November 2026: `0590_success_fee_production_safety.sql` catch-up
+## 2 November 2026: `0561_success_fee_production_safety.sql` catch-up
 
 M4-9 production safety remains dark. The production entrypoint always raises
 `FEE_GATE_CLOSED`; production policies and G4-S remain closed.
