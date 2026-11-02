@@ -130,13 +130,22 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+<<<<<<< 663d9aa063d70c7d2237d0c7c09bca62f41a10bc
 export * from "./subscription-agreement.js";
+=======
+export * from "./platform-tax-invoice.js";
+export * from "./recovery-billability-policy.js";
+>>>>>>> 055d6e741ba32272e61a808026428b26116b2fc6
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
 
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
+export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+
+export * from "./contractor-mandate.js";

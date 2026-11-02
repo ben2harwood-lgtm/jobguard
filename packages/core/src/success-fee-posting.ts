@@ -54,14 +54,20 @@ const pence=z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE);
 export const successFeeStatementV1=z.object({
  version:z.literal("success-fee-statement.v1"),jobId:id,policyVersion:z.literal("reference_fee_policy_v3"),
  roundingPolicy:z.literal("commercial_half_even.v1"),qualifyingPrincipal:exactPenceV1,
- feePence:pence,priorPence:pence,deltaPence:pence,expectedPostingRevision:revision,
- sources:z.array(z.object({assessmentId:id,sourceHash:z.string().regex(/^[a-f0-9]{64}$/u),
-  reviewAuthorizationId:id,allocationIds:z.array(id).min(1).max(10000)}).strict()).min(1).max(10000),
+ feePence:pence,priorPence:pence,deltaPence:z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE),expectedPostingRevision:revision,
+ compensationLinks:z.array(z.object({journalId:id,amountPence:pence.refine(n=>n>0)}).strict()).min(1).max(10000).optional(),
+ sources:z.array(z.union([z.object({assessmentId:id,sourceHash:z.string().regex(/^[a-f0-9]{64}$/u),
+  reviewAuthorizationId:id,allocationIds:z.array(id).min(1).max(10000)}).strict(),
+ z.object({caseId:id,recoveryAllocationId:id,sourceHash:z.string().regex(/^[a-f0-9]{64}$/u),reviewAuthorizationId:id}).strict()])).min(1).max(10000),
  environment:z.literal("synthetic_demo"),productionEnabled:z.literal(false),realExternalActions:z.literal(0),
 }).strict().superRefine((value,ctx)=>{
  try {
  const proposal=calculateSuccessFeeProposal({version:"success-fee-proposal.v1",environment:"synthetic_reference",
-  qualifyingPrincipal:value.qualifyingPrincipal,priorPostedPrincipalPence:value.priorPence,compensatesDerivationId:null});
+  qualifyingPrincipal:value.qualifyingPrincipal,priorPostedPrincipalPence:value.priorPence,compensatesDerivationId:value.deltaPence<0?value.compensationLinks?.[0]?.journalId??null:null});
+ if(value.deltaPence<0 ? !value.compensationLinks ||
+  value.compensationLinks.reduce((sum,l)=>sum+BigInt(l.amountPence),0n)!==-BigInt(value.deltaPence) ||
+  new Set(value.compensationLinks.map(l=>l.journalId)).size!==value.compensationLinks.length : value.compensationLinks!==undefined)
+  ctx.addIssue({code:"custom",message:"invalid compensation links"});
  if(proposal.successFeePrincipal.pence!==value.feePence || proposal.postingDelta.pence!==value.deltaPence)
   ctx.addIssue({code:"custom",message:"inconsistent fee arithmetic"});
  } catch { ctx.addIssue({code:"custom",message:"invalid fee arithmetic"}); }
@@ -73,7 +79,7 @@ export const successFeeResultV1=z.object({
  environment:z.literal("synthetic_demo"),productionEnabled:z.literal(false),realExternalActions:z.literal(0),
 }).strict().superRefine((value,ctx)=>{
  if(value.statement.jobId!==value.jobId || (value.action==="approve")!==(value.derivationId!==null)
-  || (value.action==="approve" && value.statement.deltaPence>0)!==(value.journalId!==null)
+  || (value.action==="approve" && value.statement.deltaPence!==0)!==(value.journalId!==null)
   || value.postingRevision!==value.statement.expectedPostingRevision+(value.action==="approve"?1:0))
   ctx.addIssue({code:"custom",message:"inconsistent fee result"});
 });
