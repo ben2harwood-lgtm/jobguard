@@ -37,3 +37,9 @@ it("MON1-J held counted source stays unavailable; it never falls back to capacit
  await expect(loadMeter(fetcher)).rejects.toThrow("READ_UNAVAILABLE");
  expect(fetcher).toHaveBeenCalledTimes(2);
 });
+it("shows track_review_due only from a saved decision", () => {
+  expect(renderToStaticMarkup(<MeterDetails view={view} />)).not.toContain("track_review_due");
+  const id = "d1500000-0000-4000-8000-000000000001";
+  const html = renderToStaticMarkup(<MeterDetails view={{ ...view, trackReviewDecisionId: id }} />);
+  expect(html).toContain("track_review_due"); expect(html).toContain(id);
+});
