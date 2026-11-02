@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs, proofSchema, proofSourceDigests, type MigrationProof, type MigrationProofSnapshot } from "./migration-proof-loader.js";
 import { compareInventory, loadReviewedInventory, parseInventory } from "./lp-0-catalog.js";
+import { MIGRATION_URLS } from "../src/migrate.js";
 
 const baseline = () => parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
 const directories: string[] = [];
@@ -35,6 +36,31 @@ function populated(): MigrationProof {
 }
 
 describe("strict migration proof discovery", () => {
+  it("gives each committed migration exactly one proof or legacy entry", () => {
+    const { proofs, legacy } = loadMigrationProofs();
+    for (const url of MIGRATION_URLS) {
+      const migration = url.pathname.split("/").at(-1)!;
+      expect(proofs.filter(proof => proof.migration === migration).length
+        + legacy.filter(name => name === migration).length, migration).toBe(1);
+    }
+  });
+  it("requires exactly one proof or legacy entry for each requested stem", () => {
+    const migrations = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!)
+      .filter(name => /^051[0-7]_/.test(name));
+    expect(migrations).toHaveLength(8);
+    for (const migration of migrations) {
+      const f = fixture([migration]);
+      rmSync(join(f.dir, "0002_fiction.proof.json"));
+      f.put("legacy-migrations.json", [migration]);
+      expect(f.load().legacy).toEqual([migration]);
+      f.save(empty(migration));
+      expect(f.load).toThrow(/orphan/);
+      f.put("legacy-migrations.json", []);
+      expect(f.load().proofs.map(proof => proof.migration)).toEqual([migration]);
+      rmSync(join(f.dir, migration.replace(/\.sql$/, ".proof.json")));
+      expect(f.load).toThrow();
+    }
+  });
   it("zero fragments preserves the committed baseline exactly, including held LP0-13 and LP0-22", async () => {
     const f = fixture();
     f.put("legacy-migrations.json", ["0001_legacy.sql", "0002_fiction.sql"]);
