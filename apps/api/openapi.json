@@ -46,6 +46,20 @@
         ]
       }
     },
+    "/small-builder-demo/trial": {
+      "post": {
+        "operationId": "SmallBuilderTrialDemoController_command",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SmallBuilderTrialDemo"
+        ]
+      }
+    },
     "/customer-portal/variations/read": {
       "post": {
         "operationId": "CustomerVariationController_read",

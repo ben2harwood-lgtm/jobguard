@@ -49,6 +49,7 @@
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/commercial-integrity-v3-sources.ts",
         "packages/db/src/index.ts",
+        "packages/db/test/migration-proofs/legacy-migrations.json",
         "packages/db/test/commercial-integrity-v3-fixtures.ts",
         "packages/db/test/commercial-integrity-v3-input.test.ts",
         "packages/db/test/commercial-integrity-v3-published.integration.test.ts",

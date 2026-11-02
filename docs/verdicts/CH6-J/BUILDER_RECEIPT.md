@@ -1946,3 +1946,39 @@ No full PostgreSQL, migration, browser or production build pass is claimed.
 GitHub CI must execute the HTTP, PostgreSQL/migration and browser suites after
 router push, then obtain the independent RED review at the resulting exact head.
 No customer data, live provider, charge, release or demo pass is involved.
+
+## PR #392 catch-up — 2 November 2026
+
+CH-6, RED. Resolved the launcher-started merge as the union of both sides:
+kept CH-6 controller/endpoints and workspace advisory wiring together with main's
+trial controller and success-fee demoSettle/reconcileMoney methods. Both 0568
+and 0569 remain on the legacy migration path, now explicitly listed in
+`packages/db/test/migration-proofs/legacy-migrations.json`; the lane includes it.
+All reviewed LP-0 array entries from HEAD and MERGE_HEAD remain byte-equivalent
+as parsed JSON, with no duplicate entry keys/group/path/target/held identities.
+
+The independent-check fixture repair clears practice_scenario and the accepted
+quote pointer when constructing imported ancestry, alongside the practice digest.
+Direct private authority assertions use f.admin inside the tenant transaction;
+the repository read/review assertions still use their runtime path. All assertions
+are retained, including rejection of the other session.
+
+Validation actually executed with installed dependencies (Vitest 4.1.12,
+explicit --maxWorkers=1; no download):
+
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts test/commercial-integrity-v3-input.test.ts` — 3 files, 64 tests PASS.
+- apps/api: `./node_modules/.bin/vitest run --maxWorkers=1 src/commercial-integrity-v3.application.test.ts src/commercial-integrity-v3.boundary.test.ts` — 2 files, 25 tests PASS.
+- Root: `node --test tools/commercial-integrity-boundary.test.mjs` — 84 tests PASS.
+- Root: `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` and `node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — PASS.
+- Rebuilt installed core/config/storage/ai/db packages with their existing tsc configs; all PASS. From apps/api, `node --import tsx src/generate-openapi.ts --check` — PASS.
+- `git diff --check` — PASS. Read-only comparison verified all 183 migration files on MERGE_HEAD unchanged, the protected lp-downstream-effects-v1.md unchanged, and all three working-tree conflict markers removed.
+
+The pnpm version probe stalled and was interrupted; checks used the installed
+package executables. The tsx CLI OpenAPI attempt could not create its IPC socket
+in this sandbox. The first socket-free loader attempt encountered stale local
+db build output; rebuilding existing dependencies resolved it and the check passed.
+
+No git write/fetch, database startup or browser run. The router must stage the
+resolved working-tree files and commit/push; PostgreSQL/migration/browser checks
+run in GitHub CI, followed by the required independent RED review at exact head.
+These local results are builder checks, not independent review or a demo pass.

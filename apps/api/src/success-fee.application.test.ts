@@ -4,9 +4,9 @@ import { afterEach,beforeEach,expect,it,vi } from "vitest";
 import { PracticeAccessError } from "@jobguard/db";
 import { SuccessFeeError } from "@jobguard/core";
 import { SuccessFeeApplication,successFeeFailure } from "./success-fee.application.js";
-const {job,view,command,statements,issueStatement,downloadStatement,collection,collect}=vi.hoisted(()=>({job:vi.fn(),view:vi.fn(),command:vi.fn(),statements:vi.fn(),issueStatement:vi.fn(),downloadStatement:vi.fn(),collection:vi.fn(),collect:vi.fn()}));
+const {job,view,command,statements,issueStatement,downloadStatement,collection,collect,reconcileMoney}=vi.hoisted(()=>({job:vi.fn(),view:vi.fn(),command:vi.fn(),statements:vi.fn(),issueStatement:vi.fn(),downloadStatement:vi.fn(),collection:vi.fn(),collect:vi.fn(),reconcileMoney:vi.fn()}));
 vi.mock("./practice-access.js",()=>({PracticeAccess:class{job=job;}}));
-vi.mock("@jobguard/db",async original=>({...await original<Record<string,unknown>>(),SuccessFeeRepository:class{view=view;command=command;},SimulationFeeCollectionRepository:class{view=collection;command=collect;},SimulationFeeStatementRepository:class{view=statements;command=issueStatement;download=downloadStatement;}}));
+vi.mock("@jobguard/db",async original=>({...await original<Record<string,unknown>>(),SimulationMoneyRunRepository:class{command=reconcileMoney;},SuccessFeeRepository:class{view=view;command=command;},SimulationFeeCollectionRepository:class{view=collection;command=collect;},SimulationFeeStatementRepository:class{view=statements;command=issueStatement;download=downloadStatement;}}));
 const id=randomUUID(),context=Object.freeze({tenantId:randomUUID()}),digest="a".repeat(64);
 const intent={version:"success-fee-command.v1",action:"review",commandId:randomUUID(),expectedPostingRevision:0};
 const app=()=>new SuccessFeeApplication({} as Pool);
@@ -95,4 +95,19 @@ it.each(["settle","fail"])("a session cannot submit fake-rail %s even with an au
  await expect(app().collect(id,async()=>c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  expect(job).toHaveBeenCalledWith(id);expect(collect).not.toHaveBeenCalled();
  expect(successFeeFailure(new SuccessFeeError("SUCCESS_FEE_FORBIDDEN"))?.status).toBe(403);
+});
+
+it("the demo settle step authenticates before body access and refuses outside synthetic_demo",async()=>{
+ const body=vi.fn().mockResolvedValue({version:"simulation-fee-demo-settle-command.v1",commandId:randomUUID(),attemptId:randomUUID()});
+ job.mockRejectedValueOnce(new PracticeAccessError("UNAUTHENTICATED"));await expect(app().demoSettle(id,body)).rejects.toThrow("UNAUTHENTICATED");expect(body).not.toHaveBeenCalled();
+ await expect(app().demoSettle(id,body,{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");expect(body).not.toHaveBeenCalled();
+ vi.stubEnv("JOBGUARD_ENV","production");
+ await expect(app().demoSettle(id,body)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");expect(body).not.toHaveBeenCalled();
+});
+
+it("money checks authenticate before body access and use the current tenant, job and digest",async()=>{
+ const body=vi.fn().mockResolvedValue({version:"simulation-money-command.v1",commandId:randomUUID(),action:"run"});
+ job.mockRejectedValueOnce(new PracticeAccessError("UNAUTHENTICATED"));await expect(app().reconcileMoney(id,body)).rejects.toThrow("UNAUTHENTICATED");expect(body).not.toHaveBeenCalled();
+ await expect(app().reconcileMoney(id,body,{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");expect(body).not.toHaveBeenCalled();
+ await app().reconcileMoney(id,body);expect(reconcileMoney).toHaveBeenCalledWith(context,id,digest,await body());
 });

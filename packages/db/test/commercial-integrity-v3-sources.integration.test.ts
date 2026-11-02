@@ -106,7 +106,7 @@ it("CH-6 bounded ownership retains nested imported related quotes and refuses an
    VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,$9,'entered')`,[tenant,binding,related.job,first.customer_id,first.customer_revision_id,first.paying_party_id,first.paying_party_revision_id,first.site_id,first.site_revision_id]);
   // Model immutable imported ancestry in this isolated synthetic projection fixture.
   await db.query("SET LOCAL session_replication_role='replica'");
-  await db.query("UPDATE app.job SET provenance='imported',practice_session_digest=NULL WHERE tenant_id=$1 AND id=ANY($2::uuid[])",[tenant,[middle.job,related.job]]);
+  await db.query("UPDATE app.job SET provenance='imported',practice_session_digest=NULL,practice_scenario=NULL,accepted_quote_version_id=NULL WHERE tenant_id=$1 AND id=ANY($2::uuid[])",[tenant,[middle.job,related.job]]);
   await db.query("SET LOCAL session_replication_role='origin'");
  });
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
@@ -119,7 +119,7 @@ it("CH-6 bounded ownership retains nested imported related quotes and refuses an
  const view=await f.repo.read(f.auth.context,actor,f.auth.digest,root.job);
  const finding=view.result.findings.find(f=>f.kind==="related_sub2000_quotes_90_days");
  expect(finding?.sourceReferences.map(s=>s.jobId).sort()).toEqual([root.job,related.job].sort());
- expect((await transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor",[tenant,related.job,f.auth.digest]))).rows[0].actor).toBe(member);
- await expect(transaction(f.runtime,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3)",[tenant,related.job,f.other.digest]))).rejects.toThrow("NOT_FOUND");
+ expect((await transaction(f.admin,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3) actor",[tenant,related.job,f.auth.digest]))).rows[0].actor).toBe(member);
+ await expect(transaction(f.admin,db=>db.query("SELECT app.ch6_integrity_authority($1,$2,$3)",[tenant,related.job,f.other.digest]))).rejects.toThrow("NOT_FOUND");
  await review(root.job,"related_sub2000_quotes_90_days");
 });

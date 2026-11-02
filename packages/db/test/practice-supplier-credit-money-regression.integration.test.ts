@@ -17,7 +17,7 @@ const context = testTenantContext(T), actor = { membershipId: M, identityUserId:
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   const directory = await mkdtemp(join(tmpdir(), "jg-pf1b-money-")), port = await freePort(62000, 100), value = randomUUID();
-  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: value, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
+  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: value, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: value });
   await migrate(admin);
