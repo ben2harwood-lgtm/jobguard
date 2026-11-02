@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-16-workbench": {
+      "branches": [
+        "codex/sandbox/m4-16-workbench"
+      ],
+      "note": "M4-16 RED synthetic workbench. Includes union resolution of inherited db exports; no sending.",
+      "allow": [
+        "apps/api/src/dunning.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/dunning/route.ts",
+        "apps/web/app/api/jobs/[id]/dunning/route.test.ts",
+        "apps/web/app/api/jobs/[id]/dunning/[operation]/route.ts",
+        "apps/web/app/jobs/[id]/dunning/page.tsx",
+        "apps/web/app/jobs/[id]/dunning/screen.tsx",
+        "apps/web/app/lib/dunning-server.ts",
+        "apps/web/e2e/m4-16-workbench.spec.mts",
+        "packages/db/src/index.ts",
+        "packages/db/src/dunning-repository.ts",
+        "packages/db/migrations/0607_dunning_workbench_preview.sql",
+        "packages/db/test/dunning-workbench-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0607_dunning_workbench_preview.proof.json",
+        "docs/contracts/dunning-dark-v1.md",
+        "packages/db/test/dunning-repository.test.ts"
+      ]
+    }
+  }
+}

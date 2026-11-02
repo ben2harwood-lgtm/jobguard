@@ -155,6 +155,8 @@ export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export * from "./mobile-auth-store.js";
 
+export * from "./evidence-bundle.js";
+export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
@@ -163,5 +165,5 @@ export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
-
 export { DunningRepository } from "./dunning-repository.js";
+export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";

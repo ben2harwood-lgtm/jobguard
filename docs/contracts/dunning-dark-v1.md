@@ -47,7 +47,7 @@ status and expiry. Missing or malformed stored Decisions fail closed; the resolv
 must never echo the caller's approval as its lookup result. Cancelled collection stays cancelled across later facts;
 replaying an obsolete request cannot return an actionable stale draft. This fake
 is not a durable command store, approval store, audit chain or execution outbox.
-There is no HTTP endpoint and no registration into a production runtime.
+The fake has no HTTP registration; the synthetic authenticated workbench below uses the durable repository.
 
 The reference service policy preserves ledger, evidence and export access even
 when service/collection is cancelled or suspended. It evaluates access only;
@@ -81,7 +81,7 @@ refund/dispute/reversal suppression, retry ownership and preservation of access.
 
 NOT built: live integrations/settings verification; approved D05/retry/access
 terms; live invoice projection ingestion and execution outbox wiring; real account service mutations;
-provider reservation and standing-authority execution; a workbench UI; Temporal or
+provider reservation and standing-authority execution; Temporal or
 Graphile scheduling; deployment. Those need merged upstream contracts and gates.
 The pure seam adds no database/browser workflow; CI still owes repository checks,
 and one independent Claude RED review is required before merging.
@@ -158,3 +158,44 @@ balances, wrong Decision/tenant/session, expiry/dismissal, RLS/grants and audit
 chain verification. PostgreSQL/migration and browser suites require CI in this
 sandbox; local unit tests do not prove PostgreSQL controls. Exact-head independent
 Claude RED review remains required. No live money, provider or release is enabled.
+
+
+## M4-16-workbench: authenticated practice screen
+
+`/jobs/[id]/dunning` reads private synthetic projections via the company-session
+bridge, with CSRF and tenant membership verification. The matching GET route and
+POST `request`/`approve` routes use no-store responses. No send operation exists.
+The screen shows unpaid amounts with suppression reasons, exact recipient, body,
+policy and amount, then creates and approves a stored preview Decision. Refresh
+loads current balances and live Decisions; failed commands clear displayed approval
+controls and require another read. No ledger, evidence or export grants change.
+
+Migration `0607_dunning_workbench_preview.sql` starts with the latest base routine,
+including retirement of expired/dismissed/rejected previews under the company lock.
+It exposes only the current unexpired snapshot's live Decision for the screen.
+The existing partial unique index continues to prevent parallel live previews;
+no sent state or delivery executor exists. Historical Decisions, resolutions,
+snapshots, receipts and audit remain intact. The proof's explicit empty LP-0,
+upgrade and tenancy sections reflect unchanged signatures, grants, relations,
+policies, static authority paths and predecessor rows. Rollback uses the same
+forward-only revoke-and-replace approach above.
+
+The base already included the expiry fix and its adversarial integration tests;
+0607 preserves that latest body rather than editing 0581. Added upgrade coverage
+checks populated history and expired-preview redraft/replay, and route coverage
+checks real identity-bridge failures with fake repositories. The browser spec uses
+real synthetic PostgreSQL/company sessions for approval, expiry, balance changes,
+suppression and tenant refusal at configured 360 and 1280 widths. These browser
+and database tests require CI in this sandbox. Sending, providers and G0–G5 remain
+closed; exact-head independent RED review remains required.
+
+Local handoff validation (2 November 2026): installed Vitest 4.1.12, one worker,
+passed 60 core, 20 repository and 26 proof-loader tests, plus 6 route tests.
+TypeScript checks/builds passed for core, config, storage, DB, AI and API; web
+no-emit checking passed. Playwright discovery finds the new spec for both widths;
+no browser or PostgreSQL execution was attempted. Money, commercial, provider,
+core-purity and PL/pgSQL boundary checks passed. Full lint remains blocked at the
+lane gate while the inherited main merge and predecessor branch paths are present;
+the lane has not been widened to cover unrelated inherited work. The pnpm wrapper
+could not verify/download its pinned executable through the restricted registry;
+checks used the already-installed executables without changing dependencies.

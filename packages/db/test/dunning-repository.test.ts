@@ -10,13 +10,25 @@ const invoice = { version: "dunning-invoice.v1", environment: "synthetic_demo", 
  pilotNoCharge: false, disputed: false, refundPending: false, reversed: false, cancelled: false, attemptState: "none" };
 const result = { decisionId: uuid(4), snapshotHash, expiresAt: "2026-10-30T19:00:00.000Z", status: "approved", executable: false };
 const input = { version: "dunning-persist-command.v1", commandId: uuid(5), invoiceId: uuid(3), snapshotHash, nowTick: 3 };
-function fixture(projections: unknown[] = [invoice], commandResult: unknown = result, clock: () => number = () => 3) {
+function fixture(projections: unknown[] = [invoice], commandResult: unknown = result, clock: () => number = () => 3, decision: unknown = null) {
  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("dunning_workbench")
-  ? [{result: sql.includes("'read'") ? projections.map(projection => ({ invoiceId: uuid(3), projection, snapshotHash })) : commandResult}] : [] }));
+  ? [{result: sql.includes("'read'") ? projections.map(projection => ({ invoiceId: uuid(3), projection, snapshotHash, decision })) : commandResult}] : [] }));
  const release = vi.fn(), connect = vi.fn(async () => ({query, release}));
  return { repo: new DunningRepository({connect} as unknown as Pool, clock), query, connect, release, context: testTenantContext(uuid(1)) };
 }
 describe("durable dunning repository boundary", () => {
+ it("reloads a current stored Decision without reviving stale, expired or suppressed approvals", async () => {
+  const current = fixture([invoice], result, () => 3, result);
+  expect((await current.repo.read(current.context,digest,{jobId:uuid(2),nowTick:3})).invoices[0]?.decision).toEqual(result);
+  for (const [projection, decision, now] of [
+   [invoice,{...result,snapshotHash:"f".repeat(64)},3],
+   [invoice,result,Date.parse(result.expiresAt)],
+   [{...invoice,disputed:true},result,3],
+  ] as const) {
+   const f=fixture([projection],result,()=>now,decision);
+   expect((await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:3})).invoices[0]?.decision).toBeNull();
+  }
+ });
  it("ignores a client future tick for both overdue display and reminder mutations", async () => {
   const f = fixture([{...invoice, dueTick: 10}]);
   const rows = await f.repo.read(f.context,digest,{jobId:uuid(2),nowTick:100});

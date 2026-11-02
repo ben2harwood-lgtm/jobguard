@@ -179,5 +179,6 @@
   "0514_withheld_payment_statement_source.sql",
   "0515_fee_compensation_gate_and_demo_settle.sql",
   "0516_trial_first_activation_capacity.sql",
-  "0517_meter_track_review_read.sql"
+  "0517_meter_track_review_read.sql",
+  "0518_shadow_demo_guide.sql"
 ]
