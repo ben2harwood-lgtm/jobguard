@@ -100,6 +100,88 @@ describe("strict migration proof discovery", () => {
   });
 });
 
+// Exercise every upgrade record shape and both other proof namespaces through discovery.
+const chainSections = ["lp0", "rows", "routines", "relations", "policies", "tenancy"] as const;
+function chainProof(section: typeof chainSections[number], step: number): MigrationProof {
+  const p = empty(`000${step + 2}_fiction.sql`);
+  const beforeStep = step === 0 ? null : step - 1;
+  if (section === "lp0") {
+    const entry = (n: number) => ({ key: "fiction-entry", group: `fiction-group-${n}` });
+    p.lp0 = [{ section: "entries", before: beforeStep === null ? null : entry(beforeStep), after: entry(step) }];
+  } else if (section === "tenancy") {
+    const state = (n: number) => ({ ...posture, owner: `fiction_owner_${n}` });
+    p.tenancy = [{ relname: "fiction", before: beforeStep === null ? null : state(beforeStep), after: state(step) }];
+  } else {
+    switch (section) {
+      case "rows": {
+        const state = (n: number) => ({ table: "app.fiction", data: [{ revision: n }] });
+        p.upgrade = [{ section, before: beforeStep === null ? null : state(beforeStep), after: state(step) }]; break;
+      }
+      case "routines": {
+        const state = (n: number) => ({ ...routine, proconfig: [`search_path=pg_catalog,fiction_${n}`] });
+        p.upgrade = [{ section, before: beforeStep === null ? null : state(beforeStep), after: state(step) }]; break;
+      }
+      case "relations": {
+        const state = (n: number) => ({ ...relation, relowner: `fiction_owner_${n}` });
+        p.upgrade = [{ section, before: beforeStep === null ? null : state(beforeStep), after: state(step) }]; break;
+      }
+      case "policies": {
+        const state = (n: number) => ({ ...policy, roles: `{fiction_owner_${n}}` });
+        p.upgrade = [{ section, before: beforeStep === null ? null : state(beforeStep), after: state(step) }]; break;
+      }
+    }
+  }
+  return p;
+}
+function chainChange(p: MigrationProof) { return [...p.lp0, ...p.upgrade, ...p.tenancy][0]!; }
+
+describe.each(chainSections)("exact replacement chain: %s", section => {
+  it.each([2, 3])("loads and applies a chain of %i fragments", length => {
+    const chain = Array.from({ length }, (_, i) => chainProof(section, i));
+    const f = fixture(["0001_legacy.sql", ...chain.map(p => p.migration)]);
+    rmSync(join(f.dir, "0002_fiction.proof.json"));
+    for (const p of [...chain].reverse()) f.save(p);
+    const { proofs } = f.load();
+    expect(proofs).toEqual(chain);
+    const last = chainChange(chain.at(-1)!);
+    if (section === "lp0") expect(combineLp0(baseline(), proofs).entries).toContainEqual(last.after);
+    else if (section === "tenancy") {
+      expect(applyTenancyProofs([], proofs, "owner")).toEqual([{ relname: "fiction", owner: "fiction_owner_" + (length - 1) }]);
+      expect(applyTenancyProofs([], proofs, "rls")).toEqual([{ relname: "fiction", relrowsecurity: true, relforcerowsecurity: true, guarded: true }]);
+    } else {
+      const result = applyUpgradeProofs(snapshot(), proofs, { ...oids, fiction_owner_0: 50, fiction_owner_1: 51, fiction_owner_2: 52 });
+      if (section === "rows") expect(result.rows["app.fiction"]).toEqual([{ revision: length - 1 }]);
+      else expect(result[section]).toEqual([{ ...last.after as object, ...(section === "routines" ? { proowner: 42 } : section === "relations" ? { relowner: 50 + length - 1 } : {}) }]);
+    }
+  });
+  it.each(["wrong before", "before null", "out-of-order", "same migration", "stale third before", "recreate after deletion"])("rejects %s", defect => {
+    const chain = [chainProof(section, 0), chainProof(section, 1)];
+    const first = chainChange(chain[0]!), second = chainChange(chain[1]!);
+    if (defect === "wrong before") second.before = chainChange(chainProof(section, 2)).after;
+    if (defect === "before null") second.before = null;
+    if (defect === "out-of-order") {
+      // Exact continuity alone cannot authorize a replacement in an earlier migration.
+      [chain[0]!.migration, chain[1]!.migration] = [chain[1]!.migration, chain[0]!.migration];
+    }
+    if (defect === "same migration") {
+      chain[0]!.lp0.push(...chain[1]!.lp0);
+      chain[0]!.upgrade.push(...chain[1]!.upgrade);
+      chain[0]!.tenancy.push(...chain[1]!.tenancy);
+      chain.splice(1);
+    }
+    if (defect === "stale third before") {
+      chain.push(chainProof(section, 2)); chainChange(chain[2]!).before = first.after;
+    }
+    if (defect === "recreate after deletion") {
+      first.before = first.after; first.after = null; second.before = null;
+    }
+    const f = fixture(["0001_legacy.sql", ...chain.map(p => p.migration)]);
+    rmSync(join(f.dir, "0002_fiction.proof.json"));
+    for (const p of chain) f.save(p);
+    expect(f.load).toThrow(/duplicate proof identity/);
+  });
+});
+
 describe("exact expectations retain all catalogue and historical attributes", () => {
   it.each(["unlisted table", "unlisted routine", "unlisted index", "unlisted policy", "changed historical row", "RLS disabled", "FORCE RLS removed", "invalid policy", "wrong owner", "changed ACL", "changed definer", "changed config"])("full snapshot equality rejects %s", defect => {
     const expected = applyUpgradeProofs(snapshot(), [populated()], oids);
