@@ -1,32 +1,71 @@
-# M4-9-S — synthetic catch success-fee posting
+# M4-9-S — synthetic success-fee posting
 
-## 30 October 2026: migration 0473 (current)
+## Recovery qualification and compensation: 0511_success_fee_recovery_compensation.sql
 
-M4-9 part 2 adds a per-job posting lock, insert bounds and an exact deferred rebuild
-of the principal, statement authority and allocation-level source links. The private
-`success_fee_inputs` helper is shared by the command and rebuild, using the latest
-0406 writer's source checks. The inherited private `lock_success_fee_sources`
-fence remains in place.
+This slice extends the merged catch-posting migrations. Approved builder-opened withheld-payment case
+receipts from the existing M4-8-S `recovery_case_allocation` writer join catch
+sources in the same cumulative calculation. Each source retains its allocation,
+case, authorization and a hash of current proof, eligibility, terms, movement
+and reversals. Current approved case eligibility, settled identified money
+received after opening and terms approval, matching finalized evidence and
+unrevoked allocator authority are required. Insurer proceeds stay excluded.
+Missing reversal allocations, invalidated proof and changed approvals fail
+closed. Supplier qualification and catch reassessment remain outside this slice.
 
-After a posting, a changed source can only reduce its previously approved principal.
-An excluded source contributes zero. A fresh source still requires current approved
-SV-6 attribution and all qualifying facts. Review and approve now support a negative
-statement delta with `compensatesDerivationId` naming the first cancelled derivation
-and `compensations` listing every cancelled `journalId`, its `derivationId` and
-positive `amountPence`, oldest outstanding journal first. The split amounts total
-the negative delta exactly. Authorization binds the absolute amount and the signed
-statement hash, including the full split. The deferred rebuild compares this list
-with the actual cancelled journals; a different derivation link is refused. Approval appends one or more negative journals,
-each linked to a positive original in the same job. Outstanding original pence and
-the rebuilt job liability bound every split. Existing journals are never edited.
-The negative receivable adjustment remains visible as credit due; no provider,
-refund execution or collection is enabled. Replay has no additional effect.
+The exact statement and hash now support a signed `deltaPence` and, only for a
+negative delta, `compensationLinks` containing original journal IDs and positive
+amounts to reverse. Authorization records bind the absolute magnitude under the
+existing nonnegative authorization contract; the signed amount and original
+journals are bound by the exact statement hash. Balanced negative journals link
+to earlier positive journals of the same tenant/job, newest first, with an
+aggregate reversal limit on each original. A reversal spanning two postings
+creates two journals; result `journalId` identifies the first, while the statement
+lists every original. Zero still retains its derivation without any journal.
+Historical statements remain valid under the extended strict schema.
 
-`success_fee_production_command(uuid,text,jsonb)` always raises `FEE_GATE_CLOSED`,
-before reading any tenant or hidden data. G4-S, approved policies, production source
-adapters and RED review remain separate gates. Q2 non-catch qualification stays closed.
-The historical Q3 catch compensation hold below is superseded only by this synthetic
-review/approve path; direct `reverse` actions remain invalid.
+F10/F11: 32,000p qualifying principal gives 3,200p; 282,000p gives a cumulative
+28,200p and a 25,000p delta; returning to 32,000p posts −25,000p against the
+original 25,000p journal. Exact approval, revision checks, replay and the same
+synthetic source fence apply to every direction. No external refund is executed.
+
+No table/routine ACL, role, RLS policy or runtime INSERT grant changes. The same
+six private tables and existing checked entrypoint signatures are retained, so
+LP-0 and tenancy retain main’s complete lists. SERIOUS-B5 records the replacement
+positive/compensation indexes and exclusive source indexes; inventory
+call metadata includes the existing payer-type helper. The source ledger adds a
+nullable, job-qualified recovery allocation reference alongside the existing
+catch references, with an exclusive shape constraint and per-derivation source
+uniqueness. Posted predecessor facts are preserved. Deploy by forward migration;
+roll back behavior by disabling the route or a reviewed forward fix, never by
+removing financial history. PostgreSQL migration/behavior tests and independent
+RED review remain required; this is synthetic principal only, without fee VAT,
+providers, collection or production activation.
+
+
+## 2 November 2026: `0590_success_fee_production_safety.sql` catch-up
+
+M4-9 production safety remains dark. The production entrypoint always raises
+`FEE_GATE_CLOSED`; production policies and G4-S remain closed.
+
+The writer starts with main's latest `0515_fee_compensation_gate_and_demo_settle.sql`
+body. Its withheld-payment qualification, invalid-proof reduction, replay, source
+fences and compensation links remain in place. Catch proof changes may only reduce
+previously posted principal. A per-job lock and journal insert guard bound accruals
+and consumption of each original journal.
+
+Negative statements retain main's `compensationLinks` and additionally bind the
+branch's `compensatesDerivationId` and `compensations` with exact original journal,
+derivation and positive pence. Catch-only cancellations consume oldest outstanding
+journals first; withheld-payment statements preserve main's newest-first ordering.
+The exact totals and journal identities must agree in both representations.
+Historical statements and journals are unchanged.
+
+An additional private deferred guard independently rebuilds both source kinds,
+statement authorization and split attribution without replacing main's existing
+deferred checks. Its input reconstruction mirrors the writer's current source path.
+The migration proof contains the exact new routines and triggers; protected shared
+inventories and historical expectation lists stay unchanged. PostgreSQL execution,
+current-main CI and independent RED review remain required.
 
 ## 29 October 2026: migrations 0405–0406 (current)
 

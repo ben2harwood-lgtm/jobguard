@@ -4,8 +4,10 @@ import type {FinalCheckFixture} from "./final-check-fixture.js";
 import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
 import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
-export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatches=false,stageSecondCatch=false){
- const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,undefined,twoCatches);
+export async function catchFeeFixture(f:FinalCheckFixture,approved=true,collectionOrOptions:boolean|{twoCatches?:boolean;stageSecondCatch?:boolean}=false){
+ const collection282=typeof collectionOrOptions==="boolean"?collectionOrOptions:false;
+ const {twoCatches=false,stageSecondCatch=false}=typeof collectionOrOptions==="object"?collectionOrOptions:{};
+ const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,collection282,twoCatches);
  const subjects=[{caseId:x.caseId,workId:x.workId,line:x.line,fact:x.fact}];
  if(twoCatches){
   const rows=(await f.admin.query(`SELECT fl.id line,c.id case_id,s.work_id FROM app.final_account_line fl
@@ -22,9 +24,12 @@ export async function catchFeeFixture(f:FinalCheckFixture,approved=true,twoCatch
  const assessments=[];
  const addSubject=async(subject:typeof subjects[number])=>{
   const revision=(await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,subject.caseId])).rows[0].revision as number;
-  const p={version:"stored-receipt-case-command.v1",commandId:randomUUID(),action:"review",factLineId:subject.fact.lineAllocationId,caseId:subject.caseId,workId:subject.workId,expectedCaseRevision:revision};
+  const facts=collection282?(await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId})).rows.filter(r=>r.lineId===subject.line):[subject.fact];
+  for(const fact of facts){
+  const p={version:"stored-receipt-case-command.v1",commandId:randomUUID(),action:"review",factLineId:fact.lineAllocationId,caseId:subject.caseId,workId:subject.workId,expectedCaseRevision:revision};
   const review=await allocator.command(x.context,x.jobId,x.auth.digest,p);
   await allocator.command(x.context,x.jobId,x.auth.digest,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash});
+  }
   const selection={version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:subject.caseId,workId:subject.workId,lineId:subject.line,lockId:subject.fact.invoiceBinding.lockId,expectedCaseRevision:revision,expectedAttributionRevision:0};
   const assessment=await attribution.assess(x.context,x.jobId,x.auth.digest,selection);
   if(approved){

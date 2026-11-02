@@ -98,3 +98,63 @@ GitHub CI must run full typecheck and PostgreSQL/migration suites, followed by
 independent Claude RED review at the final head. READY for the router to stage and
 commit the resolved files; the Git index remains unmerged because this sandbox
 prohibits Git writes. No PR is opened in this NOPR run.
+
+2 November 2026 NOPR catch-up (supersedes the earlier catch-up implementation notes):
+
+Renamed the branch-only SQL and note by their complete filename stem to
+0590_success_fee_production_safety; test and lane lookups use that filename.
+No recorded hash or bare numeric string was replaced. The supplied origin/main
+is e3e81167 (latest available migration 0517), not a tree containing 0585, 0586 or
+0589. No fetch was performed. The router must reconcile the claimed 0590 order
+and those other branches before applying/merging this migration.
+
+The replacement writer starts from main's latest 0515 body. It keeps withheld
+sources, invalid-proof-only reductions, source fencing, durable replay and main's
+compensationLinks. The branch's catch reductions, per-job lock, exact derivation
+attribution and insert bounds are retained. Both compensation representations
+must agree on journals and amounts. Catch-only splits retain the branch's oldest
+first order; withheld-payment splits retain main's newest first order.
+
+Main already supplies signed delta constraints and split journal indexes; 0590
+therefore does not drop/recreate them. Its four exact added routines and two
+triggers are declared in the new proof's lp0/upgrade sections. Tenancy is explicitly
+empty because no relation or RLS posture changes. The protected LP-0 baseline,
+SERIOUS-B5 expectations and frozen downstream recorded input are restored to main;
+all additions live in the proof. Main migrations, demo journey files and shared
+legacy/tenancy lists are unchanged.
+
+Complexity: an additional private deferred rebuild supplements main's existing
+checks, preserving their routine identities and historical catalogue contracts.
+It independently reconstructs both source kinds. This intentionally retains a
+second reconstruction path; a unit check binds it to the writer's source path.
+The two compensation formats preserve both branches' existing interfaces.
+Fixture options keep main's collection boolean distinct from two-catch/staged
+branch fixtures. Existing test assertions are preserved; only fixture invocation
+arguments and full migration filenames change.
+
+Actual local validation, installed Vitest 4.1.12, --maxWorkers=1 per run and no
+more than three named files per run:
+- Core: success-fee-catch-posting, success-fee-posting, success-fee-posting-fixtures:
+  83 passed (includes both branches' assertions and a dual-format mismatch test).
+- DB units: migration-proof-loader, success-fee-recovery-compensation-catalog,
+  success-fee-repository: 37 passed.
+- DB units: lp-0-catalog and migrate-discovery: 32 passed.
+- DB source/proof consistency: success-fee-production-safety-catalog: 2 passed.
+  Total: 154 unit tests across nine files.
+- Installed tsc --noEmit: core, db and API passed.
+- Vitest list collected nine production safety/upgrade cases and thirteen main
+  collection cases; no PostgreSQL hooks ran. Collection is not execution.
+- The complete writer/rebuild source paths compare equal after parameter renaming;
+  protected files compare byte-for-byte with main; no main migration changed;
+  all five conflicted files are resolved in working files; git diff --check
+  passed. The lane lists the exact cumulative piece paths, excluding itself.
+
+The pnpm launcher could not verify the pinned release through the restricted
+registry route. Installed repository binaries were used, with no package or check
+configuration change. No PostgreSQL/browser run, git write, commit, fetch, push,
+PR, provider call or production enablement was performed.
+
+READY for router staging/commit. The git index still has unmerged entries because
+this sandbox prohibits git writes. Required PostgreSQL/migration suites, CI on
+current main, reconciliation with the absent 0585/0586/0589 trees and one independent
+Claude RED review against the final head remain pending; production gates stay closed.

@@ -34,7 +34,7 @@ it.each(["builder_capture","disclosed_before_lock"] as const)("PostgreSQL exclud
  expect(await journals(x)).toEqual([]);
 });
 it("two genuinely allocated cases on one job race without duplicate liability or attribution",async()=>{
- const x=await catchFeeFixture(f,true,true),a=await x.execute(),b=await x.execute({...x.command,commandId:randomUUID()});
+ const x=await catchFeeFixture(f,true,{twoCatches:true}),a=await x.execute(),b=await x.execute({...x.command,commandId:randomUUID()});
  expect(a.statement.sources).toHaveLength(2);expect(a.statement.feePence).toBe(8000);
  const commands=[approve(a),approve(b)];
  const outcomes=await Promise.allSettled(commands.map(p=>x.execute(p)));
@@ -91,7 +91,7 @@ it("rebuild verifies source attribution and expired/revoked statement authority 
 });
 
 it("split reversal names each cancelled derivation, refuses a mismatched link, and replays once",async()=>{
- const x=await catchFeeFixture(f,true,true,true);
+ const x=await catchFeeFixture(f,true,{twoCatches:true,stageSecondCatch:true});
  const first=await x.execute(approve(await x.execute()));
  await x.addSecondCatch();
  const second=await x.execute(approve(await x.execute({...x.command,commandId:randomUUID(),expectedPostingRevision:1})));
