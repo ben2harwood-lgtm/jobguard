@@ -123,6 +123,7 @@ export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
 export * from "./subscription-simulated-payment-adapter.js";
+export * from "./subscription-stripe-sandbox-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
@@ -153,6 +154,7 @@ export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-reposit
 
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";
