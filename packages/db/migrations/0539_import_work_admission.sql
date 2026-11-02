@@ -210,6 +210,9 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=source_job AND job_track<>'small_builder') THEN
   RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=source_job FOR UPDATE;
+ -- An owned imported job remains readable but is never another import source.
+ IF EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=source_job AND provenance='imported') THEN
+  RAISE EXCEPTION 'IMPORT_ALREADY_ADOPTED'; END IF;
  SELECT x.* INTO b FROM app.job_party_current c JOIN app.job_party_binding x ON(x.tenant_id,x.job_id,x.id)=(c.tenant_id,c.job_id,c.binding_id)
  WHERE c.tenant_id=t AND c.job_id=source_job;
  IF b.id IS NULL THEN RAISE EXCEPTION 'REVISION_CONFLICT'; END IF;

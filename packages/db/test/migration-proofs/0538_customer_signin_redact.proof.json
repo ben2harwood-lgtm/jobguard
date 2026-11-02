@@ -1,5 +1,5 @@
 {
-  "migration": "0587_customer_signin_redact.sql",
+  "migration": "0538_customer_signin_redact.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

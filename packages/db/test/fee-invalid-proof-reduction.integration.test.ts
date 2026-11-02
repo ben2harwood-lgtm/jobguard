@@ -22,11 +22,12 @@ const journals = async (x: Fixture) => (await f.admin.query(
 async function otherProof(x: Fixture) {
  const id = randomUUID(), upload = randomUUID();
  await finalCheckTenant(f.admin, x.context.tenantId, async db => {
+  await db.query("SET LOCAL session_replication_role='replica'");
   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-   SELECT $1,u.tenant_id,u.job_id,u.scope_item_id,'synthetic/'||$1::text,u.expected_sha256,u.expected_content_type,u.maximum_bytes,u.retention_class,u.expires_at,u.state,u.object_version_id,u.server_verified_at
+   SELECT $1::uuid,u.tenant_id,u.job_id,u.scope_item_id,'synthetic/'||$1::text,u.expected_sha256,u.expected_content_type,u.maximum_bytes,u.retention_class,u.expires_at,u.state,u.object_version_id,u.server_verified_at
    FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE e.tenant_id=$2 AND e.id=$3`, [upload, x.context.tenantId, x.evidence]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   SELECT $1,tenant_id,$2,job_id,scope_item_id,kind,evidence_type,'synthetic/'||$2::text,object_version_id,sha256,byte_length,content_type,retention_class,clock_timestamp(),server_verified_at
+   SELECT $1::uuid,tenant_id,$2::uuid,job_id,scope_item_id,kind,evidence_type,'synthetic/'||$2::text,object_version_id,sha256,byte_length,content_type,retention_class,clock_timestamp(),server_verified_at
    FROM app.evidence_object WHERE tenant_id=$3 AND id=$4`, [id, upload, x.context.tenantId, x.evidence]);
  });
  return id;

@@ -335,8 +335,12 @@ BEGIN
   -- Invalidated proof supports no principal, even while the receipt is still held.
   IF EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=proof.id)
   THEN remaining:=0; END IF;
-  IF (SELECT coalesce(sum(ca.eligible_net_pence),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.case_id=landing.case_id)>least(rc.claim_pence,eligibility.eligible_net_pence)
-   OR (SELECT coalesce(sum(ca.gross_pence),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.payment_id=landing.payment_id)>movement.gross_pence
+  IF (SELECT coalesce(sum(greatest(0,ca.eligible_net_pence-(SELECT coalesce(sum(r.eligible_net_pence),0)
+    FROM app.recovery_case_allocation_reversal r
+    WHERE r.tenant_id=ca.tenant_id AND r.job_id=ca.job_id AND r.allocation_id=ca.id))),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.case_id=landing.case_id)>least(rc.claim_pence,eligibility.eligible_net_pence)
+   OR (SELECT coalesce(sum(greatest(0,ca.gross_pence-(SELECT coalesce(sum(r.gross_pence),0)
+    FROM app.recovery_case_allocation_reversal r
+    WHERE r.tenant_id=ca.tenant_id AND r.job_id=ca.job_id AND r.allocation_id=ca.id))),0) FROM app.recovery_case_allocation ca WHERE ca.tenant_id=t AND ca.job_id=j AND ca.payment_id=landing.payment_id)>movement.gross_pence
   THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
  RETURN jsonb_build_object('source',jsonb_build_object('caseId',landing.case_id,'recoveryAllocationId',landing.id,
    'reviewAuthorizationId',approval.id,'sourceHash',app.final_lock_hash(jsonb_build_object(

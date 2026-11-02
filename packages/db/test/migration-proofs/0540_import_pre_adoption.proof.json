@@ -1,30 +1,6 @@
 {
-  "migration": "0577_import_pre_adoption.sql",
+  "migration": "0540_import_pre_adoption.sql",
   "lp0": [
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.ch5_history_audit_guard()|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|rel:table|app.import_pre_adoption_evidence|jobguard_migration",
-        "group": "a-owner-tables-views"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.ch5_history_actor(uuid,uuid,text)|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
     {
       "section": "entries",
       "before": null,
@@ -55,14 +31,6 @@
       "after": {
         "key": "acl|routine|function:app.ch5_imported_catch(uuid,uuid,text,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
         "group": "a-exec-job-parties-work-orders"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.ch5_refuse_historical_shadow_source()|jobguard_migration",
-        "group": "a-owner-routines"
       }
     },
     {

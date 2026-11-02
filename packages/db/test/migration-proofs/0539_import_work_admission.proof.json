@@ -1,14 +1,6 @@
 {
-  "migration": "0576_import_work_admission.sql",
+  "migration": "0539_import_work_admission.sql",
   "lp0": [
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.ch5_require_import_record()|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
     {
       "section": "entries",
       "before": null,

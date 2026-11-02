@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobImportV3Repository } from "../src/job-import-v3-repository.js";
+import { JobSourceRepository } from "../src/job-source-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { createWorkFixture, closeWorkFixture, seedWorkJob, workTenant, boundaryLock, insertPhoto, type WorkFixture } from "./job-work-state-fixtures.js";
 import { historicalAgreement, meterCompany } from "./subscription-persistence-fixtures.js";
@@ -66,7 +67,7 @@ describe("CH-5 part 2 company imports through real MON-1 admission", () => {
   await expect(workTenant(f.admin, a.tenantId, async db => {
    await db.query("SELECT set_config('app.import_command','enabled',true)");
    await db.query("INSERT INTO app.job(tenant_id,id,title,status,provenance,accepted_net_value_pence,fee_policy_version) VALUES($1,$2,'Fictional forged import','draft','imported',300000,'reference_fee_policy_v3')", [a.tenantId, randomUUID()]);
-  })).rejects.toThrow("IMPORT_RECORD_REQUIRED");
+  })).rejects.toThrow("JOB_INSERT_PERMIT_REQUIRED");
  });
  it("Builder imports stay unblocked past grace and preserve their approved monthly maximum", async () => {
   const a = await company(13, "Builder"), before = await money(a.tenantId);
@@ -84,14 +85,18 @@ describe("CH-5 part 2 company imports through real MON-1 admission", () => {
   await expect(repo().read(b.context, b.digest, String(results[0]!.jobId))).rejects.toMatchObject({ code: "FORBIDDEN" });
   await expect(repo().adopt(b.context, b.digest, a.jobId, a.input)).rejects.toMatchObject({ code: "FORBIDDEN" });
  });
- it("closed imports release capacity; replay never reopens them and locks reject a restart", async () => {
+ it("closed imports release capacity; replay never reopens them and post-lock reopening allows no site work", async () => {
   const a = await company(), result = await adopt(a), jobId = String(result.jobId);
   const work = new JobWorkStateRepository(f.runtime);
   const closed = await work.command(a.context, jobId, a.actorId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close", expectedRevision: 0, reason: "other", note: "Fictional closure" });
   expect(await adopt(a)).toEqual(result);
   expect((await f.admin.query("SELECT id FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 ORDER BY sequence", [a.tenantId, jobId])).rows.map(row => row.id)).toEqual(closed.events.map(event => event.id));
   await boundaryLock(f, { ...a, jobId });
-  await expect(work.command(a.context, jobId, a.actorId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "reopen", expectedRevision: 1, closeEventId: closed.events[0]!.id })).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  const before = await money(a.tenantId);
+  await work.command(a.context, jobId, a.actorId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "reopen", expectedRevision: 1, closeEventId: closed.events[0]!.id });
+  expect(await money(a.tenantId)).toEqual(before);
+  const baseline = result.baseline as { lines: { scopeItemId: string }[] };
+  await expect(insertPhoto(f, { ...a, jobId, scopeId: baseline.lines[0]!.scopeItemId }, new Date().toISOString())).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
  });
  it("an implicit v3 site restart competes for capacity after its quiet stop", async () => {
   const a = await company(5), imported = await adopt(a), jobId = String(imported.jobId);
@@ -106,7 +111,10 @@ describe("CH-5 part 2 company imports through real MON-1 admission", () => {
    await db.query("UPDATE app.job_work_state_event SET fact_at=clock_timestamp()-interval '40 days',recorded_at=clock_timestamp()-interval '40 days' WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, jobId]);
   });
   await activateMeterJob(f, await seedWorkJob(f, a.tenantId));
-  await expect(insertPhoto(f, job, new Date().toISOString())).rejects.toThrow("METER_UPGRADE_REQUIRED");
+  await expect(new JobSourceRepository(f.runtime).intake(a.context, jobId, a.actorId, "diary", {
+    version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: true,
+    text: "Fitted a fictional outside tap.",
+  })).rejects.toThrow("METER_UPGRADE_REQUIRED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, jobId])).rows[0].n).toBe(1);
  });
  it("company sessions and helper privileges are checked on replay", async () => {

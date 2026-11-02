@@ -25,7 +25,7 @@ beforeAll(async () => {
   // Apply main's successors first; retain its exact preservation assertion before seeding legacy credentials.
   for (const url of MIGRATION_URLS) {
     const name = url.pathname.split("/").at(-1)!;
-    if (name > own && name < "0587_customer_signin_redact.sql") await applyMigration(c, name);
+    if (name > own && name < "0538_customer_signin_redact.sql") await applyMigration(c, name);
   }
   const successors = { ...expected, "app.customer_variation_approval": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
