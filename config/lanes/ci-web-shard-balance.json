@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-web-shard-balance": {
+      "branches": ["codex/sandbox/ci-web-shard-balance"],
+      "note": "Share the J3 journey across its read-only assertions, poll saved Final Check state promptly, and use six browser shards with both projects, one worker, zero retries and the required web gate. No product code changes.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs",
+        "docs/operations/ci-checks.md",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts"
+      ]
+    }
+  }
+}
