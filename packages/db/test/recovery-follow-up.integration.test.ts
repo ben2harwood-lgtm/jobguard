@@ -808,12 +808,24 @@ describe("M4-6-S tenant, access and database boundaries", () => {
 });
 
 describe("M4-6-S facts agree between the database and the pure rules", () => {
+  async function insertCaseEvent(sql: string, values: unknown[]) {
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      await client.query(sql, values);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
   it("reads case facts identically in SQL and in followUpCaseFacts for every ending and reopening event, at every review point", async () => {
     const sequence = ["opened", "assemble_evidence", "close_no_recovery", "dispute", "resume_pursuit", "reverse_landing", "write_off", "prevent", "close_recovered", "start_pursuit", "record_landing"];
     const caseId = await newCase();
     for (const [i, type] of sequence.entries()) {
       if (i === 0) continue; // the opening event exists
-      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,NULL,'identified','fixture-owner',$7,$8)",
+      await insertCaseEvent("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,NULL,'identified','fixture-owner',$7,$8)",
         [randomUUID(), DEMO_TENANT_ID, fixture.jobId, caseId, i + 1, type, randomUUID(), hash(`${caseId}:${i}`)]);
     }
     const events = sequence.map((eventType, i) => ({ sequence: i + 1, eventType }));
@@ -825,12 +837,12 @@ describe("M4-6-S facts agree between the database and the pure rules", () => {
     // Each event on its own: the ruling's mapping, row by row.
     for (const [eventType, reason] of Object.entries(RECOVERY_FOLLOW_UP_CASE_STOP_EVENTS)) {
       const single = await newCase();
-      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:x`)]);
+      await insertCaseEvent("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:x`)]);
       expect((await admin.query("SELECT stop_reason FROM app.recovery_follow_up_case_facts($1,$2,1)", [DEMO_TENANT_ID, single])).rows[0].stop_reason, eventType).toBe(reason);
     }
     for (const eventType of RECOVERY_FOLLOW_UP_REOPEN_EVENTS) {
       const single = await newCase();
-      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:y`)]);
+      await insertCaseEvent("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:y`)]);
       expect((await admin.query("SELECT stop_reason,reopened FROM app.recovery_follow_up_case_facts($1,$2,1)", [DEMO_TENANT_ID, single])).rows[0], eventType).toEqual({ stop_reason: null, reopened: false });
     }
   });

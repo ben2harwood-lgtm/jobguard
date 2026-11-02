@@ -48,11 +48,12 @@ describe("verified evidence lifecycle",()=>{
 
 // M3-5 server slice: real runtime/RLS, deterministic in-database transfer only.
 describe("dark resumable evidence", () => {
- const context = verifiedTenantContextFromMembership({ tenantId: TENANT, membershipId: MEMBER,
-  identityUserId: "75000000-0000-4000-8000-000000000001" } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+ const principal = { tenantId: TENANT, membershipId: MEMBER,
+  identityUserId: "75000000-0000-4000-8000-000000000001" } as Parameters<typeof verifiedTenantContextFromMembership>[0];
+ const context = verifiedTenantContextFromMembership(principal);
  async function transfer() {
   const { ResumableEvidenceService } = await import("../src/resumable-evidence.js");
-  const resumable = new ResumableEvidenceService(runtime, true), bytes = validPng();
+  const resumable = new ResumableEvidenceService(runtime, true, principal), bytes = validPng();
   const uploadId = randomUUID(), scope = randomUUID();
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($3,$1,$2,'confirmed')",[TENANT,JOB,scope]);
   await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[TENANT,JOB,scope]);
@@ -87,7 +88,7 @@ describe("dark resumable evidence", () => {
    jobId:JOB,scopeItemId:f.scope,stage:"completion",evidenceId:f.input.uploadId,requiredEvidenceType:"site_photo",decisionId:null};
   await expect(stageProof.complete(context,proofCommand)).rejects.toMatchObject({code:"PROOF_NOT_FINAL"});
   await expect(f.resumable.finalize(context,complete)).rejects.toMatchObject({code:"INCOMPLETE"});
-  const resumed = new f.ResumableEvidenceService(runtime,true);
+  const resumed = new f.ResumableEvidenceService(runtime,true,principal);
   expect(await resumed.status(context,f.input)).toMatchObject({nextOffset:20,state:"pending"});
   await resumed.append(context,{...f.input,offset:20,bytes:f.bytes.subarray(20)});
   const [a,b]=await Promise.all([resumed.finalize(context,complete),resumed.finalize(context,complete)]);

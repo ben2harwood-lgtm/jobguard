@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { sha256, type PrivateVersionedStorage } from "@jobguard/storage";
 import { EvidenceError, EvidenceService, syntheticMediaUploadSchema } from "./evidence.js";
-import { authenticatedMembershipForTenantContext, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type AuthenticatedMembership, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { requireLiveJob } from "./watchdog.js";
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
@@ -30,11 +30,11 @@ export class ResumableEvidenceError extends Error {
  * maximumBytes is the exact encrypted-local-file plaintext length for this protocol.
  */
 export class ResumableEvidenceService {
-  constructor(private readonly pool: Pool, private readonly enabled = false) {}
+  constructor(private readonly pool: Pool, private readonly enabled = false, private readonly member?: Readonly<AuthenticatedMembership>) {}
 
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, input: Access) {
-    const member = authenticatedMembershipForTenantContext(context);
-    if (!member || member.membershipId !== input.actorMembershipId)
+    const member = this.member;
+    if (!member || member.tenantId !== context.tenantId || member.membershipId !== input.actorMembershipId)
       throw new ResumableEvidenceError("NOT_FOUND");
     const allowed = await db.$client.query(`SELECT 1 FROM app.job_commercial_track t
       JOIN app.membership m ON m.tenant_id=t.tenant_id

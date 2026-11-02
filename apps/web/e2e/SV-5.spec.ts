@@ -1,5 +1,5 @@
 // SV-5 reveal and real post-lock practice worker journeys. Synthetic; CI only.
-import { sourceFixture, reconcileSourceFixtures } from "./helpers/final-check-source-fixtures";
+import { sourceFixture } from "./helpers/final-check-source-fixtures";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
@@ -227,36 +227,8 @@ test("O (real run): zero-result wording survives reload and replay creates no du
 });
 
 // I remains blocked: D13 must-surface activation is held.
-// J/L use explicit fictional connector-source fixtures; real connector intake remains outside this suite.
-test("J source leg: email, message and photo coalesce into one revealed catch and one case", async ({page}) => {
- test.setTimeout(240_000);
- const {jobId,tenantId} = await prepareLockJob(page);
- await withSyntheticShadow(tenantId, async (shadow,admin) => {
-  const observations = [];
-  for (const kind of ["email","message","completion_photo"] as const) observations.push(await sourceFixture(admin,tenantId,jobId,kind));
-  await finishDispositionsAndTerms(page);
-  await page.getByRole("button",{name:"Complete final account",exact:true}).click();
-  await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
-  await reconcileSourceFixtures(shadow,admin,tenantId,jobId,observations);
-  for (let pass=0;pass<2;pass++) {
-   await page.goto(`/jobs/${jobId}#final-check`);
-   const item=page.getByTestId("final-check-item");
-   await expect(item).toHaveCount(1);
-   await expect(item).toContainText("Outside tap");
-   for (const kind of ["email","message","completion_photo"]) await expect(item.getByLabel("Evidence and dates")).toContainText(kind);
-   await page.reload();
-  }
-  const item=page.getByTestId("final-check-item");
-  await item.getByRole("button",{name:"Yes — this was extra work",exact:true}).click();
-  await expect(item.getByTestId("final-check-disposition")).toContainText("extra work");
-  await page.reload();
-  for (const table of ["variation","recovery_case"]) expect(Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[tenantId,jobId])).rows[0].n)).toBe(1);
-  expect(Number((await shadow.query("SELECT count(*) n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL AND description='Outside tap'",[tenantId,jobId])).rows[0].n)).toBe(1);
-  // Confirmation alone never earns a fee. Settlement/fee progression is covered by DEMO-J3-shadow.
-  expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2",[tenantId,jobId])).rows[0].n)).toBe(0);
- });
-});
-
+// J source coalescing is tracked as a separate SV-5 follow-up.
+// L uses an explicit fictional connector-source fixture; real connector intake remains outside this suite.
 test("L source leg: an old message received after lock is shown at once and never fee eligible", async ({page}) => {
  const {jobId,tenantId} = await lockedPracticeJob(page);
  await withSyntheticShadow(tenantId, async (shadow,admin) => {

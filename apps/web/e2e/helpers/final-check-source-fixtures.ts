@@ -1,7 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { expect } from "@playwright/test";
 import type { Pool } from "pg";
 
 /** Finalized fictional connector originals, not a live email/message integration. */
@@ -24,33 +21,4 @@ export async function sourceFixture(admin: Pool, tenantId: string, jobId: string
     safetyImplication:false,customerClearlyRequested:false,needsPriorWrittenAgreement:false,significantWork:null,activeDispute:false,
     silenceMateriallyWorsensDispute:false,disclosureDuty:false},citations:[{start:0,end:text.length,quote:text}] };
  } catch(error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
-}
-
-/** Production detector, source proof writer and reconciliation with an explicit fictional decoder.
- * Does not seed classifications, reconciliation results, approvals, cases or fee facts. */
-export async function reconcileSourceFixtures(shadow: Pool, admin: Pool, tenantId: string, jobId: string, observations: Awaited<ReturnType<typeof sourceFixture>>[]) {
- const nativeImport = new Function("specifier", "return import(specifier)");
- const db: typeof import("@jobguard/db") = await nativeImport(pathToFileURL(join(process.cwd(),"../../packages/db/dist/index.js")).href);
- const core: typeof import("@jobguard/core") = await nativeImport(pathToFileURL(join(process.cwd(),"../../packages/core/dist/index.js")).href);
- const { FinalCheckWorker }: typeof import("../../../api/src/final-check.worker") = await nativeImport(pathToFileURL(join(process.cwd(),"../api/dist/final-check.worker.js")).href);
- const context = db.verifiedTenantContextForQueuedJob(tenantId);
- const repo = new db.FinalCheckRepository(shadow), manifest = await repo.begin(context,jobId);
- const sink = new db.ShadowDetectionRepository(shadow), reader = new db.FinalCheckSourceReader(repo,observations);
- const photo = (await admin.query("SELECT sha256 FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND evidence_type='completion_photo' AND content_type='image/png' LIMIT 1",[context.tenantId,jobId])).rows[0];
- const ports = db.practiceFinalCheckPorts(shadow,admin,photo.sha256);
- const worker = new FinalCheckWorker({...ports, async process(ctx,m,s) {
-  if (!observations.some(o=>o.evidence.id===s.evidenceId)) return ports.process(ctx,m,s);
-  const decoded = (await reader.read(ctx,{version:"final-check.task.v1",jobId,manifestId:m.id})).sources.find(x=>x.source.id===s.id)!;
-  expect(decoded.failureCode).toBeNull();
-  const observation = decoded.observation!;
-  const captures = m.comparisons.captures.map(c=>core.shadowCaptureV1.parse(c));
-  await sink.persist(ctx,{version:"shadow-detection-batch.v1",jobId,observations:[observation],captures,
-   proposals:core.detectShadowObservations([observation],captures,new Date().toISOString())});
-  const fresh = await repo.manifest(ctx,jobId,m.id);
-  return {version:"final-check.source-result.v1",inputHash:s.inputHash,status:"detected",failureCode:null,
-   signalIds:fresh.signals.filter(x=>x.evidenceIds.includes(s.evidenceId!)).map(x=>x.signalId)};
- }},"synthetic_demo");
- const task = {version:"final-check.task.v1",jobId,manifestId:manifest.id};
- const first = await worker.execute(context,task);
- expect(await worker.execute(context,task)).toEqual(first);
 }

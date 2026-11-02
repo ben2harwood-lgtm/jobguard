@@ -3806,6 +3806,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 
 | Date | Finding | Related | Proposed handling |
 |---|---|---|---|
+| 2026-11-02 | J source journey added in batch-3 has never passed: worker-only queued context, missing practice photo, then FINAL_CHECK_PENDING (independent check at f4dc08e8). Removed with reconcileSourceFixtures from PR #521 as instructed; L remains. | SV-5 J; batch-3 repair 2 | Separate follow-up: run email/message/photo coalescing through the real authorized worker path with finalized practice proof; verify one revealed catch and case, reload and replay at both widths. Risk: J remains unverified; independent RED review and green CI required. No invariant or decision change. |
 | 2026-09-25 | Leaves merged after 14 September have no recorded verdict files in `docs/verdicts/` | AGENTS §5.13; §7 | Retrospective verdicts by the checker, labelled as such (§7) |
 | 2026-09-25 | Docker is not installed on the build Mac; database and browser suites run only in CI | §2.2 | Install Docker Desktop (Ben, needs a password) to shorten fix loops |
 | 2026-09-25 | Codex repeatedly mis-named lanes in earlier cloud runs | §2.2 | Lane entry is the first change of every work order; checker verifies before review |

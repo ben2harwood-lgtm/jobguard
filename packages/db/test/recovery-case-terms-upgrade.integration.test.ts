@@ -1,3 +1,4 @@
+import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
@@ -70,6 +71,7 @@ beforeAll(async()=>{
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});
  await upgrade.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS){const current=fileURLToPath(url).split('/').at(-1)!;if(current===name)break;await upgrade.query(await readFile(url,"utf8"));await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[current]);}
+ await applyOutboundPause(upgrade);
  await admin.query("CREATE ROLE terms_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_upgrade_login");runtime=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});({job,caseId,packId,session}=await seed(upgrade,runtime));
  const repo=new RecoveryMessageRepository(runtime),v=(await preview()).latest!,q=await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"approve",commandId:randomUUID(),messageId:v.id,expectedRevision:v.revision,recipient:v.message.recipient,body:v.message.body,amountPence:v.message.amountPence,packId:v.message.packId,contentHash:v.message.contentHash},messageActor);
  await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:q.latest!.revision,outcome:"success"},messageActor);

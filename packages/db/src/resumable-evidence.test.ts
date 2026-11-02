@@ -11,7 +11,8 @@ vi.mock("./job-work-state-sources.js", () => ({ refuseLockedNewSource: vi.fn(), 
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
 const tenant = randomUUID(), user = randomUUID(), member = randomUUID();
-const context = verifiedTenantContextFromMembership({ tenantId: tenant, identityUserId: user, membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+const principal = { tenantId: tenant, identityUserId: user, membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0];
+const context = verifiedTenantContextFromMembership(principal);
 const input = { version: "resumable-evidence.v1", uploadId: randomUUID(), jobId: randomUUID(), actorMembershipId: member };
 function fixture() {
   let allowed = true;
@@ -48,7 +49,7 @@ function fixture() {
     return { rows: [] };
   });
   const pool = { connect: async () => ({ query, release() {} }) } as unknown as Pool;
-  return { pool, row, parts, query, revoke: () => { allowed=false; }, service: new ResumableEvidenceService(pool, true) };
+  return { pool, row, parts, query, revoke: () => { allowed=false; }, service: new ResumableEvidenceService(pool, true, principal) };
 }
 function beginRequest() {
   return { version: input.version, id: input.uploadId, jobId: input.jobId, actorMembershipId: member,
@@ -70,15 +71,15 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
         ...(method === "append" ? { offset: 0, bytes: new Uint8Array([1]) } :
           method === "finalize" ? { commandId: randomUUID(), evidenceType: "photo" } : {}) };
       await expect(f.service[method](context, { ...raw, actorMembershipId: otherMember })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(f.service[method](verifiedTenantContextForQueuedJob(tenant), raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(new ResumableEvidenceService(f.pool, true)[method](verifiedTenantContextForQueuedJob(tenant), raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
     const storage = f.service.storageForProof(context, { ...input, actorMembershipId: otherMember });
     await expect(storage.readExactVersion("synthetic-original", "synthetic-version")).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.evidence_upload"))).toBe(false);
     expect(f.parts).toHaveLength(0);
     await expect(f.service.status(context, input)).resolves.toMatchObject({ nextOffset: 0 });
-    const wrongUser = verifiedTenantContextFromMembership({ tenantId: tenant, identityUserId: randomUUID(), membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-    await expect(f.service.status(wrongUser, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const wrongUser = new ResumableEvidenceService(f.pool, true, { ...principal, identityUserId: randomUUID() });
+    await expect(wrongUser.status(context, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
   it("reads status without a row lock while append still locks the upload", async () => {
     const f = fixture();
@@ -107,7 +108,7 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
     const f=fixture();
     const request={...input,offset:0,bytes:new Uint8Array([1,2])};
     expect(await f.service.append(context,request)).toEqual({nextOffset:2});
-    expect(await new ResumableEvidenceService(f.pool,true).status(context,input)).toMatchObject({nextOffset:2,state:"pending"});
+    expect(await new ResumableEvidenceService(f.pool,true,principal).status(context,input)).toMatchObject({nextOffset:2,state:"pending"});
     expect(await f.service.append(context,request)).toEqual({nextOffset:2});
     expect(await f.service.append(context,{...request,offset:2})).toEqual({nextOffset:4});
     expect(f.parts).toHaveLength(2);
