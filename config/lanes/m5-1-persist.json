@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-1-persist": {
+      "branches": [
+        "codex/sandbox/m5-1-persist"
+      ],
+      "allow": [
+        "apps/api/src/accounting-export.persisted.ts",
+        "docs/contracts/accounting-export-v1.md",
+        "packages/db/migrations/0582_accounting_export_persistence.sql",
+        "packages/db/src/accounting-export-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/accounting-export-executor.test.ts",
+        "packages/db/test/accounting-export-upgrade.integration.test.ts",
+        "packages/db/test/accounting-export.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0582_accounting_export_persistence.proof.json"
+      ],
+      "note": "M5-1 RED synthetic persistence atop unmerged m5-2-xero; shared contract docs and catalog expectation lists serialize with other migrations. Follow-up binds reconciliation to the private fake-adapter inbox for the exact tenant and attempt. Own lane file implicitly permitted.",
+      "test": "packages/db/test/accounting-export-executor.test.ts packages/db/test/accounting-export.integration.test.ts"
+    }
+  }
+}

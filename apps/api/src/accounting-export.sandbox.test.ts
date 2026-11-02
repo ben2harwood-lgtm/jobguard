@@ -1,39 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 import { AccountingExportSandbox, FakeCodatAdapter } from "./accounting-export.sandbox.js";
-import type { AccountingSource, AccountingScope } from "./accounting-export.contracts.js";
+import { FakeXeroAdapter } from "./accounting-xero.fake.js";
+import type { AccountingSource } from "./accounting-export.contracts.js";
+import { ctx, consent, source, scope, command, adjustment, scopeFor } from "./accounting-export.test-fixtures.js";
 
-const ctx = { tenantId: "demo-tenant", actorId: "demo-actor", canExport: true };
-const consent = { tenantId: ctx.tenantId, companyId: "demo-company", revision: 1, expiresAt: 5000, revoked: false };
-const source: AccountingSource = { version: 1, tenantId: ctx.tenantId, jobId: "demo-job", sourceId: "demo-invoice", revision: 1,
-  kind: "customer_invoice", amount: { pence: 101, currency: "GBP" }, state: "issued", visibility: "builder", synthetic: true,
-  finalAccount: { revision: 2, lockedRevision: 2 }, invoiceId: null, invoiceRevision: null,
-  tax: "unsupported", retention: "unsupported", cis: "unsupported", drc: "unsupported" };
-const scope: AccountingScope = { version: 1, tenantId: ctx.tenantId, jobId: source.jobId, companyId: consent.companyId,
-  sourceId: source.sourceId, sourceRevision: 1, mapping: { version: 1, tenantId: ctx.tenantId, companyId: consent.companyId,
-    revision: 1, accountId: "demo-sales", customerId: "demo-customer", approval: "synthetic_reference_only",
-    tax: "unsupported", retention: "unsupported", cis: "unsupported", drc: "unsupported" } };
-function setup(sources: AccountingSource[] = [source], enabled = true) {
-  const adapter = new FakeCodatAdapter();
-  const model = new AccountingExportSandbox(adapter, sources, [consent], enabled);
-  return { model, adapter };
-}
-function command(model: AccountingExportSandbox, s = scope, suffix = "one") {
-  const result = { version: 1 as const, commandId: `demo-command-${suffix}`, idempotencyKey: `demo-key-${suffix}`, scope: s,
-    decision: { version: 1 as const, decisionId: `demo-decision-${suffix}`, tenantId: ctx.tenantId, actorId: ctx.actorId,
-      action: "accounting_export.push" as const, previewHash: model.preview(ctx, s, 100).previewHash,
-      status: "approved" as const, humanConfirmed: true as const, expiresAt: 2000 } };
-  model.confirmPreview(ctx, s, result.decision, 100);
-  return result;
-}
-function adjustment(kind: "credit" | "receipt", pence = 50, id = `demo-${kind}`): AccountingSource {
-  return { ...source, sourceId: id, kind, amount: { pence, currency: "GBP" }, invoiceId: source.sourceId, invoiceRevision: 1, finalAccount: null, state: "posted" };
-}
-const scopeFor = (s: AccountingSource): AccountingScope => ({ ...scope, sourceId: s.sourceId, sourceRevision: s.revision });
+describe.each([
+  ["Codat", () => new FakeCodatAdapter()],
+  ["Xero", () => new FakeXeroAdapter(["demo-company", "demo-company-two"].map(companyId => ({
+    version: 1, tenantId: ctx.tenantId, companyId, revision: 1, state: "connected", synthetic: true,
+  })))],
+] as const)("%s common dark export conformance", (_name, makeAdapter) => {
+  function setup(sources: AccountingSource[] = [source], enabled = true) {
+    const adapter = makeAdapter();
+    const model = new AccountingExportSandbox(adapter, sources, [consent], enabled);
+    return { model, adapter };
+  }
 
-describe("M5-1 dark accounting export", () => {
   it("is disabled by default, rejects live/PII input and leaks no input through errors", () => {
-    const adapter = new FakeCodatAdapter();
+    const adapter = makeAdapter();
     const model = new AccountingExportSandbox(adapter, [source], [consent]);
     expect(() => model.preview(ctx, scope, 100)).toThrow("disabled");
     const active = setup().model;
@@ -66,6 +51,15 @@ describe("M5-1 dark accounting export", () => {
     expect(() => model.push(ctx, { ...c, decision: { ...c.decision, expiresAt: 1900 } }, 100)).toThrow("approval_required");
     expect(() => model.push(ctx, { ...c, commandId: "demo-different" }, 100)).toThrow("replay_conflict");
     expect(() => model.push(ctx, { ...c, idempotencyKey: "demo-different" }, 100)).toThrow("replay_conflict");
+  });
+  it("rejects approved changed payloads that reuse a command ID or idempotency key", () => {
+    const { model, adapter } = setup(); const first = command(model);
+    model.push(ctx, first, 100);
+    const changedScope = { ...scope, mapping: { ...scope.mapping, customerId: "demo-changed-customer", revision: 2 } };
+    const changed = command(model, changedScope, "changed");
+    expect(() => model.push(ctx, { ...changed, commandId: first.commandId }, 100)).toThrow("replay_conflict");
+    expect(() => model.push(ctx, { ...changed, idempotencyKey: first.idempotencyKey }, 100)).toThrow("replay_conflict");
+    expect(adapter.pushes).toBe(1);
   });
   it.each(["reject", "unknown_before", "unknown_after"] as const)("requires reconciliation after %s before retry", mode => {
     const { model, adapter } = setup(); const c = command(model); adapter.next = mode;
@@ -238,4 +232,32 @@ describe("M5-1 dark accounting export", () => {
     expect(model.ledger(ctx, scope, 100).artifact?.source.state).toBe("issued");
     expect(model.reconcile(ctx, scope, 100).status).toBe("pushed");
   });
+  it("enforces the backoff deadline on either route without changing approved bytes", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    adapter.next = "rate_limit";
+    expect(model.push(ctx, c, 100).status).toBe("rate_limited");
+    expect(() => model.push(ctx, c, 129)).toThrow("rate_limited");
+    expect(() => model.reconcile(ctx, scope, 129)).toThrow("rate_limited");
+    expect(model.push(ctx, c, 130).status).toBe("pushed");
+    expect(adapter.objects).toHaveLength(1);
+    expect(adapter.objects[0]!.payload.amount).toEqual(source.amount);
+    expect(adapter.objects[0]!.payload.customerId).toBe(scope.mapping.customerId);
+  });
+  it.each(["credit", "receipt"] as const)("refuses %s against cancelled, superseded or unlocked parent invoices", kind => {
+    const item = adjustment(kind);
+    for (const invoice of [{ ...source, state: "cancelled" }, { ...source, state: "superseded" },
+      { ...source, finalAccount: { revision: 3, lockedRevision: 2 } }]) {
+      const { model, adapter } = setup([invoice as AccountingSource, item]);
+      expect(() => model.preview(ctx, scopeFor(item), 100)).toThrow("reference_conflict");
+      expect(adapter.pushes).toBe(0);
+    }
+    const { model, adapter } = setup([source, item]);
+    const c = command(model, scopeFor(item));
+    model.push(ctx, c, 100);
+    model.setSyntheticSource({ ...item, state: "cancelled" });
+    expect(() => model.push(ctx, c, 100)).toThrow("source_unavailable");
+    expect(model.reconcile(ctx, scopeFor(item), 100).status).toBe("pushed");
+    expect(adapter.pushes).toBe(1);
+  });
+
 });

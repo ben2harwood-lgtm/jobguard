@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-2-xero": {
+      "branches": ["codex/sandbox/m5-2-xero"],
+      "allow": [
+        "apps/api/src/accounting-export.contracts.ts",
+        "apps/api/src/accounting-export.fake.ts",
+        "apps/api/src/accounting-export.sandbox.ts",
+        "apps/api/src/accounting-export.sandbox.test.ts",
+        "apps/api/src/accounting-export.test-fixtures.ts",
+        "apps/api/src/accounting-xero.fake.ts",
+        "apps/api/src/accounting-xero.fake.test.ts",
+        "docs/contracts/accounting-export-v1.md"
+      ],
+      "note": "M5-2 RED dark direct Xero fake atop unmerged M5-1; own lane file is implicitly permitted. Shared contract and conformance files serialize with M5-1 repairs.",
+      "test": "apps/api/src/accounting-export.sandbox.test.ts apps/api/src/accounting-xero.fake.test.ts"
+    }
+  }
+}
