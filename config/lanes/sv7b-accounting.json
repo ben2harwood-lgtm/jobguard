@@ -5,20 +5,18 @@
       "branches": [
         "codex/sandbox/sv7b-accounting"
       ],
-      "note": "RED SV-7B follow-up: server-disabled synthetic accounting emitter with durable tenant/evidence/version receipts. Branch-owned 0399, exact additive LP-0/SERIOUS-B5/tenancy union; router handles CI, commit, PR and independent Claude review.",
+      "note": "RED SV-7B catch-up: disabled synthetic accounting connector; unchanged SQL renumbered to 0596, with explicit LP-0, upgrade and tenancy proof. Router handles commit/push; NOPR=1, no CI use during freeze. PostgreSQL, browser and independent RED review remain pending.",
       "allow": [
         "apps/api/src/accounting-observation-connector.test.ts",
         "apps/api/src/accounting-observation-connector.ts",
-        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/operations/accounting-observation-data-flow.md",
         "packages/db/MIGRATIONS.md",
-        "packages/db/migrations/0399_accounting_observation_receipt.sql",
+        "packages/db/migrations/0596_accounting_observation_receipt.sql",
         "packages/db/src/accounting-observation-receipt-repository.ts",
         "packages/db/src/index.ts",
         "packages/db/test/accounting-observation-receipt.integration.test.ts",
         "packages/db/test/accounting-observation-receipt.test.ts",
-        "packages/db/test/serious-b5-upgrade.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/migration-proofs/0596_accounting_observation_receipt.proof.json"
       ]
     }
   }

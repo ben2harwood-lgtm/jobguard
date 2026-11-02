@@ -1222,7 +1222,7 @@ Q2 non-catch authority and Q3 negative execution remain held. Forward fix:
 disable the route and append a reviewed migration; preserve any future financial
 history. Never enable posting by removing the refusal alone.
 
-### 0399 — SV-7B synthetic accounting observation receipts (branch-owned)
+### 0596 — SV-7B synthetic accounting observation receipts (branch-owned)
 
 Adds an append-only receipt keyed by tenant/evidence/object version, with a job
 foreign key and observation hash for conflicting replay detection. Forced tenant
@@ -1232,3 +1232,8 @@ backfill: the previous adapter retained no durable receipts. Deployment must
 precede the synthetic emitter. Forward fix: leave the server entrypoint disabled
 and append a reviewed migration; retain receipts to preserve replay protection.
 No live provider, real-data approval or fee authority is introduced.
+## 0519 — M4-6-store synthetic timeline history (RED)
+
+Adds `recovery_timeline_run` and `recovery_timeline_signal`, owned by `jobguard_migration`, with forced tenant RLS and tenant/subject-qualified foreign keys to the existing follow-up. Runtime has SELECT only on both tables and EXECUTE on apply_recovery_timeline_signal(uuid,jsonb). Direct run INSERT/UPDATE and signal INSERT are revoked; the old record_recovery_timeline_signal(uuid,uuid,uuid,text) helper is owner-only. The aggregate uses search_path=pg_catalog, checks the synthetic database, tenant, current persisted practice session and recursive job ownership, validates the full follow-up reference, derives state/references and computes the canonical normalized JSONB SHA-256 fingerprint before atomically upserting the run and recording the signal. No caller-chosen fingerprint or state is accepted. No DELETE/TRUNCATE, reference changes or signal edits are granted. A private invoker trigger makes stopped terminal. There are no provider, scheduling-owner, financial, audit or existing-routine changes. No backfill: existing in-memory fake history is not promoted to trusted database history.
+
+Expand-only forward fix: disable the unregistered synthetic runtime if necessary; retain both history tables and apply a new migration to repair defects. Do not drop history or edit this migration after merge. Populated predecessor/privilege preservation is covered by the SERIOUS-B5 upgrade suite; real PostgreSQL behavior is covered in recovery-follow-up.integration.test.ts and tenancy/catalogue checks. These are CI gates, not locally executed PostgreSQL evidence.

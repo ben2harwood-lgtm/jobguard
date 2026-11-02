@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { parseRecoveryAttributionCommand, recoveryAttributionRevisionV1, type RecoveryAttributionRevisionV1 } from "@jobguard/core";
+import { parseRecoveryAttributionCommand, attributionReviewResultV1, recoveryAttributionRevisionV1, type RecoveryAttributionRevisionV1 } from "@jobguard/core";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -18,6 +18,22 @@ export class RecoveryAttributionRepository {
       if(result.tenantId!==context.tenantId || result.jobId!==job || result.caseId!==command.caseId
         || result.workId!==command.workId || result.lineId!==command.lineId || result.lockId!==command.lockId)
         throw new PracticeAccessError("NOT_FOUND");
+      return result;
+    });
+  }
+  /** Records one exact review; its receipt is historical, never fee/collection permission. */
+  async approveReview(context: VerifiedTenantContext, jobId: string, sessionDigest: string, raw: unknown) {
+    const command = parseRecoveryAttributionCommand(raw);
+    if (command.action !== "approve_review") throw new Error("INVALID_RECOVERY_ATTRIBUTION_COMMAND");
+    const job = z.string().uuid().parse(jobId);
+    return withTenant(this.pool, context, async db => {
+      const row = (await db.$client.query<{ result: unknown }>(
+        "SELECT app.assess_recovery_attribution($1,$2,$3::jsonb) result", [job, sessionDigest, command],
+      )).rows[0];
+      const result = attributionReviewResultV1.parse(row?.result);
+      if (result.assessmentId !== command.assessmentId || result.commandId !== command.commandId
+        || result.sourceHash !== command.expectedSourceHash || result.reviewArtifactHash !== command.reviewArtifactHash
+        || result.assessmentRevision !== command.expectedAttributionRevision) throw new PracticeAccessError("NOT_FOUND");
       return result;
     });
   }

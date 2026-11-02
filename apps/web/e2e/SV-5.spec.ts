@@ -171,6 +171,60 @@ test("B (real run): a held extra captured for £800 at final review is never rev
   });
 });
 
+test("O (real run): zero-result wording survives reload and replay creates no duplicate classification", async ({ page }) => {
+  test.setTimeout(240_000);
+  const { jobId, tenantId } = await lockedPracticeJob(page);
+  const checkPath = `/api/jobs/${jobId}/final-check`;
+  const readCheck = () => jsonResult(page.request.get(checkPath), "Read Test O final check");
+  await expect.poll(async () => (await readCheck()).state,
+    { timeout: 180_000, intervals: [5_000] }).toBe("completed");
+  const completed = await readCheck();
+  expect(completed.items).toEqual([]);
+  expect(completed.lockId).toBeTruthy();
+  expect(completed.runId).toBeTruthy();
+  const lock = (await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`), "Read Test O lock")).lock;
+  await page.goto(`/jobs/${jobId}#final-check`);
+  const main = page.getByRole("main");
+  const panel = main.getByTestId("final-check-reveal");
+  const assertZeroResult = async () => {
+    await expect(panel.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+    await expect(panel.getByTestId("final-check-item")).toHaveCount(0);
+    await expect(panel.getByTestId("final-check-post-lock")).toHaveCount(0);
+    await expect(panel).toHaveAttribute("aria-busy", "false");
+    await expect(main.getByRole("alert")).toHaveCount(0);
+  };
+  await assertZeroResult();
+  await page.reload();
+  await assertZeroResult();
+
+  await withSyntheticShadow(tenantId, async (_shadow, admin) => {
+    const classifications = () => admin.query("SELECT * FROM app.shadow_signal_classification WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
+    const runs = () => admin.query("SELECT * FROM app.shadow_reconciliation_run WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", [tenantId, jobId]);
+    const before = (await classifications()).rows;
+    // This is an examined baseline photo, not an empty fixture that could pass without classifying anything.
+    expect(before).toEqual([expect.objectContaining({ run_id: completed.runId, outcome: "already_in_original_scope" })]);
+    const originalRuns = (await runs()).rows;
+    expect(originalRuns).toEqual([expect.objectContaining({ id: completed.runId })]);
+    // Redeliver the real practice task with the same locked-bill reference. No domain result is fabricated.
+    const queued = (await admin.query("SELECT (graphile_worker.add_job('final_check_practice_run',$1::json,job_key := $2,max_attempts := 1)).id AS id", [
+      JSON.stringify({ version: "final-check-practice-run.v1", tenantId, jobId, lockId: completed.lockId }),
+      `sv5-test-o-replay:${randomUUID()}`,
+    ])).rows[0];
+    // A failed task stays in the queue: wait for acknowledgment before claiming replay succeeded.
+    await expect.poll(async () => (await admin.query("SELECT id FROM graphile_worker._private_jobs WHERE id=$1", [queued.id])).rowCount,
+      { timeout: 30_000, intervals: [500] }).toBe(0);
+    expect((await classifications()).rows).toEqual(before);
+    expect((await runs()).rows).toEqual(originalRuns);
+    for (const table of ["variation", "recovery_case", "recovery_fee_journal"]) {
+      expect(Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`, [tenantId, jobId])).rows[0].n)).toBe(0);
+    }
+  });
+  expect(await readCheck()).toEqual(completed);
+  expect((await jsonResult(page.request.get(`/api/jobs/${jobId}/final-account`), "Re-read Test O lock")).lock).toEqual(lock);
+  await page.reload();
+  await assertZeroResult();
+});
+
 // I remains blocked: D13 must-surface activation is held.
 // J/L remain blocked: merged SV-7A rejects new post-lock sources with POST_LOCK_WORK_REQUIRES_LINKED_JOB;
 // email/photo coalescing and post-lock message imports are not supplied by its bounded text intake.
