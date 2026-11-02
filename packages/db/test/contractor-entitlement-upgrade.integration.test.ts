@@ -30,6 +30,8 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.worm_attempt":[],
  "app.supplier_line_match_snapshot":[],
  "app.supplier_line_match_correction":[],
+ "app.scheduled_readiness_plan":[],
+ "app.scheduled_readiness_proposal":[],
  "app.tenant_key_version":[],
  "app.tenant_key_revocation":[],
  "app.recovery_timeline_run":[],

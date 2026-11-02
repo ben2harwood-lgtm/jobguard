@@ -1,0 +1,201 @@
+{
+  "migration": "0485_scheduled_readiness_store.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.scheduled_readiness_plan|jobguard_runtime|INSERT|-",
+        "group": "x-scope-proposal-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.scheduled_readiness_plan|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.scheduled_readiness_plan|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.scheduled_readiness_proposal|jobguard_runtime|INSERT|-",
+        "group": "x-scope-proposal-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.scheduled_readiness_proposal|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.scheduled_readiness_proposal|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|df9cc37e8a541c03"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.scheduled_readiness_plan",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "scheduled_readiness_plan",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_plan",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)",
+        "with_check": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.scheduled_readiness_proposal",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "scheduled_readiness_proposal",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_proposal",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)",
+        "with_check": "(tenant_id = (current_setting('app.tenant_id'::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "scheduled_readiness_plan_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "scheduled_readiness_plan_tenant_id_job_id_task_id_plan_hash_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "scheduled_readiness_proposal_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "scheduled_readiness_plan",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "scheduled_readiness_proposal",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
