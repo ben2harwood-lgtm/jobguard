@@ -98,6 +98,8 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect(stageLink).toBe(`/customer/jobs/${fixture.job}`);
   await tab.getByRole("link",{name:"Review your quote"}).click();
   await expect(tab.getByText("Fictional work: 1 item — £100.00")).toBeVisible();
+  await expect(tab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("synthetic template, not reviewed (D06 v2)");
+  await expect(tab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("Practice cancellation request");
   const view=(await api(tab,"quote",{version:"customer-quote-read.v1",jobId:fixture.job})).body;
   const command={version:"customer-quote-acceptance.v1",commandId:randomUUID(),jobId:fixture.job,expectedJobRevision:view.jobRevision,target:{kind:"quote",id:view.quote.id,revision:view.quote.revision,hash:view.quote.hash}};
   expect((await api(tab,"quote-accept",{...command,expectedJobRevision:view.jobRevision+1})).status).toBe(401);
