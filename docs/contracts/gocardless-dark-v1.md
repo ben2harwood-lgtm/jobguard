@@ -168,3 +168,31 @@ sandbox cannot start PostgreSQL or bind localhost. The router must stage the two
 resolved export files because the Git index is read-only here. Existing RED
 review evidence predates this merged head; exact-head review and green CI remain
 required before merge. No live capability or approval is inferred.
+
+Catch-up verification (2 November 2026): MON-4B, no migration. Resolved the two
+core/DB barrel conflicts as the exact union of both sides, retaining each export
+once. Updated the existing MON-4B lane. No collection behavior, routines, tests,
+expectations, migration SQL, LP inventories or protected journey files changed.
+The LP catalogs, tenancy/serious-b5 expectation files, privilege snapshot and
+legacy migration inventory match origin/main byte-for-byte. All migration SQL
+matches origin/main; there are no branch-added migrations or proofs to renumber.
+
+Installed Vitest 4.1.12 checks, each with --maxWorkers=2 and at most three named files:
+- API executor.test.ts, success-fee-direct-debit.test.ts and
+  success-fee-composition.test.ts: 94 passed.
+- API fake-gocardless.test.ts: 37 passed.
+- DB src/payment-fee-collection-repository.test.ts: 9 passed.
+Installed TypeScript --noEmit with each package's tsconfig.json passed for API,
+DB and core. Both staged and working-tree whitespace checks passed. The pnpm
+wrapper stalled before executing checks and was stopped; installed binaries were
+used without downloading packages. An initial root-tsconfig invocation was
+incorrect: it includes unrelated package sources without their package settings
+and reported decorator/JSX/test typing errors. The corrected package invocations
+above passed; that root invocation is not evidence of a repository check failure.
+
+READY for router staging/commit on the same branch, NOPR=1. The read-only Git index
+still lists the two resolved export files as unmerged; the router must stage them.
+PostgreSQL, browser and full required CI checks were not run here and remain due
+when the freeze permits CI. One independent RED review of the exact final head
+remains required before merge. Shared fee-collection paths with M4-12 and M4-15
+must serialize integration. All production gates remain closed.

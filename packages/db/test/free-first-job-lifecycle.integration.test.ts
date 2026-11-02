@@ -5,6 +5,7 @@ import { keyParent,snapshot,store } from "./free-first-job-keys-fixtures.js";
 import { prepareWorkAccount, seedWorkJob } from "./job-work-state-fixtures.js";
 import { FreeFirstJobLifecycleRepository } from "../src/free-first-job-lifecycle-repository.js";
 import { exactTarget, firstTrialFixture as first } from "./free-first-job-lifecycle-fixtures.js";
+import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 describe("MON-3 END source persistence, company isolation and races",()=>{
@@ -102,21 +103,15 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
   }
   for(const fn of ['mon3_capture_lifecycle()','mon3_trial_date(uuid,timestamptz)','mon3_pin_source(uuid,text,uuid)','mon3_validate_billing(uuid,uuid)'])expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') allowed",[`app.${fn}`])).rows[0].allowed).toBe(false);
  });
- it("real capacity dependency refuses; a labelled capacity substitute permits one of two racing first jobs",async()=>{
+ it("real capacity admission permits one of two racing first jobs",async()=>{
   const a=await meterCompany(f);await verifyBusiness(f,a);await exactTarget(f,a);
   const second=await seedWorkJob(f,a.tenantId);await exactTarget(f,{...a,jobId:second.jobId});
   const repo=new FreeFirstJobLifecycleRepository(f.runtime),old=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV='synthetic_demo';
-  const original=(await f.admin.query("SELECT pg_get_functiondef('app.ch4_admit_place(uuid,uuid,text)'::regprocedure) definition")).rows[0].definition;
   try{
    const targets=await Promise.all([repo.read(a.context,a.digest,a.jobId),repo.read(a.context,a.digest,second.jobId)]);
    const inputs=targets.map((target,index)=>({version:'trial-switch-live.v1',commandId:randomUUID(),jobId:index===0?a.jobId:second.jobId,...target.target}));
    const run=(index:number)=>repo.activate(a.context,a.digest,a.actorId,inputs[index]);
-   await expect(run(0)).rejects.toThrow('CAPACITY_ADMISSION_UNAVAILABLE');
-   expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
-   // This substitutes ONLY the missing dependency. Real quote/owner/receipt/
-   // authorization, activation, keys, start and audit paths still execute.
-   await f.admin.query("CREATE OR REPLACE FUNCTION app.ch4_admit_place(t uuid,j uuid,action text) RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$ BEGIN RETURN; END $$");
-   const outcomes=await Promise.allSettled([run(0),run(1)]);
+const outcomes=await Promise.allSettled([run(0),run(1)]);
    expect(outcomes.filter(result=>result.status==='fulfilled')).toHaveLength(1);
    const winner=outcomes.findIndex(result=>result.status==='fulfilled'),stored=outcomes[winner]!;
    expect(await run(winner)).toEqual(stored.status==='fulfilled'?stored.value:null);
@@ -133,7 +128,28 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
    await expect(repo.activate(b.context,b.digest,b.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:b.jobId,...target.target})).rejects.toThrow('TRIAL_IDENTITY_CONFLICT');
    expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[b.tenantId])).rows[0].n).toBe(0);
 
-  }finally{await f.admin.query(original);if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
+  }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
+ });
+
+ it("a second job with card and terms goes live, ends the trial once and its activation claims no new key",async()=>{
+  const a=await meterCompany(f);await verifyBusiness(f,a);await exactTarget(f,a);
+  const second=await seedWorkJob(f,a.tenantId);await exactTarget(f,{...a,jobId:second.jobId});
+  const repo=new FreeFirstJobLifecycleRepository(f.runtime),old=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV='synthetic_demo';
+  try{
+   const activate=async(jobId:string)=>repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId,...(await repo.read(a.context,a.digest,jobId)).target});
+   await activate(a.jobId);
+   const keys=async()=>(await f.admin.query("SELECT count(*)::int n FROM app.trial_identity_key_claim WHERE tenant_id=$1",[a.tenantId])).rows[0].n;
+   const ends=async()=>(await f.admin.query("SELECT kind FROM app.trial_end_source WHERE tenant_id=$1",[a.tenantId])).rows;
+   await expect(activate(second.jobId)).rejects.toThrow('TRIAL_COMPLETED_CARD_REQUIRED');
+   const card=randomUUID();await requestCard(f,a,card);
+   await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_simulate_card($1,$2,$3,'{\"version\":\"trial-card-simulate.v1\"}')",[a.tenantId,a.digest,card]));
+   await expect(activate(second.jobId)).rejects.toThrow('TRIAL_SUBSCRIPTION_TERMS_REQUIRED');
+   expect(await ends()).toEqual([]);
+   await historicalAgreement(f,a);const before=await keys();
+   expect(await activate(second.jobId)).toMatchObject({jobId:second.jobId,state:'live'});
+   expect(await ends()).toEqual([{kind:'second_activation'}]);expect(await keys()).toBe(before);
+   expect((await repo.read(a.context,a.digest,a.jobId)).timeline?.active).toBe(false);
+  }finally{if(old===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=old;}
  });
 
  it("a changed transaction context cannot hide a registered company's deferred admission check",async()=>{
