@@ -177,11 +177,8 @@ test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice,
  await completeJ3(page, browser, testInfo);
 });
 
-// J3-VALUE-COMBINED is not on origin/main (8970e6e6): read_value_job still
-// joins tracked captures to an invoice of the ORIGINAL locked revision. Keep
-// only the combined-invoice value assertion fixme; all steps 6–9 above run.
-// Remove fixme when J3-VALUE-COMBINED lands; this reruns the same fresh journey.
-test.fixme("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async ({ page, browser }, testInfo) => {
+// Verify combined-invoice value figures through the same fresh journey.
+test("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async ({ page, browser }, testInfo) => {
  const { jobId, report } = await completeJ3(page, browser, testInfo);
  expect(report.value).toMatchObject({ version: "job-value.v3", jobId, status: "mapped", receipt: {
   tracked: { pence: 360000, currency: "GBP" }, trackedFee: { pence: 0, currency: "GBP" },
