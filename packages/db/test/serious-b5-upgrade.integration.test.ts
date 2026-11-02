@@ -1319,6 +1319,20 @@ async function trackReviewAddition(before: Awaited<ReturnType<typeof snapshot>>)
  const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
  return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
 }
+// 0518: four demo-only routines, which only the runtime role can run. Its request table is in the
+// infrastructure schema, which this snapshot doesn't cover; shadow-demo-guide.integration.test.ts covers it.
+async function shadowDemoGuideAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const names = ["demo_issue_customer_link","demo_request_source_hold","demo_shadow_review_inputs","demo_source_hold_state"];
+ const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
+ expect(routines.map(r => r.proname).sort()).toEqual(names);
+ for (const r of routines) {
+  expect(before.routines.some(b => b.nspname === "app" && b.proname === r.proname)).toBe(false);
+  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]);
+ }
+ const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+ return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+}
 // m4-withheld-source / 0489: one private validator, with no runtime execute grant.
 async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -1399,6 +1413,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await withheldSourceAddition(expected));
  Object.assign(expected, await demoSettleAddition(expected));
  Object.assign(expected, await trackReviewAddition(expected));
+ Object.assign(expected, await shadowDemoGuideAdditions(expected));
  Object.assign(expected, await timelineStoreAdditions(expected));
  if (proofs.length) {
   expect(await snapshot()).toEqual(expected);
