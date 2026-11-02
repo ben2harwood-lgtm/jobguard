@@ -1,0 +1,172 @@
+{
+  "migration": "0591_fee_reservation_book.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Source-defined additive capability; exact-head RED review and PostgreSQL CI required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check exact reservation table grants, RLS and append-only audit."
+        },
+        "downstream": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted.",
+        "sources": [
+          "packages/db/migrations/0591_fee_reservation_book.sql",
+          "packages/db/migrations/0592_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required."
+        ],
+        "path": "ap-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.fee_reservation_book|jobguard_migration",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.fee_reservation_book|jobguard_runtime|SELECT|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.fee_reservation_book|jobguard_runtime|INSERT|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|col|app.fee_reservation_book.book|jobguard_runtime|UPDATE|-",
+        "group": "a-m4-12-reservations"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m4-12-reservations",
+        "title": "M4-12 dark shared collection reservations",
+        "description": "One tenant book serializes fake card and Direct Debit reservations. No live adapter or production source reader is registered. No DELETE, TRUNCATE or tenant-key UPDATE is granted.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain authenticated tenant binding and same-transaction source locks.",
+          "LP-12": "Check exact reservation table grants, RLS and append-only audit."
+        },
+        "sources": [
+          "packages/db/migrations/0591_fee_reservation_book.sql",
+          "packages/db/migrations/0592_fee_reservation_archive.sql",
+          "apps/api/src/fee-collection/postgres-reservation-store.ts"
+        ],
+        "tests": [
+          "packages/db/test/fee-reservation.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.fee_reservation_book|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.fee_reservation_book|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|6fa387f2f629fba6"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.fee_reservation_book",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "fee_reservation_book",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "fee_reservation_book_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "fee_reservation_book",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": [
+          "jobguard_runtime"
+        ],
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "fee_reservation_book",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
