@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { money, MoneyError } from "@jobguard/core";
+import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { appendAuditBatch } from "./audit.js";
 import type { AuditEventInput } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
@@ -122,5 +123,6 @@ export async function executeAuthorizedCommercialAction<T>(database: TenantTrans
     Number(row.aggregate_revision)===action.aggregateRevision && (row.amount_pence===null?action.amountPence===null:Number(row.amount_pence)===action.amountPence) &&
     row.currency===action.currency && row.policy_version===action.policyVersion;
   if(!matches) throw new CommandError("AUTHORIZATION_INVALID");
+  if(!(await commercialOutboundClaimsEnabled(database))) throw new CommandError("AUTHORIZATION_INVALID");
   return invoke();
 }
