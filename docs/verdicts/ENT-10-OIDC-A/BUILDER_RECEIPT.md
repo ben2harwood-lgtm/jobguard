@@ -153,3 +153,20 @@ Checks on installed dependencies, Node 24.17.0 and cached pnpm 10.28.1:
 - `git diff --check`: PASS. Supplied main is an ancestor of HEAD; `git ls-files -u` is empty.
 
 READY for router commit, push and PR opening (no NOPR). Full GitHub CI, including PostgreSQL and browser suites unavailable in this sandbox, and one independent exact-head RED review remain required before merge. Historical secrets-scan findings above were not rechecked or repaired by this evidence-only catch-up; no current secrets-gate pass is claimed. This handoff does not close parent ENT-10 or authorize real providers, data or release.
+
+## NOPR current-main catch-up — 2 November 2026
+
+ENT-10-OIDC-A, RED (sign-in). Read the live SIMPLE_LOOP.md, full simplicity rule, repository AGENTS.md and applicable ENT-10/M5-7 plan requirements; inspected the adapter, contracts and adversarial tests. The launcher had already completed merge `5fdd5155` of supplied main `e3e811674a78859c8553dc05fec52f38b87f9103`. The worktree was clean, with no MERGE_HEAD or unmerged index entries. No conflict resolution or implementation change was necessary.
+
+The full delta against supplied main remains the exact-branch lane registration and this existing receipt. All application source/tests, database files, LP-0, tenancy, shared expectations, BUILD_PLAN.md, protected demo journey files and `docs/contracts/lp-downstream-effects-v1.md` match main. No routine was recreated; no migration was needed, added, edited or renumbered. Existing lane branches and historical allowed-path union remain intact. No test expectation or replay/domain/linking check changed.
+
+Local checks with installed Node 24.17.0, cached pnpm 10.28.1 and Vitest 4.1.12 (explicit maxWorkers=2):
+
+- `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/api exec vitest run src/auth/sso/oidc.test.ts src/auth/sso/oidc.contracts.test.ts src/auth/sso/saml.test.ts --maxWorkers=2`: PASS, 3 files / 92 tests, including consumed-code replay, concurrent exchange, company/request binding and authority-claim boundaries.
+- `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/api typecheck`: PASS, exit 0.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: PASS, lane and receipt only.
+- `git diff --check`: PASS; no conflict markers in inspected OIDC sources, lanes or BUILD_PLAN.md. Supplied main is an ancestor of HEAD; `git ls-files -u` is empty.
+
+The shell-resolved pnpm launcher stalled before test/typecheck execution (even `pnpm --version` stalled); the explicit cached pinned launcher completed both checks above. No dependencies were downloaded or installed. No Git writes, fetch, PostgreSQL, browser, live provider or real-data actions were performed.
+
+READY for the router's NOPR commit/push handoff only; no PR or CI use is authorized by this catch-up. Full required CI, database/browser execution and one independent exact-head RED review remain required when the router admits this piece. Historical secrets-scan findings recorded above were not rechecked or remediated here; no secrets-gate pass or parent ENT-10 completion is claimed. G0–G5 remain closed.
