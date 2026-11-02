@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-1-full": {
+      "branches": [
+        "codex/sandbox/m4-1-full"
+      ],
+      "note": "RED M4-1 dark full recovery case/workbench gap only. Existing final-check identity and locked-claim controls retained. Own lane file is implicitly allowed.",
+      "allow": [
+        "apps/api/src/recovery-case.command.application.test.ts",
+        "apps/api/src/recovery-case.contracts.ts",
+        "apps/web/app/ui/recovery-case-history.test.tsx",
+        "apps/web/app/ui/recovery-case-history.tsx",
+        "apps/web/app/ui/recovery-cases.behaviour.test.ts",
+        "apps/web/app/ui/recovery-cases.tsx",
+        "apps/web/e2e/M4-1-S.spec.ts",
+        "packages/core/src/recovery-case.test.ts",
+        "packages/core/src/recovery-case.ts",
+        "packages/db/src/recovery-case-repository.ts",
+        "packages/db/src/recovery-case-sources.ts",
+        "packages/db/src/recovery-case-workbench.test.ts",
+        "packages/db/src/recovery-case-workbench.ts",
+        "packages/db/test/final-check-catch-confirm.integration.test.ts",
+        "packages/db/test/recovery-cases.integration.test.ts"
+      ]
+    }
+  }
+}
