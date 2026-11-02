@@ -7,7 +7,7 @@ let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
 afterAll(async () => { await closeWorkFixture(f); });
 it("upgrades populated predecessor storage without changing its rows or schema and migrates twice", async () => {
-  const own = MIGRATION_URLS.find(url => url.pathname.endsWith("/0430_platform_tax_invoice.sql"));
+  const own = MIGRATION_URLS.find(url => url.pathname.endsWith("/0588_platform_tax_invoice.sql"));
   expect(own).toBeDefined();
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
@@ -27,5 +27,5 @@ it("upgrades populated predecessor storage without changing its rows or schema a
   expect((await f.admin.query("SELECT row_to_json(j)::text bytes FROM app.job j WHERE tenant_id=$1", [a.tenantId])).rows).toEqual(before);
   expect(await columns()).toEqual(previousColumns);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.platform_invoice_document")).rows[0].n).toBe(0);
-  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0430_platform_tax_invoice.sql'")).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0588_platform_tax_invoice.sql'")).rows[0].n).toBe(1);
 }, 240000);

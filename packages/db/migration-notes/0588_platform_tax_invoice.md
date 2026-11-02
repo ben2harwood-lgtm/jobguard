@@ -1,4 +1,4 @@
-# 0430 — M4-10 dark platform invoice storage (RED)
+# 0588 — M4-10 dark platform invoice storage (RED)
 
 Adds tenant-owned `platform_invoice_issuer`, `platform_invoice_document` and
 `platform_invoice_source` in the platform statement namespace. No earlier
@@ -25,7 +25,7 @@ Fresh installs use migration discovery. Existing databases get additive empty
 tables, without rewriting statements or financial history. Forward fix only:
 preserve profiles, documents, reservations and audit; stop fixture issuance and
 use an additive reviewed migration when correction is needed. Never drop or
-renumber issued documents. 0430 remains this unmerged branch's own migration;
+renumber issued documents. The renamed migration remains this unmerged branch's own migration;
 no migration already on main is edited.
 
 CI must run the real PostgreSQL invoice, upgrade, migration and tenancy suites.
