@@ -154,6 +154,7 @@ export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-reposit
 
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";

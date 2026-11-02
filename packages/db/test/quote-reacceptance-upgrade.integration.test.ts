@@ -1,8 +1,9 @@
+import { RecordBuilderAcceptanceMutation, RecordQuoteDispositionMutation } from "./lp3-legacy-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   QuoteRepository, QuoteDocumentRepository, IssueQuoteMutation,
-  RecordBuilderAcceptanceMutation, RecordQuoteDispositionMutation, UserCommandDispatcher,
+  UserCommandDispatcher,
   withTenant, type ConsequentialCommand,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
@@ -44,7 +45,7 @@ async function issued() {
       lines: [{ scopeItemId: scope, description: "Fit cabinet", quantity: "1", unit: "each", netPence: 10000 }],
       exclusions: [], qualifications: ["Synthetic only"], subtotalPence: 10000, discountPence: 0, netPence: 10000, taxPence: 2000, totalPence: 12000 },
   });
-  const hash = artifact.content_hash, dispatcher = new UserCommandDispatcher(c.runtime);
+  const hash = artifact.content_hash, dispatcher = new UserCommandDispatcher(c.admin);
   await dispatcher.dispatch(context, {
     version: "command.v1", commandId: randomUUID(), commandType: "quote.issue", semanticKey: `issue:${document}`,
     actorMembershipId: member, subjectType: "quote_document", subjectRef: document, authorizationId: randomUUID(),
