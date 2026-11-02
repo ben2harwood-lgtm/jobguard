@@ -47,7 +47,7 @@ async function intake(fixtureId: SupplierDocumentIntake["fixtureId"], channel: S
 }
 it("upgrades existing documents without changing prior rows, money, orders or delivery history", async () => {
   expect(await proofDifferences(admin, preserved)).toEqual({ rows: [], types: [] });
-  expect((await admin.query("SELECT canonical_document_id FROM app.supplier_document WHERE document_number='OLD-SYNTHETIC'")).rows).toEqual([{ canonical_document_id: null }]);
+  expect((await admin.query("SELECT i.canonical_document_id FROM app.supplier_document d LEFT JOIN app.supplier_document_intake i ON(i.tenant_id,i.job_id,i.document_id)=(d.tenant_id,d.job_id,d.id) WHERE d.document_number='OLD-SYNTHETIC'")).rows).toEqual([{ canonical_document_id: null }]);
 });
 it("deduplicates upload/mail/portal and concurrent exact replays while retaining each arrival", async () => {
   originalId = (await intake("materials-B-invoice", "picker")).documentId;
@@ -86,9 +86,9 @@ it("refuses cross-tenant job access, RLS writes, cross-job canonical links and r
   await expect(repo().intake(otherContext, job, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 })).rejects.toThrow("JOB_NOT_FOUND");
   const own = await repo().intake(otherContext, otherJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 }); expect(own.documentId).not.toBe(originalId);
   const sameTenant = await repo().intake(context, sameTenantJob, { version: "supplier-document-intake.v1", fixtureId: "materials-B-invoice", channel: "fixture_portal", expectedRevision: 0 });
-  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,canonical_document_id) VALUES($1,$2,$3,'fictional-merchant','invoice','WRONG-JOB',$4,'held',$5)", [randomUUID(), tenant, job, "d".repeat(64), sameTenant.documentId]))).rejects.toMatchObject({ code: "23503" });
-  await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.supplier_document SET canonical_document_id=$1 WHERE tenant_id=$2", [originalId, tenant]))).rejects.toMatchObject({ code: "42501" });
-  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,canonical_document_id) VALUES($1,$2,$3,'fictional-merchant','invoice','FOREIGN',$4,'held',$5)", [randomUUID(), tenant, job, "b".repeat(64), own.documentId]))).rejects.toMatchObject({ code: "23503" });
+  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document_intake(id,tenant_id,job_id,document_id,fixture_id,channel,result,canonical_document_id) VALUES($1,$2,$3,$4,'merchant-changed-invoice','fixture_portal','held',$5)", [randomUUID(), tenant, job, originalId, sameTenant.documentId]))).rejects.toMatchObject({ code: "23503" });
+  await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.supplier_document_intake SET canonical_document_id=$1 WHERE tenant_id=$2", [originalId, tenant]))).rejects.toMatchObject({ code: "42501" });
+  await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document_intake(id,tenant_id,job_id,document_id,fixture_id,channel,result,canonical_document_id) VALUES($1,$2,$3,$4,'merchant-changed-invoice','fixture_portal','held',$5)", [randomUUID(), tenant, job, originalId, own.documentId]))).rejects.toMatchObject({ code: "23503" });
   await expect(withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'fictional-merchant','invoice',$4,'held')", [randomUUID(), other, otherJob, "c".repeat(64)]))).rejects.toMatchObject({ code: "42501" });
 });
 it("retains the existing forced RLS, owner and append-only runtime privileges", async () => {

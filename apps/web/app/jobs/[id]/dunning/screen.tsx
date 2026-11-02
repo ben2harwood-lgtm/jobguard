@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { DunningRepository } from "@jobguard/db";
+import type { DunningWorkbenchView } from "@jobguard/core";
 
-type View = Awaited<ReturnType<DunningRepository["read"]>>;
+type View = DunningWorkbenchView;
 type Row = View["invoices"][number];
 const pounds = (pence: number) => `£${Math.trunc(pence / 100)}.${String(pence % 100).padStart(2, "0")}`;
 const categories = { customer: "Customer reminder", supplier: "Supplier reminder", platform_to_builder: "Platform invoice reminder" };

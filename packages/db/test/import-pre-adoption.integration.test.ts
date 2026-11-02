@@ -17,7 +17,7 @@ it("CH-5 persists historical provenance once, returns GBP 0 and refuses scope, r
   const p = await imports.preview(auth.context, auth.digest, source, { ...f.request, lifecyclePoint: "invoiced" });
   const adopted = await imports.adopt(auth.context, auth.digest, source, freshIntent(f.request.expectedBindingId, p.previewHash, "invoiced"));
   const jobId = String(adopted.jobId), scopeId = String((adopted.baseline as { lines: { scopeItemId: string }[] }).lines[0]!.scopeItemId);
-  const evidenceId = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z");
+  const evidenceId = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z", true);
   const command = { version: "import-history-command.v1", commandId: randomUUID(), evidenceId };
   const [a, b] = await Promise.all([repo.write(auth.context, auth.digest, jobId, command), repo.write(auth.context, auth.digest, jobId, command)]);
   expect(b).toEqual(a);
@@ -31,19 +31,19 @@ it("CH-5 persists historical provenance once, returns GBP 0 and refuses scope, r
     (tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
     SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2`,
     [t, evidenceId, randomUUID()]))).rejects.toThrow("PRE_ADOPTION_SOURCE_EXCLUDED");
-  const relabelled = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2099-02-01T00:00:00Z", "site_photo", "2099-01-01T00:00:00Z");
+  const relabelled = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2099-02-01T00:00:00Z", "site_photo", "2099-01-01T00:00:00Z", true);
   await expect(workTenant(f.admin, t, db => db.query(`INSERT INTO app.shadow_signal_evidence
     (tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
     SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2`,
     [t, relabelled, randomUUID()]))).rejects.toThrow("PRE_ADOPTION_SOURCE_EXCLUDED");
   const sourceScope = (await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1", [t, source])).rows[0].id as string;
-  const foreignEvidence = await insertPhoto(f, { tenantId: t, jobId: source, scopeId: sourceScope } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z");
+  const foreignEvidence = await insertPhoto(f, { tenantId: t, jobId: source, scopeId: sourceScope } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z", true);
   await expect(repo.write(auth.context, auth.digest, jobId, { ...command, commandId: randomUUID(), evidenceId: foreignEvidence })).rejects.toThrow("PRE_ADOPTION_SOURCE_REQUIRED");
   for (const capturedAt of [null, "2099-01-01T00:00:00Z"]) {
-    const unusable = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", capturedAt);
+    const unusable = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", capturedAt, true);
     await expect(repo.write(auth.context, auth.digest, jobId, { ...command, commandId: randomUUID(), evidenceId: unusable })).rejects.toThrow("PRE_ADOPTION_SOURCE_REQUIRED");
   }
-  const unaudited = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z");
+  const unaudited = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z", true);
   await expect(withTenant(f.runtime, auth.context, db => db.$client.query("SELECT app.ch5_write_history($1,$2,$3,$4,$5,$6)",
     [t, jobId, auth.digest, randomUUID(), unaudited, randomUUID()]))).rejects.toThrow(/foreign key|IMPORT_HISTORY_AUDIT_REQUIRED/u);
   const unrelatedAudit = (await f.admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='job.imported_baseline_attested' LIMIT 1", [t])).rows[0].id as string;

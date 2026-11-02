@@ -49,9 +49,11 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
  return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
-export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null) {
+export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {
  const id = randomUUID(), version = randomUUID();
  await workTenant(f.admin, a.tenantId, async db => {
+  // Owner-only historical import setup; ordinary site evidence still runs every guard.
+  if (historicalImportFixture) await db.query("SET LOCAL session_replication_role='replica'");
   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at,device_captured_at)
    VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp(),$9)`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt,capturedAt]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at)

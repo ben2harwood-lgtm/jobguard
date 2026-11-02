@@ -399,3 +399,23 @@ describe("DEMO-J5 exact trial guide capability",()=>{
   }
  });
 });
+
+// Private schema-owned objects have protection records, rather than exposed-owner facts.
+it("batch-4 keeps private import/billability helpers private and dispositions on checked entry points", async () => {
+  const { inventory } = await loadReviewedInventory();
+  for (const signature of ["ch5_require_import_record()", "ch5_history_actor(uuid,uuid,text)",
+    "ch5_history_audit_guard()", "ch5_refuse_historical_shadow_source()",
+    "billability_snapshot(uuid,uuid,uuid,uuid,uuid,uuid)", "guard_billability_allocation()"]) {
+    const identity = `function:app.${signature}`;
+    expect(inventory.recorded.routines.find(r => r.identity === identity)).toMatchObject({
+      owner: OWNER, runtimeExecute: false, publicExecute: false,
+    });
+    expect(inventory.entries.some(e => e.key === `owner|routine|${identity}|${OWNER}`)).toBe(false);
+  }
+  for (const signature of ["ch5_write_history(uuid,uuid,text,uuid,uuid,uuid)",
+    "ch5_imported_catch(uuid,uuid,text,uuid,uuid,uuid)", "recovery_billability(uuid,text,jsonb,jsonb)"]) {
+    const entry = inventory.entries.find(e => e.key === `acl|routine|function:app.${signature}|${RT}|EXECUTE|-`);
+    expect(entry).toBeDefined();
+    expect(inventory.groups.find(g => g.id === entry!.group)?.kind).toBe(signature.startsWith("recovery_") ? "money" : "commitment");
+  }
+});

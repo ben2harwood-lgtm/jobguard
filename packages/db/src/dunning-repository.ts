@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { buildDunningReminder, dunningInvoiceV1, DunningError, unpaidInvoiceWorkbench } from "@jobguard/core";
+import { buildDunningReminder, dunningInvoiceV1, DunningError, unpaidInvoiceWorkbench, type DunningWorkbenchView } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 const id = z.guid();
@@ -29,7 +29,7 @@ export class DunningRepository {
    throw new DunningError("DUNNING_UNAVAILABLE");
   }
  }
- async read(context: VerifiedTenantContext, digest: string, raw: unknown) {
+ async read(context: VerifiedTenantContext, digest: string, raw: unknown): Promise<DunningWorkbenchView> {
   const input = locator.safeParse(raw);
   if (!input.success || !/^[a-f0-9]{64}$/u.test(digest)) throw new DunningError("INVALID_DUNNING_INPUT");
   return this.guarded(() => withTenant(this.pool, context, async db => {

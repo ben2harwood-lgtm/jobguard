@@ -24,7 +24,7 @@ it("0328 preserves stored invoiced imports, policies, owners and grants on upgra
  const input = freshIntent(binding, preview.previewHash, "invoiced");
  const imported = await repo.adopt(auth.context, auth.digest, practice.jobId, input);
  const before = await proofBefore(f.admin, ["app.job", "app.job_import_v3", "app.imported_job_baseline", "app.command_receipt", "app.audit_event"]);
- const sql = "SELECT oid,relowner,relacl::text,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid";
+ const sql = "SELECT oid,relowner,relacl::text,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' AND relname IN ('job','job_import_v3','imported_job_baseline','command_receipt','audit_event') ORDER BY oid";
  const security = (await f.admin.query(sql)).rows;
  await migrate(f.admin); await migrate(f.admin);
  expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });

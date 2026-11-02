@@ -27,7 +27,8 @@ it("makes invalid proof worth zero, binds its loss in both source hashes, preser
  const writer = routine(sql, "write_success_fee_v3");
  expect(writer).toContain("IF invalid_reduction AND delta>=0 THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'");
  expect(writer).toContain("fee:=app.ef_round_half_even(pair[1],pair[2]*10); delta:=fee-posted;");
- for (const column of ["eligible_net_pence", "gross_pence"]) expect(writer).toContain(`sum(greatest(0,ca.${column}-(SELECT coalesce(sum(r.${column}),0)`);
+ for (const name of ["write_success_fee_v3", "success_fee_withheld_source"])
+  for (const column of ["eligible_net_pence", "gross_pence"]) expect(routine(sql, name)).toContain(`sum(greatest(0,ca.${column}-(SELECT coalesce(sum(r.${column}),0)`);
  expect(sql).not.toMatch(/\b(?:GRANT|REVOKE|ALTER|CREATE TABLE)\b/u);
  expect(sql).not.toMatch(/\b(?:IF|ELSIF|WHILE)\s+CASE\b/u);
 });

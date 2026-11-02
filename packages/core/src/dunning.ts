@@ -94,6 +94,15 @@ export function buildDunningReminder(rawScope: unknown, rawInvoice: unknown, raw
   return Object.freeze({ ...content, contentHash: sha256(JSON.stringify(content)) });
 }
 export type DunningReminder = ReturnType<typeof buildDunningReminder>;
+/** Synthetic persisted preview response, shared with the browser without database imports. */
+export type DunningWorkbenchView = Omit<ReturnType<typeof unpaidInvoiceWorkbench>, "invoices"> & {
+  invoices: (ReturnType<typeof unpaidInvoiceWorkbench>["invoices"][number] & {
+    snapshotHash: string;
+    decision: { decisionId: string; snapshotHash: string; expiresAt: string;
+      status: "pending" | "approved"; executable: false } | null;
+    reminder: DunningReminder | null;
+  })[];
+};
 const approvalV1 = z.object({
   version: z.literal("dunning-approval.v1"), decisionId: id, tenantId: id, jobId: id, invoiceId: id,
   action: z.literal("dunning.reminder.preview"), status: z.enum(["approved", "pending", "dismissed", "revoked", "expired", "superseded"]),

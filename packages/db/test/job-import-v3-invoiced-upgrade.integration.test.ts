@@ -42,6 +42,10 @@ it("CH-5 0362 preserves existing job rows and v1 baseline fields, then repeats m
   // 0328 additionally admits live v3 imports through the checked writer. This
   // upgrade still preserves the original historical cap exactly.
   expect((await f.admin.query("SELECT recovery_cap_pence::int cap FROM app.job WHERE id=$1", [legacyV3])).rows[0].cap).toBe(1500);
+  await expect(workTenant(f.admin, practice.auth.context.tenantId, db => db.query(
+    "UPDATE app.job SET recovery_cap_pence=NULL WHERE tenant_id=$1 AND id=$2",
+    [practice.auth.context.tenantId, legacyV3],
+  ))).rejects.toThrow("IMPORT_RECORD_REQUIRED");
   const posture = (await f.admin.query(`SELECT relrowsecurity,relforcerowsecurity,
     has_table_privilege('jobguard_runtime',oid,'SELECT') readable,
     has_table_privilege('jobguard_runtime',oid,'INSERT') insertable,

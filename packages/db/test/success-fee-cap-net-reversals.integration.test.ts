@@ -9,25 +9,33 @@ import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(); }, 120000);
 afterAll(async () => { if (f) await closeFinalCheckFixture(f); });
-const sql = readFileSync(new URL("../migrations/0547_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8");
-const predicate = sql.match(/  IF (\(SELECT coalesce\(sum\(greatest[\s\S]*?)\n  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'/u)![1]!
+const capacityPredicate = (sql: string) => sql.match(/  IF (\(SELECT coalesce\(sum\(greatest[\s\S]*?)\n  THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'/u)![1]!
  .replaceAll("app.recovery_case_allocation_reversal", "reversals")
  .replaceAll("app.recovery_case_allocation", "allocations")
  .replaceAll("landing.case_id", "'case-a'").replaceAll("landing.payment_id", "'payment-a'")
  .replaceAll("rc.claim_pence", "$3::bigint").replaceAll("eligibility.eligible_net_pence", "$4::bigint")
  .replaceAll("movement.gross_pence", "$5::bigint")
  .replace(/\bca.tenant_id=t\b/gu, "ca.tenant_id='tenant-a'")
- .replace(/\bca.job_id=p_job\b/gu, "ca.job_id='job-a'");
+ .replace(/\bca.job_id=(?:p_job|j)\b/gu, "ca.job_id='job-a'");
+const predicates = [
+ capacityPredicate(readFileSync(new URL("../migrations/0547_success_fee_cap_nets_reversals.sql", import.meta.url), "utf8")),
+ capacityPredicate(readFileSync(new URL("../migrations/0548_fee_invalid_proof_reduction.sql", import.meta.url), "utf8").split("FUNCTION app.success_fee_withheld_source")[1]!),
+];
 type Allocation = { id: string; tenant_id: string; job_id: string; case_id: string; payment_id: string; eligible_net_pence: number; gross_pence: number };
 type Reversal = Pick<Allocation, "tenant_id" | "job_id" | "eligible_net_pence" | "gross_pence"> & { allocation_id: string };
 const allocation = (id: string, net = 100, gross = 120): Allocation => ({ id, tenant_id: "tenant-a", job_id: "job-a", case_id: "case-a", payment_id: "payment-a", eligible_net_pence: net, gross_pence: gross });
 const reversal = (net = 100, gross = 120): Reversal => ({ allocation_id: "old", tenant_id: "tenant-a", job_id: "job-a", eligible_net_pence: net, gross_pence: gross });
 async function exceeds(allocations: Allocation[], reversals: Reversal[], claim = 100, eligible = 100, movement = 120) {
+ const results = [];
+ for (const predicate of predicates) {
  const result = await f.admin.query(`WITH
  allocations AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS a(id text,tenant_id text,job_id text,case_id text,payment_id text,eligible_net_pence bigint,gross_pence bigint)),
  reversals AS (SELECT * FROM jsonb_to_recordset($2::jsonb) AS r(allocation_id text,tenant_id text,job_id text,eligible_net_pence bigint,gross_pence bigint))
  SELECT ${predicate} AS excess`, [JSON.stringify(allocations), JSON.stringify(reversals), claim, eligible, movement]);
- return result.rows[0].excess;
+ results.push(result.rows[0].excess);
+ }
+ expect(results[1], "statement source must use the writer's net capacity").toBe(results[0]);
+ return results[0];
 }
 it("allows full reversal followed by equal reallocation", async () => {
  expect(await exceeds([allocation("old"), allocation("new")], [reversal()])).toBe(false);

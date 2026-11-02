@@ -1,5 +1,5 @@
 M5-4 dark merchant ingestion: extends the existing synthetic intake channel check with
-`fixture_portal` and adds an optional tenant/job-qualified canonical-document link. Intake records retain the observed source schema
+`fixture_portal` and adds an optional tenant/job-qualified canonical-document link on the intake record, preserving the fingerprinted supplier_document row shape. Intake records retain the observed source schema
 version for new merchant arrivals; historical source versions remain NULL.
 No backfill: existing records keep NULL links and all prior bytes/columns are preserved.
 No new tables, privileges, policies, triggers, financial writes or external destinations.
