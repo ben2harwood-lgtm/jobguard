@@ -3,12 +3,12 @@ import { expect, it } from "vitest";
 import { parseInventory } from "./lp-0-catalog.js";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 
-it("loads 0562 independently of main's missing 0510 proof and preserves existing allowances", () => {
+it("loads 0562 alongside main's proofs and preserves existing allowances", () => {
   const directory = new URL("./migration-proofs/", import.meta.url);
-  const legacy: string[] = JSON.parse(readFileSync(new URL("legacy-migrations.json", directory), "utf8"));
-  // Exercise discovery against the complete legacy list plus this branch's one migration.
-  // The default loader still fails closed for 0510 until #502 supplies main's entry.
-  const { proofs } = loadMigrationProofs(directory.pathname, [...legacy, "0562_customer_evidence_approval_guard.sql"]);
+  // Validate the complete migration set, then exercise this branch's isolated allowances.
+  const proofs = loadMigrationProofs(directory.pathname).proofs.filter(
+    proof => proof.migration === "0562_customer_evidence_approval_guard.sql",
+  );
   expect(proofs).toHaveLength(1);
   const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));
   const combined = parseInventory(combineLp0(baseline, proofs));
