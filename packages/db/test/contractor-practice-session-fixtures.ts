@@ -15,9 +15,9 @@ export async function seedHomeOwner(c: Cluster) {
  await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
 }
 /** Reuses the merged cluster's pre-0122 setup, then applies only predecessors of the named migration. */
-export async function startBeforeMigration(name = migrationName) {
+export async function startBeforeMigration(name = migrationName, database?: string) {
  if (name < "0122_extra_origin_persistence.sql") throw new Error("This starter requires a migration at or after 0122");
- const c = await cluster(true);
+ const c = await cluster(true, database);
  for (const url of MIGRATION_URLS.filter(url => url.pathname.split("/").at(-1)! < name)) {
   const entry = url.pathname.split("/").at(-1)!;
   if ((await c.admin.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [entry])).rowCount) continue;

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-9-guard-live": {
+      "branches": [
+        "codex/sandbox/mon-9-guard-live"
+      ],
+      "note": "RED MON-9 guard repair; NOPR=1, router commits and pushes.",
+      "allow": [
+        "packages/db/migration-notes/0609_managed_recovery_pursuit_guard.md",
+        "packages/db/migrations/0609_managed_recovery_pursuit_guard.sql",
+        "packages/db/test/contractor-practice-session-fixtures.ts",
+        "packages/db/test/extra-fixtures.ts",
+        "packages/db/test/managed-recovery-guard-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0609_managed_recovery_pursuit_guard.proof.json"
+      ]
+    }
+  }
+}
