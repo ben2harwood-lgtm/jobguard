@@ -155,4 +155,5 @@ export * from "./retention-balances.js";
 export * from "./vat-treatments.js";
 export * from "./cis-deductions.js";
 
+export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
