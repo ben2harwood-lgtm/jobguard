@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-16-dunning": {
+      "branches": ["codex/sandbox/m4-16-dunning"],
+      "note": "M4-16 RED dark core only; no migration, provider, scheduler or live execution.",
+      "allow": [
+        "packages/core/src/dunning.ts",
+        "packages/core/src/dunning.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/dunning-dark-v1.md"
+      ]
+    }
+  }
+}
