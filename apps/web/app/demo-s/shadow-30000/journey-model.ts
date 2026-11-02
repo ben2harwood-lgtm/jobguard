@@ -9,7 +9,7 @@ const uuid = z.string().uuid();
 export const shadowCaptureText = demoInputs.recipes.find(recipe => recipe.family === "shadow-30000")!.source.text;
 export const shadowReportV1 = z.object({
  version: z.literal("shadow-demo-report.v2"), environment: z.literal("synthetic_demo"),
- jobId: uuid, status: z.literal("incomplete"), realExternalActions: z.literal(0),
+ jobId: uuid, status: z.enum(["incomplete", "complete"]), realExternalActions: z.literal(0),
  customerApproval: z.object({
   state: z.enum(["not_ready_yet", "awaiting_customer", "approved"]),
   approvals: z.array(z.object({ variationId: uuid, approvedAt: z.string().datetime(), method: z.literal("customer_portal") }).strict()),
@@ -43,6 +43,8 @@ export function parseShadowReport(raw: unknown, jobId: string): ShadowReport {
  for (const { assessment, illustrationAsAssessed } of report.assessments ?? []) {
   if (assessment.jobId !== jobId || assessment.lockId !== report.account.lock?.id || illustrationAsAssessed.assessmentId !== assessment.assessmentId) throw new Error("Wrong attribution report");
  }
+ // The server decides completion from saved records; refuse a report that contradicts its own parts.
+ if (report.status === "complete" && (report.customerApproval.state !== "approved" || report.value.status !== "mapped" || report.invoices.invoices.length !== 1 || !report.packs?.length)) throw new Error("Wrong completion report");
  return report;
 }
 export const shadowSteps = [
@@ -51,8 +53,8 @@ export const shadowSteps = [
  "Add the fictional supplier documents, completion photos and diary note. Ordinary findings stay hidden until lock; safety disclosures must still surface.",
  "Build the final account from the frozen baseline and approved captures. Add £400 in final review, then rebuild: £33,600 net.",
  "Finish proof, record all scope dispositions, accept the terms and complete the final account. This creates the immutable lock.",
- "Run and load the real Final Check. Confirm the £500 and £300 missing extras as drafts and price them. Ask the customer to approve both extras through the customer portal.",
- "After customer approval is available: issue one £34,400 net / £41,280 gross invoice and verify its settled payment. These are target figures, not a saved invoice or settlement.",
+ "Run and load the real Final Check. Confirm the £500 and £300 missing extras as drafts and price them. Ask the customer to approve both exact priced revisions through the customer portal; only saved customer responses count as approval.",
+ "After recorded customer approval: issue one £34,400 net / £41,280 gross invoice and verify its settled payment. These are target figures, not a saved invoice or settlement.",
  "After exact landing allocations and SV-6 assessment: target Q £800, proposed fee £80, yours £720 before VAT and tax. An assessment illustration is not an approved fee or posting.",
  "The £3,200 logged extras plus £400 at review are £3,600 of builder captures, carrying £0 recovery fee. The evidence pack and value report must link the actual source chain.",
 ] as const;
