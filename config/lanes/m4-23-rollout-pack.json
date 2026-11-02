@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-rollout-pack": {
+      "branches": [
+        "codex/sandbox/m4-23-rollout-pack"
+      ],
+      "note": "AMBER M4-23 rollout procedures and offline fixtures only; enables nothing; no migration; NOPR=1.",
+      "allow": [
+        "docs/operations/live-smoke-test-procedure.md",
+        "docs/operations/rollback-disable-plan.md",
+        "docs/operations/rollout-checklist.md",
+        "packages/config/test/fixtures/release-record.g4-c.example.json",
+        "packages/config/test/fixtures/release-record.g4-s.example.json",
+        "tools/release-inventory.test.mjs"
+      ]
+    }
+  }
+}
