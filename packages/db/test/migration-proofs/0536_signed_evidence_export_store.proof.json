@@ -1,5 +1,5 @@
 {
-  "migration": "0583_signed_evidence_export_store.sql",
+  "migration": "0536_signed_evidence_export_store.sql",
   "lp0": [
     {
       "section": "entries",

@@ -23,7 +23,7 @@ beforeAll(async () => {
   await postgres.initialise(); await postgres.start();
   const connection = { host: "127.0.0.1", port, database: "postgres", password: "synthetic" };
   admin = new Pool({ ...connection, user: "postgres", max: 1 });
-  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0583_signed_evidence_export_store.sql"));
+  const own = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0536_signed_evidence_export_store.sql"));
   expect(own).toBeGreaterThan(0);
   // Upgrade from every predecessor; real migrator then proves fresh successor registration and replay.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");

@@ -9,7 +9,7 @@ const token = "fictional-connector-database-token-0001";
 const tokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const work = { version: "connector-input.v1", eventId: "fixture:event", kind: "work_order", subject: "fixture:order", revision: 1, document: "fixture:document" };
 const billing = { version: "connector-input.v1", eventId: "fixture:billing", kind: "billing_status", subject: "fixture:invoice", revision: 1, status: "paid" };
-const own = "0574_connector_intake.sql";
+const own = "0534_connector_intake.sql";
 let f: WorkFixture;
 async function asConnector<T>(run: (db: PoolClient) => Promise<T>) {
   const db = await f.runtime.connect();
