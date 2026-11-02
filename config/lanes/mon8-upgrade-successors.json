@@ -6,7 +6,7 @@
         "codex/sandbox/mon8-upgrade-successors"
       ],
       "receipt": "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-      "note": "MON-8 RED authorized fresh try (1 November): preserve entitlement refusal; seed a properly entitled operative for customer-signin issuer coverage; retain both merge sides and rename migrations to 0558/0559 without changing SQL bytes. Router owns Git merge ancestry, commit/push, CI and exact-head RED review.",
+      "note": "MON-8 RED PR #302 catch-up and stem-only renumber to 0616/0617. Preserve the exact merged-main union and latest main LP-5b site-visit effect bindings. Router stages the resolution, commits, pushes and runs CI and exact-head RED review.",
       "allow": [
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor-retained-read.application.test.ts",
@@ -37,8 +37,8 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/plan-entitlements-v1.md",
         "docs/verdicts/MON8-UPGRADE-SUCCESSORS/BUILDER_RECEIPT.md",
-        "packages/db/migrations/0558_server_plan_entitlements.sql",
-        "packages/db/migrations/0559_contractor_feature_guards.sql",
+        "packages/db/migrations/0616_server_plan_entitlements.sql",
+        "packages/db/migrations/0617_contractor_feature_guards.sql",
         "packages/db/src/audit-export-repository.ts",
         "packages/db/src/contractor-entitlement-authority-repository.ts",
         "packages/db/src/enterprise-identity-repository.ts",

@@ -1155,7 +1155,7 @@ and all 385 main migration/lane files remain present and unchanged. MERGE_HEAD
 matches the already-fetched origin/main. No fetch or Git write was run.
 
 Renamed this branch's 0408/0409 migrations to
-0558_server_plan_entitlements.sql and 0559_contractor_feature_guards.sql.
+0616_server_plan_entitlements.sql and 0617_contractor_feature_guards.sql.
 Both files compare byte-for-byte with their starting HEAD versions. Updated active
 filename consumers and the lane. No main migration or
 `docs/contracts/lp-downstream-effects-v1.md` was edited. The filesystem diff against
@@ -1198,3 +1198,115 @@ The Git index necessarily still reports unmerged entries until the router stages
 these resolved contents. Neither demo has been claimed to pass.
 
 Commit message: /tmp/mon8-upgrade-successors-20261101T142221Z-commit-msg.txt.
+
+## 1 November 16:56 CI repair — stopped at explicit privilege boundary
+
+DO NOT COMMIT this repair as ready. Ben's order expressly says to stop if the
+provisioning cannot be completed without giving runtime a status writer.
+No agreement writer, migration SQL change, entitlement relaxation, backfill,
+credential plumbing, test skip or exception was introduced in this attempt.
+
+Confirmed cause of the reported demo blocker:
+- apps/web/app/api/contractor/route.ts composes ContractorApplication with only
+  syntheticPool(); that pool uses DATABASE_URL. ContractorRepository.startPractice
+  (packages/db/src/contractor-repository.ts:37) has only that runtime pool.
+- apps/web/app/lib/northside-server.ts:18 returns the same runtime pool;
+  apps/web/app/api/northside/route.ts:27 passes it to seedNorthsideDemo.
+- packages/db/migrations/0198_contractor_entitlement_authority.sql:16-19 forces
+  RLS with a migration-role-only policy and revokes runtime/infrastructure table
+  access. The test fixture uses a separately supplied privileged admin pool,
+  tenant-local context and the exclusive seed-54 lock, but neither demo entry
+  point has that privileged dependency or a trusted provisioning channel.
+- .env.example:37 reserves MIGRATION_DATABASE_URL for trusted bootstrap only.
+  Moving that credential into the web/application runtime would cross that
+  boundary and give runtime owner-level authority. Direct runtime INSERT would
+  require widening grants/RLS; a runtime-executable SECURITY DEFINER insert,
+  including insertion inside the runtime-callable practice generator or
+  northside_register, would allow runtime to trigger status activation. These
+  are not an owner-only external fixture/generator step under the retained rule.
+- One static bootstrap seed cannot cover the fresh tenant minted for every new
+  practice session. A working solution needs a genuinely separate trusted
+  generator/provisioner lifecycle for those dynamic tenants. Such a channel is
+  not present in the inspected source. Adding speculative provisioning machinery
+  or silently assigning owner credentials to runtime is not this repair.
+
+The supplied trace file
+/Users/benharwood/.local/share/full-steam/codex-runs/mon8-upgrade-successors-ci-traces-1656.txt
+is exactly 18 bytes: two `=== job ` headers. It contains no failing test names,
+assertion diffs or stacks. Therefore no claim is made to have diagnosed or fixed
+unsupplied CI failures. The described demo provisioning defect is source-confirmed;
+ENT-11b has not been run or claimed to pass.
+
+Completed the independent merge housekeeping already requested: resolved the
+contractor-entitlement-upgrade conflict by retaining HEAD's predecessor/data
+preservation and replay assertions and every main successor expectation row.
+No textual conflict markers remain in that file; its syntax/braces parse cleanly.
+MERGE_HEAD and origin/main both resolve to
+7f6c8f95001f648ef648a1b82b05f96802b1f527. No fetch or Git write was run; the
+router must stage the resolution because this sandbox's index is read-only.
+
+Checks this attempt:
+- Installed Node/Vitest in packages/db, `node node_modules/vitest/vitest.mjs run
+  --maxWorkers=2 test/mon8-combined-migration.test.ts
+  src/plan-entitlement-service.test.ts test/lp-0-catalog.test.ts`: 42 tests passed.
+- TypeScript parser: resolved contractor upgrade test syntax/braces valid.
+- 0558/0559 SQL and docs/contracts/lp-downstream-effects-v1.md byte-identical
+  to starting HEAD. All main explicit successor rows retained.
+- git diff --check: passed.
+PostgreSQL/browser suites not run, as instructed. Missing/suspended/inactive
+refusals and historical protections are unchanged, not newly DB-verified.
+
+Handoff: /tmp/mon8-upgrade-successors-20261101T165603Z-commit-msg.txt contains
+`do not commit`, with the exact blocker above. No ready completion is claimed.
+
+
+## 2 November 22:36 issued catch-up and renumber — READY (RED)
+
+This handoff supersedes the historical do-not-commit handoff above for this
+catch-up-only order. No repair, new product behavior or test expectation change
+was introduced. HEAD is f998d5943413557c025458da05686a38648f1672;
+launcher merge parent is 7f6c8f95001f648ef648a1b82b05f96802b1f527.
+The unmerged index entry is intentionally left for the router to stage.
+
+- Renumbered the two branch migration filename stems to
+  0616_server_plan_entitlements and 0617_contractor_feature_guards, including
+  every tracked lookup, test, contract, receipt and lane reference.
+  No bare-digit substitutions.
+- The contractor upgrade resolution is exactly reviewed HEAD plus incoming
+  main's platform_fee_attempt, platform_fee_attempt_event and
+  platform_fee_collection_command empty-successor entries. All incoming explicit
+  empty-table assertions and reviewed predecessor/replay assertions remain.
+- Inspected the latest main definition of every recreated existing routine.
+  Existing origin/main (no fetch) is 42bb496ce052bc91a28fdc58b2bc4496ff25063c,
+  newer than MERGE_HEAD. Carried its 0522_lp5b_writers.sql lp5_bind_effect calls
+  in app.ent3b_start_visit and app.ent3b_complete_visit. These two bodies are
+  exact latest-main bodies plus the existing MON-8 site_origin_capture guard.
+  Other recreated bodies retain the existing MON-8 changes on latest main.
+  No migration already present in the incoming main was edited.
+- Refreshed the lane's exact changed-file list against integrated main
+  (MERGE_HEAD), excluding config/lanes/ itself. No new reporting machinery.
+
+Actual local checks:
+- From packages/db: node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/mon8-combined-migration.test.ts src/plan-entitlement-service.test.ts
+  test/lp-0-catalog.test.ts — 3 files, 42 tests passed, Vitest 4.1.12.
+- node packages/db/node_modules/typescript/bin/tsc -p
+  packages/db/tsconfig.json --noEmit — passed.
+- node packages/db/node_modules/typescript/bin/tsc --noEmit --strict
+  --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck
+  --target ES2023 --module NodeNext --moduleResolution NodeNext
+  packages/db/test/contractor-entitlement-upgrade.integration.test.ts
+  packages/db/test/server-entitlement-upgrade.integration.test.ts
+  packages/db/test/operative-entitlements-upgrade.integration.test.ts — passed.
+- Deterministic byte/source assertions: all incoming main migrations unchanged;
+  upgrade resolution exactly the three main entries above; first renamed SQL
+  byte-identical to reviewed HEAD, second differs only by the two carried
+  latest-main LP-5b calls — passed.
+- git diff --check and tracked old-stem search — passed.
+
+PostgreSQL and browser suites were not run: this sandbox cannot start PostgreSQL
+or bind localhost. GitHub CI must run them after the router pushes. The historical
+RED PASS applies to f998d594 only; this handoff does not claim a fresh independent
+review. Current main must supply the LP-5b migration before the carried visit
+bodies execute (it is already on observed origin/main, beyond MERGE_HEAD).
+No Git write, fetch, install, provider action or release was performed.

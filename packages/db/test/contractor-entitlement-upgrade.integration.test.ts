@@ -153,6 +153,10 @@ it("actual catalogs retain least privilege",async()=>{
 });
 // Preserve the union of main's explicit empty successor expectations and the general proof.
 const emptySuccessors=[
+ "app.platform_fee_attempt",
+ "app.platform_fee_attempt_event",
+ "app.platform_fee_collection_command",
+
  "app.tenant_key_version",
  "app.tenant_key_revocation",
  "app.recovery_timeline_run",

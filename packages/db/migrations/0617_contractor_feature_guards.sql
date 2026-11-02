@@ -596,7 +596,7 @@ BEGIN
  IF order_id IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  -- No time is supplied: started_at is the column default.
  INSERT INTO app.site_visit(tenant_id,id,job_id,work_order_id,membership_id) VALUES(tenant,new_visit,p_job,order_id,p_actor);
- RETURN new_visit;
+ PERFORM app.lp5_bind_effect(p_command,NULL,'site_visit',jsonb_build_object('visitId',new_visit)); RETURN new_visit;
 END $$;
 CREATE OR REPLACE FUNCTION app.ent3b_complete_visit(p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_answer text) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -625,7 +625,7 @@ BEGIN
  UPDATE app.site_visit SET completed_at=recorded WHERE tenant_id=tenant AND id=p_visit;
  INSERT INTO app.closeout_answer(tenant_id,id,job_id,work_order_id,site_visit_id,membership_id,question_version,answer,command_id,server_recorded_at)
   VALUES(tenant,answer_id,p_job,visit_row.work_order_id,p_visit,p_actor,'closeout-question.v1',p_answer,p_command,recorded);
- RETURN answer_id;
+ PERFORM app.lp5_bind_effect(p_command,NULL,'site_visit',jsonb_build_object('visitId',p_visit)); RETURN answer_id;
 END $$;
 CREATE OR REPLACE FUNCTION app.cb_authority(p_session uuid,p_job uuid,p_write boolean) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
