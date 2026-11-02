@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { Pool } from "pg";
 
@@ -29,6 +30,15 @@ export async function freePort(base: number, span: number): Promise<number> {
 export async function closeTestPools(...pools: Array<Pool | undefined>): Promise<void> {
   await Promise.all(pools.map(async (pool) => pool?.end()));
   await new Promise<void>((resolve) => setTimeout(resolve, 25));
+}
+
+/** Close a practice database's pools, stop it and remove its temp folder, even if an earlier step fails. */
+export async function closeTestDatabase(postgres: { stop(): Promise<void> }, directory: string, ...pools: Array<Pool | undefined>): Promise<void> {
+  try { await closeTestPools(...pools); }
+  finally {
+    try { await postgres.stop(); }
+    finally { await rm(directory, { recursive: true, force: true }); }
+  }
 }
 
 /** Earlier suites exercise other contracts with generated jobs. Supply CH-3a's

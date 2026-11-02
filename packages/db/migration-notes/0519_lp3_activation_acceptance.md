@@ -215,3 +215,41 @@ money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF checks passed.
 PostgreSQL and browser suites were not run in this sandbox; GitHub CI must run
 them after router push. The router must stage the resolved files and both
 renames to clear the read-only pending merge index before committing.
+
+## 2 November 2026 catch-up for PR #414 (0519 reservation)
+
+Resolved the launcher's pending main merge, preserving main and LP-3's reviewed
+shared-list edits. Removed five identical duplicate routine identities from the
+LP-0 union; final inventory has 70 groups, 1,480 unique privilege entries,
+45 authority paths and 562 unique routines. Main's new records remain intact;
+the four reviewed LP-3 legacy-route withdrawals remain in place.
+
+Renamed the migration and this note from 0514 to 0519 and updated current lane,
+LP-0 source/description and upgrade lookup references. Registered 0519 in order
+on the legacy migration path. Historical dated notes above retain their numbers.
+SQL bytes remain SHA-256
+8d01db992b67342344eddca985a35a4889ba964469854128188a0306f7e3702e.
+All 183 main migration files and 238 main lane files are byte-identical to the
+fetched origin/main, through 0518. The downstream-effects contract is unchanged.
+
+Local checks using installed package-local binaries from packages/db:
+- ./node_modules/.bin/tsc -p tsconfig.json --noEmit: PASS.
+- ./node_modules/.bin/vitest run --maxWorkers=2 src/lp3-operation.test.ts
+  src/lp3-mutations.test.ts test/lp-0-catalog.test.ts: 88 tests passed.
+- ./node_modules/.bin/vitest run --maxWorkers=2
+  test/migration-proof-loader.test.ts: 26 tests passed.
+Core purity, money arithmetic, commercial boundary and PL/pgSQL CASE-in-IF
+checks passed. Explicit inventory union/uniqueness and unchanged-main-file
+comparisons passed. No tests were weakened; no new product behavior was added.
+
+PostgreSQL/migration execution and browser suites were not run because this
+sandbox cannot start PostgreSQL or bind localhost. GitHub CI must run them after
+the router pushes. RED exact-head independent review remains a merge gate.
+The router must stage the resolved files and both renames to finish the pending
+merge; this session did not write Git metadata, commit, fetch or push.
+Final filesystem changed-path checks using the exported lane and migration-order
+validators passed against origin/main; git diff --check passed. Git's unresolved
+index still requires router staging, as expected in the read-only sandbox.
+An initial overly broad filesystem lane comparison hit Node's output-buffer
+limit while reading an unrelated large reports input. Replaced it with the
+successful changed-path-only comparison above; no repository checks changed.
