@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "approval-error-display": {
+      "branches": ["codex/sandbox/approval-error-display"],
+      "note": "RED: subscription approval/execution response display; no money calculations, authorization or retry changes.",
+      "allow": [
+        "apps/api/src/subscription.application.ts",
+        "apps/api/src/subscription.application.test.ts",
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/e2e/approval-error-display.spec.ts"
+      ]
+    }
+  }
+}

@@ -26,7 +26,7 @@ test("fake collection stays pending through redirects and unknown outcomes, then
     expect(c).toMatchObject({statementId:corrected?allocation:id,statementHash:record(corrected).documentHash,amountPence:corrected?25000:28200});
     state="pending";kind=c.action==="collect"?"collection":"refund";attemptId=randomUUID();
    }else if(c.action==="unknown")state="outcome_unknown";
-   else if(c.action==="settle"){state="settled";if(kind==="collection")settled=28200;else refunded=25000;}
+   else expect(["redirect","unknown"]).toContain(c.action);
    await route.fulfill({json:{}});return;
   }
   await route.fulfill({json:{version:"simulation-fee-collection-view.v1",jobId,
@@ -60,7 +60,10 @@ test("fake collection stays pending through redirects and unknown outcomes, then
  await expect(money.getByTestId("fee-settled-principal")).toHaveText("£0.00");
  await money.getByRole("button",{name:"Simulate unknown outcome",exact:true}).click();
  await expect(money.getByRole("button",{name:"Approve simulated collection of £282.00 principal",exact:true})).toBeDisabled();
- await money.getByRole("button",{name:"Reconcile fake settled event",exact:true}).click();
+ await expect(money.getByRole("button",{name:/Reconcile fake/})).toHaveCount(0);
+ // The fake rail reports a terminal fact outside the builder transport.
+ state="settled";if(kind==="collection")settled=28200;else refunded=25000;
+ await money.getByRole("button",{name:"Refresh collection records",exact:true}).click();
  await expect(money.getByTestId("fee-settled-principal")).toHaveText("£282.00");
  await expect(money.getByTestId("fee-outstanding-principal")).toHaveText("£0.00");
  await panel.getByRole("button",{name:"Save current simulation statement or correction"}).click();
@@ -68,7 +71,10 @@ test("fake collection stays pending through redirects and unknown outcomes, then
  await expect(panel.locator("article").first().getByText(originalHash,{exact:true})).toBeVisible();
  await expect(money.getByTestId("fee-refund-due")).toHaveText("£250.00");
  await money.getByRole("button",{name:"Approve simulated refund of £250.00 principal",exact:true}).click();
- await money.getByRole("button",{name:"Reconcile fake settled event",exact:true}).click();
+ await expect(money.getByRole("button",{name:/Reconcile fake/})).toHaveCount(0);
+ // The fake rail reports a terminal fact outside the builder transport.
+ state="settled";if(kind==="collection")settled=28200;else refunded=25000;
+ await money.getByRole("button",{name:"Refresh collection records",exact:true}).click();
  await expect(money.getByTestId("fee-refunded-principal")).toHaveText("£250.00");
  await expect(money.getByTestId("fee-retained-principal")).toHaveText("£32.00");
 });

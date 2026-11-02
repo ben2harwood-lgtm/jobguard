@@ -9,7 +9,7 @@ import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
 
 let f:FinalCheckFixture;
 const environment=process.env.JOBGUARD_ENV;
-const target="0384_receipt_line_command_producer.sql";
+const target="0398_receipt_line_command_producer.sql";
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{
  await closeFinalCheckFixture(f);
@@ -39,7 +39,7 @@ it("populated F5/F7 survive 0377, old commands replay, and v1 writes after upgra
   const p={version:"receipt-line-facts-command.v1",action:"approve",commandId:x.produced.commandId,reviewId:x.produced.reviewId,approvalHash:x.produced.approvalHash,expectedSourceRevision:x.produced.sourceRevision};
   expect(await x.producer.command(x.context,x.actor,x.auth.digest,x.jobId,p)).toEqual({...x.produced,replayed:true});
  }
- const enabled=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1");
+ const enabled=await realReceiptFixture(f,"F7",undefined,undefined,"receipt-line-allocation-command.v1");
  expect(enabled.fact.gross).toEqual({numerator:"96000",denominator:"1"});
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1",[target])).rows).toEqual([{n:1}]);
 },120000);

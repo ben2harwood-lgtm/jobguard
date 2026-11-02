@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-j3-driver": {
+      "branches": [
+        "codex/sandbox/demo-j3-driver"
+      ],
+      "note": "RED DEMO-S DEMO-J3 part 2 dark source recipe, built on PR #410. Sources through real routes; pre-lock detector invoked by test driver; scheduled Final Check; no fabricated customer approval, settlement or attribution. No migration. Serialize overlapping part-1 paths.",
+      "allow": [
+        "apps/api/src/proof/contracts.ts",
+        "apps/api/src/proof/proof.application.test.ts",
+        "apps/api/src/proof/proof.application.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/helpers/shadow-source-recipe.ts",
+        "docs/contracts/small-builder-demo-run-v1.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/src/practice-photo-observation.test.ts",
+        "packages/db/src/practice-photo-observation.ts",
+        "packages/db/src/practice-proof-image.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/src/shadow-observation-reader.ts"
+      ]
+    }
+  }
+}

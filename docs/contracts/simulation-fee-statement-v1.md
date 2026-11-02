@@ -17,7 +17,11 @@ statement identity/hash are included in the document's SHA-256.
 
 Sources come from approved M4-9-S derivations and the existing SV-6 current-source
 validator. The statement does not allocate receipts or qualify new positive
-principal. It cannot expand the latest posted entitlement. The snapshot also binds immutable payment-reversal, customer-adjustment and
+principal. It cannot expand the latest posted entitlement. Each live source is also
+bounded by its own immutable reviewed remaining principal: exact cross-multiplication
+compares the fractions before any fee rounding. Growth returns
+`SUCCESS_FEE_SOURCE_CHANGED`, requiring a new source review/posting rather than
+allowing another source's reversal to offset unreviewed principal. The snapshot also binds immutable payment-reversal, customer-adjustment and
 evidence-invalidation IDs, and the latest stored assessment identity. Lost eligibility is
 recorded as zero qualifying principal. A reversal can reduce the documentary
 balance before M4-9-S's negative journal execution is available; it does not
@@ -42,8 +46,22 @@ the same snapshot return one document. Original documents cannot be updated,
 deleted or truncated, and runtime/infrastructure/shadow roles have no table
 access. All references are tenant-qualified; the original link also binds job.
 
-Approval is bound to the saved document hash, recipient statement, absolute GBP document amount (the signed delta remains hash-bound),
-posting revision, policy and session/membership expiry. Approval of an old hash,
+Approval is bound to the saved document hash, recipient statement, GBP amount
+magnitude, direction, posting revision, policy and session/membership expiry.
+Negative documentary deltas use `success_fee.statement_correction_approve` on
+both the Decision and authorization; nonnegative deltas use
+`success_fee.statement_approve`. This preserves the shared nonnegative amount
+invariant while recording direction explicitly. Neither action authorizes
+collection, and a correction approval cannot substitute for a positive approval.
+
+After expiry, a fresh `approve` command can create a new Decision, approved
+resolution and authorization for the same immutable statement. The original
+Decision/authorization remain unchanged. Every new approval command rechecks
+current sources and requires the latest document/hash. A still-current approval
+is reused; expired or revoked authorizations are never reused. Command replay
+returns its historical result, including an expired authorization ID, without
+renewing it. Execution must still check current expiry and exact action identity.
+Renewals append the normal approval audit event atomically with their new records. Approval of an old hash,
 old document or changed source snapshot fails. This is a statement approval
 (`success_fee.statement_approve`), never a collection authorization. M4-12-S
 must define/check its own exact collection authority and current eligibility.

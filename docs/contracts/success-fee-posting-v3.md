@@ -1,8 +1,8 @@
 # M4-9-S — synthetic success-fee posting
 
-## 30 October 2026: migration 0489 (recovery qualification and compensation)
+## Recovery qualification and compensation: 0511_success_fee_recovery_compensation.sql
 
-This slice extends 0392/0393. Approved builder-opened withheld-payment case
+This slice extends the merged catch-posting migrations. Approved builder-opened withheld-payment case
 receipts from the existing M4-8-S `recovery_case_allocation` writer join catch
 sources in the same cumulative calculation. Each source retains its allocation,
 case, authorization and a hash of current proof, eligibility, terms, movement
@@ -30,7 +30,8 @@ synthetic source fence apply to every direction. No external refund is executed.
 
 No table/routine ACL, role, RLS policy or runtime INSERT grant changes. The same
 six private tables and existing checked entrypoint signatures are retained, so
-LP-0, entitlement and SERIOUS-B5 expectation identities are unchanged; inventory
+LP-0 and tenancy retain main’s complete lists. SERIOUS-B5 records the replacement
+positive/compensation indexes and exclusive source indexes; inventory
 call metadata includes the existing payer-type helper. The source ledger adds a
 nullable, job-qualified recovery allocation reference alongside the existing
 catch references, with an exclusive shape constraint and per-derivation source
@@ -41,7 +42,7 @@ RED review remain required; this is synthetic principal only, without fee VAT,
 providers, collection or production activation.
 
 
-## 29 October 2026: migrations 0392–0393 (predecessor slice)
+## 29 October 2026: migrations 0405–0406 (current)
 
 The current stacked SV-6 review and M4-8-S v1 producer replace the historical
 source dependency described below for **catch-only positive/zero posting**.

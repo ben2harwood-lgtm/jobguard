@@ -9,7 +9,7 @@ import {realReceiptFixture} from "./stored-receipt-case-fixture.js";
 
 let f:FinalCheckFixture;
 const environment=process.env.JOBGUARD_ENV;
-const target="0401_receipt_source_job_binding.sql";
+const target="0386_receipt_source_job_binding.sql";
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{
  await closeFinalCheckFixture(f);

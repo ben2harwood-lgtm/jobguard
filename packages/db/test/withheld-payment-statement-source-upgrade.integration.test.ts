@@ -11,7 +11,7 @@ let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 it("0497 preserves genuine pre-upgrade withheld allocations and fee postings, and retains existing routine ACLs",async()=>{
- const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0497_withheld_payment_statement_source.sql'));expect(own).toBeGreaterThan(0);
+ const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0514_withheld_payment_statement_source.sql'));expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,own)){
   const name=url.pathname.split('/').at(-1)!,sql=await readFile(url,"utf8");
