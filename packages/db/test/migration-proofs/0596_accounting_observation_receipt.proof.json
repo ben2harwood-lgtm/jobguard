@@ -1,0 +1,104 @@
+{
+  "migration": "0596_accounting_observation_receipt.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.accounting_observation_receipt|jobguard_shadow|INSERT|-",
+        "group": "a-shadow-role-grants"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.accounting_observation_receipt|jobguard_shadow|SELECT|-",
+        "group": "a-shadow-role-grants"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.accounting_observation_receipt|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.accounting_observation_receipt|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.accounting_observation_receipt|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_shadow|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.accounting_observation_receipt|accounting_receipt_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_observation_receipt",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_observation_receipt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_shadow=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_observation_receipt_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_observation_receipt",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_shadow}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "accounting_observation_receipt",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

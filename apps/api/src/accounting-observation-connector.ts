@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { AccountingObservationReceiptRepository, VerifiedTenantContext } from "@jobguard/db";
 import { observationV1, parseObservation, type Observation } from "@jobguard/core";
 
 const scopeV1 = z.object({ tenantId: z.guid(), jobId: z.guid() }).strict();
@@ -26,7 +27,7 @@ export function readAccountingConnector(_request: unknown): never {
  * Output is the existing SV-7A observation contract, suitable for worker fixture sources.
  * Hashes cover the exact UTF-8 text. Caller-supplied fixture times are not live verification.
  */
-export function emitFakeAccountingObservations(rawScope: unknown, raw: unknown): readonly Observation[] {
+export function parseFakeAccountingObservations(rawScope: unknown, raw: unknown): readonly Observation[] {
   const scope = scopeV1.safeParse(rawScope), fixture = fixtureV1.safeParse(raw);
   if (!scope.success || !fixture.success) throw new AccountingConnectorError("INVALID_ACCOUNTING_FIXTURE");
   const versions = new Map<string, Observation>();
@@ -43,4 +44,16 @@ export function emitFakeAccountingObservations(rawScope: unknown, raw: unknown):
     versions.set(key, observation);
   }
   return Object.freeze([...versions.values()]);
+}
+
+/** Explicit synthetic worker seam; receipts survive new instances and process restarts. */
+export class FakeAccountingObservationEmitter {
+  constructor(private readonly receipts: AccountingObservationReceiptRepository) {}
+
+  async emit(context: VerifiedTenantContext, rawScope: unknown, raw: unknown): Promise<readonly Observation[]> {
+    const observations = parseFakeAccountingObservations(rawScope, raw);
+    const scope = scopeV1.parse(rawScope);
+    if (context.tenantId !== scope.tenantId) throw new AccountingConnectorError("ACCOUNTING_BINDING_MISMATCH");
+    return this.receipts.claim(context, observations);
+  }
 }
