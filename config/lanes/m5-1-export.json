@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-1-export": {
+      "branches": ["codex/sandbox/m5-1-export"],
+      "allow": [
+        "apps/api/src/accounting-export.contracts.ts",
+        "apps/api/src/accounting-export.sandbox.ts",
+        "apps/api/src/accounting-export.sandbox.test.ts",
+        "docs/contracts/accounting-export-v1.md"
+      ],
+      "note": "M5-1 RED dark synthetic accounting export slice; own lane file is implicitly permitted.",
+      "test": "apps/api/src/accounting-export.sandbox.test.ts"
+    }
+  }
+}
