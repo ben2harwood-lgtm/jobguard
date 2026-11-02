@@ -15,6 +15,8 @@ const text = z.string().min(1).max(2000).refine(v => v.trim().length > 0 && !v.i
 const fixtureId = z.string().regex(/^[a-z0-9][a-z0-9.-]{0,99}$/u);
 const lifecycle = z.enum(["live", "invoiced"]);
 
+export const jobImportSourceV1 = z.object({ version: z.literal("job-import-source.v1"), bindingId: uuid.nullable() }).strict();
+
 /** Public intent only. The path identifies the already-owned source job/party binding. */
 export const jobPartiesImportV3 = z.object({
   version: z.literal("job-parties-import.v3"), commandId: uuid, expectedBindingId: uuid,
