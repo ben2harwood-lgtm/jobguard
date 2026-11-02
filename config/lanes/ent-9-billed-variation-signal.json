@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-9-billed-variation-signal": {
+      "branches": ["codex/sandbox/ent-9-billed-variation-signal"],
+      "note": "ENT-9 RED advisory acceptance: reuse the existing ENT-9E stored read; prove non-variation silence, line-specific credits and unchanged business rows. No migration or authority change.",
+      "allow": [
+        "packages/db/test/enterprise-dashboard-signals.test.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}
