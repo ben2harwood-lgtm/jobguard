@@ -180,6 +180,51 @@ it("ENT-F8: office, client instructions and order lines contribute zero even whe
   const r = await derive(t), ref = reference(t, [{ approved: 50000, billed: 50000, paid: exact(50000), kind: "office_entry" }, { approved: 80000, billed: 80000, paid: exact(80000), kind: "client_instruction" }]);
   expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence); expect(r.qualifyingPrincipal).toEqual(exact(0)); expect((await post(t)).postings).toEqual([]);
 });
+for (const state of ["withdrawn", "rejected", "unexported", "unpaid"] as const) it(`ENT-7: ${state} amounts contribute zero through real commands, with a qualifying control`, async () => {
+  const t = await setup(), approvals = new ExtraApprovalRepository(c.runtime);
+  if (state === "withdrawn" || state === "rejected") {
+    const extraId = await raiseOn(c, t.w.w, t.w.s.jobId);
+    await approvals.priceExtra(t.w.ctx, t.w.w.members.surveyor.member, {
+      version: "price-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, netPence: 15000,
+    });
+    const request = await approvals.submitExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+      version: "submit-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId,
+    });
+    const result = state === "withdrawn"
+      ? await approvals.withdrawExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+        version: "withdraw-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, reasonCode: "not_done",
+      })
+      : await approvals.rejectExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+        ...approveInput({ jobId: t.w.s.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 15000 }, 0),
+        version: "reject-extra.v1", reasonCode: "price_not_agreed",
+      });
+    expect(result.state).toBe(state);
+  }
+  // setup's approved site extra is the control. Initially it is either unexported or billed but unpaid.
+  if (state === "unpaid") await invoice(t, { [t.w.s.extraId]: 15000 });
+  const r = await derive(t), ref = reference(t, [{ approved: 15000, billed: state === "unpaid" ? 15000 : 0, paid: exact(0) }]);
+  expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence);
+  expect(r.qualifyingPrincipal).toEqual(exact(0));
+  expect((await post(t)).postings).toEqual([]);
+
+  // Complete only the control's billing chain; withdrawn/rejected work must still contribute nothing.
+  if (state !== "unpaid") await invoice(t, { [t.w.s.extraId]: 15000 });
+  await pay(t, 15000);
+  const p = next(t.p), control = await derive(t, p);
+  expect(control.qualifyingPrincipal).toEqual(exact(15000));
+  expect(control.cumulativeFeePence).toBe(reference(t, [{ approved: 15000, billed: 15000, paid: exact(15000) }]).cumulativeFee.pence);
+  expect(control.contributions.map(x => x.extraId)).toEqual([t.w.s.extraId]);
+  expect((await post(t, p)).postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+});
+it("ENT-7: runtime SQL cannot insert fee contributions or journal headers", async () => {
+  const t = await setup();
+  await invoice(t, { [t.w.s.extraId]: 15000 }); await pay(t, 15000); await derive(t);
+  expect((await post(t)).postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+  for (const sql of [
+    "INSERT INTO app.enterprise_fee_contribution DEFAULT VALUES",
+    "INSERT INTO app.platform_enterprise_fee DEFAULT VALUES",
+  ]) await expect(withTenant(c.runtime, t.w.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+});
 it("ENT-F9: origins either side of a version boundary keep 10% / 8%; a later X credit stays under v1", async () => {
   const t = await setup();
   // Use the CI server's real instants instead of rewriting immutable origin timestamps to November dates.
