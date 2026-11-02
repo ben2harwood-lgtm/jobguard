@@ -9,7 +9,7 @@ const uuid = z.string().uuid();
 export const shadowCaptureText = demoInputs.recipes.find(recipe => recipe.family === "shadow-30000")!.source.text;
 export const shadowReportV1 = z.object({
  version: z.literal("shadow-demo-report.v2"), environment: z.literal("synthetic_demo"),
- jobId: uuid, status: z.literal("incomplete"), realExternalActions: z.literal(0),
+ jobId: uuid, status: z.enum(["incomplete", "complete"]), realExternalActions: z.literal(0),
  customerApproval: z.object({
   state: z.enum(["not_ready_yet", "awaiting_customer", "approved"]),
   approvals: z.array(z.object({ variationId: uuid, approvedAt: z.string().datetime(), method: z.literal("customer_portal") }).strict()),
@@ -43,6 +43,8 @@ export function parseShadowReport(raw: unknown, jobId: string): ShadowReport {
  for (const { assessment, illustrationAsAssessed } of report.assessments ?? []) {
   if (assessment.jobId !== jobId || assessment.lockId !== report.account.lock?.id || illustrationAsAssessed.assessmentId !== assessment.assessmentId) throw new Error("Wrong attribution report");
  }
+ // The server decides completion from saved records; refuse a report that contradicts its own parts.
+ if (report.status === "complete" && (report.customerApproval.state !== "approved" || report.value.status !== "mapped" || report.invoices.invoices.length !== 1 || !report.packs?.length)) throw new Error("Wrong completion report");
  return report;
 }
 export const shadowSteps = [

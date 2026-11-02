@@ -47,3 +47,16 @@ describe("issued simulation statement download",()=>{
   }
  });
 });
+it("preserves withheld allocation, payer receipt, approval and reversal links without a fabricated catch assessment",()=>{
+ const doc=fixture();
+ const source={caseId:id,recoveryAllocationId:id,paymentId:id,invoiceId:id,sourceHash:hash,reviewAuthorizationId:id,
+  remainingPrincipal:{numerator:"282000",denominator:"1"},reversalIds:[]};
+ const withheld={...doc,sourceSnapshot:{...doc.sourceSnapshot,sources:[source]}};
+ const digest=sha256(canonicalSimulationFeeStatementJson(withheld));
+ expect(downloadIssuedSimulationFeeStatement(withheld,digest).document.sourceSnapshot.sources).toEqual([source]);
+ for(const key of ["caseId","recoveryAllocationId","paymentId","invoiceId","reviewAuthorizationId","sourceHash","remainingPrincipal","reversalIds"]){
+  const invalid:Record<string,unknown>={...source};delete invalid[key];
+  expect(issuedSimulationFeeStatementV1.safeParse({...withheld,sourceSnapshot:{...withheld.sourceSnapshot,sources:[invalid]}}).success).toBe(false);
+ }
+ expect(issuedSimulationFeeStatementV1.safeParse({...withheld,sourceSnapshot:{...withheld.sourceSnapshot,sources:[{...source,assessmentId:id}]}}).success).toBe(false);
+});
