@@ -135,7 +135,7 @@ describe("SV-7B durable DARK email delivery", () => {
     const atLimit = { ...input(), bytes: Buffer.alloc(1_000_000, "x") };
     vi.mocked(ports.parseMime).mockResolvedValue({ version: "email-mime.v1", text, parts: [] });
     const receipt = await store.receive(atLimit);
-    expect(Buffer.from(receipt.rawBase64, "base64")).toEqual(atLimit.bytes);
+    expect(Buffer.from(receipt.rawBase64, "base64").equals(atLimit.bytes)).toBe(true);
     expect(receipt.quarantine).toEqual([]);
     expect(await new EmailDeliveryStore(directory, ports, config).receive(atLimit)).toEqual(receipt);
     expect(await store.readOriginal(context, jobId, messageId)).not.toBeNull();
