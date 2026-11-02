@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-int-m": {
+      "branches": ["codex/sandbox/sv7a-int-m"],
+      "receipt": "docs/verdicts/SV7A-INT-M/BUILDER_RECEIPT.md",
+      "note": "C268 issued build-ahead, 25 October 2026. DEPENDENCY-BOUND on SV7A-INT-A f3743e7e: no POST intake route, accepted writer or verified tester authority handoff. UI and browser journey remain unbuilt. Dispatcher owns commit and integration.",
+      "allow": [
+        "apps/web/app/jobs/[id]/customer-messages/page.tsx",
+        "apps/web/app/ui/customer-messages.tsx",
+        "apps/web/app/ui/customer-messages.test.tsx",
+        "apps/web/e2e/SV7A-INT-M.spec.ts",
+        "docs/verdicts/SV7A-INT-M/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
