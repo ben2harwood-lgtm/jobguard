@@ -153,6 +153,8 @@ export { JobImportV3Repository, JobImportV3Error } from "./job-import-v3-reposit
 
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
+export * from "./ais-adapter.js";
+export * from "./ais-repository.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";
