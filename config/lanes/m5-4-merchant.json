@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-4-merchant": {
+      "branches": [
+        "codex/sandbox/m5-4-merchant"
+      ],
+      "allow": [
+        "docs/contracts/merchant-connectors-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/merchant-connectors.ts",
+        "packages/core/src/merchant-connectors.test.ts",
+        "packages/core/src/supplier-documents.ts",
+        "packages/db/migrations/0575_merchant_ingestion_hardening.sql",
+        "packages/db/migration-notes/0575_merchant_ingestion_hardening.md",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/src/merchant-ingestion.test.ts",
+        "packages/db/test/merchant-ingestion.integration.test.ts",
+        "packages/db/test/migration-proofs/0575_merchant_ingestion_hardening.proof.json"
+      ],
+      "note": "RED M5-4 dark merchant ingestion. Own lane file is implicitly permitted. Synthetic fixtures only; no external route. Migration 0575_merchant_ingestion_hardening reserved; no main migration edited."
+    }
+  }
+}
