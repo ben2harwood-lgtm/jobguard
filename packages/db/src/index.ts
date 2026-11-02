@@ -164,3 +164,4 @@ export * from "./simulation-fee-statement-repository.js";
 export * from "./simulation-fee-collection-repository.js";
 export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
+export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
