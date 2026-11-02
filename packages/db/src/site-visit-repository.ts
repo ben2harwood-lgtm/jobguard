@@ -1,8 +1,9 @@
+import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { SiteVisitError, WorkOrderError, type CloseoutAnswer, type SiteVisitErrorCode } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
-import { assertContractorGate, canonicalJson, derivedUuid, sha256Hex } from "./work-order-repository.js";
+import { assertContractorGate, canonicalJson, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
@@ -38,21 +39,16 @@ function routineFailure(error: unknown): SiteVisitErrorCode | FactsChanged {
   default: return "SITE_VISIT_UNAVAILABLE";
  }
 }
-/** The receipt claim, written here because the merged helpers are private to extra-repository.ts. A replay returns the stored result and writes nothing. */
-async function claim(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, actor: string): Promise<unknown | null> {
- const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-  VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, hash, actor]);
- if (inserted.rowCount) return null;
- return readReceipt(db, tenant, commandId, type, semantic, hash, false);
+/** Preserve the route's lock phases; SQL validates both receipt keys and current authority. */
+async function claim(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, legacyJson: string, actor: string, jobId: string): Promise<unknown | null> {
+ const claimed=await beginRepositoryCommand<unknown>(db,{tenantId:tenant,actorMembershipId:actor,commandId,commandType:type,
+  semanticKey:semantic,jobId,legacyJson});
+ return claimed.kind==="replay"?claimed.result:null;
 }
-async function readReceipt(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, allowMissing: boolean): Promise<unknown | null> {
- const rows = (await db.$client.query<{ request_hash: string; status: string; result: unknown }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
- if (allowMissing && rows.length === 0) return null;
- if (rows.length !== 1 || rows[0]!.request_hash !== hash || rows[0]!.status !== "succeeded" || rows[0]!.result === null) throw new SiteVisitError("IDEMPOTENCY_CONFLICT");
- return rows[0]!.result;
-}
-async function finish(db: TenantTransaction, tenant: string, commandId: string, result: StartedVisit | CompletedVisit): Promise<void> {
- await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId, canonicalJson(result)]);
+async function readReceipt(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, legacyJson: string, actor: string, jobId: string): Promise<unknown | null> {
+ const rows=(await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))",[tenant,commandId,type,semantic])).rows;
+ if(!rows.length)return null;
+ return claim(db,tenant,commandId,type,semantic,legacyJson,actor,jobId);
 }
 /**
  * ENT-3b: visit start and complete, and the site worker's two read lists. The visit rule lives once, in app.ent3b_visit_authority; this class calls it.
@@ -110,8 +106,8 @@ export class SiteVisitRepository {
     const type = kind === "start" ? startCommandType : completeCommandType;
     const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
     const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
-    const hash = sha256Hex(canonicalJson(content));
-    const cached = kind === "complete" ? await readReceipt(db, tenant, input.commandId, type, semantic, hash, true) : null;
+    const legacyJson = canonicalJson(content);
+    const cached = kind === "complete" ? await readReceipt(db, tenant, input.commandId, type, semantic, legacyJson, actor.membershipId,input.jobId) : null;
     // Completion shares the prompt/extra job serialization key before any job row lock.
     // Otherwise a confirming prompt can wait for this SHARE lock while this hook waits for its key.
     if (kind === "complete" && cached === null) await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, input.jobId]);
@@ -121,7 +117,7 @@ export class SiteVisitRepository {
      if (error instanceof WatchdogError) throw new FactsChanged();
      throw error;
     }
-    const replay = cached ?? await claim(db, tenant, input.commandId, type, semantic, hash, actor.membershipId);
+    const replay = cached ?? await claim(db, tenant, input.commandId, type, semantic, legacyJson, actor.membershipId,input.jobId);
     // A concurrent first execution may commit while we wait for key 417. Release all
     // first-execution locks by rolling back, then read its receipt on a fresh replay path.
     if (kind === "complete" && cached === null && replay !== null) throw new CompletionReplayRace();
@@ -155,10 +151,11 @@ export class SiteVisitRepository {
     if (kind === "complete") await db.$client.query("SELECT app.lp_visit_evaluate($1,$2,$3)", [actor.membershipId, input.jobId, input.commandId]);
     // The audit append is the last write before the receipt is completed; no lock is taken after it.
     await appendAuditBatch(db, [audit]);
-    await finish(db, tenant, input.commandId, result);
-    return schema.parse(result);
+    return schema.parse(await completeRepositoryCommand(db,input.commandId));
    });
   } catch (error) {
+   if (error instanceof Error && error.message==="COMMAND_CONFLICT")throw new SiteVisitError("IDEMPOTENCY_CONFLICT");
+   if (error instanceof Error && error.message==="FORBIDDEN")throw new FactsChanged();
    if (error instanceof CompletionReplayRace) return this.command(context, actor, kind, input, schema);
    if (error instanceof SiteVisitError || error instanceof FactsChanged || error instanceof InvalidTenantContextError) throw error;
    // Anything raised by the deferred checks at commit, or by the database in general, is unavailable and carries none of its text.

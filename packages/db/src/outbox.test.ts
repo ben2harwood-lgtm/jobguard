@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
@@ -92,10 +93,8 @@ describe("ActionExecutor retry exhaustion", () => {
       status: "retryable",
     };
     const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(_values?.[0]), context.tenantId) };
       if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: context.tenantId }] };
-      if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
-      if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
-      if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
       if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row] };
       if (sql.startsWith("SELECT count(*)::int n FROM app.action_attempt")) return { rows: [{ n: 4 }] };
       if (sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
