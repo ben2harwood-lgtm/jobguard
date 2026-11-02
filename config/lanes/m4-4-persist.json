@@ -7,7 +7,7 @@
       "allow": [
         "packages/storage/src/worm.ts",
         "packages/storage/src/worm.test.ts",
-        "packages/db/migrations/0455_worm_durable_commands.sql",
+        "packages/db/migrations/0597_worm_durable_commands.sql",
         "packages/db/src/worm-command-repository.ts",
         "packages/db/src/worm-command-repository.test.ts",
         "packages/db/test/worm-command.integration.test.ts"

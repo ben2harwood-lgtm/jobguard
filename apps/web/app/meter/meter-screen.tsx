@@ -19,6 +19,7 @@ export function MeterDetails({ view }: { view: MeterTodayRead }) {
     <p>Today in London: {view.date}</p><p data-testid="jobs-on-the-go">{labels.count}</p>
     <p>{labels.capacity}</p><p>{labels.grace} {labels.graceUse}</p>
     <p data-testid="next-job-price">{labels.next}</p>
+    {view.trackReviewDecisionId && <p data-testid="track-review-due" role="status">track_review_due: this company has passed Builder's grace place, so an account review is due. Nothing is blocked, the monthly maximum still holds and no track changes on its own. Saved decision {view.trackReviewDecisionId}.</p>}
     <p>{view.freeSmallPlaces} small {view.freeSmallPlaces === 1 ? "place does" : "places do"} not take a plan place today.</p>
   </section>;
 }

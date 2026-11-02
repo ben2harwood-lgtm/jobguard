@@ -35,7 +35,7 @@ beforeAll(async () => {
   // Use the actual migration chain and the same non-owner runtime role as the application.
   const config = { host: "127.0.0.1", port, database: "postgres" };
   admin = new Pool({ ...config, user: "postgres", password: "synthetic-only" });
-  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0488_worm_operator_recovery.sql"));
+  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0598_worm_operator_recovery.sql"));
   expect(own).toBeGreaterThan(0);
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, own)) {
