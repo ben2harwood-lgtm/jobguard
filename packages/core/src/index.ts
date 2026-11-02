@@ -1,6 +1,7 @@
 /** Domain-only package. Network, database, vendor and platform imports are forbidden. */
 export const CORE_PACKAGE = "@jobguard/core" as const;
 export * from "./shadow-pilot-measurement.js";
+export * from "./shadow-pilot-report.js";
 export * from "./allocation.js";
 export * from "./fee.js";
 export * from "./fee-statement.js";
@@ -130,6 +131,7 @@ export * from "./evidence-pack-v3-assembly.js";
 export * from "./meter-today.js";
 
 export * from "./small-builder-demo-lifecycle.js";
+export * from "./inbox-outcome-metrics.js";
 export * from "./recovery-billability-policy.js";
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
@@ -137,8 +139,10 @@ export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./s
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
+export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
 export * from "./interim-applications.js";
 export * from "./exposure-curve.js";
