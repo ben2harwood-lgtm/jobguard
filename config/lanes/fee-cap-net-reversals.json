@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "fee-cap-net-reversals": {
+      "branches": [
+        "codex/sandbox/fee-cap-net-reversals"
+      ],
+      "note": "RED M4-9-S / MON-4A: net capacity checks after allocation reversals. NOPR=1; router commits and pushes; PostgreSQL checks and independent RED review remain required.",
+      "allow": [
+        "config/lanes/fee-cap-net-reversals.json",
+        "packages/db/migrations/0585_success_fee_cap_nets_reversals.sql",
+        "packages/db/test/migration-proofs/0585_success_fee_cap_nets_reversals.proof.json",
+        "packages/db/test/success-fee-cap-net-reversals.test.ts",
+        "packages/db/test/success-fee-cap-net-reversals.integration.test.ts"
+      ]
+    }
+  }
+}

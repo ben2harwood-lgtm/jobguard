@@ -1,0 +1,106 @@
+{
+  "migration": "0585_success_fee_cap_nets_reversals.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.decision",
+          "app.decision_resolution",
+          "app.success_fee_command",
+          "app.success_fee_derivation",
+          "app.success_fee_journal",
+          "app.success_fee_journal_line",
+          "app.success_fee_review",
+          "app.success_fee_source"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.ef_round_half_even",
+          "app.final_check_builder",
+          "app.final_lock_hash",
+          "app.lock_success_fee_sources",
+          "app.read_success_fee_v3",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      },
+      "after": {
+        "identity": "function:app.write_success_fee_v3(uuid,text,jsonb,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.decision",
+          "app.decision_resolution",
+          "app.success_fee_command",
+          "app.success_fee_derivation",
+          "app.success_fee_journal",
+          "app.success_fee_journal_line",
+          "app.success_fee_review",
+          "app.success_fee_source"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.ef_round_half_even",
+          "app.final_check_builder",
+          "app.final_lock_hash",
+          "app.lock_success_fee_sources",
+          "app.read_success_fee_v3",
+          "app.recovery_allocation_fraction_sum",
+          "app.recovery_attribution_sources",
+          "app.recovery_job_payer_type"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "write_success_fee_v3",
+        "args": "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "write_success_fee_v3",
+        "args": "p_job uuid, p_session text, p_command jsonb, p_artifact jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
