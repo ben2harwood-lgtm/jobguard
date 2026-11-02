@@ -153,3 +153,5 @@ export * from "./customer-variation-approval.js";
 export * from "./contractor-mandate.js";
 
 export * from "./dunning.js";
+
+export * from "./value-source-receipt-v2.js";
