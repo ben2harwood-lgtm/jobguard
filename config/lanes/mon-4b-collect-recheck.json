@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-4b-collect-recheck": {
+      "branches": [
+        "codex/sandbox/mon-4b-collect-recheck"
+      ],
+      "note": "RED MON-4/M4-12. Shared current attribution review check and database-clock expiry after authorization locks. Includes exact-union core export conflict resolution from inherited main merge. NOPR=1; PostgreSQL CI and independent RED review remain. Own lane file is implicitly permitted.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/db/src/payment-fee-collection-repository.ts",
+        "packages/db/src/payment-fee-collection-repository.test.ts",
+        "packages/db/test/success-fee-direct-debit.integration.test.ts",
+        "packages/db/migrations/0601_payment_fee_collect_recheck.sql",
+        "packages/db/test/migration-proofs/0601_payment_fee_collect_recheck.proof.json"
+      ]
+    }
+  }
+}

@@ -1,12 +1,12 @@
 // Real PostgreSQL + real MON-4A writers/sources; fake payment rail only.
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
-import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
+import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 import { withTenant } from "../src/tenant-context.js";
-import { StoredReceiptCaseAllocationRepository } from "../src/stored-receipt-case-allocation-repository.js";
 import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
 import { createSuccessFeeDirectDebitExecutor } from "../../../apps/api/src/fee-collection/success-fee-composition.js";
 import { FakeGoCardlessRail } from "../../../apps/api/src/fee-collection/fake-gocardless.js";
@@ -20,19 +20,7 @@ afterAll(async () => {
   if (environment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = environment;
 });
 async function fixture() {
-  const x = await realReceiptFixture(f);
-  const revision = (await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3",
-    [x.context.tenantId, x.jobId, x.caseId])).rows[0].revision as number;
-  const allocator = new StoredReceiptCaseAllocationRepository(f.runtime, "synthetic_demo");
-  const intent = { version: "stored-receipt-case-command.v1", action: "review", commandId: randomUUID(),
-    factLineId: x.fact.lineAllocationId, caseId: x.caseId, workId: x.workId, expectedCaseRevision: revision };
-  const review = await allocator.command(x.context, x.jobId, x.auth.digest, intent);
-  await allocator.command(x.context, x.jobId, x.auth.digest, { ...intent, action: "approve", commandId: randomUUID(),
-    reviewId: review.reviewId, approvalHash: review.approvalHash });
-  await new RecoveryAttributionRepository(f.runtime).assess(x.context, x.jobId, x.auth.digest, {
-    version: "recovery-attribution-command.v1", action: "assess", commandId: randomUUID(), caseId: x.caseId,
-    workId: x.workId, lineId: x.line, lockId: x.fact.invoiceBinding.lockId, expectedCaseRevision: revision, expectedAttributionRevision: 0,
-  });
+  const x = await catchFeeFixture(f);
   const command = (raw: unknown) => withTenant(f.runtime, x.context, async db =>
     (await db.$client.query("SELECT app.write_payment_fee($1,$2,$3::jsonb) result", [x.jobId, x.auth.digest, raw])).rows[0].result);
   const statement = await command({ version: "payment-fee-command.v1", action: "prepare", commandId: randomUUID(), paymentId: x.paymentId }) as { statementId: string; statementHash: string; feePence: number };
@@ -150,4 +138,125 @@ it("keeps MON-4A owner reads unavailable to the runtime connection", async () =>
   expect((await f.runtime.query("SELECT has_table_privilege(current_user,'app.payment_fee_statement','SELECT') allowed")).rows[0].allowed).toBe(false);
   await expect(x.compose(f.runtime).reserve(x.ctx, x.collection)).rejects.toThrow();
   expect(x.book().attempts).toEqual([]);
+});
+
+it("an unreviewed successor assessment stops an already reserved collection", async () => {
+  const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
+  await x.executor.reserve(x.ctx, x.collection);
+  const a = x.assessment;
+  await new RecoveryAttributionRepository(f.runtime).assess(x.context, x.jobId, x.auth.digest, {
+    version: "recovery-attribution-command.v1", action: "assess", commandId: randomUUID(),
+    caseId: a.caseId, workId: a.workId, lineId: a.lineId, lockId: a.lockId,
+    expectedCaseRevision: a.caseRevision, expectedAttributionRevision: a.revision,
+  });
+  await expect(x.executor.execute(x.ctx, x.collection.commandId)).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
+  expect(submit).not.toHaveBeenCalled(); expect(x.book().attempts[0]?.state).toBe("reserved");
+});
+it("changed source facts stop an approved collection before provider dispatch", async () => {
+  const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
+  await x.executor.reserve(x.ctx, x.collection);
+  const preview = await x.invoices.previewCredit(x.context, { jobId: x.jobId, invoiceId: x.invoiceId,
+    netPence: 40000, reason: "Fictional partial credit" });
+  await x.invoices.issueCredit(x.context, { jobId: x.jobId, invoiceId: x.invoiceId,
+    actorMembershipId: x.actor.membershipId, commandId: randomUUID(), netPence: 40000,
+    reason: "Fictional partial credit", previewHash: preview.previewHash });
+  await expect(x.executor.execute(x.ctx, x.collection.commandId)).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
+  expect(submit).not.toHaveBeenCalled();
+});
+it("a forged statement hash cannot reserve collection", async () => {
+  const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
+  await expect(x.executor.reserve(x.ctx, { ...x.collection, statementHash: "0".repeat(64) }))
+    .rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
+  expect(x.book().attempts).toEqual([]); expect(submit).not.toHaveBeenCalled();
+});
+
+it.each(["expiry", "revocation"] as const)("rechecks %s after a real authorization row-lock wait", async kind => {
+  const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
+  await x.executor.reserve(x.ctx, x.collection);
+  const params = [x.context.tenantId, x.statement.statementId];
+  const authWhere = "tenant_id=$1 AND id IN(SELECT authorization_id FROM app.payment_fee_command WHERE tenant_id=$1 AND statement_id=$2 AND authorization_id IS NOT NULL)";
+  const original = (await f.admin.query(`SELECT id,expires_at FROM app.action_authorization WHERE ${authWhere}`, params)).rows[0];
+  const setExpiry = (value: Date) => finalCheckTenant(f.admin, x.context.tenantId, async db => {
+    // Fixture-only immutable-term negative control, restored in finally.
+    await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
+    await db.query("UPDATE app.action_authorization SET expires_at=$3 WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, original.id, value]);
+    await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
+  });
+  if (kind === "expiry") {
+    const deadline = (await f.admin.query("SELECT clock_timestamp()+interval '10 seconds' deadline")).rows[0].deadline as Date;
+    await setExpiry(deadline);
+  }
+  const blocker = await f.admin.connect();
+  let signal!: (pid: number) => void;
+  const started = new Promise<number>(resolve => { signal = resolve; });
+  const waitingPool = { connect: async () => {
+    const client = await f.admin.connect();
+    const pid = (await client.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
+    return { release: () => client.release(), query: (sql: string, values?: unknown[]) => {
+      const result = client.query(sql, values);
+      if (sql.includes("FOR SHARE OF a")) signal(pid);
+      return result;
+    } };
+  } } as unknown as Pool;
+  let dispatch: Promise<unknown> | undefined;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query(`SELECT id FROM app.action_authorization WHERE ${authWhere} FOR UPDATE`, params);
+    dispatch = x.compose(waitingPool).execute(x.ctx, x.collection.commandId);
+    const rejected = expect(dispatch).rejects.toMatchObject({ reason: kind === "expiry" ? "AUTHORITY_EXPIRED" : "AUTHORITY_REVOKED" });
+    const pid = await Promise.race([started, dispatch.then(() => { throw new Error("DISPATCH_DID_NOT_WAIT"); })]);
+    let waiting = false;
+    for (let n = 0; n < 200 && !waiting; n++) {
+      await blocker.query("SELECT pg_stat_clear_snapshot()");
+      waiting = (await blocker.query("SELECT wait_event_type='Lock' waiting FROM pg_stat_activity WHERE pid=$1", [pid])).rows[0]?.waiting === true;
+      if (!waiting) await blocker.query("SELECT pg_sleep(0.01)");
+    }
+    expect(waiting).toBe(true);
+    if (kind === "expiry") await blocker.query(`SELECT pg_sleep(greatest(0,extract(epoch FROM (expires_at-clock_timestamp())))+0.02) FROM app.action_authorization WHERE ${authWhere}`, params);
+    else await blocker.query(`UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE ${authWhere}`, params);
+    await blocker.query("COMMIT");
+    await rejected;
+    expect(submit).not.toHaveBeenCalled(); expect(x.book().attempts[0]?.state).toBe("reserved");
+  } finally {
+    await blocker.query("ROLLBACK"); blocker.release();
+    await dispatch?.catch(() => undefined);
+    if (kind === "expiry") await setExpiry(original.expires_at as Date);
+  }
+});
+
+it.each(["revoked", "expired"] as const)("a %s attribution review stops previously approved dispatch", async state => {
+  const x = await fixture(), submit = vi.spyOn(x.rail, "submit");
+  await x.executor.reserve(x.ctx, x.collection);
+  await rolledBack(f.admin, async db => {
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [x.context.tenantId]);
+    await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
+    await db.query(`UPDATE app.action_authorization SET ${state === "revoked" ? "revoked_at=clock_timestamp()" : "expires_at=clock_timestamp()-interval '1 second'"}
+      WHERE tenant_id=$1 AND recipient=$2 AND action_type='recovery.attribution_review'`, [x.context.tenantId, x.assessment.assessmentId]);
+    await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
+    await expect(x.compose(nestedPool(db)).execute(x.ctx, x.collection.commandId)).rejects.toMatchObject({ reason: "AUTHORITY_STALE" });
+  });
+  expect(submit).not.toHaveBeenCalled();
+  await x.executor.execute(x.ctx, x.collection.commandId); expect(submit).toHaveBeenCalledTimes(1);
+});
+
+it("0601 upgrades the latest writer in place, preserves approvals and is rerunnable", async () => {
+  const x = await fixture();
+  const previous = (await readFile(new URL("../migrations/0561_payment_fee_collect_review.sql", import.meta.url), "utf8"))
+    .replace(/^BEGIN;\n/u, "").replace(/COMMIT;\n$/u, "");
+  const upgrade = (await readFile(new URL("../migrations/0601_payment_fee_collect_recheck.sql", import.meta.url), "utf8"))
+    .replace(/^BEGIN;\n/u, "").replace(/COMMIT;\n$/u, "");
+  await rolledBack(f.admin, async db => {
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [x.context.tenantId]);
+    await db.query(previous);
+    const metadata = async () => (await db.query("SELECT oid,proowner,proacl FROM pg_proc WHERE oid='app.write_payment_fee(uuid,text,jsonb)'::regprocedure")).rows;
+    const before = await metadata();
+    await db.query(upgrade); await db.query(upgrade);
+    expect(await metadata()).toEqual(before);
+    expect((await db.query("SELECT document FROM app.payment_fee_statement WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, x.statement.statementId])).rows)
+      .toEqual([{ document: x.statement }]);
+    expect((await db.query("SELECT has_function_privilege('jobguard_runtime','app.payment_fee_review_deadline(uuid,uuid,jsonb,uuid)','EXECUTE') allowed")).rows)
+      .toEqual([{ allowed: false }]);
+    // Existing exact approval remains usable through the upgraded shared check.
+    await x.compose(nestedPool(db)).reserve(x.ctx, x.collection);
+  });
 });

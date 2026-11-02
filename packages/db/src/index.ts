@@ -156,6 +156,8 @@ export * from "./small-builder-demo-repository.js";
 export { PaymentFeeCollectionRepository, PaymentFeeCollectionSourceError } from "./payment-fee-collection-repository.js";
 export * from "./mobile-auth-store.js";
 
+export * from "./evidence-bundle.js";
+export * from "./evidence-bundle-sources.js";
 export * from "./practice-photo-observation.js";
 export * from "./practice-proof-image.js";
 export * from "./value-business-reader.js";
