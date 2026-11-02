@@ -39,7 +39,8 @@ test("core and web retain their commands, setup pins and candidate SHA guards", 
   assert.ok(jobs["web-shards"].includes("run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium"));
   for (const name of ["core-checks", "core-db", "web-shards"]) {
     const body = jobs[name];
-    assert.match(body, /^    runs-on: ubuntu-latest$/m);
+    // Playwright 1.55.1 cannot install chromium on 26.04, so the browser job stays on 24.04.
+    assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
     assert.match(body, /^    timeout-minutes: 90$/m);
     assert.doesNotMatch(body, /^    needs:/m);
     assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
@@ -104,8 +105,8 @@ for (const [gate, dependencies] of Object.entries({
 });
 
 test("only superseded PR runs cancel; main never cancels in progress", () => {
-  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.ref }}"));
-  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' && github.ref != 'refs/heads/main' }}"));
+  assert.ok(workflow.includes("group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"));
+  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
 test("DB and browser matrices cover all four shards without fail-fast or test selection", () => {
