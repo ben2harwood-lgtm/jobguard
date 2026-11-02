@@ -89,5 +89,12 @@
     "fingerprint": "e3022f3b698c45f3159149e4750bb539f49c66ad1de705035eb0a737ecb33852",
     "reason": "Adapter.execute(work) receives runtime authorized work; broad terminal execute detection cannot prove a SQL boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
+  },
+  {
+    "file": "packages/db/src/subscription-stripe-sandbox-adapter.ts",
+    "line": 103,
+    "fingerprint": "cca1e585bf32c7408b19ff8bbb7a528bc17aa2440a1daa23e3bfc71f8526682c",
+    "reason": "Calls the synthetic payment adapter's execute method with a typed work object; this is not a database query.",
+    "code": "UNRESOLVED_COVERED_EDGE"
   }
 ]
