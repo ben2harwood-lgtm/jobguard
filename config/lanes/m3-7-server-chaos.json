@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-7-server-chaos": {
+      "branches": ["codex/sandbox/m3-7-server-chaos"],
+      "note": "RED M3-7 server-only synthetic regression and unexecuted native procedures. index.ts resolves the inherited merge by preserving both exports. G3 remains unmet.",
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/test/native-server-chaos.integration.test.ts",
+        "docs/operations/native-device-matrix.md",
+        "docs/operations/native-rollout-rollback.md"
+      ]
+    }
+  }
+}
