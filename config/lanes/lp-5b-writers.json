@@ -7,9 +7,9 @@
       ],
       "note": "LP-5b RED: remaining receipt writers and synthetic seed. Stacked on LP-5a; shared source/catalog overlaps serialize after that base. PostgreSQL CI and fresh independent Claude RED review remain required.",
       "allow": [
-        "config/lanes/lp-3-v3.json",
-        "config/lanes/lp-4-audit.json",
-        "config/lanes/lp-5a-commands.json",
+        "apps/api/src/shadow-isolation.application.test.ts",
+        "apps/api/src/sv5pre-worker-execution.integration.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/contracts/lp-command-binding-design-v1.md",
         "docs/contracts/lp-downstream-effects-v1.md",
@@ -40,6 +40,7 @@
         "packages/db/src/site-visit-repository.ts",
         "packages/db/src/variation-repository.ts",
         "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/audit-export.integration.test.ts",
         "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/contractor-parties.integration.test.ts",
@@ -94,6 +95,7 @@
         "packages/db/test/site-visit.integration.test.ts",
         "packages/db/test/small-builder-origin.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
         "tools/lp-downstream-inventory.py",
         "tools/lp-downstream-inventory.test.mjs"
       ]

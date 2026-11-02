@@ -1,4 +1,4 @@
-import { lp5ReadTables } from "./lp5-command-catalog.js";
+import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -256,7 +256,7 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     const oldTables = new Set(upgrade.before.filter(subject => subject.kind === 'table').map(subject => subject.name));
     const writerFacts = lp5ReadTables.filter(table => oldTables.has(`app.${table}`)).flatMap(table => [
       `table app.${table}: + grant jobguard_command_writer SELECT`,
-      `policy app.${table}.lp5_command_read: permissive policy added`,
+      `policy app.${table}.${lp5bReadTables.includes(table) ? "lp5b" : "lp5"}_command_read: permissive policy added`,
     ]);
     for (const table of ['decision','decision_resolution','action_authorization','command_receipt']) if (oldTables.has(`app.${table}`)) writerFacts.push(
       `table app.${table}: + grant jobguard_command_writer INSERT`, `policy app.${table}.lp5_command_insert: permissive policy added`);
