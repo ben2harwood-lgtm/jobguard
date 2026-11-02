@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { migrate } from "../src/migrate.js";
-import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { freePort, closeTestDatabase, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
@@ -15,7 +15,7 @@ export const CH4_HASH = "a".repeat(64);
 export async function createWorkFixture(install = true, database = "jobguard_synthetic_demo") {
  const directory = await mkdtemp(join(tmpdir(), "ch4-pg16-")), port = await freePort(59000, 400), credential = randomUUID();
  const connection = { host: "127.0.0.1", port, database, user: "postgres", password: credential };
- const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
+ const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
@@ -24,8 +24,7 @@ export async function createWorkFixture(install = true, database = "jobguard_syn
  return { postgres, directory, admin, runtime };
 }
 export type WorkFixture = Awaited<ReturnType<typeof createWorkFixture>>;
-/** Preserve the temporary cluster for dispatcher inspection; no deletion by this piece. */
-export async function closeWorkFixture(f?: WorkFixture) { if (f) { await closeTestPools(f.runtime, f.admin); await f.postgres.stop(); } }
+export async function closeWorkFixture(f?: WorkFixture) { if (f) await closeTestDatabase(f.postgres, f.directory, f.runtime, f.admin); }
 export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>) {
  const db = await pool.connect();
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }

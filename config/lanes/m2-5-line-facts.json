@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-5-line-facts": {
+      "branches": [
+        "codex/sandbox/m2-5-line-facts"
+      ],
+      "allow": [
+        "docs/contracts/supplier-line-matching-v1.md",
+        "packages/core/src/discrepancy.ts",
+        "packages/core/src/line-discrepancy.ts",
+        "packages/core/src/line-discrepancy.test.ts",
+        "packages/core/src/discrepancy-evaluation.ts",
+        "packages/core/src/discrepancy-evaluation.test.ts",
+        "packages/core/src/discrepancy-development-fixtures.ts",
+        "packages/db/src/supplier-line-correction-repository.ts",
+        "packages/db/test/supplier-line-corrections.integration.test.ts",
+        "packages/ai/src/index.ts",
+        "packages/core/src/index.ts",
+        "packages/db/src/index.ts"
+      ],
+      "note": "M2-5 confirmed line-fact proposals and DEVELOPMENT-only evaluation. NOPR=1. No migration; 0606 unused. Three inherited index export conflicts resolved as an exact union; router must stage resolutions in the read-only Git index."
+    }
+  }
+}

@@ -31,10 +31,12 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
    expect(await attributes()).toEqual(before); expect(await facts()).toEqual(data);
   } finally {
    await f.admin.query(await readFile(new URL("../migrations/0400_trial_activation_lock_order.sql", import.meta.url), "utf8"));
+   // Later tests in this file run the current routine, which 0517 supersedes.
+   await f.admin.query(await readFile(new URL("../migrations/0516_trial_first_activation_capacity.sql", import.meta.url), "utf8"));
   }
  });
 
- it("preserves capacity refusal through the restricted runtime and rejects foreign or expired session authority", async () => {
+ it("starts the first trial through the restricted runtime and rejects foreign or expired session authority", async () => {
   const a = await meterCompany(f); await verifyBusiness(f, a); await exactTarget(f, a);
   const grants = (await f.admin.query(`SELECT has_table_privilege('jobguard_runtime','app.job','UPDATE') job_update,
    pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
@@ -46,8 +48,8 @@ describe("lock-order-418 trial versus MON-1 admission (real PostgreSQL)", () => 
   await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [a.tenantId,a.jobId])))
    .rejects.toMatchObject({code:'42501'});
   const repo = new FreeFirstJobLifecycleRepository(f.runtime), view = await repo.read(a.context,a.digest,a.jobId);
-  await expect(repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:a.jobId,...view.target}))
-   .rejects.toThrow('CAPACITY_ADMISSION_UNAVAILABLE');
+  expect(await repo.activate(a.context,a.digest,a.actorId,{version:'trial-switch-live.v1',commandId:randomUUID(),jobId:a.jobId,...view.target})).toMatchObject({jobId:a.jobId,state:'live'});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
   const b = await meterCompany(f);
   const lock = (tenant:string,digest:string) => workTenant(f.runtime,tenant,db => db.query("SELECT app.mon3_lock_activation($1,$2,$3)",[tenant,digest,a.jobId]));
   await expect(lock(b.tenantId,a.digest)).rejects.toThrow('METER_FORBIDDEN');

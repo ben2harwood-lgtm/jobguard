@@ -89,11 +89,15 @@ describe("M2-4 durable audited reviewer corrections (PostgreSQL)", () => {
   it("keeps originals immutable, resolves ambiguity explicitly and reproduces every historical result", async () => {
     const f = await fixture(), before = structuredClone(f.facts);
     expect(f.initial.result.unresolved).toHaveLength(2);
+    expect(f.initial.discrepancies.decisions).toEqual([]);
     const first = await repo.correct(ctx, actor, job, f.command);
     expect(first.result.unresolved).toHaveLength(1);
     const second = await repo.correct(ctx, actor, job, { ...f.command, commandId: randomUUID(), expectedRevision: 1,
       sourceVersionId: f.facts.receipts[0]!.versionId });
     expect(second.result.unresolved).toEqual([]);
+    expect(second.discrepancies.decisions[0]).toMatchObject({ correctionRevision: 2,
+      amount: { pence: 200, currency: "GBP" }, claimSent: false, cashLandedPence: 0, feePence: 0 });
+    expect((await repo.read(ctx, actor, f.read)).discrepancies).toEqual(second.discrepancies);
     expect(second.result.groups.flatMap(g => g.issues).map(i => i.code)).toEqual(expect.arrayContaining(["short_delivery", "billed_above_received"]));
     expect(await repo.read(ctx, actor, f.read)).toEqual(second);
     expect(await repo.read(ctx, actor, { ...f.read, revision: 1 })).toEqual(first);
@@ -120,6 +124,7 @@ describe("M2-4 durable audited reviewer corrections (PostgreSQL)", () => {
     await repo.correct(ctx, actor, job, f.command);
     const withdrawn = await repo.correct(ctx, actor, job, { ...f.command, commandId: randomUUID(), expectedRevision: 1, orderVersionId: null });
     expect(withdrawn.result).toEqual(f.initial.result);
+    expect(withdrawn.discrepancies.decisions).toEqual([]);
     expect(withdrawn.history).toHaveLength(2);
   });
   it("rechecks membership and identity, including on replays, and fails closed outside synthetic mode", async () => {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { correctSupplierLineMapping, matchSupplierLines, supplierLineCorrectionV1, supplierLineMatchInputV1,
+import { correctSupplierLineMapping, evaluateLineDiscrepancies, matchSupplierLines, supplierLineCorrectionV1, supplierLineMatchInputV1,
   SupplierMatchCorrectionError, type SupplierLineMatchInput } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
@@ -43,7 +43,9 @@ export class SupplierLineCorrectionRepository {
     if (revision !== undefined && current !== revision) throw new SupplierMatchCorrectionError("MATCH_REVISION_CONFLICT");
     let facts = snapshot.facts;
     for (const row of history) facts = correctSupplierLineMapping(facts, row.correction, `correction:${row.id}`);
-    return { snapshotId, revision: current, facts, result: matchSupplierLines(facts), history };
+    const discrepancies = evaluateLineDiscrepancies({ version: "line-discrepancy-input.v1",
+      snapshotId, correctionRevision: current, facts });
+    return { snapshotId, revision: current, facts, result: matchSupplierLines(facts), history, discrepancies };
   }
 
   private async lock(db: TenantTransaction, tenantId: string, commandId: string, snapshotId: string) {

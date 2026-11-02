@@ -119,3 +119,62 @@ a new migration to repair defects; keep the existing tables/history and disable
 the dark caller if necessary. Never edit 0494 after merge. PostgreSQL integration,
 full migration/catalogue CI and one independent RED review remain required before
 merge. There is no browser change or new provider route in this piece.
+
+## M2-5 confirmed line discrepancy proposals and development evaluation
+
+`evaluateLineDiscrepancies` accepts the strict `line-discrepancy-input.v1` envelope:
+confirmed synthetic facts, snapshot ID and correction revision. The existing
+correction repository includes its result as `discrepancies` on create, correction,
+read and replay. It reconstructs historical facts first, so historical command
+replays retain the original result. Current reads use the current correction
+revision. No findings are persisted and no migration is needed (0606 unused).
+The retained single-line workspace is unchanged; this remains a dark synthetic seam.
+
+A proposed Decision groups the explicitly matched invoice/credit lines and accepted
+receipts for one agreed order rate. Unresolved sources, duplicates, missing receipts,
+unknown conversions, invalid credits, non-net amounts and out-of-date rates suppress
+actionable results. Short or partial deliveries alone are not an invoice obligation.
+All citations retain line/version, immutable document version/hash and page. Rate
+basis retains the order citation, rate version, discount, pack and validity interval.
+Quantities are exact integers scaled by 10^12 base units, as in M2-4.
+
+For each invoice/credit line, expected net = base quantity × agreed pack rate ×
+(10000 − discount basis points) / (order pack base quantity × 10000), rounded once
+half-even at the source-line boundary. Credits subtract both net and expected money.
+Quantity exposure = max(0, net billed base quantity − accepted base quantity) × the
+same discounted rate, rounded half-even. Proposed exposure = max(0, net billed money
+− expected net billed money + quantity exposure). Lower prices offset quantity
+exposure; quantities are not counted twice. Arithmetic terms and signed totals are
+shown in the result. Application money limits apply before bigint narrowing.
+
+Decision identity binds rule version, scoped fact digest, snapshot, correction
+revision and group. Reordering source arrays preserves results. A new correction
+revision produces a new identity, including after withdrawal; old proposals must
+not be treated as current commercial authority. Repository reads retain the existing
+membership checks, tenant/job scoping and synthetic environment restriction.
+
+Exposure is unclassified until payment facts are known: avoiding payment of an
+unpaid overcharge is prevention; a paid overcharge is potential recovery requiring
+separate evidence and authorization. Neither is established as billable by detection.
+Decisions are proposals only: no claim send, cash landing, fee, invoice, or ledger
+entry. Payment status is unknown in this input; no paid/unpaid inference is made.
+
+`evaluateDiscrepancyPredictions` accepts strict `discrepancy-evaluation.v1`, dataset
+`development`, and one stage: `confirmed_source_facts` or `end_to_end`. Supply one
+independently labelled opportunity per case, including cases producing no prediction;
+never drop extraction/matching failures from the end-to-end denominator. These
+stages produce separate reports. This piece does not implement an extraction evaluator.
+The development labelled discrepancy cohort is at least 2500 pence net (inclusive).
+Other labels are genuine match or ambiguous, both non-actionable. Any positive
+prediction counts as actionable, so even a one-penny ambiguous prediction is FP.
+
+Reports include class counts, TP/FP/TN/FN, every error example, FP/(TP+FP), precision,
+and recall on that labelled cohort. Undefined ratios are null; empty predictions or
+no positive labels fail the diagnostic targets. Targets use exact integer counts
+(5% false discoveries, 90% recall), never rounded displayed ratios. These diagnostics
+measure detection, not amount-estimation accuracy. They are not release acceptance.
+The five fictional cases in `discrepancy-development-fixtures.ts` are DEVELOPMENT
+DATA ONLY, not the frozen 100-set held-out benchmark, an accuracy claim or G2 evidence.
+Reports explicitly state the uncertainty and `releaseEvidence: false`. People must
+freeze the held-out corpus/labels and record the product decision separately. G0–G5
+remain closed. No providers, paid calls or real customer data are introduced.
