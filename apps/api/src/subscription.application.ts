@@ -55,7 +55,7 @@ export class SubscriptionApplication {
      }
     } catch {
      // Approval committed above. Executor/read failures cannot undo it or justify a new approval.
-     return { ...result, paymentStatus: "pending" as const };
+     return { ...result, paymentStatus: "pending" as const, executionStatus: "unavailable" as const };
     }
    }
    return result;
@@ -63,7 +63,9 @@ export class SubscriptionApplication {
  }
  async read(session:unknown){return this.current(session,async (credentials,digest)=>{
   const context=await resolveVerifiedTenantContext(this.authority.provider,credentials,this.authority.allowedOrigin);
-  return this.repository.read(context,digest);
+  const snapshot = await this.repository.read(context,digest);
+  const billingDay = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric" }).format(new Date()));
+  return { ...snapshot, billingDay };
  });}
  private async current<T>(session:unknown,fn:(credentials:TenantRequestCredentials,digest:string)=>Promise<T>):Promise<T>{
   try{

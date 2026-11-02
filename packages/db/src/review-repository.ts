@@ -76,8 +76,7 @@ export class ConfirmProposalReview implements CommandMutation<{jobId:string;revi
     }
     for(const line of this.review.lines.filter(x=>x.disposition==="dismissed"||x.disposition==="split"||x.disposition==="merged")) await db.$client.query(`UPDATE app.scope_identity SET state='retired' WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[tenantId,this.review.jobId,line.scopeItemId]);
     if(this.failAfterScope) throw new Error("SYNTHETIC_CONFIRMATION_FAILURE");
-    await db.$client.query(`UPDATE app.proposal_review SET state='confirmed',confirmed_at=transaction_timestamp(),updated_at=transaction_timestamp() WHERE tenant_id=$1 AND id=$2`,[tenantId,this.review.reviewId]);
-    const transitioned=(await db.$client.query<{revision:number}>(`SELECT revision FROM app.transition_job($1,$2,$3,'quoting','start_quote')`,[tenantId,this.review.jobId,job.revision])).rows[0]!;
+    const transitioned=(await db.$client.query<{revision:number}>(`SELECT revision FROM app.start_quote_from_review($1,$2,$3,$4,$5,$6,$7,$8)`,[tenantId,this.review.jobId,job.revision,command.actorMembershipId,command.commandId,command.authorizationId,this.review.reviewId,JSON.stringify(this.review)])).rows[0]!;
     return {jobId:this.review.jobId,reviewId:this.review.reviewId,jobRevision:transitioned.revision,status:"quoting" as const};
   }
 }

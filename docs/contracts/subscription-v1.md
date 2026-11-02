@@ -40,6 +40,8 @@ Only current owners accept terms/change terms/approve simulation. Exact authoriz
 
 ## Calendar, source and pennies
 
+For a first `accept`, the server captures the acceptance timestamp after the company lock and sets the anchor to its London day-of-month. A different supplied day is refused with `SUBSCRIPTION_ANCHOR_NOT_ACCEPTANCE_DAY`. A new period starting before the first agreement revision's London `accepted_at` date is refused with `SUBSCRIPTION_PERIOD_BEFORE_ACCEPTANCE`, even if it matches the anchor. Both codes map to HTTP 409. Existing immutable receipts and issued periods replay unchanged.
+
 Monthly boundaries retain the original 1–31 anchor and independently clamp to each month's end. Half-open London-date periods include 28–31 actual dates. Same-day accepted revisions resolve by revision. First-period stubs, re-anchoring and unspecified conversion rules remain stopped; no missing dates are fabricated. Annual acceptance and execution are unavailable even if a client supplies an enablement flag.
 
 Stable place keys are canonical lowercase `tenant:customer:site`. Source job UUIDs remain fixture references, not fabricated `app.job` rows. `canonical-place-and-job.v1` chooses the smallest canonical job identity as representative, allocates small-place allowances first by place key, then included/paid-extra/grace places by place key. Bindings retain source ID/revision, representative and rule version immutably. Largest-remainder equal fractions break ties by canonical line key. Hashes exclude random period/statement IDs and input array ordering.

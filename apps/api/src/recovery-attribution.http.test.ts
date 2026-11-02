@@ -66,7 +66,7 @@ it("SV6-26 PostgreSQL actual HTTP and fresh applications read the same stored hi
   next.get.mockImplementation((id,query)=>new RecoveryAttributionApplication(f.runtime,token).get(id,query));
   const route=await import(new URL("../../web/app/api/jobs/[id]/success-fee-attribution/route.ts",import.meta.url).href);
   expect(await (await route.GET(new Request(`https://synthetic.invalid${url}`),{params:Promise.resolve({id:p.jobId})})).json()).toEqual(first.body);
-  await request(app.getHttpServer()).post(url).set("Cookie",`jg_session=${token}`).send({...command,action:"approve_review",assessmentId:document.assessmentId,expectedSourceHash:document.sourceHash,reviewArtifactHash:"b".repeat(64)}).expect(503);
+  await request(app.getHttpServer()).post(url).set("Cookie",`jg_session=${token}`).send({...command,action:"approve_review",assessmentId:document.assessmentId,expectedSourceHash:document.sourceHash,reviewArtifactHash:"b".repeat(64)}).expect(409).expect(({body})=>expect(body.code).toBe("RECOVERY_ATTRIBUTION_IDEMPOTENCY_CONFLICT"));
   const stranger=await db.issuePracticeSession(f.runtime);
   await request(app.getHttpServer()).get(url).set("Cookie",`jg_session=${stranger}`).expect(404);
   await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[auth.digest]);

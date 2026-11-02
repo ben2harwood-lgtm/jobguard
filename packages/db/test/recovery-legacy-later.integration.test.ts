@@ -23,13 +23,13 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential,
     persistent: true, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: credential, database: "jobguard_synthetic_demo" });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
   // This isolated test role inherits the existing runtime privileges only.
   await admin.query(`CREATE ROLE later_b17_login LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO later_b17_login`);
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "later_b17_login", password: credential, max: 2 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "later_b17_login", password: credential, max: 2 });
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); });
 

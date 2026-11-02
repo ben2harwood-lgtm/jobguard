@@ -30,7 +30,7 @@ export async function submitSubscriptionAction(tenantId: string, commandId: stri
     headers: { "content-type": "application/json", "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId },
     body: JSON.stringify({ version: "subscription-http-command.v1", commandId, command }) });
   if (!response.ok) throw new Error("The subscription action could not be completed. Reload to check the saved result before trying again.");
-  return await response.json() as { status?: string; effectiveDate?: string; paymentStatus?: string };
+  return await response.json() as { status?: string; effectiveDate?: string; paymentStatus?: string; executionStatus?: "unavailable" };
 }
 export function PlanDetails({ view }: { view: SubscriptionPlanView }) {
   return <>
@@ -39,9 +39,9 @@ export function PlanDetails({ view }: { view: SubscriptionPlanView }) {
       <h3>{plan.plan}</h3><p>{plan.monthlyLabel} per month · {plan.includedPlaces} jobs on the go included</p>
       <p>Monthly maximum: {plan.maximumLabel}</p>{view.annualAvailable && plan.annualLabel && <p>{plan.annualLabel} per year</p>}
     </article>)}</section>
-    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.agreement ? <>
+    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.billingDay !== null && <p>Your billing day: the {view.billingDay}</p>}{view.agreement ? <>
       <p>{view.agreement.plan} · {view.agreement.cadence} · effective {view.agreement.effectiveDate}</p>
-      <p>Original billing anchor: day {view.agreement.anchorDay}. Monthly maximum: {view.agreement.maximumLabel}.</p>
+      <p>Monthly maximum: {view.agreement.maximumLabel}.</p>
     </> : <p>No accepted subscription agreement.</p>}</section>
     <section aria-label="Subscription periods"><h2>Subscription periods</h2>{view.periods.length === 0 ? <p>No issued subscription periods.</p>
       : view.periods.map(period => <article key={period.id}>
@@ -64,7 +64,6 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [plan, setPlan] = useState<"Solo" | "Builder">("Solo");
-  const [anchorDay, setAnchorDay] = useState(1);
   const [consent, setConsent] = useState(false);
   async function act(command: unknown) {
     if (busy) return;
@@ -75,6 +74,7 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
       saved = true;
       setConsent(false);
       setMessage(subscriptionActionMessage(result));
+      if (result.executionStatus === "unavailable") setActionError("The simulation executor could not complete or confirm its result. Your approval is saved. Reload to check progress; do not approve it again.");
       const next = await loadSubscriptionWorkspace(fetch, tenantId);
       if (next.tenantId !== tenantId) throw new Error("Company access changed. Reload before continuing.");
       setView(next.view);
@@ -89,7 +89,7 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
     setBusy(true); setView(null); setConsent(false); setMessage(""); setActionError(""); setError("");
     try {
       const next = await loadSubscriptionWorkspace(fetch, selected);
-      setView(next.view); setTenantId(next.tenantId); setMemberships(next.memberships); setPlan("Solo"); setAnchorDay(1);
+      setView(next.view); setTenantId(next.tenantId); setMemberships(next.memberships); setPlan("Solo");
     } catch { setError("unavailable"); }
     finally { setBusy(false); }
   }
@@ -113,11 +113,10 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
         <section aria-label="Manage subscription"><h2>Manage subscription</h2>
           {consentTerms}
           <label>Plan <select aria-label="Plan" value={plan} disabled={busy} onChange={e => { setPlan(e.target.value as "Solo" | "Builder"); setConsent(false); }}><option>Solo</option><option>Builder</option></select></label>
-          {!view.agreement && <label>Billing anchor day <input type="number" min="1" max="31" value={anchorDay} disabled={busy} onChange={e => { setAnchorDay(Number(e.target.value)); setConsent(false); }} /></label>}
           <label><input type="checkbox" checked={consent} disabled={busy} onChange={e => setConsent(e.target.checked)} />I accept these monthly terms and the selected plan's monthly maximum for this made-up company.</label>
-          <button type="button" disabled={busy || !consentTerms || !consentText || !consent || !Number.isInteger(anchorDay) || anchorDay < 1 || anchorDay > 31 || view.agreement?.plan === plan}
+          <button type="button" disabled={busy || !consentTerms || !consentText || !consent || view.billingDay === null || view.agreement?.plan === plan}
             onClick={() => void act({ version: "subscription-command.v1", kind: view.agreement ? "change" : "accept", plan, cadence: "monthly",
-              anchorDay: view.agreement?.anchorDay ?? anchorDay, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4",
+              anchorDay: view.billingDay, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4",
               consentText, maximumPence: plan === "Solo" ? 4900 : 16900, expectedRevision: view.revision })}>
             {!view.agreement ? "Accept monthly terms" : plan === "Builder" ? "Approve upgrade to Builder" : "Request downgrade to Solo"}
           </button>

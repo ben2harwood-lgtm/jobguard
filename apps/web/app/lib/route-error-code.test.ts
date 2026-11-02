@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 const state = vi.hoisted(() => ({ error: undefined as unknown }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "session" }) }) }));
+// This fixture supplies only the legacy practice cookie; company-session calls are unexpected.
+vi.mock("./trial-server", () => ({ trialReply: () => { throw new Error("Unexpected company-session trial call in legacy fixture"); } }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => name === "jg_session" ? { value: "session" } : undefined }) }));
 vi.mock("./synthetic-server", () => ({ hasSyntheticSession: () => true, practiceFailure: () => null, syntheticPool: () => ({}) }));
 vi.mock("./workspace-server", () => {
   const service: unknown = new Proxy(() => { throw state.error; }, { get: (_target, key) => key === "then" ? undefined : service });

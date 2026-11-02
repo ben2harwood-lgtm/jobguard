@@ -8,7 +8,7 @@ import { startBeforeMigration, applyMigration } from "./contractor-practice-sess
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate } from "../src/migrate.js";
 
-const own = "0499_fee_reservation_archive.sql";
+const own = "0592_fee_reservation_archive.sql";
 describe("M4-12 reservation archive populated upgrade", () => {
   it("preserves the predecessor book, compacts without losing history and retains grants/RLS on replay", async () => {
     const db = await startBeforeMigration(own);

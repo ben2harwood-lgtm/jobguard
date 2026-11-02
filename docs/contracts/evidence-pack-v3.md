@@ -158,3 +158,41 @@ EVIDENCE_PACK_V3_DEPENDENCY_HELD in the authenticated application, SQL request a
 boundaries. No runtime pack is created with absent or invented attribution/settlement sections.
 Queued work from an older deployment cannot bypass the writer refusal. Pure assembly specimens
 and source preparation do not activate runtime creation. v1 behaviour is preserved.
+
+## CH-8 part 3 synthetic activation (28 October 2026)
+
+Migration 0375 activates the queued application/request/writer path after the installed 0340 SV-6
+source resolver. This supersedes the part 2 runtime refusal above. Compatibility preparation ports
+remain held and are not a fallback writer. Production and external delivery remain disabled.
+
+Post-lock material includes immutable SV-6 attribution history, stored case/line allocations, neutral
+fact sources/lines, exact invoice bindings and invoiced lines, settled movements/matches/payments,
+credits and payment reversals. Source IDs/versions and rational strings remain exact. The accepted
+attribution and allocation writers retain #346 job binding, #356 cumulative caps/distinct lines and
+#368 locked original revision versus completed-check supplementary descendant binding. Pack generation
+does not allocate money, approve attribution or grant a fee. Earlier artifacts never change.
+
+Commands claim the shared command receipt before any business/audit locks; identical requests replay,
+changed payloads and other command families conflict. The worker serializes the case, stored allocation
+inventory and job before its final material comparison. Approval refers only to the exact stored pack
+and is refused if the current material differs. A newly recorded adjustment makes older content
+historical; an old approval never claims continuing freshness.
+
+CI coverage exercises SQL canonical bytes against the TypeScript renderer, fresh synthetic
+shadow-30000 source-to-settlement storage/browser/verifier agreement, and completed pre-lock exports
+with zero/many hidden signals. These are tests awaiting execution in CI, not independent acceptance.
+Pre-lock material exits before hidden SQL; must-surface processing remains worker-owned and completes
+before ordinary export. Timing coverage checks statement shape and hidden-query exclusion; it does not
+claim wall-clock constancy or production side-channel certification.
+
+## RED repair round 1: export disclosure boundary
+
+0375 projects processing sources and attempts to IDs and input/result hashes only. Neither frozen
+processing input nor signal lists are exported. The reconciliation run projection retains only run,
+manifest and lock IDs plus manifest/result hashes; its classifications and zero-result flag stay private.
+Reveal and disposition records require a `reveal` classification and this case's own catch origin,
+traced through its referenced variation revision and a matching final-account line `source_id` and
+`commercial_revision_id`. A variation ID alone does not bind a real line. Non-catch cases receive no
+reveal/disposition rows. Ordinary catch-origin records also exclude other catches' signal IDs.
+The original pre-lock branch still returns before any hidden query. 0306 remains exactly PR #389;
+these changes are confined to the not-yet-merged 0375 activation.

@@ -52,7 +52,7 @@ class RecordedSql {
     if (sql.includes("FROM app.proposal_review")) return rows(sql.includes("OR proposal_id") ? [] : [{ revision: this.review.revision, state: "reviewing" }]);
     if (sql.includes("SELECT 1 FROM app.scope_identity")) return rows([{}]);
     if (sql.includes("SELECT revision,status FROM app.job")) return rows([{ revision: 0, status: this.status }]);
-    if (sql.includes("app.transition_job")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+    if (sql.includes("app.start_quote_from_review")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("current_setting('app.tenant_id') tenant")) return rows([{ tenant: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);

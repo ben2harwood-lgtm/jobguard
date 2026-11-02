@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-admit": {
+      "branches": [
+        "codex/sandbox/mon1-admit"
+      ],
+      "note": "RED MON-1 PR #388 renumber-only catch-up: reserved 0367 -> 0380, SQL bytes unchanged from 476b0336. Preserve current main through MON-3 0373 and union shared expectations. PostgreSQL/browser checks run in GitHub CI.",
+      "allow": [
+        "apps/api/src/job-parties.application.test.ts",
+        "apps/api/src/job-work-state-capacity.test.ts",
+        "apps/api/src/job-work-state.errors.ts",
+        "apps/api/src/job-work-state.isolation.test.ts",
+        "apps/api/src/meter-today.application.ts",
+        "apps/api/src/meter-work-state.application.test.ts",
+        "apps/api/src/practice-session.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.test.ts",
+        "apps/web/app/api/meter/jobs/[id]/work-state/route.ts",
+        "apps/web/app/lib/meter-server.ts",
+        "apps/web/app/meter/meter-screen.test.tsx",
+        "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/e2e/MON1-J.spec.mts",
+        "apps/web/tsconfig.json",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/meter-place-admission-v1.md",
+        "packages/core/src/job-work-state.ts",
+        "packages/db/migration-notes/0380_meter_work_admission.md",
+        "packages/db/migrations/0380_meter_work_admission.sql",
+        "packages/db/src/audit-fix-dbsrc-08.test.ts",
+        "packages/db/src/builder-capture-lock.test.ts",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/job-work-state-capacity-lock.test.ts",
+        "packages/db/src/job-work-state-repository.ts",
+        "packages/db/src/meter-lifecycle-repository.test.ts",
+        "packages/db/src/meter-today-repository.test.ts",
+        "packages/db/src/meter-today-repository.ts",
+        "packages/db/src/meter-work-admission.test.ts",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/meter-import-refresh.integration.test.ts",
+        "packages/db/test/meter-journey-fixtures.ts",
+        "packages/db/test/meter-today-journey.integration.test.ts",
+        "packages/db/test/meter-today.integration.test.ts",
+        "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
+        "packages/db/test/meter-work-admission.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

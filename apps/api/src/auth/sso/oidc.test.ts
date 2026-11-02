@@ -20,6 +20,55 @@ describe("local library-backed OIDC", () => {
     expect(proposal).toEqual({ version: "oidc-claims.v1", tenantId: fixtureConfig.tenantId, connectionId: fixtureConfig.connectionId, issuer: fixtureConfig.issuer, subject: "fictional-person", email: "person@builder.invalid", emailVerified: true, groups: ["site"] });
     expect(issuer.calls).toContain(`${fixtureConfig.issuer}/jwks`);
   });
+  it("refuses a consumed authorization code replay at the fixture issuer", async () => {
+    const { issuer, adapter, request, authorizationUrl } = await setup();
+    const callback = issuer.authorize(authorizationUrl);
+    await adapter.validate(callback, request, browser);
+    await expect(adapter.validate(callback, request, browser)).rejects.toThrow("OIDC_REFUSED");
+    expect(issuer.calls.filter(url => url.endsWith("/token"))).toHaveLength(2);
+    // This proves protocol handling only; durable request consumption belongs to slice B.
+  });
+  it("accepts at most one concurrent exchange of the same fixture code", async () => {
+    const { issuer, adapter, request, authorizationUrl } = await setup();
+    const callback = issuer.authorize(authorizationUrl);
+    const outcomes = await Promise.allSettled([
+      adapter.validate(callback, request, browser), adapter.validate(callback, request, browser),
+    ]);
+    expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const refused = outcomes.find(result => result.status === "rejected");
+    expect(refused).toMatchObject({ status: "rejected", reason: { code: "OIDC_REFUSED" } });
+  });
+  it("refuses another company's stored request before transport", async () => {
+    const { issuer, request, authorizationUrl } = await setup();
+    const otherCompany = new OidcAdapter({ ...fixtureConfig, tenantId: "33333333-3333-4333-8333-333333333333" }, issuer.transport);
+    const calls = issuer.calls.length;
+    await expect(otherCompany.validate(issuer.authorize(authorizationUrl), request, browser)).rejects.toThrow("OIDC_REFUSED");
+    expect(issuer.calls).toHaveLength(calls);
+  });
+  it("refuses a callback swapped between two companies' valid requests", async () => {
+    const { issuer, adapter, request, authorizationUrl } = await setup();
+    const otherCompany = new OidcAdapter({ ...fixtureConfig, tenantId: "33333333-3333-4333-8333-333333333333" }, issuer.transport);
+    const other = await otherCompany.start(browser);
+    const calls = issuer.calls.length;
+    const callback = issuer.authorize(authorizationUrl);
+    await expect(otherCompany.validate(callback, other.request, browser)).rejects.toThrow("OIDC_REFUSED");
+    expect(issuer.calls).toHaveLength(calls);
+    // The original request can still complete; the failed cross-company attempt consumed no code.
+    await expect(adapter.validate(callback, request, browser)).resolves.toHaveProperty("tenantId", fixtureConfig.tenantId);
+  });
+  it("keeps privileged groups as data and discards provider authority claims", async () => {
+    const { issuer, adapter, request, authorizationUrl } = await setup();
+    issuer.claims = {
+      tenantId: "33333333-3333-4333-8333-333333333333", connectionId: "33333333-3333-4333-8333-333333333333",
+      role: "owner", permissions: ["*"], session: "invented", groups: ["owner", "finance", "commercial_manager"],
+    };
+    const proposal = await adapter.validate(issuer.authorize(authorizationUrl), request, browser);
+    expect(proposal).toEqual({
+      version: "oidc-claims.v1", tenantId: fixtureConfig.tenantId, connectionId: fixtureConfig.connectionId,
+      issuer: fixtureConfig.issuer, subject: "fictional-person", email: "person@builder.invalid", emailVerified: true,
+      groups: ["owner", "finance", "commercial_manager"],
+    });
+  });
   it.each([
     { iss: "https://other.invalid" }, { aud: "other" }, { nonce: "other" }, { exp: 1 }, { iat: 9999999999 }, { nbf: 9999999999 }, { nonce: null },
     { email_verified: false }, { email: "person@example.com" }, { sub: "" }, { groups: Array(101).fill("site") },
