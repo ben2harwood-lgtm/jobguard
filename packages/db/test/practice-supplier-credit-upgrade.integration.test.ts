@@ -16,7 +16,7 @@ let adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV='synthetic_demo';const directory=await mkdtemp(join(tmpdir(),'jg-pf1b-upgrade-')),port=await freePort(61900,100),value=randomUUID();
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:'postgres',password:value,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:'postgres',password:value,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  adminConfig={host:'127.0.0.1',port,user:'postgres',database:'postgres',password:value};
  admin=new Pool(adminConfig);
  await admin.query(`CREATE ROLE pf1b_upgrade_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
