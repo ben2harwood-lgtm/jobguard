@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-web-shard-balance": {
+      "branches": ["codex/sandbox/ci-web-shard-balance"],
+      "note": "Twelve browser shards retaining both projects, one worker, zero retries and the required web gate. No product code changes.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs",
+        "docs/operations/ci-checks.md"
+      ]
+    }
+  }
+}
