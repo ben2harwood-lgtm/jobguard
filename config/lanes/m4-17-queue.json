@@ -18,7 +18,11 @@
         "packages/db/test/financial-reconciliation-queue-upgrade.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
-        "packages/db/test/tenancy.integration.test.ts"
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/migration-proofs/0310_money_trail_reconciliation.proof.json",
+        "packages/db/test/migration-proofs/0479_financial_reconciliation_queue.proof.json",
+        "docs/contracts/lp-downstream-effects-v1.md",
+        "docs/verdicts/M4-17-S/BUILDER_RECEIPT.md"
       ]
     }
   }

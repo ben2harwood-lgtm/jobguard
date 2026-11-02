@@ -130,8 +130,8 @@ only, never balances, counts, hashes or an empty completed report.
 PUBLIC/infrastructure/shadow get none. No tables, table grants, policies,
 existing routines or roles change. There is no new table requiring FORCE RLS,
 tenancy or contractor table inventory rows. LP-0 has exactly two new ACL/owner
-keys, one routine protection record and appended authority-path evidence;
-serious-B5 has exactly one new routine identity. No freeze is loosened.
+keys and one routine protection record in its migration proof; serious-B5
+has exactly one new routine identity. No freeze is loosened.
 RLS still assumes correctly authenticated tenant context and cannot protect
 against stolen privileged credentials. Source-inspected SQL and scripted pool
 tests are not PostgreSQL execution proof.
@@ -399,3 +399,19 @@ orphans, overpayments and late observations against the pure reference engine.
 No new table, routine, ACL or policy is introduced: the exact LP-0 / SERIOUS-B5
 unions remain unchanged. Only the unmerged branch-owned migration is edited.
 PostgreSQL integration and upgrade execution remain CI-only here.
+
+
+### 2 November catch-up: explicit migration proofs
+
+Neither 0310 nor 0479 matches a migration body on the saved `main` or
+`origin/main` refs (including the M4-17-S simulation run migration 0512).
+Both branch migrations are retained at their current numbers. Their exact
+`lp0`, `upgrade` and `tenancy` expectations now live in the corresponding
+`packages/db/test/migration-proofs/*.proof.json` files. The legacy inventory,
+B5 helper and tenancy lists no longer duplicate these branch-only allowances;
+the existing full comparisons consume the fragments instead. Expectations
+come from SQL and committed reviewed records, never a running database.
+0310 adds one routine only. 0479 lists five empty tables, eleven indexes,
+one routine, five policies and five forced-RLS tenancy postures. Neither
+migration on main is edited. PostgreSQL execution and exact-head RED review
+remain required before merge.
