@@ -20,7 +20,6 @@
         "apps/web/app/api/jobs/[id]/shadow-demo/source-hold/route.ts",
         "apps/web/app/demo-s/chooser-state.ts",
         "apps/web/app/demo-s/chooser.test.tsx",
-        "apps/web/app/demo-s/chooser.tsx",
         "apps/web/app/demo-s/journey-result.tsx",
         "apps/web/app/demo-s/shadow-30000/journey-model.ts",
         "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
@@ -42,6 +41,7 @@
         "packages/db/src/receipt-line-command-producer.test.ts",
         "packages/db/src/shadow-demo-guide-repository.ts",
         "packages/db/test/migration-proofs/legacy-migrations.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/shadow-demo-guide.integration.test.ts"
       ]
     }
