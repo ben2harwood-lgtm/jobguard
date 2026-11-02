@@ -132,12 +132,17 @@ export * from "./meter-today.js";
 export * from "./small-builder-demo-lifecycle.js";
 
 export * from "./inbox-outcome-metrics.js";
+export * from "./recovery-billability-policy.js";
 export * from "./mobile-auth-state.js";
 export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./small-builder-demo-meter.js";
 
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
+export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
+export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+
+export * from "./contractor-mandate.js";
