@@ -1,6 +1,6 @@
 // Synthetic PostgreSQL fixtures. Never call extra-fixtures.cluster/close: those delete their directory.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, statfs, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -9,7 +9,7 @@ import { ContractorRepository, ExtraRepository, contractorSessionContext, migrat
 import { enterpriseDashboardScopeLockSql } from "../src/enterprise-dashboard-queries.js";
 import { fixture } from "./extra-fixtures.js";
 import { actor, direct, invite } from "./site-extra-fixtures.js";
-import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestDatabase, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const deadlineMs = 8000;
 export const exclusiveGateSql = "SELECT pg_advisory_xact_lock(hashtextextended($1,54))";
@@ -34,14 +34,9 @@ export const outcome = <T>(work: Promise<T>) => work.then(
 );
 
 export async function authorityCluster() {
-  if (process.env.CI === undefined) {
-    const space = await statfs(tmpdir());
-    if (space.bavail * space.bsize < 33 * 1024 ** 3) throw new Error("Retained database requires at least 33 GiB free");
-  }
   const directory = await mkdtemp(join(tmpdir(), "jg-dashboard-authority-"));
   const port = await freePort(58800, 400);
-  // persistent:true is essential: embedded-postgres.stop() deletes a non-persistent directory.
-  const postgres = new EmbeddedPostgres({ databaseDir: join(directory, "postgres"), port, user: "postgres", password: "synthetic", persistent: true,
+  const postgres = new EmbeddedPostgres({ databaseDir: join(directory, "postgres"), port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
   const pools: Pool[] = [];
@@ -52,10 +47,7 @@ export async function authorityCluster() {
   const admin = retainedPool({ ...config, database: "jobguard_synthetic_demo", statement_timeout: 15000 });
   const runtimePool = (name: string, max = 4) => retainedPool({ ...config, database: "jobguard_synthetic_demo", user: "dashboard_authority_login",
     application_name: name, max, connectionTimeoutMillis: 8000, lock_timeout: 12000, statement_timeout: 15000 });
-  const close = async () => { try { await closeTestPools(...pools); } finally { await postgres.stop(); } };
-  // Preserve the location even if startup/migration fails. No teardown path removes it.
-  await writeFile(join(directory, "TEST-RETENTION.txt"), "TESTS-DASHBOARD-AUTHORITY-1 synthetic database; stop and retain.\n");
-  console.info(`TESTS-DASHBOARD-AUTHORITY-1 retained database: ${directory}`);
+  const close = () => closeTestDatabase(postgres, directory, ...pools);
   try {
     await postgres.initialise(); await postgres.start();
     await control.query("CREATE DATABASE jobguard_synthetic_demo");

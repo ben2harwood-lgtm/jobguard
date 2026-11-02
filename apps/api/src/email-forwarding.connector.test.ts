@@ -67,6 +67,13 @@ describe("SV-7B email forwarding DARK contract", () => {
     vi.mocked(p.readOriginal).mockResolvedValue({ ...original, signalCount: 1 });
     await expect(connector.read(context, request)).rejects.toThrow("EMAIL_FORWARDING_UNAVAILABLE");
   });
+  it("refuses a valid receipt whose evidence identity differs from the requested delivery", async () => {
+    const p = ports();
+    vi.mocked(p.readOriginal).mockResolvedValue({ ...original, evidence: { ...original.evidence, id: foreignId } });
+    await expect(new EmailForwardingConnector(p, configuration).read(context, request)).rejects.toMatchObject({
+      code: "EMAIL_FORWARDING_UNAVAILABLE", message: "EMAIL_FORWARDING_UNAVAILABLE",
+    });
+  });
   it("feeds only the existing worker; terms refusal prevents source reads and sink writes", async () => {
     const p = ports(), connector = new EmailForwardingConnector(p, configuration);
     const workerPorts: ShadowWorkerPorts = { assertTermsRelation: vi.fn(async () => undefined), hasAcceptedTerms: vi.fn(async () => true),

@@ -70,6 +70,11 @@ function compareInstants(a: Instant, b: Instant): -1 | 0 | 1 {
   return left === right ? 0 : left < right ? -1 : 1;
 }
 
+/** Compare source instants without dropping sub-millisecond precision. */
+export function compareReceiptInstants(left: string, right: string): -1 | 0 | 1 {
+  return compareInstants(parseInstant(instantV1.parse(left)), parseInstant(instantV1.parse(right)));
+}
+
 /** For reversals, supply the original settlement's remaining line balances and ratios. */
 export function allocateReceiptToLines(raw: unknown): readonly ReceiptLineAllocation[] {
   const parsed = receiptAllocationV1.safeParse(raw);
