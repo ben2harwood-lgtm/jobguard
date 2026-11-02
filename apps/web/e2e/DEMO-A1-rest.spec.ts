@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { finishDispositionsAndTerms, prepareLockJob } from "./helpers/final-account-lock-journey";
 import { enterQuote, recordThroughUi } from "./helpers/customer-invoice-journey";
 import { get, post } from "./helpers/recovery-sources";
-import { approveJ3Catches, type PricedCatch } from "./helpers/j3-customer-approval";
+import { approveJ3Catches, type PricedCatch } from "./helpers/j3-integrity-approval";
 import { allocateThroughUi, readAllocations, recovery18800 } from "./helpers/recovery-allocation-journey";
 
 // DEMO-A1's remaining five scenarios. Both configured projects run each test
