@@ -2,7 +2,7 @@ import {readFile} from "node:fs/promises";
 import {expect,it} from "vitest";
 import {MIGRATION_URLS} from "./migrate.js";
 it("discovers the additive movement migration once and validates both FKs without changing facts or privileges",async()=>{
- const name="0535_receipt_movement_job_fk.sql";
+ const name="0536_receipt_movement_job_fk.sql";
  expect(MIGRATION_URLS.filter(url=>url.pathname.endsWith(`/${name}`))).toHaveLength(1);
  const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
  expect(sql).toMatch(/^BEGIN;/u);expect(sql).toMatch(/COMMIT;\s*$/u);

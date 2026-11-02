@@ -5,7 +5,7 @@ import { ownerTx } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate, withTenant } from "../src/index.js";
 
-const migration = "0529_customer_evidence_approval_guard.sql", hash = "a".repeat(64);
+const migration = "0530_customer_evidence_approval_guard.sql", hash = "a".repeat(64);
 let c: Cluster, tenant: string, job: string, otherJob: string, actor: string;
 let historical: unknown, historicalId: string, privileges: unknown;
 const catalogue = () => c.admin.query("SELECT relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.variation_approval'::regclass");

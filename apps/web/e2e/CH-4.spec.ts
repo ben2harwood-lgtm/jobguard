@@ -55,6 +55,46 @@ test("finish, cancel and close with a reason persist across reload and a second 
   expect(box!.height).toBeGreaterThanOrEqual(44);
 });
 
+test("close requires an allowed reason, displays it, and replay preserves the exact event sequence", async ({ page }) => {
+  await openLiveWatchdogJob(page);
+  const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+  const url = `/api/jobs/${jobId}/work-state`;
+  await page.goto(`/jobs/${jobId}#site-work`);
+  await click(page, "Finished on site");
+  await click(page, "Cancel finished on site");
+  const before = await eventIds(page);
+  const expectedRevision = Number(await panel(page).getByTestId("work-state-revision").textContent());
+  for (const reason of [undefined, "not_an_allowed_reason"]) {
+    const refused = await page.request.post(url, { data: {
+      version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision,
+      action: "close", note: "Fictional customer stopped the work", ...(reason === undefined ? {} : { reason }),
+    } });
+    expect(refused.status()).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: "INVALID_WORK_STATE_INPUT" });
+  }
+  await page.reload();
+  await expect.poll(() => eventIds(page)).toEqual(before);
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Work under way");
+
+  await panel(page).getByLabel("Reason").selectOption("abandoned");
+  await panel(page).getByLabel("Note (required)").fill("Fictional customer stopped the work");
+  const sent = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === url);
+  await click(page, "Close job");
+  const command = (await sent).postDataJSON();
+  await expect(panel(page).getByTestId("work-state")).toHaveText("Closed");
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
+  const saved = await eventIds(page);
+  expect(saved.map(item => item.split(":")[0])).toEqual(["finished_on_site", "finished_cancelled", "closed"]);
+  const replay = await page.request.post(url, { data: command });
+  expect(replay.status()).toBe(201);
+  const result = await replay.json();
+  expect(result.events.filter((event: { kind: string }) => event.kind === "closed")).toHaveLength(1);
+  expect(result.events.at(-1)).toMatchObject({ commandId: command.commandId, closeReason: "abandoned", closeNote: "Fictional customer stopped the work" });
+  await page.reload();
+  await expect.poll(() => eventIds(page)).toEqual(saved);
+  await expect(panel(page).getByTestId("work-state-event").last()).toContainText("Abandoned: Fictional customer stopped the work");
+});
+
 test("after lock, new site work is refused and the screen offers a linked job", async ({ page }) => {
   const { jobId, account } = await prepareLockJob(page);
   await prepareInvoiceFinalCheck(page, jobId, account);

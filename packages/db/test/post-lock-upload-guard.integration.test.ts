@@ -41,8 +41,8 @@ it.each([false,true])("C248 SV-5 completes with an excluded expired source (reje
  expect(await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest)).toMatchObject({state:'completed',runId:result.runId});
  const audit=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
  expect(audit).toHaveLength(1);
- expect(JSON.stringify(audit[0].payload.references.exclusions)).toContain(id);
- expect(JSON.stringify(audit[0].payload.references.exclusions)).toContain(reject?'SYNTHETIC_EXPIRED':'expired_unswept');
+ const binding=(await f.admin.query("SELECT lock_id,app.final_lock_hash($3::jsonb) digest FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,m.id,JSON.stringify(m.excludedUploads)])).rows[0];
+ expect(audit).toEqual([{payload:{references:{auditTrust:'checked_operation',manifestId:m.id,lockId:binding.lock_id},hashes:{exclusions:binding.digest}}}]);
  // Replays retain the first frozen manifest and do not duplicate the exclusion audit.
  expect((await worker.begin(a.context,a.jobId)).id).toBe(m.id);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows[0].n).toBe(1);

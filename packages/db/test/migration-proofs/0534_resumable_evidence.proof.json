@@ -1,0 +1,104 @@
+{
+  "migration": "0534_resumable_evidence.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.synthetic_evidence_chunk|jobguard_runtime|INSERT|-",
+        "group": "x-evidence-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.synthetic_evidence_chunk|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.synthetic_evidence_chunk|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.synthetic_evidence_chunk|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.synthetic_evidence_chunk|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|0bb55fee5eed8d6d"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.synthetic_evidence_chunk|synthetic_evidence_chunk_immutable|app.reject_evidence_object_mutation|BEFORE UPDATE/DELETE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.synthetic_evidence_chunk",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "synthetic_evidence_chunk",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "synthetic_evidence_chunk_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "synthetic_evidence_chunk",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (EXISTS ( SELECT 1\n   FROM (app.evidence_upload u\n     JOIN app.job_commercial_track t ON (((t.tenant_id = u.tenant_id) AND (t.job_id = u.job_id))))\n  WHERE ((u.tenant_id = synthetic_evidence_chunk.tenant_id) AND (u.id = synthetic_evidence_chunk.upload_id) AND ((t.environment)::text = 'synthetic_demo'::text) AND ((u.state)::text = 'pending'::text) AND (u.expires_at > clock_timestamp())))))"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "synthetic_evidence_chunk",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

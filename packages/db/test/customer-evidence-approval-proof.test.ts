@@ -7,7 +7,7 @@ it("loads 0562 alongside main's proofs and preserves existing allowances", () =>
   const directory = new URL("./migration-proofs/", import.meta.url);
   // Validate the complete migration set, then exercise this branch's isolated allowances.
   const proofs = loadMigrationProofs(directory.pathname).proofs.filter(
-    proof => proof.migration === "0529_customer_evidence_approval_guard.sql",
+    proof => proof.migration === "0530_customer_evidence_approval_guard.sql",
   );
   expect(proofs).toHaveLength(1);
   const baseline = parseInventory(JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8")));

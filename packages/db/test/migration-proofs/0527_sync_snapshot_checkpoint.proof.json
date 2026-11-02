@@ -1,0 +1,196 @@
+{
+  "migration": "0527_sync_snapshot_checkpoint.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m3-3-snapshot",
+        "title": "Synthetic sync checkpoint read and controlled advancement",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "LP-7 reviews membership and revocation boundaries; synthetic-only checkpoint advancement."
+        },
+        "cards": [
+          "LP-7"
+        ],
+        "responsibilities": {},
+        "downstream": "Runtime SELECT is tenant-scoped; SECURITY DEFINER advancement rechecks active membership, rejects contractor revocation, stale revisions and non-synthetic environments. No direct runtime checkpoint writes.",
+        "path": "ap-m3-3-snapshot",
+        "sources": [
+          "packages/db/migrations/0527_sync_snapshot_checkpoint.sql"
+        ],
+        "tests": [
+          "packages/db/test/sync-snapshot.integration.test.ts",
+          "apps/api/src/sync/snapshot.adapter.test.ts"
+        ],
+        "gaps": [
+          "Synthetic provider port only; no mounted endpoint or approved-region live sync deployment."
+        ]
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m3-3-snapshot",
+        "title": "Synthetic sync checkpoint authority",
+        "description": "Verified tenant context and current membership bound durable synthetic download generations; no live adapter or token authority is granted.",
+        "cards": [
+          "LP-7"
+        ],
+        "responsibilities": {},
+        "sources": [
+          "packages/db/migrations/0527_sync_snapshot_checkpoint.sql"
+        ],
+        "tests": [
+          "packages/db/test/sync-snapshot.integration.test.ts",
+          "apps/api/src/sync/snapshot.adapter.test.ts"
+        ],
+        "gaps": [
+          "Synthetic provider port only; no mounted endpoint or approved-region live sync deployment."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.sync_snapshot_checkpoint|jobguard_runtime|SELECT|-",
+        "group": "a-m3-3-snapshot"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.sync_snapshot_checkpoint|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.sync_snapshot_generation(uuid,bigint,bigint,text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m3-3-snapshot"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.sync_snapshot_generation(uuid,bigint,bigint,text,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.sync_snapshot_generation(uuid,bigint,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.sync_snapshot_checkpoint"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.sync_snapshot_checkpoint|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.sync_snapshot_checkpoint|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|6fa387f2f629fba6"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.sync_snapshot_checkpoint",
+        "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "sync_snapshot_generation",
+        "args": "u uuid, r bigint, s bigint, h text, e text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "sync_snapshot_checkpoint",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "sync_snapshot_checkpoint_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "sync_snapshot_checkpoint",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "sync_snapshot_checkpoint",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
