@@ -86,14 +86,14 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Catalog scan catches a newly added callable helper reaching any shadow table.
   const helpers=(await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AND p.proname<>'reveal_shadow_signals' AND p.oid<>ALL($2::text[]::regprocedure[]::oid[]) AND (p.prosrc ~ 'shadow_(commercial_signal|signal_|reconciliation_run|disclosure_event|break_glass_access)' OR EXISTS(SELECT 1 FROM pg_depend d JOIN pg_class c ON c.oid=d.refobjid WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND c.relname=ANY($1)))`,[tables,finalCheckRuntime])).rows;
   expect(helpers).toEqual([]);
-  // SV-5: each of the eight routines exists at its exact signature, is migration-owned SECURITY DEFINER with the
+  // SV-5: each of the nine routines exists at its exact signature, is migration-owned SECURITY DEFINER with the
   // pinned path, and has exactly one non-owner EXECUTE grantee (no PUBLIC). No same-name overload exists.
   const pinned=(await admin.query(`SELECT s AS sig,pg_get_userbyid(p.proowner) AS owner,p.prosecdef,p.proconfig,ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type='EXECUTE' AND a.grantee<>p.proowner ORDER BY 1)::text[] AS grantees
    FROM unnest($1::text[]) s JOIN pg_proc p ON p.oid=s::regprocedure`,[Object.keys(finalCheck)])).rows;
-  expect(pinned).toHaveLength(8);
+  expect(pinned).toHaveLength(9);
   for(const row of pinned){expect(row).toMatchObject({owner:"jobguard_migration",prosecdef:true,grantees:[finalCheck[row.sig]]});expect(row.proconfig).toContain("search_path=pg_catalog, app");}
   const names=Object.keys(finalCheck).map(sig=>sig.slice(4,sig.indexOf("(")));
-  expect((await admin.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1)",[names])).rows[0].n).toBe(8);
+  expect((await admin.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1)",[names])).rows[0].n).toBe(9);
  });
  it("closes inherited PUBLIC EXECUTE: neither new role can run an app routine beyond SV-2's explicit grants",async()=>{
   // 0128 gives both roles USAGE on schema app for the first time. Four older SECURITY DEFINER routines there had

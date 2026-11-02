@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/demo-j3-finish-2"
       ],
-      "note": "Squashed final tree of DEMO-J3 shadow-30000 from origin/main: report completion, shared-tenant receipt retry, click-through guide and its demo-only helpers. Migration 0518; its four permissions are not approved for merge (awaiting Ben). Own lane file is implicitly owned.",
+      "note": "Squashed final tree of DEMO-J3 shadow-30000 from origin/main: report completion, shared-tenant receipt retry, click-through guide and its demo-only helpers. Migration 0518; its four demo-only permissions approved by Ben, 2 Nov 2026 (\"Approve, demo only\"). Own lane file is implicitly owned.",
       "allow": [
         "apps/api/src/shadow-demo-guide.application.test.ts",
         "apps/api/src/shadow-demo-guide.application.ts",
@@ -43,6 +43,7 @@
         "packages/db/src/shadow-demo-guide-repository.ts",
         "packages/db/test/migration-proofs/legacy-migrations.json",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
         "packages/db/test/shadow-demo-guide-fixture.ts",
         "packages/db/test/shadow-demo-guide-outside.integration.test.ts",
         "packages/db/test/shadow-demo-guide.integration.test.ts"
