@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach,beforeEach,expect,it,vi } from "vitest";
-const mocks=vi.hoisted(()=>({job:vi.fn(),read:vi.fn(),command:vi.fn()}));
+const mocks=vi.hoisted(()=>({job:vi.fn(),read:vi.fn(),command:vi.fn(),authority:vi.fn()}));
 vi.mock("./practice-access.js",()=>({PracticeAccess:class{job=mocks.job;}}));
-vi.mock("@jobguard/db",async original=>({...await original<typeof import("@jobguard/db")>(),PaymentFeeRepository:class{read=mocks.read;command=mocks.command;}}));
+vi.mock("@jobguard/db",async original=>({...await original<typeof import("@jobguard/db")>(),PaymentFeeRepository:class{read=mocks.read;command=mocks.command;authority=mocks.authority;}}));
 import { PaymentFeeApplication,paymentFeeFailure } from "./payment-fee.application.js";
 import { PaymentFeeStatementError } from "@jobguard/core";
 const environment=process.env.JOBGUARD_ENV,id=randomUUID();
@@ -29,4 +29,17 @@ it("maps pauses and stale bindings to explicit conflicts without converting unkn
  expect(paymentFeeFailure(new PaymentFeeStatementError())).toEqual({status:400,body:{code:"INVALID_PAYMENT_FEE_COMMAND"}});
  expect(paymentFeeFailure(new Error("FINAL_CHECK_FORBIDDEN"))).toEqual({status:404,body:{code:"NOT_FOUND"}});
  expect(paymentFeeFailure(new Error("unknown"))).toBeNull();
+});
+
+it("routes explicit opt-in/revoke intent through fresh authenticated authority commands",async()=>{
+ const app=new PaymentFeeApplication({} as Pool);
+ for(const action of ["opt_in","revoke"]){
+  const p={version:"payment-fee-authority-command.v1",action,commandId:randomUUID(),expectedAuthorityId:null,cap:"per_verified_receipt_fee",policyVersion:"reference_fee_policy_v3"};
+  await app.command(id,p);
+  const auth=await mocks.job.mock.results.at(-1)!.value;
+  expect(mocks.authority).toHaveBeenLastCalledWith(auth.context,id,auth.digest,p);
+  await expect(app.command(id,{...p,amountPence:8000})).rejects.toThrow("INVALID_PAYMENT_FEE_COMMAND");
+ }
+ expect(mocks.command).not.toHaveBeenCalled();
+ expect(paymentFeeFailure(new Error("PAYMENT_FEE_AUTHORITY_STALE"))).toEqual({status:409,body:{code:"PAYMENT_FEE_AUTHORITY_STALE"}});
 });
