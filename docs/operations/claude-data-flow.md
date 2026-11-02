@@ -34,6 +34,18 @@ instruction; the gateway validates the caller's schema and citation bounds,
 permits one local repair, and creates provenance from server configuration.
 This separation mitigates injection; it does not prove model accuracy.
 
+The gateway requires a server-owned session resolver on every call. It fails
+closed when the resolver is missing, returns no tenant or fails. Provider requests
+use that session tenant; a conflicting request tenant is refused. Every source
+must explicitly have the same tenant and `visibility: public`, otherwise neither
+the provider nor output repair runs. The resolver must authenticate the session
+and check active membership through the API's verified principal bridge before a
+future live route can use it. This package does not implement a live endpoint.
+Recorded fixture builders supply synthetic authority and explicit public labels
+for fictional snapshots only, including shadow-proposal evaluation inputs. Those
+fixture labels are not a production source-classification or access-control adapter;
+a live source adapter must read authoritative ownership/visibility from storage.
+
 CI builds the AI dependency closure and runs `eval:contract` on every candidate,
 including model/prompt/parser/schema changes. It uses the existing fixture gateway,
 separate corpus/labels, per-case failures and fixed proposed targets. It remains
