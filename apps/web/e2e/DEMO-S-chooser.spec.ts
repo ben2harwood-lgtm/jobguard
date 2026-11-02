@@ -136,11 +136,12 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
   const selectionUrl = page.url();
   const runId = new URL(selectionUrl).searchParams.get("runId");
   const requests: { captureId: string }[] = [];
+  let replayBody: unknown;
   await page.route("**/api/jobs/capture", async route => {
     requests.push(route.request().postDataJSON());
     const response = await route.fetch();
     if (requests.length === 1) { expect(response.ok()).toBe(true); await route.abort("failed"); }
-    else await route.fulfill({ response });
+    else { replayBody = await response.json(); await route.fulfill({ response }); }
   });
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
   // Next's route announcer also has role=alert. Require this journey's actual
@@ -155,7 +156,7 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
   const replayResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Launch or resume shadow-30000", exact: true }).click();
   const replay = await replayResponse;
-  const replayBody: unknown = await replay.json();
+  // The page navigates once this succeeds, so read the body in the route handler, not from the browser.
   expect(replay.status(), JSON.stringify(replayBody)).toBe(201);
   const recovered = recoveredCaptureV1.parse(replayBody);
   expect(recovered.captureId).toBe(runId);
