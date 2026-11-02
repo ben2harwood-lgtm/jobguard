@@ -6,7 +6,7 @@ import { get, post } from "./helpers/recovery-sources";
 import { approveJ3Catches, type PricedCatch } from "./helpers/j3-integrity-approval";
 import { allocateThroughUi, readAllocations, recovery18800 } from "./helpers/recovery-allocation-journey";
 
-// DEMO-A1's remaining five scenarios. Both configured projects run each test
+// DEMO-A1's remaining seven scenarios. Both configured projects run each test
 // from a new practice session/job. Setup and outcomes use HTTP/UI only: even
 // Final Check completion belongs to the real scheduled worker, never SQL setup.
 test.setTimeout(300_000);
@@ -29,9 +29,11 @@ async function checkedJob(page: Page, extra = false) {
   await finishDispositionsAndTerms(page);
   await button(page, "Complete final account").click();
   await expect.poll(async () => (await get(page, path(jobId, "final-account/lock"))).lock?.finalAccountRevisionId).toBe(account.id);
-  // Discovery runs once per minute. No completion certificate is manufactured.
+  // Each scenario needs a fresh job: dispositions and receipts mutate it.
+  // Discovery runs once per minute. Poll the saved result without an extra
+  // five-second observation delay; no completion certificate is manufactured.
   await expect.poll(async () => (await get(page, path(jobId, "final-check"))).state,
-    { timeout: 180_000, intervals: [5_000] }).toBe("completed");
+    { timeout: 180_000 }).toBe("completed");
   const check = await get(page, path(jobId, "final-check"));
   expect(check.items).toHaveLength(extra ? 1 : 0);
   if (extra) expect(check.items[0].description).toContain("outside tap");
