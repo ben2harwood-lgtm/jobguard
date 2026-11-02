@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-7-dashboard": {
+      "branches": [
+        "codex/sandbox/m2-7-dashboard"
+      ],
+      "note": "M2-7 AMBER synthetic owner-only metrics read and dashboard. Reuses existing session/job ownership, metrics and mandatory projections; no migration. Core index edit only removes inherited empty merge conflict markers. This lane file is implicitly editable.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.test.ts",
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.ts",
+        "apps/web/app/jobs/[id]/signal-to-noise/page.tsx",
+        "apps/web/app/lib/inbox-metrics-server.ts",
+        "apps/web/app/ui/inbox-metrics-dashboard.test.tsx",
+        "apps/web/app/ui/inbox-metrics-dashboard.tsx",
+        "apps/web/app/ui/relevance-inbox.tsx",
+        "apps/web/e2e/m2-7-dashboard.spec.ts",
+        "packages/core/src/index.ts"
+      ]
+    }
+  }
+}
