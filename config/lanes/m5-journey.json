@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-journey": {
+      "branches": [
+        "codex/sandbox/m5-journey"
+      ],
+      "note": "MON-5 M5-JOURNEY; RED; fictional fake-outbox customer journey. NOPR=1. Browser/PostgreSQL execution and independent review remain with the router; no migration or production behavior changes. Lane file is implicitly owned.",
+      "allow": [
+        "apps/web/e2e/MON-5-customer-journey.spec.ts",
+        "apps/web/e2e/helpers/customer-portal-journey.ts",
+        "config/lanes/m5-journey.json"
+      ]
+    }
+  }
+}
