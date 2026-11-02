@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { QuoteDocument } from "@jobguard/core";
+import { cancellationKitRows, type QuoteDocument } from "@jobguard/core";
 type View = { jobId: string; jobRevision: number; status: string; quote: { id: string; revision: number; hash: string; document: QuoteDocument } | null };
 export default function CustomerQuote() {
   const [view,setView]=useState<View>(), [message,setMessage]=useState("Loading your quote…"), [busy,setBusy]=useState(false);
@@ -31,6 +31,7 @@ export default function CustomerQuote() {
     <h3>Exclusions</h3><ul>{d.exclusions.map((text,i)=><li key={i}>{text}</li>)}</ul>
     <h3>Qualifications</h3><ul>{d.qualifications.map((text,i)=><li key={i}>{text}</li>)}</ul>
     <p>Subtotal {gbp(d.subtotalPence)} · Discount {gbp(d.discountPence)}</p><p>Net {gbp(d.netPence)} · VAT {gbp(d.taxPence)} · Total {gbp(d.totalPence)}</p>
+    {d.cancellationKit&&<section aria-label="Domestic cancellation-notice kit"><h3>Domestic cancellation-notice kit</h3>{cancellationKitRows(d.cancellationKit).slice(1).map((row,i)=><p key={i}>{row}</p>)}</section>}
     {view?.status==="quoting"&&<button disabled={busy} onClick={()=>void accept()}>{busy?"Confirming…":"Accept this quote"}</button>}
     {view?.status==="accepted"&&<p>This quote is accepted.</p>}
   </>}</main>;

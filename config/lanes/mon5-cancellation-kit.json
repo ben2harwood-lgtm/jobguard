@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon5-cancellation-kit": {
+      "branches": [
+        "codex/sandbox/mon5-cancellation-kit"
+      ],
+      "note": "MON-5 cancellation kit; AMBER synthetic documents only. Reuses the frozen candidate template. No migration or production activation.",
+      "allow": [
+        "apps/web/app/customer/quote/quote.tsx",
+        "apps/web/e2e/customer-signin.spec.ts",
+        "packages/core/src/cancellation-kit.test.ts",
+        "packages/core/src/cancellation-kit.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/quote-document.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/test/cancellation-kit.integration.test.ts"
+      ]
+    }
+  }
+}
