@@ -1,7 +1,9 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 import { click, jsonResult, recordThroughUi } from "./helpers/customer-invoice-journey";
+import { releaseChooserSignIns, signInForChooser } from "./helpers/chooser-sign-in";
 
 test.setTimeout(300_000);
+test.afterEach(releaseChooserSignIns);
 const names = ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"];
 async function read(page: Page, path: string) { return jsonResult(page.request.get(path), `Read ${path}`); }
 async function post(page: Page, path: string, data: unknown) { return jsonResult(page.request.post(path, { data }), `Post ${path}`); }
@@ -16,7 +18,7 @@ async function add(page: Page, description: string, price: string, direction: st
 
 // No SQL setup, successful response mocking or fixture-completion insertion.
 // Both configured browser projects run the real capture, command paths and Final Check worker.
-test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, correction and source links", async ({ page, browser }) => {
+test("DEMO-J1 guide link alone makes a fresh five-line draft", async ({ page }) => {
   await page.goto("/demo-s");
   await page.getByRole("link", { name: "Practise core-1000 with the guided job screens" }).click();
   await click(page, "Start core-1000 practice session");
@@ -24,7 +26,18 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   await expect(page.getByTestId("proposal-line-count")).toHaveText("5");
   await click(page, "Check and edit my draft");
   await page.waitForURL(/core-1000\?jobId=/);
+});
+
+test("DEMO-J1 fresh selection launch, five-line job, completed worker check, receipts, reversal, correction, source links and saved report", async ({ page, browser }) => {
+  await signInForChooser(page);
+  await page.goto("/demo-s");
+  await page.getByRole("button", { name: "Choose core-1000 selection", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Saved core-1000 selection" })).toContainText("Available end to end");
+  const selectionUrl = page.url(), results = page.getByRole("region", { name: "Core-1000 results", exact: true });
+  await results.getByRole("button", { name: "Launch or resume core-1000", exact: true }).click();
+  await page.waitForURL(/core-1000\?jobId=/);
   const guidedUrl = page.url(), jobId = new URL(guidedUrl).searchParams.get("jobId")!;
+  await expect(page.getByRole("link", { name: "Practice chooser" })).toHaveAttribute("href", new URL(selectionUrl).pathname + new URL(selectionUrl).search);
   const root = `/api/jobs/${jobId}`;
   await click(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
@@ -81,9 +94,6 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   const account = (await read(page, `${root}/final-account`)).account;
   expect(account.lines.filter((line: { kind: string }) => line.kind === "baseline").map((line: { scopeItemId: string }) => line.scopeItemId).sort()).toEqual(scopeIds.sort());
   expect(account.pending).toHaveLength(1);
-  const before = await read(page, `${root}/final-check`);
-  expect(before).toMatchObject({ state: "unlocked", items: [] });
-  expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
   for (const name of names) {
     await page.getByLabel(`Disposition ${name}`, { exact: true }).selectOption("done");
     await expect(page.getByLabel(`Disposition ${name}`, { exact: true })).toBeEnabled();
@@ -96,6 +106,10 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
   await expect(page.getByTestId("final-account-lock")).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("button", { name: "Accept final check terms", exact: true })).toBeDisabled();
   expect((await read(page, `${root}/final-account/lock`)).termsAccepted).toBe(true);
+  // Reading is refused until the business accepts the terms; before lock it stays empty.
+  const before = await read(page, `${root}/final-check`);
+  expect(before).toMatchObject({ state: "unlocked", items: [] });
+  expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);
@@ -176,4 +190,25 @@ test("DEMO-J1 fresh five-line job, completed worker check, receipts, reversal, c
     await expect(tab.getByTestId("invoice-balance")).toHaveCount(0);
     await expect(tab.getByTestId("final-check-item")).toHaveCount(0);
   } finally { await other.close(); }
+  // The saved report reads the same job again from the selection's own capture identity.
+  await page.goto(selectionUrl);
+  await results.getByRole("button", { name: "Read saved core-1000 results", exact: true }).click();
+  const report = page.getByRole("region", { name: "Saved core-1000 report" });
+  await expect(page.getByTestId("core-1000-status")).toHaveText("Every step has saved records.");
+  for (const [row, text] of [["confirmation", "5 of 5 cited lines confirmed"], ["quote", "Revision 2: £1,000.00 net"], ["switch-live", "reference_fee_policy_v3; no recovery cap"],
+    ["extras", "Approved +£125.00 and −£25.00; pending £50.00"], ["proof", "Proof verified; stage complete"], ["final-account", "£1,320.00 gross"], ["final-check", "Bill locked; check completed"],
+    ["invoice", "£1,320.00 gross"], ["receipts", "2 receipts, 1 reversed"], ["correction", "£120.00 credit; balance £700.00"], ["value", "£1,320.00 invoiced; £700.00 outstanding"]]) {
+    await expect(page.getByTestId(`core-1000-row-${row}`)).toContainText(text!);
+    await expect(page.getByTestId(`core-1000-row-${row}`)).not.toContainText("Not done yet");
+    expect(await page.getByTestId(`core-1000-row-${row}`).getByRole("link").getAttribute("href")).toContain(jobId);
+  }
+  for (const row of ["quote", "switch-live", "final-account", "invoice", "correction"]) await expect(page.getByTestId(`core-1000-row-${row}`)).toContainText("saved record");
+  await report.getByRole("link", { name: "Source-linked job value", exact: true }).click();
+  await expect(page.getByTestId("value-outstanding-gross")).toHaveText("£700.00");
+  await page.goto(selectionUrl);
+  await page.getByRole("button", { name: "Reset selection", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Open archived selection", exact: true })).toBeVisible();
+  await results.getByRole("button", { name: "Read saved core-1000 results", exact: true }).click();
+  await expect(page.getByTestId("core-1000-status")).toHaveText("In progress: read each step below.");
+  await expect(page.getByTestId("core-1000-row-invoice")).toContainText("Not done yet");
 });
