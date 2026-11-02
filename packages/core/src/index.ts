@@ -150,7 +150,14 @@ export * from "./customer-approval-method.js";
 export * from "./customer-quote-acceptance.js";
 export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
+export * from "./interim-applications.js";
+export * from "./construction-notices.js";
+export * from "./retention-balances.js";
+export * from "./vat-treatments.js";
+export * from "./cis-deductions.js";
+export * from "./exposure-curve.js";
 
+export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
 
 export * from "./cancellation-kit.js";
