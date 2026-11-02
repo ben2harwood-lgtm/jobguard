@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-sv-7a": {
+      "branches": [
+        "codex/sandbox/demo-sv7a"
+      ],
+      "note": "AMBER SV-7A on-site diary screen only; no server, migration or meter changes.",
+      "allow": [
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/job-sources.test.tsx",
+        "apps/web/e2e/SV-7A.spec.ts"
+      ]
+    }
+  }
+}
