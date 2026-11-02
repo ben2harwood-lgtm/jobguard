@@ -269,3 +269,159 @@ Router owns commit/push and CI. Real PostgreSQL, migration/upgrade and browser
 execution remain CI gates; none was executed or claimed here. Green CI against
 current main and one independent Claude RED review of the exact pushed head
 remain required before merge. No live providers or real customer data used.
+
+## m5-signin-redact — RED before-live repair, 30 October 2026
+
+Built ahead on codex/sandbox/m5-signin-redact from d71db32f (m5-signin,
+PR #423). Router owns commit, push, finish-list/work-list updates and the later
+PR after the base merges. No Git-writing commands were run.
+
+Issuance now persists a versioned random delivery reference rather than a usable
+link. The existing identity HMAC key derives a deterministic 256-bit token from
+the complete reference under a separate customer-delivery domain; the grant
+continues to hold only the existing customer-link HMAC. Authorization and outbox
+hashes bind the reference. ActionExecutor checks that hash and materializes the
+link only as a separate transient fake_email delivery argument. Other adapter
+calls retain their existing argument and behavior. Missing delivery keys fail
+before claiming or sending. Completed/unknown work keeps the existing replay
+and reconciliation controls. Callers executing these synthetic sign-in actions
+must supply the same identity digest callback as issuance; no key or token is
+stored in the outbox, attempts, audit or telemetry.
+
+Forward migration 0388 copies the latest 0387 customer_portal_issue definition
+and changes only the content-format validation/comment. No migration on main
+was edited; mon2_issue and every other routine remain untouched. No tables,
+routines, grants, policies or catalog facts are added, so the LP-0, SERIOUS-B5,
+entitlement and privilege expectation unions are unchanged. Existing plaintext
+sign-in outbox contents are redacted to a digest marker, their grants revoked
+(including already redeemed sessions through the existing current-grant check),
+and pending/retryable sends cancelled. Rows, authorization hashes and prior audit
+history remain; an identifier-only redacted audit event records each affected
+grant. Historical redacted records cannot be delivered. This is a forward privacy
+fix: keep the redaction, and use a later forward migration for any correction;
+do not restore old plaintext. 0388 is the next local number after the base's
+0387; router must check concurrent reservations before integration.
+
+Regression coverage attacks database-only nonce redemption, old plaintext issue
+inputs, stored credential leakage, key absence, reference/hash substitution,
+working fake delivery, repeat execution without a new token/send, and existing
+one-time redemption. PostgreSQL coverage also seeds a legacy working link/session
+before the forward migration and checks redaction, revocation, data preservation
+and migration replay. The browser fixture now receives its credential through
+the actual ActionExecutor/fake adapter instead of reading a usable database link.
+
+Local validation used installed Node 24.17.0, TypeScript 5.8.3 and Vitest 4.1.12,
+with one worker per Vitest process and at most two test workers:
+
+- packages/db: `vitest run --maxWorkers=1 src/outbox.test.ts
+  src/later-outbox.test.ts src/serious-b10.test.ts` — 25 passed.
+- apps/api: `vitest run --maxWorkers=1 src/auth/customer-signin.test.ts
+  src/auth/sso/oidc-paths.test.ts` — 32 passed.
+- Installed `tsc -p <package>/tsconfig.json --noEmit` for packages/db,
+  apps/api and apps/web — passed. Core/config/storage/AI/DB dependency outputs
+  were built with installed tsc after initial collection found absent dist
+  entrypoints. No test behavior was mocked to hide missing builds.
+- `vitest list --maxWorkers=1 test/customer-signin.integration.test.ts` collected
+  26 cases; `playwright test --list --workers=1 customer-signin.spec.ts` collected
+  both projects. Collection does not execute PostgreSQL or browsers. Playwright
+  uses the existing native dynamic ESM import pattern from global-setup.
+- `node tools/lint.mjs` and `git diff --check` — passed.
+
+PostgreSQL/migration/upgrade and browser suites cannot execute in this sandbox;
+GitHub CI must run them after the router pushes. Green CI against current main
+and one independent Claude RED review of the exact final head remain merge
+gates. This is builder source inspection and local testing, not that review.
+Made-up data and fake adapters only; no live provider, release or money action.
+
+Additional local checks: LP-0 catalogue and upgrade-proof-utils unit suites —
+30 passed. Exact path-set comparison matches the lane (including its implicit
+own file). Byte comparison confirms 0387 unchanged and the recreated issuer
+routine differs only in CREATE OR REPLACE plus the reference validation/comment.
+
+## m5-signin-redact — RED hash-history follow-up, 30 October 2026
+
+The branch-owned 0388 migration now computes each redacted outbox row's current
+SHA-256 from its replacement content. In the same transaction it appends an
+`action_outbox.redacted` event to the existing tenant audit chain with the outbox
+ID, original content hash and replacement content hash. It keeps the original
+authorization hash, prior audit events and grant-redaction events unchanged.
+No plaintext content or credential enters the new event. All business updates
+precede the audit-head lock; no new table, routine, grant or catalogue fact is
+introduced. Inline migration code reuses the existing canonical hash and audit
+head routines, avoiding a persistent helper/interface solely for this backfill.
+
+Attacked the old behavior with PostgreSQL regression assertions: current hash
+matches replacement bytes and differs from the original; history binds both
+hashes to the exact outbox; history UPDATE is rejected; the entire audit chain
+verifies; no legacy token or plaintext path appears anywhere in the post-upgrade
+snapshot; existing authorization/data preservation, revocation, cancellation and
+repeat-migration assertions remain. Database assertions await actual CI execution.
+LP-0 and SERIOUS-B5 union expectations are unchanged byte-for-byte against HEAD;
+0387 is unchanged against the build-ahead base. No migration on main was edited.
+The lane remains exact against d71db32f, including its implicit own lane file.
+
+Local validation (installed binaries only, one Vitest worker):
+
+- packages/db: `vitest run --maxWorkers=1 src/outbox.test.ts
+  test/lp-0-catalog.test.ts test/upgrade-proof-utils.test.ts` — 39 passed.
+- `tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- In packages/db: `tsc --noEmit --target ES2023 --module NodeNext
+  --moduleResolution NodeNext --strict --skipLibCheck
+  test/customer-signin.integration.test.ts` — passed, including the changed
+  integration file (the package tsconfig includes src only).
+- `vitest list --maxWorkers=1 test/customer-signin.integration.test.ts` —
+  26 cases collected, not executed; upgrade assertions execute in beforeAll.
+- `LANE_BASE_REF=d71db32f node tools/lint.mjs` — passed against this piece's
+  build-ahead base. Default `node tools/lint.mjs` stops at migration ordering:
+  origin/main has advanced to 0398, above the reserved branch migration 0388.
+  The router must catch up and renumber branch-only migrations at integration;
+  no new number was claimed during this bounded follow-up.
+- `git diff --check` — passed. No git-writing commands or downloads used.
+
+Ready as a follow-up on the unmerged built-ahead branch. Router owns commit/push,
+main catch-up/renumbering and CI. PostgreSQL/migration/upgrade and browser suites,
+green CI against current main and one independent exact-head Claude RED review
+remain merge gates. Made-up data only; no live provider, release or money action.
+
+
+## MON-5 m5-signin-redact — RED main catch-up, 2 November 2026
+
+Resolved the customer-signin integration conflict as a union: main's exact
+predecessor/successor preservation assertions run before seeding the historical
+plaintext link; the existing branch redaction, original/replacement hash history,
+append-only audit-chain, revocation and replay assertions remain intact. Main's
+successors are applied before the branch forward fix so the fixture exercises
+the latest main schema. No test expectation was weakened or replaced.
+
+Renamed only the branch migration filename stem from
+`0388_customer_signin_redact` to `0587_customer_signin_redact` and updated the lane.
+The SQL bytes are unchanged (SHA-256
+`a6d5b244e35060b26f3eb9cd34b760d86c5a0f4bfe18e46839326b761941b269`).
+The latest main issuer body is still in 0387; the branch body retains that
+body's issuer, locking, binding, expiry and rate controls plus its existing
+reference validation. The historical redaction and hash-history fix is unchanged.
+The new 0587 proof explicitly has empty lp0, upgrade and tenancy arrays:
+no objects, ACLs, owners, policies, static call/write edges or tenancy postures
+are added or changed, and the existing issuer definition hash is null in LP-0.
+The upgrade catalogue snapshot does not include routine bodies. The separate
+seeded integration assertions continue to cover historical row redaction.
+No protected shared expectation lists, demo files or main migrations changed.
+
+Validation (installed binaries, no downloads, each Vitest run maxWorkers=1;
+two Vitest workers total):
+
+- In packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/outbox.test.ts test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts` — 64 passed.
+- In apps/api: `./node_modules/.bin/vitest run --maxWorkers=1 src/auth/customer-signin.test.ts` — 26 passed.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — passed.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — passed.
+- In packages/db: `./node_modules/.bin/tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck test/customer-signin.integration.test.ts` — passed.
+- `./node_modules/.bin/turbo run typecheck --concurrency=2` — stopped after its pnpm child stalled; four dependency checks were cache hits. Direct affected-package checks above all passed. `pnpm --version` also stalled and was stopped.
+- `git diff --check` — passed; content conflict markers absent; renamed SQL compared byte-for-byte with HEAD's original.
+
+READY for the router's NOPR handoff. No git writes, fetch, PostgreSQL or browser
+runs performed. The read-only git index still records the conflict until the
+router stages the resolved working file and migration rename/proof. PostgreSQL,
+migrations, browser checks, green CI and one independent exact-head Claude RED
+review remain required before merge. Synthetic data only; all release gates stay
+closed.
