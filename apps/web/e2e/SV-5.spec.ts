@@ -228,7 +228,78 @@ test("O (real run): zero-result wording survives reload and replay creates no du
   await assertZeroResult();
 });
 
-// I remains blocked: D13 must-surface activation is held.
+test("I (practice journey): a £8,000 request fires D13 before lock and stays permanently fee-free", async ({ page }) => {
+  test.setTimeout(300_000);
+  const { jobId, tenantId } = await prepareLockJob(page);
+  await finishDispositionsAndTerms(page);
+  const text = "Fictional practice customer request: please build a garden room for £8,000 net; written agreement is required before work starts.";
+  const messages = page.getByTestId("customer-messages");
+  await messages.getByLabel("Made-up customer name").fill("Fictional Alex");
+  await messages.getByLabel("Message", { exact: true }).fill(text);
+  await messages.getByRole("button", { name: "Save message", exact: true }).click();
+  await expect(messages.getByTestId("customer-message")).toContainText(text);
+  const saved = await jsonResult(page.request.get(`/api/jobs/${jobId}/customer-messages`), "Read Test I original");
+  const evidence = saved.messages[0].evidence;
+
+  // Existing authorized practice request and scheduled worker; no seeded signal,
+  // firing, Decision, disclosure, classification or completion row.
+  const examineSources = async () => {
+    await page.goto(`/jobs/${jobId}/shadow-journey`);
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/shadow-demo/source-hold`) && r.request().method() === "POST"),
+      page.getByRole("button", { name: "Hold signals from saved sources", exact: true }).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    await page.reload();
+    await expect(page.getByTestId("guide-hold-state")).toHaveText("Saved sources examined", { timeout: 180_000 });
+  };
+  await examineSources();
+  const decisions = await jsonResult(page.request.get(`/api/decisions?tenantId=${tenantId}&jobId=${jobId}`), "Read Test I Decision");
+  const mandatory = decisions.decisions.filter((d: { title: string }) => d.title === "Fictional £8,000 garden room change");
+  expect(mandatory).toHaveLength(1);
+  const decision = mandatory[0];
+  expect(decision).toMatchObject({ classification: "mandatory", resolution: "open", authorizedAction: false });
+  const signalId = decision.source.subjectRef;
+  const assertDecision = async () => {
+    await page.getByRole("button", { name: /Fictional £8,000 garden room change/u }).click();
+    await expect(page.locator(".decision-detail .decision-kind")).toHaveText("mandatory");
+    await expect(page.getByTestId("decision-source-ref")).toHaveText(signalId);
+    await expect(page.getByRole("button", { name: "Dismiss suggestion", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Mandatory blockers cannot be suppressed by value, confidence, or advisory budget.", { exact: true })).toBeVisible();
+  };
+  const openInbox = async () => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /Decisions/u }).first().click();
+    await assertDecision();
+  };
+  await openInbox();
+  await page.reload();
+  await assertDecision();
+  await page.getByRole("button", { name: "← Jobs", exact: true }).click();
+  await openInbox();
+  // A second real worker request cannot duplicate or undo the firing/exclusions.
+  await examineSources();
+  await openInbox();
+  await withSyntheticShadow(tenantId, async (shadow, admin) => {
+    expect((await shadow.query("SELECT state,disclosed_before_lock,must_surface_now,confidence_band,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, signalId])).rows).toEqual([
+      { state: "surfaced_early", disclosed_before_lock: true, must_surface_now: true, confidence_band: "low", estimated_value_pence: "800000" },
+    ]);
+    expect((await shadow.query("SELECT rule,rule_version,source_ref,object_version_id,decision_id FROM app.shadow_must_surface_firing WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows).toEqual([
+      { rule: "prior_written_agreement", rule_version: "shadow_attribution_policy_v3", source_ref: evidence.id, object_version_id: evidence.objectVersionId, decision_id: decision.id },
+    ]);
+    const reasons = (await shadow.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2 ORDER BY reason", [tenantId, signalId])).rows.map(r => r.reason);
+    expect(reasons).toEqual(["disclosed_before_lock", "surfaced_early"]);
+    expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='shadow.must_surface_fired'", [tenantId, jobId])).rows[0].n).toBe(1);
+    expect((await admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows[0].n).toBe(0);
+    for (const table of ["variation", "recovery_case", "recovery_fee_journal"]) {
+      expect(Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`, [tenantId, jobId])).rows[0].n)).toBe(0);
+    }
+    // The restricted worker cannot erase the permanent exclusion or disclosure.
+    await expect(shadow.query("DELETE FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2", [tenantId, signalId])).rejects.toThrow();
+    await expect(shadow.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE tenant_id=$1 AND id=$2", [tenantId, signalId])).rejects.toThrow();
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
 // L uses an explicit fictional connector-source fixture; real connector intake remains outside this suite.
 test("L source leg: an old message received after lock is shown at once and never fee eligible", async ({page}) => {
  const {jobId,tenantId} = await lockedPracticeJob(page);
