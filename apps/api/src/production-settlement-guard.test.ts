@@ -26,6 +26,7 @@ function outbox(actionType: string, mode?: string) {
     aggregate_revision: 1, amount_pence: 101, currency: "GBP", policy_version: "fixture.v1",
     authorization_expires_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z", status: "pending" };
   const query = vi.fn(async (sql: string) => {
+    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }], rowCount: 1 };
     if (sql.startsWith("SELECT o.* FROM app.action_outbox")) return { rows: [row], rowCount: 1 };
     if (sql.startsWith("SELECT count(*)::int n")) return { rows: [{ n: 0 }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
