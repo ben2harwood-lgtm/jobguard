@@ -45,7 +45,7 @@ export const vatTreatmentFixtureBookV1 = z.object({
   tenantId: id, jobId: id, supplierReference: reference, customerReference: reference,
   // Both are unapproved calculation examples, never a choice of legal tax point.
   taxBasis: z.enum(["full_net", "net_after_retention"]),
-  roundingVersion: z.literal("fixture_cumulative_group_half_up_v1"),
+  roundingVersion: z.enum(["fixture_cumulative_group_half_up_v1", "fixture_document_group_sign_symmetric_half_up_v1"]),
   documents: z.array(document).min(1).max(1000),
 }).strict();
 export type VatTreatmentFixtureBook = z.infer<typeof vatTreatmentFixtureBookV1>;
@@ -113,6 +113,7 @@ export function reconcileVatTreatmentFixtures(input: unknown) {
   const ids = new Set<string>(), references = new Set<string>(), releases = new Set<string>();
   let previous: z.infer<typeof document> | undefined;
   let priorTotals = emptyTotals();
+  const priorGroups = new Map<string, Totals>();
   const documents = book.documents.map(current => {
     if (ids.has(current.id) || references.has(current.documentReference)
       || current.previousDocumentId !== (previous?.id ?? null)) fail("INVALID_LINEAGE", "Duplicate or broken document history");
@@ -149,13 +150,23 @@ export function reconcileVatTreatmentFixtures(input: unknown) {
         || (current.kind === "retention_release" && (!prior || netDelta !== 0n || retainedDelta > 0n))) {
         fail("VALUE_LIMIT", "Document kind conflicts with cumulative net/retention movement");
       }
-      const cumulative = amounts(item, book.taxBasis);
+      const priorAmounts = priorGroups.get(item.treatment) ?? emptyTotals();
+      // The document candidate rounds signed movements; cumulative outputs sum those facts.
+      // The cumulative candidate retains its original difference-of-rounded-totals behaviour.
+      const cumulative = book.roundingVersion === "fixture_cumulative_group_half_up_v1"
+        ? amounts(item, book.taxBasis)
+        : combine(priorAmounts, amounts({ ...item, cumulativeNetPence: checked(netDelta),
+          retainedNetPence: checked(retainedDelta) }, book.taxBasis), 1n);
       totals = combine(totals, cumulative, 1n);
-      const delta = combine(cumulative, prior ? amounts(prior, book.taxBasis) : emptyTotals(), -1n);
+      const delta = combine(cumulative, priorAmounts, -1n);
       if (current.kind === "credit_note" && delta.expectedCash > 0) fail("VALUE_LIMIT", "A credit group cannot release extra customer cash");
+      priorGroups.set(item.treatment, cumulative);
       return { treatment: item.treatment, wording: VAT_SUPPORT_MATRIX[item.treatment].wording, cumulative: asMoney(cumulative), delta: asMoney(delta) };
     });
     const delta = combine(totals, priorTotals, -1n);
+    if (current.kind !== "interim" && delta.net === 0 && delta.retained === 0) {
+      fail("VALUE_LIMIT", "Credit or retention release must change net or retained principal");
+    }
     if (current.kind === "credit_note" && delta.expectedCash > 0) fail("VALUE_LIMIT", "Credit cannot increase expected customer cash");
     previous = current; priorTotals = totals;
     return { source: current, groups, cumulative: asMoney(totals), delta: asMoney(delta) };
