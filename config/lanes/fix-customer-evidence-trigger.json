@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-customer-evidence-trigger": {
+      "branches": ["codex/sandbox/fix-customer-evidence-trigger"],
+      "note": "RED: SV-5 customer_evidence direct-write database guard; serializes with LP-5b if it changes variation approvals.",
+      "allow": [
+        "packages/db/migrations/0562_customer_evidence_approval_guard.sql",
+        "packages/db/migration-notes/0562_customer_evidence_approval_guard.md",
+        "packages/db/test/customer-evidence-approval.integration.test.ts",
+        "packages/db/test/migration-proofs/0562_customer_evidence_approval_guard.proof.json",
+        "packages/db/test/customer-evidence-approval-proof.test.ts"
+      ]
+    }
+  }
+}
