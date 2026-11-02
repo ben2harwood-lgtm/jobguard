@@ -113,5 +113,6 @@ export * from "../contractor/enterprise-baseline.application.js";
 export * from "../payment-fee.application.js";
 export * from "../small-builder-demo.application.js";
 export * from "../shadow-demo.application.js";
+export * from "../shadow-demo-guide.application.js";
 export { CompanyValueApplication } from "../value/value-business.application.js";
 export * from "../receipt-case-allocation.application.js";
