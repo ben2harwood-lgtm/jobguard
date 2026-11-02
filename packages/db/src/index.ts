@@ -156,6 +156,7 @@ export * from "./import-pre-adoption-repository.js";
 export * from "./payment-fee-repository.js";
 export * from "./small-builder-demo-repository.js";
 export { reviewOfflineCommercialIntent } from "./offline-upload.js";
+export * from "./subscription-mandate-repository.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./evidence-bundle.js";
