@@ -64,3 +64,41 @@ Current local validation (installed tools; no downloads):
 No stalled check remains. This is builder test evidence, not independent review. RED remains:
 CI must run the required full PostgreSQL/migration and browser checks, followed by the independent
 exact-head RED review. NOPR remains in force; the router controls opening and merge order.
+
+## NOPR catch-up — 2 November 2026
+
+READY for the router to stage and commit the pending merge of main
+`e3e811674a78859c8553dc05fec52f38b87f9103`. The three index conflicts
+(`apps/api/openapi.json`, `apps/api/src/app.module.ts`, `packages/core/src/index.ts`)
+have complete working-tree unions with no conflict markers. They arrived with
+those unions already present; inspection confirmed both sides' routes/exports and
+the exact combined module registration. No source repair was needed. The index
+remains unmerged because `.git` is read-only; the router must stage the resolutions.
+
+All 182 migrations on merging main are byte-identical to main. Branch migration
+0570 and its proof file are byte-identical to HEAD; no renumbering or routine
+replacement was performed. Main's legacy-migration additions are retained. LP-0
+JSON keys/entry identities and legacy migration names contain no duplicates.
+`docs/contracts/lp-downstream-effects-v1.md` is unchanged. No new behavior or
+substantial complexity was introduced.
+
+Validation actually run with installed binaries, no downloads:
+
+- Core `tsc -p tsconfig.json` and DB `tsc -p tsconfig.json`: passed.
+- API and web `tsc -p tsconfig.json --noEmit`: passed.
+- Core `vitest run --maxWorkers=1 src/customer-quote-acceptance.test.ts`: 1 passed.
+- API `vitest run --maxWorkers=1 src/auth/customer-quote.test.ts src/auth/customer-signin.test.ts src/watchdog-registry.test.ts`: 162 passed.
+- Web `vitest run --maxWorkers=1 proxy.test.ts`: 32 passed.
+- DB `vitest run --maxWorkers=1 test/migration-proof-loader.test.ts`: 26 passed.
+- API `node --import tsx src/generate-openapi.ts --check`: passed.
+- Migration/proof byte checks, exact module union, OpenAPI operation union,
+  core export union without duplicates, JSON duplicate checks, changed-file
+  conflict-marker scan and `git diff --check`: passed.
+
+Installed Node is v24.17.0 and Vitest is v4.1.12. The pnpm version probe stalled
+in its launcher; checks used installed compiler/runner binaries, as in the earlier
+receipt. No required compiler or test check stalled. PostgreSQL and browser
+suites were not run: this sandbox cannot start PostgreSQL or bind localhost.
+These results are deterministic builder checks, not independent review. The
+exact merged head still requires green CI and RED review before merge. NOPR
+remains in force. No fetch, git write, push, PR or release was attempted.

@@ -137,10 +137,12 @@ export { demoMeterPreviewV1, previewDemoMeter, type DemoMeterPreview } from "./s
 export * from "./value-source-receipt.js";
 export * from "./issued-simulation-fee-statement.js";
 
+export * from "./small-builder-trial-demo.js";
 export * from "./simulation-fee-collection.js";
 export * from "./customer-approval-method.js";
 
 export * from "./customer-quote-acceptance.js";
+export * from "./simulation-money-run.js";
 export * from "./customer-variation-approval.js";
 
 export * from "./contractor-mandate.js";
