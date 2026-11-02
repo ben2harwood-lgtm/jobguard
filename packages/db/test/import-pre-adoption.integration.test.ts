@@ -36,7 +36,7 @@ it("CH-5 persists historical provenance once, returns GBP 0 and refuses scope, r
     (tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
     SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2`,
     [t, relabelled, randomUUID()]))).rejects.toThrow("PRE_ADOPTION_SOURCE_EXCLUDED");
-  const sourceScope = (await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1", [t, source])).rows[0].id as string;
+  const sourceScope = (await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1", [t, source])).rows[0]?.id as string;
   const foreignEvidence = await insertPhoto(f, { tenantId: t, jobId: source, scopeId: sourceScope } as Parameters<typeof insertPhoto>[1], "2026-10-13T10:00:00Z", "site_photo", "2020-01-01T00:00:00Z", true);
   await expect(repo.write(auth.context, auth.digest, jobId, { ...command, commandId: randomUUID(), evidenceId: foreignEvidence })).rejects.toThrow("PRE_ADOPTION_SOURCE_REQUIRED");
   for (const capturedAt of [null, "2099-01-01T00:00:00Z"]) {
