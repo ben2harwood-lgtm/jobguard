@@ -1,0 +1,167 @@
+{
+  "migration": "0487_inbox_metrics_store.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.inbox_metric_receipt|jobguard_runtime|INSERT|-",
+        "group": "x-prevention-fact-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.inbox_metric_receipt|jobguard_runtime|SELECT|-",
+        "group": "a-runtime-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.inbox_metric_receipt|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.inbox_metric_immutable()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.inbox_metric_receipt|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.inbox_metric_receipt|tenant_isolation|PERMISSIVE|ALL|jobguard_runtime|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.inbox_metric_receipt|immutable_rows|app.inbox_metric_immutable|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.inbox_metric_receipt|immutable_table|app.inbox_metric_immutable|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.inbox_metric_receipt",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "inbox_metric_receipt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "inbox_metric_receipt_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "inbox_metric_receipt_tenant_id_event_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "inbox_metric_receipt_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "inbox_metric_immutable",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "inbox_metric_receipt",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "inbox_metric_receipt",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

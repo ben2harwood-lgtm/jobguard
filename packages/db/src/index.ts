@@ -161,6 +161,7 @@ export { reviewOfflineCommercialIntent } from "./offline-upload.js";
 export * from "./ais-adapter.js";
 export * from "./ais-repository.js";
 export * from "./platform-tax-invoice-fixture-repository.js";
+export * from "./inbox-metrics-repository.js";
 export * from "./mobile-auth-store.js";
 
 export * from "./purchase-order-action.js";
