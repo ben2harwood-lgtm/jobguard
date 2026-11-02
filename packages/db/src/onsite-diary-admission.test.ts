@@ -31,3 +31,38 @@ describe("SV-7A on-site migration boundaries", () => {
   expect(sql).not.toMatch(/app\.(?:shadow|recovery|finding|eligibility)/u);
  });
 });
+
+describe("SV-7A practice diary admission repair", () => {
+ const repairName = "0541_practice_onsite_diary_admission.sql";
+ const repair = readFileSync(new URL(`../migrations/${repairName}`, import.meta.url), "utf8");
+ it("is discovered and applied atomically by the migration runner", async () => {
+  expect(MIGRATION_URLS.filter(url => url.pathname.endsWith(`/${repairName}`))).toHaveLength(1);
+  const queries: string[] = [];
+  await migrate({ query: async (query: string, values?: unknown[]) => {
+   queries.push(query); return { rows: [], rowCount: values?.[0] === repairName ? 0 : 1 };
+  } } as Parameters<typeof migrate>[0]);
+  expect(queries.filter(query => query.startsWith(repair.slice(0, 80)))).toEqual([
+   repair.replace(/COMMIT;\s*$/u, `INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('${repairName}') ON CONFLICT DO NOTHING;\nCOMMIT;\n`),
+  ]);
+ });
+ it("patches only diary admission in the latest predecessors, retaining LP-5 completion", () => {
+  const replacements = [...repair.matchAll(/changed:=replace\(original,'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/gu)]
+   .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")]);
+  expect(replacements).toHaveLength(2);
+  const latestIntake = readFileSync(new URL("../migrations/0522_lp5b_writers.sql", import.meta.url), "utf8")
+   .split("CREATE OR REPLACE FUNCTION app.sv7a_intake_job_source")[1]!.split("END $$;")[0]!;
+  const latestCapture = sql.split("CREATE OR REPLACE FUNCTION app.ch4_capture_site_source")[1]!.split("END $$;")[0]!;
+  for (const [index, original] of [latestCapture, latestIntake].entries()) {
+   const [before, after] = replacements[index]!;
+   expect(original.split(before!).length - 1).toBe(1);
+   expect(after).toContain("x.practice_session_digest IS NULL");
+   expect(after).toContain(index === 0 ? "x.tenant_id=r.tenant_id AND x.id=r.job_id" : "x.tenant_id=t AND x.id=j");
+   const changed = original.replace(before!, after!);
+   expect(changed.replace(after!, before!)).toBe(original);
+   if (index === 1) expect(changed).toContain("app.complete_command(cid,'{}'::jsonb)");
+  }
+  expect(repair).toContain("IF changed=original THEN RAISE EXCEPTION 'unexpected capture definition'");
+  expect(repair).toContain("IF changed=original THEN RAISE EXCEPTION 'unexpected intake definition'");
+  expect(repair).not.toMatch(/CREATE OR REPLACE FUNCTION app.ch4_admit_place|\b(?:GRANT|REVOKE)\b/u);
+ });
+});
