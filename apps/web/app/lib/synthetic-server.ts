@@ -16,6 +16,9 @@ export function syntheticPool() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic workflow is unavailable"), {code:"UNAUTHENTICATED"});
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw Object.assign(new Error("Database configuration is unavailable"), { code: "DATABASE_UNAVAILABLE" });
+  // Workers cannot share sockets across requests. maxUses closes on release,
+  // including transaction clients; there are no idle sockets/timers to retain.
+  if (process.env.JOBGUARD_HOSTING === "cloudflare") return new Pool({ connectionString, max: 1, maxUses: 1, application_name: "jobguard-cloudflare-synthetic-demo" });
   poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-vercel-synthetic-demo" });
   return poolRegistry.__jobguardSyntheticPool;
 }

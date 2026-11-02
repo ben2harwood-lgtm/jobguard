@@ -11,10 +11,13 @@ export const simulationFeeSourceSnapshotV1 = z.object({
   postingRevision: z.number().int().positive(), qualifyingPrincipal: exactPenceV1, feePence: pence,
   adjustments: z.object({paymentReversalIds:z.array(id).max(10_000),creditNoteIds:z.array(id).max(10_000),evidenceInvalidationIds:z.array(id).max(10_000)}).strict(),
   derivations: z.array(z.object({ derivationId: id, reviewId: id, authorizationId: id, statementHash: hash }).strict()).min(1).max(10_000),
-  sources: z.array(z.object({ assessmentId: id, currentAssessmentId: id, sourceHash: hash, reviewAuthorizationId: id,
+  sources: z.array(z.union([z.object({ assessmentId: id, currentAssessmentId: id, sourceHash: hash, reviewAuthorizationId: id,
     allocationIds: z.array(id).min(1).max(10_000), remainingPrincipal: exactPenceV1,
     reasonCodes: z.array(z.string().max(100)).max(100),
-  }).strict()).min(1).max(10_000),
+  }).strict(), z.object({
+    caseId:id, recoveryAllocationId:id, paymentId:id, invoiceId:id, sourceHash:hash, reviewAuthorizationId:id,
+    remainingPrincipal:exactPenceV1, reversalIds:z.array(id).max(10_000),
+  }).strict()])).min(1).max(10_000),
 }).strict();
 export const issuedSimulationFeeStatementV1 = simulationFeeStatementDocumentV1.extend({
   version: z.literal("issued-simulation-fee-statement.v1"),

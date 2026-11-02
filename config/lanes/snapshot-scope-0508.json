@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "snapshot-scope-0508": {
+      "branches": ["codex/sandbox/snapshot-scope-0508"],
+      "note": "Tests only: freeze the 0508 registry upgrade snapshot to its own-step table set (the #445 pattern).",
+      "allow": [
+        "packages/db/test/tenant-key-registry.integration.test.ts"
+      ]
+    }
+  }
+}

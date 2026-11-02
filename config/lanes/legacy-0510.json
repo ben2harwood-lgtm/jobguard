@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "legacy-0510": {
+      "branches": ["codex/sandbox/legacy-0510"],
+      "note": "Tests only: add #460's 0510 to the legacy migration list after it merged alongside #499.",
+      "allow": [
+        "packages/db/test/migration-proofs/legacy-migrations.json"
+      ]
+    }
+  }
+}

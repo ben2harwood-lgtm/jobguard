@@ -6,6 +6,8 @@ export const meterTodayReadV1 = z.object({
   date: londonMeterDateV1, plan: z.enum(["Solo", "Builder"]),
   countedPlaces: z.number().int().nonnegative().safe(),
   freeSmallPlaces: z.number().int().nonnegative().max(7),
+  // The saved Decision raised when Builder's grace place was crossed. Absent when none exists.
+  trackReviewDecisionId: z.string().uuid().optional(),
 }).strict().refine(value => value.freeSmallPlaces <= syntheticMeterPolicyV1[value.plan].included);
 export type MeterTodayRead = z.infer<typeof meterTodayReadV1>;
 

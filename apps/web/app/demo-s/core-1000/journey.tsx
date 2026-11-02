@@ -3,21 +3,16 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { WalkIt } from "../../ui/jobguard-app";
 import { WorkspaceShell } from "../../ui/workspace-shell";
+import { core1000Link, core1000Source } from "./journey-model";
 
 const sessionV1 = z.object({ version: z.literal(1), tenants: z.array(z.object({ id: z.string().uuid() })).min(1) });
 const uuid = z.string().uuid();
-export const core1000Source = `JOB: Fictional practice decorating
-ITEM: Protect room | £200.00
-ITEM: Prepare walls | £200.00
-ITEM: Paint walls | £200.00
-ITEM: Finish trim | £200.00
-ITEM: Clean site | £100.00`;
-export const core1000Link = (id: string) => `/demo-s/core-1000?${new URLSearchParams({ jobId: uuid.parse(id) })}`;
+export { core1000Link, core1000Source } from "./journey-model";
 
 /** Instructions describe the reference exercise, never a claimed outcome or a shadow read. */
-export function Core1000Guide() {
+export function Core1000Guide({ chooserHref = "/demo-s" }: { chooserHref?: string }) {
   return <section className="workspace-page" aria-label="Core-1000 guide">
-    <a href="/demo-s">Practice chooser</a><h1>Core £1,000 job</h1>
+    <a href={chooserHref}>Practice chooser</a><h1>Core £1,000 job</h1>
     <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
     <p>These are instructions and expected figures. The job screens below read saved facts; this guide does not mark steps complete.</p>
     <ol>
@@ -36,7 +31,7 @@ export function Core1000Guide() {
   </section>;
 }
 
-export function Core1000Journey({ requestedJobId }: { requestedJobId?: string | string[] | undefined }) {
+export function Core1000Journey({ requestedJobId, chooserHref }: { requestedJobId?: string | string[] | undefined; chooserHref?: string }) {
   const [tenantId, setTenantId] = useState(""), [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const jobId = requestedJobId === undefined ? undefined : uuid.safeParse(requestedJobId);
@@ -62,13 +57,13 @@ export function Core1000Journey({ requestedJobId }: { requestedJobId?: string | 
     finally { setBusy(false); }
   }
   return <>
-    <Core1000Guide />
+    <Core1000Guide {...(chooserHref ? { chooserHref } : {})} />
     {invalid ? <p role="alert">Invalid saved job reference.</p> : jobId?.success ? <>
       {tenantId && <Core1000GuideLinks jobId={jobId.data} />}
       <WorkspaceShell jobId={jobId.data} />
     </> : <section className="workspace-page">
       {checking ? <p role="status">Checking practice session…</p> : tenantId ?
-        <WalkIt tenantId={tenantId} initialText={core1000Source} reviewHref={core1000Link} close={() => location.assign("/demo-s")} /> :
+        <WalkIt tenantId={tenantId} initialText={core1000Source} reviewHref={core1000Link} close={() => location.assign(chooserHref ?? "/demo-s")} /> :
         <button disabled={busy} onClick={() => void start()}>Start core-1000 practice session</button>}
       {error && <p role="alert">{error}</p>}
     </section>}

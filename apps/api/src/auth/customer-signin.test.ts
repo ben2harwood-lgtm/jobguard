@@ -86,10 +86,10 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     expect(reply.cookie).not.toHaveBeenCalled(); if (action !== "read") expect(reply.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
   });
   it("customer cookies refuse builder paths in both transports before the legacy cookie shortcut", async () => {
-    const { middleware } = await import(fileURLToPath(new URL("../../../web/middleware.ts", import.meta.url)));
+    const { proxy } = await import(fileURLToPath(new URL("../../../web/proxy.ts", import.meta.url)));
     for (const builder of ["", "; jg_session=10000000-0000-4000-8000-000000000001; jobguard_session=builder"]) {
       const cookie = `${headers.cookie}${builder}`;
-      const response = middleware({ cookies: { has: (name: string) => cookie.includes(`${name}=`) }, nextUrl: new URL(`${origin}/api/jobs`) })!;
+      const response = proxy({ cookies: { has: (name: string) => cookie.includes(`${name}=`) }, nextUrl: new URL(`${origin}/api/jobs`) })!;
       expect(response.status).toBe(401); expect(await response.json()).toEqual({ code: "UNAUTHENTICATED" });
       const guard = new ApplicationAuthGuard(() => { throw new Error("builder authentication must not run"); });
       const context = { switchToHttp: () => ({ getRequest: () => ({ path: "/jobs", method: "GET", headers: { cookie } }) }) } as ExecutionContext;

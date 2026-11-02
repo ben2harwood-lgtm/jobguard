@@ -9,11 +9,13 @@ export class MeterTodayRepository {
     if (!/^[a-f0-9]{64}$/u.test(digest)) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     try {
       return await withTenant(this.pool, context, async transaction => {
+        const review = (await transaction.$client.query("SELECT app.mon1_track_review_decision($1,$2) id", [context.tenantId, digest])).rows[0]?.id as string | null | undefined;
+        const withReview = (view: MeterTodayRead): MeterTodayRead => review ? { ...view, trackReviewDecisionId: review } : view;
         const raw = (await transaction.$client.query("SELECT app.mon1_today_source($1,$2) result", [context.tenantId, digest])).rows[0]?.result as { date?: string; stored?: unknown; view?: unknown } | undefined;
         if (raw?.view !== undefined) {
           const existing = meterTodayReadV1.safeParse(raw.view);
           if (!existing.success) throw new MeterLifecyclePersistenceError("METER_PROJECTION_MISMATCH");
-          return existing.data;
+          return withReview(existing.data);
         }
         const stored = meterLifecycleStoredV1.safeParse(raw?.stored);
         if (!stored.success || stored.data.source.tenantId !== context.tenantId ||
@@ -28,7 +30,7 @@ export class MeterTodayRepository {
         const parsed = meterTodayReadV1.safeParse(day && { version: "meter-today-read.v1", hypothetical: true,
           date: day.date, plan: source.plan, countedPlaces: day.countedPlaces, freeSmallPlaces: day.freeSmallPlaces });
         if (!parsed.success) throw new MeterLifecyclePersistenceError("METER_PROJECTION_MISMATCH");
-        return parsed.data;
+        return withReview(parsed.data);
       });
     } catch (error) {
       if (error instanceof MeterLifecyclePersistenceError) throw error;

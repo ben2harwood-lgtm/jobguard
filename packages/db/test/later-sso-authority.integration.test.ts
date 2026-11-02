@@ -89,9 +89,43 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
     expect(queued.deliver).toHaveBeenCalledOnce(); expect(await queued.attempts()).toBe(1);
     expect((await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [f.principal.tenantId, queued.action.id])).rows[0].status).toBe("succeeded");
   });
+  it("M5-7 SSO owner cannot broaden an exact Decision's recipient, document, revision, amount or policy", async () => {
+    const f = await fixture(h), queued = await approvedAction(f);
+    const context = testTenantContext(f.principal.tenantId);
+    const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:unexpected" }));
+    const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
+    const executor = new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined });
+    const content = "Different fictional document";
+    const patches: Partial<OutboundAction>[] = [
+      { recipient: "other@fixture.invalid" },
+      { immutableContent: content, contentHash: sha256(content) },
+      { aggregateRevision: queued.action.aggregateRevision + 1 },
+      { amountPence: 1, currency: "GBP" },
+      { policyVersion: "different.synthetic.v1" },
+      { actionType: "send_order" },
+    ];
+    for (const patch of patches) {
+      const action = { ...queued.action, ...patch, id: randomUUID(), providerEffectKey: randomUUID() };
+      await withTenant(h.runtime, context, db => appendOutboundAction(db, f.principal.tenantId, action));
+      await executor.execute(context, action.id);
+      expect(deliver).not.toHaveBeenCalled();
+      expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [f.principal.tenantId, action.id])).rows[0].n).toBe(0);
+    }
+    // A genuine exact approval still works, once, and another tenant cannot execute it.
+    await executor.execute(testTenantContext(randomUUID()), queued.action.id);
+    expect(deliver).not.toHaveBeenCalled();
+    await queued.execute(); await queued.execute();
+    expect(queued.deliver).toHaveBeenCalledOnce(); expect(await queued.attempts()).toBe(1);
+  });
+  it("M5-7 revoking the exact approval prevents a previously queued SSO owner action", async () => {
+    const f = await fixture(h), queued = await approvedAction(f);
+    await h.admin.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.principal.tenantId, queued.action.authorizationId]);
+    await queued.execute();
+    expect(queued.deliver).not.toHaveBeenCalled(); expect(await queued.attempts()).toBe(0);
+  });
   describe("L054 queued owner after contractor command revocation", () => {
     let observed: { calls: number; attempts: number; status: string };
-    // Setup is outside it.fails: a fixture/command/SQL failure must fail this suite normally.
+    // Fixture/command/SQL failures must fail this suite normally.
     beforeAll(async () => {
       const f = await fixture(h), queued = await approvedAction(f);
       const view = await f.contractor.query(f.principal, { version: "contractor-query.v1", resource: "organisation", tenantId: f.principal.tenantId });
@@ -100,9 +134,8 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
       await queued.execute();
       observed = { calls: queued.deliver.mock.calls.length, attempts: await queued.attempts(), status: (await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [f.principal.tenantId, queued.action.id])).rows[0].status };
     });
-    // STOP: outbox.ts:13 is outside this lane. This expected-failure reproduction is not acceptance.
-    it.fails("L054 actually authorised owner is blocked after the actual SSO revocation mechanism (known executor gap)", () => {
-      expect(observed).toEqual({ calls: 0, attempts: 0, status: "pending" });
+    it("L054 actually authorised owner is cancelled after the actual SSO revocation mechanism", () => {
+      expect(observed).toEqual({ calls: 0, attempts: 0, status: "cancelled" });
     });
   });
 });

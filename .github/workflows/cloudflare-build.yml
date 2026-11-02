@@ -1,0 +1,30 @@
+name: Cloudflare bundle (no deploy)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # No bootstrap, database, credentials, or deployment in a PR build.
+      - run: pnpm --filter @jobguard/web build:cloudflare
+      - name: Validate the local Worker bundle
+        working-directory: apps/web
+        run: pnpm exec wrangler deploy --dry-run --outdir .wrangler/dry-run

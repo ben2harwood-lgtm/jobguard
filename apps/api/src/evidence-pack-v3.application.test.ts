@@ -89,6 +89,34 @@ const portsUrl = new URL("../../../packages/db/src/evidence-pack-v3-ports.ts", i
 const writerUrl = new URL("../../../packages/db/src/evidence-pack-v3-command.ts", import.meta.url).href;
 const sourceUrl = new URL("../../../packages/db/src/evidence-pack-v3-sources.ts", import.meta.url).href;
 const ports = await import(portsUrl), writer = await import(writerUrl), source = await import(sourceUrl);
+describe("r1 snapshot transaction lifecycle (unit SQL doubles, not PostgreSQL proof)", () => {
+  const tenantContext = import(new URL("../../../packages/db/src/tenant-context.ts", import.meta.url).href);
+  it.each([false, true])("preserves tenant setup and cleanup when work fails=%s", async fails => {
+    const { verifiedTenantContextForQueuedJob } = await tenantContext;
+    const query = vi.fn(async () => ({ rows: [] })), release = vi.fn();
+    const pool = { connect: vi.fn(async () => ({ query, release })) };
+    const failure = new Error("source read failed");
+    const result = source.withEvidencePackV3Snapshot(pool, verifiedTenantContextForQueuedJob(id), async () => {
+      if (fails) throw failure;
+      return "snapshot";
+    });
+    if (fails) await expect(result).rejects.toBe(failure);
+    else await expect(result).resolves.toBe("snapshot");
+    expect(query.mock.calls).toEqual([
+      ["BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", undefined],
+      ["SELECT set_config('app.tenant_id', $1, true)", [id]],
+      [fails ? "ROLLBACK" : "COMMIT", undefined],
+    ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+  it("rejects a copied tenant context before acquiring a connection", async () => {
+    const { verifiedTenantContextForQueuedJob } = await tenantContext;
+    const connect = vi.fn(), work = vi.fn();
+    await expect(source.withEvidencePackV3Snapshot({ connect }, { ...verifiedTenantContextForQueuedJob(id) }, work))
+      .rejects.toThrow("A verified tenant context with a valid UUID is required");
+    expect(connect).not.toHaveBeenCalled(); expect(work).not.toHaveBeenCalled();
+  });
+});
 it("unbound producer ports and checked writer all fail closed with the same public code", async () => {
   await expect(ports.heldEvidencePackV3Ports.mustSurface.requestCheck()).rejects.toMatchObject({ code: "EVIDENCE_PACK_V3_DEPENDENCY_HELD", hold: "HOLD-EP-MUST-SURFACE" });
   await expect(ports.heldEvidencePackV3Ports.mustSurface.readCompletion()).rejects.toMatchObject({ code: "EVIDENCE_PACK_V3_DEPENDENCY_HELD", hold: "HOLD-EP-MUST-SURFACE" });

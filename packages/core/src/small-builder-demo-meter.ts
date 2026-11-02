@@ -97,8 +97,8 @@ export function previewDemoMeter(raw: unknown): DemoMeterPreview {
  });
  return demoMeterPreviewV1.parse({ version: "demo-meter-preview.v1", ...binding, hypothetical: true,
   persistence: "run-bound-reference-projection", clock: "london-midnight-stops.v1", profiles, crossings,
-  unavailable: [{ step: "MON-3 trial prelude", reason: "Not ready yet: the trial producer is not on main." },
-   { step: "Persisted admissions, statements and simulated settlement", reason: "Not ready yet: isolated run-to-company execution and reference-period command bindings are unavailable. These are producer previews, not issued or settled bills." },
+  unavailable: [{ step: "MON-3 trial prelude", reason: "Not ready yet in these previews: run it in the guided first-job trial." },
+   { step: "Issued statements and simulated settlement for these profiles", reason: "Not ready yet: reference-period command bindings are unavailable. These are producer previews, not issued or settled bills." },
    { step: "DM-11–DM-13", reason: "Not ready yet: sustained-use, lifecycle attack and concurrent admission journeys are not connected to this run." }],
  });
 }

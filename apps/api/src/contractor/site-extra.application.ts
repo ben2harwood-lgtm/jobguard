@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
+import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
 import { ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 import { SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
@@ -22,6 +22,23 @@ export class SiteExtraApplication {
   } catch (error) {
    if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") throw new SiteExtraError("UNAUTHENTICATED");
    throw error;
+  }
+ }
+ /** ENT-12 server slice only; no native route or distribution is enabled. */
+ async logOffline(principal: unknown, raw: unknown) {
+  assertSiteExtraMode();
+  const session = workOrderPrincipalV1.safeParse(principal); if (!session.success) throw new SiteExtraError("UNAUTHENTICATED");
+  try {
+   const member = await new ContractorRepository(this.pool).resolveSession(session.data.sessionId);
+   const context = await this.resolveContext(session.data.sessionId, member);
+   let intent;
+   try { intent = parseOfflineIntentV1(raw); } catch { throw new SiteExtraError("INVALID_COMMAND"); }
+   const result = await this.repository.logOfflineSiteExtra(context, member, intent);
+   return siteExtraLoggedV1.parse({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: intent.jobId, extraId: result.variationId, state: "logged" });
+  } catch (error) {
+   if (error instanceof SiteExtraError || error instanceof WatchdogError) throw error;
+   if ((error as { code?: string } | null)?.code === "UNAUTHENTICATED") throw new SiteExtraError("UNAUTHENTICATED");
+   throw new SiteExtraError("SITE_EXTRA_UNAVAILABLE");
   }
  }
  async log(principal: unknown, jobId: string, raw: unknown) {

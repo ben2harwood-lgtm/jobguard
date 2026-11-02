@@ -4,12 +4,16 @@ import type {FinalCheckFixture} from "./final-check-fixture.js";
 import {StoredReceiptCaseAllocationRepository} from "../src/stored-receipt-case-allocation-repository.js";
 import {RecoveryAttributionRepository} from "../src/recovery-attribution-repository.js";
 import {SuccessFeeRepository} from "../src/success-fee-repository.js";
-export async function catchFeeFixture(f:FinalCheckFixture,approved=true){
- const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1");
+export async function catchFeeFixture(f:FinalCheckFixture,approved=true,collection282=false){
+ const x=await realReceiptFixture(f,"F7","receipt-line-allocation-command.v1",false,collection282);
  const revision=(await f.admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,x.caseId])).rows[0].revision as number;
- const p={version:"stored-receipt-case-command.v1",commandId:randomUUID(),action:"review",factLineId:x.fact.lineAllocationId,caseId:x.caseId,workId:x.workId,expectedCaseRevision:revision};
- const allocator=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo"),review=await allocator.command(x.context,x.jobId,x.auth.digest,p);
+ const facts=collection282?(await x.producer.readCurrent(x.context,x.actor,x.auth.digest,{jobId:x.jobId})).rows.filter(r=>r.lineId===x.line):[x.fact];
+ const allocator=new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo");
+ for(const fact of facts){
+ const p={version:"stored-receipt-case-command.v1",commandId:randomUUID(),action:"review",factLineId:fact.lineAllocationId,caseId:x.caseId,workId:x.workId,expectedCaseRevision:revision};
+ const review=await allocator.command(x.context,x.jobId,x.auth.digest,p);
  await allocator.command(x.context,x.jobId,x.auth.digest,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash});
+ }
  const attribution=new RecoveryAttributionRepository(f.runtime),selection={version:"recovery-attribution-command.v1",action:"assess",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,lineId:x.line,lockId:x.fact.invoiceBinding.lockId,expectedCaseRevision:revision,expectedAttributionRevision:0};
  const assessment=await attribution.assess(x.context,x.jobId,x.auth.digest,selection);
  if(approved){

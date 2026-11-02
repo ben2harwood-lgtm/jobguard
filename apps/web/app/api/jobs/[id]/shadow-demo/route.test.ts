@@ -35,3 +35,12 @@ it("returns the v2 report and preserves the complete mapped value union", async 
  expect(response.status).toBe(200); expect(await response.json()).toEqual(report);
  expect(response.headers.get("Cache-Control")).toBe("no-store");
 });
+
+it.each(["not_ready_yet", "awaiting_customer", "approved"])("returns 200 with the persisted customer approval state %s", async approvalState => {
+ const customerApproval = { state: approvalState, approvals: approvalState === "approved"
+  ? [{ variationId: "fictional-variation", approvedAt: "2026-10-31T08:00:00.000Z", method: "customer_portal" }] : [] };
+ state.read.mockResolvedValue({ version: "shadow-demo-report.v2", customerApproval });
+ const response = await GET(new Request("https://fictional.invalid"), params);
+ expect(response.status).toBe(200);
+ expect((await response.json()).customerApproval).toEqual(customerApproval);
+});

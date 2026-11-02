@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-3-server": {
+      "branches": ["codex/sandbox/m3-3-server"],
+      "note": "RED. M3-3 dark server slice only. Synthetic signing and unfiltered-source download authorization; no mounted endpoint, provider, migration or deployment. This lane file is implicitly owned by this branch.",
+      "allow": [
+        "apps/api/src/sync/download.application.ts",
+        "apps/api/src/sync/download.application.test.ts",
+        "docs/contracts/sync-download-v1.md"
+      ]
+    }
+  }
+}

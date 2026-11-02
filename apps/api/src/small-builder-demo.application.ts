@@ -18,3 +18,21 @@ export class SmallBuilderDemoApplication {
   }
  }
 }
+
+/** Trial guide retains company authentication on every read, replay and report. */
+export class SmallBuilderTrialDemoApplication {
+ constructor(private readonly authority:SubscriptionAuthorityPort,private readonly repository:Pick<import("@jobguard/db").SmallBuilderTrialDemoRepository,"execute">){}
+ async execute(session:unknown,raw:unknown){
+  try{
+   if(this.authority.environment()!=="synthetic_demo")throw new SmallBuilderDemoError("DEMO_SYNTHETIC_ONLY");
+   const {credentials,digest}=await this.authority.resolve(session);
+   const context=await resolveVerifiedTenantContext(this.authority.provider,credentials,this.authority.allowedOrigin);
+   return await this.repository.execute(context,digest,raw);
+  }catch(error){if(error instanceof SmallBuilderDemoError)throw error;throw new SmallBuilderDemoError("DEMO_FORBIDDEN");}
+ }
+}
+export function smallBuilderDemoHttpFailure(error:unknown){
+ const code=error instanceof SmallBuilderDemoError?error.code:"DEMO_UNAVAILABLE";
+ const status=code==="INVALID_DEMO_INPUT"?400:code==="DEMO_FORBIDDEN"||code==="DEMO_SYNTHETIC_ONLY"?403:code==="DEMO_NOT_FOUND"?404:["DEMO_STALE_REVISION","DEMO_ARCHIVED","DEMO_COMMAND_CONFLICT"].includes(code)?409:503;
+ return {status,body:{version:"small-builder-demo-error.v1",code}};
+}

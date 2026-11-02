@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-2-lease": {
+      "branches": ["codex/sandbox/m3-2-lease"],
+      "note": "RED M3-2 DARK server fake only; Auth.js absent. D08/G3 and durable/native implementation remain incomplete. No migration.",
+      "allow": [
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/auth/mobile-auth.application.ts",
+        "apps/api/src/auth/mobile-auth.application.test.ts",
+        "docs/contracts/mobile-auth-v1.md",
+        "docs/operations/native-device-lifecycle.md"
+      ]
+    }
+  }
+}

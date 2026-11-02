@@ -12,6 +12,7 @@ export function MeterPreview({ preview }: { preview: DemoMeterPreview }) {
   <h3>Builder grace crossing</h3><ul>{preview.crossings.map(item => <li key={item.date}>
    {item.date}: {item.committedPlaces} places — {item.immediate ? "track_review_due immediately" : "Within grace"}. No track change.
   </li>)}</ul>
+  <p>Your company's own saved count and any real account review show on <a href="/meter">Jobs on the go</a>. Its plan and saved periods are on <a href="/plans">Plans</a>.</p>
   <h3>Not ready yet</h3><ul>{preview.unavailable.map(item => <li key={item.step}>{item.step}: {item.reason}</li>)}</ul>
  </section>;
 }

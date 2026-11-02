@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, smallBuilderDemoReadRunV1,
   type SmallBuilderDemoRun, type SmallBuilderDemoReport, type SmallBuilderDemoHttpCommand } from "@jobguard/core";
-import { demoLink, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { demoLink, journeyAvailability, journeyAvailable, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { Core1000Result } from "./core-1000/result";
+import { JourneyResult } from "./journey-result";
 import { MeterPreview } from "./meter-preview";
 import styles from "./chooser.module.css";
 const sessionV1 = z.object({ version: z.literal("identity-session.v1"), environment: z.literal("synthetic_demo"),
@@ -25,10 +27,18 @@ async function readSaved(session: Session, tenantId: string, operation: "read" |
   if (!response.ok) throw new Error(errors[(body as { code?: string }).code ?? ""] ?? "Saved state is unavailable. Try Resume again.");
   return operation === "read" ? smallBuilderDemoRunV1.parse(body) : smallBuilderDemoReportV1.parse(body);
 }
+/** Where this selection's persisted results are read. Links only: a snapshot asserts no outcome. */
+function SavedScreens({ scenario, tenantId, runId }: { scenario: string; tenantId: string; runId: string }) {
+  const trial = `/demo-s/trial?${new URLSearchParams({ tenantId, runId })}`;
+  if (scenario === "core-1000") return <p>Saved screens: use Read saved core-1000 results on this selection. It links each job screen to its saved record.</p>;
+  if (scenario === "meter") return <p>Saved screens: <a href={demoLink(tenantId, runId)}>reference previews</a> · <a href="/meter">Jobs on the go and account review</a> · <a href="/plans">Plan and saved periods</a></p>;
+  if (scenario === "trial") return <p>Saved screens: <a href={trial}>trial source report</a> · <a href="/plans">Accepted terms and saved periods</a> · <a href="/meter">Jobs on the go</a></p>;
+  return null;
+}
 export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemoReport; tenantId: string }) {
   const facts = report.facts;
   return <section aria-labelledby="report-title"><h2 id="report-title">Saved selection report</h2>
-    <p>This report records the saved selection and its blocker. The product journey has not run.</p>
+    <p>This snapshot records selection metadata only. It does not record whether a product journey ran. Read current persisted journey results below.</p>
     <dl><dt>Scenario</dt><dd>{facts.scenario}</dd><dt>Status</dt><dd>{facts.status}</dd>
       <dt>Saved reason</dt><dd>{facts.reason}</dd><dt>Revision</dt><dd>{facts.revision}</dd>
       <dt>Created</dt><dd>{facts.createdAt}</dd><dt>Archived</dt><dd>{facts.archivedAt ?? "Not archived at snapshot time"}</dd></dl>
@@ -36,7 +46,8 @@ export function LifecycleReport({ report, tenantId }: { report: SmallBuilderDemo
     <p><a href={demoLink(tenantId, facts.runId, report.snapshotId)}>Open exact saved report {report.snapshotId}</a></p>
     {facts.predecessorId && <p><a href={demoLink(tenantId, facts.predecessorId)}>Open previous selection</a></p>}
     {facts.successorId && <p><a href={demoLink(tenantId, facts.successorId)}>Open replacement selection</a></p>}
-    <p>DEMO-A1 is not ready yet: DEMO-J1–J5 need completed journeys and persisted source reports.</p>
+    <SavedScreens scenario={facts.scenario} tenantId={tenantId} runId={facts.runId} />
+    <p>Demo acceptance is not recorded here. Each journey reports its own saved results.</p>
     <p>Independent verdict: missing. Non-technical builder observations: 0 of 2 recorded here.</p>
   </section>;
 }
@@ -124,9 +135,10 @@ export function DemoChooser() {
   }
   const disabled = busy || !!pending || !membership;
   return <main className={styles.main}><a href="/">JobGuard home</a><h1>Small-builder practice chooser</h1>
-    <p>Made-up data only. Choose a journey to see whether it is ready and save your selection.</p>
-    <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This uses a separate practice session; saving a company selection below does not run or complete it.</p>
+    <p>Made-up data only. Choose an available journey, launch a fresh fictional job, or resume your saved selection.</p>
+    <p><a href="/demo-s/core-1000">Practise core-1000 with the guided job screens</a>. This is not tied to a saved selection; choose core-1000 below to resume it and read its saved report.</p>
     <p><a href="/demo-s/shadow-30000">Open the guided £30,000 Final Check journey</a></p>
+    <p><a href="/demo-s/recovery-18800">Open the guided £18,800 recovery journey</a></p>
     {checking && <p role="status">Checking your signed-in business…</p>}
     {error && <p role="alert">{error}</p>}
     {!session && !checking && <a href="/sign-in">Sign in with a fictional email code</a>}
@@ -135,19 +147,20 @@ export function DemoChooser() {
       {pending && <section aria-label="Unconfirmed request"><p>A saved request has no confirmed response. Retry uses its original reference.</p>
         <button disabled={busy} onClick={() => void send(pending)}>Retry saved request</button></section>}
       <section aria-labelledby="journey-title"><h2 id="journey-title">Choose a journey</h2><div className={styles.choices}>
-        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>Not ready yet. {choice.reason}</p>
+        {journeyChoices.map(choice => <article key={choice.scenario}><h3>{choice.title}</h3><p>{journeyAvailability(choice.scenario)}. {choice.reason}</p>
           {choice.scenario === "meter" && <details><summary>Meter profiles — reference previews available</summary><ul>{meterProfiles.map(profile => <li key={profile}>{profile}</li>)}</ul></details>}
-          <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>Save {choice.scenario} selection</button>
+          <button disabled={disabled} onClick={() => void send({ operation: "create", runId: null, input: { contractVersion: "small-builder-demo.create.v1", commandId: crypto.randomUUID(), scenario: choice.scenario } })}>{journeyAvailable(choice.scenario) ? "Choose" : "Save"} {choice.scenario} selection</button>
         </article>)}
       </div></section>
       <form onSubmit={event => void resume(event)}><h2>Resume a saved selection</h2><label htmlFor="demo-resume">Saved selection reference</label>
         <input id="demo-resume" value={resumeId} onChange={event => setResumeId(event.target.value)} required />
         <button disabled={busy || !membership} type="submit">Resume</button></form>
-      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : "Not ready yet"}: {run.reason}</p>
+      {run && <section aria-labelledby="saved-title"><h2 id="saved-title">Saved {run.scenario} selection</h2><p>{run.status === "archived" ? "Archived" : journeyAvailability(run.scenario)}: {journeyAvailable(run.scenario) ? "Read journey results for actual progress." : run.reason}</p>
         {run.meterPreviewNote && <p role="status">{run.meterPreviewNote}</p>}
         {run.meterPreview && <MeterPreview preview={run.meterPreview} />}
         <p><a href={demoLink(tenantId, run.runId)}>Resume link: {run.runId}</a></p>
-        <p>Saved revision {run.revision}. No product journey completion is recorded.</p>
+        {run.scenario === "trial" && <p><a href={`/demo-s/trial?${new URLSearchParams({tenantId,runId:run.runId})}`}>Open guided first-job trial</a></p>}
+        <p>Saved selection revision {run.revision}. Selection metadata does not record journey completion.</p>
         {run.successorId && <p><a href={demoLink(tenantId, run.successorId)}>Open replacement selection</a></p>}
         {run.predecessorId && <p><a href={demoLink(tenantId, run.predecessorId)}>Open archived selection</a></p>}
         <p>Reset archives this selection and creates a replacement. Existing history and business records stay saved.</p>
@@ -155,6 +168,8 @@ export function DemoChooser() {
         <button disabled={disabled || run.status === "archived"} onClick={() => void send({ operation: "snapshot", runId: run.runId, input: { contractVersion: "small-builder-demo.report-snapshot.v1", commandId: crypto.randomUUID(), expectedRunRevision: run.revision } })}>Save selection report</button>
       </section>}
       {report && <LifecycleReport report={report} tenantId={tenantId} />}
+      {run?.scenario === "core-1000" && <Core1000Result key={`${tenantId}:${run.runId}`} runId={run.runId} tenantId={tenantId} archived={run.status === "archived"} disabled={disabled} onBusyChange={value => { busyRef.current = value; setBusy(value); }} />}
+      {run?.scenario === "shadow-30000" && <JourneyResult key={`${tenantId}:${run.runId}`} runId={run.runId} tenantId={tenantId} archived={run.status === "archived"} disabled={disabled} onBusyChange={value => { busyRef.current = value; setBusy(value); }} />}
     </>}
   </main>;
 }

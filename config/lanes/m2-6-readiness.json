@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-6-readiness": {
+      "branches": ["codex/sandbox/m2-6-readiness"],
+      "note": "M2-6 dark adapter and Graphile scheduling seams; no live providers or migration.",
+      "allow": [
+        "apps/api/src/readiness-adapters.ts",
+        "apps/api/src/readiness-scheduler.ts",
+        "apps/api/src/readiness-scheduler.test.ts",
+        "packages/core/src/readiness.ts",
+        "packages/core/src/readiness-scheduling.test.ts"
+      ]
+    }
+  }
+}

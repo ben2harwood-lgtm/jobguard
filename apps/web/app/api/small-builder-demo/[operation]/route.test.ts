@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SmallBuilderDemoError } from "@jobguard/db";
 const state = vi.hoisted(() => ({ execute: vi.fn(), credentials: { sessionToken: "real-session", csrfToken: "csrf", tenantHeader: "company", origin: undefined as string | undefined } }));
-vi.mock("../../../lib/identity-server", () => ({ identityCredentials: async () => state.credentials, identityApplication: () => ({ allowedOrigin: "https://practice.invalid" }) }));
-vi.mock("../../../lib/small-builder-demo-server", () => ({ smallBuilderDemoApplication: () => ({ execute: state.execute }) }));
+vi.mock("../../../lib/identity-server", () => ({ identityCredentials: async () => state.credentials, identityApplication: () => ({ context:async()=>({}), allowedOrigin: "https://practice.invalid" }) }));
+vi.mock("../../../lib/small-builder-demo-server", () => ({ smallBuilderDemoApplication: () => ({ execute: state.execute }), smallBuilderTrialDemoApplication: () => ({ execute: state.execute }) }));
 import { GET, POST } from "./route";
 const id = "d1500000-0000-4000-8000-000000000001";
 const context = (operation: string) => ({ params: Promise.resolve({ operation }) });
@@ -52,4 +52,16 @@ describe("DEMO-S lifecycle transport (application mocked, no database proof)", (
     const response = await post(create); expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ version: "small-builder-demo-error.v1", code: "DEMO_UNAVAILABLE" });
   });
+});
+
+it("trial transport forwards current authority and rejects synthetic clock/settlement injection",async()=>{
+ const command={version:"trial-demo-command.v1",action:"snapshot",runId:id,commandId:id};
+ state.execute.mockResolvedValue({version:"trial-demo-report.v1"});
+ expect((await post(command,"trial")).status).toBe(200);
+ expect(state.execute).toHaveBeenCalledWith(state.credentials,command);
+ state.execute.mockClear();
+ for(const key of ["asOf","acceptedAt","amountPence","settled","releaseTrialKey"]){
+  expect((await post({...command,[key]:true},"trial")).status).toBe(400);
+ }
+ expect(state.execute).not.toHaveBeenCalled();
 });

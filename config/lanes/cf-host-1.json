@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "cf-host-1": {
+      "branches": [
+        "codex/sandbox/cf-host-1"
+      ],
+      "note": "RED CF-HOST-1: Worker hosting, explicit trusted origins and single-use database connections; no deployment or migrations. Cloudflare-only webpack build shares server chunks: dry run measures 2619.53 KiB gzip, 452.47 KiB under the 3 MiB budget. Normal Vercel build keeps Turbopack; hosted journeys and exact-head review remain outstanding.",
+      "allow": [
+        ".env.example",
+        ".github/workflows/cloudflare-build.yml",
+        ".gitignore",
+        "apps/api/src/auth/identity.application.ts",
+        "apps/api/src/auth/identity.test.ts",
+        "apps/web/app/api/contractor/origin.test.ts",
+        "apps/web/app/api/contractor/origin.ts",
+        "apps/web/app/lib/cloudflare-pools.test.ts",
+        "apps/web/app/lib/identity-server.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/next.config.mjs",
+        "apps/web/open-next.config.ts",
+        "apps/web/package.json",
+        "apps/web/wrangler.jsonc",
+        "docs/operations/cloudflare-hosting.md",
+        "package.json",
+        "pnpm-lock.yaml"
+      ]
+    }
+  }
+}
