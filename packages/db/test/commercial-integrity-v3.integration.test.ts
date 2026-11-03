@@ -29,6 +29,6 @@ it("CI-P01 revoked persisted session denies even malformed review",async()=>{
 it("CI-P03 a locked job without published authority returns explicit availability without private data",async()=>{
  const {addIntegrityLock}=await import("./commercial-integrity-v3-fixtures.js"),x=await seedIntegrityJob(f),lockId=await addIntegrityLock(f,x);
  const view=await f.repo.read(f.auth.context,actor,f.auth.digest,x.job);
- expect(view.published).toBeNull();expect(view.availability).toContain("published_final_check_unavailable");
+ expect(view.published).toBeNull();expect(view.availability).toContain("published_final_check_pending");
  expect(view.result.findings).toEqual([]);
 });
