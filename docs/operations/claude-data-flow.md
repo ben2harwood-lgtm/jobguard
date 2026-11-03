@@ -38,13 +38,38 @@ The gateway requires a server-owned session resolver on every call. It fails
 closed when the resolver is missing, returns no tenant or fails. Provider requests
 use that session tenant; a conflicting request tenant is refused. Every source
 must explicitly have the same tenant and `visibility: public`, otherwise neither
-the provider nor output repair runs. The resolver must authenticate the session
-and check active membership through the API's verified principal bridge before a
-future live route can use it. This package does not implement a live endpoint.
-Recorded fixture builders supply synthetic authority and explicit public labels
-for fictional snapshots only, including shadow-proposal evaluation inputs. Those
-fixture labels are not a production source-classification or access-control adapter;
-a live source adapter must read authoritative ownership/visibility from storage.
+the provider nor output repair runs. The API's
+`createAiSessionResolver` uses the existing verified principal bridge and server
+identity credentials, independently of the AI payload. It checks session
+expiry/revocation and current membership again for each call.
+
+`AiCaptureAuthority` is a dark composition with no HTTP route. Its source loader
+uses the verified tenant context and RLS to read `app.capture_source`, replacing
+caller bytes, hash, tenant and visibility with stored values. Capture sources do
+not have a visibility column: only immutable stored `text` and
+`browser_local_transcript` kinds are classified public here. Audio and unknown kinds
+are refused. No shadow/evidence table is queried. Missing records, other tenants,
+and hash mismatches fail closed before provider execution. Membership is checked
+again after the storage read, with no database transaction held over the provider
+call. This is a current authorization check, not a lock over future revocation.
+
+`fixtureAiSession` is exported only from `@jobguard/ai/testing`; an architecture
+check prohibits its import from non-test code. The recorded capture fixture
+builder retains its private synthetic tenant closure; fixture results are unchanged.
+Other recorded fixture builders supply synthetic authority and public labels for
+fictional snapshots, including shadow-proposal evaluation inputs. Those labels are
+not production classification or access-control adapters.
+
+This RED piece leaves D04 route approval open for people. Any live route or live
+evaluation remains founder-reserved spending and requires separate authorization.
+Shadow text must never enter a live path until a person approves that data flow.
+`createLiveAiProvider` still refuses; gates G0–G5 are not opened. The local API
+regressions use the existing in-memory identity provider, a fake database client
+and the recorded fixture provider. They do not prove PostgreSQL RLS; database and
+browser suites cannot run in this sandbox and remain CI checks. The golden record
+is regenerated with `createGoldenRunRecord(await runCaptureEvaluation())` after
+building the AI package, binding the changed fixture implementation bytes; this
+remains a deterministic, zero-spend run with `NOT_AUTHORIZED` release status.
 
 CI builds the AI dependency closure and runs `eval:contract` on every candidate,
 including model/prompt/parser/schema changes. It uses the existing fixture gateway,

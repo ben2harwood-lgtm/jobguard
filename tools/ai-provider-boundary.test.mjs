@@ -36,3 +36,13 @@ test("the factory definition is allowed only in its adapter", () => {
 test("all current application and package sources respect the gateway boundary", () => {
   assert.doesNotThrow(() => checkAiProviderBoundary());
 });
+
+test("fixture session authority is available only through the test entry", () => {
+  for (const source of [
+    'import { fixtureAiSession as session } from "@jobguard/ai";',
+    'import * as testing from "@jobguard/ai/testing";',
+    'export * from "./testing.js";',
+  ]) assert.ok(checkAiProviderBoundarySource(file, source).length);
+  assert.deepEqual(checkAiProviderBoundarySource("apps/api/src/feature.test.ts",
+    'import { fixtureAiSession } from "@jobguard/ai/testing";'), []);
+});
