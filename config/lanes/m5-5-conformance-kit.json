@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-5-conformance-kit": {
+      "branches": [
+        "codex/sandbox/m5-5-conformance-kit"
+      ],
+      "allow": [
+        "docs/contracts/merchant-conformance-kit-v1.md",
+        "docs/contracts/merchant-connectors-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/merchant-conformance-fakes.ts",
+        "packages/core/src/merchant-conformance-kit.test.ts",
+        "packages/core/src/merchant-conformance-kit.ts",
+        "packages/core/src/merchant-connectors.test.ts",
+        "packages/core/src/merchant-connectors.ts",
+        "packages/core/src/supplier-documents.ts",
+        "packages/db/migration-notes/0586_merchant_ingestion_hardening.md",
+        "packages/db/migrations/0586_merchant_ingestion_hardening.sql",
+        "packages/db/src/merchant-ingestion.test.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/merchant-ingestion.integration.test.ts",
+        "packages/db/test/migration-proofs/0586_merchant_ingestion_hardening.proof.json"
+      ],
+      "note": "M5-5 synthetic conformance kit with required stacked M5-4 dependency absent from origin/main. RED dependency: merchant ingestion and tenant/job-qualified canonical link. Migration 0586_merchant_ingestion_hardening reserved. NOPR; no live adapter, external action or release. Actual adapter/partner conformance and exact outbound authorization remain open."
+    }
+  }
+}
