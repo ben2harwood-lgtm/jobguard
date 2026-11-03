@@ -9,8 +9,8 @@ sign-off gate. M1's existing standard-20%-only implementation is unchanged.
 
 ## Explicit support matrix
 
-Version: `vat.support-matrix.dark.v1`; rounding example:
-`fixture_cumulative_group_half_up_v1`. GBP checked integer pence only.
+Version: `vat.support-matrix.dark.v1`. GBP checked integer pence only.
+Rounding requires one explicit book-level candidate version; there is no default.
 
 | Code | Fixture rate | Explicit qualification | Draft wording/data |
 | --- | --- | --- | --- |
@@ -42,10 +42,34 @@ wording and eligibility evidence still require D02/D06 approval.
 
 A book is one tenant/job, supplier/customer, matrix, rounding version and retention-tax
 basis. Every snapshot contains one complete cumulative group per treatment; group order
-is immaterial. Rounding occurs once per cumulative tax-code group using the existing exact
-`multiplyRatio(..., half_up)` helper. Document movements subtract the previous rounded
-cumulative amounts, so tiny part bills and inverse credits telescope exactly. This is a
-candidate fixture method, not an approved tax-rounding or tax-point policy.
+is immaterial. Two candidate rounding versions use the existing exact
+`multiplyRatio(..., half_up)` helper. Neither is approved; D02 must choose the actual
+method, and D02/D06 adviser-approved fixtures remain outstanding for people:
+
+- `fixture_cumulative_group_half_up_v1`: round each cumulative tax-code group, then
+  subtract previous rounded amounts for document movements.
+- `fixture_document_group_sign_symmetric_half_up_v1`: the plan's candidate, rounding
+  each document's tax-code group movement half-up for positive invoices and using
+  its sign-symmetric inverse for credits (negative half-pennies round away from zero).
+  Apply this to both full-net and current-basis tax; retained tax is their difference.
+  Cumulative outputs sum document amounts rather than re-rounding cumulative net.
+  Splitting bills or credits can therefore leave rounding residues, including on a
+  correction to zero; no automatic adjustment or choice of legal treatment is made.
+
+A single version applies to the complete history. Missing/unknown versions, arrays of
+versions and per-document overrides refuse; histories cannot mix methods. Neither method
+selects a legal tax point or enables real issue.
+
+Fictional comparison fixture: reduced rate 5%, no retention; cumulative net snapshots
+10p, 20p, 10p, 0p (two part bills then two credits):
+
+| Candidate | Document VAT movements | Cumulative VAT |
+| --- | --- | --- |
+| Cumulative group | +1p, 0p, 0p, -1p | 1p, 1p, 1p, 0p |
+| Document group sign-symmetric | +1p, +1p, -1p, -1p | 1p, 2p, 1p, 0p |
+
+The second bill and first credit differ by one penny. This comparison is made-up
+calculation evidence only, not an adviser-approved fixture or a recommendation.
 
 Two explicitly chosen, unapproved basis examples are supported:
 
@@ -97,14 +121,17 @@ eligibility and retention profile cannot be changed. Credits can only reduce net
 from the immediately preceding cumulative snapshot and cannot increase expected cash.
 Historic arbitrary credit allocations, profile changes, changed treatment/status and other
 regimes are unsupported. Retention releases keep net unchanged and cannot increase held
-principal. Duplicate document references/IDs, duplicate groups, reused release IDs and broken
+principal. A credit or release must change net or retained principal across the document;
+zero-change credits and releases refuse, while unchanged individual groups are allowed.
+Duplicate document references/IDs, duplicate groups, reused release IDs and broken
 previous/credit references fail. Replaying the same pure calculation has no side effects;
 this is not a durable issuance or settlement ledger.
 
 ## Evidence and remaining gates
 
 Fixtures/tests cover every row, both retention bases, mixed groups, part billing, credit
-correction to zero, retention release, rounding residues, amount limits, missing/conflicting
+correction to zero, retention release, both rounding candidates, penny comparisons, mixed-version
+and no-op refusal, rounding residues, amount limits, missing/conflicting
 eligibility, strict versions, disabled issue and preservation of M1. M4-18 and M4-20 are run
 as regression suites without edits. No tax/tenant tables or grants change, so no migration,
 LP-0 or tenancy-list amendment is needed. Independent exact-head RED review and CI remain
