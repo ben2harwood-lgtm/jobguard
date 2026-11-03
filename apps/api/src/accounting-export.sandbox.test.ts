@@ -1,0 +1,267 @@
+import { describe, expect, it } from "vitest";
+import { MAX_MONEY_PENCE } from "@jobguard/core";
+import { AccountingExportSandbox, FakeCodatAdapter } from "./accounting-export.sandbox.js";
+import { FakeXeroAdapter } from "./accounting-xero.fake.js";
+import { FakeQuickBooksAdapter } from "./accounting-quickbooks.fake.js";
+import type { AccountingSource } from "./accounting-export.contracts.js";
+import { ctx, consent, source, scope, command, adjustment, scopeFor } from "./accounting-export.test-fixtures.js";
+
+describe.each([
+  ["Codat", () => new FakeCodatAdapter()],
+  ["Xero", () => new FakeXeroAdapter(["demo-company", "demo-company-two"].map(companyId => ({
+    version: 1, tenantId: ctx.tenantId, companyId, revision: 1, state: "connected", synthetic: true,
+  })))],
+  ["QuickBooks", () => new FakeQuickBooksAdapter(["demo-company", "demo-company-two"].map(companyId => ({
+    version: 1, tenantId: ctx.tenantId, companyId, revision: 1, state: "connected", synthetic: true,
+  })))],
+] as const)("%s common dark export conformance", (_name, makeAdapter) => {
+  function setup(sources: AccountingSource[] = [source], enabled = true) {
+    const adapter = makeAdapter();
+    const model = new AccountingExportSandbox(adapter, sources, [consent], enabled);
+    return { model, adapter };
+  }
+
+  it("is disabled by default, rejects live/PII input and leaks no input through errors", () => {
+    const adapter = makeAdapter();
+    const model = new AccountingExportSandbox(adapter, [source], [consent]);
+    expect(() => model.preview(ctx, scope, 100)).toThrow("disabled");
+    const active = setup().model;
+    for (const patch of [{ synthetic: false }, { visibility: "shadow" }, { email: "secret@example.com" }, { sourceId: "real-customer" }]) {
+      expect(() => active.setSyntheticSource({ ...source, ...patch })).toThrow(/^Accounting export: invalid_input$/);
+    }
+    expect(adapter.pushes).toBe(0);
+  });
+  it.each(["customer_invoice", "credit", "receipt"] as const)("exports %s with exact pennies and immutable source/mapping ledger", kind => {
+    const item = kind === "customer_invoice" ? source : adjustment(kind, 1);
+    const { model, adapter } = setup(kind === "customer_invoice" ? [source] : [source, item]);
+    const s = scopeFor(item);
+    const result = model.push(ctx, command(model, s), 100);
+    expect(result.status).toBe("pushed");
+    expect(result.pence).toBe(item.amount.pence);
+    expect(adapter.objects[0]!.payload).toMatchObject({ sourceId: item.sourceId, sourceRevision: item.revision, amount: item.amount, companyId: s.companyId, accountId: s.mapping.accountId });
+    expect(result.sourceRevision).toBe(1);
+    const ledger = model.ledger(ctx, s, 100);
+    expect(ledger.artifact?.scope.mapping).toEqual(s.mapping);
+    expect(ledger.artifact?.source).toEqual(item);
+    ledger.entry.status = "failed";
+    expect(model.ledger(ctx, s, 100).entry.status).toBe("pushed");
+  });
+  it("deduplicates commands, idempotency keys and new commands for the same business effect", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    const first = model.push(ctx, c, 100);
+    expect(model.push(ctx, c, 100)).toEqual(first);
+    model.push(ctx, command(model, scope, "two"), 100);
+    expect(adapter.pushes).toBe(1);
+    expect(() => model.push(ctx, { ...c, decision: { ...c.decision, expiresAt: 1900 } }, 100)).toThrow("approval_required");
+    expect(() => model.push(ctx, { ...c, commandId: "demo-different" }, 100)).toThrow("replay_conflict");
+    expect(() => model.push(ctx, { ...c, idempotencyKey: "demo-different" }, 100)).toThrow("replay_conflict");
+  });
+  it("rejects approved changed payloads that reuse a command ID or idempotency key", () => {
+    const { model, adapter } = setup(); const first = command(model);
+    model.push(ctx, first, 100);
+    const changedScope = { ...scope, mapping: { ...scope.mapping, customerId: "demo-changed-customer", revision: 2 } };
+    const changed = command(model, changedScope, "changed");
+    expect(() => model.push(ctx, { ...changed, commandId: first.commandId }, 100)).toThrow("replay_conflict");
+    expect(() => model.push(ctx, { ...changed, idempotencyKey: first.idempotencyKey }, 100)).toThrow("replay_conflict");
+    expect(adapter.pushes).toBe(1);
+  });
+  it.each(["reject", "unknown_before", "unknown_after"] as const)("requires reconciliation after %s before retry", mode => {
+    const { model, adapter } = setup(); const c = command(model); adapter.next = mode;
+    expect(model.push(ctx, c, 100).status).toBe(mode === "reject" ? "failed" : "outcome_unknown");
+    expect(() => model.push(ctx, c, 100)).toThrow("reconcile_required");
+    expect(adapter.pushes).toBe(1);
+    expect(model.reconcile(ctx, scope, 100).status).toBe(mode === "unknown_after" ? "pushed" : "confirmed_absent");
+    expect(model.push(ctx, c, 100).status).toBe("pushed");
+    expect(adapter.objects).toHaveLength(1);
+  });
+  it("detects external edits, duplicate imports, changed references and paid labels without importing proof", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    model.push(ctx, c, 100);
+    const object = adapter.objects[0]!;
+    object.paid = true;
+    expect(model.reconcile(ctx, scope, 100).qualifyingRecoveryProof).toBe(false);
+    object.payload.amount.pence = 99;
+    expect(model.reconcile(ctx, scope, 100).status).toBe("external_edit");
+    object.payload.amount.pence = source.amount.pence;
+    object.contentHash = "edited";
+    expect(model.reconcile(ctx, scope, 100).status).toBe("external_edit");
+    expect(() => model.push(ctx, c, 100)).toThrow("reconcile_required");
+    object.contentHash = c.decision.previewHash;
+    adapter.objects.push({ ...object, id: "demo-duplicate" });
+    expect(model.reconcile(ctx, scope, 100).status).toBe("duplicate_import");
+    adapter.objects.pop(); object.id = "demo-replaced";
+    expect(model.reconcile(ctx, scope, 100).status).toBe("reference_conflict");
+    object.reference = "unmatched";
+    expect(model.reconcile(ctx, scope, 100).status).toBe("reference_conflict");
+    expect(adapter.pushes).toBe(1);
+  });
+  it("reconciles a pre-existing import without another create", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    adapter.next = "unknown_after"; const row = model.push(ctx, c, 100);
+    // Reuse the same external fake with a fresh model to simulate an imported target object.
+    const restored = new AccountingExportSandbox(adapter, [source], [consent], true);
+    expect(restored.push(ctx, command(restored), 100).externalId).toBe(adapter.objects[0]!.id);
+    expect(restored.reconcile(ctx, scope, 100).reference).toBe(row.reference);
+    expect(adapter.pushes).toBe(1);
+  });
+  it("checks approval, actor, expiry, company, mapping, scope and consent again at execution", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    for (const decision of [{ ...c.decision, humanConfirmed: false }, { ...c.decision, status: "rejected" },
+      { ...c.decision, action: "send" }, { ...c.decision, actorId: "demo-other" }, { ...c.decision, expiresAt: 100 }]) {
+      expect(() => model.push(ctx, { ...c, decision }, 100)).toThrow();
+    }
+    expect(() => model.push(ctx, { ...c, scope: { ...scope, mapping: { ...scope.mapping, accountId: "demo-other" } } }, 100)).toThrow("approval_required");
+    expect(() => model.push(ctx, { ...c, scope: { ...scope, companyId: "demo-other" } }, 100)).toThrow("consent_expired");
+    model.setSyntheticConsent({ ...consent, revision: 2 });
+    expect(() => model.push(ctx, c, 100)).toThrow("approval_required");
+    model.setSyntheticConsent({ ...consent, revoked: true });
+    expect(() => model.push(ctx, c, 100)).toThrow("consent_expired");
+    model.setSyntheticConsent(consent);
+    expect(() => model.push(ctx, c, 5000)).toThrow("consent_expired");
+    expect(adapter.pushes).toBe(0);
+  });
+  it("refuses cross-tenant, same-tenant wrong-job and unauthorized operations", () => {
+    const { model } = setup(); const c = command(model); model.push(ctx, c, 100);
+    const outsider = { ...ctx, tenantId: "demo-other" };
+    for (const method of ["preview", "reconcile", "ledger"] as const) {
+      expect(() => model[method](outsider, scope, 100)).toThrow("forbidden");
+      expect(() => model[method]({ ...ctx, canExport: false }, scope, 100)).toThrow("forbidden");
+      expect(() => model[method](ctx, { ...scope, jobId: "demo-other-job" }, 100)).toThrow("source_unavailable");
+    }
+    expect(() => model.push(outsider, c, 100)).toThrow("forbidden");
+    expect(model.history(outsider)).toEqual([]);
+    expect(JSON.stringify(model.history(ctx))).not.toMatch(/demo-customer|demo-sales|demo-actor/);
+  });
+  it.each([0, -1, MAX_MONEY_PENCE + 1, 1.5, Number.NaN])("rejects invalid pence %s", pence => {
+    expect(() => setup([{ ...source, amount: { pence, currency: "GBP" } }])).toThrow("invalid_input");
+  });
+  it("permits the exact cap and penny values without arithmetic rounding", () => {
+    const { model } = setup([{ ...source, amount: { pence: MAX_MONEY_PENCE, currency: "GBP" } }]);
+    expect(model.push(ctx, command(model), 100).pence).toBe(MAX_MONEY_PENCE);
+  });
+  it.each(["credit", "receipt"] as const)("bounds %s references and aggregate allocation using immutable exported amounts", kind => {
+    const a = adjustment(kind, 60); const b = adjustment(kind, 42, "demo-adjustment-two");
+    const { model } = setup([source, a, b]);
+    model.push(ctx, command(model, scopeFor(a)), 100);
+    model.setSyntheticSource({ ...a, amount: { pence: 1, currency: "GBP" }, state: "cancelled" });
+    expect(() => model.preview(ctx, scopeFor(b), 100)).toThrow("reference_conflict");
+    model.setSyntheticSource({ ...b, amount: { pence: 41, currency: "GBP" } });
+    expect(model.push(ctx, command(model, scopeFor(b), "two"), 100).status).toBe("pushed");
+  });
+  it.each([
+    ["credit", "receipt", "demo-company"],
+    ["receipt", "credit", "demo-company"],
+    ["credit", "credit", "demo-company-two"],
+    ["receipt", "receipt", "demo-company-two"],
+    ["credit", "receipt", "demo-company-two"],
+  ] as const)("combines %s and %s reservations across target %s", (firstKind, secondKind, companyId) => {
+    const a = adjustment(firstKind, 60, "demo-adjustment-one");
+    const b = adjustment(secondKind, 42, "demo-adjustment-two");
+    const { model, adapter } = setup([source, a, b]);
+    model.setSyntheticConsent({ ...consent, companyId });
+    const secondScope = { ...scopeFor(b), companyId, mapping: { ...scope.mapping, companyId } };
+    const secondCommand = command(model, secondScope, "two");
+    const firstCommand = command(model, scopeFor(a));
+    model.push(ctx, firstCommand, 100);
+    expect(() => model.preview(ctx, secondScope, 100)).toThrow("reference_conflict");
+    expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
+    expect(adapter.pushes).toBe(1);
+    model.setSyntheticSource({ ...b, amount: { pence: 41, currency: "GBP" } });
+    expect(model.push(ctx, command(model, secondScope, "exact"), 100).status).toBe("pushed");
+    expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
+    expect(adapter.objects.reduce((sum, object) => sum + object.payload.amount.pence, 0)).toBe(source.amount.pence);
+    expect(adapter.pushes).toBe(2);
+  });
+  it.each(["credit", "receipt"] as const)("counts the same %s source reserved in another company", kind => {
+    const a = adjustment(kind, 60);
+    const { model, adapter } = setup([source, a]);
+    const companyId = "demo-company-two";
+    model.setSyntheticConsent({ ...consent, companyId });
+    const secondScope = { ...scopeFor(a), companyId, mapping: { ...scope.mapping, companyId } };
+    const secondCommand = command(model, secondScope, "two");
+    const firstCommand = command(model, scopeFor(a));
+    model.push(ctx, firstCommand, 100);
+    expect(() => model.push(ctx, secondCommand, 100)).toThrow("reference_conflict");
+    expect(model.push(ctx, firstCommand, 100).status).toBe("pushed");
+    expect(adapter.pushes).toBe(1);
+  });
+  it("rejects adjustments before their invoice, wrong-job references and amounts above invoice", () => {
+    const a = adjustment("credit", 102);
+    expect(() => setup([a]).model.preview(ctx, scopeFor(a), 100)).toThrow("reference_conflict");
+    expect(() => setup([source, a]).model.preview(ctx, scopeFor(a), 100)).toThrow("reference_conflict");
+    expect(() => setup([source, { ...a, jobId: "demo-other-job" }]).model.preview(ctx, { ...scopeFor(a), jobId: "demo-other-job" }, 100)).toThrow("reference_conflict");
+    expect(() => setup([{ ...source, tenantId: "demo-other" }, a]).model.preview(ctx, scopeFor(a), 100)).toThrow("reference_conflict");
+  });
+  it("refuses cancelled/superseded sources before or after an export and requires exact locked final revision", () => {
+    const { model, adapter } = setup(); const c = command(model); model.push(ctx, c, 100);
+    for (const state of ["cancelled", "superseded"] as const) {
+      model.setSyntheticSource({ ...source, state });
+      expect(() => model.push(ctx, c, 100)).toThrow("source_unavailable");
+      expect(() => setup([{ ...source, state }]).model.preview(ctx, scope, 100)).toThrow("source_unavailable");
+    }
+    model.setSyntheticSource({ ...source, revision: 2 });
+    expect(() => model.push(ctx, c, 100)).toThrow("source_unavailable");
+    const newer = { ...scope, sourceRevision: 2 };
+    expect(() => model.push(ctx, command(model, newer, "two"), 100)).toThrow("reference_conflict");
+    model.setSyntheticSource({ ...source, finalAccount: { revision: 3, lockedRevision: 2 } });
+    expect(() => model.preview(ctx, scope, 100)).toThrow("source_unavailable");
+    expect(adapter.pushes).toBe(1);
+  });
+  it.each(["tax", "retention", "cis", "drc"])("fails explicitly on unsupported %s mappings", field => {
+    const { model } = setup();
+    expect(() => model.preview(ctx, { ...scope, mapping: { ...scope.mapping, [field]: "supported" } }, 100)).toThrow("unsupported_mapping");
+    expect(() => model.setSyntheticSource({ ...source, [field]: { pence: 10 } })).toThrow("unsupported_mapping");
+  });
+  it("requires a stored human confirmation, rejects reused Decision IDs and binds the parent invoice revision", () => {
+    const { model } = setup(); const c = command(model);
+    expect(() => model.push(ctx, { ...c, decision: { ...c.decision, decisionId: "demo-unconfirmed" } }, 100)).toThrow("approval_required");
+    const changed = { ...scope, mapping: { ...scope.mapping, revision: 2 } };
+    const previewHash = model.preview(ctx, changed, 100).previewHash;
+    expect(() => model.confirmPreview(ctx, changed, { ...c.decision, previewHash }, 100)).toThrow("replay_conflict");
+    const receipt = adjustment("receipt");
+    const other = setup([{ ...source, revision: 2 }, receipt]).model;
+    expect(() => other.preview(ctx, scopeFor(receipt), 100)).toThrow("reference_conflict");
+  });
+  it("refuses a revoked confirmation and cannot silently reapprove its Decision ID", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    expect(() => model.revokeConfirmation({ ...ctx, tenantId: "demo-other" }, c.decision)).toThrow("forbidden");
+    model.revokeConfirmation(ctx, c.decision);
+    expect(() => model.push(ctx, c, 100)).toThrow("approval_required");
+    expect(() => model.confirmPreview(ctx, scope, c.decision, 100)).toThrow("replay_conflict");
+    expect(adapter.pushes).toBe(0);
+  });
+  it("keeps the ledger available for reconciliation after source cancellation without authorizing a new push", () => {
+    const { model } = setup(); model.push(ctx, command(model), 100);
+    model.setSyntheticSource({ ...source, state: "cancelled" });
+    expect(model.ledger(ctx, scope, 100).artifact?.source.state).toBe("issued");
+    expect(model.reconcile(ctx, scope, 100).status).toBe("pushed");
+  });
+  it("enforces the backoff deadline on either route without changing approved bytes", () => {
+    const { model, adapter } = setup(); const c = command(model);
+    adapter.next = "rate_limit";
+    expect(model.push(ctx, c, 100).status).toBe("rate_limited");
+    expect(() => model.push(ctx, c, 129)).toThrow("rate_limited");
+    expect(() => model.reconcile(ctx, scope, 129)).toThrow("rate_limited");
+    expect(model.push(ctx, c, 130).status).toBe("pushed");
+    expect(adapter.objects).toHaveLength(1);
+    expect(adapter.objects[0]!.payload.amount).toEqual(source.amount);
+    expect(adapter.objects[0]!.payload.customerId).toBe(scope.mapping.customerId);
+  });
+  it.each(["credit", "receipt"] as const)("refuses %s against cancelled, superseded or unlocked parent invoices", kind => {
+    const item = adjustment(kind);
+    for (const invoice of [{ ...source, state: "cancelled" }, { ...source, state: "superseded" },
+      { ...source, finalAccount: { revision: 3, lockedRevision: 2 } }]) {
+      const { model, adapter } = setup([invoice as AccountingSource, item]);
+      expect(() => model.preview(ctx, scopeFor(item), 100)).toThrow("reference_conflict");
+      expect(adapter.pushes).toBe(0);
+    }
+    const { model, adapter } = setup([source, item]);
+    const c = command(model, scopeFor(item));
+    model.push(ctx, c, 100);
+    model.setSyntheticSource({ ...item, state: "cancelled" });
+    expect(() => model.push(ctx, c, 100)).toThrow("source_unavailable");
+    expect(model.reconcile(ctx, scopeFor(item), 100).status).toBe("pushed");
+    expect(adapter.pushes).toBe(1);
+  });
+
+});

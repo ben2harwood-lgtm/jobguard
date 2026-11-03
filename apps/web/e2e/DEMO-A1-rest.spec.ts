@@ -3,10 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { finishDispositionsAndTerms, prepareLockJob } from "./helpers/final-account-lock-journey";
 import { enterQuote, recordThroughUi } from "./helpers/customer-invoice-journey";
 import { get, post } from "./helpers/recovery-sources";
-import { approveJ3Catches, type PricedCatch } from "./helpers/j3-customer-approval";
+import { approveJ3Catches, type PricedCatch } from "./helpers/j3-integrity-approval";
 import { allocateThroughUi, readAllocations, recovery18800 } from "./helpers/recovery-allocation-journey";
 
-// DEMO-A1's remaining five scenarios. Both configured projects run each test
+// DEMO-A1's remaining seven scenarios. Both configured projects run each test
 // from a new practice session/job. Setup and outcomes use HTTP/UI only: even
 // Final Check completion belongs to the real scheduled worker, never SQL setup.
 test.setTimeout(300_000);
@@ -29,9 +29,11 @@ async function checkedJob(page: Page, extra = false) {
   await finishDispositionsAndTerms(page);
   await button(page, "Complete final account").click();
   await expect.poll(async () => (await get(page, path(jobId, "final-account/lock"))).lock?.finalAccountRevisionId).toBe(account.id);
-  // Discovery runs once per minute. No completion certificate is manufactured.
+  // Each scenario needs a fresh job: dispositions and receipts mutate it.
+  // Discovery runs once per minute. Poll the saved result without an extra
+  // five-second observation delay; no completion certificate is manufactured.
   await expect.poll(async () => (await get(page, path(jobId, "final-check"))).state,
-    { timeout: 180_000, intervals: [5_000] }).toBe("completed");
+    { timeout: 180_000 }).toBe("completed");
   const check = await get(page, path(jobId, "final-check"));
   expect(check.items).toHaveLength(extra ? 1 : 0);
   if (extra) expect(check.items[0].description).toContain("outside tap");
@@ -79,7 +81,8 @@ async function incompleteShadowReport(page: Page, jobId: string) {
   await expect(saved).toContainText("No invoice issued");
 }
 
-test("DEMO-S evidence after lock: late intake is honestly refused, never added to the locked check", async ({ page }) => {
+test("DEMO-S evidence after lock: ordinary intake is refused; imported old evidence stays usable and fee-free", async ({ page }) => {
+  test.setTimeout(420_000); // Two real worker passes: initial check, then late-source examination.
   const { jobId, check } = await checkedJob(page);
   const locked = await get(page, path(jobId, "final-account/lock"));
   const before = await get(page, path(jobId, "diary"));
@@ -100,8 +103,58 @@ test("DEMO-S evidence after lock: late intake is honestly refused, never added t
   expect(await get(page, path(jobId, "final-account/lock"))).toEqual(locked);
   await expect(page.getByTestId("final-check-post-lock")).toHaveCount(0);
   await zeroRecovery(page, jobId);
-  // Remaining blocker: late-source import/display is not ready; this proves the
-  // current refusal, not the plan's eventual usable, permanently fee-free item.
+  // Ordinary message intake is still refused; historical import is a separate command.
+  const messagesBefore = await get(page, path(jobId, "customer-messages"));
+  const messages = page.getByTestId("customer-messages");
+  await expect(messages).toHaveAttribute("aria-busy", "false");
+  await messages.getByLabel("Made-up customer name").fill("Fictional Alex");
+  await messages.getByLabel("Message", { exact: true }).fill("Fitted outside tap.");
+  const messageRefused = page.waitForResponse(r => r.request().method() === "POST" && r.url().endsWith(path(jobId, "customer-messages")));
+  await messages.getByRole("button", { name: "Save message", exact: true }).click();
+  const messageResponse = await messageRefused;
+  expect(messageResponse.status()).toBe(422);
+  expect(await messageResponse.json()).toMatchObject({ code: "POST_LOCK_WORK_REQUIRES_LINKED_JOB", realExternalActions: 0 });
+  await expect(messages.getByRole("alert")).toContainText("final account is locked");
+  expect(await get(page, path(jobId, "customer-messages"))).toEqual(messagesBefore);
+
+  await page.goto(`/jobs/${jobId}#final-check`);
+  const form = page.getByTestId("historical-evidence-import");
+  await form.getByLabel("Fictional sender").fill("Fictional Alex");
+  await form.getByLabel("Stated message date").fill("2020-01-01T10:00");
+  await form.getByLabel("Old fictional message").fill("Fitted outside tap.");
+  const importReply = page.waitForResponse(r => r.request().method() === "POST" && r.url().endsWith(path(jobId, "historical-evidence")));
+  await form.getByRole("button", { name: "Import as evidence only", exact: true }).click();
+  const imported = await importReply;
+  expect(imported.ok()).toBe(true);
+  const receipt = await imported.json();
+  expect(receipt).toMatchObject({ evidenceAfterLock: true, realExternalActions: 0,
+    record: { text: "Fitted outside tap.", fictionalCustomer: { name: "Fictional Alex" } } });
+  // Original text is usable immediately, without waiting for the detector.
+  const original = page.getByTestId("imported-historical-message");
+  await original.getByText("Old message from Fictional Alex", { exact: true }).click();
+  await expect(original).toContainText("Fitted outside tap.");
+  expect(await get(page, path(jobId, "historical-evidence"))).toEqual([receipt]);
+  await expect.poll(async () => (await get(page, path(jobId, "final-check"))).postLockItems?.length,
+    { timeout: 180_000, intervals: [5000] }).toBe(1);
+  const afterImport = await get(page, path(jobId, "final-check"));
+  expect(afterImport).toMatchObject({ lockId: check.lockId, runId: check.runId, items: check.items });
+  expect(afterImport.postLockItems[0].evidenceAfterLock).toBe(true);
+  expect(afterImport.postLockItems[0].evidence).toContainEqual(expect.objectContaining({ id: receipt.record.evidence.id }));
+  for (let pass = 0; pass < 2; pass++) {
+    await page.reload();
+    await expect(page.getByTestId("final-check-post-lock")).toContainText("outside tap");
+    await expect(page.getByTestId("final-check-reveal")).toContainText("You can use it, but it never earns JobGuard a fee.");
+    await original.getByText("Old message from Fictional Alex", { exact: true }).click();
+    await expect(original).toContainText("Fitted outside tap.");
+    expect(await get(page, path(jobId, "historical-evidence"))).toEqual([receipt]);
+    expect(await get(page, path(jobId, "final-check"))).toEqual(afterImport);
+    expect(await get(page, path(jobId, "final-account/lock"))).toEqual(locked);
+    expect(await get(page, path(jobId, "diary"))).toEqual(before);
+    expect(await get(page, path(jobId, "customer-messages"))).toEqual(messagesBefore);
+    expect((await get(page, path(jobId, "recovery-cases"))).cases).toEqual([]);
+    await zeroRecovery(page, jobId);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("DEMO-S disputed attribution: an unmatched included claim persists as disputed with no fee", async ({ page }) => {

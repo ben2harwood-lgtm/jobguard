@@ -4,6 +4,7 @@ import { startBeforeMigration, applyMigration, company, start, end, lookup, repo
 import { currentCommand } from "./contractor-practice-session-fixtures.js";
 import { ContractorRepository, registerNorthsideRun, migrate } from "../src/index.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 const migration = "0332_northside_finance_switch.sql";
 let c: Awaited<ReturnType<typeof startBeforeMigration>>;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await startBeforeMigration(migration); }, 240000);
@@ -23,6 +24,9 @@ it("populated upgrade preserves rows and routine security while admitting only t
   expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] }); expect(await metadata()).toEqual(security);
   expect(await lookup(c, foreign)).toEqual(actor);
   await end(c, foreign);
+  // MON-8 never backfills agreement authority for predecessor companies.
+  await seedActiveContractorAgreement(c.admin,f.p.tenantId);
+  await seedActiveContractorAgreement(c.admin,foreign.p.tenantId);
   await switchFinance(); expect((await lookup(c, f)).membershipId).toBe(member.id);
   // The active-switch grant trigger still prevents acquiring approval/admin authority.
   await expect(c.admin.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id,contract_id) VALUES($1,$2,$3,'commercial_manager','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), member.id])).rejects.toMatchObject({ message: "PRACTICE_WORKER_GRANT_FORBIDDEN" });

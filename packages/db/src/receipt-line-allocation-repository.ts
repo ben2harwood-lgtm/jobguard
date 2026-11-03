@@ -43,6 +43,7 @@ function serializableReceiptPool(pool:Pool):Pool{
  }} as unknown as Pool;
 }
 
+const COMMAND_ATTEMPTS=5;
 function fail(code:ReceiptLineAllocationErrorCode):never{throw new ReceiptLineAllocationError(code);}
 /** Synthetic neutral receipt producer. SQL derives all money; SH-1 checks the
  * proposal again before the repository can return a review or saved result. */
@@ -88,12 +89,22 @@ export class RecoveryLineAllocationRepository {
   if(!command.success)fail("INVALID_RECEIPT_LINE_COMMAND");
   // SSI is selected at BEGIN, before the digest/tenant configuration queries.
   // Unknown transport/commit outcomes remain errors; retry the same command id.
+  // 40001 is a definite rollback, usually another writer moving the tenant's shared audit head.
+  for(let attempt=1;;attempt++){
+   try{return await this.writeFacts(context,actor,digest,jobId,command.data);}
+   catch(error){
+    if((error as {code?:string}).code!=="40001"||attempt>=COMMAND_ATTEMPTS)throw error;
+    await new Promise(resolve=>setTimeout(resolve,attempt*50+Math.random()*50));
+   }
+  }
+ }
+ private writeFacts(context:VerifiedTenantContext,actor:RecoveryAllocationActor,digest:string,jobId:string,command:{commandId:string;action:string}):Promise<NeutralReceiptFactResult>{
   return withTenant(practiceMaterialPool(serializableReceiptPool(this.pool),digest),context,async db=>{
    await this.scope(db,context,actor,digest,jobId);
    await db.$client.query("SELECT set_config('app.receipt_line_environment','synthetic_demo',true)");
-   const row=(await db.$client.query<{result:unknown}>("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,NULL::jsonb) result",[context.tenantId,jobId,digest,JSON.stringify(command.data)])).rows[0];
+   const row=(await db.$client.query<{result:unknown}>("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4::jsonb,NULL::jsonb) result",[context.tenantId,jobId,digest,JSON.stringify(command)])).rows[0];
    const parsed=resultV1.safeParse(row?.result);
-   if(!parsed.success||parsed.data.jobId!==jobId||parsed.data.commandId!==command.data.commandId||parsed.data.action!==command.data.action)fail("INVALID_RECEIPT_LINE_RESULT");
+   if(!parsed.success||parsed.data.jobId!==jobId||parsed.data.commandId!==command.commandId||parsed.data.action!==command.action)fail("INVALID_RECEIPT_LINE_RESULT");
    const shared=mapRecoveryReceiptToLines(parsed.data.input);
    if(shared.length!==parsed.data.lines.length||shared.some(line=>!parsed.data.lines.some(saved=>saved.lineId===line.lineId&&saved.rule===line.rule&&saved.sourceRef===line.sourceRef&&JSON.stringify(saved.gross)===JSON.stringify(line.gross)&&JSON.stringify(saved.net)===JSON.stringify(line.net))))fail("INVALID_RECEIPT_LINE_RESULT");
    return parsed.data;
