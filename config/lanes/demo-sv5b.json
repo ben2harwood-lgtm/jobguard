@@ -18,6 +18,7 @@
         "apps/web/app/api/jobs/[id]/historical-evidence/route.ts",
         "apps/web/app/api/jobs/[id]/shadow-demo/source-hold/route.test.ts",
         "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/historical-evidence.test.tsx",
         "apps/web/app/ui/shadow-journey.tsx",
         "apps/web/e2e/SV-5.spec.ts",
         "docs/contracts/job-source-intake-persistence-v1.md",
@@ -30,9 +31,14 @@
         "packages/db/src/late-source-import.test.ts",
         "packages/db/src/late-source-import.ts",
         "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/commercial-integrity-v3-fixtures.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
+        "packages/db/test/customer-variation-upgrade.integration.test.ts",
         "packages/db/test/job-source-fixtures.test.ts",
         "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/late-source-import.integration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/migration-proofs/0613_late_source_import.proof.json"
       ]
     }

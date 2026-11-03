@@ -1,4 +1,4 @@
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -18,7 +18,7 @@ beforeAll(async () => {
   await applyMigration(c, own);
   expect(await snapshot(c.admin)).toEqual(expected);
   await migrate(c.admin); await migrate(c.admin);
-  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(lp5RegistryRows)])).rows[0].data;
+  const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data;
   const successors = { ...expected, "app.customer_variation_approval": [], "app.activation_acceptance_operation_use": [], "app.command_lifecycle_claim": [], "app.command_type_registry": registry, "app.repository_operational_record": [] };
   expect(await snapshot(c.admin, Object.keys(successors))).toEqual(successors);
 }, 120000);

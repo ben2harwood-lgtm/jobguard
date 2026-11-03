@@ -274,6 +274,7 @@ test("I (practice journey): a £8,000 request fires D13 before lock and stays pe
   };
   await openInbox();
   await page.reload();
+  await page.getByRole("button", { name: /Decisions/u }).first().click();
   await assertDecision();
   await page.getByRole("button", { name: "← Jobs", exact: true }).click();
   await openInbox();

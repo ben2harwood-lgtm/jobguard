@@ -112,6 +112,7 @@ function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<vo
    const response=await fetch(`/api/jobs/${jobId}/historical-evidence`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
     version:"late-source-import.v1",commandId:pending.current.commandId,fictionalCustomer:{kind:"named_fictional_customer",name},text,statedSentAt})});
    if(!response.ok){setMessage("Import refused. Use an old message dated before the final-account lock.");return;}
+   lateSourceReceiptV1.parse(await response.json());
    setMessage("Evidence saved. The practice worker will examine it; load the saved final check in about a minute. It can never earn JobGuard a fee.");
    setText("");pending.current=null;await loadHistory();await onSaved();
   } catch {setMessage("The result is unknown. Retry the same import to check its saved receipt.");}
