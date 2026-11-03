@@ -183,5 +183,7 @@
   "0521_lp5a_commands.sql",
   "0522_lp5b_writers.sql",
   "0525_commercial_integrity_v3_receipts.sql",
-  "0526_commercial_integrity_sources.sql"
+  "0526_commercial_integrity_sources.sql",
+  "0616_server_plan_entitlements.sql",
+  "0617_contractor_feature_guards.sql"
 ]

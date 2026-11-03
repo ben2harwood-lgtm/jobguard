@@ -4,7 +4,7 @@ import { ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { beforeAll, afterAll, expect, it } from "vitest";
+import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { startBeforeMigration, applyMigration, startSession, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { migrate } from "../src/migrate.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
@@ -30,6 +30,7 @@ async function identityQuery(sql: string, args: unknown[]) {
 }
 async function world(role = "owner") {
   // A real operative needs contractor authority before the issuer refusal can be exercised.
+  if (role === "operative") vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const contractor = role === "operative" ? await startSession(c) : undefined;
   const tenant = contractor?.p.tenantId ?? randomUUID(), account = randomUUID(), member = randomUUID(), user = randomUUID(), job = randomUUID(), session = randomUUID(), token = randomBytes(32).toString("base64url"), digest = hmac(token);
   await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenant]);

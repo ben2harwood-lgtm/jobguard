@@ -23,6 +23,7 @@
         "apps/api/src/plan-entitlements.application.ts",
         "apps/api/src/plan-entitlements.authority.ts",
         "apps/api/src/plan-entitlements.persisted.test.ts",
+        "apps/api/src/production-settlement-guard.test.ts",
         "apps/web/app/api/contractor/jobs/[id]/site-extras/route.test.ts",
         "apps/web/e2e/ENT-1.spec.ts",
         "apps/web/e2e/ENT-10-oidc.spec.ts",
@@ -80,6 +81,7 @@
         "packages/db/test/job-work-state-commands.integration.test.ts",
         "packages/db/test/lp-job-doors-compatibility.integration.test.ts",
         "packages/db/test/migfix-1.integration.test.ts",
+        "packages/db/test/migration-proofs/legacy-migrations.json",
         "packages/db/test/mon8-combined-migration.test.ts",
         "packages/db/test/mon8-oidc.integration.test.ts",
         "packages/db/test/northside-finance-upgrade.integration.test.ts",
@@ -105,6 +107,7 @@
         "packages/db/test/sso-required.integration.test.ts",
         "packages/db/test/work-order-concurrency.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
         "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
