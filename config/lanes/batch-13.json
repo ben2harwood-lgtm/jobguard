@@ -1,0 +1,60 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-13": {
+      "branches": [
+        "codex/sandbox/batch-13"
+      ],
+      "note": "RED built-ahead union; NOPR. mon-4b-collect-recheck remains unmerged. Resumable evidence already exists on main at 0553; no new migrations.",
+      "allow": [
+        "apps/api/src/ai-capture-authority.test.ts",
+        "apps/api/src/ai-capture-authority.ts",
+        "apps/api/src/connectors/conformance-kit.bad-fixture.ts",
+        "apps/api/src/connectors/conformance-kit.test.ts",
+        "apps/api/src/connectors/conformance-kit.ts",
+        "apps/api/src/connectors/sftp.synthetic.ts",
+        "apps/api/src/fee-collection/contracts.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/fake-gocardless.ts",
+        "apps/api/src/fee-collection/success-fee-composition.test.ts",
+        "apps/api/src/fee-collection/success-fee-composition.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.test.ts",
+        "apps/api/src/fee-collection/success-fee-direct-debit.ts",
+        "apps/api/src/fee-collection/test-fixture.ts",
+        "docs/contracts/gocardless-dark-v1.md",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/operations/claude-data-flow.md",
+        "docs/operations/ent-13b-adapter-template.md",
+        "docs/operations/m1-15s-read-records.md",
+        "docs/operations/native-device-matrix.md",
+        "docs/operations/native-rollout-rollback.md",
+        "docs/operations/subscription-synthetic.md",
+        "packages/ai/package.json",
+        "packages/ai/src/capture.ts",
+        "packages/ai/src/claude-provider.test.ts",
+        "packages/ai/src/fixture-provider.ts",
+        "packages/ai/src/gateway.test.ts",
+        "packages/ai/src/later-gateway.test.ts",
+        "packages/ai/src/testing.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/shadow-pilot-financial-record.ts",
+        "packages/core/src/shadow-pilot-report.test.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/payment-fee-collection-repository.test.ts",
+        "packages/db/src/payment-fee-collection-repository.ts",
+        "packages/db/src/shadow-pilot-financial-reader.ts",
+        "packages/db/src/subscription-stripe-sandbox-adapter.test.ts",
+        "packages/db/src/subscription-stripe-sandbox-adapter.ts",
+        "packages/db/src/subscription-webhook-verifier.test.ts",
+        "packages/db/src/subscription-webhook-verifier.ts",
+        "packages/db/test/native-server-chaos.integration.test.ts",
+        "packages/db/test/shadow-pilot-financial.integration.test.ts",
+        "packages/db/test/subscription-stripe-sandbox.integration.test.ts",
+        "packages/db/test/success-fee-direct-debit.integration.test.ts",
+        "tools/ai-provider-boundary-lint.mjs",
+        "tools/ai-provider-boundary.test.mjs"
+      ]
+    }
+  }
+}
