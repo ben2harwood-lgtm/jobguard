@@ -7,10 +7,10 @@
       ],
       "note": "RED SV-6 database uniqueness for one recorded review per assessment. Own lane file implicitly allowed.",
       "allow": [
-        "packages/db/migrations/0552_recovery_attribution_one_review.sql",
-        "packages/db/migration-notes/0552_recovery_attribution_one_review.md",
+        "packages/db/migrations/0542_recovery_attribution_one_review.sql",
+        "packages/db/migration-notes/0542_recovery_attribution_one_review.md",
         "packages/db/test/recovery-attribution-review.integration.test.ts",
-        "packages/db/test/migration-proofs/0552_recovery_attribution_one_review.proof.json"
+        "packages/db/test/migration-proofs/0542_recovery_attribution_one_review.proof.json"
       ]
     }
   }

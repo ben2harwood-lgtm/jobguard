@@ -1,7 +1,7 @@
 # SV-6 one review per assessment (RED)
 
 Piece: `sv6-one-review-index`, before-live follow-up to #422. After catching up
-with main, the migration is `0552_recovery_attribution_one_review.sql`.
+with main, the migration is `0542_recovery_attribution_one_review.sql`.
 
 Adds a partial unique index on `(tenant_id, assessment_id)` for command rows whose
 payload action is `approve_review`. The existing routine, locking, error handling,

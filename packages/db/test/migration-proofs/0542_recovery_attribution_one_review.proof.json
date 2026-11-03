@@ -1,5 +1,5 @@
 {
-  "migration": "0552_recovery_attribution_one_review.sql",
+  "migration": "0542_recovery_attribution_one_review.sql",
   "lp0": [],
   "upgrade": [
     {
