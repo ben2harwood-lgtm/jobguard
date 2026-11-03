@@ -79,8 +79,8 @@ async function newCase(caseType: 'withheld_customer_payment' | 'merchant_overcha
     [id, fixture.tenantId, fixture.jobId, caseType, caseType === 'merchant_overcharge' ? 'supplier_cost' : 'builder_customer', caseType === 'merchant_overcharge' ? 'supplier_documents' : 'customer_invoice', JSON.stringify(refs), claimPence]);
   await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,$6,'GBP','fixture-owner',$5)", [randomUUID(), fixture.tenantId, fixture.jobId, id, hash(id), claimPence]);
   // A real case always starts with its opening event, so its revision is claim 1 + event 1.
-  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)",
-    [randomUUID(), fixture.tenantId, fixture.jobId, id, caseType === 'prevention' ? 'prevent' : 'opened', caseType === 'prevention' ? 'prevented' : 'identified', randomUUID(), hash(`open:${id}`)]);
+  await withTenant(admin,context,db=>db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)",
+    [randomUUID(), fixture.tenantId, fixture.jobId, id, caseType === 'prevention' ? 'prevent' : 'opened', caseType === 'prevention' ? 'prevented' : 'identified', randomUUID(), hash(`open:${id}`)]));
   if (caseType === 'withheld_customer_payment') await new RecoveryCaseTermsRepository(runtime).approve(context, fixture.jobId, {
     version: 'recovery-case-terms-command.v1', action: 'approve', commandId: randomUUID(), caseId: id,
     termsVersion: 'synthetic_recovery_fee_terms.v1', feePolicyVersion: 'reference_fee_policy_v3',

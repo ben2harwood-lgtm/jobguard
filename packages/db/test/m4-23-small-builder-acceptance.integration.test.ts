@@ -230,10 +230,23 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const x = await catchFeeFixture(f), reviewed = await x.execute();
     expect(reviewed.statement.sources).toHaveLength(1);
     const cases = new RecoveryCaseRepository(x.scoped);
-    const prevented = await cases.command(x.context, x.jobId, {
+    // Stored cash can no longer be relabelled prevented through the command.
+    await expect(cases.command(x.context, x.jobId, {
       version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(),
       caseId: x.caseId, expectedRevision: x.assessment.caseRevision, eventType: "prevent",
-    }, x.actor);
+    }, x.actor)).rejects.toMatchObject({ code: "RECOVERY_TRANSITION_FORBIDDEN" });
+    // Defence in depth for history written before that guard: owner-only fixture, guards bypassed.
+    const client = await f.admin.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [x.context.tenantId]);
+      await client.query("SET LOCAL session_replication_role='replica'");
+      const last = (await client.query("SELECT sequence,to_state FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2 ORDER BY sequence DESC LIMIT 1", [x.context.tenantId, x.caseId])).rows[0];
+      await client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,'prevent',$6,'prevented','fixture',$7,$8)",
+        [randomUUID(), x.context.tenantId, x.jobId, x.caseId, Number(last.sequence) + 1, last.to_state, randomUUID(), "a".repeat(64)]);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    const prevented = (await cases.listForMember(x.context, x.jobId, x.actor)).find(c => c.id === x.caseId)!;
     expect(prevented.state).toBe("prevented");
     // The original complete, approved catch source exists. Its current prevented
     // state changes attribution, so the fee writer must reject this exact review.
