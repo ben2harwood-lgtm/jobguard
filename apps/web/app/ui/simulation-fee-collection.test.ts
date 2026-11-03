@@ -26,3 +26,13 @@ it.each([true,false])("finishes the command body before returning to the refresh
  finish(ok?{version:"simulation-fee-collection-result.v1",commandId:jobId,attemptId:jobId,replayed:false}:{code:"SUCCESS_FEE_STALE"});
  expect(await write).toBe(response);
 });
+
+it.each([
+ ["PAYMENT_FEE_AUTHORITY_REVOKED","revoked"],
+ ["PAYMENT_FEE_AUTHORITY_STALE","stale"],
+ ["PAYMENT_FEE_AUTHORITY_DISPUTED","dispute"],
+ ["PAYMENT_FEE_AUTHORITY_CAP_EXCEEDED","cap"],
+])("shows a bounded specific reason for %s",async(code,text)=>{
+ vi.stubGlobal("fetch",vi.fn(async()=>({ok:false,json:async()=>({code})})));
+ await expect(writeSimulationFeeCollection(jobId,{})).rejects.toThrow(text);
+});

@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-ent7-hook": {
+      "branches": [
+        "codex/sandbox/demo-ent7-hook"
+      ],
+      "note": "RED ENT-7: simulated invoice projection only; no migration or provider. Includes inherited exclusion tests from #526.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-fee.executor.ts",
+        "apps/web/app/api/contractor/statements/[action]/route.test.ts",
+        "apps/web/app/api/contractor/statements/[action]/route.ts",
+        "apps/web/app/ui/enterprise-statement.tsx",
+        "apps/web/e2e/ENT-11b.spec.ts",
+        "docs/contracts/enterprise-fee-statement-v1.md",
+        "docs/verdicts/ENT-7/BUILDER_RECEIPT.md",
+        "packages/db/src/enterprise-fee-invoice.test.ts",
+        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts"
+      ]
+    }
+  }
+}

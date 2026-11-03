@@ -298,3 +298,57 @@ describe("MON-7a real PostgreSQL guarantees", () => {
     }finally{await upgrade.end();}
   }, 60_000);
 });
+
+describe("MON-7 saved practice exposure schedules", () => {
+  const request = (stages: unknown[], expectedRevision = 0) => ({ version: "exposure-schedule-command.v1", commandId: randomUUID(), expectedRevision, stages });
+  const stages = () => [{ id: "builder-stage", label: "Fictional roof", date: "2026-12-01",
+    cumulativeWorkValue: { pence: 72123, currency: "GBP" }, cumulativeReceipts: { pence: 12300, currency: "GBP" } }];
+  it("keeps the forecast table migration-owned, tenant-isolated and append-only after all LP-5 migrations", async () => {
+    expect((await admin.query(`SELECT r.rolname owner,c.relrowsecurity,c.relforcerowsecurity,
+      has_table_privilege('jobguard_runtime',c.oid,'SELECT') can_select,
+      has_table_privilege('jobguard_runtime',c.oid,'INSERT') can_insert,
+      has_table_privilege('jobguard_runtime',c.oid,'UPDATE,DELETE,TRUNCATE') can_mutate,
+      has_table_privilege('jobguard_command_writer',c.oid,'INSERT') command_writer_insert
+      FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner
+      WHERE c.oid='app.practice_exposure_schedule'::regclass`)).rows).toEqual([{
+      owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true,
+      can_select: true, can_insert: true, can_mutate: false, command_writer_insert: false,
+    }]);
+    const j = await job();
+    await prevention.exposureSchedule(context, member, j.id, undefined, request(stages()));
+    await expect(admin.query("DELETE FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND job_id=$2", [tenant, j.id]))
+      .rejects.toMatchObject({ code: "55000" });
+  });
+  it("starts unknown, persists exact job forecasts, rejects stale edits and conflicting replays", async () => {
+    const first = await job(), second = await job();
+    const read = (id: string) => prevention.exposureSchedule(context, member, id, undefined);
+    expect((await read(first.id)).schedule).toBeNull();
+    const input = request(stages());
+    await Promise.all([1, 2].map(() => prevention.exposureSchedule(context, member, first.id, undefined, input)));
+    const saved = await read(first.id);
+    expect(saved.revision).toBe(1);
+    expect(saved.schedule!.stages[0]).toMatchObject({ ...stages()[0], source: { id: "synthetic-stage-schedule.v1" } });
+    expect(saved.schedule!.stages[0]!.source!.retrievedAt).toBeTruthy();
+    expect((await read(second.id)).schedule).toBeNull();
+    await expect(prevention.exposureSchedule(context, member, second.id, undefined, input)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await expect(prevention.exposureSchedule(context, member, first.id, undefined, { ...input, stages: [] })).rejects.toMatchObject({ code: "INVALID_PREVENTION_COMMAND" });
+    await expect(prevention.exposureSchedule(context, member, first.id, undefined, request(stages()))).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    expect((await admin.query("SELECT 1 FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND job_id=$2", [tenant, first.id])).rowCount).toBe(1);
+    expect((await admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='prevention.exposure_schedule_saved'", [tenant, first.id])).rowCount).toBe(1);
+    await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.practice_exposure_schedule SET stages='[]' WHERE tenant_id=$1", [tenant]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, context, db => db.$client.query("DELETE FROM app.practice_exposure_schedule WHERE tenant_id=$1", [tenant]))).rejects.toMatchObject({ code: "42501" });
+    await expect(runtime.query("TRUNCATE app.practice_exposure_schedule")).rejects.toMatchObject({ code: "42501" });
+    const foreignContext = verifiedTenantContextFromMembership({ identityUserId: user, tenantId: other, membershipId: member } as AuthenticatedMembership);
+    expect(await withTenant(runtime, foreignContext, async db => (await db.$client.query("SELECT 1 FROM app.practice_exposure_schedule")).rowCount)).toBe(0);
+    await expect(prevention.exposureSchedule(context, member, randomUUID(), undefined)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+  it("keeps missing forecasts unknown and preserves old snapshots when a schedule is revised", async () => {
+    const j = await job();
+    await prevention.exposureSchedule(context, member, j.id, undefined, request(stages()));
+    const changed = [{ ...stages()[0]!, cumulativeReceipts: null }];
+    const next = await prevention.exposureSchedule(context, member, j.id, undefined, request(changed, 1));
+    expect(next.revision).toBe(2);
+    expect(next.schedule!.stages[0]!.cumulativeReceipts).toBeNull();
+    expect((await admin.query("SELECT revision FROM app.practice_exposure_schedule WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision", [tenant, j.id])).rows).toEqual([{ revision: 1 }, { revision: 2 }]);
+  });
+});
