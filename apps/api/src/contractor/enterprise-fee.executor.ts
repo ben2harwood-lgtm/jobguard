@@ -8,7 +8,8 @@ import { bindEnterpriseFeeReference, validateEnterpriseFeeReference } from "./en
 /**
  * Refusal/validation machinery only. No worker registration, enqueue, durable result or provider exists here.
  * currentFacts must eventually be read after commit from persisted authority by the executor; supplied unit facts
- * are not evidence of that integration. Q-02 holds even an otherwise valid synthetic invoice.
+ * are not evidence of that integration. Q-02 still holds this supplied-reference execution path.
+ * The working fictional hook is EnterpriseFeeRepository.simulateInvoice, backed by persisted statement authority.
  */
 export function refuseEnterpriseFeeInvoiceWork(raw: unknown, currentFacts: unknown, workerMode: unknown): never {
   const work = parseEnterpriseFee(enterpriseFeeInvoiceWorkV1, raw), mode = parseEnterpriseFee(enterpriseModeV1, workerMode);

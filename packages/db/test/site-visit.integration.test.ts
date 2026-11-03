@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SiteVisitError, siteAssignedJobsV1, siteOrderLinesV1, siteVisitFailureV1, siteVisitHttpStatus } from "@jobguard/core";
 import { JobSchedulingRepository, SiteVisitRepository, WorkOrderRepository, appendAuditBatch, demoFile, demoRow, derivedUuid, withTenant } from "../src/index.js";
-import { fixture } from "./extra-fixtures.js";
+import { fixture, terminalizeFixtureReceipt } from "./extra-fixtures.js";
 import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
 import {
  cluster, visitFixture, snapshot, refusalEvents, auditHead, serverTime, startInput, completeInput, ownerVisit, moveOffLive, extraOrder, secondJob, reviseOrder, cancelOrder, forbiddenRoles,
@@ -59,9 +59,9 @@ describe("ENT-3b success paths", () => {
   const events = (await c.admin.query("SELECT id,event_type,subject_type,subject_ref,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'contractor.visit.%' ORDER BY sequence", [f.p.tenantId])).rows;
   expect(events).toHaveLength(2);
   expect(events[0]).toMatchObject({ id: started.visitId, event_type: "contractor.visit.started", subject_type: "site-visit", subject_ref: started.visitId, actor_ref: `membership:${a.member.membershipId}` });
-  expect(events[0]!.payload).toEqual({ references: { command: expect.any(String), job: f.jobId, visit: started.visitId, environment: "synthetic_demo" } });
+  expect(events[0]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: expect.any(String), job: f.jobId, visit: started.visitId, environment: "synthetic_demo" } });
   expect(events[1]).toMatchObject({ id: stored[0]!.id, event_type: "contractor.visit.completed", subject_type: "site-visit", subject_ref: started.visitId, actor_ref: `membership:${a.member.membershipId}` });
-  expect(events[1]!.payload).toEqual({ references: { command: stored[0]!.command_id, job: f.jobId, visit: started.visitId, closeoutAnswer: stored[0]!.id, environment: "synthetic_demo" } });
+  expect(events[1]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: stored[0]!.command_id, job: f.jobId, visit: started.visitId, closeoutAnswer: stored[0]!.id, environment: "synthetic_demo" } });
   expect(JSON.stringify(events[1]!.payload)).not.toContain(`"${answer}"`);
   const receipts = (await c.admin.query("SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_type IN('StartSiteVisit','CompleteSiteVisit') ORDER BY command_type", [f.p.tenantId])).rows;
   expect(receipts).toEqual([{ command_type: "CompleteSiteVisit", status: "succeeded" }, { command_type: "StartSiteVisit", status: "succeeded" }]);
@@ -322,12 +322,12 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
   const observed = new ObservedPool(c.runtime, c.admin), watched = new SiteVisitRepository(observed.pool);
   const { value, transactions } = await observed.record(() => kind === "start" ? watched.startVisit(f.ctx, a.member, raw) : watched.completeVisit(f.ctx, a.member, raw));
   expect(value).toEqual(first);
-  const replay = transactions.find(t => t.statements.some(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql)));
+  const replay = transactions.find(t => t.statements.some(s => /(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/u.test(s.sql)));
   expect(replay).toBeDefined(); expect(replay!.outcome).toBe("commit");
   const analysis = analyseLockOrder(replay!, { mutable: await mutableTables(c.admin) });
   expect(analysis.firstStatement).toMatch(/pg_advisory_xact_lock_shared\(hashtextextended\(\$1,54\)\)/u);
   expect(analysis.auditIndex).toBeUndefined(); expect(analysis.strongTableLocks).toEqual([]);
-  const statements = replay!.statements, receiptIndex = statements.findIndex(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql));
+  const statements = replay!.statements, receiptIndex = statements.findIndex(s => /(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/u.test(s.sql));
   const checks = statements.flatMap((s, index) => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(s.sql) ? [index] : []);
   expect(checks).toHaveLength(2); expect(checks[0]).toBeLessThan(receiptIndex); expect(checks[1]).toBeGreaterThan(receiptIndex);
   const held = statements[statements.findIndex(s => s.sql === analysis.firstStatement)]!.footprint.advisory;
@@ -465,10 +465,10 @@ describe("ENT-3b races on independent connections", () => {
 });
 
 describe("ENT-3b the audit event is in the same transaction", () => {
- for (const kind of ["start", "complete"] as const) it(`[B12] ${kind}: a failure at the receipt insert, the routine call, the audit insert or the commit leaves nothing written`, async () => {
+ for (const kind of ["start", "complete"] as const) it(`[B12] ${kind}: a failure at claim, the routine call, audit, completion or commit leaves nothing written`, async () => {
   const f = await visitFixture(c), a = f.members.operative;
   const open = kind === "complete" ? await start(f, a) : undefined;
-  const fragments = ["INSERT INTO app.command_receipt", kind === "start" ? "app.ent3b_start_visit" : "app.ent3b_complete_visit", "INSERT INTO app.audit_event", "COMMIT"];
+  const fragments = ["SELECT app.begin_command(", kind === "start" ? "app.ent3b_start_visit" : "app.ent3b_complete_visit", "FROM app.append_audit(", "SELECT app.complete_command(", "COMMIT"];
   for (const fragment of fragments) {
    const before = await snapshot(c, f.p.tenantId), head = await auditHead(c, f.p.tenantId);
    const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
@@ -485,7 +485,7 @@ describe("ENT-3b the audit event is in the same transaction", () => {
     let commandTransaction = false;
     vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
      if (sql === "BEGIN") commandTransaction = false;
-     if (String(sql).includes("require_watchdog_live")) commandTransaction = true;
+     if (String(sql).includes("SELECT app.begin_command(")) commandTransaction = true;
      if (String(sql).includes(fragment) && (fragment !== "COMMIT" || commandTransaction)) {
       // Exercise the deferred checks, but never execute COMMIT before failing.
       if (fragment === "COMMIT") await original("SET CONSTRAINTS ALL IMMEDIATE");
@@ -531,6 +531,8 @@ describe("ENT-3b the audit event is in the same transaction", () => {
    await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'CompleteSiteVisit',$3,$4,'processing',$5)", [f.p.tenantId, command, `owner:${command}`, "c".repeat(64), a.member.membershipId]);
    await db.$client.query("UPDATE app.site_visit SET completed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, visit]);
    await db.$client.query("INSERT INTO app.closeout_answer(tenant_id,id,job_id,work_order_id,site_visit_id,membership_id,question_version,answer,command_id,server_recorded_at) SELECT tenant_id,$3,job_id,work_order_id,id,membership_id,'closeout-question.v1','yes',$4,completed_at FROM app.site_visit WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, visit, answer, command]);
+   // This unmanaged owner fixture isolates the missing domain audit guard.
+   await terminalizeFixtureReceipt(db, f.p.tenantId, command, { visitId: visit, closeoutAnswer: "yes" });
   });
   await expect(attempt()).rejects.toMatchObject({ message: "CLOSEOUT_AUDIT_REQUIRED", code: "23514" });
   // The decoy: another company's completion event with the very same id, subject and type. The table owner sees it; the check must not.
@@ -551,7 +553,7 @@ describe("ENT-3b the audit event is in the same transaction", () => {
   const statements = command!.statements.map(s => s.sql);
   const authorityIndex = statements.findIndex(sql => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(sql));
   const liveIndex = statements.findIndex(sql => /require_watchdog_live/u.test(sql));
-  const receiptIndex = statements.findIndex(sql => /INSERT INTO app.command_receipt/u.test(sql));
+  const receiptIndex = statements.findIndex(sql => /(?:INSERT INTO app.command_receipt|SELECT app\.begin_command\()/u.test(sql));
   expect(authorityIndex).toBeGreaterThan(statements.indexOf(analysis.firstStatement!));
   expect(liveIndex).toBeGreaterThan(authorityIndex); expect(receiptIndex).toBeGreaterThan(liveIndex);
   expect(analysis.auditIndex).toBeDefined();
@@ -574,7 +576,7 @@ describe("ENT-3b the refusal record", () => {
    const events = await refusalEvents(c, fx.p.tenantId), mine = events.filter(e => e.subject_ref === raw.commandId);
    expect(mine, reason).toHaveLength(1);
    expect(mine[0]).toMatchObject({ id: derivedUuid(`visit-refusal:${fx.p.tenantId}:${raw.commandId}:${reason}`), actor_ref: `membership:${who.member.membershipId}`, subject_type: "visit-command" });
-   expect(mine[0]!.payload).toEqual({ references: { command: raw.commandId, command_type: "StartSiteVisit", reason, environment: "synthetic_demo", job }, classifications: { action: "security" } });
+   expect(mine[0]!.payload).toEqual({ references: { auditTrust: "lower_trust", command: raw.commandId, command_type: "StartSiteVisit", reason, environment: "synthetic_demo", job }, classifications: { action: "security" } });
   }
   for (const job of [foreign.jobId, randomUUID()]) {
    const raw = startInput(f, { jobId: job });
@@ -596,7 +598,7 @@ describe("ENT-3b the refusal record", () => {
    wrapped.add(client);
    const original = client.query.bind(client);
    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
-    if (String(sql).includes("INSERT INTO app.audit_event")) { reached++; throw new Error("injected failure"); }
+    if (String(sql).includes("FROM app.append_audit(")) { reached++; throw new Error("injected failure"); }
     return original(sql, params);
    }) as any);
    return client;
