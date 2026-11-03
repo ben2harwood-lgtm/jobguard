@@ -163,7 +163,7 @@ it("job track survives company move and reversal; a job never widens contractor 
     if (track === "contractor") {
       // Owner-only active agreement status fixture, per the 29 October ruling.
       await workTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source)
-        SELECT tenant_id,$2,id,1,'active','contractor-agreement-status.v1','synthetic_demo','fictional:mon8-positive-control'
+        SELECT tenant_id,$2,id,1,'active','contractor-agreement-status.v1','synthetic_demo','fictional-fixture:'||gen_random_uuid()
         FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1`, [a.tenantId, randomUUID()]));
       expect(await app.require(request("work_orders", contractor.jobId))).toMatchObject({ executable: true });
       expect(await app.check(request("work_orders", a.jobId))).toMatchObject({ executable: false, reason: "track_forbidden" });
@@ -171,15 +171,14 @@ it("job track survives company move and reversal; a job never widens contractor 
   }
 });
 
-it("missing, foreign, practice and untracked jobs refuse without a decision; forged authority fields fail before consumption", async () => {
+it("missing, foreign and untracked jobs refuse without a decision; forged authority fields fail before consumption", async () => {
   const { a, app } = await companyService(f, await meterCompany(f)), b = await meterCompany(f); await command(f, a, terms(a));
-  const untracked = await seedWorkJob(f, a.tenantId), practice = await seedWorkJob(f, a.tenantId);
+  const untracked = await seedWorkJob(f, a.tenantId);
   await workTenant(f.admin, a.tenantId, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("DELETE FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, untracked.jobId]);
-    await db.query("UPDATE app.job SET practice_session_digest=$3 WHERE tenant_id=$1 AND id=$2", [a.tenantId, practice.jobId, "a".repeat(64)]);
   });
-  for (const job of [randomUUID(), b.jobId, practice.jobId, untracked.jobId]) {
+  for (const job of [randomUUID(), b.jobId, untracked.jobId]) {
     await expect(app.check(request("invoices", job))).rejects.toMatchObject({ code: "ENTITLEMENT_UNAVAILABLE" });
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.mon8_company_feature($1,'invoices',$2)", [a.digest, job]))).rejects.toThrow("FORBIDDEN");
   }

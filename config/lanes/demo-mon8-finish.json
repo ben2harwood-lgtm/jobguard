@@ -7,7 +7,6 @@
       ],
       "allow": [
         "apps/api/src/plan-entitlements.authority.ts",
-        "config/lanes/demo-mon8-finish.json",
         "docs/contracts/plan-entitlements-v1.md",
         "packages/db/migration-notes/0556_mon8_job_track_and_trial.md",
         "packages/db/migrations/0556_mon8_job_track_and_trial.sql",
