@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-customer-wording": {
+      "branches": [
+        "codex/sandbox/demo-s-customer-wording"
+      ],
+      "note": "DEMO-S customer-approval wording only; observations and fresh verdict remain open. No migration.",
+      "allow": [
+        "apps/web/app/demo-s/core-1000/journey.test.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
+        "docs/contracts/small-builder-demo-run-v1.md"
+      ]
+    }
+  }
+}

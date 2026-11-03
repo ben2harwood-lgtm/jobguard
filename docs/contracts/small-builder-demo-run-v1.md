@@ -122,6 +122,7 @@ producer chains exist. CH-8 v3 generation and CH-9's public value reader remain
 producer-bound on the inspected main; their holds remain visible. No migration,
 external action, fee obligation or release is introduced. This guide and source
 report do not complete the full no-step-skipped DEMO-J3 or DEMO-S acceptance.
+Update 3 Nov 2026: MON-5 landed in #523. This paragraph records the slice as built then.
 
 Verification: scripted application/route/renderer tests exercise pre-lock
 non-invocation, current-authority denial, foreign bindings, duplicate/reversal
@@ -215,6 +216,7 @@ producer chain; Q £800 / fee £80 / kept £720 remain targets, as do the invoic
 verified settlement, CH-8 pack and CH-9 value completion. Existing SV-6 tests
 exercise its separate genuine settled-source chain; they are not evidence of
 settlement for this J3 run. No live provider, personal data or release is enabled.
+Update 3 Nov 2026: MON-5 landed in #523. This paragraph records the slice as built then.
 
 ### DEMO-J3 completion report
 
