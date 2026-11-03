@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-2-integrate": {
+      "branches": [
+        "codex/sandbox/m4-2-integrate"
+      ],
+      "note": "RED DARK M4-2 stored-fact billability integration; catch-up to current main, synthetic only.",
+      "allow": [
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "packages/core/src/recovery-billability-policy.test.ts",
+        "packages/core/src/recovery-billability-policy.ts",
+        "packages/db/migrations/0566_recovery_billability_integration.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/recovery-billability-repository.test.ts",
+        "packages/db/src/recovery-billability-repository.ts",
+        "packages/db/test/migration-proofs/0566_recovery_billability_integration.proof.json",
+        "packages/db/test/recovery-billability-upgrade.integration.test.ts",
+        "packages/db/test/recovery-billability.integration.test.ts"
+      ]
+    }
+  }
+}
