@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { mappedValueReceiptV1, valueWindowV1, type ValueWindowV1, mapValueReceipt } from "@jobguard/core";
+import { receiptBaseSources, mappedValueReceipt, valueWindowV1, type ValueWindowV1, mapCurrentValueReceipt } from "@jobguard/core";
 import { PracticeAccess } from "../practice-access.js";
 
 // Preserve the pre-lock refusal envelope alongside the source-mapped receipt.
@@ -14,9 +14,9 @@ const heldValueJobResponseV3 = z.object({
 }).strict();
 export const valueJobResponseV3 = z.union([heldValueJobResponseV3, z.object({
  version: z.literal("job-value.v3"), environment: z.literal("synthetic_demo"), jobId: z.string().uuid(),
- status: z.literal("mapped"), receipt: mappedValueReceiptV1,
+ status: z.literal("mapped"), receipt: mappedValueReceipt,
 }).strict()]).superRefine((v,ctx)=>{
- if(v.status==="mapped" && v.receipt.sources.jobId!==v.jobId)ctx.addIssue({code:"custom",message:"Receipt job mismatch"});
+ if(v.status==="mapped" && receiptBaseSources(v.receipt).jobId!==v.jobId)ctx.addIssue({code:"custom",message:"Receipt job mismatch"});
 });
 export type JobValueResponseV3 = z.infer<typeof valueJobResponseV3>;
 export function heldJobValueV3(jobId: string): JobValueResponseV3 {
@@ -49,8 +49,8 @@ export class ValueV3Application {
   const result = valueJobResponseV3.safeParse(raw);
   if (!result.success || result.data.jobId !== jobId) throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
   if(result.data.status==="mapped"){
-   if(result.data.receipt.sources.tenantId!==auth.context.tenantId)throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
-   const expected=mapValueReceipt(result.data.receipt.sources,window.success?window.data:null);
+   if(receiptBaseSources(result.data.receipt).tenantId!==auth.context.tenantId)throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
+   const expected=mapCurrentValueReceipt(result.data.receipt.sources,window.success?window.data:null);
    if(JSON.stringify(expected)!==JSON.stringify(result.data.receipt))throw new ValueV3ReadError("VALUE_V3_SOURCE_REJECTED");
   }
   return result.data;

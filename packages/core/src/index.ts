@@ -158,3 +158,5 @@ export * from "./exposure-curve.js";
 
 export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
+
+export * from "./value-source-receipt-v2.js";

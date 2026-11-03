@@ -20,3 +20,17 @@ test("mapped receipt sources and separate billing periods render and clear on an
  available=false;await page.getByRole("button",{name:"Refresh availability"}).click();
  await expect(page.getByTestId("business-value-status")).toContainText("Value is unavailable");await expect(page.getByText("£3,600.00 net · Fee £0.00")).toHaveCount(0);
 });
+
+// v2 remains a rendering test here; CH-9-recovery.spec.ts uses the saved API.
+test("v2 business sections show mapped sources and keep the subscription per period",async({page})=>{
+ const {mapValueReceiptV2,mapCurrentBusinessValueSummary}=await import("../../../packages/core/src/value-source-receipt-v2.js");
+ const money=(pence:number)=>({pence,currency:"GBP" as const});
+ const receipt=mapValueReceiptV2({base:{tenantId:id(1),jobId:id(2),lockId:id(3),lockedRevisionId:id(4),lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:id(5),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]},supplier:{reason:"No approved supplier derivation",balances:[]},withheld:{reason:null,balances:[{tenantId:id(1),jobId:id(2),derivationId:id(6),revision:1,at:"2026-10-03T00:00:00Z",recovered:money(282000),fee:money(28200),allocationIds:[id(7)],statementHash:"a".repeat(64)}]}});
+ await page.route("**/api/value",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({state:"mapped",summary:mapCurrentBusinessValueSummary([receipt]),jobs:[{jobId:id(2),status:"mapped",receipt}],subscription:[{periodId:id(8),from:"2026-10-01",toExclusive:"2026-11-01",policyVersion:"subscription_pricing_policy_v4",amount:money(6900)}]})}));
+ await page.goto("/value");
+ await expect(page.getByTestId("business-withheld-recovered")).toHaveText("£2,820.00");
+ await expect(page.getByTestId("business-withheld-fee")).toHaveText("£282.00");
+ await expect(page.getByTestId("business-withheld-yours-before-tax")).toHaveText("£2,538.00");
+ await expect(page.getByTestId("business-supplier-recovered")).toHaveText("Unavailable");
+ await expect(page.getByText(/£69.00 · Hypothetical/u)).toBeVisible();
+});
