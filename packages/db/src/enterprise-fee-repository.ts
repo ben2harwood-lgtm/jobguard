@@ -15,6 +15,7 @@ export const enterpriseFeeApproveStatementV1 = z.object({ version: z.literal("en
   contentHash: z.string().regex(/^[0-9a-f]{64}$/u), totalDeltaPence: z.number().int().refine(Number.isSafeInteger), expiresAt: z.iso.datetime({ offset: true }) }).strict();
 /** ENT-7c: finance posts an approved revision by presenting the exact authorisation its approval created. */
 export const enterpriseFeePostStatementV1 = z.object({ version: z.literal("enterprise-fee-post-statement.v1"), commandId: z.guid(), statementId: z.guid(), authorizationId: z.guid() }).strict();
+export const enterpriseFeeSimulateInvoiceV1 = enterpriseFeePostStatementV1.extend({ version: z.literal("enterprise-fee-simulate-invoice.v1") });
 /** ReconcileExportedDuplicate: explicit finance approval; amounts come only from stored billing facts. */
 export const enterpriseReconcileExportedDuplicateV1 = z.object({ version: z.literal("enterprise-reconcile-exported-duplicate.v1"),
   commandId: z.guid(), jobId: z.guid(), duplicateId: z.guid(), canonicalId: z.guid() }).strict()
@@ -119,6 +120,26 @@ export class EnterpriseFeeRepository {
       return await withTenant(this.pool, context, async db =>
         (await db.$client.query("SELECT app.ef_reconcile_exported_duplicate($1,$2,$3,$4,$5) result",
           [session, input.commandId, input.jobId, input.duplicateId, input.canonicalId])).rows[0].result as EnterpriseDuplicateCorrection);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
+  /** Fictional invoice projection of an exactly approved statement. No provider, tax invoice or settlement.
+   * The existing posting command owns authorization, audit, locking and durable replay, including zero statements.
+   * Keep posting and the immutable statement read in one transaction; a failed read must roll back posting too.
+   */
+  async simulateInvoice(context: VerifiedTenantContext, session: string, raw: unknown, mode: unknown) {
+    if (mode === "production_billing") throw new EnterpriseFeeError("SYNTHETIC_REFERENCE_FORBIDDEN");
+    if (mode !== "synthetic_demo") throw new EnterpriseFeeError("FEE_GATE_CLOSED");
+    const input = this.parse(enterpriseFeeSimulateInvoiceV1, raw, session);
+    try {
+      return await withTenant(this.pool, context, async db => {
+        // ef_post_statement also refuses unless the actual database is jobguard_synthetic_demo.
+        await db.$client.query("SELECT app.ef_post_statement($1,$2,$3,$4) result", [session, input.commandId, input.statementId, input.authorizationId]);
+        const statement = (await db.$client.query("SELECT app.ef_read_statement($1,$2) result", [session, input.statementId])).rows[0].result as EnterpriseFeeStatementRead;
+        return Object.freeze({ version: "enterprise-fee-simulated-invoice.v1" as const, mode: "synthetic_demo" as const,
+          label: "Simulated invoice — no payment due" as const, invoiceId: statement.id, statementId: statement.id,
+          statementRevision: statement.revision, contentHash: statement.contentHash,
+          authorizationId: input.authorizationId, totalPence: statement.totalDeltaPence, currency: "GBP" as const });
+      });
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
   async readPostings(context: VerifiedTenantContext, session: string, statementId: string): Promise<EnterpriseFeePosting[]> {

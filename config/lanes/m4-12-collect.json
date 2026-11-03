@@ -5,14 +5,8 @@
       "branches": [
         "codex/sandbox/m4-12-collect"
       ],
-      "note": "M4-12 RED dark small-builder card collection/refund seam, built on M4-13. No live registration, dependencies or migration. Own lane path is implicitly permitted.",
-      "allow": [
-        "docs/contracts/lp-0-effective-privileges-v1.json",
-        "apps/api/src/fee-collection/contracts.ts",
-        "apps/api/src/fee-collection/executor.ts",
-        "apps/api/src/fee-collection/executor.test.ts",
-        "apps/api/src/fee-collection/fake-stripe.ts"
-      ]
+      "note": "M4-12 RED catch-up: current main already contains this piece and its subsequent session-authority and Direct Debit fixes. No remaining code change or migration. Own lane path is implicitly permitted.",
+      "allow": []
     }
   }
 }

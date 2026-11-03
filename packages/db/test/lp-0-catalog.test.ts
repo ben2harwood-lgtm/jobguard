@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AclEntry, type Catalogue, type Inventory, type RelationRow, type RoutineRow, type RoleRow,
   compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness, staleEntries,
-  routineIdentity, staticScan, InventoryError, loadReviewedInventory,
+  routineIdentity, staticScan, InventoryError, loadReviewedInventory, repoFileExists,
 } from "./lp-0-catalog.js";
 
 const RT = "jobguard_runtime";
@@ -302,6 +302,10 @@ describe("[LP0-02] stale inventory entries fail the base", () => {
 });
 
 describe("recorded routine facts and static scan", () => {
+  it("the installed reviewed inventory has complete authority dispositions after legacy grant withdrawal", async () => {
+    const { inventory } = await loadReviewedInventory();
+    expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
+  });
   it("static scan finds written tables and called routines as hypotheses, ignoring comments and unknown names", () => {
     const known = new Set(["app.helper", "app.other"]);
     const rels = new Set(["app.membership", "app.audit_event"]);
@@ -394,4 +398,23 @@ describe("DEMO-J5 exact trial guide capability",()=>{
    expect(compareInventory(inventory,deriveFacts(altered).filter(f=>f.key.includes("app.demo_trial"))).ok).toBe(false);
   }
  });
+});
+
+// Private schema-owned objects have protection records, rather than exposed-owner facts.
+it("CH-5 keeps private import helpers private and dispositions on checked entry points", async () => {
+  const { inventory } = await loadReviewedInventory();
+  for (const signature of ["ch5_require_import_record()", "ch5_history_actor(uuid,uuid,text)",
+    "ch5_history_audit_guard()", "ch5_refuse_historical_shadow_source()"]) {
+    const identity = `function:app.${signature}`;
+    expect(inventory.recorded.routines.find(r => r.identity === identity)).toMatchObject({
+      owner: OWNER, runtimeExecute: false, publicExecute: false,
+    });
+    expect(inventory.entries.some(e => e.key === `owner|routine|${identity}|${OWNER}`)).toBe(false);
+  }
+  for (const signature of ["ch5_write_history(uuid,uuid,text,uuid,uuid,uuid)",
+    "ch5_imported_catch(uuid,uuid,text,uuid,uuid,uuid)"]) {
+    const entry = inventory.entries.find(e => e.key === `acl|routine|function:app.${signature}|${RT}|EXECUTE|-`);
+    expect(entry).toBeDefined();
+    expect(inventory.groups.find(g => g.id === entry!.group)?.kind).toBe("commitment");
+  }
 });

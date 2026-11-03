@@ -1,0 +1,308 @@
+{
+  "migration": "0546_customer_stage_acknowledgement.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-customer-stage",
+        "title": "MON-5 synthetic exact stage acknowledgement",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0546_customer_stage_acknowledgement.sql",
+          "apps/api/src/auth/customer-stages.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-stage-acknowledgement.integration.test.ts",
+          "apps/api/src/auth/customer-stages.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation authorized by Ben on 29 October; this entry records capability, not an independent review."
+        },
+        "downstream": "Customer-session-only stage snapshot reads and exact acknowledgements. The private append-only table has no direct application grants. Existing finalized proof is checked under completion and upload locks; invalidated or superseded snapshots require fresh review. No payment, certification, waiver or shadow access.",
+        "path": "ap-customer-stage"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-customer-stage"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-customer-stage",
+        "title": "MON-5 synthetic exact stage acknowledgement",
+        "cards": [
+          "LP-6d",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6d": "Verify persisted builder issuer credentials and distinct customer session authority.",
+          "LP-11": "Bind every read to one tenant/job/customer/current party revision.",
+          "LP-12": "Keep tables/helpers private and EXECUTE limited to the identity login."
+        },
+        "sources": [
+          "packages/db/migrations/0546_customer_stage_acknowledgement.sql",
+          "apps/api/src/auth/customer-stages.ts"
+        ],
+        "tests": [
+          "packages/db/test/customer-stage-acknowledgement.integration.test.ts",
+          "apps/api/src/auth/customer-stages.test.ts",
+          "apps/web/e2e/customer-signin.spec.ts"
+        ],
+        "gaps": [
+          "PostgreSQL and browser CI execution and independent Claude RED review remain required."
+        ],
+        "description": "Customer-session-only stage snapshot reads and exact acknowledgements. The private append-only table has no direct application grants. Existing finalized proof is checked under completion and upload locks; invalidated or superseded snapshots require fresh review. No payment, certification, waiver or shadow access."
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.customer_stage_snapshot(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_hash"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.customer_stage_acknowledgement"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_stage_snapshot",
+          "identity.customer_portal_use"
+        ],
+        "identity": "function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)"
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.customer_stage_acknowledgement",
+        "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "customer_stage_snapshot",
+        "args": "t uuid, j uuid, completion uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "customer_stages",
+        "args": "t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_stage_acknowledgement",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_stage_acknowledgement_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_stage_acknowledgement_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "customer_stage_acknowledgemen_tenant_id_customer_id_complet_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_stage_acknowledgement",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "stage_completion",
+        "policyname": "customer_stage_source",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_link",
+        "policyname": "customer_stage_source",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "stage_review_event",
+        "policyname": "customer_stage_source",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_invalidation",
+        "policyname": "customer_stage_source",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "customer_stage_acknowledgement",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

@@ -156,7 +156,7 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   const f=await fixture(h),p=await person(f),cases=[{subject:randomUUID(),outcome:"ignored",cause:"SCIM_SUBJECT_NOT_LINKED"},{subject:f.principal.identityUserId,outcome:"refused",cause:"SCIM_OWNER_PROTECTED"},{subject:p.subject,outcome:"deactivated",cause:"SCIM_DEACTIVATED"},{subject:p.subject,outcome:"ignored",cause:"SCIM_ALREADY_INACTIVE"}];
   for(const c of cases){const eventId=randomUUID(),before=(await auditRows(h,f.principal.tenantId)).length;expect(await deactivate(f,c,eventId)).toMatchObject({outcome:c.outcome,cause:c.cause});
    const row=await record(f,eventId),events=(await auditRows(h,f.principal.tenantId)).slice(before);expect(events).toHaveLength(1);expect(events[0]).toMatchObject({event_type:`sso.scim.${c.outcome}`,actor_ref:"identity:scim",subject_type:"sso-connection",subject_ref:f.connectionId});
-   expect(events[0].payload).toEqual({references:{environment:"synthetic_demo",code:c.cause},hashes:{document:row.event_hash},classifications:{action:"security"}});expect(JSON.stringify(events[0].payload)).not.toContain(c.subject);expect(JSON.stringify(events[0].payload)).not.toContain(p.email);
+   expect(events[0].payload).toEqual({references:{auditTrust:"lower_trust",environment:"synthetic_demo",code:c.cause},hashes:{document:row.event_hash},classifications:{action:"security"}});expect(JSON.stringify(events[0].payload)).not.toContain(c.subject);expect(JSON.stringify(events[0].payload)).not.toContain(p.email);
   }
   expect((await h.admin.query("SELECT count(*)::int n FROM identity.scim_event WHERE tenant_id=$1",[f.principal.tenantId])).rows[0].n).toBe(4);
  });

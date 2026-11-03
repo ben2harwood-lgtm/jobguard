@@ -54,6 +54,7 @@ export type Attempt = {
   statementHash: string; statementId: string; amountPence: number; rail: "stripe_card" | "direct_debit";
   decisionId: string; settlementCommandId: string | null; settlementObjectId: string | null; creditNoteId: string | null;
   state: "reserved" | "outcome_unknown" | "provider_accepted" | "settled" | "released" | "reconciliation_required";
+  paymentState?: DirectDebitPaymentState;
   providerObjectId: string | null;
 };
 export type CollectionBook = {
@@ -77,3 +78,8 @@ export interface LockedCollectionSources {
 }
 /** Credentials only: membership and actor are resolved through AuthProvider on every operation. */
 export type CollectionSessionContext = Readonly<{ tenantId: string; environment: "synthetic_demo"; sessionToken: string }>;
+
+export type DirectDebitPaymentState = "pending_submission" | "submitted" | "confirmed" | "paid_out" | "failed" | "cancelled" | "charged_back" | "late_failure";
+
+/** Routing context only; provider signature and account/tenant binding authenticate events. */
+export type DirectDebitWebhookContext = Readonly<{ tenantId: string; environment: "synthetic_demo" }>;
