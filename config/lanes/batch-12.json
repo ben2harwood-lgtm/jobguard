@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-12": {
+      "branches": [
+        "codex/sandbox/batch-12"
+      ],
+      "note": "Ben, 3 Nov 2026: batch-12 built ahead, NOPR. Deepgram fixture union and foundation gates; ops, restore and privacy merges remain for the router. RED.",
+      "allow": [
+        "apps/api/src/capture/contracts.ts",
+        "apps/api/src/capture/deepgram-fixture.service.test.ts",
+        "apps/api/src/capture/deepgram-fixture.service.ts",
+        "apps/web/app/ui/review-proposal.tsx",
+        "config/foundation-gates.v1.json",
+        "docs/operations/deepgram-fixture-data-flow.md",
+        "docs/operations/foundation-gates.md",
+        "packages/ai/src/deepgram.test.ts",
+        "packages/ai/src/deepgram.ts",
+        "packages/ai/src/index.ts",
+        "packages/config/src/foundation-gates.test.ts",
+        "packages/config/src/foundation-gates.ts",
+        "packages/core/src/deepgram-transcript.test.ts",
+        "packages/core/src/deepgram-transcript.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migration-notes/0658_deepgram_fixture_transcripts.md",
+        "packages/db/migrations/0658_deepgram_fixture_transcripts.sql",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/resumable-evidence.test.ts",
+        "packages/db/src/speech-audio.test.ts",
+        "packages/db/src/speech-audio.ts",
+        "packages/db/test/deepgram.integration.test.ts",
+        "packages/db/test/migration-proofs/0658_deepgram_fixture_transcripts.proof.json",
+        "tools/foundation-gates.test.mjs"
+      ]
+    }
+  }
+}
