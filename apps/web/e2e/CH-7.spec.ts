@@ -1,7 +1,7 @@
 // Written before the v3 workbench UI. NOT RUN in the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { confirmCapturedScope } from "./helpers/capture-journey";
+import { confirmCapturedScope, openLiveWatchdogJob } from "./helpers/capture-journey";
 import { get, post } from "./helpers/recovery-sources";
 const banner="Practice sandbox — synthetic data; nothing is sent or charged";
 for(const [name,button,movement,q,reason] of [
@@ -100,3 +100,82 @@ test("[A1 A6 Browser] insurer-paid F18 uses its own exclusion reason and survive
  const verify=async()=>{await expect(page.getByTestId("v3-qualifying-principal")).toHaveText("£0.00");await expect(page.getByTestId("v3-outcome")).toHaveText("Excluded");await expect(page.getByTestId("v3-reason")).toHaveText("Insurer proceeds never qualify");};
  await verify();await page.reload();await verify();
 });
+
+// F14/F16 use persisted supplier documents and the existing supplier-payment feed,
+// with the case opened and every review requested through the workbench.
+for (const fixture of ["F14", "F16"] as const) {
+ test(`${fixture} supplier credit persists across reload and a second browser context`, async ({page,browser,context},testInfo) => {
+  test.setTimeout(360_000);
+  await openLiveWatchdogJob(page);
+  const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+  const documentsPath=`/api/jobs/${jobId}/supplier-documents`;
+  for (const fixtureId of ["practice-credit-300","practice-later-invoice-1440"]) {
+   const {state}=await get(page,documentsPath);
+   await post(page,`${documentsPath}/intake`,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId,channel:"picker",expectedRevision:state.intakeRevision});
+  }
+  await post(page,`/api/jobs/${jobId}/practice-feed`,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+  await page.getByRole("button",{name:"Open materials-320 overcharge",exact:true}).click();
+  await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();
+  const panel=page.locator("#practice-facts");
+  await panel.getByRole("button",{name:"Load extra practice movements",exact:true}).click();
+  await expect(panel).toHaveAttribute("aria-busy","false");
+  const settle=async(movement:string)=>{
+   await panel.getByLabel("Extra generated movement",{exact:true}).selectOption(movement);
+   await panel.getByLabel("Extra generated event",{exact:true}).selectOption("settled");
+   await panel.getByRole("button",{name:"Advance extra movement",exact:true}).click();
+   await expect(panel.locator(`[data-testid="practice-fact"][data-movement-key="${movement}"]`).getByTestId("practice-fact-state")).toHaveText("Simulated settled movement");
+  };
+  await settle("supplier-payment-600");
+  if(fixture==="F14")await settle("supplier-payment-840");
+  const requestReview=async(name:string)=>{
+   const control=page.getByRole("button",{name:`Review v3 ${name}`,exact:true});
+   await expect(control).toBeEnabled();
+   const box=await control.boundingBox();expect(box?.width).toBeGreaterThanOrEqual(44);expect(box?.height).toBeGreaterThanOrEqual(44);
+   await control.focus();await expect(control).toBeFocused();
+   const response=page.waitForResponse(r=>r.request().method()==="POST"&&r.url().endsWith("/recovery-cases/eligibility"));
+   const request=page.waitForRequest(r=>r.method()==="POST"&&r.url().endsWith("/recovery-cases/eligibility"));
+   await page.keyboard.press("Enter");
+   const command=(await request).postDataJSON();
+   await expect(page.getByTestId("v3-review")).toBeVisible();
+   const reply=await response;expect(reply.ok()).toBe(true);
+   const saved=await reply.json();
+   await expect(page.getByTestId("v3-review")).toHaveAttribute("data-review-id",saved.eligibilityV3CommandResult.id);
+   return command;
+  };
+  const firstCommand=await requestReview(fixture==="F14"?"F14":"F16-partial");
+  const listPath=`/api/jobs/${jobId}/recovery-cases`;
+  const first=(await get(page,listPath)).cases.at(-1);
+  const verify=async(view:Page,partial:boolean)=>{
+   await expect(view.getByTestId("v3-qualifying-principal")).toHaveText(partial?"£0.00":"£300.00");
+   await expect(view.getByTestId("v3-outcome")).toHaveText(partial?"Excluded":"Eligible for review");
+   if(partial)await expect(view.getByTestId("v3-reason")).toHaveText("Credit note used against an invoice not yet paid in full");
+   else await expect(view.getByTestId("v3-reason")).toHaveCount(0);
+   await expect(view.getByText(banner,{exact:true})).toHaveCount(1);
+   expect(await view.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  };
+  const persisted=async(partial:boolean)=>{
+   await verify(page,partial);await page.reload();await verify(page,partial);
+   const second=await browser.newContext({...(testInfo.project.use.baseURL?{baseURL:testInfo.project.use.baseURL}:{}),...(testInfo.project.use.viewport?{viewport:testInfo.project.use.viewport}:{}),storageState:{cookies:(await context.cookies()).filter(c=>c.name==="jg_session"),origins:[]}});
+   try{
+    const view=await second.newPage();await view.goto(`/jobs/${jobId}#recovery-cases`);await verify(view,partial);
+    const reply=await second.request.get(listPath);expect(reply.ok()).toBe(true);
+    expect((await reply.json()).cases.find((c:{id:string})=>c.id===first.id).eligibilityV3).toEqual((await get(page,listPath)).cases.find((c:{id:string})=>c.id===first.id).eligibilityV3);
+   }finally{await second.close();}
+  };
+  await persisted(fixture==="F16");
+  if(fixture==="F16"){
+   await settle("supplier-payment-840");await requestReview("F16-full");
+   await persisted(false);
+   const full=(await get(page,listPath)).cases.find((c:{id:string})=>c.id===first.id);
+   expect(full.eligibilityV3.revision).toBe(first.eligibilityV3.revision+1);
+   expect(full.eligibilityV3.id).not.toBe(first.eligibilityV3.id);
+   // Replay the original command to read the saved partial history, rather than recompute it.
+   const replay=await post(page,`${listPath}/eligibility`,firstCommand);
+   expect(replay.eligibilityV3CommandResult).toEqual(first.eligibilityV3);
+   expect(replay.cases.find((c:{id:string})=>c.id===first.id).eligibilityV3).toEqual(full.eligibilityV3);
+  }
+  const saved=(await get(page,listPath)).cases.find((c:{id:string})=>c.id===first.id);
+  expect(saved.eligibilityV3.result).toMatchObject({productionEnabled:false,qualifyingPrincipal:{pence:30000,currency:"GBP"}});
+  expect(saved.landedNetPence).toBe(0);expect(saved.feeJobLiabilityPence).toBe(0);
+ });
+}

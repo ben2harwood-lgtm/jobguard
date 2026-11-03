@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-ch9b": {
+      "branches": [
+        "codex/sandbox/demo-ch9b"
+      ],
+      "note": "CH-9 RED: versioned recovery receipt, read-only 0543_value_recovery_receipt, business sections and saved-data window tests.",
+      "allow": [
+        "apps/api/src/shadow-demo.application.ts",
+        "apps/api/src/value/company-value.application.test.ts",
+        "apps/api/src/value/value-business.application.ts",
+        "apps/api/src/value/value-v3.application.test.ts",
+        "apps/api/src/value/value-v3.application.ts",
+        "apps/web/app/demo-s/shadow-30000/journey-model.ts",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/ui/business-value-v3.tsx",
+        "apps/web/app/ui/mapped-value-receipt.test.tsx",
+        "apps/web/app/ui/mapped-value-receipt.tsx",
+        "apps/web/e2e/CH-9-mapped.spec.ts",
+        "apps/web/e2e/CH-9-recovery.spec.ts",
+        "apps/web/e2e/helpers/recovery-allocation-journey.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/value-source-receipt-v2.test.ts",
+        "packages/core/src/value-source-receipt-v2.ts",
+        "packages/db/migrations/0543_value_recovery_receipt.sql",
+        "packages/db/src/value-business-reader.test.ts",
+        "packages/db/src/value-business-reader.ts",
+        "packages/db/src/value-v3-reader.ts",
+        "packages/db/test/migration-proofs/0543_value_recovery_receipt.proof.json",
+        "packages/db/test/value-recovery-receipt.integration.test.ts",
+        "packages/db/test/value-recovery-receipt.test.ts"
+      ]
+    }
+  }
+}
