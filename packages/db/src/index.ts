@@ -176,3 +176,5 @@ export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+
+export * from "./inbox-metrics-repository.js";

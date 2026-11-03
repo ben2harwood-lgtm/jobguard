@@ -5,13 +5,21 @@
       "branches": [
         "codex/sandbox/batch-14"
       ],
-      "note": "Built ahead: M2-5 benchmark, M2-6 edge facts/store and M2-7 metrics-store. RED. M2-7 dashboard remains for the router. NOPR.",
+      "note": "Built ahead: M2-5 benchmark, M2-6 readiness store and M2-7 metrics/dashboard. RED. NOPR. Preserves current-main MON-8 and LP-5c.",
       "allow": [
         "apps/api/src/readiness-adapters.ts",
         "apps/api/src/readiness-scheduler.test.ts",
         "apps/api/src/readiness-scheduler.ts",
         "apps/api/src/readiness-store.test.ts",
         "apps/api/src/readiness-store.ts",
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.test.ts",
+        "apps/web/app/api/jobs/[id]/inbox-metrics/route.ts",
+        "apps/web/app/jobs/[id]/signal-to-noise/page.tsx",
+        "apps/web/app/lib/inbox-metrics-server.ts",
+        "apps/web/app/ui/inbox-metrics-dashboard.test.tsx",
+        "apps/web/app/ui/inbox-metrics-dashboard.tsx",
+        "apps/web/app/ui/relevance-inbox.tsx",
+        "apps/web/e2e/m2-7-dashboard.spec.ts",
         "docs/operations/supplier-benchmark.md",
         "packages/core/src/supplier-benchmark.test.ts",
         "packages/core/src/supplier-benchmark.ts",

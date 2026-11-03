@@ -1,0 +1,190 @@
+{
+  "migration": "0557_lp5c_revoke_command_writes.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": {
+        "id": "x-command-authority-writes",
+        "title": "Runtime INSERT on command_receipt, decision_resolution, action_authorization and receipt/authorization column UPDATE",
+        "kind": "authority",
+        "status": "existing_exception",
+        "target": {
+          "state": "revoke",
+          "note": "LP-5c revokes after LP-5a/5b convert every writer"
+        },
+        "cards": [
+          "LP-5a",
+          "LP-5b",
+          "LP-5c"
+        ],
+        "responsibilities": {
+          "LP-5a": "begin_command and complete_command inside the database, migrate the dispatcher, enforce the per-command role rule",
+          "LP-5b": "convert the nine receipt-writing repositories and the demo seed, retain contractor controlled routes",
+          "LP-5c": "revoke runtime INSERT on command_receipt, decision_resolution and action_authorization and receipt UPDATE; inventory remaining authority-changing column grants"
+        },
+        "downstream": "A receipt records who is processing a command, a resolution records an approval and an authorization is the single-use exact approval of an operation; the login can write all three and can mark a receipt complete or revoke an authorization.",
+        "sources": [
+          "packages/db/migrations/0005_commands.sql:76",
+          "packages/db/migrations/0005_commands.sql:79",
+          "packages/db/migrations/0005_commands.sql:80",
+          "packages/db/src/commands.ts"
+        ],
+        "tests": [
+          "packages/db/test/commands.integration.test.ts",
+          "packages/db/test/command-replay-contract.integration.test.ts",
+          "packages/db/test/proof-replay.integration.test.ts",
+          "packages/db/test/decision-adoption.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-command-receipts"
+      },
+      "after": {
+        "id": "x-command-authority-writes",
+        "title": "Runtime INSERT on command_receipt, decision_resolution, action_authorization and receipt/authorization column UPDATE",
+        "kind": "authority",
+        "status": "existing_exception",
+        "target": {
+          "state": "revoke",
+          "note": "0557 withdraws direct command creation/completion after LP-5a/5b; LP-6d closes remaining authorization revocation before whole-track gate"
+        },
+        "cards": [
+          "LP-5a",
+          "LP-5b",
+          "LP-5c",
+          "LP-6d"
+        ],
+        "responsibilities": {
+          "LP-5a": "begin_command and complete_command inside the database, migrate the dispatcher, enforce the per-command role rule",
+          "LP-5b": "convert the nine receipt-writing repositories and the demo seed, retain contractor controlled routes",
+          "LP-5c": "revoke runtime INSERT on command_receipt, decision_resolution and action_authorization and receipt UPDATE; inventory remaining authority-changing column grants",
+          "LP-6d": "close remaining direct action_authorization.revoked_at through its actor-bound checked path"
+        },
+        "downstream": "0557 withdraws direct creation and receipt completion. The remaining revoked_at column can revoke authority but cannot restore it under guard_authorization_revocation; LP-6d must close it through its checked binding path before the whole-track gate.",
+        "sources": [
+          "packages/db/migrations/0005_commands.sql:76",
+          "packages/db/migrations/0005_commands.sql:79",
+          "packages/db/migrations/0005_commands.sql:80",
+          "packages/db/src/commands.ts"
+        ],
+        "tests": [
+          "packages/db/test/commands.integration.test.ts",
+          "packages/db/test/command-replay-contract.integration.test.ts",
+          "packages/db/test/proof-replay.integration.test.ts",
+          "packages/db/test/decision-adoption.integration.test.ts",
+          "packages/db/test/lp-0-authority-paths.integration.test.ts"
+        ],
+        "gaps": [],
+        "path": "ap-command-receipts"
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|col|app.command_receipt.completed_at|jobguard_runtime|UPDATE|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|col|app.command_receipt.result|jobguard_runtime|UPDATE|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.action_authorization|jobguard_runtime|INSERT|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.decision_resolution|jobguard_runtime|INSERT|-",
+        "group": "x-command-authority-writes"
+      },
+      "after": null
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "command_receipt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "command_receipt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "decision_resolution",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "decision_resolution",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "action_authorization",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "action_authorization",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    }
+  ],
+  "tenancy": []
+}

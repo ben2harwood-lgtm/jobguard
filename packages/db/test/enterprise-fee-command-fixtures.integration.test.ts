@@ -329,7 +329,7 @@ it("Self-check: posting command IDs bind the exact statement and authorization, 
   const first = await approve(t.p), commandId = randomUUID();
   const cmd = { version: "enterprise-fee-post-statement.v1",commandId,...first };
   expect(await t.repo.postStatement(t.w.ctx,t.w.session,cmd)).toMatchObject({ replayed: false, journals: 0 });
-  await withTenant(c.runtime,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ statementId: randomUUID(),journals: 999 }),commandId]));
+  await withTenant(c.admin,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ statementId: randomUUID(),journals: 999 }),commandId]));
   expect(await t.repo.postStatement(t.w.ctx,t.w.session,cmd)).toEqual({ statementId: first.statementId,replayed: true,journals: 0 });
   expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,authorizationId: randomUUID() }))).toBe("COMMAND_CONFLICT");
   expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,commandId: randomUUID(),authorizationId: randomUUID() }))).toBe("STATEMENT_AUTHORITY_INVALID");
@@ -356,7 +356,7 @@ it("Self-check: cross-tenant replay, reads and cross-job duplicate references di
   await invoice(t, { [t.w.s.extraId]: 15000, [canonical]: 15000 });
   const command = { version: "enterprise-reconcile-exported-duplicate.v1", commandId: randomUUID(), jobId: t.w.s.jobId, duplicateId: t.w.s.extraId, canonicalId: canonical };
   const correction = await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command);
-  await withTenant(c.runtime,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ correctionId: foreign.w.s.extraId }),command.commandId]));
+  await withTenant(c.admin,t.w.ctx,db => db.$client.query("UPDATE app.command_receipt SET result=$2::jsonb WHERE tenant_id=$1 AND command_id=$3", [t.w.w.p.tenantId,JSON.stringify({ correctionId: foreign.w.s.extraId }),command.commandId]));
   expect(await t.repo.reconcileExportedDuplicate(t.w.ctx,t.w.session,command)).toEqual({ ...correction,replayed: true });
   expect(await code(t.repo.reconcileExportedDuplicate(foreign.w.ctx, foreign.w.session, command))).toBe("FEE_NOT_FOUND");
   expect(await code(t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, { ...command, commandId: randomUUID(), canonicalId: foreign.w.s.extraId }))).toBe("FEE_NOT_FOUND");
