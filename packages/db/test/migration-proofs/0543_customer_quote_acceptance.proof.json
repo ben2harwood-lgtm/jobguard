@@ -1,5 +1,5 @@
 {
-  "migration": "0570_customer_quote_acceptance.sql",
+  "migration": "0543_customer_quote_acceptance.sql",
   "lp0": [
     {
       "section": "entries",

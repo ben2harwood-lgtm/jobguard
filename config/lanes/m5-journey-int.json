@@ -56,6 +56,9 @@
         "packages/db/migrations/0570_customer_quote_acceptance.sql",
         "packages/db/migrations/0571_customer_stage_acknowledgement.sql",
         "packages/db/migrations/0572_customer_portal_message.sql",
+        "packages/db/migrations/0543_customer_quote_acceptance.sql",
+        "packages/db/migrations/0544_customer_stage_acknowledgement.sql",
+        "packages/db/migrations/0545_customer_portal_message.sql",
         "packages/db/src/acceptance-repository.ts",
         "packages/db/src/customer-message-fixtures.test.ts",
         "packages/db/src/customer-message-fixtures.ts",
@@ -74,8 +77,12 @@
         "packages/db/test/migration-proofs/0570_customer_quote_acceptance.proof.json",
         "packages/db/test/migration-proofs/0571_customer_stage_acknowledgement.proof.json",
         "packages/db/test/migration-proofs/0572_customer_portal_message.proof.json",
+        "packages/db/test/migration-proofs/0543_customer_quote_acceptance.proof.json",
+        "packages/db/test/migration-proofs/0544_customer_stage_acknowledgement.proof.json",
+        "packages/db/test/migration-proofs/0545_customer_portal_message.proof.json",
         "packages/db/test/watchdog-command-harness.ts",
-        "tools/commercial-integrity-current-source-guard.unresolved.json"
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "tools/commercial-integrity-boundary.unresolved.json"
       ]
     }
   }

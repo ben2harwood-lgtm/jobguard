@@ -53,12 +53,12 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   const scope = randomUUID(), evidence = randomUUID(), evidenceLink = randomUUID(), completion = randomUUID(), objectVersion = randomUUID();
   const stageDb = await admin.connect();
   try {
-   await stageDb.query("BEGIN"); await stageDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+   await stageDb.query("BEGIN"); await stageDb.query("SET LOCAL session_replication_role='replica'"); await stageDb.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
   await stageDb.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant,scope,fixture.job]);
-  await stageDb.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
-    VALUES($1,$2,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp())`, [tenant,evidence,fixture.job,scope,"a".repeat(64),objectVersion]);
-  await stageDb.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_verified_at)
-    VALUES($1,$2,$2,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp())`, [tenant,evidence,fixture.job,scope,objectVersion,"a".repeat(64)]);
+  await stageDb.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
+    VALUES($1,$2::uuid,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp(),clock_timestamp())`, [tenant,evidence,fixture.job,scope,"a".repeat(64),objectVersion]);
+  await stageDb.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+    VALUES($1,$2::uuid,$2::uuid,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [tenant,evidence,fixture.job,scope,objectVersion,"a".repeat(64)]);
   await stageDb.query("INSERT INTO app.evidence_link(tenant_id,id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')", [tenant,evidenceLink,evidence,fixture.job,scope]);
   await stageDb.query("INSERT INTO app.stage_completion(tenant_id,id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'Fictional pre-cover stage',$5,$6)", [tenant,completion,fixture.job,scope,evidenceLink,randomUUID()]);
    await stageDb.query("COMMIT");
@@ -71,6 +71,33 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   await expect(tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true })).toBeVisible(); expect(tab.url()).not.toContain("#");
   await tab.getByRole("main").getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab.getByRole("main").getByText("You are signed in to this job.", { exact: true })).toBeVisible();
+  const cookie = (await customerContext.cookies()).find(c => c.name === "jobguard_customer")!;
+  expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: "Strict", expires: -1 });
+  expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);
+  expect((await api(tab, "read", { version: "customer-read.v1", jobId: randomUUID() })).status).toBe(401);
+  expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
+  const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
+  expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
+  const stageLink = await tab.getByRole("link", {name:"Review recorded stages"}).getAttribute("href");
+  expect(stageLink).toBe(`/customer/jobs/${fixture.job}`);
+  const quoteTab=await customerContext.newPage();
+  await quoteTab.goto((await tab.getByRole("link",{name:"Review your quote"}).getAttribute("href"))!);
+  await expect(quoteTab.getByText("Fictional work: 1 item — £100.00")).toBeVisible();
+  await expect(quoteTab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("synthetic template, not reviewed (D06 v2)");
+  await expect(quoteTab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("Practice cancellation request");
+  const view=(await api(quoteTab,"quote",{version:"customer-quote-read.v1",jobId:fixture.job})).body;
+  const command={version:"customer-quote-acceptance.v1",commandId:randomUUID(),jobId:fixture.job,expectedJobRevision:view.jobRevision,target:{kind:"quote",id:view.quote.id,revision:view.quote.revision,hash:view.quote.hash}};
+  expect((await api(quoteTab,"quote-accept",{...command,expectedJobRevision:view.jobRevision+1})).status).toBe(401);
+  expect((await api(quoteTab,"quote-accept",{...command,target:{...command.target,hash:"0".repeat(64)}})).status).toBe(401);
+  const sent=quoteTab.waitForRequest(request=>request.url().endsWith("/api/customer-portal/quote-accept")&&request.method()==="POST");
+  await quoteTab.getByRole("button",{name:"Accept this quote",exact:true}).click();
+  const acceptedCommand=(await sent).postDataJSON();
+  await expect(quoteTab.getByText("You accepted this quote.",{exact:true})).toBeVisible();
+  expect((await api(quoteTab,"quote-accept",acceptedCommand)).status).toBe(200);
+  expect((await api(quoteTab,"quote-accept",{...acceptedCommand,target:{...acceptedCommand.target,hash:"0".repeat(64)}})).status).toBe(401);
+  const accepted=(await admin.query("SELECT acceptance_kind,actor_membership_id,document_hash FROM app.quote_acceptance WHERE tenant_id=$1 AND job_id=$2",[tenant,fixture.job])).rows;
+  expect(accepted).toEqual([{acceptance_kind:"customer_authenticated",actor_membership_id:null,document_hash:view.quote.hash}]);
+  await quoteTab.close();
   // Owner-connected synthetic lifecycle fixture only; message/evidence rows are created by SV-7A.
   const lifecycle = await admin.connect();
   try {
@@ -87,32 +114,6 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect(saved).toHaveLength(1); expect(saved[0]).toMatchObject({text: "I agree, perhaps £500? This is only a fictional message.", evidence_type: "customer_message_text"});
   expect(saved[0].sha256).toMatch(/^[a-f0-9]{64}$/u); expect(saved[0].object_version_id).toBeTruthy();
   expect((await api(tab, "messages", {version: "customer-portal-message.v1", jobId: randomUUID(), commandId: randomUUID(), text: "Foreign job"})).status).toBe(401);
-  const cookie = (await customerContext.cookies()).find(c => c.name === "jobguard_customer")!;
-  expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: "Strict", expires: -1 });
-  expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);
-  expect((await api(tab, "read", { version: "customer-read.v1", jobId: randomUUID() })).status).toBe(401);
-  expect(await tab.evaluate(async () => (await fetch("/api/jobs")).status)).toBe(401);
-  const [tenantId, jobId, customerId, token] = outbox.immutable_content.split("#")[1].split("/");
-  expect((await api(tab, "signin", { version: "customer-signin.v1", tenantId, jobId, customerId, token })).status).toBe(401);
-  const stageLink = await tab.getByRole("link", {name:"Review recorded stages"}).getAttribute("href");
-  expect(stageLink).toBe(`/customer/jobs/${fixture.job}`);
-  await tab.getByRole("link",{name:"Review your quote"}).click();
-  await expect(tab.getByText("Fictional work: 1 item — £100.00")).toBeVisible();
-  await expect(tab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("synthetic template, not reviewed (D06 v2)");
-  await expect(tab.getByRole("region",{name:"Domestic cancellation-notice kit"})).toContainText("Practice cancellation request");
-  const view=(await api(tab,"quote",{version:"customer-quote-read.v1",jobId:fixture.job})).body;
-  const command={version:"customer-quote-acceptance.v1",commandId:randomUUID(),jobId:fixture.job,expectedJobRevision:view.jobRevision,target:{kind:"quote",id:view.quote.id,revision:view.quote.revision,hash:view.quote.hash}};
-  expect((await api(tab,"quote-accept",{...command,expectedJobRevision:view.jobRevision+1})).status).toBe(401);
-  expect((await api(tab,"quote-accept",{...command,target:{...command.target,hash:"0".repeat(64)}})).status).toBe(401);
-  const sent=tab.waitForRequest(request=>request.url().endsWith("/api/customer-portal/quote-accept")&&request.method()==="POST");
-  await tab.getByRole("button",{name:"Accept this quote",exact:true}).click();
-  const acceptedCommand=(await sent).postDataJSON();
-  await expect(tab.getByText("You accepted this quote.",{exact:true})).toBeVisible();
-  expect((await api(tab,"quote-accept",acceptedCommand)).status).toBe(200);
-  expect((await api(tab,"quote-accept",{...acceptedCommand,target:{...acceptedCommand.target,hash:"0".repeat(64)}})).status).toBe(401);
-  const accepted=(await admin.query("SELECT acceptance_kind,actor_membership_id,document_hash FROM app.quote_acceptance WHERE tenant_id=$1 AND job_id=$2",[tenant,fixture.job])).rows;
-  expect(accepted).toEqual([{acceptance_kind:"customer_authenticated",actor_membership_id:null,document_hash:view.quote.hash}]);
-  await tab.goto("/customer/sign-in");
   await tab.goto(stageLink!);
   await expect(tab.getByRole("heading", {name:"Fictional pre-cover stage"})).toBeVisible();
   await expect(tab.getByText(objectVersion,{exact:true})).toBeVisible();

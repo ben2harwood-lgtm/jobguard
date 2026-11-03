@@ -53,25 +53,30 @@ CREATE FUNCTION app.customer_stage_snapshot(t uuid,j uuid,completion uuid) RETUR
 $$;
 
 CREATE FUNCTION identity.customer_stages(t uuid,j uuid,c uuid,digest text,completion uuid,command uuid,expected_hash text) RETURNS jsonb
- LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET app.customer_stage_read='on' AS $$
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE s app.stage_completion; prior app.customer_stage_acknowledgement; view jsonb; sid uuid; ack uuid:=gen_random_uuid();
 BEGIN
+ -- A function SET clause on this setting needs superuser, so open and close the read window here.
+ PERFORM set_config('app.customer_stage_read','on',true);
  -- Reuse the existing authority boundary inside this transaction, including its job lock.
  PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
  SELECT id INTO sid FROM app.customer_portal_session WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest;
  IF completion IS NULL THEN
   IF command IS NOT NULL OR expected_hash IS NOT NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
-  RETURN jsonb_build_object('version','customer-stages.v1','jobId',j,'stages',coalesce((
+  view:=jsonb_build_object('version','customer-stages.v1','jobId',j,'stages',coalesce((
    SELECT jsonb_agg(app.customer_stage_snapshot(t,j,x.id)||jsonb_build_object('acknowledgement',
     (SELECT jsonb_build_object('id',a.id,'snapshotHash',a.snapshot_hash,'acknowledgedAt',a.acknowledged_at)
      FROM app.customer_stage_acknowledgement a WHERE a.tenant_id=t AND a.customer_id=c AND a.completion_id=x.id)) ORDER BY x.completed_at,x.id)
    FROM app.stage_completion x WHERE x.tenant_id=t AND x.job_id=j),'[]'::jsonb));
+  PERFORM set_config('app.customer_stage_read','',true);
+  RETURN view;
  END IF;
  IF command IS NULL OR expected_hash IS NULL OR expected_hash !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':customer-stage-command:'||command::text,390));
  SELECT * INTO prior FROM app.customer_stage_acknowledgement WHERE tenant_id=t AND command_id=command;
  IF prior.id IS NOT NULL THEN
   IF prior.job_id<>j OR prior.customer_id<>c OR prior.completion_id<>completion OR prior.snapshot_hash<>expected_hash THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  PERFORM set_config('app.customer_stage_read','',true);
   RETURN jsonb_build_object('version','customer-stage-acknowledged.v1','id',prior.id,'snapshotHash',prior.snapshot_hash);
  END IF;
  SELECT * INTO s FROM app.stage_completion WHERE tenant_id=t AND job_id=j AND id=completion;
@@ -83,6 +88,7 @@ BEGIN
  WHERE l.tenant_id=t AND l.id=s.evidence_link_id FOR UPDATE OF u;
  PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
  view:=app.customer_stage_snapshot(t,j,completion);
+ PERFORM set_config('app.customer_stage_read','',true);
  IF view IS NULL OR (view->>'reviewRequired')::boolean IS DISTINCT FROM false OR view->>'hash'<>expected_hash THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  IF EXISTS(SELECT 1 FROM app.customer_stage_acknowledgement WHERE tenant_id=t AND customer_id=c AND completion_id=completion) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  INSERT INTO app.customer_stage_acknowledgement(tenant_id,id,job_id,customer_id,session_id,completion_id,command_id,snapshot,snapshot_hash)

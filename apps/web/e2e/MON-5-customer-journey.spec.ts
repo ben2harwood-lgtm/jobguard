@@ -27,7 +27,6 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     expect(parties.status()).toBe(200);
     const customer = (await parties.json()).currentIds.customerId as string;
     const other = await seedJob(admin,portalTenant,digest);
-    const stage = await seedStage(admin,portalTenant,job);
     const link = await issueLink(admin,page,job,customer,issuer.csrf);
     const tab = await context.newPage();
     await tab.goto("/customer/sign-in");
@@ -66,7 +65,14 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
       .toEqual([{document_id:quote.quote.id,document_hash:quote.quote.hash,acceptance_kind:"customer_authenticated"}]);
 
     // Synthetic lifecycle input only, as in customer-signin; no fee or settlement.
-    await admin.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[portalTenant,job]);
+    const lifecycle = await admin.connect();
+    try {
+      await lifecycle.query("BEGIN"); await lifecycle.query("SELECT set_config('app.tenant_id',$1,true)",[portalTenant]);
+      await lifecycle.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT DO NOTHING",[portalTenant,job]);
+      await lifecycle.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[portalTenant,job]);
+      await lifecycle.query("COMMIT");
+    } catch (error) { await lifecycle.query("ROLLBACK"); throw error; } finally { lifecycle.release(); }
+    const stage = await seedStage(admin,portalTenant,job);
     const extras = await seedExtras(admin,portalTenant,job,issuer.member);
     await tab.goto(routes.extras);
     const approvedCommands: unknown[] = [];
@@ -112,7 +118,7 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     await home.getByRole("button",{name:"Save message",exact:true}).click();
     const sentMessage = (await messageRequest).postDataJSON();
     await expect(home.getByRole("status")).toHaveText("Message saved for your builder with its evidence.");
-    expect((await portal(home,"messages",sentMessage)).status).toBe(200);
+    expect((await portal(home,"messages",sentMessage)).status).toBe(201);
     const builderMessages = async () => {
       const response = await page.request.get(`/api/jobs/${job}/customer-messages`);
       expect(response.status()).toBe(200); return response.json();

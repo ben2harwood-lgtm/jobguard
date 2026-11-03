@@ -4,7 +4,7 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
 import { migrate } from "../src/migrate.js";
-const own="0571_customer_stage_acknowledgement.sql",hash=(v:string)=>createHash("sha256").update(v).digest("hex");
+const own="0544_customer_stage_acknowledgement.sql",hash=(v:string)=>createHash("sha256").update(v).digest("hex");
 let c:Cluster;
 beforeAll(async()=>{
  c=await startBeforeMigration(own);const before=await snapshot(c.admin);await applyMigration(c,own);
