@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { statementLines, exactPence, sumExactPence } from "@jobguard/core";
@@ -71,7 +72,7 @@ async function post(t: Setup, p = t.p) {
     contentHash: s.contentHash, totalDeltaPence: s.totalDeltaPence, expiresAt: new Date(Date.now() + 600000).toISOString() });
   await t.repo.postStatement(t.w.ctx, t.w.session, { version: "enterprise-fee-post-statement.v1", commandId: randomUUID(), statementId, authorizationId });
   await chain(c, t.w.w);
-  return { s, postings: await t.repo.readPostings(t.w.ctx, t.w.session, statementId) };
+  return { s, authorizationId, postings: await t.repo.readPostings(t.w.ctx, t.w.session, statementId) };
 }
 
 async function check(t: Setup, approved: number, billed: number, q: number, fee: number) {
@@ -169,6 +170,7 @@ it("fractional duplicate credit preserves 250000/31 net pence in storage, replay
   const stored = (await c.admin.query(`SELECT c.corrections,c.content_hash,a.content_hash authorization_hash,a.amount_pence::int,
     app.final_lock_hash(jsonb_build_object('version','enterprise-duplicate-correction.v1','jobId',c.job_id,'duplicateId',c.duplicate_id,'canonicalId',c.canonical_id,'corrections',c.corrections)) recomputed_hash
     FROM app.enterprise_duplicate_correction c JOIN app.action_authorization a ON(a.tenant_id,a.id)=(c.tenant_id,c.authorization_id) WHERE c.tenant_id=$1 AND c.id=$2`, [t.w.w.p.tenantId,result.correctionId])).rows[0];
+ await assertLp4SealedEvents(c.admin, t.w.w.p.tenantId, "contractor.extra.duplicate_linked");
   expect(stored).toEqual({ corrections: result.corrections, content_hash: result.contentHash, authorization_hash: result.contentHash, recomputed_hash: result.contentHash, amount_pence: 28800 });
   expect(await t.repo.reconcileExportedDuplicate(t.w.ctx, t.w.session, command)).toEqual({ ...result, replayed: true });
 });
@@ -177,6 +179,64 @@ it("ENT-F8: office, client instructions and order lines contribute zero even whe
   await invoice(t, { [office]: 50000, [client]: 80000 }, 100000); await pay(t, 230000);
   const r = await derive(t), ref = reference(t, [{ approved: 50000, billed: 50000, paid: exact(50000), kind: "office_entry" }, { approved: 80000, billed: 80000, paid: exact(80000), kind: "client_instruction" }]);
   expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence); expect(r.qualifyingPrincipal).toEqual(exact(0)); expect((await post(t)).postings).toEqual([]);
+});
+for (const state of ["withdrawn", "rejected", "unexported", "unpaid"] as const) it(`ENT-7: ${state} amounts contribute zero through real commands, with a qualifying control`, async () => {
+  const t = await setup(), approvals = new ExtraApprovalRepository(c.runtime);
+  if (state === "withdrawn" || state === "rejected") {
+    const extraId = await raiseOn(c, t.w.w, t.w.s.jobId);
+    await approvals.priceExtra(t.w.ctx, t.w.w.members.surveyor.member, {
+      version: "price-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, netPence: 15000,
+    });
+    const request = await approvals.submitExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+      version: "submit-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId,
+    });
+    const result = state === "withdrawn"
+      ? await approvals.withdrawExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+        version: "withdraw-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, reasonCode: "not_done",
+      })
+      : await approvals.rejectExtra(t.w.ctx, t.w.w.members.supervisor.member, {
+        ...approveInput({ jobId: t.w.s.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 15000 }, 0),
+        version: "reject-extra.v1", reasonCode: "price_not_agreed",
+      });
+    expect(result.state).toBe(state);
+  }
+  // setup's approved site extra is the control. Initially it is either unexported or billed but unpaid.
+  if (state === "unpaid") await invoice(t, { [t.w.s.extraId]: 15000 });
+  const r = await derive(t), ref = reference(t, [{ approved: 15000, billed: state === "unpaid" ? 15000 : 0, paid: exact(0) }]);
+  expect(r.cumulativeFeePence).toBe(ref.cumulativeFee.pence);
+  expect(r.qualifyingPrincipal).toEqual(exact(0));
+  const zero = await post(t);
+  expect(zero.postings).toEqual([]);
+  const simulate = (statementId: string, authorizationId: string, commandId = randomUUID(), session = t.w.session) =>
+    t.repo.simulateInvoice(t.w.ctx, session, { version: "enterprise-fee-simulate-invoice.v1", commandId, statementId, authorizationId }, "synthetic_demo");
+  expect(await simulate(zero.s.id, zero.authorizationId)).toMatchObject({ totalPence: 0, currency: "GBP" });
+
+  // Complete only the control's billing chain; withdrawn/rejected work must still contribute nothing.
+  if (state !== "unpaid") await invoice(t, { [t.w.s.extraId]: 15000 });
+  await pay(t, 15000);
+  const p = next(t.p), control = await derive(t, p);
+  expect(control.qualifyingPrincipal).toEqual(exact(15000));
+  expect(control.cumulativeFeePence).toBe(reference(t, [{ approved: 15000, billed: 15000, paid: exact(15000) }]).cumulativeFee.pence);
+  expect(control.contributions.map(x => x.extraId)).toEqual([t.w.s.extraId]);
+  const approved = await post(t, p);
+  expect(approved.postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+  const commandId = randomUUID(), simulated = await simulate(approved.s.id, approved.authorizationId, commandId);
+  expect(simulated).toMatchObject({ version: "enterprise-fee-simulated-invoice.v1", mode: "synthetic_demo",
+    statementId: approved.s.id, contentHash: approved.s.contentHash, totalPence: 1500, currency: "GBP" });
+  expect(await simulate(approved.s.id, approved.authorizationId, commandId)).toEqual(simulated);
+  expect(await simulate(approved.s.id, approved.authorizationId)).toEqual(simulated);
+  expect(await code(simulate(approved.s.id, randomUUID()))).toBe("STATEMENT_AUTHORITY_INVALID");
+  expect(await code(simulate(approved.s.id, approved.authorizationId, randomUUID(), randomUUID()))).toBe("EXTRA_FORBIDDEN");
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, approved.s.id)).toEqual(approved.postings);
+});
+it("ENT-7: runtime SQL cannot insert fee contributions or journal headers", async () => {
+  const t = await setup();
+  await invoice(t, { [t.w.s.extraId]: 15000 }); await pay(t, 15000); await derive(t);
+  expect((await post(t)).postings).toEqual([expect.objectContaining({ kind: "accrual", amountPence: 1500 })]);
+  for (const sql of [
+    "INSERT INTO app.enterprise_fee_contribution DEFAULT VALUES",
+    "INSERT INTO app.platform_enterprise_fee DEFAULT VALUES",
+  ]) await expect(withTenant(c.runtime, t.w.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
 });
 it("ENT-F9: origins either side of a version boundary keep 10% / 8%; a later X credit stays under v1", async () => {
   const t = await setup();
@@ -276,6 +336,7 @@ it("Self-check: posting command IDs bind the exact statement and authorization, 
   expect(await t.repo.postStatement(t.w.ctx,t.w.session,{ ...cmd,commandId: randomUUID() })).toMatchObject({ replayed: true });
   const p = next(t.p); await derive(t,p); const second = await approve(p);
   expect(await code(t.repo.postStatement(t.w.ctx,t.w.session,{ version: "enterprise-fee-post-statement.v1",commandId,...second }))).toBe("COMMAND_CONFLICT");
+ await assertLp4SealedEvents(c.admin, t.w.w.p.tenantId, "enterprise_fee.statement_posted");
   expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='enterprise_fee.statement_posted'",[t.w.w.p.tenantId])).rows[0].n).toBe(1);
   expect(await t.repo.readPostings(t.w.ctx,t.w.session,first.statementId)).toEqual([]); await chain(c,t.w.w);
 });
@@ -342,4 +403,32 @@ it("ReconcileExportedDuplicate refuses non-live jobs, wrong tenant/session and d
   const routine = (await c.admin.query("SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public FROM pg_proc p WHERE p.oid='app.ef_reconcile_exported_duplicate(uuid,uuid,uuid,uuid,uuid)'::regprocedure")).rows;
   expect(routine).toEqual([{ owner: "jobguard_migration", prosecdef: true, proconfig: ["search_path=pg_catalog"], runtime: true, infrastructure: false, public: false }]);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.enterprise_duplicate_correction WHERE tenant_id=$1", [t.w.w.p.tenantId])).rows[0].n).toBe(0);
+});
+
+it("ENT-7: the simulated invoice posts exact approved money once and rechecks revoked authority", async () => {
+  const t = await setup();
+  await invoice(t, { [t.w.s.extraId]: 15000 }); await pay(t, 15000); await derive(t);
+  const { statementId } = await t.repo.prepareStatement(t.w.ctx, t.w.session, {
+    version: "enterprise-fee-prepare-statement.v1", commandId: randomUUID(), period: t.p,
+  });
+  const statement = await t.repo.readStatement(t.w.ctx, t.w.session, statementId);
+  expect(await code(t.repo.simulateInvoice(t.w.ctx, t.w.session, {
+    version: "enterprise-fee-simulate-invoice.v1", commandId: randomUUID(), statementId, authorizationId: randomUUID(),
+  }, "synthetic_demo"))).toBe("STATEMENT_AUTHORITY_INVALID");
+  const { authorizationId } = await t.repo.approveStatement(t.w.ctx, t.w.session, {
+    version: "enterprise-fee-approve-statement.v1", commandId: randomUUID(), statementId, contentHash: statement.contentHash,
+    totalDeltaPence: statement.totalDeltaPence, expiresAt: new Date(Date.now() + 600000).toISOString(),
+  });
+  const command = { version: "enterprise-fee-simulate-invoice.v1", commandId: randomUUID(), statementId, authorizationId };
+  const simulate = () => t.repo.simulateInvoice(t.w.ctx, t.w.session, command, "synthetic_demo");
+  const [first, replay] = await Promise.all([simulate(), simulate()]);
+  expect(first).toEqual(replay);
+  expect(first).toMatchObject({ invoiceId: statementId, contentHash: statement.contentHash, totalPence: 1500, currency: "GBP" });
+  expect(first.totalPence).toBe(statement.totalDeltaPence);
+  expect(await t.repo.readPostings(t.w.ctx, t.w.session, statementId)).toEqual([
+    expect.objectContaining({ kind: "accrual", amountPence: 1500 }),
+  ]);
+  await c.admin.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [t.w.w.p.tenantId, authorizationId]);
+  expect(await code(t.repo.simulateInvoice(t.w.ctx, t.w.session, { ...command, commandId: randomUUID() }, "synthetic_demo"))).toBe("STATEMENT_AUTHORITY_INVALID");
+  await chain(c, t.w.w);
 });

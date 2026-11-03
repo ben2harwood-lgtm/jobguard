@@ -1,3 +1,4 @@
+import { customerSigninLink } from "@jobguard/db";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { IdentityApplication } from "./identity.application.js";
@@ -36,9 +37,10 @@ export class CustomerSigninApplication {
         await this.identity.context({ sessionToken: token, requestedTenantId: input.tenantId, origin: request.headers.origin, csrfToken: request.headers["x-csrf-token"] });
         const builderDigest = this.identity.provider.digest(`session:${token}`);
         if ("customerId" in input) {
-          const secret = randomBytes(32).toString("base64url");
-          const path = `/customer/sign-in#${input.tenantId}/${input.jobId}/${input.customerId}/${secret}`;
-          const id = await this.query<string>("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) result", [input.tenantId, builderDigest, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${secret}`), path]);
+          const reference = `customer-signin-reference.v1:${input.tenantId}/${input.jobId}/${input.customerId}/${randomBytes(32).toString("base64url")}`;
+          const path = customerSigninLink(reference, value => this.identity.provider.digest(value));
+          const secret = path.split("/").at(-1)!;
+          const id = await this.query<string>("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) result", [input.tenantId, builderDigest, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${secret}`), reference]);
           return { body: { version: "customer-link-issued.v1", grantId: id } };
         }
         await this.query("SELECT identity.customer_portal_revoke($1,$2,$3,$4) result", [input.tenantId, builderDigest, input.jobId, input.grantId]);
