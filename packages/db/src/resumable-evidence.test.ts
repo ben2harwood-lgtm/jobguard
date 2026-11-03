@@ -11,7 +11,8 @@ vi.mock("./job-work-state-sources.js", () => ({ refuseLockedNewSource: vi.fn(), 
 import { refuseLockedNewSource } from "./job-work-state-sources.js";
 
 const tenant = randomUUID(), user = randomUUID(), member = randomUUID();
-const context = { tenantId: tenant, identityUserId: user, membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0];
+const actor = { identityUserId: user, membershipId: member };
+const context = verifiedTenantContextFromMembership({ tenantId: tenant, ...actor } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 const input = { version: "resumable-evidence.v1", uploadId: randomUUID(), jobId: randomUUID(), actorMembershipId: member };
 function fixture() {
   let allowed = true;
@@ -59,30 +60,30 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
   it("refuses every default-off entry before touching a pool", async () => {
     const f=fixture(), service=new ResumableEvidenceService(f.pool);
     for (const method of ["begin", "append", "status", "finalize"] as const)
-      await expect(service[method](context, {})).rejects.toMatchObject({code:"DISABLED"});
+      await expect(service[method](context, actor, {})).rejects.toMatchObject({code:"DISABLED"});
     expect(f.query).not.toHaveBeenCalled();
   });
-  it("binds every operation and proof read to the authenticated member, refusing queued contexts", async () => {
+  it("binds every operation and proof read to the session actor, refusing a missing actor", async () => {
     const f = fixture();
     const otherMember = randomUUID();
     for (const method of ["begin", "append", "status", "finalize"] as const) {
       const raw = method === "begin" ? beginRequest() : { ...input,
         ...(method === "append" ? { offset: 0, bytes: new Uint8Array([1]) } :
           method === "finalize" ? { commandId: randomUUID(), evidenceType: "photo" } : {}) };
-      await expect(f.service[method](context, { ...raw, actorMembershipId: otherMember })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(f.service[method](verifiedTenantContextForQueuedJob(tenant) as unknown as typeof context, raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(f.service[method](context, actor, { ...raw, actorMembershipId: otherMember })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(f.service[method](context, {}, raw)).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
-    const storage = f.service.storageForProof(context, { ...input, actorMembershipId: otherMember });
+    const storage = f.service.storageForProof(context, actor, { ...input, actorMembershipId: otherMember });
     await expect(storage.readExactVersion("synthetic-original", "synthetic-version")).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.evidence_upload"))).toBe(false);
     expect(f.parts).toHaveLength(0);
-    await expect(f.service.status(context, input)).resolves.toMatchObject({ nextOffset: 0 });
-    const wrongUser = { tenantId: tenant, identityUserId: randomUUID(), membershipId: member } as Parameters<typeof verifiedTenantContextFromMembership>[0];
-    await expect(f.service.status(wrongUser, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(f.service.status(context, actor, input)).resolves.toMatchObject({ nextOffset: 0 });
+    const wrongUser = { identityUserId: randomUUID(), membershipId: member };
+    await expect(f.service.status(context, wrongUser, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
   it("snapshots the caller membership before an asynchronous lookup", async () => {
-    const f = fixture(), caller = { ...context };
-    const result = f.service.status(caller, input);
+    const f = fixture(), caller = { ...actor };
+    const result = f.service.status(context, caller, input);
     caller.identityUserId = randomUUID();
     caller.membershipId = randomUUID();
     await expect(result).resolves.toMatchObject({ nextOffset: 0 });
@@ -91,84 +92,84 @@ describe("dark resumable transfer orchestration (SQL isolation is tested in CI)"
   });
   it("reads status without a row lock while append still locks the upload", async () => {
     const f = fixture();
-    await f.service.status(context, input);
+    await f.service.status(context, actor, input);
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FOR UPDATE"))).toBe(false);
-    await f.service.append(context, { ...input, offset: 0, bytes: new Uint8Array([1]) });
+    await f.service.append(context, actor, { ...input, offset: 0, bytes: new Uint8Array([1]) });
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.evidence_upload") && sql.includes("FOR UPDATE"))).toBe(true);
   });
   it("caps client expiry at 24 server hours and keeps the stored expiry on replay", async () => {
     const now = Date.parse("2026-10-29T08:00:00Z");
     const clock = vi.spyOn(Date, "now").mockReturnValue(now);
     const f = fixture(), request = beginRequest();
-    const first = await f.service.begin(context, request);
+    const first = await f.service.begin(context, actor, request);
     expect(first.upload.expiresAt).toEqual(new Date(now + 24 * 60 * 60 * 1000));
     clock.mockReturnValue(now + 1000);
-    expect((await f.service.begin(context, request)).upload.expiresAt).toEqual(first.upload.expiresAt);
+    expect((await f.service.begin(context, actor, request)).upload.expiresAt).toEqual(first.upload.expiresAt);
     const shorter = new Date(now + 60_000);
-    expect((await fixture().service.begin(context, { ...request, expiresAt: shorter })).upload.expiresAt).toEqual(shorter);
+    expect((await fixture().service.begin(context, actor, { ...request, expiresAt: shorter })).upload.expiresAt).toEqual(shorter);
     for (const expiresAt of [new Date(now), new Date(now - 1)]) {
       const expired = fixture();
-      await expect(expired.service.begin(context, { ...request, expiresAt })).rejects.toMatchObject({ code: "LIMIT" });
+      await expect(expired.service.begin(context, actor, { ...request, expiresAt })).rejects.toMatchObject({ code: "LIMIT" });
       expect(expired.query).not.toHaveBeenCalled();
     }
   });
   it("resumes from persisted offsets in a fresh service and deduplicates exact retries", async () => {
     const f=fixture();
     const request={...input,offset:0,bytes:new Uint8Array([1,2])};
-    expect(await f.service.append(context,request)).toEqual({nextOffset:2});
-    expect(await new ResumableEvidenceService(f.pool,true).status(context,input)).toMatchObject({nextOffset:2,state:"pending"});
-    expect(await f.service.append(context,request)).toEqual({nextOffset:2});
-    expect(await f.service.append(context,{...request,offset:2})).toEqual({nextOffset:4});
+    expect(await f.service.append(context, actor, request)).toEqual({nextOffset:2});
+    expect(await new ResumableEvidenceService(f.pool,true).status(context, actor, input)).toMatchObject({nextOffset:2,state:"pending"});
+    expect(await f.service.append(context, actor, request)).toEqual({nextOffset:2});
+    expect(await f.service.append(context, actor, {...request,offset:2})).toEqual({nextOffset:4});
     expect(f.parts).toHaveLength(2);
   });
   it("rejects changed retries, overlaps, gaps and size overflow", async () => {
     const f=fixture();
-    await f.service.append(context,{...input,offset:0,bytes:new Uint8Array([1,2])});
+    await f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1,2])});
     for (const [offset,bytes] of [[0,[9]], [1,[3]], [3,[3]], [2,[1,2,3]]] as const)
-      await expect(f.service.append(context,{...input,offset,bytes:new Uint8Array(bytes)})).rejects.toMatchObject({code:offset===2?"LIMIT":"CONFLICT"});
+      await expect(f.service.append(context, actor, {...input,offset,bytes:new Uint8Array(bytes)})).rejects.toMatchObject({code:offset===2?"LIMIT":"CONFLICT"});
     expect(f.parts).toHaveLength(1);
   });
   it("leaves interrupted uploads pending when finalize is attempted early", async () => {
     const f=fixture();
-    await f.service.append(context,{...input,offset:0,bytes:new Uint8Array([1])});
-    await expect(f.service.finalize(context,{...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"INCOMPLETE"});
+    await f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1])});
+    await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"INCOMPLETE"});
     expect(f.row.state).toBe("pending");
-    await expect(f.service.append(context,{...input,offset:1,bytes:new Uint8Array([2,3,4])})).resolves.toEqual({nextOffset:4});
+    await expect(f.service.append(context, actor, {...input,offset:1,bytes:new Uint8Array([2,3,4])})).resolves.toEqual({nextOffset:4});
   });
   it("refuses other tenants, jobs and revoked access without exposing offsets", async () => {
     const f=fixture();
-    await expect(f.service.status(verifiedTenantContextForQueuedJob(randomUUID()) as unknown as typeof context,input)).rejects.toMatchObject({code:"NOT_FOUND"});
-    await expect(f.service.status(context,{...input,jobId:randomUUID()})).rejects.toMatchObject({code:"NOT_FOUND"});
+    await expect(f.service.status(verifiedTenantContextForQueuedJob(randomUUID()),actor,input)).rejects.toMatchObject({code:"NOT_FOUND"});
+    await expect(f.service.status(context, actor, {...input,jobId:randomUUID()})).rejects.toMatchObject({code:"NOT_FOUND"});
     f.revoke();
     for (const method of ["append", "status", "finalize"] as const)
-      await expect(f.service[method](context,{...input,...(method==="append"?{offset:0,bytes:new Uint8Array([1])}:method==="finalize"?{commandId:randomUUID(),evidenceType:"photo"}:{})})).rejects.toMatchObject({code:"NOT_FOUND"});
+      await expect(f.service[method](context,actor,{...input,...(method==="append"?{offset:0,bytes:new Uint8Array([1])}:method==="finalize"?{commandId:randomUUID(),evidenceType:"photo"}:{})})).rejects.toMatchObject({code:"NOT_FOUND"});
   });
   it.each(["verified","rejected","quarantined","expired","locked"])("refuses appends after %s", async state => {
     const f=fixture();
     if(state==="expired") f.row.expires_at=new Date(0);
     else if(state==="locked") vi.mocked(refuseLockedNewSource).mockRejectedValue(new Error("locked"));
     else f.row.state=state;
-    await expect(f.service.append(context,{...input,offset:0,bytes:new Uint8Array([1])})).rejects.toThrow();
+    await expect(f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1])})).rejects.toThrow();
     expect(f.parts).toHaveLength(0);
   });
   it("finalizes server-read bytes once and rejects a different type on replay", async () => {
     const f=fixture(), bytes=new Uint8Array([255,216,1,2,255,217]);
     f.row.maximum_bytes=String(bytes.length); f.row.expected_content_type="image/jpeg";
     f.row.expected_sha256=createHash("sha256").update(bytes).digest("hex");
-    await f.service.append(context,{...input,offset:0,bytes});
+    await f.service.append(context, actor, {...input,offset:0,bytes});
     const command={...input,commandId:randomUUID(),evidenceType:"site_photo"};
-    const result=await f.service.finalize(context,command);
+    const result=await f.service.finalize(context, actor, command);
     expect(result).toMatchObject({id:input.uploadId,sha256:f.row.expected_sha256,object_version_id:`synthetic-${f.row.expected_sha256}`});
-    expect(await f.service.finalize(context,command)).toEqual(result);
+    expect(await f.service.finalize(context, actor, command)).toEqual(result);
     expect(f.query.mock.calls.filter(([sql])=>sql.startsWith("INSERT INTO app.evidence_object"))).toHaveLength(1);
-    await expect(f.service.finalize(context,{...command,evidenceType:"other"})).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
+    await expect(f.service.finalize(context, actor, {...command,evidenceType:"other"})).rejects.toMatchObject({code:"COMMAND_CONFLICT"});
   });
   it("rejects bytes that disagree with the client hash and cannot resurrect the upload", async () => {
     const f=fixture();
-    await f.service.append(context,{...input,offset:0,bytes:new Uint8Array([1,2,3,4])});
-    await expect(f.service.finalize(context,{...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"OBJECT_INVALID",message:"wrong_hash"});
+    await f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1,2,3,4])});
+    await expect(f.service.finalize(context, actor, {...input,commandId:randomUUID(),evidenceType:"site_photo"})).rejects.toMatchObject({code:"OBJECT_INVALID",message:"wrong_hash"});
     expect(f.row.state).toBe("rejected");
-    await expect(f.service.append(context,{...input,offset:0,bytes:new Uint8Array([1])})).rejects.toMatchObject({code:"CONFLICT"});
+    await expect(f.service.append(context, actor, {...input,offset:0,bytes:new Uint8Array([1])})).rejects.toMatchObject({code:"CONFLICT"});
   });
   it("validates narrow synthetic voice bytes without widening the ordinary upload boundary", () => {
     const bytes=Buffer.alloc(46); bytes.write("RIFF");bytes.writeUInt32LE(38,4);bytes.write("WAVEfmt ",8);
