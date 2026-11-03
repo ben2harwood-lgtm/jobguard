@@ -177,5 +177,13 @@
   "0512_simulation_money_trail_run.sql",
   "0514_withheld_payment_statement_source.sql",
   "0515_fee_compensation_gate_and_demo_settle.sql",
-  "0518_shadow_demo_guide.sql"
+  "0518_shadow_demo_guide.sql",
+  "0519_lp3_activation_acceptance.sql",
+  "0520_lp4_database_audit.sql",
+  "0521_lp5a_commands.sql",
+  "0522_lp5b_writers.sql",
+  "0525_commercial_integrity_v3_receipts.sql",
+  "0526_commercial_integrity_sources.sql",
+  "0548_server_plan_entitlements.sql",
+  "0549_contractor_feature_guards.sql"
 ]

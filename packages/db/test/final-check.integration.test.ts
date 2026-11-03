@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,type FinalCheckFixture} from "./final-check-fixture.js";
 import {FinalCheckRepository} from "../src/final-check-repository.js";
@@ -6,6 +7,7 @@ it("SV5-04 empty inventory records explicit zero-result; SV5-29 fresh connection
  const a=await seedFinalCheckJob(f);await a.lock();const worker=new FinalCheckRepository(f.shadow),m=await worker.begin(a.context,a.jobId);expect(m.sources).toEqual([]);
  const result=await worker.reconcile(a.context,a.jobId,m.id,[]) as {runId:string;zeroResult:boolean};expect(result.zeroResult).toBe(true);
  const view=await new FinalCheckRepository(f.runtime).read(a.context,a.jobId,a.digest);expect(view).toMatchObject({state:'completed',runId:result.runId,lockId:m.lockId,items:[]});
+ await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.result_available");
  expect((await worker.manifest(a.context,a.jobId,m.id)).result?.runId).toBe(result.runId);
 });
 it("SV5-06 locked baseline match stays excluded; mutable later work cannot substitute",async()=>{

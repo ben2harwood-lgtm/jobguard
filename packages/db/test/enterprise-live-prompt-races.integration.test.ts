@@ -22,8 +22,8 @@ describe("ENT-8A-P command races",()=>{
   expect(tx.outcome).toBe("commit");
   const keyIndex=tx.statements.findIndex(s=>s.sql.includes(",417)"));
   const liveIndex=tx.statements.findIndex(s=>s.sql.includes("app.require_watchdog_live"));
-  const readIndex=tx.statements.findIndex(s=>s.sql.includes("SELECT request_hash,status,result FROM app.command_receipt"));
-  const claimIndex=tx.statements.findIndex(s=>s.sql.includes("INSERT INTO app.command_receipt"));
+  const readIndex=tx.statements.findIndex(s=>s.sql.includes("SELECT 1 FROM app.command_receipt"));
+  const claimIndex=tx.statements.findIndex(s=>/(?:INSERT INTO app.command_receipt|SELECT app\.begin_command\()/.test(s.sql));
   expect(readIndex).toBeGreaterThan(-1); expect(keyIndex).toBeGreaterThan(readIndex);
   expect(liveIndex).toBeGreaterThan(keyIndex); expect(claimIndex).toBeGreaterThan(liveIndex);
   const authority=tx.statements.find(s=>s.sql.includes("pg_advisory_xact_lock_shared"))!.footprint.advisory;
@@ -34,7 +34,7 @@ describe("ENT-8A-P command races",()=>{
   expect([...evaluated.footprint.rows].some(([row,strength])=>row.startsWith("app.work_order_current#")&&strength>=2)).toBe(true);
   const replay=await observed.record(()=>watched.completeVisit(f.ctx,actor,input));
   expect(replay.value).toEqual(first.value);
-  const replayTx=replay.transactions.find(t=>t.statements.some(s=>s.sql.includes("SELECT request_hash,status,result FROM app.command_receipt")))!;
+  const replayTx=replay.transactions.find(t=>t.statements.some(s=>/(?:SELECT request_hash,status,result FROM app.command_receipt|SELECT app\.begin_command\()/.test(s.sql)))!;
   expect(replayTx.outcome).toBe("commit");
   const held=replayTx.statements.find(s=>s.sql.includes("pg_advisory_xact_lock_shared"))!.footprint.advisory;
   expect(held.size).toBe(1);

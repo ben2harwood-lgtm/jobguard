@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "./money.js";
-import { EXPOSURE_CURVE_ENABLED, ExposureCurveError, EXPOSURE_SOURCE, evaluateExposureCurve, exposureScheduleFixture } from "./exposure-curve.js";
+import { EXPOSURE_CURVE_ENABLED, ExposureCurveError, EXPOSURE_SOURCE, evaluateExposureCurve, exposureScheduleFixture, exposureScheduleCommandV1 } from "./exposure-curve.js";
 
 describe("MON-7b synthetic stage exposure", () => {
   it("shows exact independent cumulative exposure, with a source and both dates for every figure", () => {
@@ -58,10 +58,12 @@ describe("MON-7b synthetic stage exposure", () => {
       { ...fixture, stages: [...fixture.stages].reverse() },
     ]) expect(() => evaluateExposureCurve(bad)).toThrow(ExposureCurveError);
   });
-  it("is dark, deterministic and read-only, with no command, fee, receipt or meter output", () => {
+  it("is practice-only, deterministic and read-only, with no command, fee, receipt or meter output", () => {
     const input = exposureScheduleFixture(), before = JSON.stringify(input);
     const result = evaluateExposureCurve(input);
-    expect(EXPOSURE_CURVE_ENABLED).toBe(false);
+    expect(EXPOSURE_CURVE_ENABLED("synthetic_demo")).toBe(true);
+    for (const environment of [undefined, null, "production", "production_billing", "pilot_no_charge", "provider_sandbox", "synthetic"])
+      expect(EXPOSURE_CURVE_ENABLED(environment)).toBe(false);
     expect(result).toEqual(evaluateExposureCurve(input));
     expect(JSON.stringify(input)).toBe(before);
     expect(Object.keys(result).sort()).toEqual(["version", "environment", "referenceOnly", "policyVersion", "maximumAgeMinutes", "evaluatedAt", "points"].sort());
@@ -69,4 +71,15 @@ describe("MON-7b synthetic stage exposure", () => {
     input.stages[0]!.source!.observedAt = null;
     expect(result.points[0]!.source!.observedAt).not.toBeNull();
   });
+});
+
+it("accepts only source-free, job-independent forecast inputs with ordered unique stages", () => {
+  const input = { version: "exposure-schedule-command.v1", commandId: "11111111-1111-4111-8111-111111111111", expectedRevision: 0,
+    stages: exposureScheduleFixture().stages.map(({ source: _source, ...stage }) => stage) };
+  expect(exposureScheduleCommandV1.safeParse(input).success).toBe(true);
+  for (const forged of [
+    { ...input, tenantId: "forged" }, { ...input, jobId: "forged" }, { ...input, environment: "production" },
+    { ...input, expectedRevision: -1 }, { ...input, stages: exposureScheduleFixture().stages },
+    { ...input, stages: [input.stages[0], input.stages[0]] }, { ...input, stages: [...input.stages].reverse() },
+  ]) expect(exposureScheduleCommandV1.safeParse(forged).success).toBe(false);
 });
