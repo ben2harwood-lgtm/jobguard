@@ -71,7 +71,7 @@ it.each([null, undefined, {}, { state: "acting" }, { state: "owner", switch: nul
  const p = { query: localQuery, connect: vi.fn(async () => ({ query: localQuery, release: vi.fn() })) } as unknown as Pool;
  const localApp = new PracticeWorkerSwitchApplication(p);
  await expect(localApp.read(principal)).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
- expect(localQuery).toHaveBeenCalledWith("ROLLBACK"); expect(localQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO app.audit_event"))).toBe(false);
+ expect(localQuery).toHaveBeenCalledWith("ROLLBACK"); expect(localQuery.mock.calls.some(([sql]) => (sql.includes("INSERT INTO app.audit_event") || sql.includes("FROM app.append_audit(")))).toBe(false);
 });
 it("[PW27] revoking switch-on execute yields unavailable after authentication with no audit write", async () => {
  const actorRow = { tenant_id: randomUUID(), membership_id: randomUUID(), identity_user_id: randomUUID() };

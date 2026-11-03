@@ -1,6 +1,6 @@
 # M4-9 contractor production safety preparation (RED, dark)
 
-Migration `0589_enterprise_fee_production_safety.sql` adds a separate production command that always refuses, before any
+Migration `0606_enterprise_fee_production_safety.sql` adds a separate production command that always refuses, before any
 business read or write. No request approval, environment variable or GUC activates
 it. Synthetic routines keep their existing environment, finance-session, exact
 statement authority and stale-fact checks. No D16 or G4-C approval is created.
@@ -29,3 +29,17 @@ Collection/refund execution and tax documents belong to later pieces.
 Local verification and the explicit handoff state are in the router commit-message
 file. PostgreSQL suites require CI in this sandbox. Required review remains one
 fresh Claude RED review against the exact head.
+
+Catch-up to main (3 November 2026): preserve both the dark production schema
+and main's simulated-invoice schema. Renumber only this branch's migration stem
+from `0589_enterprise_fee_production_safety` to
+`0606_enterprise_fee_production_safety`, including its proof and test lookup.
+No existing SQL routine is replaced; main's LP-4 audit sealing, LP-3/LP-5 command
+authority and MON-8 entitlements are retained. The new production routine always
+raises before any business operation and needs no command registration.
+
+Local checks: installed Vitest 4.1.12, one worker, five named unit files in
+two runs (93 tests passed); installed TypeScript 5.8.3 database package
+`--noEmit` passed; PL/pgSQL CASE-condition lint passed (221 migrations).
+The pnpm wrapper stalled before running checks; the same installed executables
+were invoked directly. Database and browser suites were not run in this sandbox.

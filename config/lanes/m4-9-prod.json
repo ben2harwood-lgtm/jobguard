@@ -7,12 +7,12 @@
       ],
       "note": "M4-9 RED dark contractor safety preparation; production gate remains closed. Full production policy/source binding outstanding.",
       "allow": [
-        "packages/db/migrations/0589_enterprise_fee_production_safety.sql",
-        "packages/db/migration-notes/0589_enterprise_fee_production_safety.md",
-        "packages/db/src/enterprise-fee-repository.ts",
+        "packages/db/migration-notes/0606_enterprise_fee_production_safety.md",
+        "packages/db/migrations/0606_enterprise_fee_production_safety.sql",
         "packages/db/src/enterprise-fee-repository.test.ts",
+        "packages/db/src/enterprise-fee-repository.ts",
         "packages/db/test/enterprise-fee-production.integration.test.ts",
-        "packages/db/test/migration-proofs/0589_enterprise_fee_production_safety.proof.json"
+        "packages/db/test/migration-proofs/0606_enterprise_fee_production_safety.proof.json"
       ]
     }
   }

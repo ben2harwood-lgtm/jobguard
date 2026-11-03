@@ -7,7 +7,7 @@ import { applyMigration, counts, startBeforeMigration } from "./contractor-pract
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 
 // PostgreSQL CI only. Every source, agreement, person and amount is fictional. No policy is approved here.
-const migration = "0589_enterprise_fee_production_safety.sql";
+const migration = "0606_enterprise_fee_production_safety.sql";
 let c: Awaited<ReturnType<typeof startBeforeMigration>>;
 beforeAll(async () => { c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); });
