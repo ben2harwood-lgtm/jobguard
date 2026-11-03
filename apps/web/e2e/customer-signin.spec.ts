@@ -10,7 +10,7 @@ async function seedJob(admin: Pool, tenant: string) {
  const job = randomUUID(), customer = randomUUID(), cr = randomUUID(), site = randomUUID(), sr = randomUUID(), binding = randomUUID();
  const db = await admin.connect();
  try {
-  await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+  await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role='replica'"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
   await db.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional customer job','live')", [tenant, job]);
   await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[tenant,job]);
   await db.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenant, customer]);

@@ -35,7 +35,6 @@ CREATE FUNCTION identity.customer_portal_quote(t uuid,j uuid,c uuid,digest text,
 DECLARE job app.job; d app.quote_document_version; s app.customer_portal_session; g app.customer_portal_grant;
  prior app.customer_quote_approval; aid uuid:=gen_random_uuid(); eid uuid:=gen_random_uuid(); previous_id uuid; previous_seq integer;
  result jsonb; target jsonb; ts timestamptz;
- seq bigint; previous text; audit_ts timestamptz; payload jsonb; ph text; eh text; actor text;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR cmd IS NULL OR jsonb_typeof(cmd)<>'object'
   OR cmd->>'jobId' IS DISTINCT FROM j::text OR cmd->>'version' IS NULL
@@ -112,16 +111,10 @@ BEGIN
  result:=jsonb_build_object('version','customer-quote-accepted.v1','acceptanceId',aid,'jobId',j,'target',target,'method','customer_authenticated');
  INSERT INTO app.customer_quote_approval(tenant_id,command_id,job_id,acceptance_id,session_id,customer_id,party_binding_id,command,result)
  VALUES(t,(cmd->>'commandId')::uuid,j,aid,s.id,c,g.party_binding_id,cmd,result);
- -- Canonical append copied from 0387 customer_portal_audit; customer session is the actor,
- -- and only immutable identifiers/hash enter the commercial audit payload. Final lock.
- SELECT sequence,event_hash INTO seq,previous FROM app.lock_audit_head();
- seq:=seq+1; audit_ts:=date_trunc('milliseconds',clock_timestamp()); actor:='customer-session:'||s.id::text;
- payload:=jsonb_build_object('references',jsonb_build_object('acceptanceId',aid::text,'acceptanceEventId',eid::text),'hashes',jsonb_build_object('documentHash',d.content_hash),'classifications',jsonb_build_object('action','commercial'));
- ph:=app.final_lock_hash(payload);
- eh:=encode(sha256(convert_to(concat_ws(chr(31),'audit.v1',t::text,seq::text,actor,'quote.acceptance.customer_authenticated','quote_document',d.id::text,to_char(audit_ts AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),ph,coalesce(previous,'')),'UTF8')),'hex');
- INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
- VALUES(gen_random_uuid(),t,seq,'audit.v1',actor,'quote.acceptance.customer_authenticated','quote_document',d.id::text,audit_ts,payload,ph,previous,eh);
- PERFORM app.advance_audit_head(seq,eh);
+ -- Customer session is the actor; only immutable identifiers/hash enter the sealed audit payload.
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','customer-session:'||s.id::text,
+  'eventType','quote.acceptance.customer_authenticated','subjectType','quote_document','subjectRef',d.id::text,
+  'payload',jsonb_build_object('references',jsonb_build_object('acceptanceId',aid::text,'acceptanceEventId',eid::text),'hashes',jsonb_build_object('documentHash',d.content_hash),'classifications',jsonb_build_object('action','commercial')))),'checked_operation');
  RETURN result;
 EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
  RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501';

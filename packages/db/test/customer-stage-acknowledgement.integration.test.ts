@@ -40,10 +40,10 @@ async function completion(w:World,previous:string|null=null) {
  const scope=previous?(await db.query("SELECT scope_item_id FROM app.stage_completion WHERE tenant_id=$1 AND id=$2",[w.t,previous])).rows[0].scope_item_id as string:randomUUID();
  const e=randomUUID(),l=randomUUID(),s=randomUUID(),v=randomUUID();
  if(!previous)await db.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",[w.t,scope,w.j]);
- await db.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
- VALUES($1,$2,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp())`,[w.t,e,w.j,scope,"a".repeat(64),v]);
- await db.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_verified_at)
- VALUES($1,$2,$2,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp())`,[w.t,e,w.j,scope,v,"a".repeat(64)]);
+ await db.query(`INSERT INTO app.evidence_upload(tenant_id,id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
+ VALUES($1,$2::uuid,$3,$4,$2::text,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,clock_timestamp(),clock_timestamp())`,[w.t,e,w.j,scope,"a".repeat(64),v]);
+ await db.query(`INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+ VALUES($1,$2::uuid,$2::uuid,$3,$4,'original','pre_cover_photo',$2::text,$5,$6,80,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[w.t,e,w.j,scope,v,"a".repeat(64)]);
  await db.query("INSERT INTO app.evidence_link(tenant_id,id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')",[w.t,l,e,w.j,scope]);
  await db.query("INSERT INTO app.stage_completion(tenant_id,id,job_id,scope_item_id,stage,evidence_link_id,command_id,supersedes_completion_id) VALUES($1,$2,$3,$4,'Fictional pre-cover stage',$5,$6,$7)",[w.t,s,w.j,scope,l,randomUUID(),previous]);
  return {s,e,scope};
