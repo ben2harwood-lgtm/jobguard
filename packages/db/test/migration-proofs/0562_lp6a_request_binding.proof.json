@@ -1,5 +1,5 @@
 {
-  "migration": "0564_lp6a_request_binding.sql",
+  "migration": "0562_lp6a_request_binding.sql",
   "lp0": [
     {
       "section": "groups",
@@ -27,7 +27,7 @@
         },
         "downstream": "Runtime can bind only a real session membership or a database-confined practice principal, then read the current transaction actor and tenant. No business writes or existing authority cutover. The private migration-owned session lock helper has no runtime execution grant.",
         "sources": [
-          "packages/db/migrations/0564_lp6a_request_binding.sql",
+          "packages/db/migrations/0562_lp6a_request_binding.sql",
           "docs/contracts/lp-command-binding-design-v1.md"
         ],
         "tests": [
@@ -205,7 +205,7 @@
           "LP-12": "Review private lookup helper and existing migration owner custody."
         },
         "sources": [
-          "packages/db/migrations/0564_lp6a_request_binding.sql",
+          "packages/db/migrations/0562_lp6a_request_binding.sql",
           "docs/contracts/lp-command-binding-design-v1.md"
         ],
         "tests": [

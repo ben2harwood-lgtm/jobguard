@@ -161,7 +161,7 @@ it("expires an already-bound request and refuses a bind waiting behind revocatio
 });
 
 it("rejects unsafe administrative provisioning before installing any binding object",async()=>{
-  const sql=await readFile(new URL("../migrations/0564_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0562_lp6a_request_binding.sql",import.meta.url),"utf8");
   const admin=await db.owner.connect();
   try{
     for(const defect of ["ALTER ROLE jobguard_binding_owner LOGIN","GRANT jobguard_binding_owner TO jobguard_runtime",
@@ -176,7 +176,7 @@ it("rejects unsafe administrative provisioning before installing any binding obj
 });
 
 it("accepts only the exact temporary migration membership while executing as that role",async()=>{
-  const sql=await readFile(new URL("../migrations/0564_lp6a_request_binding.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0562_lp6a_request_binding.sql",import.meta.url),"utf8");
   const preflight=sql.slice(0,sql.indexOf("-- Temporary schema CREATE"));
   const admin=await db.owner.connect();
   try{

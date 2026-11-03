@@ -564,3 +564,39 @@ snapshot consumers. Required monorepo checks and one independent RED review
 must pass against the exact final head before merge. Migration 0564 is reserved
 for this preparation and must be reconciled with landing order by the router.
 No independent implementation review or database pass is claimed locally.
+
+
+### LP-6a catch-up after batch 7 / PR #543 (3 November 2026)
+
+Reconciled PR #544 with incoming main `a18cbfac9696fa987e607ad35064c00d4be64d2d`,
+whose last migration is `0561_subscription_mandate_db_gate.sql`. Resolved
+`later-empty-tables.ts` as the exact union of both merge sides (14 tables).
+The entitlement lifecycle upgrade test already matches main byte-for-byte.
+Renamed the migration and proof to `0562_lp6a_request_binding`, replacing only
+the full filename stem in lookups and references. This supersedes the earlier
+migration reservation above; the SQL bytes, behavior and test expectations are
+unchanged. The lane now lists exactly all 21 changed paths outside `config/lanes/`,
+including the renamed SQL/proof and excluding the unchanged entitlement test.
+
+Local evidence (Node 24.17.0, TypeScript 5.8.3, Vitest 4.1.12):
+
+- From `packages/db`, `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`: passed.
+- From `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/lp6a-binding.test.ts test/lp5c-revoke.test.ts test/migration-proof-loader.test.ts`: 81 passed across three files.
+- From `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=1 test/demo-bootstrap.integration.test.ts -t 'bootstrap SQL trace'`: seven passed; three database tests unselected.
+- Read-only assertions proved the exact table union, byte-identical SQL, unchanged
+  entitlement test, and exact lane coverage through the existing lane loader.
+- `git diff --check`: passed; working files contain no merge conflict markers.
+
+The initial pnpm invocations stalled before starting checks and were interrupted.
+The direct installed runners above completed. Initial unit imports found stale
+`packages/core/dist` lacking batch 7 subscription exports; rebuilding with
+`node node_modules/typescript/bin/tsc -p tsconfig.json` from `packages/core` passed
+and the three unit suites then passed. No source change was needed for this.
+The existing LATER / SIMPLICITY entry above remains deferred; this catch-up adds
+no abstraction or behavioral change.
+
+CI must prove the full required checks, real PostgreSQL migration/upgrade,
+catalogue/privilege proofs, restore and binding boundaries. No local database or
+browser suite was run. RED independent review must bind the final exact head.
+The router must stage the resolved union and rename and complete the pending
+merge; this sandbox made no git writes.

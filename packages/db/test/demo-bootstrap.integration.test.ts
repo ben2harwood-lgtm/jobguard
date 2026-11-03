@@ -201,7 +201,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     const prerequisite = await admin.connect();
     try {
       expect((await prerequisite.query("SELECT rolname FROM pg_roles WHERE rolname IN ('jobguard_audit_writer','jobguard_command_writer','jobguard_binding_owner')")).rows).toEqual([]);
-      for (const [file, role] of [["0520_lp4_database_audit.sql", "jobguard_audit_writer"], ["0521_lp5a_commands.sql", "jobguard_command_writer"], ["0564_lp6a_request_binding.sql", "jobguard_binding_owner"]]) {
+      for (const [file, role] of [["0520_lp4_database_audit.sql", "jobguard_audit_writer"], ["0521_lp5a_commands.sql", "jobguard_command_writer"], ["0562_lp6a_request_binding.sql", "jobguard_binding_owner"]]) {
         const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
         await expect(prerequisite.query(sql)).rejects.toMatchObject({ code: "42704", message: `${role} is missing; run administrative ensureRoles before migrations` });
         await prerequisite.query("ROLLBACK");
