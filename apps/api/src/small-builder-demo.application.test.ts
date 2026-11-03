@@ -7,7 +7,7 @@ import {
   smallBuilderDemoReadReportV1,
 } from "./small-builder-demo.contracts.js";
 
-import { SmallBuilderDemoApplication } from "./small-builder-demo.application.js";
+import { SmallBuilderDemoApplication,SmallBuilderTrialDemoApplication } from "./small-builder-demo.application.js";
 // Request-boundary tests; persisted lifecycle adversaries are in the PostgreSQL suite.
 const id = "d1500000-0000-4000-8000-000000000001";
 const create = { contractVersion: "small-builder-demo.create.v1", commandId: id, scenario: "core-1000" };
@@ -103,13 +103,19 @@ describe("DEMO-I company authority",()=>{
   await f.app.execute("first-login","read",id,{});
   const original=f.authority.resolve.mock.results[0]!;
   const {credentials}=await original.value;
-  f.authority.resolve.mockResolvedValue({credentials,digest:"b".repeat(64)});
-  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:credentials.csrfToken});
+  const freshCredentials={...credentials,sessionToken:"t".repeat(32),csrfToken:"d".repeat(24)};
+  f.authority.resolve.mockResolvedValue({credentials:freshCredentials,digest:"b".repeat(64)});
+  f.authority.provider.authenticate.mockResolvedValue({identityUserId:id,sessionId:"d1500000-0000-4000-8000-000000000002",csrfToken:freshCredentials.csrfToken});
   await f.app.execute("fresh-login","read",id,{});
   expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
   expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(2);
+  expect(f.authority.provider.authenticate).toHaveBeenNthCalledWith(1,credentials.sessionToken);
+  expect(f.authority.provider.authenticate).toHaveBeenNthCalledWith(2,freshCredentials.sessionToken);
   expect(f.repository.execute).toHaveBeenNthCalledWith(1,expect.objectContaining({tenantId:id}),"a".repeat(64),"read",id,{});
   expect(f.repository.execute).toHaveBeenNthCalledWith(2,expect.objectContaining({tenantId:id}),"b".repeat(64),"read",id,{});
+  f.authority.resolve.mockResolvedValue({credentials:{...freshCredentials,csrfToken:credentials.csrfToken},digest:"b".repeat(64)});
+  await expect(f.app.execute("stale-csrf","read",id,{})).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(f.repository.execute).toHaveBeenCalledTimes(2);
  });
  it("re-authenticates resume, reset and report reads; a revoked session cannot replay",async()=>{
   const f=lifecycleFixture();
@@ -126,5 +132,25 @@ describe("DEMO-I company authority",()=>{
   await expect(f.app.execute("practice","read",id)).rejects.toThrow("DEMO_FORBIDDEN");expect(f.repository.execute).not.toHaveBeenCalled();
   const g=lifecycleFixture();g.authority.provider.findMembership.mockResolvedValue(null as never);
   await expect(g.app.execute("session","read",id)).rejects.toThrow("DEMO_FORBIDDEN");expect(g.repository.execute).not.toHaveBeenCalled();
+ });
+});
+
+describe("DEMO-J5 company authority before trial source reads and replay",()=>{
+ it("requires current company membership on every request, including a reused command",async()=>{
+  const f=lifecycleFixture(),app=new SmallBuilderTrialDemoApplication(f.authority as never,f.repository);
+  const command={version:"trial-demo-command.v1",action:"snapshot",runId:id,commandId:id};
+  await app.execute("current",command);await app.execute("current",command);
+  expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
+  expect(f.repository.execute).toHaveBeenCalledWith(expect.objectContaining({tenantId:id}),"a".repeat(64),command);
+  f.authority.provider.authenticate.mockResolvedValue(null as never);
+  await expect(app.execute("revoked",command)).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(f.repository.execute).toHaveBeenCalledTimes(2);
+ });
+ it("refuses production and practice credentials before persistence",async()=>{
+  const f=lifecycleFixture("production"),app=new SmallBuilderTrialDemoApplication(f.authority as never,f.repository);
+  await expect(app.execute("session",{})).rejects.toThrow("DEMO_SYNTHETIC_ONLY");expect(f.repository.execute).not.toHaveBeenCalled();
+  const g=lifecycleFixture();g.authority.resolve.mockRejectedValue(new Error("practice cookie"));
+  await expect(new SmallBuilderTrialDemoApplication(g.authority as never,g.repository).execute("practice",{})).rejects.toThrow("DEMO_FORBIDDEN");
+  expect(g.repository.execute).not.toHaveBeenCalled();
  });
 });

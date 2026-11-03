@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-8-keys": {
+      "branches": ["codex/sandbox/m5-8-keys"],
+      "note": "M5-8 RED dark synthetic envelope encryption and shared-RLS routing seam; no migration or live integration.",
+      "allow": [
+        "packages/storage/src/tenant-envelope.ts",
+        "packages/storage/src/tenant-kms-fake.ts",
+        "packages/storage/src/tenant-envelope.test.ts"
+      ]
+    }
+  }
+}

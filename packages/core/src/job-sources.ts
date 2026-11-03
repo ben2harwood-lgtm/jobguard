@@ -25,3 +25,9 @@ export type CustomerMessageRead=z.infer<typeof customerMessageReadV1>;
 export class JobSourceError extends Error {
  constructor(readonly code:"INVALID_JOB_SOURCE_INPUT"|"JOB_SOURCE_FORBIDDEN"|"JOB_SOURCE_UNAVAILABLE"|"SOURCE_NOT_FINALIZED"|"SYNTHETIC_MODE_REQUIRED"){super(code)}
 }
+
+/** Evidence-only historical import: receive time, object version and hash are server-owned. */
+export const lateSourceImportV1 = z.object({version:z.literal("late-source-import.v1"),commandId:z.guid(),
+ fictionalCustomer:fictionalCustomerV1,text:jobSourceTextV1,statedSentAt:instantV1}).strict().readonly();
+export const lateSourceReceiptV1 = z.object({version:z.literal("late-source-receipt.v1"),jobId:z.guid(),
+ record:customerMessageV1,statedSentAt:instantV1,evidenceAfterLock:z.literal(true),environment:z.literal("synthetic_demo"),realExternalActions:z.literal(0)}).strict();

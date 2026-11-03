@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,7 +18,7 @@ const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(
 const query = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await query(p)).revision, ...fields });
 async function setup(type = "insurer") {
-  const session = randomUUID(), p = await contractors.startPractice(session), v = await query(p);
+  const session = randomUUID(), p = await contractors.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
   const job = (await new JobRepository(runtime).create(ctx(p), ["job:update"], { title: "Fictional contractor job" })).id as string;
   const jp = new JobPartiesRepository(runtime);
   const customer = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_customer", customer: { version: "customer.v1", name: "Fictional Client", type, email: "client@example.invalid" } }));
@@ -51,7 +52,9 @@ describe("CH-3b PostgreSQL guarantees", () => {
       await assertContractorPartiesRequired(() => withTenant(runtime, ctx(f.p), db => rawBind(db, f.p, input)));
       const counts = await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT (SELECT count(*) FROM app.contractor_party_binding WHERE job_id=$1)::int bindings,(SELECT count(*) FROM app.command_receipt WHERE command_id=$2)::int receipts,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audit,(SELECT count(*) FROM app.action_outbox)::int outbox", [f.job, f.input.commandId]));
       // create_customer/site have their own audit; refusal must leave the exact prior projection unchanged.
-      expect(counts.rows[0]).toMatchObject({ bindings: 0, receipts: 0, outbox: 0, audit: 2 });
+      expect(counts.rows[0]).toMatchObject({ bindings: 0, receipts: 0, outbox: 0, audit: 4 });
+      const auditKinds=(await withTenant(runtime,ctx(f.p),db=>db.$client.query("SELECT event_type,count(*)::int n FROM app.audit_event WHERE subject_ref=$1::text GROUP BY event_type ORDER BY event_type",[f.job]))).rows;
+      expect(auditKinds).toEqual([{event_type:"command.succeeded",n:2},{event_type:"job.parties.create_customer",n:1},{event_type:"job.parties.create_site",n:1}]);
     }
     await expect(parties.bind(f.p, f.input)).resolves.toMatchObject({ realExternalActions: 0 });
   });

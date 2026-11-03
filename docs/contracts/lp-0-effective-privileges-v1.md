@@ -466,7 +466,7 @@ The replay branch of the thirteen-argument adopt_in_flight_job (0095_job_parties
 
 Remove the LP-0 guard, inventory and design note through the ordinary reviewed code process. No migration, grant, role, routine, policy or trigger is installed, so there is no data rollback.
 
-## LP-5c cutover (0508; stacked after 0496)
+## LP-5c cutover (0557; after 0522)
 
 Direct command creation and completion ACLs are withdrawn, including the separate receipt column UPDATE grants. No new runtime grants or routine changes. Land after LP-5b and rerun the complete PostgreSQL suite and independent RED review at the exact head. Shared overlaps with LP-5a/b are this LP-0 inventory and its exception assertions; serialize their landing. Forward fixes repair checked writers rather than restoring the direct grants.
 

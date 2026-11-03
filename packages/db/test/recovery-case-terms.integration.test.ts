@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
@@ -24,11 +25,22 @@ async function newCase(type="withheld_customer_payment",target=job){
  if(type==="withheld_customer_payment"&&target===job)return (await new RecoveryCaseRepository(runtime).command(context,job,{version:"recovery-case-command.v1",action:"open",expectedRevision:0,commandId:randomUUID(),caseType:type,claimedNetPence:32000,counterparty:"Fictional customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoice]},actor)).id;
  const id=randomUUID();await admin.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP',$5,0,true,$4::varchar,'Fictional party',CASE WHEN $4::varchar='merchant_overcharge' THEN 'supplier_cost' ELSE 'builder_customer' END,CASE WHEN $4::varchar='merchant_overcharge' THEN 'supplier_documents' ELSE 'customer_invoice' END,$6)`,[id,T,target,type,type==="prevention"?"prevented":"identified",JSON.stringify(type==="merchant_overcharge"?supplierRefs:[target===unbound?unboundInvoice:invoice])]);
  await admin.query(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)`,[randomUUID(),T,target,id,hash(id)]);
- await admin.query(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)`,[randomUUID(),T,target,id,type==="prevention"?"prevent":"opened",type==="prevention"?"prevented":"identified",randomUUID(),hash(id)]);return id;
+ await withTenant(admin,context,db=>db.$client.query(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)`,[randomUUID(),T,target,id,type==="prevention"?"prevent":"opened",type==="prevention"?"prevented":"identified",randomUUID(),hash(id)]));return id;
 }
 async function member(role:string,state="active"){
+ // Create a historically valid operative, then restore the tenant's builder track.
+ // Its later recovery refusal must be a role check, not failed fixture admission.
+ const prior=role==="operative" ? (await admin.query("SELECT commercial_track FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[T])).rows[0]?.commercial_track ?? "small_builder" : null;
+ const assign=async(track:string)=>withTenant(admin,context,async db=>{
+  const revision=(await db.$client.query("SELECT coalesce(max(revision),0) revision FROM app.commercial_track_assignment WHERE tenant_id=$1",[T])).rows[0].revision;
+  const assignment=randomUUID();
+  await db.$client.query("SELECT app.assign_commercial_track($1,$2,$3,$4,$5,'operations:terms-fixture')",[T,assignment,track,`synthetic-agreement:${T}`,revision]);
+  const { appendAuditBatch } = await import("../src/index.js");
+  await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:terms-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:T,payload:{references:{environment:"synthetic_demo"}}}]);
+ });
+ if(prior!==null) { await assign("contractor"); await seedActiveContractorAgreement(admin,T); }
  const id=randomUUID(),identity=randomUUID();await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[identity]);
- await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]);return {membershipId:id,identityUserId:identity};
+ await withTenant(admin,context,db=>db.$client.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at) SELECT $1,tenant_id,account_id,$2,$3,CASE WHEN $4='revoked' THEN clock_timestamp() END,CASE WHEN $4='expired' THEN clock_timestamp()-interval '1 second' END FROM app.membership WHERE tenant_id=$5 AND id=$6`,[id,identity,role,state,T,M]));if(prior!==null)await assign(prior);return {membershipId:id,identityUserId:identity};
 }
 async function handMade(db:PoolClient,caseId:string,memberId:string,over:Record<string,unknown>={}){
  const c=randomUUID(),d=randomUUID(),r=randomUUID(),a=randomUUID(),action=over.action??"recovery.terms.approve";

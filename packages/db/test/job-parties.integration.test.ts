@@ -200,6 +200,9 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);expect(results.find(r=>r.status==="rejected")).toMatchObject({reason:{code:"REVISION_CONFLICT"}});
     const winner=results[0]?.status==="fulfilled"?a:b;
     const first=await repository.command(context,member,job,winner);expect(await repository.command(context,member,job,winner)).toEqual(first);
+    const terminal = (await admin.query("SELECT event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND payload->'references'->>'commandId'=$3 ORDER BY event_type", [tenant, job, winner.commandId])).rows;
+    expect(terminal.map(row => row.event_type)).toEqual(["command.succeeded", "job.parties.bind"]);
+    expect(terminal[0]!.payload.references).toMatchObject({ commandId: winner.commandId, auditTrust: "checked_operation" });
     await expect(repository.command(context,member,job,{...winner,expectedJobRevision:1})).rejects.toThrow("COMMAND_CONFLICT");
     expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(1);
     const binding=(await repository.view(context,member,job)).current!;
@@ -231,7 +234,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties,reason:"Correct fictional payer"}));
     expect((await admin.query(`SELECT snapshot FROM app.job_party_snapshot WHERE tenant_id=$1 AND binding_id=$2`,[tenant,before.bindingId])).rows[0].snapshot).toEqual(before);
     const audit=await admin.query(`SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'job.parties.%'`,[tenant]);
-    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
+    for(const {payload} of audit.rows){expect(Object.keys(payload).sort()).toEqual(["classifications","hashes","references"]);expect(Object.keys(payload.references).sort()).toEqual(["auditTrust","commandId","identityId"]);expect(JSON.stringify(payload)).not.toMatch(/Fictional|Street|example\.invalid|00000000000|Correct fictional/u);}
   });
   it("uses composite foreign keys to reject cross-tenant parties and hides foreign identities",async()=>{
     const job=await createJob(),{parties,c}=await saveParties(job);
@@ -674,10 +677,11 @@ describe("CH-3a round 13 generated practice entry", () => {
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
     return { digest, context: testTenantContext(DEMO_TENANT_ID) };
   }
-  it("issues the unchanged three home scenarios with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
+  it("issues the three home scenarios and saved v1 sample with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();
     const jobs = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs;
     expect(jobs.map(({ title, status, revision }) => ({ title, status, revision })).sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+      { title: "Earlier proposed pricing (v1)", status: "draft", revision: 0 },
       { title: "Kitchen extension", status: "live", revision: 0 },
       { title: "Loft conversion", status: "quoting", revision: 0 },
       { title: "Practice kitchen", status: "quoting", revision: 0 },
@@ -712,13 +716,26 @@ describe("CH-3a round 13 generated practice entry", () => {
   it("refuses missing parties despite forged scenario, session and bypass settings on direct runtime INSERT and UPDATE", async () => {
     const owner = await session(), id = randomUUID();
     const quote = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs.find(job => job.status === "quoting")!;
+    // 0356's INVOKER permit guard runs before job_parties_live_guard on INSERT.
+    // Runtime cannot DELETE its private permit table, so that structural refusal
+    // necessarily precedes JOB_PARTIES_REQUIRED; require the exact door/error.
+    const guardOrder = (await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='app.job'::regclass
+      AND tgname IN ('imported_job_command_only','job_parties_live_guard') ORDER BY tgname`)).rows;
+    expect(guardOrder).toEqual([{ tgname: "imported_job_command_only" }, { tgname: "job_parties_live_guard" }]);
+    expect((await admin.query(`SELECT prosecdef,has_table_privilege('jobguard_runtime','app.lp_job_insert_permit','DELETE') can_delete
+      FROM pg_proc WHERE oid='app.guard_imported_job()'::regprocedure`)).rows).toEqual([{ prosecdef: false, can_delete: false }]);
     for (const insert of [true, false]) {
       await expect(withTenant(runtime, owner.context, async db => {
         await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
         if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
         else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
-      })).rejects.toMatchObject(insert ? { code: "22023", message: "JOB_PARTIES_REQUIRED" } : { code: "42501" });
+      })).rejects.toMatchObject({ code: "42501", message: insert ? "permission denied for table lp_job_insert_permit" : "permission denied for table job" });
     }
+    // Keep the exact business refusal through the allowed runtime entrypoint too.
+    await expect(withTenant(runtime, owner.context, async db => {
+      await db.$client.query("SELECT set_config('app.skip_job_parties','true',true)");
+      await db.$client.query("SELECT app.require_current_job_parties($1,$2)", [DEMO_TENANT_ID, quote.id]);
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     // Runtime has no direct status UPDATE grant; the allowed migration-owner
     // path must independently reject the same attempted unbound promotion.
     await expect(withTenant(admin, owner.context, async db => {
@@ -779,7 +796,7 @@ describe("CH-3a round 13 generated practice entry", () => {
     const before = await counts();
     await expect(runtime.query("SELECT app.issue_practice_session($1)", [owner.digest])).rejects.toMatchObject({ code: "23505" });
     await expect(runtime.query("SELECT app.issue_practice_session($1)", ["forged"])).rejects.toMatchObject({ code: "42501" });
-    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "23502" });
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "42501", message: "UNAUTHENTICATED" });
     try {
       await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
       await expect(runtime.query("SELECT app.issue_practice_session($1)", [createHash("sha256").update(randomUUID()).digest("hex")])).rejects.toMatchObject({ code: "42501" });

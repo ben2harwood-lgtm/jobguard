@@ -1,0 +1,6 @@
+{
+  "migration": "0527_payment_fee_collect_review.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
