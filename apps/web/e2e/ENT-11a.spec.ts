@@ -128,6 +128,8 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(cl.page.getByTestId("client-amount")).toHaveText(pounds(rate * 6));
   await expect(cl.page.getByTestId("client-description")).toHaveText(description);
   await expect(cl.page.getByTestId("client-company-approvals")).toContainText("supervisor");
+  await expect(cl.page.getByTestId("client-work-timing")).toContainText("no linked visit");
+  await expect(cl.page.getByTestId("client-work-timing")).toContainText("has not been derived");
   await expect(cl.page.getByTestId("actual-actor")).toContainText(ownerMember);
   await cl.page.getByRole("button", { name: "Approve this extra" }).click();
   await expect(cl.page.getByTestId("client-decided")).toContainText("approved");

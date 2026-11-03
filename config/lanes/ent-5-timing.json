@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-5-timing": {
+      "branches": [
+        "codex/sandbox/ent-5-timing"
+      ],
+      "note": "RED: visit-derived client approval timing; proceed contract and other held items stay open.",
+      "allow": [
+        "packages/db/src/extra-approval-chain-repository.ts",
+        "packages/db/src/extra-approval-timing.ts",
+        "packages/db/test/extra-approval-timing.test.ts",
+        "packages/db/test/extra-approval-timing.integration.test.ts",
+        "apps/web/app/extra-approval/[jobId]/[requestId]/client-approval.tsx",
+        "apps/web/e2e/ENT-11a.spec.ts",
+        "docs/contracts/extra-approval-chain-v1.md",
+        "docs/contracts/extra-approval-v1.md",
+        "apps/web/app/extra-approval/[jobId]/[requestId]/client-approval.test.tsx"
+      ]
+    }
+  }
+}
