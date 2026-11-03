@@ -38,7 +38,7 @@ export async function jobDoorsDatabase(practice = false, stopBefore?: string) {
         await owner.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
       }
     }
-    if (stopBefore) await applyOutboundPause(owner);
+    if (stopBefore && stopBefore <= "0552_commercial_outbound_pause.sql") await applyOutboundPause(owner);
     // Disposable test login inherits runtime only; it never receives fixture writes.
     await owner.query(`CREATE ROLE lp2_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${phrase}'`);
     await owner.query("GRANT jobguard_runtime TO lp2_login");

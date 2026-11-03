@@ -257,13 +257,14 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       pg_has_role('neondb_owner','jobguard_shadow_emergency_access','USAGE') AS emergency_usage,pg_has_role('neondb_owner','jobguard_shadow_emergency_access','SET') AS emergency_set`)).rows)
       .toEqual([{ shadow_usage: false, shadow_set: false, emergency_usage: false, emergency_set: false }]);
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
-    // Exact LP-5a ownership exceptions; every other business/control table remains migration-owned.
+    // Exact LP-5a/LP-6a ownership exceptions; every other business/control table remains migration-owned.
     expect((await admin.query(`SELECT schemaname,tablename,tableowner FROM pg_tables
       WHERE schemaname IN ('app','identity','control_plane','audit_control','infrastructure')
         AND tableowner <> 'jobguard_migration' ORDER BY schemaname,tablename`)).rows).toEqual([
       { schemaname: "app", tablename: "command_lifecycle_claim", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "command_type_registry", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "repository_operational_record", tableowner: "jobguard_command_writer" },
+      { schemaname: "control_plane", tablename: "request_binding", tableowner: "jobguard_binding_owner" },
     ]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND c.relname <> 'command_type_registry' AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
     const catalogue = await admin.connect();

@@ -6,7 +6,7 @@ it("records the dark binding as an explicit authority path without broadening bu
   const {inventory}=await loadReviewedInventory();
   expect(pathCompleteness(inventory,repoFileExists).filter(p=>p.includes("lp6a"))).toEqual([]);
   const entries=inventory.entries.filter(e=>e.group==="a-lp6a-request-binding");
-  expect(entries).toHaveLength(18);
+  expect(entries).toHaveLength(20);
   const runtime=entries.filter(e=>e.key.includes("|jobguard_runtime|"));
   expect(runtime.map(e=>e.key).sort()).toEqual([
     "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_runtime|EXECUTE|-",

@@ -371,6 +371,22 @@
           "identity.sso_required_state"
         ]
       }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|control_plane.contractor_practice_session|jobguard_migration",
+        "group": "a-lp6a-request-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|control_plane.practice_session|jobguard_migration",
+        "group": "a-lp6a-request-binding"
+      }
     }
   ],
   "upgrade": [

@@ -526,6 +526,8 @@ binding accessor are callable only by the binding owner.
 - `acl|schema|app|jobguard_binding_owner|USAGE|-`
 - `acl|schema|control_plane|jobguard_binding_owner|USAGE|-`
 - `acl|schema|identity|jobguard_binding_owner|USAGE|-`
+- `owner|rel:table|control_plane.contractor_practice_session|jobguard_migration`
+- `owner|rel:table|control_plane.practice_session|jobguard_migration`
 - `owner|rel:table|control_plane.request_binding|jobguard_binding_owner`
 - `owner|routine|function:app.bind_request(text,text,uuid)|jobguard_binding_owner`
 - `owner|routine|function:app.current_actor()|jobguard_binding_owner`

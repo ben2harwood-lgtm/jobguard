@@ -106,8 +106,8 @@ it("keeps concurrent requests isolated and takes only a session SHARE row lock",
   await Promise.all([a,b].map(s => request(async c => {
     await bind(c,s);
     expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(s.member);
-    const locks = (await c.query(`SELECT mode,relation::regclass::text rel FROM pg_locks
-      WHERE pid=pg_backend_pid() AND locktype='relation' AND mode IN ('RowShareLock','RowExclusiveLock')`)).rows;
+    const locks = (await c.query(`SELECT mode,relation::regclass::text rel FROM pg_locks l JOIN pg_class c ON c.oid=l.relation
+      WHERE pid=pg_backend_pid() AND locktype='relation' AND c.relkind='r' AND mode IN ('RowShareLock','RowExclusiveLock')`)).rows;
     expect(locks.filter(r => r.mode === "RowShareLock").map(r => r.rel)).toEqual(["identity.session"]);
     expect(locks.filter(r => r.mode === "RowExclusiveLock").map(r => r.rel)).toEqual(["control_plane.request_binding"]);
   })));
