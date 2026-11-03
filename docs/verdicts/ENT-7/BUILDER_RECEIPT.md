@@ -549,3 +549,30 @@ The installed pnpm wrapper stalled before running checks and was interrupted;
 local binaries were used. Initial Vitest collection lacked built core outputs;
 building the installed workspace dependencies resolved it. No downloads occurred.
 The added browser assertion in ENT-11b is authored/typechecked, not executed here.
+
+
+## 3 November 2026 — main catch-up (RED)
+
+Reviewed the launcher merge `27d66b571afe2f3f0e433da85a5429c788aadf7f`
+against its current-main second parent `47b6d80114ce272bf691a85b458417f6dda2b8b6`.
+A read-only tree/blob audit of both parents against their merge base found no
+independently overlapping changed paths and no unexpected merge results: exact union.
+All ten piece source/document paths and its lane were unchanged by the merge.
+No implementation or test expectation changes were needed for this catch-up.
+No migration differs from origin/main. The existing piece lane exactly lists all
+changed paths outside config/lanes; no other piece lane is introduced by the branch,
+so no lane removal is needed. The initial LATER / SIMPLICITY observation above remains
+recorded; this catch-up adds no refactoring.
+
+Validation using installed Node v24.17.0 and Vitest 4.1.12, no downloads:
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/enterprise-fee-invoice.test.ts src/enterprise-fee-repository.test.ts` — 9 passed.
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=1 'app/api/contractor/statements/[action]/route.test.ts'` — 8 passed.
+- From apps/api: `./node_modules/.bin/vitest run --maxWorkers=1 src/contractor/enterprise-fee.executor.test.ts src/contractor/enterprise-fee.application.test.ts` — 10 passed.
+- From repository root: `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`, `node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false`, and `node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` — all passed.
+- `node_modules/.bin/tsc -p /tmp/demo-ent7-hook-integration-tsconfig.json` — passed. Temporary configuration extends the existing DB tsconfig, includes the affected PostgreSQL command-fixtures integration test and checks its transitive imports without emitting; this does not execute database assertions.
+- `node tools/agent-lane-boundary-lint.mjs`, exact lane inventory, read-only union audit and `git diff --check origin/main HEAD` / `git diff --check` — passed.
+
+PostgreSQL, migrations, browser, full build/lint/test suites and independent exact-head
+RED review remain for GitHub CI and the router. No real providers, money or data were
+used. No git writes, fetch, package install, server or database startup was performed.
+Router commit message: `/tmp/demo-ent7-hook-20261103T003111Z-commit-msg.txt`.
