@@ -71,7 +71,7 @@ The original pure matcher remains unchanged. The dark synthetic correction seam
 is specified below. Inline fixtures are development regression tests, not frozen
 human ground truth, a held-out benchmark or G2 release evidence.
 
-## M2-4 stored reviewer corrections (0494)
+## M2-4 stored reviewer corrections (`0593_supplier_line_corrections.sql`)
 
 `SupplierLineCorrectionRepository` stores an immutable, server-owned confirmed
 synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
@@ -104,7 +104,7 @@ same match and discrepancy IDs. New confirmed source versions require a new
 snapshot, never edits to a stored one. No finding, debt, invoice, payment or fee
 is created by these proposal corrections.
 
-Migration 0494 adds only `supplier_line_match_snapshot`,
+Migration `0593_supplier_line_corrections.sql` adds only `supplier_line_match_snapshot`,
 `supplier_line_match_correction` and their trigger guard. Tenant-qualified job,
 snapshot, actor and deferred audit foreign keys, FORCE RLS, append-only grants,
 immutable triggers, revision uniqueness and audit actor/type/subject/command/hash
@@ -116,7 +116,7 @@ not evidence of agreed debt or verified original bytes.
 
 Upgrade is additive and backfills no source or financial data. Roll forward with
 a new migration to repair defects; keep the existing tables/history and disable
-the dark caller if necessary. Never edit 0494 after merge. PostgreSQL integration,
+the dark caller if necessary. Never edit `0593_supplier_line_corrections.sql` after merge. PostgreSQL integration,
 full migration/catalogue CI and one independent RED review remain required before
 merge. There is no browser change or new provider route in this piece.
 
@@ -127,7 +127,15 @@ confirmed synthetic facts, snapshot ID and correction revision. The existing
 correction repository includes its result as `discrepancies` on create, correction,
 read and replay. It reconstructs historical facts first, so historical command
 replays retain the original result. Current reads use the current correction
-revision. No findings are persisted and no migration is needed (0606 unused).
+revision. No findings are persisted and M2-5 itself needs no migration. The stacked prerequisites use
+`0592_dark_merchant_order.sql` and `0593_supplier_line_corrections.sql`.
+The stacked M2-1 dark order uses the checked `app.begin_command`,
+`app.complete_command` and `app.append_audit` protocol from `c70d7d20`.
+Migration 0592 registers only `purchase_order.send.dark` with owner permission
+and the `fake_merchant_order` outbox. Checked completion binds the whole approved
+artifact (including `revisionAuthorityHash`) to the immutable order revision.
+Manual attestation takes the actor from its trusted authenticated caller,
+separately from the strict request DTO, and rechecks current owner membership.
 The retained single-line workspace is unchanged; this remains a dark synthetic seam.
 
 A proposed Decision groups the explicitly matched invoice/credit lines and accepted

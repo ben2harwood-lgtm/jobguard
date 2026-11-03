@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -71,6 +72,7 @@ beforeEach(async () => {
   catch (error) { await reset.query("ROLLBACK"); throw error; }
   finally { reset.release(); }
   a = await contractor.startPractice(randomUUID()); b = await contractor.startPractice(randomUUID());
+  await seedActiveContractorAgreement(admin,a.tenantId); await seedActiveContractorAgreement(admin,b.tenantId);
 });
 afterAll(async () => {
   try { if (admin) expect(await catalog()).toEqual(priorCatalog); }
@@ -221,7 +223,7 @@ it("[A6] only A advances with the exact hand-off event, operator and stored serv
   for (const table of ["app.audit_event", "audit_control.checkpoint", "app.audit_export_checkpoint"]) expect((afterA[table] as unknown[]).length).toBe((beforeA[table] as unknown[]).length + 1);
   const { entries, rows } = await verify(a.tenantId); await verify(b.tenantId);
   const event = entries.at(-1)!;
-  expect(event).toMatchObject({ version: "audit.v1", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
+  expect(event).toMatchObject({ version: "audit.v2", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { auditTrust: "lower_trust", environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
   expect(event.occurredAt).toBeInstanceOf(Date); expect(rows.at(-1)).toMatchObject({ sequence: event.sequence, eventHash: event.eventHash });
   expect(rows).toHaveLength(2); expect(await snapshot(b.tenantId)).toEqual(beforeB);
 });
@@ -234,9 +236,9 @@ async function assertConcurrent() {
 }
 it("[A7] two simultaneous operators create only one hand-off", assertConcurrent);
 it("[A7] two operators demonstrably wait on the held head then serialize", async () => {
-  const blocker = await runtime.connect(); let pending: Promise<void> | undefined;
+  const blocker = await admin.connect(); let pending: Promise<void> | undefined;
   try {
-    await blocker.query("BEGIN"); await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await blocker.query("SELECT * FROM app.lock_audit_head()");
+    await blocker.query("BEGIN"); await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await blocker.query("SELECT * FROM audit_control.audit_head WHERE tenant_id=$1 FOR UPDATE", [a.tenantId]);
     pending = assertConcurrent();
     const deadline = Date.now() + 3000; let waiting: number[] = [];
     while (Date.now() < deadline) {

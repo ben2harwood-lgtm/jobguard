@@ -130,7 +130,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  await expect(reveal0).toHaveAttribute("aria-busy", "false");
  const run = reveal0.getByRole("button", { name: "Run the final check (practice)", exact: true });
  if (await run.isVisible()) await run.click();
- await expect.poll(async () => (await read("final-check")).state, { timeout: 180_000, intervals: [5000] }).toBe("completed");
+ await expect.poll(async () => (await read("final-check")).state, { timeout: 180_000 }).toBe("completed");
  await page.reload();
  const reveal = await read("final-check") as FinalCheckRead;
  expect(reveal.items.map(item => item.description).sort()).toEqual(["fitted garden drainage", "fitted loft hatch"]);
@@ -244,26 +244,24 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  return { jobId, report, customerApprovals };
 }
 
+// These are three assertion groups over the same persisted result. Run all nine
+// journey steps once per viewport; neither read below changes the saved job.
 test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs", async ({ page, browser }, testInfo) => {
- await completeJ3(page, browser, testInfo);
-});
+ const { jobId, report, customerApprovals } = await test.step("Complete all nine fresh J3 journey steps", () => completeJ3(page, browser, testInfo));
 
-// Verify combined-invoice value figures through the same fresh journey.
-test("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async ({ page, browser }, testInfo) => {
- const { jobId, report } = await completeJ3(page, browser, testInfo);
+ await test.step("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async () => {
  expect(report.value).toMatchObject({ version: "job-value.v3", jobId, status: "mapped", receipt: {
   tracked: { pence: 360000, currency: "GBP" }, trackedFee: { pence: 0, currency: "GBP" },
   found: { state: "mapped", recovered: { pence: 80000 }, fee: { pence: 8000 }, yoursBeforeVatAndTax: { pence: 72000 } },
  } });
  await page.goto(`/jobs/${jobId}/value`);
  for (const [id, amount] of [["found-recovered-net", "£800.00"], ["found-success-fee", "£80.00"], ["found-yours-before-tax", "£720.00"], ["tracked-captured-net", "£3,600.00"], ["tracked-fee", "£0.00"]]) await expect(page.getByTestId(id!)).toHaveText(amount!);
-});
+ });
 
-// Portal approvals must survive the complete persisted journey.
-test("DEMO-J3-APPROVAL-READ", async ({ page, browser }, testInfo) => {
- const { report, customerApprovals } = await completeJ3(page, browser, testInfo);
+ await test.step("DEMO-J3-APPROVAL-READ", async () => {
  const byVariation = (a: { variationId: string }, b: { variationId: string }) => a.variationId.localeCompare(b.variationId);
  expect({ ...report.customerApproval, approvals: [...report.customerApproval.approvals].sort(byVariation) }).toEqual({
   state: "approved", approvals: [...customerApprovals].sort(byVariation),
+ });
  });
 });

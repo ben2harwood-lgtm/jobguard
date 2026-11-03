@@ -12,7 +12,7 @@ import { GET, POST } from "./route";
 beforeEach(() => { vi.resetAllMocks(); mocks.authenticated = true; });
 const params = () => ({ params: Promise.resolve({ id: randomUUID() }) });
 const request = () => new Request("http://fixture.invalid/invoices", { method: "POST", body: "{}" });
-it.each(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED"] as const)("PRE-Q4 Next refusal %s matches Nest", async code => {
+it.each(["JOB_WORK_CLOSED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED"] as const)("PRE-Q4 Next refusal %s matches Nest", async code => {
  mocks.issue.mockRejectedValue(new FinalAccountLockError(code));
  const response = await POST(request(), params());
  expect(response.status).toBe(409);

@@ -16,7 +16,7 @@ const id = z.guid({ error: "Invalid uuid" });
 const pence = z.number().int().nonnegative().max(1_000_000_000_000);
 export const merchantOrderV1 = z.object({
   version: z.literal("merchant-order.v1"), environment: z.literal("synthetic_demo"),
-  tenantId: id, jobId: id, draftId: id, revisionId: id, revision: z.number().int().positive(), merchantId: id,
+  tenantId: id, jobId: id, draftId: id, revisionId: id, revision: z.number().int().positive(), revisionAuthorityHash: z.string().regex(/^[a-f0-9]{64}$/u), merchantId: id,
   recipient: z.string().min(1).max(320).endsWith(".invalid"), deliveryDate: z.string().date(),
   line: z.object({ requirementId: id, skuId: id, quantity: materialQuantityV1, unit: z.literal("each"),
     unitPricePence: pence, rateId: id, rateVersion: z.number().int().positive(), agreedPricePence: pence,
@@ -34,7 +34,7 @@ export const orderAmount = (order: MerchantOrder) => purchaseOrderNet(order.line
  * Stock and lead time have no trusted provider in this slice, so neither is asserted.
  */
 export async function readMerchantOrder(db: TenantTransaction, tenantId: string, jobId: string, revisionId: string): Promise<MerchantOrder> {
-  const row = (await db.$client.query(`SELECT r.id,r.draft_id,r.revision,r.quantity_decimal,r.unit_price_pence,
+  const row = (await db.$client.query(`SELECT r.id,r.draft_id,r.revision,r.authority_hash,r.quantity_decimal,r.unit_price_pence,
     r.recipient,to_char(r.required_date,'YYYY-MM-DD') delivery_date,d.requirement_id,q.sku_id,s.merchant_id,
     rate.id rate_id,rate.version rate_version,rate.price_pence,rate.price_unit,rate.tax_basis,rate.applicable_count,
     CASE WHEN rate.price_unit='each' THEN '1' ELSE pack.each_quantity_decimal END pack_quantity
@@ -53,7 +53,7 @@ export async function readMerchantOrder(db: TenantTransaction, tenantId: string,
       AND newer.draft_id=r.draft_id AND newer.revision>r.revision)`, [tenantId, jobId, revisionId])).rows[0];
   if (!row || Number(row.applicable_count) !== 1 || row.tax_basis !== "net" || !row.pack_quantity) throw new PurchaseOrderActionError("ORDER_AUTHORITY_STALE");
   return merchantOrderV1.parse({ version: "merchant-order.v1", environment: "synthetic_demo", tenantId, jobId,
-    draftId: row.draft_id, revisionId: row.id, revision: row.revision, merchantId: row.merchant_id,
+    draftId: row.draft_id, revisionId: row.id, revision: row.revision, revisionAuthorityHash: row.authority_hash, merchantId: row.merchant_id,
     recipient: row.recipient, deliveryDate: row.delivery_date,
     line: { requirementId: row.requirement_id, skuId: row.sku_id, quantity: row.quantity_decimal, unit: "each",
       unitPricePence: Number(row.unit_price_pence), rateId: row.rate_id, rateVersion: row.rate_version,

@@ -111,3 +111,7 @@ it("money checks authenticate before body access and use the current tenant, job
  await expect(app().reconcileMoney(id,body,{},true)).rejects.toThrow("INVALID_SUCCESS_FEE_COMMAND");expect(body).not.toHaveBeenCalled();
  await app().reconcileMoney(id,body);expect(reconcileMoney).toHaveBeenCalledWith(context,id,digest,await body());
 });
+
+it.each(["PAYMENT_FEE_AUTHORITY_REVOKED","PAYMENT_FEE_AUTHORITY_STALE","PAYMENT_FEE_AUTHORITY_DISPUTED","PAYMENT_FEE_AUTHORITY_CAP_EXCEEDED","PAYMENT_FEE_SOURCE_REQUIRED"] as const)("returns a bounded standing collection conflict for %s",code=>{
+ expect(successFeeFailure(new SuccessFeeError(code))).toEqual({status:409,body:{code}});
+});

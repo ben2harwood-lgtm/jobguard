@@ -1,0 +1,362 @@
+{
+  "migration": "0593_supplier_line_corrections.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-supplier-line-corrections",
+        "title": "Synthetic line-match snapshots and reviewer mapping history",
+        "kind": "working_data",
+        "status": "approved_current",
+        "target": {
+          "state": "retain",
+          "note": "Append-only synthetic proposals, checked owner membership, source versions, revision and audit binding; no commercial authority."
+        },
+        "cards": [],
+        "responsibilities": {},
+        "downstream": "Mapping proposals feed the pure synthetic matcher only; cannot authorize debt, delivery, payment or fees.",
+        "sources": [
+          "packages/db/migrations/0593_supplier_line_corrections.sql",
+          "packages/db/src/supplier-line-correction-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/supplier-line-corrections.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL catalogue CI and exact-head independent RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.supplier_line_match_snapshot|jobguard_runtime|INSERT|-",
+        "group": "a-supplier-line-corrections"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.supplier_line_match_snapshot|jobguard_runtime|SELECT|-",
+        "group": "a-supplier-line-corrections"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.supplier_line_match_snapshot|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|f4b6ad5879e052e3"
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.supplier_line_match_correction|jobguard_runtime|INSERT|-",
+        "group": "a-supplier-line-corrections"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.supplier_line_match_correction|jobguard_runtime|SELECT|-",
+        "group": "a-supplier-line-corrections"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.supplier_line_match_correction|jobguard_migration",
+        "group": "a-owner-tables-views"
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.supplier_line_match_correction|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.supplier_line_match_correction|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|f4b6ad5879e052e3"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.supplier_line_match_audit_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|validate_insert|app.supplier_line_match_audit_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_snapshot|audit_binding|app.supplier_line_match_audit_guard|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_correction|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_correction|no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_correction|validate_insert|app.supplier_line_match_audit_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_line_match_correction|audit_binding|app.supplier_line_match_audit_guard|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.supplier_line_match_snapshot",
+        "data": []
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.supplier_line_match_correction",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_snapshot",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_correction",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_snapshot_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_snapshot_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_snapshot_tenant_id_job_id_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_snapshot_tenant_id_audit_event_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_correction_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_correction_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "slmc_revision",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "supplier_line_match_correction_tenant_id_audit_event_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "supplier_line_match_audit_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "supplier_line_match_snapshot",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "supplier_line_match_correction",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "supplier_line_match_snapshot",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "supplier_line_match_correction",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

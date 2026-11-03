@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, type Browser, type Page } from "@playwright/test";
 import { jsonResult } from "./customer-invoice-journey";
+import { deliveredCustomerLink } from "./customer-signin-link";
 
 const tenantId = "11111111-1111-4111-8111-111111111111";
 export type PricedCatch = { id: string; description: string; currentRevisionId: string; revisions: { id: string; revision: number; contentHash: string; signedDeltaPence: number }[] };
@@ -70,10 +71,10 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
     return { status: response.status, body: await response.json() };
    }, { csrfToken: authorized.body.csrfToken, tenantId, jobId, customerId });
    expect(issued.status, "Builder authorizes the customer link through the real route").toBe(200);
-   // Fake delivery transport: read the exact durable outbox artifact, as the
-   // existing customer-extra-approval journey does. No provider is contacted.
+   // Fake delivery transport: materialize the durable reference with the identity
+   // key, as the customer-extra-approval journey does. No provider is contacted.
    const outbox = (await admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenantId, issued.body.grantId])).rows[0];
-   await customer.goto(outbox.immutable_content);
+   await customer.goto(await deliveredCustomerLink(outbox.immutable_content));
    await customer.getByRole("button", { name: "Sign in", exact: true }).click();
    await customer.getByRole("link", { name: "Review extras", exact: true }).click();
   const approvals: { variationId: string; approvedAt: string; method: "customer_portal" }[] = [];

@@ -9,7 +9,7 @@ function setup(state: "open" | "locked" | "superseded" | "cancelled" = "open") {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const scope = { tenantId: randomUUID(), jobId: randomUUID() };
   const order: MerchantOrder = { version: "merchant-order.v1", environment: "synthetic_demo", ...scope,
-    draftId: randomUUID(), revisionId: randomUUID(), revision: 1, merchantId: randomUUID(),
+    draftId: randomUUID(), revisionId: randomUUID(), revision: 1, revisionAuthorityHash: "a".repeat(64), merchantId: randomUUID(),
     recipient: "orders@merchant.invalid", deliveryDate: "2030-01-01", line: { requirementId: randomUUID(), skuId: randomUUID(),
       quantity: "10", unit: "each", unitPricePence: 2500, rateId: randomUUID(), rateVersion: 1, agreedPricePence: 2500,
       rateUnit: "each", packQuantity: "1", taxBasis: "net", currency: "GBP" } };

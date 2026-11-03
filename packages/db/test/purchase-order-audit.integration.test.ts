@@ -137,8 +137,6 @@ describe("purchase-order audit with authenticated applications and PostgreSQL", 
 // Dark seam called directly with deterministic fakes; no HTTP or worker registration.
 async function darkFixture() {
   const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
-  // MaterialApplication and PurchaseOrderApplication write the catalogue with
-  // this authenticated session digest. The dark seam must use the same RLS scope.
   const scoped = practiceMaterialPool(runtime, f.auth.digest);
   const repo = new PurchaseOrderActionRepository(scoped);
   const scope = { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id };
@@ -170,7 +168,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       const repo = new PurchaseOrderActionRepository(pool);
       await expect(repo.preview(f.auth.context, f.scope)).rejects.toThrow("ORDER_AUTHORITY_STALE");
       await expect(repo.approve(f.auth.context, f.scope, f.approved)).rejects.toThrow("ORDER_AUTHORITY_STALE");
-      await expect(repo.attestManual(f.auth.context, f.manual)).rejects.toThrow("ORDER_AUTHORITY_STALE");
+      await expect(repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_AUTHORITY_STALE");
     }
     expect(await effects()).toEqual(before);
     expect((await f.repo.preview(f.auth.context, f.scope)).contentHash).toBe(f.preview.contentHash);
@@ -185,6 +183,34 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, one.outboxActionId])).rows[0].status).toBe("succeeded");
     await expect(f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" })).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+  });
+  it("checked completion rejects a full artifact bound to a false revision authority and rolls back", async () => {
+    const f = await darkFixture();
+    // Simulate an application read bug. All commands, grants, outbox writes and
+    // completion predicates still execute on real PostgreSQL as the runtime role.
+    const scoped = practiceMaterialPool(runtime, f.auth.digest);
+    const spoofed = { connect: async () => {
+      const client = await scoped.connect();
+      return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+        const result = await client.query(sql, values);
+        if (sql.startsWith("SELECT r.id,r.draft_id")) {
+          return { ...result, rows: result.rows.map(row => ({ ...row, authority_hash: "f".repeat(64) })) };
+        }
+        return result;
+      } };
+    } } as unknown as Pool;
+    const repo = new PurchaseOrderActionRepository(spoofed);
+    const preview = await repo.preview(f.auth.context, f.scope);
+    expect(preview.order.revisionAuthorityHash).not.toBe(f.revision.authorityHash);
+    const before = await effects();
+    await expect(repo.approve(f.auth.context, f.scope, { ...f.approved,
+      action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
+    expect(await effects()).toEqual(before);
+    const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
+    expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
+      WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
+      [DEMO_TENANT_ID, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
   });
   it("changed quantity cancels the queued old authority before any fake delivery", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
@@ -210,20 +236,20 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       SELECT tenant_id,$1,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4`,
       [otherOwner, otherIdentity, DEMO_TENANT_ID, f.auth.membershipId]);
     const before = await effects();
-    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner })).rejects.toThrow();
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, actorMembershipId: otherOwner }, f.auth.membershipId)).rejects.toThrow();
     expect(await effects()).toEqual(before);
     expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
       [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(0);
   });
   it("rechecks a verified session's owner membership after revocation, even on replay", async () => {
     const f = await darkFixture();
-    await f.repo.attestManual(f.auth.context, f.manual);
+    await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
     const before = await effects();
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, f.auth.membershipId]);
     try {
-      await expect(f.repo.attestManual(f.auth.context, f.manual)).rejects.toThrow("ORDER_ACTION_INVALID");
-      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() })).rejects.toThrow("ORDER_ACTION_INVALID");
+      await expect(f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
+      await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID() }, f.auth.membershipId)).rejects.toThrow("ORDER_ACTION_INVALID");
       expect(await effects()).toEqual(before);
       expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND job_id=$2",
         [DEMO_TENANT_ID, f.job])).rows[0].n).toBe(1);
@@ -234,8 +260,8 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
   });
   it("manual placement is append-only, replayable, and mutually exclusive with either send route", async () => {
     const f = await darkFixture(), before = await effects();
-    const fact = await f.repo.attestManual(f.auth.context, f.manual);
-    expect(await f.repo.attestManual(f.auth.context, f.manual)).toEqual(fact);
+    const fact = await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
+    expect(await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId)).toEqual(fact);
     expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND id=$2",
       [DEMO_TENANT_ID, fact.attestationId])).rows).toEqual([{ actor_membership_id: f.auth.membershipId }]);
     expect((await admin.query(`SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'
@@ -251,13 +277,13 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       [DEMO_TENANT_ID]))).rejects.toThrow(/permission denied/u);
   });
   it("one supplier reference cannot attest two drafts at the same merchant", async () => {
-    const f = await darkFixture(); await f.repo.attestManual(f.auth.context, f.manual);
+    const f = await darkFixture(); await f.repo.attestManual(f.auth.context, f.manual, f.auth.membershipId);
     const nextScope = randomUUID();
     await admin.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [DEMO_TENANT_ID, nextScope, f.job]);
     const requirement = await f.materials.addRequirement(f.job, { version: "material-requirement-command.v1", scopeItemId: nextScope,
       skuId: f.saved.skuId, quantity: "1", unit: "each", expectedRevision: 0 });
     const revision = await f.orders.revise(f.job, { ...f.input, commandId: randomUUID(), requirementId: requirement.id });
-    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID(), revisionId: revision.id })).rejects.toThrow("ORDER_ALREADY_COMMITTED");
+    await expect(f.repo.attestManual(f.auth.context, { ...f.manual, commandId: randomUUID(), revisionId: revision.id }, f.auth.membershipId)).rejects.toThrow("ORDER_ALREADY_COMMITTED");
     expect((await admin.query("SELECT count(*)::int n FROM app.purchase_order_manual_attestation WHERE tenant_id=$1 AND merchant_id=$2",
       [DEMO_TENANT_ID, f.saved.merchantId])).rows[0].n).toBe(1);
   });

@@ -7,7 +7,7 @@ import { withTenant } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 
 const invoiceRefusals = new Set<FinalAccountLockErrorCode>([
- "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED",
+ "JOB_WORK_CLOSED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED",
  "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED",
 ]);
 /** Keeps merged projections and carries the existing persisted-session digest into SQL. */

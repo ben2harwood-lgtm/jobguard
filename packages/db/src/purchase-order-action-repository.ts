@@ -6,7 +6,7 @@ import { appendAuditBatch } from "./audit.js";
 import { consequentialCommandV1Schema, UserCommandDispatcher } from "./commands.js";
 import { appendOutboundAction } from "./outbox.js";
 import { claimCommandIdentity, requestHashFor, requireLiveJob, runStoredCommand } from "./watchdog.js";
-import { authenticatedMembershipId, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { InvalidTenantContextError, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { requireSyntheticOrders, readMerchantOrder, merchantOrderContent, orderContentHash, orderAmount,
   PurchaseOrderActionError } from "./purchase-order-action.js";
 
@@ -86,10 +86,12 @@ export class PurchaseOrderActionRepository {
     });
   }
 
-  /** Records the owner's assertion, never an outbound action or provider-confirmed placement. */
-  async attestManual(context: VerifiedTenantContext, raw: unknown) {
+  /** Records the owner's assertion. The authenticated caller supplies context and actor,
+   * as for the command dispatcher; the request DTO cannot select its actor. No provider confirmation. */
+  async attestManual(context: VerifiedTenantContext, raw: unknown, actorMembershipId: string) {
     requireSyntheticOrders(); const input = attestationV1.parse(raw);
-    const actorMembershipId = authenticatedMembershipId(context);
+    // The authenticated application supplies the actor separately from the untrusted DTO.
+    if (!uuid.safeParse(actorMembershipId).success) throw new InvalidTenantContextError();
     try { return await withTenant(this.pool, context, async db => {
       await lockOrder(db, context.tenantId, input.jobId);
       const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'

@@ -2,13 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
+import { lp5RegistryRows, lateSourceRegistryRow, currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { parseInventory } from "./lp-0-catalog.js";
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 
 it("M2-4 and its sibling proofs preserve main and keep tables guarded and routines private", () => {
   // Main's separately owned pending 0510 proof must not mask validation of these fragments.
   const directory = mkdtempSync(join(tmpdir(), "jg-supplier-proofs-"));
-  const migrations = ["0465_dark_merchant_order.sql", "0494_supplier_line_corrections.sql"];
+  const migrations = ["0592_dark_merchant_order.sql", "0593_supplier_line_corrections.sql"];
   try {
     writeFileSync(join(directory, "legacy-migrations.json"), "[]");
     for (const migration of migrations) {
@@ -22,10 +23,18 @@ it("M2-4 and its sibling proofs preserve main and keep tables guarded and routin
     expect(baseline).toEqual(original);
     expect(combined.entries.filter(e => !baseline.entries.some(b => b.key === e.key))).toHaveLength(9);
     expect(combined.entries.filter(e => e.key.includes("supplier_line_match_audit_guard"))).toEqual([]);
-    const expected = applyUpgradeProofs({ rows: {}, routines: [], relations: [], policies: [] }, proofs, { jobguard_migration: 42 });
+    const registryProof = proofs[0]!.upgrade.find(change => change.section === "rows" && change.before?.table === "app.command_type_registry")!;
+    if (registryProof.section !== "rows") throw new Error("Missing registry proof");
+    // SQL catalogue snapshots retain their own row order; independently check
+    // every predecessor entry before using that exact snapshot as the baseline.
+    expect(registryProof.before!.data).toEqual(expect.arrayContaining([...lp5RegistryRows, lateSourceRegistryRow]));
+    expect(registryProof.before!.data).toHaveLength(lp5RegistryRows.length + 1);
+    const expected = applyUpgradeProofs({ rows: { "app.command_type_registry": registryProof.before!.data }, routines: [], relations: [], policies: [] }, proofs, { jobguard_migration: 42 });
     expect(Object.keys(expected.rows).sort()).toEqual([
-      "app.purchase_order_manual_attestation", "app.supplier_line_match_correction", "app.supplier_line_match_snapshot",
+      "app.command_type_registry", "app.purchase_order_manual_attestation", "app.supplier_line_match_correction", "app.supplier_line_match_snapshot",
     ]);
+    expect(expected.rows["app.command_type_registry"]).toEqual(expect.arrayContaining(currentCommandRegistryRows));
+    expect(expected.rows["app.command_type_registry"]).toHaveLength(currentCommandRegistryRows.length);
     expect(expected.routines).toHaveLength(3);
     for (const routine of expected.routines) expect(routine).toMatchObject({
       proowner: 42, proacl: "{jobguard_migration=X/jobguard_migration}", prosecdef: false,

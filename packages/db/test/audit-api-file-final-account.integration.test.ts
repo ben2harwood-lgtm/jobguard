@@ -1,3 +1,4 @@
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,8 +24,8 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
-  const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password };
-  admin = new Pool(connection);
+  const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password };
+  admin = await syntheticOwnerPool(connection);
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [T]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]);

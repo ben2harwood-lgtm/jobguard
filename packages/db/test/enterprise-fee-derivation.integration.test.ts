@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
@@ -34,6 +35,7 @@ it("ENT-F2 on PostgreSQL: the site extra contributes Q = 250000/31 pence, the or
   expect(read.contributions).toHaveLength(1);
   expect(read.contributions[0]).toMatchObject({ extraId: w.s.extraId, originKind: "site_user", qualifyingPrincipal: { numerator: "250000", denominator: "31" } });
   const audit = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='enterprise_fee.derived' AND subject_ref=$2", [w.w.p.tenantId, result.derivationId])).rows[0].n;
+ await assertLp4SealedEvents(c.admin, w.w.p.tenantId, "enterprise_fee.derived");
   expect(audit).toBe(1);
 });
 
