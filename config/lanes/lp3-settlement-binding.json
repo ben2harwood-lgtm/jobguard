@@ -5,15 +5,16 @@
       "branches": [
         "codex/sandbox/lp3-settlement-binding"
       ],
-      "note": "LP-3 RED synthetic settlement approval binding; NOPR router handoff after #414.",
+      "note": "LP-3 RED settlement approval binding; next LP PR.",
       "allow": [
-        "packages/db/migrations/0610_lp3_settlement_binding.sql",
-        "packages/db/test/migration-proofs/0610_lp3_settlement_binding.proof.json",
+        "packages/db/migrations/0567_lp3_settlement_binding.sql",
+        "packages/db/test/migration-proofs/0567_lp3_settlement_binding.proof.json",
         "packages/db/src/activation-repository.ts",
         "packages/db/src/lp3-mutations.test.ts",
         "packages/db/test/activation.integration.test.ts",
         "packages/db/test/lp3-activation-acceptance.integration.test.ts",
-        "packages/db/migration-notes/0610_lp3_settlement_binding.md"
+        "packages/db/migration-notes/0567_lp3_settlement_binding.md",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

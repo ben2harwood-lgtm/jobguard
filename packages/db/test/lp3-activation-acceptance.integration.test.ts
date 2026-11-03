@@ -67,7 +67,8 @@ const call="SELECT * FROM app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
 describe("LP-3 actual runtime attack and compatibility checks",()=>{
   it.each(["tenant","actor","job","command","authorization","document","version","hash","price","cap","terms","payload","revision","revoked","expired","receipt-status","authorization-price","authorization-policy"])("refuses changed %s atomically",async attack=>{
     const f=await fixture(),before=await counts();
-    await expect(new UserCommandDispatcher(db.runtime).dispatch(context,{...f.command,action:{...f.command.action,expiresAt:attack==="expired"?new Date(Date.now()+100):f.command.action.expiresAt,amountPence:attack==="authorization-price"?7901:7900,policyVersion:attack==="authorization-policy"?"wrong-terms":f.command.action.policyVersion}},{
+    // Forged receipt state is an owner fixture write; runtime retains no receipt writes.
+    await expect(new UserCommandDispatcher(attack==="receipt-status"?db.owner:db.runtime).dispatch(context,{...f.command,action:{...f.command.action,expiresAt:attack==="expired"?new Date(Date.now()+100):f.command.action.expiresAt,amountPence:attack==="authorization-price"?7901:7900,policyVersion:attack==="authorization-policy"?"wrong-terms":f.command.action.policyVersion}},{
       inputHash:c=>f.mutation.inputHash(c),
       async mutate(database,c){
         const values=args(f,c);
@@ -154,6 +155,19 @@ describe("LP-3 actual runtime attack and compatibility checks",()=>{
     expect(competing.filter(result=>result.status==="fulfilled")).toHaveLength(1);
     expect(competing.filter(result=>result.status==="rejected")).toHaveLength(1);
     expect((await db.owner.query("SELECT count(*)::int n FROM app.simulated_settlement_event WHERE tenant_id=$1 AND obligation_id=$2",[T,g.input.obligationId])).rows[0].n).toBe(1);
+  });
+  it("refuses reuse of a settled approval for another obligation",async()=>{
+    const first=await settlementFixture(),dispatcher=new UserCommandDispatcher(db.runtime);
+    await dispatcher.dispatch(context,first.command,first.mutation);
+    const authorization=(await db.owner.query("SELECT authorization_id FROM app.activation_acceptance_operation_use WHERE tenant_id=$1 AND command_id=$2",[T,first.command.commandId])).rows[0].authorization_id;
+    const next=await settlementFixture(),before=await counts();
+    await expect(dispatcher.dispatch(context,next.command,{
+      inputHash:c=>next.mutation.inputHash(c),
+      async mutate(database,c){
+        return (await database.$client.query(settlementCall,settlementArgs(next.input,{...c,authorizationId:authorization}))).rows[0];
+      },
+    })).rejects.toMatchObject({code:"42501"});
+    expect(await counts()).toEqual(before);
   });
   it("SQL settlement digest matches the approval issuer's canonical LP-3 input",async()=>{
     const f=await settlementFixture();
