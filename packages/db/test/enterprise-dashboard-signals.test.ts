@@ -104,3 +104,15 @@ it("rejects malformed stored money and preserves activity/billing projections re
   expect(without.observations).toEqual([]); expect(withSignal.observations).toHaveLength(1);
   expect(JSON.stringify(facts)).not.toContain("billed_variation_without_extra");
 });
+
+it("credits suppress only their own unmatched line, independent of original-order balances", () => {
+  const original = { ...storedRow, line: { ...storedRow.line, kind: "original_order", externalInvoiceLineId: "order" } };
+  const credited = { ...storedRow, creditedNet: storedRow.billedNet };
+  // An outstanding order must not keep a fully credited possible variation visible.
+  expect(observed([original, credited]).observations).toEqual([]);
+  // Crediting the order must not suppress an outstanding possible variation.
+  expect(observed([{ ...original, creditedNet: original.billedNet }, storedRow]).observations).toEqual(observed().observations);
+  const second = { ...storedRow, line: { ...storedRow.line, externalInvoiceLineId: "second-other" } };
+  expect(observed([credited, second]).observations).toEqual(observed().observations);
+  expect(observed([credited, { ...second, creditedNet: second.billedNet }]).observations).toEqual([]);
+});

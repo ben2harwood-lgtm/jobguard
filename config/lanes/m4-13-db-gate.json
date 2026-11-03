@@ -2,15 +2,26 @@
   "version": 2,
   "lanes": {
     "m4-13-db-gate": {
-      "branches": ["codex/sandbox/m4-13-db-gate"],
-      "note": "M4-13 RED: confine existing dark synthetic routines to the demo database. NOPR=1. Own lane file is implicitly allowed by the validator.",
+      "branches": [
+        "codex/sandbox/m4-13-db-gate"
+      ],
+      "note": "M4-13 RED: retain dark synthetic mandate persistence and database gate against current main. NOPR; no collection execution.",
       "allow": [
-        "packages/core/src/index.ts",
-        "packages/db/migrations/0603_subscription_mandate_db_gate.sql",
-        "packages/db/migration-notes/0603_subscription_mandate_db_gate.md",
-        "packages/db/test/migration-proofs/0603_subscription_mandate_db_gate.proof.json",
+        "packages/core/src/subscription-agreement.test.ts",
+        "packages/core/src/subscription-agreement.ts",
+        "packages/db/migration-notes/0561_subscription_mandate.md",
+        "packages/db/migration-notes/0562_subscription_mandate_db_gate.md",
+        "packages/db/migrations/0561_subscription_mandate.sql",
+        "packages/db/migrations/0562_subscription_mandate_db_gate.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/subscription-mandate-repository.ts",
+        "packages/db/test/migration-proofs/0561_subscription_mandate.proof.json",
+        "packages/db/test/migration-proofs/0562_subscription_mandate_db_gate.proof.json",
+        "packages/db/test/subscription-mandate-db-gate.integration.test.ts",
         "packages/db/test/subscription-mandate-db-gate.test.ts",
-        "packages/db/test/subscription-mandate-db-gate.integration.test.ts"
+        "packages/db/test/subscription-mandate-upgrade.integration.test.ts",
+        "packages/db/test/subscription-mandate.integration.test.ts",
+        "packages/db/test/subscription-mandate.test.ts"
       ]
     }
   }

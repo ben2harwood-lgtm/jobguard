@@ -7,8 +7,8 @@ import { command, meterCompany, readSubscription, terms } from "./subscription-p
 let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(false); }, 120000);
 afterAll(async () => closeWorkFixture(f));
-it("0452 upgrades without granting a mandate to legacy subscription approvals and re-applies safely", async () => {
-  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0580_subscription_mandate.sql"));
+it("M4-13 persistence upgrades without granting a mandate to legacy subscription approvals and re-applies safely", async () => {
+  const own = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0561_subscription_mandate.sql"));
   expect(own).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, own)) {

@@ -39,7 +39,7 @@ export class SorRepository {
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
         // Reading price lists needs a contract-level read grant (owner, admin, commercial_manager, supervisor, surveyor, finance, read_only): the same members who can read contracts.
-        await assertContractorGate(db, principal, "member");
+        await assertContractorGate(db, principal, "retained_member");
         // Client approvers read approval packs only; a client contract grant cannot unlock the general schedule list.
         const member = (await db.$client.query<{ role: string }>("SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2", [principal.tenantId, principal.membershipId])).rows[0];
         if (!member || member.role === "client_approver") throw new WorkOrderError("NOT_FOUND");
