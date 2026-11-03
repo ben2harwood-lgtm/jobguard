@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8a-inbox": {
+      "branches": [
+        "codex/sandbox/ent-8a-inbox"
+      ],
+      "note": "ENT-8a Possible extras inbox and thin session-bound web handlers only. RED; NOPR. End-of-job check remains open. No migrations.",
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/confirm/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/dismiss/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/[promptId]/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/possible-extras/route.ts",
+        "apps/web/app/contractor/jobs/[id]/possible-extras/page.tsx",
+        "apps/web/app/lib/possible-extras-server.ts",
+        "apps/web/app/ui/possible-extras.test.tsx",
+        "apps/web/app/ui/possible-extras.tsx",
+        "apps/web/app/ui/work-order-revisions.tsx",
+        "apps/web/e2e/ENT-8a-possible-extras.spec.ts"
+      ]
+    }
+  }
+}
