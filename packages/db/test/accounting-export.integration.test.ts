@@ -35,6 +35,9 @@ it("one document persists once across concurrent approvals, retries and reposito
  expect(await f.push()).toMatchObject({ status: "pushed", attempts: 1 });
  expect(await f.push()).toMatchObject({ status: "pushed", attempts: 1 });
  expect(f.adapter.pushes).toBe(1);
+ const audit = (await c.admin.query("SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'accounting_export.%'", [f.a.tenantId])).rows;
+ expect(audit.length).toBeGreaterThan(0);
+ for (const event of audit) expect(event).toEqual({ version: "audit.v2", trust: "checked_operation" });
  for (const table of ["decision", "ledger", "outbox", "attempt"]) {
   expect((await c.admin.query(`SELECT count(*)::int n FROM app.accounting_export_${table} WHERE tenant_id=$1`, [f.a.tenantId])).rows[0].n).toBe(1);
  }

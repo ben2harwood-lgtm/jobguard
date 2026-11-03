@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { mappedValueReceiptV1, mappedBusinessSummaryV1 } from "@jobguard/core";
-import { MappedReceipt, mappedMoney } from "./mapped-value-receipt";
+import { mappedValueReceipt, mappedBusinessSummary } from "@jobguard/core";
+import { MappedReceipt, mappedMoney, RecoveryValueSection } from "./mapped-value-receipt";
 import { z } from "zod";
 
-const job=z.object({jobId:z.string().uuid(),status:z.string(),receipt:mappedValueReceiptV1.nullable()});
-const resultV1=z.union([z.object({state:z.literal("mapped"),summary:mappedBusinessSummaryV1.optional(),jobs:z.array(job),subscription:z.array(z.object({periodId:z.string().uuid(),from:z.string(),toExclusive:z.string(),policyVersion:z.string(),amount:z.object({pence:z.number().int(),currency:z.literal("GBP")})}).passthrough())}),z.object({state:z.literal("unavailable"),code:z.string()})]);
+const job=z.object({jobId:z.string().uuid(),status:z.string(),receipt:mappedValueReceipt.nullable()});
+const resultV1=z.union([z.object({state:z.literal("mapped"),summary:mappedBusinessSummary.optional(),jobs:z.array(job),subscription:z.array(z.object({periodId:z.string().uuid(),from:z.string(),toExclusive:z.string(),policyVersion:z.string(),amount:z.object({pence:z.number().int(),currency:z.literal("GBP")})}).passthrough())}),z.object({state:z.literal("unavailable"),code:z.string()})]);
 
 export function BusinessValueV3() {
  const [value,setValue] = useState<Extract<z.infer<typeof resultV1>,{state:"mapped"}>|null>(null);
@@ -45,6 +45,7 @@ export function BusinessValueV3() {
     <p>What we checked: {value.summary.checkedCount??"Unavailable"} sources</p>
     <p>Tracked through to your bill: {mappedMoney(value.summary.tracked)} net · Fee £0.00</p>
     <p>Found by JobGuard after your bill was complete: {mappedMoney(value.summary.recovered)} recovered · Fee {mappedMoney(value.summary.fee)} · Yours before VAT and tax {mappedMoney(value.summary.yoursBeforeVatAndTax)}</p>
+    <RecoveryValueSection name="Supplier recoveries — business" id="business-supplier" value={"supplier" in value.summary?value.summary.supplier:null}/><RecoveryValueSection name="Withheld-payment recoveries — business" id="business-withheld" value={"withheld" in value.summary?value.summary.withheld:null}/>
     <p>Illustration — proposed policy; principal only. Inspect each job below.</p>
    </section>}
    {value.jobs.map(job=><section key={job.jobId}><h2><a href={`/jobs/${job.jobId}/value${job.receipt?.window?`?${new URLSearchParams(job.receipt.window).toString()}`:""}`}>Job {job.jobId}</a></h2>{job.status==="mapped"&&job.receipt?<MappedReceipt receipt={job.receipt}/>:<p>Bill not locked; value unavailable.</p>}</section>)}

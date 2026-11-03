@@ -23,4 +23,3 @@ export function adjustment(kind: "credit" | "receipt", pence = 50, id = `demo-${
   return { ...source, sourceId: id, kind, amount: { pence, currency: "GBP" }, invoiceId: source.sourceId, invoiceRevision: 1, finalAccount: null, state: "posted" };
 }
 export const scopeFor = (s: AccountingSource): AccountingScope => ({ ...scope, sourceId: s.sourceId, sourceRevision: s.revision });
-

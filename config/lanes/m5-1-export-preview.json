@@ -9,6 +9,7 @@
         "apps/api/package.json",
         "apps/api/src/accounting-export.application.test.ts",
         "apps/api/src/accounting-export.application.ts",
+        "apps/api/src/accounting-export.persisted.ts",
         "apps/api/src/accounting-export.preview-contracts.ts",
         "apps/web/app/accounting-exports/[sourceId]/page.tsx",
         "apps/web/app/accounting-exports/export-screen.tsx",
@@ -17,10 +18,22 @@
         "apps/web/app/lib/accounting-export-server.ts",
         "apps/web/e2e/m5-1-export-preview.spec.ts",
         "docs/contracts/accounting-export-v1.md",
-        "packages/db/src/index.ts"
+        "packages/db/migrations/0559_accounting_export_persistence.sql",
+        "packages/db/src/accounting-export-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/accounting-export-executor.test.ts",
+        "packages/db/test/accounting-export-upgrade.integration.test.ts",
+        "packages/db/test/accounting-export.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/customer-quote-acceptance.integration.test.ts",
+        "packages/db/test/customer-stage-acknowledgement.integration.test.ts",
+        "packages/db/test/migration-proofs/0559_accounting_export_persistence.proof.json",
+        "packages/db/test/operative-entitlements-upgrade.integration.test.ts",
+        "packages/db/test/server-entitlement-upgrade.integration.test.ts"
       ],
-      "note": "M5-1 RED: dark synthetic company-session preview and hash-bound human confirmation. No migration/provider/push endpoint. Own lane file implicitly permitted. Shared contract document serializes with the persistence base. Inherited db index conflict resolved as an exact union; both accounting and shadow guide exports retained.",
-      "test": "apps/api/src/accounting-export.application.test.ts apps/api/src/accounting-export.sandbox.test.ts apps/web/app/api/accounting-exports/[sourceId]/route.test.ts apps/web/e2e/m5-1-export-preview.spec.ts"
+      "note": "M5-1 RED catch-up against merge target 111865cf6. Includes the required unmerged persistence base and migration 0559. Synthetic preview/confirmation only; no production or provider enablement.",
+      "test": "apps/api/src/accounting-export.application.test.ts apps/api/src/accounting-export.sandbox.test.ts apps/api/src/accounting-quickbooks.fake.test.ts packages/db/test/accounting-export-executor.test.ts packages/db/test/migration-proof-loader.test.ts apps/web/app/api/accounting-exports/[sourceId]/route.test.ts"
     }
   }
 }

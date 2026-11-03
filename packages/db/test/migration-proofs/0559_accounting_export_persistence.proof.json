@@ -1,0 +1,559 @@
+{
+  "migration": "0559_accounting_export_persistence.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-m5-accounting-export",
+        "title": "M5-1 dark synthetic accounting export persistence",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain per-request persisted session and company membership verification before reads and replay.",
+          "LP-12": "Verify exact migration ownership and runtime-only closed entry point; helpers and tables remain private."
+        },
+        "downstream": "Closed synthetic export preview, human confirmation, durable claim and reconciliation. No provider or recovery authority.",
+        "sources": [
+          "packages/db/migrations/0559_accounting_export_persistence.sql",
+          "packages/db/src/accounting-export-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/accounting-export.integration.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-m5-accounting-export"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.accounting_export(uuid,text,text,text,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m5-accounting-export"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.accounting_export(uuid,text,text,text,jsonb)|jobguard_migration",
+        "group": "a-m5-accounting-export"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-m5-accounting-export",
+        "title": "M5-1 dark synthetic accounting export persistence",
+        "description": "Synthetic database, authenticated company session, exact actor, consent and current artifact are checked before replay or execution. Claims persist unknown outcome before adapter calls. Reconciliation accepts only the attempt identity and reads the private immutable fake-adapter inbox for that tenant and attempt; callers cannot supply matches or assert absence. The inbox grants no runtime or infrastructure access. Reconciliation cannot write settlement or recovery facts.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve authenticated company/member ownership, current session checks and synthetic database refusal.",
+          "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
+        },
+        "sources": [
+          "packages/db/migrations/0559_accounting_export_persistence.sql",
+          "packages/db/src/accounting-export-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/accounting-export.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required; no live provider route exists."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.accounting_export(uuid,text,text,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.accounting_export_attempt",
+          "app.accounting_export_decision",
+          "app.accounting_export_ledger",
+          "app.accounting_export_outbox"
+        ],
+        "staticCalls": [
+          "app.accounting_export_audit",
+          "app.final_lock_hash",
+          "app.mon1_company_actor"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.accounting_export_audit(uuid,uuid,uuid,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.accounting_export_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_fixture",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_fixture",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_fixture",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_decision",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_decision",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_decision",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_ledger",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_ledger",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_ledger",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_outbox",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_outbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_outbox",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_attempt",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_attempt",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_attempt",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.accounting_export_inbox",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_inbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_export_inbox",
+        "policyname": "tenant_scope",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_fixture_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_decision_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_ledger_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_outbox_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_attempt_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_inbox_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_decision_tenant_id_id_source_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "accounting_export_ledger_tenant_id_reference_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "accounting_export",
+        "args": "t uuid, digest text, operation text, source text, v jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "accounting_export_audit",
+        "args": "t uuid, actor uuid, command uuid, kind text, hash text, result_hash text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "accounting_export_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "accounting_export_fixture",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "accounting_export_decision",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "accounting_export_ledger",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "accounting_export_outbox",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "accounting_export_attempt",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "accounting_export_inbox",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

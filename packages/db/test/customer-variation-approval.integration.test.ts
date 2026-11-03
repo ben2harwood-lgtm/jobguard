@@ -27,7 +27,7 @@ async function fixture() {
  await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[FINAL_CHECK_USER,a.tenantId,FINAL_CHECK_ACTOR]);
  const builderDigest=hash(randomUUID()), linkDigest=hash(randomUUID()), sessionDigest=hash(randomUUID());
  await f.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fictional-csrf',clock_timestamp()+interval '1 hour','synthetic_demo')",[randomUUID(),FINAL_CHECK_USER,builderDigest]);
- const path=`/customer/sign-in#${a.tenantId}/${a.jobId}/${customer}/${"a".repeat(43)}`;
+ const path=`customer-signin-reference.v1:${a.tenantId}/${a.jobId}/${customer}/${"a".repeat(43)}`;
  const grant=(await identity("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id",[a.tenantId,builderDigest,a.jobId,customer,linkDigest,path])).rows[0].id;
  await identity("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[a.tenantId,a.jobId,customer,linkDigest,sessionDigest]);
  const revision=(await f.admin.query("SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].revision;
