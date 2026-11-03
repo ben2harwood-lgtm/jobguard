@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { randomBytes, randomUUID, createHmac } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
@@ -11,7 +12,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 const own = "0545_customer_quote_acceptance.sql";
 const hmac = (v: string) => createHmac("sha256", "fictional-customer-secret-at-least-32-bytes").update(v).digest("hex");
 let c: Cluster;
-beforeAll(async()=>{c=await startBeforeMigration(own); const before=await snapshot(c.admin);await applyMigration(c,own);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[]});await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[],"app.customer_stage_acknowledgement":[],"app.practice_exposure_schedule":[]});},120000);
+beforeAll(async()=>{c=await startBeforeMigration(own); const before=await snapshot(c.admin);await applyMigration(c,own);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[]});await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_quote_approval":[],"app.customer_stage_acknowledgement":[],...laterEmptyTables});},120000);
 afterAll(async()=>{await c?.close();});
 async function identityQuery(sql: string, args: unknown[]) {
   const db = await c.admin.connect();

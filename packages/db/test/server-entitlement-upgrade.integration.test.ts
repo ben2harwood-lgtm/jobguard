@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { afterAll, expect, it } from "vitest";
 import { company } from "./practice-worker-switch-fixtures.js";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -18,5 +19,5 @@ it("MON-8 0352 and 0353 preserve every pre-existing row and refuse legacy new wo
   expect(await withTenant(c.runtime, f.context, db => serverEntitlement(db, f.p.membershipId, "work_orders"))).toMatchObject({ executable: false, entitlement: "held" });
   expect(await read(c, f)).toEqual(retained);
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, "app.practice_exposure_schedule": [] });
+  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables });
 }, 120000);

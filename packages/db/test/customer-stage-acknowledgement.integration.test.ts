@@ -1,3 +1,4 @@
+import { laterEmptyTables } from "./later-empty-tables.js";
 import { workTenant } from "./job-work-state-fixtures.js";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
@@ -9,7 +10,7 @@ let c:Cluster;
 beforeAll(async()=>{
  c=await startBeforeMigration(own);const before=await snapshot(c.admin);await applyMigration(c,own);
  expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[]});
- await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[],"app.practice_exposure_schedule":[]});
+ await migrate(c.admin);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.customer_stage_acknowledgement":[],...laterEmptyTables});
 },120000);
 afterAll(async()=>{await c?.close();});
 async function identity(sql:string,args:unknown[]) {
