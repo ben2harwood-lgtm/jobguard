@@ -22,16 +22,17 @@ function syntheticOnly(): void {
 function admissionUnavailable(): never {
   throw new JobImportV3Error(meterPlaceAdmissionHold.code);
 }
-async function owned(db: TenantTransaction, tenantId: string, digest: string, jobId: string, expectedActor?: string): Promise<string> {
+async function owned(db: TenantTransaction, tenantId: string, digest: string, jobId: string, expectedActor?: string, originalSource = false): Promise<string> {
   const principal = (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.authenticate_practice_session($1,$2)", [digest, tenantId])).rows[0];
   if (!principal || (expectedActor !== undefined && uuid.parse(principal.membership_id) !== uuid.parse(expectedActor))) throw new JobImportV3Error("FORBIDDEN");
-  const found = await db.$client.query(`${practiceOwnedJobsSql()} SELECT id FROM practice_owned_job WHERE id=$2`, [tenantId, jobId, digest]);
+  const found = await db.$client.query(`${practiceOwnedJobsSql()} SELECT j.id,j.provenance FROM practice_owned_job owned JOIN app.job j ON j.tenant_id=$1 AND j.id=owned.id WHERE j.id=$2`, [tenantId, jobId, digest]);
   if (!found.rowCount) throw new JobImportV3Error("FORBIDDEN");
+  if (originalSource && found.rows[0].provenance === "imported") throw new JobImportV3Error("IMPORT_ALREADY_ADOPTED");
   return uuid.parse(principal.membership_id);
 }
 async function snapshot(db: TenantTransaction, tenantId: string, digest: string, sourceJobId: string, raw: unknown, actor?: string) {
   // Fresh authorization precedes informative fixture/binding errors, including replay.
-  const actorId = await owned(db, tenantId, digest, sourceJobId, actor);
+  const actorId = await owned(db, tenantId, digest, sourceJobId, actor, true);
   const parsed = importPreviewRequestV3.safeParse(raw);
   if (!parsed.success) throw new JobImportV3Error("INVALID_IMPORT");
   const request = parsed.data;
