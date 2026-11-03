@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -31,7 +32,7 @@ const persistedVersions=async(contractId:string)=>(await admin.query<{n:number}>
 // Expected organisation revision = persisted count of contractor command receipts (the definition the view reports). Reading it directly
 // keeps the two hot conformance loops from building a full projection before every command; the view itself is still asserted elsewhere.
 const revisionOf=async(p:AuthenticatedMembership)=>(await admin.query<{n:number}>("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type LIKE 'contractor.%'",[p.tenantId])).rows[0]!.n;
-async function setup(){const session=randomUUID();const p=await repo.startPractice(session);const v=await query(p);return {session,p,v};}
+async function setup(){const session=randomUUID();const p=await repo.startPractice(session);await seedActiveContractorAgreement(admin,p.tenantId);const v=await query(p);return {session,p,v};}
 async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){const v=await query(p);return repo.command(p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:v.revision,...fields});}
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
  const id=randomUUID();await command(p,{kind:'member.invite',id,role,email:`${id}@fictional.invalid`,scope:{kind,id:scopeId},clientId,contractId});
@@ -57,11 +58,13 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
  });
  it('isolates two contractor tenants and one small-builder tenant, including scoped IDs and pooled context',async()=>{
   const a=await setup(),b=await setup(),s=await setup();
+  const retainedBefore=await query(s.p);
   const assignment=randomUUID();await withTenant(admin,verifiedTenantContextFromMembership(s.p),async db=>{
    await db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,1,'operations:test')",[s.p.tenantId,assignment,`synthetic-agreement:${s.p.tenantId}`]);
    await appendAuditBatch(db,[{id:assignment,version:'audit.v1',actorRef:'operations:test',eventType:'commercial_track.assigned',subjectType:'tenant',subjectRef:s.p.tenantId,payload:{references:{environment:'synthetic_demo'}}}]);
   });
-  await expect(query(s.p)).rejects.toMatchObject({code:'FORBIDDEN'});
+  expect(await query(s.p)).toEqual(retainedBefore);
+  await expect(command(s.p,{kind:'team.create',branchId:s.v.teams[0]!.branch_id,name:'Fictional refused'})).rejects.toMatchObject({code:'FORBIDDEN'});
   for(const target of [b.p.tenantId,s.p.tenantId,randomUUID()])await expect(repo.query(a.p,{version:'contractor-query.v1',tenantId:target,resource:'organisation'})).rejects.toMatchObject({code:'NOT_FOUND'});
   const branch=a.v.units.find(x=>x.kind==='branch')!.id, client=(await command(a.p,{kind:'client.create',branchId:branch,name:'Fictional A',clientType:'housing_association'})).id;
   const contract=randomUUID();await command(a.p,{kind:'contract.revise',clientId:client,contractId:contract,document,rules:referenceApprovalRulesV1});
@@ -212,7 +215,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   const farBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional far branch'})).id;
   const farTeam=(await command(p,{kind:'team.create',branchId:farBranch,name:'Fictional far team'})).id;
   const targets=[] as Array<{team:string;branch:string;region:string;client:string;contract:string}>;
-  for(const [team,branch,region]of[[v.teams[0]!.id,ownBranch,ownRegion],[otherTeam,ownBranch,ownRegion],[otherBranchTeam,otherBranch,ownRegion],[farTeam,farBranch,otherRegion]]){
+  for(const [team,branch,region]of[[v.teams[0]!.id,ownBranch,ownRegion],[otherTeam,ownBranch,ownRegion],[otherBranchTeam,otherBranch,ownRegion],[farTeam,farBranch,otherRegion]] as const){
    const client=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional scoped client',clientType:'insurer'})).id,contract=randomUUID();
    await command(p,{kind:'contract.revise',clientId:client,contractId:contract,document,rules:referenceApprovalRulesV1});targets.push({team,branch,region,client,contract});
   }

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-mon-3": {
+      "branches": ["codex/sandbox/demo-mon3"],
+      "note": "MON-3 AMBER: PostgreSQL deadline, conversion and trial Final Check/illustration proof only. Own lane file is implicitly permitted. Company Final Check screens remain on jobguard-trial-demo-scope-2026-11-01; no billing or trial rule changes.",
+      "allow": [
+        "packages/db/test/free-first-job-conversion.integration.test.ts",
+        "packages/db/test/free-first-job-final-check.integration.test.ts"
+      ]
+    }
+  }
+}

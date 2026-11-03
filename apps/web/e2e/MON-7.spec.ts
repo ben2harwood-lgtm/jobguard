@@ -74,7 +74,11 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await page.getByLabel("Unit rate Clean site").fill("200.00");await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();
-  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
+  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");await B(page,"Record practice acceptance").click();
+  // The saved v1 sample defaults to pilot_no_charge; work-state reads require
+  // a synthetic_demo track, supplied by this existing simulated scenario.
+  await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");
+  await B(page,"Start this practice job").click();
   await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
   const id=(await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   // Establish a nonzero VALUE-1 figure through the existing explicit variation path.
@@ -89,6 +93,17 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   await expect(page.locator(".fee-statement").getByTestId("additional-fee")).toHaveText("£203.00");
   const feeFiguresBefore=await page.locator(".statement-facts dd").allTextContents();
   await page.goto(`/jobs/${id}/value`);await expect(page.getByTestId("value-invoiced-gross")).toBeVisible();await expect(page.getByTestId("value-approved-extras")).toHaveText("£125.00");const valueBefore=await page.locator(".value-card").allTextContents();
+  // Forecasts must also leave fees, value and the work meter unchanged.
+  const meterBefore = await page.request.get(`/api/jobs/${id}/work-state`);
+  expect(meterBefore.ok(), await meterBefore.text()).toBe(true); const workBefore = await meterBefore.json();
+  const forecast = await page.request.post(`/api/jobs/${id}/exposure-schedule`, { data: {
+    version: "exposure-schedule-command.v1", commandId: crypto.randomUUID(), expectedRevision: 0,
+    stages: [{ id: "quote-stage", label: "Fictional quote work", date: "2026-12-01",
+      cumulativeWorkValue: { pence: 100000, currency: "GBP" }, cumulativeReceipts: { pence: 0, currency: "GBP" } }] } });
+  expect(forecast.ok(), await forecast.text()).toBe(true);
+  await panel(page, id); await expect(page.getByTestId("exposure-curve")).toContainText("£1,000.00");
+  const meterAfter = await page.request.get(`/api/jobs/${id}/work-state`);
+  expect(await meterAfter.json()).toEqual(workBefore);
   // Evaluate every prevention action after recording the financial baselines.
   const view=await read(page,id);
   const input={version:"prevention-command.v1",commandId:crypto.randomUUID(),action:"property",expectedBindingId:view.parties.bindingId,scenarioNow:"2026-10-07T13:00:00.000Z",fixture:"mixed"};
@@ -104,4 +119,52 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   expect(await page.locator(".statement-facts dd").allTextContents()).toEqual(feeFiguresBefore);
   const feeAfter=await page.request.get(`/api/jobs/${id}/fee-illustration`);expect(await feeAfter.json()).toEqual(feeBefore);
   await page.goto(`/jobs/${id}/value`);await expect(page.getByTestId("value-invoiced-gross")).toBeVisible();expect(await page.locator(".value-card").allTextContents()).toEqual(valueBefore);
+});
+
+test("MON-7 curve uses this job's saved stage forecasts, with cited unknowns and no cross-session access", async ({ page, browser }) => {
+  const id = await quote(page);
+  const schedule = page.getByTestId("job-exposure-schedule");
+  await expect(schedule.getByTestId("exposure-unknown")).toContainText("unknown");
+  await expect(schedule.getByRole("button", { name: "Save practice stage schedule", exact: true })).toBeEnabled();
+  for (const [label, value] of [["Stage 1 name", "Fictional roof work"], ["Stage 1 date", "2026-12-01"],
+    ["Stage 1 cumulative work (£ net)", "721.23"], ["Stage 1 cumulative receipts (£ net)", "123.00"]])
+    await schedule.getByLabel(label!, { exact: true }).fill(value!);
+  await schedule.getByRole("button", { name: "Add forecast stage", exact: true }).click();
+  await schedule.getByLabel("Stage 2 name", { exact: true }).fill("Fictional finishing");
+  await schedule.getByLabel("Stage 2 date", { exact: true }).fill("2026-12-08");
+  await schedule.getByRole("button", { name: "Save practice stage schedule", exact: true }).click();
+  const curve = schedule.getByTestId("exposure-curve");
+  await expect(curve).toBeVisible();
+  const roof = curve.getByRole("row").filter({ hasText: "Fictional roof work" });
+  await expect(roof).toContainText("£598.23");
+  await expect(roof).toContainText("synthetic-stage-schedule.v1");
+  await expect(roof).toContainText("Retrieved:");
+  const finishing = curve.getByRole("row").filter({ hasText: "Fictional finishing" });
+  await expect(finishing).toContainText("unknown — missing");
+  await expect(finishing).not.toContainText("£");
+  const response = await page.request.get(`/api/jobs/${id}/exposure-schedule`);
+  expect(response.ok(), await response.text()).toBe(true);
+  const saved = await response.json();
+  await expect(roof).toContainText(saved.schedule.stages[0].source.observedAt);
+  await page.reload(); await panel(page, id);
+  await expect(page.getByTestId("exposure-curve")).toContainText("£598.23");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const stranger = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
+  try {
+    expect((await stranger.request.get(`/api/jobs/${id}/exposure-schedule`)).status()).toBe(401);
+    await stranger.request.post("/api/session");
+    expect((await stranger.request.get(`/api/jobs/${id}/exposure-schedule`)).status()).toBe(404);
+    expect((await stranger.request.post(`/api/jobs/${id}/exposure-schedule`, { data: { version: "exposure-schedule-command.v1" } })).status()).toBe(404);
+  } finally { await stranger.close(); }
+  // Stale presentation uses the persisted schedule and an explicitly aged source response.
+  await page.route(`**/api/jobs/${id}/exposure-schedule`, async route => {
+    const result = await route.fetch(); const aged = await result.json();
+    for (const stage of aged.schedule.stages) stage.source.observedAt = "2020-01-01T00:00:00.000Z";
+    await route.fulfill({ response: result, json: aged });
+  });
+  await page.getByRole("button", { name: "Load saved stage schedule", exact: true }).click();
+  await expect(page.getByTestId("exposure-curve")).toContainText("unknown — stale");
+  await expect(page.getByTestId("exposure-curve")).not.toContainText("£");
+  await expect(page.getByTestId("exposure-curve")).not.toContainText("clear");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

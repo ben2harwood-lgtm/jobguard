@@ -5,7 +5,7 @@ import { FinalAccountLockError } from "@jobguard/core";
 import { expect, it, vi } from "vitest";
 import { CustomerInvoiceSv5preFilter } from "./customer-invoice-sv5pre.filter.js";
 
-it.each(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED"] as const)("PRE-Q4 Nest filter serializes only the typed %s refusal", code => {
+it.each(["JOB_WORK_CLOSED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED"] as const)("PRE-Q4 Nest filter serializes only the typed %s refusal", code => {
  const response = { setHeader: vi.fn(), status: vi.fn(), json: vi.fn() };
  response.status.mockReturnValue(response);
  const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-mon-2a": {
+      "branches": [
+        "codex/sandbox/demo-mon2a"
+      ],
+      "allow": [
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/subscription-onboarding.tsx",
+        "apps/web/app/plans/subscription-onboarding-architecture.test.ts",
+        "apps/web/e2e/subscription-onboarding.spec.ts"
+      ]
+    }
+  }
+}
