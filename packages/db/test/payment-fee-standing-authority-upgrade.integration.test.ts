@@ -14,7 +14,7 @@ let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture(false);},120000);
 afterAll(async()=>{if(f)await closeFinalCheckFixture(f);});
 it("0614 preserves existing approved statements, reservations, receipts and ledger rows; no historical consent is inferred",async()=>{
- const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("/0547_payment_fee_standing_authority.sql"));expect(own).toBeGreaterThan(0);
+ const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("/0544_payment_fee_standing_authority.sql"));expect(own).toBeGreaterThan(0);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,own)){
   const name=url.pathname.split("/").at(-1)!,sql=await readFile(url,"utf8");
@@ -36,7 +36,7 @@ it("0614 preserves existing approved statements, reservations, receipts and ledg
  const tables=(await f.admin.query("SELECT t.schemaname||'.'||t.tablename name FROM pg_tables t WHERE t.schemaname IN('app','identity','control_plane','audit_control') AND EXISTS(SELECT 1 FROM pg_index i WHERE i.indrelid=format('%I.%I',t.schemaname,t.tablename)::regclass AND i.indisprimary) ORDER BY 1")).rows.map(r=>r.name as string);
  const before=await proofBefore(f.admin,tables);
  await f.admin.query(await readFile(MIGRATION_URLS[own]!,"utf8"));
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0547_payment_fee_standing_authority.sql')");
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0544_payment_fee_standing_authority.sql')");
  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
  expect((await fees.read(x.context,x.jobId,x.auth.digest)).standingAuthority).toBeNull();
  expect((await fees.read(x.context,x.jobId,x.auth.digest)).statements[0]).toEqual({statement:receipt,state:"approved"});

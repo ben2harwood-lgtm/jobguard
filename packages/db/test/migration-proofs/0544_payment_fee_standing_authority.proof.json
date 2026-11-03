@@ -1,5 +1,5 @@
 {
-  "migration": "0547_payment_fee_standing_authority.sql",
+  "migration": "0544_payment_fee_standing_authority.sql",
   "lp0": [
     {
       "section": "entries",

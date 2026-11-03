@@ -19,7 +19,7 @@ it("0497 retains the private validator and five consumers with exact static priv
  const known=new Set<string>(raw.recorded.routines.map(r=>r.identity.slice(9).split("(")[0]!));
  const tables=new Set<string>(raw.recorded.routines.flatMap(r=>r.staticWrites));
  // 0614 is now this writer's latest definition, and the reviewed facts follow it.
- const standing=await read("0547_payment_fee_standing_authority.sql");
+ const standing=await read("0544_payment_fee_standing_authority.sql");
  const latest=new Map([...standing.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\([^;]*? AS \$\$([\s\S]*?)END \$\$;/gu)].map(m=>[m[1],m[2]]));
  for(const [_,name,body] of [...definitions,...sharedDefinitions]){
   const facts=raw.recorded.routines.filter(r=>r.identity.startsWith(`function:app.${name}(`));expect(facts).toHaveLength(1);
