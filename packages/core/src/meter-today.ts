@@ -29,3 +29,23 @@ export function meterTodayLabels(view: MeterTodayRead) {
       : "Further places stay within the monthly maximum and raise an account review.",
   };
 }
+
+/** One row per metered place; shared jobs retain each original job reference. */
+export const meterTodayJobsReadV1 = z.object({
+  version: z.literal("meter-today-jobs-read.v1"),
+  meter: meterTodayReadV1,
+  places: z.array(z.object({
+    jobIds: z.array(z.string().uuid()).min(1),
+    kind: z.enum(["place", "shared_place", "free_small_place"]),
+  }).strict()),
+}).strict().superRefine((value, ctx) => {
+  const ids = value.places.flatMap(place => place.jobIds);
+  if (value.places.length !== value.meter.countedPlaces + value.meter.freeSmallPlaces ||
+    value.places.filter(place => place.kind === "free_small_place").length !== value.meter.freeSmallPlaces ||
+    new Set(ids).size !== ids.length ||
+    value.places.some(place => place.kind === "place" && place.jobIds.length !== 1 ||
+      place.kind === "shared_place" && place.jobIds.length < 2)) {
+    ctx.addIssue({ code: "custom", message: "Meter job list disagrees with today's count" });
+  }
+});
+export type MeterTodayJobsRead = z.infer<typeof meterTodayJobsReadV1>;

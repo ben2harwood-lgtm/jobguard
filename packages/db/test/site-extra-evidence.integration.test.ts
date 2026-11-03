@@ -127,7 +127,7 @@ describe("ENT-3d verified photo and resident confirmation", () => {
   const row = await originOf(f, result.variationId);
   expect(row).toMatchObject({ evidence_id: p?.id ?? null, resident_confirmation_evidence_id: confirmation }); expect(row.origin_hash).toBe(extraOriginHashV1(originHashInput(row)));
   const events = (await c.admin.query("SELECT payload,actor_ref,subject_type,subject_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.resident_confirmation_recorded'", [f.p.tenantId])).rows;
-  expect(events).toEqual([{ actor_ref: `membership:${a.member.membershipId}`, subject_type: "evidence", subject_ref: confirmation, payload: { references: { command: commandId, job: f.jobId, confirmation, environment: "synthetic_demo" }, hashes: { content, document: documentHash } } }]);
+  expect(events).toEqual([{ actor_ref: `membership:${a.member.membershipId}`, subject_type: "evidence", subject_ref: confirmation, payload: { references: { auditTrust: "lower_trust", command: commandId, job: f.jobId, confirmation, environment: "synthetic_demo" }, hashes: { content, document: documentHash } } }]);
   const payloads = (await c.admin.query("SELECT payload::text body FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows.map(r => r.body as string).join("\n");
   expect(payloads).not.toContain(note); expect(payloads).not.toContain(description); await chain(c, f);
  });
