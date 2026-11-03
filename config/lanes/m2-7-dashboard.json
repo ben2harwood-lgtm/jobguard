@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m2-7-dashboard"
       ],
-      "note": "M2-7 AMBER synthetic owner-only metrics read and dashboard. Reuses existing session/job ownership, metrics and mandatory projections; no migration. Core index edit only removes inherited empty merge conflict markers. This lane file is implicitly editable.",
+      "note": "M2-7 synthetic owner-only dashboard and required metrics store. RED: tenant-isolated receipt persistence. Catch-up retains main authority and LP-4 lower-trust audit wrapper. Migration 0597; no live providers.",
       "allow": [
         "apps/web/app/api/jobs/[id]/inbox-metrics/route.test.ts",
         "apps/web/app/api/jobs/[id]/inbox-metrics/route.ts",
@@ -15,7 +15,13 @@
         "apps/web/app/ui/inbox-metrics-dashboard.tsx",
         "apps/web/app/ui/relevance-inbox.tsx",
         "apps/web/e2e/m2-7-dashboard.spec.ts",
-        "packages/core/src/index.ts"
+        "packages/db/migrations/0597_inbox_metrics_store.sql",
+        "packages/db/src/inbox-metrics-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/inbox-metrics.integration.test.ts",
+        "packages/db/test/inbox-metrics.test.ts",
+        "packages/db/test/migration-proofs/0597_inbox_metrics_store.proof.json"
       ]
     }
   }

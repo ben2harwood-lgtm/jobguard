@@ -115,3 +115,12 @@ it("refuses a complete status that contradicts its own saved parts", () => {
  ]) expect(() => parseShadowReport({ ...good, ...patch }, jobId)).toThrow();
  expect(() => parseShadowReport({ ...report(), status: "finished" }, jobId)).toThrow();
 });
+
+it("accepts CH-9 v2 while preserving the shadow receipt's job and lock checks",async()=>{
+ const {mapValueReceiptV2}=await import("@jobguard/core");
+ const raw=report(),lock={id:randomUUID(),finalAccountRevisionId:randomUUID(),lockedAt:"2026-10-31T04:00:00Z",digest:"a".repeat(64)};
+ const receipt=mapValueReceiptV2({base:{tenantId:randomUUID(),jobId,lockId:lock.id,lockedRevisionId:lock.finalAccountRevisionId,lockedAt:lock.lockedAt,foundComplete:true,checkId:randomUUID(),checkedAt:lock.lockedAt,checked:[],tracked:[],assessments:[]},supplier:{reason:"No supplier derivation",balances:[]},withheld:{reason:"No withheld derivation",balances:[]}});
+ const saved={...raw,account:{...raw.account,lock},value:{version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt}};
+ expect(parseShadowReport(saved,jobId).value).toEqual(saved.value);
+ receipt.sources.base.lockId=randomUUID();expect(()=>parseShadowReport(saved,jobId)).toThrow("Wrong value report");
+});

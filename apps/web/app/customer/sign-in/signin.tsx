@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { CustomerMessage } from "./message";
 export default function CustomerSignin() {
   const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open the link from your email to sign in."), [busy, setBusy] = useState(false), [signedInJob, setSignedInJob] = useState<string>();
   useEffect(() => {
@@ -27,5 +28,5 @@ export default function CustomerSignin() {
     setMessage(response.ok ? "You are signed out." : "Sign-out could not be confirmed. Close this browser session.");
     } catch { setMessage("Sign-out could not be confirmed. Close this browser session."); }
   }
-  return <main><h1>Customer sign-in</h1><p>{message}</p>{signedInJob && <p><a href={`/customer/extras?jobId=${encodeURIComponent(signedInJob)}`}>Review extras</a></p>}{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button></main>;
+  return <main><h1>Customer sign-in</h1><p>{message}</p>{signedInJob && <p><a href={`/customer/quote?job=${encodeURIComponent(signedInJob)}`}>Review your quote</a></p>}{signedInJob && <p><a href={`/customer/extras?jobId=${encodeURIComponent(signedInJob)}`}>Review extras</a></p>}{signedInJob && <p><a href={`/customer/jobs/${signedInJob}`}>Review recorded stages</a></p>}{link && <button onClick={() => void signin()} disabled={busy}>Sign in</button>}<button onClick={() => void signout()}>Sign out</button>{signedInJob && <CustomerMessage jobId={signedInJob}/>}</main>;
 }
