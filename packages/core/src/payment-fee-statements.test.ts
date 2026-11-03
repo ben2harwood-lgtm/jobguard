@@ -1,7 +1,7 @@
 let nextId=0;
 const randomUUID=()=>`a0000000-0000-4000-8000-${String(++nextId).padStart(12,"0")}`;
 import { expect,it } from "vitest";
-import { parsePaymentFeeCommand,PaymentFeeStatementError,paymentFeeStatementV1 } from "./payment-fee-statements.js";
+import { parsePaymentFeeCommand,PaymentFeeStatementError,paymentFeeStatementV1,paymentFeeAuthorityCommandV1,paymentFeeViewV1 } from "./payment-fee-statements.js";
 const prepare={version:"payment-fee-command.v1",commandId:randomUUID(),action:"prepare",paymentId:randomUUID()};
 it("MON-4A accepts intent only; fee, tenant, settlement, allocation and actor are server-owned",()=>{
  expect(parsePaymentFeeCommand(prepare)).toEqual(prepare);
@@ -25,4 +25,15 @@ it("the statement boundary refuses negative, unsafe and production money",()=>{
   policyVersion:"reference_fee_policy_v3",environment:"synthetic_demo",productionEnabled:false,realExternalActions:0};
  expect(paymentFeeStatementV1.parse(doc)).toEqual(doc);
  for(const patch of [{feePence:-1},{feePence:1.5},{feePence:1000000000001},{environment:"production"},{productionEnabled:true},{realExternalActions:1}])expect(paymentFeeStatementV1.safeParse({...doc,...patch}).success).toBe(false);
+});
+
+it("standing authority accepts explicit capped consent only; its persisted view does not grant live capability",()=>{
+ const command={version:"payment-fee-authority-command.v1",action:"opt_in",commandId:randomUUID(),expectedAuthorityId:null,cap:"per_verified_receipt_fee",policyVersion:"reference_fee_policy_v3"};
+ expect(paymentFeeAuthorityCommandV1.parse(command)).toEqual(command);
+ for(const patch of [{cap:8000},{cap:"fixed_sum"},{amountPence:8000},{tenantId:randomUUID()},{expiresAt:"2099-01-01"},{policyVersion:"approved"},{expectedAuthorityId:"bad"}])
+  expect(paymentFeeAuthorityCommandV1.safeParse({...command,...patch}).success).toBe(false);
+ const authority={version:"payment-fee-authority.v1",authorityId:command.commandId,state:"active",cap:command.cap,policyVersion:command.policyVersion,expiresAt:"2026-11-03T00:00:00+00:00",productionEnabled:false,realExternalActions:0};
+ const view={version:"payment-fee-view.v1",jobId:randomUUID(),receipts:[],statements:[],standingAuthority:authority,productionEnabled:false,realExternalActions:0};
+ expect(paymentFeeViewV1.parse(view)).toEqual(view);
+ for(const patch of [{productionEnabled:true},{realExternalActions:1},{cap:8000}])expect(paymentFeeViewV1.safeParse({...view,standingAuthority:{...authority,...patch}}).success).toBe(false);
 });

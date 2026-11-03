@@ -1,3 +1,4 @@
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -44,6 +45,7 @@ describe("DEMO-I PostgreSQL lifecycle and adversaries",()=>{
   expect(await call(a,"report",id)).toEqual(report);
   expect(await proofDifferences(c.admin,businessBefore)).toEqual({rows:[],types:[]});
   expect((await c.admin.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'small_builder_demo.%' ORDER BY sequence",[a.tenantId])).rows.map(row=>row.event_type)).toEqual(["small_builder_demo.create","small_builder_demo.snapshot","small_builder_demo.reset"]);
+ await assertLp4SealedEvents(c.admin, a.tenantId, "small_builder_demo.reset");
   const successor="successorId" in results[0]! ? results[0].successorId : null;
   expect(await call(a,"read",successor)).toMatchObject({predecessorId:id,status:"blocked",revision:1});
   await expect(call(a,"reset",id,reset())).rejects.toThrow("DEMO_STALE_REVISION");

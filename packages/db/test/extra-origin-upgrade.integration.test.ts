@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -157,6 +158,7 @@ describe("ENT-4b additive upgrade", () => {
    expect(await new ExtraRepository(c.runtime).readExtra(testTenantContext(old.tenant_id), old.job_id, old.variation_id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: old.provenance, commandId: null, raisingMembershipId: null } });
   }
   expect((await c.admin.query("SELECT * FROM public.jobguard_schema_migration WHERE migration_name='0122_extra_origin_persistence.sql'")).rowCount).toBe(1);
+  await seedActiveContractorAgreement(c.admin,f.p.tenantId);
   for (const col of newOriginColumns) await expect(withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, fixtureJob, id, f.p.membershipId); await rawVariation(db, f.p.tenantId, fixtureJob, id); await rawOrigin(db, { ...f, jobId: fixtureJob }, id, command, { raising_grant_id: null, [col]: col === "raiser_assigned" ? false : col.includes("hash") ? "a".repeat(64) : col === "command_type" ? "LogSiteExtra" : randomUUID() }); })).rejects.toMatchObject({ code: "23514" });
   const fresh = await cluster(); try {
    const catalog = async (db: typeof c.admin) => (await db.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,pg_get_constraintdef(k.oid) definition FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_constraint k ON k.conrelid=c.oid WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname,definition", [newTables])).rows;

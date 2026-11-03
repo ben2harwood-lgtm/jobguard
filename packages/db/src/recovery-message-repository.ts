@@ -1,3 +1,4 @@
+import { beginRecoveryCommand, withRecoveryCommands } from "./recovery-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -73,6 +74,12 @@ function translate(error: unknown): unknown {
     return new RecoveryMessageError(error.code === "FORBIDDEN" ? "RECOVERY_MESSAGE_FORBIDDEN" : error.code === "COMMAND_CONFLICT" ? "RECOVERY_MESSAGE_COMMAND_CONFLICT" : "RECOVERY_MESSAGE_EXPIRED");
   }
   const pg = error as { code?: string; message?: string; constraint?: string };
+  if (pg.message === "RECOVERY_CASE_NOT_FOUND") return new RecoveryMessageError("RECOVERY_MESSAGE_NOT_FOUND");
+  // Deferred command guards can fail at COMMIT, outside the dispatcher's mapper.
+  if ((pg.code === "23514" || pg.code === "23505") && pg.message === "COMMAND_CONFLICT") {
+    return new RecoveryMessageError("RECOVERY_MESSAGE_COMMAND_CONFLICT");
+  }
+  if(pg.message==="FORBIDDEN")return new RecoveryMessageError("RECOVERY_MESSAGE_FORBIDDEN");
   if (pg.code === "23514") {
     const mapped: Record<string, RecoveryMessageErrorCode> = {
       RECOVERY_TERMS_NOT_APPROVED: "RECOVERY_TERMS_NOT_APPROVED",
@@ -110,7 +117,7 @@ export class RecoveryMessageRepository {
 
   async read(ctx: VerifiedTenantContext, caseId: string): Promise<RecoveryMessageState> {
     caseId = uuidArg(caseId);
-    return guarded(() => withTenant(this.pool, ctx, async db => {
+    return guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
       await this.finishHistory(db, ctx.tenantId, caseId);
       return this.state(db, ctx.tenantId, caseId);
@@ -119,9 +126,9 @@ export class RecoveryMessageRepository {
 
   async preview(ctx: VerifiedTenantContext, caseId: string, raw: unknown, actor: RecoveryMessageActor): Promise<RecoveryMessageState> {
     caseId = uuidArg(caseId);
-    const input = recoveryMessagePreviewCommandV1.parse(raw), requestHash = requestHashOf({ action: "preview", caseId, ...input, membershipId: actor.membershipId });
-    await guarded(() => withTenant(this.pool, ctx, async db => {
-      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "preview", requestHash });
+    const input = recoveryMessagePreviewCommandV1.parse(raw), requestJson = canonical({ action: "preview", caseId, ...input, membershipId: actor.membershipId }), requestHash = requestHashOf(JSON.parse(requestJson));
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "preview", requestHash, requestJson });
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["previewed"], caseId, requestHash)) return;
       if (!claimed) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT"); // another family holds this id
       const current = await this.inspect(db, ctx.tenantId, caseId);
@@ -154,7 +161,7 @@ export class RecoveryMessageRepository {
   // ---- approve: an exact Decision, authorization and outbox action in one transaction -------------------------
   private async approve(ctx: VerifiedTenantContext, caseId: string, messageId: string, input: Extract<RecoveryMessageCommand, { action: "approve" }>, actor: RecoveryMessageActor, requestHash: string) {
     // A replay must be recognised before any freshness check: the first success already moved the revision on.
-    const pre = await guarded(() => withTenant(this.pool, ctx, async db => {
+    const pre = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, false);
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["approved"], caseId, requestHash)) return { replayed: true as const };
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
@@ -204,7 +211,7 @@ export class RecoveryMessageRepository {
     await guarded(() => new UserCommandDispatcher(this.pool).dispatch(ctx, command, mutation));
     // Shared semantic idempotency can return a different command's completed approval. This leaf binds the caller's
     // expected message revision as well: only the same exact command is a replay; another client's approval is stale.
-    await guarded(() => withTenant(this.pool, ctx, async db => {
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       const owned = await db.$client.query("SELECT 1 FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 AND command_id=$3 AND request_hash=$4 AND kind='approved'", [ctx.tenantId, messageId, input.commandId, requestHash]);
       if (!owned.rowCount) fail("RECOVERY_MESSAGE_STALE_REVISION");
     }));
@@ -212,8 +219,9 @@ export class RecoveryMessageRepository {
 
   // ---- revoke: only before anything was claimed; it withdraws the authorization and cancels the queued action --
   private async revoke(ctx: VerifiedTenantContext, caseId: string, messageId: string, input: Extract<RecoveryMessageCommand, { action: "revoke" }>, actor: RecoveryMessageActor, requestHash: string) {
-    await guarded(() => withTenant(this.pool, ctx, async db => {
-      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "revoke", requestHash });
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, messageId });
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "revoke", requestHash, requestJson });
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["revoked"], caseId, requestHash)) return;
       if (!claimed) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT"); // another family holds this id
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId), status = await this.statusOf(db, ctx.tenantId, m);
@@ -230,8 +238,9 @@ export class RecoveryMessageRepository {
 
   // ---- advance: claim under the case lock, run the fake adapter after commit, record the result ---------------
   private async advance(ctx: VerifiedTenantContext, caseId: string, messageId: string, input: Extract<RecoveryMessageCommand, { action: "advance" }>, actor: RecoveryMessageActor, requestHash: string) {
-    const claimed = await guarded(() => withTenant(this.pool, ctx, async db => {
-      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "advance", requestHash });
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, messageId });
+    const claimed = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "advance", requestHash, requestJson });
       const replay = await this.isReplay(db, ctx.tenantId, input.commandId, ["started", "blocked"], caseId, requestHash);
       if (replay) {
         const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
@@ -277,7 +286,7 @@ export class RecoveryMessageRepository {
     const adapter = executorAdapter(new FakeRecoveryMessageAdapter(this.pool, input.outcome satisfies RecoveryMessageDeliveryMode), ctx);
     try { await new ActionExecutor(this.pool, new Map([[adapter.name, adapter]]), noTelemetry).execute(ctx, claimed.outboxId); }
     catch (error) { if (error instanceof PracticeProcessStopped) fail("RECOVERY_MESSAGE_DELIVERY_INTERRUPTED"); throw error; }
-    await guarded(() => withTenant(this.pool, ctx, async db => {
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
       // A declined execution or a changed-source refusal has no effect. Persist the block before recording its history.
       await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
@@ -292,9 +301,10 @@ export class RecoveryMessageRepository {
 
   // ---- reconcile: ask the practice provider what it recorded; never resend an unknown outcome -----------------
   private async reconcile(ctx: VerifiedTenantContext, caseId: string, messageId: string, input: Extract<RecoveryMessageCommand, { action: "reconcile" }>, actor: RecoveryMessageActor, requestHash: string) {
+    const requestJson = canonical({ caseId, membershipId: actor.membershipId, ...input, messageId });
     const adapter = executorAdapter(new FakeRecoveryMessageAdapter(this.pool, "success"), ctx);
-    const claimed = await guarded(() => withTenant(this.pool, ctx, async db => {
-      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "reconcile", requestHash });
+    const claimed = await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
+      const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "reconcile", requestHash, requestJson });
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["reconcile_started", "outcome_unknown"], caseId, requestHash)) {
         const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
         if (m.outbox_status !== "outcome_unknown") return { replayed: true as const };
@@ -344,7 +354,7 @@ export class RecoveryMessageRepository {
     let result: "succeeded" | "not_found" | "unknown";
     try { result = await reconcileOutbox(this.pool, ctx, claimed.outboxId, adapter); }
     catch (error) { if (error instanceof Error && error.message === "NOT_RECONCILABLE") return fail("RECOVERY_MESSAGE_NOT_RECONCILABLE"); throw error; }
-    await guarded(() => withTenant(this.pool, ctx, async db => {
+    await guarded(() => withRecoveryCommands(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
       if (result === "unknown") {
         await this.event(db, ctx.tenantId, { id: messageId, jobId: claimed.jobId, caseId }, actor, "outcome_unknown", input.commandId, requestHash, claimed.started);
@@ -364,7 +374,7 @@ export class RecoveryMessageRepository {
    * the audit append is always last. Returns whether this transaction newly claimed the command id (true when no claim was asked).
    */
   private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, lockCase = true,
-    claim?: Readonly<{ action: string; requestHash: string }>): Promise<boolean> {
+    claim?: Readonly<{ action: string; requestHash: string; requestJson: string }>): Promise<boolean> {
     await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [tenantId, `recovery-message-command:${commandId}`]);
     if (!(await db.$client.query("SELECT 1 FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId])).rowCount) fail("RECOVERY_MESSAGE_NOT_FOUND");
     // FOR SHARE needs UPDATE on app.membership, which jobguard_runtime holds (0000_tenancy.sql); it keeps the owner from being revoked mid-command.
@@ -374,7 +384,7 @@ export class RecoveryMessageRepository {
     if (!owner.rowCount || actor.actorRef !== `membership:${actor.membershipId}`) fail("RECOVERY_MESSAGE_FORBIDDEN");
     // The receipt is claimed BEFORE the case lock, in the same order as UserCommandDispatcher (receipt, then the approval's case lock),
     // so a racing approval with the same id meets a typed conflict instead of a deadlock (Codex P2 4196435988).
-    const claimed = claim ? await this.claim(db, tenantId, commandId, claim.action, claim.requestHash, actor) : true;
+    const claimed = claim ? await this.claim(db, tenantId, commandId, claim.action, claim.requestHash, actor, claim.requestJson) : true;
     await this.refuseEvidencePackCommand(db, tenantId, commandId);
     if (lockCase) await this.lockCase(db, tenantId, caseId);
     return claimed;
@@ -398,12 +408,10 @@ export class RecoveryMessageRepository {
    * lock does not serialise against other command families, but the receipt primary key fences families that use shared
    * registration. Legacy pack tables additionally use refuseEvidencePackCommand(). Approval claims through the dispatcher.
    */
-  private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor): Promise<boolean> {
-    const claimed = await db.$client.query(
-      `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
-       VALUES($1,$2,$3,$4,$5,'succeeded',$6::jsonb,$7,clock_timestamp()) ON CONFLICT DO NOTHING RETURNING command_id`,
-      [commandId, tenantId, `recovery.message.${action}`, commandId, requestHash, JSON.stringify({ recoveryMessageCommand: action }), actor.membershipId]);
-    return !!claimed.rowCount;
+  private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, _requestHash: string, _actor: RecoveryMessageActor, requestJson: string): Promise<boolean> {
+    try { return await beginRecoveryCommand(db,tenantId,commandId,`recovery.message.${action}`,requestJson); }
+    catch(error) { if(error instanceof Error && error.message==="COMMAND_CONFLICT")fail("RECOVERY_MESSAGE_COMMAND_CONFLICT");
+      if(error instanceof Error && error.message==="FORBIDDEN")fail("RECOVERY_MESSAGE_FORBIDDEN");throw error; }
   }
 
   /** The first recorded effect of a command id, whichever table holds it. An approval is also a Decision receipt. */
