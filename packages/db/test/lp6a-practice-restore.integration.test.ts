@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { ContractorRepository, ContractorPracticeSessionRepository, contractorSessionContext, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "../src/index.js";
@@ -86,6 +86,10 @@ it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster
     await execute("pg_dump",[...connectionArgs(db),"--data-only","--inserts",
       "--no-owner","--no-privileges","--table=control_plane.request_binding",`--file=${dumpFile}`],
       {env:{...process.env,PGPASSWORD:String(db.owner.options.password)},timeout:30_000});
+    // Embedded PostgreSQL 16 ships no pg_dump. CI's newer client adds this
+    // PostgreSQL 17+ setting, which 16 rejects; remove only that SET line.
+    const dumpSql=await readFile(dumpFile,"utf8");
+    await writeFile(dumpFile,dumpSql.replace(/^SET transaction_timeout = 0;\r?\n/gm,""));
     await execute("psql",[...connectionArgs(other),"-X","--set=ON_ERROR_STOP=on",`--file=${dumpFile}`],
       {env:{...process.env,PGPASSWORD:String(other.owner.options.password)},timeout:30_000});
     const dump=(await db.owner.query("SELECT coalesce(json_agg(row_to_json(b)),'[]'::json) payload FROM control_plane.request_binding b")).rows[0].payload;
