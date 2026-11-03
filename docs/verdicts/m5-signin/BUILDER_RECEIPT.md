@@ -530,3 +530,60 @@ or bind localhost. GitHub CI must run those after router push. No git-writing
 commands, dependency downloads, live providers or releases. Router owns commit,
 push and the resulting head; green CI and independent exact-head RED review
 remain required before merge.
+
+## PR #531 exact-union catch-up — 3 November 2026
+
+READY. RED; plan piece CH-5. Merge parent origin/main is be69b8d91
+(batch 3b #530, #392 CH-6 and #431 CH-4 already landed); local main
+is older, so comparisons use the actual MERGE_HEAD/origin/main.
+
+Resolved three content conflicts as an exact union. Import ownership keeps
+company-owner authentication and main's provenance lookup/refusal, including
+original-source checks in preview and mutation. Both company and shared-practice
+queries now return provenance. Scripted SQL transports match the combined query;
+no test assertion or expected result changed in this catch-up. Work fixtures
+retain audit/command writer role setup plus main's lazy migration import and
+direct proof-schema source import.
+
+Inspected each re-created routine against its latest definition on main:
+0387 customer_portal_issue; 0380 mon1_refresh_work_ledger; 0385 ch4_admit_place;
+0530 adopt_invoiced_job_v3; 0515 write_success_fee_v3,
+success_fee_withheld_source and simulation_fee_demo_settle. Existing batch SQL
+already carries the required union: 0534 retains batch 3b's 0530 locked
+IMPORT_ALREADY_ADOPTED refusal before insert permits; 0536/0537 preserve the
+latest 0515 routines with the existing batch deltas. No migration SQL needed
+an edit. #392's CH-6 source/fingerprint/review routines and #431's work-state
+changes remain as merged. All 197 main migrations are byte-identical, with
+only the five batch additions numbered 0533–0537. Lane now exactly lists the
+68 changed paths relative to origin/main, excluding config/lanes/.
+
+Validation actually executed with installed dependencies, Vitest 4.1.12,
+maxWorkers=1, one Vitest process at a time, at most three named files per run:
+
+- DB success-fee-cap-net-reversals, fee-invalid-proof-reduction and
+  job-import-v3-admission unit suites: 14 passed.
+- DB import-pre-adoption-repository and migration-proof-loader: 80 passed.
+  An extra nonexistent job-import-v3.test.ts filter selected no file.
+- job-import-v3.integration.test.ts filtered to CH5-P source-only: 13 passed,
+  3 database cases skipped by the filter; no PostgreSQL started.
+- DB lp-0-catalog and src/outbox: 40 passed. Total: 147 passed.
+- Direct installed tsc checks for packages/db, apps/api and apps/web: passed.
+- Direct strict tsc check of the three affected import/work fixture test files:
+  passed.
+- Core purity, money arithmetic, commercial boundary, AI provider boundary,
+  PL/pgSQL CASE-in-IF (202 migrations), git diff --check and changed-file
+  conflict-marker scan: passed.
+- Read-only comparison of all main migration bytes and exact lane paths: passed.
+- Full lint stops at lane checking because the unfinished merge index contains
+  incoming main files as staged changes. Router must stage/commit the resolved
+  merge and rerun normal lane lint; the lane deliberately excludes unchanged
+  main files.
+- An initial edit command used the DB working directory with root-relative
+  paths and made no edits; its subsequent test invocation failed on the still
+  unresolved markers. Corrected the working directory, resolved the conflicts,
+  then all selected tests above passed.
+
+No git writes, fetch, downloads, PostgreSQL or browser execution. Router owns
+staging, commit and push. GitHub CI database/migration/browser checks and one
+independent exact-head RED review remain required before merge. Synthetic data
+only; no new behavior or test expectation changes in this catch-up.

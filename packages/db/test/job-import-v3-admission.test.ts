@@ -16,7 +16,7 @@ function company() {
   actionHash: intent.previewHash, environment: "synthetic_demo", realExternalActions: 0,
   baseline: { acceptedNetPence: 300000, lines: approved.baseline.lines.map(line => ({ sourceLineId: line.sourceLineId, netPence: line.netPence, scopeItemId: randomUUID(), origin: "builder_baseline" })) } };
  f.query.mockImplementation(async (sql, values) => {
-  if (sql.startsWith("SELECT j.id FROM app.job")) return { rows: f.state.owns ? [{ id: J }] : [], rowCount: f.state.owns ? 1 : 0 };
+  if (sql.startsWith("SELECT j.id,j.provenance FROM app.job")) return { rows: f.state.owns ? [{ id: J, provenance: f.state.provenance }] : [], rowCount: f.state.owns ? 1 : 0 };
   if (sql.includes("FROM app.job_import_v3")) return { rows: [{ snapshot: approved, result: receipt, adopted_at: new Date("2026-10-28T18:00:00Z") }], rowCount: 1 };
   return original(sql, values);
  });
