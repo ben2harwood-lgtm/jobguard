@@ -1,5 +1,5 @@
 {
-  "migration": "0526_practice_invoice_closed_job.sql",
+  "migration": "0524_practice_invoice_closed_job.sql",
   "lp0": [
     {
       "section": "routines",
