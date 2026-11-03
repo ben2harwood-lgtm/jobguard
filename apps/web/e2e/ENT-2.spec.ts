@@ -1,5 +1,7 @@
+import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
 import { expect, test, type Page } from '@playwright/test';
 test.setTimeout(240_000);
+test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const base = 'http://127.0.0.1:3000';
 const B = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 const banner = 'Practice sandbox — synthetic data; nothing is sent or charged';

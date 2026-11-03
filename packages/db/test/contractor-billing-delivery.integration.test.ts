@@ -1,3 +1,5 @@
+import { pauseOutboundFixture } from "./outbound-pause-fixture.js";
+import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
 import {ContractorBillingDelivery} from "../src/contractor-billing-delivery.js";
@@ -13,6 +15,7 @@ it("E6-23 E6-24 outcome_unknown delivery is reconciled, never blindly retried",a
  await delivery.reconcile(w.ctx,w.session,w.s.jobId,action.outboxActionId);expect(reconciliations).toBe(1);expect(calls).toBe(1);
  const after=await w.repo.read(w.ctx,w.session,w.s.jobId);
  expect(after.deliveries[0]).toMatchObject({status:"succeeded",outbox_action_id:action.outboxActionId});
+ await assertLp4SealedEvents(c.admin, w.w.p.tenantId, "contractor.billing.delivery_claimed");
  // The screen offers export only to contracts on this job's own work orders.
  expect(after.clientContractIds).toEqual((await c.admin.query("SELECT DISTINCT contract_id::text id FROM app.work_order WHERE job_id=$1 ORDER BY 1",[w.s.jobId])).rows.map(r=>r.id));
  expect(after.clientContractIds.length).toBeGreaterThan(0);
@@ -37,18 +40,17 @@ it("M0-13a paused contractor delivery keeps its queued artifact and records no a
  const w=await world(c),batch=await w.exported(),view=await w.repo.read(w.ctx,w.session,w.s.jobId);
  const action=await w.repo.approveDelivery(w.ctx,w.session,w.s.jobId,{version:"billing-approve-delivery.v1",commandId:randomUUID(),batchId:batch.batchId,channel:"fake_api",destination:"fictional.invalid",contentHash:view.exports[0]!.jsonHash,expiresAt:new Date(Date.now()+3600000).toISOString()});
  const before=(await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows;
- const prior=(await c.admin.query("SELECT paused FROM outbound_control.state")).rows[0].paused;
  let calls=0;
  const adapter:OutboundAdapter={name:"fake_api",supportsProviderDeduplication:true,async deliver(){calls++;return {kind:"succeeded",providerReference:"fictional-pause"};},async reconcile(){return "unknown";}};
  const executor=new ContractorBillingDelivery(c.runtime,new Map([[adapter.name,adapter]]));
- await c.admin.query("UPDATE outbound_control.state SET paused=true");
+ const resume = await pauseOutboundFixture(c.admin);
  try{
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
   await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
   expect(calls).toBe(0);
   expect((await c.admin.query("SELECT * FROM app.action_outbox WHERE id=$1",[action.outboxActionId])).rows).toEqual(before);
   expect((await c.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1",[action.outboxActionId])).rows).toEqual([{n:0}]);
- }finally{await c.admin.query("UPDATE outbound_control.state SET paused=$1",[prior]);}
+ }finally{await resume();}
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  await executor.execute(w.ctx,w.session,w.s.jobId,action.outboxActionId);
  expect(calls).toBe(1);

@@ -22,11 +22,25 @@ export const paymentFeeStatementV1=z.object({
  productionEnabled:z.literal(false),realExternalActions:z.literal(0),
 }).strict();
 export type PaymentFeeStatement=z.infer<typeof paymentFeeStatementV1>;
+// Separate executable contract; the policy-independent preparation stays authority-free.
+export const paymentFeeAuthorityCommandV1=z.object({
+ version:z.literal("payment-fee-authority-command.v1"),commandId:id,
+ action:z.enum(["opt_in","revoke"]),expectedAuthorityId:id.nullable(),
+ cap:z.literal("per_verified_receipt_fee"),policyVersion:z.literal("reference_fee_policy_v3"),
+}).strict();
+export type PaymentFeeAuthorityCommand=z.infer<typeof paymentFeeAuthorityCommandV1>;
+export const paymentFeeAuthorityV1=z.object({
+ version:z.literal("payment-fee-authority.v1"),authorityId:id,
+ state:z.enum(["active","revoked","stale"]),cap:z.literal("per_verified_receipt_fee"),
+ policyVersion:z.literal("reference_fee_policy_v3"),expiresAt:z.string().datetime({offset:true}),
+ productionEnabled:z.literal(false),realExternalActions:z.literal(0),
+}).strict();
+export const paymentFeeRequestV1=z.union([paymentFeeCommandV1,paymentFeeAuthorityCommandV1]);
 export const paymentFeeViewV1=z.object({
  version:z.literal("payment-fee-view.v1"),jobId:id,
  receipts:z.array(id),statements:z.array(z.object({statement:paymentFeeStatementV1,
  state:z.enum(["awaiting_approval","approved","disputed","source_changed","approval_expired","approval_revoked"])}).strict()),
- standingAuthority:z.null(),productionEnabled:z.literal(false),realExternalActions:z.literal(0),
+ standingAuthority:paymentFeeAuthorityV1.nullable(),productionEnabled:z.literal(false),realExternalActions:z.literal(0),
 }).strict();
 export class PaymentFeeStatementError extends Error {
  readonly code="INVALID_PAYMENT_FEE_COMMAND";

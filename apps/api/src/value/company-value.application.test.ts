@@ -55,3 +55,14 @@ it("company read admission is exact to GET value endpoints",async()=>{
  expect(await guard.canActivate({switchToHttp:()=>({getRequest:()=>request})} as ExecutionContext)).toBe(true);
  request.method="POST";await expect(guard.canActivate({switchToHttp:()=>({getRequest:()=>request})} as ExecutionContext)).rejects.toMatchObject({status:403});
 });
+
+it("v2 business totals reproduce job sources and reject an altered recovery subtotal",async()=>{
+ const {mapValueReceiptV2,mapCurrentBusinessValueSummary,mappedBusinessSummaryV2}=await import("@jobguard/core");
+ const f=fixture(),jobId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",money=(pence:number)=>({pence,currency:"GBP" as const});
+ const receipt=mapValueReceiptV2({base:{tenantId:id,jobId,lockId:id,lockedRevisionId:id,lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:id,checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]},supplier:{reason:"No supplier derivation",balances:[]},withheld:{reason:null,balances:[{tenantId:id,jobId,derivationId:id,revision:1,at:"2026-10-03T00:00:00Z",recovered:money(282000),fee:money(28200),allocationIds:[id],statementHash:"a".repeat(64)}]}});
+ const summary=mappedBusinessSummaryV2.parse(mapCurrentBusinessValueSummary([receipt]));
+ const value={version:"business-value-result.v1",state:"mapped",tenantId:id,label:"mapped, inspectable",environment:"synthetic_demo",jobs:[{version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt}],summary,subscription:[]};
+ f.readBusiness.mockResolvedValue(value);expect(await f.app.readBusiness("session",{})).toMatchObject({summary:{withheld:{fee:money(28200)}}});
+ f.readBusiness.mockResolvedValue({...value,summary:{...summary,withheld:{...summary.withheld,fee:money(1)}}});
+ await expect(f.app.readBusiness("session",{})).rejects.toThrow("VALUE_SUMMARY_SOURCE_MISMATCH");
+});
