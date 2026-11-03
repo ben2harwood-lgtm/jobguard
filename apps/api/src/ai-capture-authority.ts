@@ -48,15 +48,16 @@ export class AiCaptureAuthority {
   constructor(
     private readonly pool: Pool,
     private readonly provider: AiProvider,
-    private readonly resolveSession: () => Promise<VerifiedTenantContext>,
+    private readonly resolveSession: ReturnType<typeof createAiSessionResolver>,
   ) {}
 
   async generate<T>(raw: unknown, outputSchema: AiOutputSchema<T>) {
     const parsed = aiGatewayRequestSchema.safeParse(raw);
     if (!parsed.success) throw new AiGatewayError("invalid_request", "Invalid AI request");
-    let context: VerifiedTenantContext;
-    try { context = await this.resolveSession(); }
-    catch { throw new AiGatewayError("invalid_request", "AI session is not permitted"); }
+    const context = await (async () => {
+      try { return await this.resolveSession(); }
+      catch { throw new AiGatewayError("invalid_request", "AI session is not permitted"); }
+    })();
     if (parsed.data.tenantId !== undefined && parsed.data.tenantId !== context.tenantId) throw sourceRefused();
     let sources;
     try { sources = await loadAiCaptureSources(this.pool, context, parsed.data.sources.map(source => source.id)); }
