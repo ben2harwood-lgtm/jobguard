@@ -12,6 +12,8 @@
         "apps/web/app/api/meter/current/route.test.ts",
         "apps/web/app/meter/meter-screen.test.tsx",
         "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/page.tsx",
         "apps/web/app/ui/jobguard-app.tsx",
         "apps/web/e2e/MON1-J.spec.mts",
         "packages/core/src/meter-today.ts",
