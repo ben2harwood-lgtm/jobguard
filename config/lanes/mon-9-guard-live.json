@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-9-guard-live": {
+      "branches": [
+        "codex/sandbox/mon-9-guard-live"
+      ],
+      "note": "RED MON-9 catch-up to launcher merge target; NOPR. Router stages, commits and pushes.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0568_managed_recovery_election.md",
+        "packages/db/migration-notes/0569_managed_recovery_actor_bind.md",
+        "packages/db/migration-notes/0570_managed_recovery_pursuit_guard.md",
+        "packages/db/migrations/0568_managed_recovery_election.sql",
+        "packages/db/migrations/0569_managed_recovery_actor_bind.sql",
+        "packages/db/migrations/0570_managed_recovery_pursuit_guard.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/managed-recovery-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/contractor-practice-session-fixtures.ts",
+        "packages/db/test/extra-fixtures.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/managed-recovery-actor-bind-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery-fixtures.ts",
+        "packages/db/test/managed-recovery-guard-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery-repository.test.ts",
+        "packages/db/test/managed-recovery-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery.integration.test.ts",
+        "packages/db/test/migration-proofs/0568_managed_recovery_election.proof.json",
+        "packages/db/test/migration-proofs/0569_managed_recovery_actor_bind.proof.json",
+        "packages/db/test/migration-proofs/0570_managed_recovery_pursuit_guard.proof.json"
+      ]
+    }
+  }
+}

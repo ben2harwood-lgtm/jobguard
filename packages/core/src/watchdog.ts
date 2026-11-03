@@ -215,6 +215,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:RecordOfficeExtra": "pre_live_allowed",
   "command:RecordClientInstruction": "pre_live_allowed",
   "command:UnlinkDuplicate": "pre_live_allowed",
+  "command:managed_recovery.elect": "post_live_billing",
   "command:recovery.message.preview": "post_live_billing",
   "command:recovery.message.revoke": "post_live_billing",
   "command:recovery.message.advance": "post_live_billing",
