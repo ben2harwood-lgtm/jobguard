@@ -5,7 +5,12 @@ import type { IdentityApplication } from "./auth/identity.application.js";
 import type { TenantRequestCredentials } from "./auth/principal-bridge.js";
 
 export class MeterTodayApplication {
-  constructor(private readonly identity: IdentityApplication, private readonly repository: Pick<MeterTodayRepository, "read">) {}
+  constructor(private readonly identity: IdentityApplication, private readonly repository: Pick<MeterTodayRepository, "read"> & Partial<Pick<MeterTodayRepository, "readJobs">>) {}
+  async readJobs(credentials: TenantRequestCredentials) {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo" || !this.repository.readJobs) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    return this.repository.readJobs(context, this.identity.provider.digest(`session:${credentials.sessionToken}`));
+  }
   async read(credentials: TenantRequestCredentials) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
