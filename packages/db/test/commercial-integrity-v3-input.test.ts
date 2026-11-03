@@ -23,7 +23,7 @@ it("CH-6 source decoder refuses hidden pre-lock fields, foreign scope, malformed
  const {db,query}=database(raw,false);await expect(readCommercialIntegrityV3Input(db,scope)).rejects.toThrow("NOT_FOUND");expect(query).toHaveBeenCalledTimes(1);
 });
 it("CH-6 source migration confines publication calls to the locked branch and adds no runtime table grants",async()=>{
- const sql=await readFile(new URL("../migrations/0528_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0526_commercial_integrity_sources.sql",import.meta.url),"utf8");
  const body=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_integrity_sources"),sql.indexOf("-- Re-resolve all source facts"));
  const pre=body.slice(0,body.indexOf("IF has_lock THEN"));
  expect(pre).not.toMatch(/app\.(?:shadow_|final_check_|ch6_integrity_published)/u);
@@ -48,7 +48,7 @@ it("CH-6 revocation between the ordinary authority read and controlled source qu
 });
 
 it("CH-6 SQL receipt projection has a distinct identity while conflicting facts still fail closed",async()=>{
- const sql=await readFile(new URL("../migrations/0528_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const sql=await readFile(new URL("../migrations/0526_commercial_integrity_sources.sql",import.meta.url),"utf8");
  // Use the namespace actually emitted by the installed SQL receipt projection.
  const receiptType=sql.match(/app\.ch6_source\(t,j,d,p\.id::text,'([^']+)',p\.created_at/u)?.[1];
  expect(receiptType).toBeDefined();
@@ -89,12 +89,12 @@ it("both integrity GET methods enforce read-only transactions and release them o
 });
 
 it("CH-6 installs no table locks; source readers and correction guards never lock job rows",async()=>{
- for(const name of ["0527_commercial_integrity_v3_receipts.sql","0528_commercial_integrity_sources.sql"]){
+ for(const name of ["0525_commercial_integrity_v3_receipts.sql","0526_commercial_integrity_sources.sql"]){
   const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),"utf8");
   expect(sql).not.toMatch(/\bLOCK\s+TABLE\b/iu);
   const end=sql.indexOf("CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review")>0?sql.indexOf("CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review"):sql.indexOf("CREATE FUNCTION app.ch6_record_integrity_review");
   expect(sql.slice(0,end)).not.toMatch(/\bFOR\s+(?:SHARE|UPDATE|NO KEY UPDATE|KEY SHARE)\b/iu);
-  if(name.startsWith("0528_commercial_integrity_sources")){
+  if(name.startsWith("0526_commercial_integrity_sources")){
    const guard=sql.slice(sql.indexOf("CREATE FUNCTION app.ch6_guard_line_correction"),sql.indexOf("CREATE TRIGGER ch6_line_correction_bound"));
    expect(guard).toContain("pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||':'||NEW.job_id::text,628))");
   }
@@ -102,8 +102,8 @@ it("CH-6 installs no table locks; source readers and correction guards never loc
 });
 
 it("CH-6 ownership recursion starts at the displayed job and exact party-related candidates",async()=>{
- const authority=await readFile(new URL("../migrations/0527_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
- const sources=await readFile(new URL("../migrations/0528_commercial_integrity_sources.sql",import.meta.url),"utf8");
+ const authority=await readFile(new URL("../migrations/0525_commercial_integrity_v3_receipts.sql",import.meta.url),"utf8");
+ const sources=await readFile(new URL("../migrations/0526_commercial_integrity_sources.sql",import.meta.url),"utf8");
  expect(authority).toContain("SELECT id FROM app.job WHERE tenant_id=t AND id=j");
  expect(authority).toContain("WHERE root.practice_session_digest=digest");
  expect(sources).toContain("SELECT id AS candidate_id,id FROM candidates");

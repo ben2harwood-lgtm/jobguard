@@ -182,6 +182,6 @@
   "0520_lp4_database_audit.sql",
   "0521_lp5a_commands.sql",
   "0522_lp5b_writers.sql",
-  "0527_commercial_integrity_v3_receipts.sql",
-  "0528_commercial_integrity_sources.sql"
+  "0525_commercial_integrity_v3_receipts.sql",
+  "0526_commercial_integrity_sources.sql"
 ]
