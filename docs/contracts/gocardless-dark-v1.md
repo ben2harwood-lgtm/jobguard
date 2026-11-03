@@ -68,3 +68,150 @@ The pnpm wrapper stalled before executing checks and was stopped; installed
 binaries were used without downloading packages. Database/browser/full CI and the
 independent RED review remain for the router/CI. Conflict markers are resolved in
 files; the read-only git index still needs the router to stage the resolution.
+
+## MON-4B: receipt success fees (synthetic, real MON-4A reader)
+
+Plan: MON-4 / §10.3.4, M4-15 and §12.4. RED money. Repair 1 addresses
+independent review of 4a11b726: the original slice only registered a fake source
+in tests. `createSuccessFeeDirectDebitExecutor` now registers
+`PaymentFeeCollectionRepository` over the actual MON-4A 0359 tables and routines.
+The existing stand-in remains a unit-test double only. No migration is needed;
+there are no new grants, schema objects, source writers or provider routes.
+
+The caller supplies an explicit owner pool, the stamped PracticeAccess context
+and session digest unchanged, the shared reservation store, sessions and fake
+rails. The repository uses `withTenant` plus `practiceMaterialPool` and refuses
+outside synthetic_demo. Each source read calls `app.payment_fee_actor`, which
+reauthenticates current ownership/membership and the synthetic database and takes
+MON-4A's existing case/allocation/session locks. Every statement lookup has tenant,
+job and statement predicates. The reader invokes `app.payment_fee_current` to
+recompute settlement/qualification, prior-statement source freshness and disputes.
+It reads the immutable document from `app.payment_fee_statement` and the exact
+`app.action_authorization` via `app.payment_fee_command`, binding its approved
+Decision resolution, current actor, recipient, hash/revision, policy, amount and
+currency. The authorization row is locked against revocation until the reservation
+callback finishes. No historical replay or read-view status is used as a token.
+
+MON-4A has no platform invoice. For this synthetic statement-collection path,
+`CollectionIntent.invoiceId` is the **fee statement ID**, the existing reservation
+interface's balance key. It is never the customer's invoice ID. `statementHash`
+and amount bind the immutable statement; feePence is consumed unchanged, without
+new rounding, allocation, fee formula or VAT calculation. Credits/prior fee
+receipts outside the shared reservation book do not exist on this MON-4A slice;
+reversals invalidate current source authority, and book settlements/refunds retain
+the existing reservation/reconciliation behavior. No customer payment is mutated.
+
+The composition encloses each reservation-store callback in the tenant SQL read
+transaction. Source locks remain held through its local reservation/dispatch
+transition; both complete before provider I/O. The store remains shared across
+card and DD and retains command/balance uniqueness. Production storage is still
+unregistered; this work does not claim restart durability for an in-memory store
+or fake provider. Real database source verification and fake provider settlement
+are distinct evidence.
+
+0359 states map to bounded `SuccessFeeCollectionError.reason` values:
+`disputed` → `AUTHORITY_DISPUTED`, `approval_revoked` → `AUTHORITY_REVOKED`,
+`approval_expired` → `AUTHORITY_EXPIRED`, and changed/missing/unapproved authority
+→ `AUTHORITY_STALE`. A pre-dispatch pause preserves the reservation and makes no
+provider call. The original scoped fake-source reasons and local mandate checks
+remain. Accepted or unknown requests are reconciled rather than resubmitted.
+Payout reversal blocks replacement attempts on both rails.
+
+Standing authority is unchanged and fake-only: MON-4A still returns
+standingAuthority null. The real reader emits only exact statement authority.
+There is no standing grant/renewal writer, production consent, SDK, live endpoint,
+worker or HTTP route. Production remains refused (`productionEnabled:false` on
+the fake), subject to all separate commercial/security approvals and G4-S.
+The shadow-30000 demo definitions are untouched: £41,280 received, £800 qualifying,
+£80 fee and £720 before tax; VAT remains uncalculated in simulation.
+
+Repair 1 checks (30 October 2026):
+- Existing three collection Vitest files: 128 passed, maxWorkers=2.
+- payment-fee-collection-repository.test.ts: 9 passed, maxWorkers=2.
+- success-fee-composition.test.ts: 3 passed, maxWorkers=2; verifies real-reader
+  registration overrides a test stand-in and preserves specific pause reasons.
+- DB/API TypeScript, integration-test type checking, diff whitespace, money
+  arithmetic and commercial-boundary checks passed. The exact slice lane check
+  since issued base b1c91ec6 passed for 14 paths (13 non-lane paths), excluding
+  inherited predecessor changes against main.
+- PostgreSQL integration suite is authored in packages/db/test and discovered by
+  the installed repository Vitest runner. It creates actual MON-4A statements and
+  approvals using the real allocator, attribution and payment-fee writers, then
+  drives the concrete composition and fake DD rail. Cases cover once-only
+  collection/replay, disputed/revoked/expired dispatch, cross-tenant refusal,
+  runtime read denial and unchanged customer payments. Only the reservation book
+  and payment rail are test doubles. The expiry negative control follows MON-4A's
+  existing rollback-only protected-row expiry technique; positive fixtures keep
+  all integrity controls enabled.
+
+No PostgreSQL or browser suite was executed in this sandbox. This built-ahead
+base does not yet contain MON-4A migration 0359; coordinator/CI must run the suite
+with its main dependencies integrated. Test discovery initially needed the
+existing storage build output; it was built without downloading packages.
+Full CI/lane comparison and one independent Claude RED review remain required.
+The earlier main-comparison lane failure includes inherited M4-12/M4-13/M4-15
+changes; this lane is not broadened to absorb those predecessor changes. All new
+paths are explicitly listed in config/lanes/mon-4b.json. No acceptance or live
+MON-4B completion is inferred from source inspection, local unit tests or discovery.
+
+Catch-up verification (31 October 2026): merged current main in the worktree and
+resolved only the core/DB export conflicts by retaining both sides' exports.
+Shared LP inventories, tenancy/serious-b5 expectations, watchdog registry and
+customer-signin tests match main; no unions were necessary. No routines, routes,
+migrations or collection behaviour changed. Targeted installed Vitest runs passed
+140 tests: executor, success-fee-direct-debit and success-fee-composition (94),
+fake-gocardless (37), and payment-fee-collection-repository (9), each with at most
+two workers and three named files. Installed TypeScript builds passed for core,
+storage, config and DB; API TypeScript --noEmit passed. Money arithmetic,
+commercial boundary and whitespace checks passed. PostgreSQL/browser suites remain for GitHub CI; this
+sandbox cannot start PostgreSQL or bind localhost. The router must stage the two
+resolved export files because the Git index is read-only here. Existing RED
+review evidence predates this merged head; exact-head review and green CI remain
+required before merge. No live capability or approval is inferred.
+
+Catch-up verification (2 November 2026): MON-4B, no migration. Resolved the two
+core/DB barrel conflicts as the exact union of both sides, retaining each export
+once. Updated the existing MON-4B lane. No collection behavior, routines, tests,
+expectations, migration SQL, LP inventories or protected journey files changed.
+The LP catalogs, tenancy/serious-b5 expectation files, privilege snapshot and
+legacy migration inventory match origin/main byte-for-byte. All migration SQL
+matches origin/main; there are no branch-added migrations or proofs to renumber.
+
+Installed Vitest 4.1.12 checks, each with --maxWorkers=2 and at most three named files:
+- API executor.test.ts, success-fee-direct-debit.test.ts and
+  success-fee-composition.test.ts: 94 passed.
+- API fake-gocardless.test.ts: 37 passed.
+- DB src/payment-fee-collection-repository.test.ts: 9 passed.
+Installed TypeScript --noEmit with each package's tsconfig.json passed for API,
+DB and core. Both staged and working-tree whitespace checks passed. The pnpm
+wrapper stalled before executing checks and was stopped; installed binaries were
+used without downloading packages. An initial root-tsconfig invocation was
+incorrect: it includes unrelated package sources without their package settings
+and reported decorator/JSX/test typing errors. The corrected package invocations
+above passed; that root invocation is not evidence of a repository check failure.
+
+READY for router staging/commit on the same branch, NOPR=1. The read-only Git index
+still lists the two resolved export files as unmerged; the router must stage them.
+PostgreSQL, browser and full required CI checks were not run here and remain due
+when the freeze permits CI. One independent RED review of the exact final head
+remains required before merge. Shared fee-collection paths with M4-12 and M4-15
+must serialize integration. All production gates remain closed.
+
+Catch-up verification (3 November 2026): MON-4B, NOPR, no migration. Resolved
+only the DB barrel conflict by preserving the collection repository export and
+main's offline-upload export. The remaining diff against the merged main contains
+only MON-4B's existing slice and its lane; removed the stale core barrel entry
+from that lane. No tests, expectations, SQL routines or collection behavior changed.
+All migration SQL and predecessor lane files match the merged main.
+
+Installed Vitest 4.1.12, --maxWorkers=2, at most three named files per invocation:
+- executor, success-fee-direct-debit, success-fee-composition: 94 passed.
+- fake-gocardless and m4-23-sb-rails: 40 passed.
+- payment-fee-collection-repository: 9 passed.
+Installed package TypeScript --noEmit passed for API, DB and core. Money arithmetic,
+commercial boundary and diff whitespace checks passed. The pnpm wrapper stalled
+before invoking checks and was interrupted; installed binaries were used without
+package downloads. PostgreSQL, browser and full CI suites remain unproved here.
+Exact-head independent RED review and green CI remain required before merge.
+READY for router staging and commit; the read-only index still records the DB
+barrel as unmerged even though its working-tree conflict markers are resolved.
