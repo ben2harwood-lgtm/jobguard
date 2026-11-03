@@ -11,7 +11,7 @@ export const successFeeCommandV1=z.discriminatedUnion("action",[
  z.object({...command,action:z.literal("approve"),reviewId:id,statementHash:z.string().regex(/^[a-f0-9]{64}$/u)}).strict(),
 ]);
 export type SuccessFeeCommand=z.infer<typeof successFeeCommandV1>;
-export type SuccessFeeErrorCode="INVALID_SUCCESS_FEE_COMMAND"|"SUCCESS_FEE_DEPENDENCY_BOUND"|"SUCCESS_FEE_FORBIDDEN"|"SUCCESS_FEE_REVIEW_REQUIRED"|"SUCCESS_FEE_SOURCE_CHANGED"|"SUCCESS_FEE_STALE"|"SUCCESS_FEE_IDEMPOTENCY_CONFLICT";
+export type SuccessFeeErrorCode="PAYMENT_FEE_AUTHORITY_REVOKED"|"PAYMENT_FEE_AUTHORITY_STALE"|"PAYMENT_FEE_AUTHORITY_DISPUTED"|"PAYMENT_FEE_AUTHORITY_CAP_EXCEEDED"|"PAYMENT_FEE_SOURCE_REQUIRED"|"INVALID_SUCCESS_FEE_COMMAND"|"SUCCESS_FEE_DEPENDENCY_BOUND"|"SUCCESS_FEE_FORBIDDEN"|"SUCCESS_FEE_REVIEW_REQUIRED"|"SUCCESS_FEE_SOURCE_CHANGED"|"SUCCESS_FEE_STALE"|"SUCCESS_FEE_IDEMPOTENCY_CONFLICT";
 export class SuccessFeeError extends Error {
  constructor(readonly code:SuccessFeeErrorCode="INVALID_SUCCESS_FEE_COMMAND"){super(code);this.name="SuccessFeeError";}
 }

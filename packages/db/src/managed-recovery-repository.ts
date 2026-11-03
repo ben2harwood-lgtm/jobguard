@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -81,10 +81,7 @@ export class ManagedRecoveryRepository {
           "SELECT * FROM app.mon9_elect($1,$2,$3,$4,$5,$6,$7,$8)",
           [job, caseId, actor.membershipId, command.commandId, authorized.authorizationId,
             selection.service, selection.points, termsVersion])).rows[0]),
-        auditEvents: result => [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`,
-          eventType: "managed_recovery.elected", subjectType: "recovery_case", subjectRef: caseId,
-          payload: { references: { jobId: job, commandId: command.commandId },
-            hashes: { election: result.election!.bindingHash }, classifications: { action: "commercial" } } }],
+
       });
     } catch (error) { return translate(error); }
   }

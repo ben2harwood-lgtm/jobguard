@@ -20,7 +20,12 @@ it("persists the exact election; concurrent replays produce one authorization an
  expect(after.recovery_fee_derivation).toBe(before.recovery_fee_derivation);
  expect(after.journal).toBe(before.journal);
  // A new repository reads the stored choice; projection cannot issue anything.
- expect((await repo().preview(f.context,f.job,id,f.actor)).serviceChargeInvoice?.points).toBe(5);
+ const preview=await repo().preview(f.context,f.job,id,f.actor);
+ expect(preview.serviceChargeInvoice?.points).toBe(5);
+ expect(preview.serviceChargeInvoice?.electionHash).toBe(results[0]!.election!.bindingHash);
+ const audit=(await c.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
+ expect(audit).toEqual([{version:'audit.v2',payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation'},
+  hashes:{election:results[0]!.election!.bindingHash},classifications:{action:'commercial'}}}]);
 });
 it("no election means no service-charge document, and the success fee stays identical", async () => {
  const id = await newCase(c,f), before = await repo().preview(f.context,f.job,id,f.actor);
