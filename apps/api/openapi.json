@@ -1,6 +1,51 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/commercial-integrity/family": {
+      "get": {
+        "operationId": "CommercialIntegrityV3Controller_family",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current owned synthetic job integrity family",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
+    "/jobs/{id}/commercial-integrity/v3": {
+      "get": {
+        "operationId": "CommercialIntegrityV3Controller_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read persisted synthetic D11 v3 advisories without commercial effects",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
+    "/jobs/{id}/commercial-integrity/v3/reviews": {
+      "post": {
+        "operationId": "CommercialIntegrityV3Controller_review",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Persist exact-snapshot advisory feedback only",
+        "tags": [
+          "commercial integrity v3"
+        ]
+      }
+    },
     "/offline/uploads": {
       "post": {
         "operationId": "OfflineUploadController_upload",
@@ -76,6 +121,79 @@
         ]
       }
     },
+    "/customer-portal/messages": {
+      "post": {
+        "operationId": "CustomerMessageController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "job-source-intake-receipt.v1: saved message and exact checked evidence"
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE or a conflicting command replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+          }
+        },
+        "summary": "Save a fictional customer message and its checked original through SV-7A",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/stages": {
+      "post": {
+        "operationId": "CustomerStagesController_stages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the signed-in customer's recorded stage snapshots and review status",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/stage-acknowledge": {
+      "post": {
+        "operationId": "CustomerStagesController_acknowledge",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Acknowledge one exact verified stage snapshot; no payment, certification or waiver",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
     "/small-builder-demo/trial": {
       "post": {
         "operationId": "SmallBuilderTrialDemoController_command",
@@ -87,6 +205,42 @@
         },
         "tags": [
           "SmallBuilderTrialDemo"
+        ]
+      }
+    },
+    "/customer-portal/quote": {
+      "post": {
+        "operationId": "CustomerQuoteController_quote",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Read the current exact issued quote for this customer session",
+        "tags": [
+          "customer portal"
+        ]
+      }
+    },
+    "/customer-portal/quote-accept": {
+      "post": {
+        "operationId": "CustomerQuoteController_accept",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "CUSTOMER_REFUSED: no credential or scope diagnostics"
+          }
+        },
+        "summary": "Accept the exact quote revision and hash through the customer session",
+        "tags": [
+          "customer portal"
         ]
       }
     },
@@ -863,6 +1017,36 @@
         ]
       }
     },
+    "/jobs/{id}/parties/import-v3/source": {
+      "get": {
+        "operationId": "JobImportV3Controller_source",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read an owned source job binding for the synthetic import screen",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import-v3/catch": {
+      "post": {
+        "operationId": "JobImportV3Controller_assessCatch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Assess a stored pre-adoption catch at GBP 0; other imported attribution remains unavailable",
+        "tags": [
+          "job-import-v3"
+        ]
+      }
+    },
     "/jobs/{id}/parties/import-v3/preview": {
       "post": {
         "operationId": "JobImportV3Controller_preview",
@@ -887,7 +1071,7 @@
             "description": ""
           }
         },
-        "summary": "Import a fictional invoiced job under v3 terms; live capacity admission remains unavailable",
+        "summary": "Import a fictional v3 job; company live imports use checked capacity admission",
         "tags": [
           "job-import-v3"
         ]
@@ -1892,6 +2076,94 @@
           }
         },
         "summary": "Record a message from a named fictional customer, entered by the job owner, on a live, unlocked synthetic job",
+        "tags": [
+          "JobSource"
+        ]
+      }
+    },
+    "/jobs/{id}/historical-evidence": {
+      "get": {
+        "operationId": "JobSourceController_historical",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read imported fictional historical messages and their original receive times",
+        "tags": [
+          "JobSource"
+        ]
+      },
+      "post": {
+        "operationId": "JobSourceController_importHistorical",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "fictionalCustomer",
+                  "text",
+                  "statedSentAt"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "late-source-import.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "fictionalCustomer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "named_fictional_customer"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  },
+                  "statedSentAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an old fictional message as evidence on a locked job; no site activity or fee eligibility",
         "tags": [
           "JobSource"
         ]

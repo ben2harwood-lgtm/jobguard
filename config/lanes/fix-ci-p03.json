@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-ci-p03": {
+      "branches": [
+        "codex/sandbox/fix-ci-p03"
+      ],
+      "allow": [
+        "packages/db/test/commercial-integrity-v3-fixtures.ts",
+        "packages/db/test/commercial-integrity-v3.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import type { Pool } from "pg";
-import { ContractorRepository, ContractorRetainedReadRepository } from "@jobguard/db";
-import { ContractorError, contractorQueryV1 } from "@jobguard/core";
+import { ContractorRepository, ContractorRetainedReadRepository, ContractorEntitlementAuthorityRepository } from "@jobguard/db";
+import { ContractorError, contractorQueryV1, contractorCommandV1 } from "@jobguard/core";
 const sessionV1 = z.object({ version: z.literal("contractor-principal.v1"), sessionId: z.guid({ error: "Invalid uuid" }) }).strict();
 const startV1 = z.object({ version: z.literal("contractor-practice.v1"), environment: z.literal("synthetic_demo") }).strict();
 /** Server-only composition; all tenant/membership authority comes from the persisted bearer session. */
 export class ContractorApplication {
  private readonly repository: ContractorRepository;
  private readonly retained: ContractorRetainedReadRepository;
- constructor(pool: Pool) { this.repository = new ContractorRepository(pool); this.retained = new ContractorRetainedReadRepository(pool); }
+ constructor(private readonly pool: Pool) { this.repository = new ContractorRepository(pool); this.retained = new ContractorRetainedReadRepository(pool); }
  private session(raw: unknown) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new ContractorError("MODE_FORBIDDEN");
   const parsed=sessionV1.safeParse(raw);
@@ -31,7 +31,13 @@ export class ContractorApplication {
   return this.retained.resume(this.session(principal));
  }
  async command(principal: unknown, raw: unknown) {
-  const member=await this.repository.resolveSession(this.session(principal));
+  const session = this.session(principal);
+  const command = contractorCommandV1.safeParse(raw);
+  if (!command.success) throw new ContractorError(command.error.issues.some(issue => issue.path.includes("rules")) ? "INVALID_RULE_DOCUMENT" : "INVALID_COMMAND");
+  if ((command.data.kind === "member.invite" || command.data.kind === "grant.create") && command.data.role === "operative") {
+   await new ContractorEntitlementAuthorityRepository(this.pool).requireFeature(session, "operative_roles");
+  }
+  const member=await this.repository.resolveSession(session);
   return this.repository.command(member,raw);
  }
 }

@@ -1184,3 +1184,69 @@ independent verdict or technical acceptance. A fresh exact-commit independent
 review and separate acceptance are still required. The dispatcher owns commit,
 push, merge and release. Intended conventional commit subject/body is overwritten
 at `/private/tmp/jg-msg-sv-7a.txt`.
+
+## PR #525 practice on-site diary repair — 2 November 2026 (RED)
+
+Repair of the independent FAIL at `4bfb7e17`, on the router-prepared merge head
+`048d69b1f6b2517edb8a17da50aaafa419fe6e2c`. Read repository instructions,
+BUILD_PLAN SV-7/CH-4, simplicity rule, both diary callers, browser regression,
+admission/upgrade tests, migration runner and proof loader. No git writes or
+fetch, dependency downloads, PostgreSQL starts or localhost listeners.
+
+Migration `0539_practice_onsite_diary_admission.sql` applies the reviewer's two
+exact guarded replacements to installed definitions. Latest main intake is 0522,
+including LP-5 begin/bind/complete command behavior; capture is 0505. Only the two
+diary calls skip capacity for practice jobs. Company admission, the helper's
+practice refusal, locks, authorization, replay, evidence, audit and command
+completion are preserved. Unexpected predecessors fail the whole transaction.
+No existing migration or test is weakened. Added migration note, empty metadata
+proof, migration runner/predecessor source regression tests, and full lane paths.
+The existing initial-review LATER / SIMPLICITY observation in the 0505 migration
+note remains non-blocking; no unrelated cleanup was added.
+
+Actual local checks (installed Node v24.17.0, Vitest v4.1.12):
+
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=2 src/onsite-diary-admission.test.ts test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts`: 111 tests passed in three files. Source/protocol/catalog tests only, no PostgreSQL execution.
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 app/ui/job-sources.test.tsx`: six tests passed; no browser execution.
+- From packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`: passed.
+- Root: `node tools/lint.mjs` and `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: passed (existing computed-import reports are informational).
+- `git diff --check`: passed.
+
+READY for router commit/push and CI, not merge approval. PostgreSQL fresh/upgrade,
+company capacity tests, mobile/desktop SV-7A browser journeys and full LP-0 remain
+CI gates. The reviewer must independently check the migration at the new committed
+head; no new head is claimed because this sandbox cannot write git metadata.
+
+
+## PR #525 SV-7A catch-up after #535 — 3 November 2026 (RED)
+
+Inspected launcher merge `d1189af28` against local `origin/main`
+`b7c7ac066`. Catch-up only: no behavior, SQL, privilege, test expectation or
+application changes in this session. All 126 incoming merge paths match main
+byte for byte, including #535's commercial-integrity fixture fix. All 197
+migrations already on main remain byte-identical. The lane allow-list exactly
+matches all nine changed paths outside `config/lanes/`.
+
+Migration remains `0539_practice_onsite_diary_admission.sql`; its proof, note
+filename, test lookup, receipt and lane use the same filename stem. No filename
+stem replacement was needed; no bare-digit replacements were made. The existing
+note's historical numeric heading was left untouched under the stem-only scope.
+Read-only `node tools/migration-renumber.mjs` reports no renumber required.
+The checkout has no migrations numbered 0533–0538: the router must reconcile
+that merge-order gap before the no-gaps merge gate; this session does not fill
+it with invented migrations or renumber the reserved 0539.
+
+Actual local checks using installed Vitest 4.1.12:
+
+- `packages/db`: `./node_modules/.bin/vitest run --maxWorkers=2 src/onsite-diary-admission.test.ts test/migration-proof-loader.test.ts test/lp-0-catalog.test.ts` — 111 passed in three files.
+- `apps/web`: `./node_modules/.bin/vitest run --maxWorkers=2 app/ui/job-sources.test.tsx` — six passed in one file.
+- `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` — passed.
+- Root: `node tools/lint.mjs`, `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`, read-only migration-renumber check and `git diff --check` — passed.
+- Read-only byte comparisons verified the incoming merge, main migrations and exact lane coverage.
+
+No PostgreSQL/browser suites were attempted: the sandbox cannot start PostgreSQL
+or bind localhost. Those suites run in GitHub CI after the router pushes. The
+existing initial-review LATER / SIMPLICITY observation remains; this catch-up
+adds no simplification or new behavior. READY for router staging/commit/push;
+merge still requires the no-gaps gate, green CI and an independent RED review at
+the committed head. No git writes, fetch, package downloads or new review claims.
