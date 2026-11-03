@@ -2,7 +2,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { exposureScheduleFixture } from "@jobguard/core";
-import { ExposureCurvePreview, PreventionChecks } from "./prevention-checks";
+import { PreventionChecks } from "./prevention-checks";
+import { ExposureCurvePreview } from "./exposure-curve-preview";
 
 it("renders each stage's figures alongside its source and dates", () => {
   const html = renderToStaticMarkup(<ExposureCurvePreview schedule={exposureScheduleFixture()}/>);
@@ -14,7 +15,7 @@ it("renders each stage's figures alongside its source and dates", () => {
   expect(html.match(/Observed:/g)).toHaveLength(3);
   expect(html.match(/data-exposure-segment/g)).toHaveLength(2);
   for (const stage of exposureScheduleFixture().stages) expect(html).toContain(stage.date);
-  expect(html).toContain("Fictional schedule preview, independent of this job");
+  expect(html).toContain("Saved fictional forecasts for this practice job");
 });
 it("renders unknown instead of figures for stale or missing data", () => {
   const schedule = exposureScheduleFixture();

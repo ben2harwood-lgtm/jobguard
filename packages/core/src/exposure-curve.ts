@@ -3,8 +3,8 @@ import { utcDatetimeV1 } from "./datetime.js";
 import { MAX_MONEY_PENCE, moneyFromBigInt, type Money } from "./money.js";
 import { preventionFactStale } from "./prevention-checks.js";
 
-/** Dark synthetic preview only. No route, persistence, commercial command or live adapter. */
-export const EXPOSURE_CURVE_ENABLED = false as const;
+/** Explicit environment gate; an absent or unrecognised environment stays off. */
+export const EXPOSURE_CURVE_ENABLED = (environment: unknown) => environment === "synthetic_demo";
 export const EXPOSURE_SOURCE = {
   id: "synthetic-stage-schedule.v1", name: "Generated stage schedule (synthetic)",
 } as const;
@@ -31,6 +31,21 @@ export const exposureScheduleV1 = z.object({
   }
 });
 export type ExposureScheduleV1 = z.infer<typeof exposureScheduleV1>;
+// Builder-entered forecasts only; source dates and job identity come from the server.
+export const exposureScheduleCommandV1 = z.object({
+  version: z.literal("exposure-schedule-command.v1"), commandId: z.guid(),
+  expectedRevision: z.number().int().min(0).max(2147483646),
+  stages: exposureScheduleV1.shape.stages.element.omit({ source: true }).array().min(1).max(1000),
+}).strict().superRefine(({ stages }, ctx) => {
+  if (new Set(stages.map(stage => stage.id)).size !== stages.length
+    || stages.some((stage, i) => i > 0 && stage.date <= stages[i - 1]!.date))
+    ctx.addIssue({ code: "custom", message: "Stages need unique identities and increasing dates" });
+});
+export const exposureScheduleViewV1 = z.object({
+  version: z.literal("exposure-schedule-view.v1"), environment: z.literal("synthetic_demo"),
+  jobId: z.guid(), revision: z.number().int().nonnegative(), schedule: exposureScheduleV1.nullable(),
+}).strict();
+
 export class ExposureCurveError extends Error {
   readonly code = "INVALID_EXPOSURE_SCHEDULE";
   constructor() { super("Invalid versioned synthetic exposure schedule"); this.name = "ExposureCurveError"; }
