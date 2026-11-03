@@ -135,7 +135,7 @@ describe("LP-3 actual runtime attack and compatibility checks",()=>{
         if(attack==="expired")await database.$client.query("SELECT pg_sleep(0.6)");
         return (await database.$client.query(settlementCall,values)).rows[0];
       },
-    })).rejects.toMatchObject({code:"42501"});
+    })).rejects.toMatchObject({code:attack==="actor"?"FORBIDDEN":"42501"});
     expect(await counts()).toEqual(ready);
   });
   it("settlement races and receipt replays give one effect, with rollback preserving approval availability",async()=>{
