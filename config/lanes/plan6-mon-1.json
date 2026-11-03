@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/demo-mon1"
       ],
-      "note": "MON-1 RED: company jobs-list meter line and tenant-checked read-only ledger drill-down. Migration 0612; CI PostgreSQL/browser suites and independent RED review remain required.",
+      "note": "MON-1 RED: company jobs-list meter line and tenant-checked read-only ledger drill-down. Exact-union catch-up with origin/main 47b6d8011; no runtime or test expectation changes. Preserve migration 0612 for router renumbering at landing. Existing registered lane retained because duplicate branch registration and editing other lane files are forbidden. CI PostgreSQL/browser suites and independent RED review remain required.",
       "allow": [
         "apps/api/src/meter-today.application.ts",
         "apps/web/app/api/meter/current/jobs/route.ts",
