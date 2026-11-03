@@ -37,6 +37,49 @@ it("stale revisions, assessment identity, source hash and review artifact are al
  for(const patch of [{expectedCaseRevision:x.intent.expectedCaseRevision+1},{expectedAttributionRevision:0},{assessmentId:randomUUID()},{expectedSourceHash:"0".repeat(64)},{lineId:randomUUID()},{lockId:randomUUID()},{workId:randomUUID()}])await expect(x.approve({...x.intent,...patch})).rejects.toThrow("RECOVERY_ATTRIBUTION_STALE");
  await expect(x.approve({...x.intent,reviewArtifactHash:"0".repeat(64)})).rejects.toThrow("RECOVERY_ATTRIBUTION_REVIEW_ARTIFACT_CHANGED");
 });
+// Bypass the command routine deliberately: database uniqueness must stand on its own.
+async function insertReviewDirectly(x:Awaited<ReturnType<typeof prepared>>){
+ const commandId=randomUUID();
+ return finalCheckTenant(f.admin,x.context.tenantId,db=>db.query(`
+  INSERT INTO app.recovery_attribution_command
+   (tenant_id,command_id,job_id,actor_membership_id,assessment_id,case_id,work_id,line_id,lock_id,payload,first_result)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,'{}'::jsonb)`,
+  [x.context.tenantId,commandId,x.jobId,x.actor.membershipId,x.assessment.assessmentId,
+   x.caseId,x.workId,x.line,x.intent.lockId,{...x.intent,commandId}]));
+}
+it("a direct second review insert fails the database unique index, retaining assessment and replay",async()=>{
+ const x=await prepared(),first=await x.approve();
+ await expect(insertReviewDirectly(x)).rejects.toMatchObject({
+  code:"23505",constraint:"recovery_attribution_one_review_per_assessment"
+ });
+ expect(await x.approve()).toEqual(first);
+ expect(await x.repo.history(x.context,x.jobId,x.auth.digest)).toEqual([x.assessment]);
+ expect((await f.admin.query(`SELECT payload->>'action' action,count(*)::int n
+  FROM app.recovery_attribution_command WHERE tenant_id=$1 AND assessment_id=$2
+  GROUP BY payload->>'action' ORDER BY action`,[x.context.tenantId,x.assessment.assessmentId])).rows)
+  .toEqual([{action:"approve_review",n:1},{action:"assess",n:1}]);
+});
+it("concurrent direct inserts with distinct command IDs record exactly one review",async()=>{
+ const x=await prepared();
+ const results=await Promise.allSettled([insertReviewDirectly(x),insertReviewDirectly(x)]);
+ expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+ expect(results.filter(result=>result.status==="rejected")).toMatchObject([
+  {reason:{code:"23505",constraint:"recovery_attribution_one_review_per_assessment"}}
+ ]);
+ expect((await f.admin.query(`SELECT count(*)::int n FROM app.recovery_attribution_command
+  WHERE tenant_id=$1 AND assessment_id=$2 AND payload->>'action'='approve_review'`,
+  [x.context.tenantId,x.assessment.assessmentId])).rows).toEqual([{n:1}]);
+});
+it("concurrent distinct review commands keep the normal one-winner result",async()=>{
+ const x=await prepared();
+ const results=await Promise.allSettled([x.approve(),x.approve({...x.intent,commandId:randomUUID()})]);
+ expect(results.filter(result=>result.status==="fulfilled")).toMatchObject([
+  {value:{effect:"review_recorded",assessmentId:x.assessment.assessmentId}}
+ ]);
+ expect(results.filter(result=>result.status==="rejected")).toHaveLength(1);
+ const failure=results.find(result=>result.status==="rejected");
+ expect(failure?.status==="rejected" && failure.reason.message).toContain("RECOVERY_ATTRIBUTION_REVIEW_ALREADY_RECORDED");
+});
 it.each(["evidence","refund","credit"] as const)("changed %s refuses a fresh review; earlier replay remains historical",async kind=>{
  const x=await prepared();const first=await x.approve();
  if(kind==="evidence")await finalCheckTenant(f.admin,x.context.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),x.context.tenantId,x.evidence,x.actor.membershipId]));

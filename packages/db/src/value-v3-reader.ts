@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { mapValueReceipt, type ValueWindowV1 } from "@jobguard/core";
+import { mapCurrentValueReceipt, type ValueWindowV1 } from "@jobguard/core";
 import { withTenant } from "./tenant-context.js";
 import { authorizePracticeJob } from "./practice-session.js";
 
@@ -26,10 +26,10 @@ export class ValueV3Reader {
   const snapshot = await withTenant(this.pool, auth.context, async db => {
    const locked=(await db.$client.query("SELECT id FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[auth.context.tenantId,jobId])).rows[0];
    if(!locked)return null;
-   return (await db.$client.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0]?.result;
+   return (await db.$client.query("SELECT app.read_value_job_v2($1,$2) result",[jobId,auth.digest])).rows[0]?.result;
   });
   if (snapshot) return { version: "job-value.v3" as const, environment: "synthetic_demo" as const, jobId,
-   status: "mapped" as const, receipt: mapValueReceipt(snapshot,window) };
+   status: "mapped" as const, receipt: mapCurrentValueReceipt(snapshot,window) };
   // Retain ports for future composition, but never execute a held producer.
   void this.ports;
   return {
