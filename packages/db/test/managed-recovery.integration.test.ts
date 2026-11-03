@@ -18,6 +18,9 @@ it("persists the exact election; concurrent replays produce one authorization an
  const after = await counts(c);
  for (const t of ['managed_recovery_election','command_receipt','action_authorization']) expect(after[t]-before[t]).toBe(1);
  expect(after.audit_event-before.audit_event).toBe(2);
+ expect((await c.admin.query(`SELECT event_type,payload->'references'->>'auditTrust' trust FROM app.audit_event
+  WHERE tenant_id=$1 AND payload->'references'->>'commandId'=$2 ORDER BY sequence`,[f.tenant,input.commandId])).rows)
+  .toEqual([{event_type:'managed_recovery.elected',trust:'checked_operation'},{event_type:'command.succeeded',trust:'checked_operation'}]);
  expect(after.recovery_fee_derivation).toBe(before.recovery_fee_derivation);
  expect(after.journal).toBe(before.journal);
  // A new repository reads the stored choice; projection cannot issue anything.
@@ -216,4 +219,20 @@ it('requires session ownership even with a matching processing receipt and appro
   return (await call(f.sessionDigest)).rows[0];
  }});
  expect(elected).toMatchObject({case_id:id,actor_membership_id:f.actor.membershipId,points:5});
+});
+
+// LP-5 completion must derive an immutable effect, even if a route hands it a
+// plausible-looking result. No election/receipt/audit survives this failed claim.
+it('refuses completion without a stored election', async () => {
+ const id=await newCase(c,f),input=command(id),before=await counts(c);
+ const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
+  input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
+ await expect(new UserCommandDispatcher(c.runtime).dispatch(f.context,{
+  version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
+  semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
+  subjectType:'recovery_case',subjectRef:id,
+  action:{actionType:'managed_recovery.elect',recipient:null,contentHash:h,aggregateRevision:1,
+   amountPence:null,currency:null,policyVersion:input.termsVersion,expiresAt:new Date('2099-01-01T00:00:00Z')},
+ },{mutate:async()=>({case_id:id,points:5})})).rejects.toMatchObject({code:'AUTHORIZATION_INVALID'});
+ expect(await counts(c)).toEqual(before);
 });

@@ -5,7 +5,7 @@ const start = "2026-01-01T00:00:00.000000Z", end = "2026-04-01T00:00:00.000000Z"
 const source = (sourceId: string, job = jobId) => ({ tenantId, jobId: job, scopeId: "owned-practice-session", sourceId, sourceType: "synthetic_fixture", revision: "1", hash: "a".repeat(64), recordedAt: start, provenance: "builder_attested" });
 const amount = (pence: number) => ({ pence, currency: "GBP", basis: "net" });
 function fixture() { return { version: "commercial-integrity-input.v3", environment: "synthetic_demo", tenantId, jobId, scopeId: "owned-practice-session", evaluatedAt: "2026-04-02T00:00:00.000000Z", profile: { version: "synthetic_fixture.v3", ruleVersion: "fixture-rules.1", window: { start, end } }, phase: "pre_lock", ordinaryFacts: { lockState: "absent", quotes: [], activations: [], activity: [], workEvents: [], assertions: [] } }; }
-function postFixture() { return { ...fixture(), phase: "post_lock", ordinaryFacts: { ...fixture().ordinaryFacts, lockState: "present" }, published: { lockId: "30000000-0000-4000-8000-000000000001", contractVersion: "synthetic-published-fixture.1", cutoff: end, lockSource: source("lock"), lockedAccount: amount(100), catches: [], completions: [], receipts: [], corrections: [], allocations: [] } }; }
+function postFixture() { return { ...fixture(), phase: "post_lock", ordinaryFacts: { ...fixture().ordinaryFacts, lockState: "present" }, published: { lockId: "30000000-0000-4000-8000-000000000001", contractVersion: "synthetic-published-fixture.1", cutoff: end, lockSource: { ...source("30000000-0000-4000-8000-000000000001"), recordedAt: end, provenance: "server_recorded" }, lockedAccount: amount(100), catches: [], completions: [], receipts: [], corrections: [], allocations: [] } }; }
 
 const withFinding = () => {
  const base = fixture();
@@ -105,4 +105,51 @@ it("CI-C03 unrelated published catches do not alter receipt finding identity or 
  const second = evaluateCommercialIntegrityV3({ ...raw, published: { ...raw.published, catches: [extra] } }).findings[0]!;
  expect(second.key).toBe(first.key);
  expect(canonicalCommercialIntegritySnapshot(second.sourceSnapshot)).toBe(canonicalCommercialIntegritySnapshot(first.sourceSnapshot));
+});
+
+function allocatedFixture() {
+ const base = postFixture();
+ const catchLine = { source: source("catch"), catchId: "catch", status: "confirmed", includedInLockedAccount: true, value: amount(10), invoiceLineId: "catch-line" };
+ const receipts = ["r1", "r2"].map(id => ({ source: source(id), value: amount(5), reversed: false }));
+ const allocations = receipts.map((r, i) => ({ source: source(`allocation-${i}`), receiptId: r.source.sourceId, method: "explicit_user", reversed: false, catchOutstanding: amount(10), catchAllocated: amount(0), ordinaryAllocated: amount(5), catchLineIds: ["catch-line"] }));
+ return { ...base, profile: { ...base.profile, allocation: { minimumPayments: 2 } }, published: { ...base.published, catches: [catchLine], receipts, allocations } };
+}
+const avoidance = (input: unknown) => evaluateCommercialIntegrityV3(input).findings.filter(f => f.kind === "explicit_allocations_avoid_catch_lines");
+it("CH-6 attack: allocations cite actual unreversed receipts, deduplicate replays and bind receipt revisions", () => {
+ const input = allocatedFixture(), original = avoidance(input);
+ expect(original).toHaveLength(1);
+ expect(original[0]!.sourceReferences.map(s => s.sourceId)).toEqual(expect.arrayContaining(["r1", "r2"]));
+ const replay = { ...input, published: { ...input.published, allocations: [...input.published.allocations, ...input.published.allocations], receipts: [...input.published.receipts, ...input.published.receipts] } };
+ expect(avoidance(replay)).toEqual(original);
+ for (const receipts of [[], input.published.receipts.slice(0, 1), input.published.receipts.map((r, i) => ({ ...r, reversed: i === 0 }))]) {
+  expect(avoidance({ ...input, published: { ...input.published, receipts } })).toHaveLength(0);
+ }
+ const changed = { ...input, published: { ...input.published, receipts: input.published.receipts.map(r => ({ ...r, source: { ...r.source, revision: "2" } })) } };
+ expect(canonicalCommercialIntegritySnapshot(avoidance(changed)[0]!.sourceSnapshot)).not.toBe(canonicalCommercialIntegritySnapshot(original[0]!.sourceSnapshot));
+});
+it("CH-6 attack: receipt and catch allocation limits use exact totals across saved allocations", () => {
+ const input = allocatedFixture(), first = input.published.allocations[0]!;
+ const variants = [
+  { receipts: input.published.receipts.map(r => ({ ...r, value: amount(4) })) },
+  { allocations: [...input.published.allocations, { ...first, source: source("extra-allocation"), ordinaryAllocated: amount(1) }] },
+  { allocations: input.published.allocations.map(a => ({ ...a, catchOutstanding: amount(11) })) },
+  { allocations: input.published.allocations.map(a => ({ ...a, catchLineIds: ["foreign-line"] })) },
+  { receipts: input.published.receipts.map(r => ({ ...r, value: { ...r.value, basis: "gross" } })) },
+ ];
+ for (const patch of variants) expect(avoidance({ ...input, published: { ...input.published, ...patch } })).toHaveLength(0);
+ // A reversed competing allocation consumes no receipt capacity.
+ const reversed = { ...first, source: source("reversed-allocation"), ordinaryAllocated: amount(100), reversed: true };
+ expect(avoidance({ ...input, published: { ...input.published, allocations: [...input.published.allocations, reversed] } })).toHaveLength(1);
+});
+it("CH-6 attack: published sources bind the exact locked bill, cutoff, job, tenant and session", () => {
+ const input = allocatedFixture();
+ for (const patch of [{ sourceId: "another-lock" }, { recordedAt: start }, { provenance: "builder_attested" }, { jobId: otherJob }, { tenantId: otherJob }, { scopeId: "other-session" }]) {
+  expect(() => evaluateCommercialIntegrityV3({ ...input, published: { ...input.published, lockSource: { ...input.published.lockSource, ...patch } } })).toThrow("INVALID_COMMERCIAL_INTEGRITY_V3_INPUT");
+ }
+ for (const patch of [{ jobId: otherJob }, { tenantId: otherJob }, { scopeId: "other-session" }]) {
+  const receipt = input.published.receipts[0]!;
+  expect(() => evaluateCommercialIntegrityV3({ ...input, published: { ...input.published, receipts: [{ ...receipt, source: { ...receipt.source, ...patch } }] } })).toThrow("INVALID_COMMERCIAL_INTEGRITY_V3_INPUT");
+ }
+ const r = input.published.receipts[0]!;
+ expect(() => evaluateCommercialIntegrityV3({ ...input, published: { ...input.published, receipts: [...input.published.receipts, { ...r, source: { ...r.source, sourceType: "other-receipt" } }] } })).toThrow("INVALID_COMMERCIAL_INTEGRITY_V3_INPUT");
 });

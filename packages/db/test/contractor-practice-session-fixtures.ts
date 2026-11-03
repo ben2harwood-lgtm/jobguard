@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
@@ -32,9 +33,10 @@ export async function applyMigration(c: Cluster, name = migrationName) {
  await c.admin.query(await readFile(url, "utf8"));
  await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
 }
-export async function startSession(c: Cluster, home = false) {
+export async function startSession(c: Cluster, home = false, activeAgreement = true) {
  const session = home ? await issuePracticeSession(c.runtime) : randomUUID();
  const p = await new ContractorRepository(c.runtime).startPractice(session);
+ if (activeAgreement) await seedActiveContractorAgreement(c.admin, p.tenantId);
  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, session);
  return { session, p, context, home };
 }

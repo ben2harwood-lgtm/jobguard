@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { expect } from "vitest";
@@ -76,6 +77,7 @@ export async function handBuilt(c: Cluster, signIn = false) {
   await db.$client.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'owner','tenant',$1,NULL)", [tenant, randomUUID(), member]);
   await appendAuditBatch(db, [{ id: assignment, version: "audit.v1", actorRef: "operations:pws-fixture", eventType: "commercial_track.assigned", subjectType: "tenant", subjectRef: tenant, payload: { references: { assignment, environment: "synthetic_demo" }, classifications: { action: "security" } } }]);
  });
+ await seedActiveContractorAgreement(c.admin, tenant);
  const p = await new ContractorRepository(c.runtime).resolveSession(session);
  const context = await contractorSessionContext(c.runtime, session);
  const f = { p, session, context, home: false };

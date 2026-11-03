@@ -1,3 +1,4 @@
+import { fakeAuditAppend } from "./audit-protocol-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -31,12 +32,31 @@ class RecordedSql {
   readonly originals: Array<{ id: string; scope_item_id: string }>;
   receipt: { request_hash: string; status: string; result?: unknown } | undefined;
   status = "draft";
+  authorizations = 0;
+  completions = 0;
   constructor(readonly review: ProposalReview) {
     this.originals = review.lines.filter(line => line.origin === "proposal").map(line => ({ id: line.id, scope_item_id: line.scopeItemId }));
   }
   query = async (sql: string, values: unknown[] = []) => {
     this.calls.push({ sql, values });
     const rows = (items: unknown[]) => ({ rows: items, rowCount: items.length });
+    if (sql.startsWith("SELECT app.begin_command(")) {
+      const input = JSON.parse(values[6] as string);
+      for (const key of ['commandId','decisionId','resolutionId','authorizationId']) delete input[key];
+      input.action.expiresAt = {}; // same server-generated expiry exclusion as begin_command
+      const requestHash = JSON.stringify([values[0], ...values.slice(2,6), input]);
+      if (this.receipt) {
+        if (this.receipt.request_hash !== requestHash || this.receipt.status !== "succeeded") throw new Error("COMMAND_CONFLICT");
+        return rows([{ result: { kind: "replay", result: this.receipt.result } }]);
+      }
+      this.receipt = { request_hash: requestHash, status: "processing" }; this.authorizations++;
+      return rows([{ result: { kind: "claim", decisionId: randomUUID(), resolutionId: randomUUID(), authorizationId: randomUUID() } }]);
+    }
+    if (sql.startsWith("SELECT app.complete_command(")) {
+      const result = { jobId: this.review.jobId, reviewId: this.review.reviewId, jobRevision: 1, status: "quoting" };
+      this.receipt!.status = "succeeded"; this.receipt!.result = result; this.completions++;
+      return rows([{ result }]);
+    }
     if (sql.includes("INSERT INTO app.command_receipt")) {
       if (this.receipt) return rows([]);
       this.receipt = { request_hash: values[4] as string, status: "processing" };
@@ -53,6 +73,7 @@ class RecordedSql {
     if (sql.includes("SELECT 1 FROM app.scope_identity")) return rows([{}]);
     if (sql.includes("SELECT revision,status FROM app.job")) return rows([{ revision: 0, status: this.status }]);
     if (sql.includes("app.start_quote_from_review")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+    if (sql.includes("FROM app.append_audit(")) return rows(fakeAuditAppend(values[0] as string, tenantId));
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("current_setting('app.tenant_id') tenant")) return rows([{ tenant: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);
@@ -62,7 +83,7 @@ class RecordedSql {
   };
   transaction() { return { $client: { query: this.query } } as unknown as TenantTransaction; }
   pool() { return { connect: async () => ({ query: this.query, release() {} }) } as unknown as Pool; }
-  inserts(table: string) { return this.calls.filter(call => call.sql.includes(`INSERT INTO app.${table}`)); }
+  inserts(table: string) { return this.calls.filter(call => (table === "audit_event" ? call.sql.includes("FROM app.append_audit(") : call.sql.includes(`INSERT INTO app.${table}`))); }
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -143,10 +164,9 @@ describe("night audit capture regressions (scripted SQL)", () => {
     const first = await app.confirm(review.jobId, input);
     clock.mockReturnValue(now + 1000);
     await expect(app.confirm(review.jobId, input)).resolves.toEqual(first);
-    for (const table of ["command_receipt", "action_authorization", "audit_event", "scope_revision"]) {
-      // The duplicate receipt INSERT is an attempted claim; only one claim succeeds.
-      if (table === "command_receipt") expect(db.receipt?.status).toBe("succeeded");
-      else expect(db.inserts(table)).toHaveLength(1);
-    }
+    expect(db.receipt?.status).toBe("succeeded");
+    expect(db.authorizations).toBe(1);
+    expect(db.completions).toBe(1); // complete_command owns the command audit now.
+    expect(db.inserts("scope_revision")).toHaveLength(1);
   });
 });

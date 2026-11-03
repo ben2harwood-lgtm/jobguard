@@ -67,24 +67,23 @@ export function loadMigrationProofs(directory = PROOF_DIRECTORY, migrations = MI
     sources.push(path);
     return proof;
   });
-  // Repeated identities require an exact sequential transition, never independent claims.
-  const prior = new Map<string, unknown>();
+  // Replacements must chain exact reviewed records across strictly later migrations.
+  const claims = new Map<string, { migration: string; after: unknown }>();
+  function claim(key: string, before: unknown, after: unknown, migration: string) {
+    const previous = claims.get(key);
+    if (previous && (migration <= previous.migration || before === null || !isDeepStrictEqual(before, previous.after))) {
+      throw new Error(`duplicate proof identity: ${key}`);
+    }
+    claims.set(key, { migration, after });
+  }
   for (const proof of proofs) {
-    const claims = new Set<string>();
-    const claim = (key: string, before: unknown, after: unknown) => {
-      if (claims.has(key) || (prior.has(key) &&
-        (before === null || !isDeepStrictEqual(prior.get(key), before)))) {
-        throw new Error(`duplicate proof identity: ${key}`);
-      }
-      claims.add(key); prior.set(key, after);
-    };
-    for (const c of proof.lp0) claim(`lp0:${c.section}:${lpIdentity(c.section, c.after ?? c.before)}`, c.before, c.after);
+    for (const c of proof.lp0) claim(`lp0:${c.section}:${lpIdentity(c.section, c.after ?? c.before)}`, c.before, c.after, proof.migration);
     for (const c of proof.upgrade) {
       const a = c.after ?? c.before;
       if (c.before && c.after && upgradeIdentity(c.section, c.before) !== upgradeIdentity(c.section, c.after)) throw new Error("changed upgrade identity");
-      claim(`upgrade:${c.section}:${upgradeIdentity(c.section, a)}`, c.before, c.after);
+      claim(`upgrade:${c.section}:${upgradeIdentity(c.section, a)}`, c.before, c.after, proof.migration);
     }
-    for (const c of proof.tenancy) claim(`tenancy:${c.relname}`, c.before, c.after);
+    for (const c of proof.tenancy) claim(`tenancy:${c.relname}`, c.before, c.after, proof.migration);
   }
   return { proofs, sources, legacy };
 }

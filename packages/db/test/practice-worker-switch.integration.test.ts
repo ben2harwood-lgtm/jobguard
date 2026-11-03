@@ -139,7 +139,7 @@ it.each(["routine", "audit", "commit"])("[PW10] injected %s failure rolls back b
    const client = await target.connect();
    return new Proxy(client, { get(connection, key) {
     if (key !== "query") { const value = Reflect.get(connection, key, connection); return typeof value === "function" ? value.bind(connection) : value; }
-    return async (sql: string, args?: unknown[]) => { if ((seam === "routine" && sql.includes("SELECT app.practice_worker_switch_")) || (seam === "audit" && sql.includes("INSERT INTO app.audit_event")) || (seam === "commit" && sql === "COMMIT")) throw new Error("PWS_INJECTED_FAILURE"); return connection.query(sql, args); };
+    return async (sql: string, args?: unknown[]) => { if ((seam === "routine" && sql.includes("SELECT app.practice_worker_switch_")) || (seam === "audit" && sql.includes("FROM app.append_audit(")) || (seam === "commit" && sql === "COMMIT")) throw new Error("PWS_INJECTED_FAILURE"); return connection.query(sql, args); };
    } });
   };
  } });
@@ -157,7 +157,7 @@ it("[PW10] no business lock is acquired after the audit append", async () => {
  const f = await company(c), observed = new ObservedPool(c.runtime, c.admin), repository = new PracticeWorkerSwitchRepository(observed.pool), mutable = await mutableTables(c.admin);
  for (const work of [() => repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative }), () => repository.switchOff(f.context, f.p, f.session, off())]) {
   const { transactions } = await observed.record(work); expect(transactions).toHaveLength(1);
-  const statements = transactions[0]!.statements, index = statements.findIndex(s => s.sql.includes("app.lock_audit_head")); expect(index).toBeGreaterThanOrEqual(0);
+  const statements = transactions[0]!.statements, index = statements.findIndex(s => [...s.footprint.rows.keys()].some(key => key.startsWith("audit_control.audit_head#"))); expect(index).toBeGreaterThanOrEqual(0);
   const head = statements[index]!.footprint;
   for (const statement of statements.slice(index + 1)) {
    expect([...statement.footprint.advisory].every(k => head.advisory.has(k))).toBe(true);
@@ -283,7 +283,7 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
 it("[PW5] a target linked to another company's sign-in locator is not eligible", async () => {
  const f = await company(c), b = await company(c);
  const user = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.members.operative])).rows[0]!.identity_user_id, linked = randomUUID();
- await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,$3,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$4", [b.p.tenantId, linked, user, b.p.membershipId]);
+ await withTenant(c.admin,b.context,db=>db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,$3,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$4", [b.p.tenantId, linked, user, b.p.membershipId]));
  await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [user, b.p.tenantId, linked]);
  await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" }); expect(await lookup(c, f)).toEqual(f.p);
 });

@@ -17,7 +17,7 @@ export class SimulationFeeCollectionRepository {
     catch(error) {
       if(error instanceof Error && "code" in error) {
         if(error.code==="42501") throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
-        if(["23514","40001","0A000"].includes(String(error.code)) && ["INVALID_SUCCESS_FEE_COMMAND","SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_DEPENDENCY_BOUND","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))
+        if(["23514","40001","0A000"].includes(String(error.code)) && ["PAYMENT_FEE_AUTHORITY_REVOKED","PAYMENT_FEE_AUTHORITY_STALE","PAYMENT_FEE_AUTHORITY_DISPUTED","PAYMENT_FEE_AUTHORITY_CAP_EXCEEDED","PAYMENT_FEE_SOURCE_REQUIRED","INVALID_SUCCESS_FEE_COMMAND","SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_DEPENDENCY_BOUND","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))
           throw new SuccessFeeError(error.message as import("@jobguard/core").SuccessFeeErrorCode);
       }
       throw error;

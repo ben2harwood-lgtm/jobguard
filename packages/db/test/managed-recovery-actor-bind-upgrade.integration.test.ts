@@ -8,7 +8,7 @@ import { migrate } from "../src/migrate.js";
 let c: Cluster;
 afterAll(async()=>{await c?.close();});
 it('upgrades from the immediate predecessor, revokes the bypass and preserves stored elections',async()=>{
- c=await startBeforeMigration('0602_managed_recovery_actor_bind.sql');
+ c=await startBeforeMigration('0569_managed_recovery_actor_bind.sql');
  const f=await fixture(c),id=await newCase(c,f);
  const input=command(id);
  const contentHash=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
@@ -29,7 +29,7 @@ it('upgrades from the immediate predecessor, revokes the bypass and preserves st
  const old='app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text)';
  const bound='app.mon9_elect(text,uuid,uuid,uuid,uuid,uuid,text,integer,text)';
  expect((await c.admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') allowed",[old])).rows[0].allowed).toBe(true);
- await applyMigration(c,'0602_managed_recovery_actor_bind.sql');
+ await applyMigration(c,'0569_managed_recovery_actor_bind.sql');
  expect((await history()).rows).toEqual(before);
  expect((await c.admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') old,has_function_privilege('jobguard_runtime',$2,'EXECUTE') bound",[old,bound])).rows).toEqual([{old:false,bound:true}]);
  const fresh=await newCase(c,f);

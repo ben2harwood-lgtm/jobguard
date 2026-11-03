@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -68,7 +68,7 @@ export class ManagedRecoveryRepository {
       "managed-recovery-election-command.v1", job, caseId, selection.service, selection.points, termsVersion,
     ].join("\n")).digest("hex");
     try {
-      return await new UserCommandDispatcher(this.pool).dispatch(context, {
+      const result = await new UserCommandDispatcher(this.pool).dispatch(context, {
         version: "command.v1", commandId: command.commandId, commandType: "managed_recovery.elect",
         semanticKey: `managed-recovery:${job}:${caseId}`, actorMembershipId: actor.membershipId,
         subjectType: "recovery_case", subjectRef: caseId,
@@ -77,15 +77,12 @@ export class ManagedRecoveryRepository {
       }, {
         // Before receipt/replay: recheck current session identity and membership.
         lock: db => this.authorize(db, context, job, caseId, actor),
-        mutate: async (db, authorized) => fromRow((await db.$client.query(
+        mutate: async (db, authorized) => (await db.$client.query(
           "SELECT * FROM app.mon9_elect($1,$2,$3,$4,$5,$6,$7,$8,$9)",
           [this.sessionDigest, job, caseId, actor.membershipId, command.commandId, authorized.authorizationId,
-            selection.service, selection.points, termsVersion])).rows[0]),
-        auditEvents: result => [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`,
-          eventType: "managed_recovery.elected", subjectType: "recovery_case", subjectRef: caseId,
-          payload: { references: { jobId: job, commandId: command.commandId },
-            hashes: { election: result.election!.bindingHash }, classifications: { action: "commercial" } } }],
+            selection.service, selection.points, termsVersion])).rows[0],
       });
+      return fromRow(result);
     } catch (error) { return translate(error); }
   }
 
