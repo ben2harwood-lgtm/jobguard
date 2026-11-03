@@ -140,6 +140,7 @@ export * from "./free-first-job-eligibility-repository.js";
 export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
 export * from "./success-fee-repository.js";
+export * from "./money-trail-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
@@ -152,6 +153,7 @@ export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 export * from "./value-v3-reader.js";
 export * from "./enterprise-baseline-repository.js";
+export * from "./financial-reconciliation-queue-repository.js";
 export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
 export * from "./import-pre-adoption-repository.js";
 

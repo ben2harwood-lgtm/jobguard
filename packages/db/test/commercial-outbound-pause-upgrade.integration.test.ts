@@ -21,6 +21,7 @@ it("upgrades without rewriting any predecessor data or authority and migrates tw
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='outbound_control' AND c.relkind='r' ORDER BY 1`)).rows).toEqual([
     {relname:"event",owner:"jobguard_migration",relrowsecurity:false},
+    {relname:"reconciliation",owner:"jobguard_migration",relrowsecurity:false},
     {relname:"state",owner:"jobguard_migration",relrowsecurity:false},
   ]);
   for (const role of ["jobguard_runtime","jobguard_infrastructure","jobguard_identity","jobguard_shadow"]) {
@@ -34,5 +35,7 @@ it("upgrades without rewriting any predecessor data or authority and migrates tw
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='outbound_control' ORDER BY 1`)).rows).toEqual([
     {proname:"claims_enabled",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,operator:false},
     {proname:"command",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:false,operator:true},
+    {proname:"record_reconciliation",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:false,operator:true},
+    {proname:"require_reconciliation",owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:false,operator:false},
   ]);
 });

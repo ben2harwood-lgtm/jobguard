@@ -24,7 +24,7 @@ beforeAll(async () => {
  await f.runtime.end();
  // Upgrade proof: install the exact previous supported schema, then discover 0427.
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- for (const url of MIGRATION_URLS.filter(url => !url.pathname.endsWith("0579_dark_ais.sql"))) {
+ for (const url of MIGRATION_URLS.filter(url => !url.pathname.endsWith("0621_dark_ais.sql"))) {
   await f.admin.query(await readFile(url, "utf8"));
   await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
  }
