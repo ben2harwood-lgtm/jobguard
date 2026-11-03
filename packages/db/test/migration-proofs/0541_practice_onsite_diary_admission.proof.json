@@ -1,6 +1,0 @@
-{
-  "migration": "0541_practice_onsite_diary_admission.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

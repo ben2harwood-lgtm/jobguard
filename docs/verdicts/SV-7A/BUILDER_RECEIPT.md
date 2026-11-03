@@ -1193,7 +1193,7 @@ BUILD_PLAN SV-7/CH-4, simplicity rule, both diary callers, browser regression,
 admission/upgrade tests, migration runner and proof loader. No git writes or
 fetch, dependency downloads, PostgreSQL starts or localhost listeners.
 
-Migration `0541_practice_onsite_diary_admission.sql` applies the reviewer's two
+Migration `0539_practice_onsite_diary_admission.sql` applies the reviewer's two
 exact guarded replacements to installed definitions. Latest main intake is 0522,
 including LP-5 begin/bind/complete command behavior; capture is 0505. Only the two
 diary calls skip capacity for practice jobs. Company admission, the helper's

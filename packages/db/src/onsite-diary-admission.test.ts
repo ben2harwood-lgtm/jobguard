@@ -33,7 +33,7 @@ describe("SV-7A on-site migration boundaries", () => {
 });
 
 describe("SV-7A practice diary admission repair", () => {
- const repairName = "0541_practice_onsite_diary_admission.sql";
+ const repairName = "0539_practice_onsite_diary_admission.sql";
  const repair = readFileSync(new URL(`../migrations/${repairName}`, import.meta.url), "utf8");
  it("is discovered and applied atomically by the migration runner", async () => {
   expect(MIGRATION_URLS.filter(url => url.pathname.endsWith(`/${repairName}`))).toHaveLength(1);
