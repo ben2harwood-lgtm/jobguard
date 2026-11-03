@@ -9,7 +9,7 @@ export function paymentFeeFailure(error:unknown):{status:number;body:{code:strin
  if(error instanceof Error){
   if(["FINAL_CHECK_FORBIDDEN","PAYMENT_FEE_FORBIDDEN"].includes(error.message))return {status:404,body:{code:"NOT_FOUND"}};
   if(error.message==="INVALID_PAYMENT_FEE_COMMAND")return {status:400,body:{code:error.message}};
-  if(["PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))return {status:409,body:{code:error.message}};
+  if(["PAYMENT_FEE_SOURCE_REQUIRED","PAYMENT_FEE_ATTRIBUTION_REQUIRED","PAYMENT_FEE_REVIEW_REQUIRED","PAYMENT_FEE_SOURCE_CHANGED","PAYMENT_FEE_PAUSED","PAYMENT_FEE_APPROVAL_CHANGED","PAYMENT_FEE_REASSESSMENT_REQUIRED","PAYMENT_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))return {status:409,body:{code:error.message}};
  }
  return null;
 }
