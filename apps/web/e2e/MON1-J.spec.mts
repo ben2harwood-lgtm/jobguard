@@ -38,7 +38,26 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
    const job=await seedWorkJob(f,a.tenantId); await activateMeterJob(f,job);
    await insertPhoto(f,job,"now");
   }
+  // Another company's reference must never appear in this company list.
+  const other = await meterCompany(f);
+  await historicalAgreement(f, other, "Builder"); await activateMeterJob(f, other); await insertPhoto(f, other, "now");
+  await page.goto("/");
+  const line = page.getByTestId("jobs-on-the-go-line");
+  await expect(line).toHaveText("5 of 7 jobs on the go");
+  await expect(line.locator("..")).toContainText("Next job included");
+  await page.reload(); await expect(line).toHaveText("5 of 7 jobs on the go");
+  await line.click();
+  await expect(page.getByTestId("meter-job-row")).toHaveCount(5);
+  await expect(page.getByRole("main")).not.toContainText(other.jobId);
+  await page.reload();
+  await expect(page.getByTestId("meter-job-row")).toHaveCount(5);
+  await expect(page.getByRole("main")).not.toContainText(other.jobId);
   await expectMeter(page,"5 of 7 jobs on the go","Next job included");
+  // Authenticated read failure leaves the rest of the home page usable.
+  await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));
+  await page.goto("/");
+  await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start the demo", exact: true })).toBeVisible();
  } finally { await runtime.end(); await admin.end(); }
 });
 
@@ -107,8 +126,22 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
   const foreignRead=await page.request.get("/api/meter/current",{headers:{"x-tenant-id":other.tenantId,"x-csrf-token":session.csrfToken}});
   expect(foreignRead.status()).toBe(403);
   expect(await foreignRead.text()).not.toContain("countedPlaces");
+  const foreignJobs = await page.request.get("/api/meter/current/jobs", { headers: { "x-tenant-id": other.tenantId, "x-csrf-token": session.csrfToken } });
+  expect(foreignJobs.status()).toBe(403);
+  expect(await foreignJobs.text()).not.toContain("jobIds");
   const badCsrf=await page.request.post(`/api/meter/jobs/${a.jobId}/work-state`,{headers:{origin:new URL(page.url()).origin,"x-tenant-id":a.tenantId,"x-csrf-token":"x".repeat(24)},data:finish});
   expect(badCsrf.status()).toBe(403);
   await count(6);
  } finally { await runtime.end(); await admin.end(); }
+});
+
+test("MON1-J: practice and failed meter reads leave the jobs page usable without a figure", async ({ page }) => {
+ await page.request.post("/api/session");
+ await page.goto("/");
+ await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+ await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
+ await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));
+ await page.reload();
+ await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+ await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
 });

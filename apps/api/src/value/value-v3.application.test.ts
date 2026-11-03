@@ -106,3 +106,19 @@ it("mapped receipt figures reproduce their source list and bind the authorized t
  readJob.mockResolvedValue(value);authority.mockResolvedValue({context:{tenantId:randomUUID()}} as Awaited<ReturnType<PracticeAccess["job"]>>);
  await expect(app.readJob(jobId)).rejects.toMatchObject({code:"VALUE_V3_SOURCE_REJECTED"});
 });
+
+it("v2 re-derives every recovery figure and refuses other-company derivations",async()=>{
+ const {mapValueReceiptV2}=await import("@jobguard/core");
+ const {app,authority,readJob}=fixture(),tenantId=randomUUID();
+ authority.mockResolvedValue({context:{tenantId}} as Awaited<ReturnType<PracticeAccess["job"]>>);
+ const sources={base:{tenantId,jobId,lockId:randomUUID(),lockedRevisionId:randomUUID(),lockedAt:"2026-10-01T00:00:00Z",foundComplete:true,checkId:randomUUID(),checkedAt:"2026-10-02T00:00:00Z",checked:[],tracked:[],assessments:[]},
+  supplier:{reason:"No supplier derivation",balances:[]},withheld:{reason:null,balances:[{tenantId,jobId,derivationId:randomUUID(),revision:1,at:"2026-10-03T00:00:00Z",recovered:{pence:282000,currency:"GBP"},fee:{pence:28200,currency:"GBP"},allocationIds:[randomUUID()],statementHash:"a".repeat(64)}]}};
+ const receipt=mapValueReceiptV2(sources),value={version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt};
+ readJob.mockResolvedValue(value);expect(await app.readJob(jobId)).toMatchObject({receipt:{withheld:{yoursBeforeVatAndTax:{pence:253800}}}});
+ for(const field of ["recovered","fee","yoursBeforeVatAndTax"] as const){
+  readJob.mockResolvedValue({...value,receipt:{...receipt,withheld:{...receipt.withheld,[field]:{pence:1,currency:"GBP"}}}});
+  await expect(app.readJob(jobId)).rejects.toMatchObject({code:"VALUE_V3_SOURCE_REJECTED"});
+ }
+ const foreign=structuredClone(value);foreign.receipt.sources.withheld.balances[0]!.tenantId=randomUUID();
+ readJob.mockResolvedValue(foreign);await expect(app.readJob(jobId)).rejects.toMatchObject({code:"VALUE_V3_SOURCE_REJECTED"});
+});

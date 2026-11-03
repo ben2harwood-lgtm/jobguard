@@ -26,7 +26,6 @@ beforeAll(startCluster);
 afterAll(async () => {
   await closeTestPools(...connections);
   await postgres?.stop();
-  // Leave the disposable directory for the dispatcher's cleanup; this order authorizes no deletion.
 });
 
 describe("[A02 A03] audit-export own-step catalogue", () => {
@@ -223,7 +222,7 @@ async function startCluster() {
   postgres = new EmbeddedPostgres({
     databaseDir: directory, port, user: "postgres",
     password: value,
-    persistent: true, createPostgresUser: process.getuid?.() === 0,
+    persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined,
   });
   await postgres.initialise();

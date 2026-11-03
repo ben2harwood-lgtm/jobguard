@@ -98,13 +98,26 @@ test("DEMO-J5 first activation, refused second job, card, terms, second activati
   await expect(outcome(page)).toContainText("Trial ended by second activation");
   expect(await facts(tenantId)).toMatchObject({ starts: 1, activations: 2, ends: ["second_activation"], admissions: ["first", "second"] });
   await expect(page.getByTestId("trial-missing")).toContainText("Final Check");
-  await expect(page.getByTestId("trial-missing")).toContainText("Pro-ration");
+  await expect(page.getByTestId("trial-missing")).toContainText("Pro-ration: no billing period is issued yet.");
+  // MON-3 builds conversion from an ended meter period and accepted terms.
+  // Today's acceptance and second activation supply no ended period or preview amount.
+  const sourceReport = async () => JSON.parse((await page.getByRole("region", { name: "Source report" }).locator("pre").textContent())!);
+  const savedSources = await sourceReport();
+  expect(savedSources).toMatchObject({ status: "incomplete", subscription: { periods: [], statements: [], results: [] } });
+  expect(savedSources.subscription.agreements).toHaveLength(1);
   await expect(page.getByText("Stored subscription agreements: 1")).toBeVisible();
 
   await button(page, "Save source report").click();
   await expect(page).toHaveURL(/snapshotId=/);
   await page.reload();
   await expect(outcome(page)).toContainText("Trial ended by second activation");
+
+  const resumedSources = await sourceReport();
+  expect(resumedSources.missing).toEqual(savedSources.missing);
+  expect(resumedSources.subscription).toEqual(savedSources.subscription);
+  expect(resumedSources.status).toBe("incomplete");
+  await expect(page.getByTestId("trial-missing")).toContainText("Final Check");
+  await expect(page.getByTestId("trial-missing")).toContainText("Pro-ration: no billing period is issued yet.");
 
   // Reset archives this run; the same jobs carry over and cannot earn a second trial.
   await page.getByRole("link", { name: "Archive and reset in chooser" }).click();

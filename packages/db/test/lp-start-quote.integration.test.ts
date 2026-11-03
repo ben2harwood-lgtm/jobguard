@@ -70,7 +70,7 @@ describe("LP-2 narrow review transition", () => {
             field === "authorization" ? randomUUID() : command.authorizationId, field === "review" ? randomUUID() : f.review.reviewId,
             JSON.stringify(field === "content" ? { ...f.review, lines: [] } : f.review)])).rows[0]!;
       },
-    })).rejects.toMatchObject({ code: ["review", "job", "revision", "state"].includes(field) ? "40001" : "42501" });
+    })).rejects.toMatchObject({ code: ["review", "job", "revision", "state"].includes(field) ? "40001" : ["authorization", "content"].includes(field) ? "AUTHORIZATION_INVALID" : "FORBIDDEN" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
   });
   it("[LP2-A10] failure after scope writes rolls back scope, review, job, authorization, receipt and audit", async () => {
