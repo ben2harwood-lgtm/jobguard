@@ -148,6 +148,56 @@ it("[E9E] a billed variation matched to a JobGuard extra has no missing-extra ad
   expect(activity.signals.observations.filter(o => o.kind === "billed_variation_without_extra")).toEqual([]);
   expect(await repo.readBilling(context, s, query)).toEqual(before);
 });
+
+it("[E9E] original orders stay silent and unrelated credits cannot erase a possible variation", async () => {
+  const own = await billingWorld(c), s = await session(own.w);
+  const original = { externalInvoiceLineId: "order-only", kind: "original_order", existedAt: "2026-10-01T00:00:00Z",
+    netPence: 100000, vatPence: 20000, grossPence: 120000, match: null };
+  const amount = { netPence: 100000, vatPence: 20000, grossPence: 120000 };
+  const orderInvoice = own.event("invoiced", { invoiceNumber: "FICTIONAL-ORDER-ONLY", amount,
+    composition: { declared: amount, lines: [original] } });
+  await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([orderInvoice]));
+  expect((await read(s)).signals.observations.filter(o => o.kind === "billed_variation_without_extra")).toEqual([]);
+
+  const raw = await own.invoice();
+  const composition = raw.composition as { declared: unknown; lines: unknown[] };
+  const invoice = { ...raw, amount: { netPence: 124100, vatPence: 24820, grossPence: 148920 },
+    composition: { declared: { netPence: 124100, vatPence: 24820, grossPence: 148920 }, lines: [...composition.lines,
+      { ...original, externalInvoiceLineId: "possible-variation", kind: "other", netPence: 100, vatPence: 20, grossPence: 120 }] } };
+  await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([invoice]));
+  const observations = (await read(s)).signals.observations.filter(o => o.kind === "billed_variation_without_extra");
+  expect(observations).toHaveLength(1);
+  const credit = own.event("credited", { originalEventId: invoice.sourceEventId,
+    effectiveAt: "2026-10-03T12:00:00Z", amount,
+    lineAdjustments: [{ externalInvoiceLineId: "order", ...amount }] });
+  await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([credit]));
+
+  // Snapshot every tenant-owned business table, including fees, prices and meter records.
+  // The dashboard must perform no business writes even when it returns this advisory.
+  const snapshot = async () => {
+    const tables = (await c.admin.query<{ tablename: string }>(`SELECT p.tablename FROM pg_tables p
+      JOIN information_schema.columns col ON (col.table_schema,col.table_name,col.column_name)=(p.schemaname,p.tablename,'tenant_id')
+      WHERE p.schemaname='app' ORDER BY p.tablename`)).rows;
+    const rows: Record<string, unknown> = {};
+    for (const { tablename } of tables) {
+      const quoted = '"' + tablename.replaceAll('"', '""') + '"';
+      rows[tablename] = (await c.admin.query(`SELECT row_to_json(t)::text bytes FROM app.${quoted} t WHERE tenant_id=$1 ORDER BY row_to_json(t)::text`, [own.w.p.tenantId])).rows;
+    }
+    return rows;
+  };
+  const before = await snapshot();
+  const result = await read(s);
+  const remaining = result.signals.observations.filter(o => o.kind === "billed_variation_without_extra");
+  expect(remaining).toHaveLength(1);
+  expect(remaining[0]).toMatchObject({ jobId: own.s.jobId, extraIds: [] });
+  // A new allocation run legitimately changes the citation, but never the invoice fact.
+  expect(remaining[0]!.sourceIds.filter(id => observations[0]!.sourceIds.includes(id))).toHaveLength(1);
+  expect(remaining[0]!.sourceIds).toHaveLength(2);
+  expect((await read(s)).signals.observations).toEqual(result.signals.observations);
+  const context = await contractorSessionContext(c.runtime, s);
+  expect((await new EnterpriseDashboardRepository(c.runtime).readBilling(context, s, query)).totals.billed.known.pence).toBe(24000);
+  expect(await snapshot()).toEqual(before);
+});
 it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and removed by current credits/rejections", async () => {
   const a = await billingWorld(c), b = await billingWorld(c);
   const sa = await session(a.w), sb = await session(b.w);

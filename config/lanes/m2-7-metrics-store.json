@@ -5,15 +5,15 @@
       "branches": [
         "codex/sandbox/m2-7-metrics-store"
       ],
-      "note": "RED: M2-7 dark synthetic durable metrics, tenant isolation, replay safety and rejection receipts. Migration 0487; built ahead on m2-7-inbox. Proof declares RLS off only for the three indexes (PostgreSQL indexes have no row policies); the receipt table enables and forces RLS.",
+      "note": "RED: M2-7 dark synthetic durable metrics, tenant isolation, replay safety and rejection receipts. Migration 0596; catch-up preserves current main. Database and browser evidence remains for CI.",
       "allow": [
-        "packages/db/migrations/0487_inbox_metrics_store.sql",
+        "packages/db/migrations/0596_inbox_metrics_store.sql",
         "packages/db/src/index.ts",
         "packages/db/src/inbox-metrics-repository.ts",
         "packages/db/test/inbox-metrics.test.ts",
         "packages/db/test/inbox-metrics.integration.test.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0487_inbox_metrics_store.proof.json"
+        "packages/db/test/migration-proofs/0596_inbox_metrics_store.proof.json"
       ]
     }
   }

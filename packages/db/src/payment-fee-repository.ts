@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { parsePaymentFeeCommand, paymentFeeStatementV1, paymentFeeViewV1 } from "@jobguard/core";
+import { paymentFeeAuthorityCommandV1, paymentFeeAuthorityV1, parsePaymentFeeCommand, paymentFeeStatementV1, paymentFeeViewV1 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { PracticeAccessError } from "./practice-session.js";
 const id=z.string().uuid(),digest=z.string().regex(/^[a-f0-9]{64}$/u);
@@ -12,6 +12,15 @@ export class PaymentFeeRepository {
    const row=(await db.$client.query<{result:unknown}>("SELECT app.read_payment_fees($1,$2) result",[job,token])).rows[0];
    const result=paymentFeeViewV1.parse(row?.result);
    if(result.jobId!==job)throw new PracticeAccessError("NOT_FOUND");
+   return result;
+  });
+ }
+ async authority(context:VerifiedTenantContext,jobId:string,session:string,raw:unknown){
+  const job=id.parse(jobId),token=digest.parse(session),command=paymentFeeAuthorityCommandV1.parse(raw);
+  return withTenant(this.pool,context,async db=>{
+   const row=(await db.$client.query<{result:unknown}>("SELECT app.write_payment_fee_authority($1,$2,$3::jsonb) result",[job,token,command])).rows[0];
+   const result=paymentFeeAuthorityV1.parse(row?.result);
+   if(result.authorityId!==command.commandId)throw new PracticeAccessError("NOT_FOUND");
    return result;
   });
  }

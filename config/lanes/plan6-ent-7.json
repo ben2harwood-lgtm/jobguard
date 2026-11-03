@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-ent-7": {
+      "branches": ["codex/sandbox/demo-ent7"],
+      "note": "ENT-7 AMBER tests only. Invoice hook remains held under Q-02. Own lane file is implicitly owned.",
+      "allow": [
+        "packages/db/test/enterprise-fee-command-fixtures.integration.test.ts"
+      ]
+    }
+  }
+}
