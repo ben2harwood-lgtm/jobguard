@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { FakeOpsSink } from "../../config/src/ops-alerts.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -366,19 +368,23 @@ describe("commercial outbound pause", () => {
       VALUES($1,$2,$3,$4,$5,'text/plain',100,'standard_evidence','2099-01-01')`,
       [uploadId,TENANT,jobId,`synthetic-pause/${uploadId}`,hash("Synthetic evidence")]));
     const evidence = (await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows;
+    const auditBefore = (await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows;
     const pause = randomUUID(), request = randomUUID(), approval = randomUUID();
     let revision = (await operatorA.query("SELECT revision FROM outbound_control.state")).rows[0].revision;
     const paused = await command(operatorA, pause, "pause", revision);
     expect(await command(operatorA, pause, "pause", revision)).toBe(paused);
     await expect(command(operatorA, pause, "pause", paused)).rejects.toThrow("OUTBOUND_IDEMPOTENCY_CONFLICT");
     const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:pause" }));
-    const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), telemetry);
+    const sink = new FakeOpsSink(JSON.parse(readFileSync(new URL("../../../config/ops-alerts.v1.json", import.meta.url), "utf8")));
+    const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(deliver)]]), sink.outboxTelemetry());
     try {
       await executor.execute(context, action.id);
       await executor.execute(context, action.id);
       expect(deliver).not.toHaveBeenCalled();
       expect((await admin.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows).toEqual(before);
       expect((await admin.query("SELECT * FROM app.evidence_upload WHERE id=$1", [uploadId])).rows).toEqual(evidence);
+      expect((await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows).toEqual(auditBefore);
+      expect(sink.records).toEqual([]);
       expect((await admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1", [action.id])).rows[0].n).toBe(0);
       // A business runtime cannot unpause via routine, direct SQL, role or GUC.
       await expect(command(runtime, randomUUID(), "approve_resume", paused, request)).rejects.toMatchObject({ code: "42501" });
