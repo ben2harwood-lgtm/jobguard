@@ -1018,3 +1018,39 @@ The router owns commit/push of codex/sandbox/money-test-gaps; no PR for this bui
 Final deterministic checks: `git diff --check` passed. Existing loadLanePolicy /
 lanePathAllowed helpers accepted all eight exact changed paths, including the
 implicitly permitted own lane file, with no unchanged allow-list entries.
+
+## MONEY-TEST-GAPS catch-up to main — 3 November 2026
+
+READY for router commit as NOPR; RED money tests. Inspected merge cef455d3f
+against local origin/main 111865cf6. The launcher already completed the merge;
+there are no unmerged index entries. Local main is stale, so scope comparisons
+use origin/main without fetching. Main's production code, migrations and other
+lanes are unchanged. This piece retains its six test/fixture changes above,
+its existing receipt and its own exact lane. No test expectation, skip or
+production behavior was changed during this catch-up. No migration is needed.
+
+Actual checks on Node 24.17.0 and installed Vitest 4.1.12:
+
+- packages/db: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` passed.
+  This checks src; integration tests are outside that tsconfig.
+- packages/db: `./node_modules/.bin/vitest run --maxWorkers=1
+  test/trial-lock-order-source.test.ts
+  src/simulation-fee-statement-repository.test.ts
+  src/success-fee-repository.test.ts` — 15 tests passed across three files.
+- packages/core: `./node_modules/.bin/vitest run --maxWorkers=1
+  src/success-fee-posting.test.ts src/success-fee-posting-fixtures.test.ts
+  src/success-fee-catch-posting.test.ts` — 80 tests passed across three files.
+- packages/db: `vitest list --maxWorkers=1` with the three named compensation,
+  statement and trial integration files, then separately the shadow guide file,
+  collected all four successfully. Discovery/import only; no database assertions
+  executed and no PostgreSQL startup attempted.
+- `git diff --check origin/main` passed. Existing loadLanePolicy/lanePathAllowed
+  helpers verified eight changed paths, exact allow-list equality excluding
+  config/lanes, only this piece's lane changed, and no migration changes.
+
+PostgreSQL and browser execution remain unproved in this sandbox. CI must run
+all four changed integration files against real PostgreSQL, plus required
+checks, before landing. Independent RED review must cover the resulting exact
+committed head. No full-suite, clean-install, browser or independent-review pass
+is claimed. No Git writes, installs, downloads, providers or real data were used.
+Router owns commit/push and later PR opening when this group's turn arrives.
