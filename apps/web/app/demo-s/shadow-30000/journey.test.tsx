@@ -90,3 +90,37 @@ it("shows step 6 approved only for persisted customer portal approval", () => {
  const parsed = parseShadowReport({ ...report(), customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00Z", method: "customer_portal" }] } }, jobId);
  expect(renderToStaticMarkup(<ShadowSavedReport report={parsed} />)).toContain("Step 6: approved by the customer");
 });
+
+function completeReport() {
+ const lock = { id: randomUUID(), finalAccountRevisionId: randomUUID(), lockedAt: "2026-10-31T04:00:00Z", digest: "a".repeat(64) };
+ const receipt = { ...mapValueReceipt({ tenantId: randomUUID(), jobId, lockId: lock.id, lockedRevisionId: lock.finalAccountRevisionId, lockedAt: lock.lockedAt, foundComplete: true, checkId: randomUUID(), checkedAt: lock.lockedAt, checked: [], tracked: [], assessments: [] }) };
+ const raw = report();
+ return { ...raw, status: "complete", customerApproval: { state: "approved", approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00Z", method: "customer_portal" }] },
+  account: { ...raw.account, lock }, packs: [{ caseId: randomUUID(), result: {} }],
+  invoices: { ...raw.invoices, invoices: [{ id: randomUUID(), number: "DEMO-CUST-000001", issuedOn: "2026-10-31", recipient: "practice-customer@example.invalid", pdfSha256: "b".repeat(64), finalAccountRevisionId: randomUUID(), sourceHash: "c".repeat(64), netPence: 3440000, taxPence: 688000, totalPence: 4128000, balancePence: 0, customerCreditPence: 0, paidPence: 4128000, creditedPence: 0, delivery: "simulated_delivery" }] },
+  value: { version: "job-value.v3", environment: "synthetic_demo", jobId, status: "mapped", receipt } };
+}
+it("shows complete only for the server's complete status and never for an incomplete one", () => {
+ const html = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(completeReport(), jobId)} />);
+ expect(html).toContain("Complete. All nine steps are saved on this job."); expect(html).not.toContain("Incomplete");
+ expect(html).toContain("an approved pack proves"); expect(html).toContain("Settlement");
+ const incomplete = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(report(), jobId)} />);
+ expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("not all approved yet");
+});
+it("refuses a complete status that contradicts its own saved parts", () => {
+ const good = completeReport();
+ for (const patch of [
+  { customerApproval: { state: "awaiting_customer", approvals: [] } }, { value: report().value },
+  { invoices: { ...good.invoices, invoices: [] } }, { packs: [] }, { packs: undefined },
+ ]) expect(() => parseShadowReport({ ...good, ...patch }, jobId)).toThrow();
+ expect(() => parseShadowReport({ ...report(), status: "finished" }, jobId)).toThrow();
+});
+
+it("accepts CH-9 v2 while preserving the shadow receipt's job and lock checks",async()=>{
+ const {mapValueReceiptV2}=await import("@jobguard/core");
+ const raw=report(),lock={id:randomUUID(),finalAccountRevisionId:randomUUID(),lockedAt:"2026-10-31T04:00:00Z",digest:"a".repeat(64)};
+ const receipt=mapValueReceiptV2({base:{tenantId:randomUUID(),jobId,lockId:lock.id,lockedRevisionId:lock.finalAccountRevisionId,lockedAt:lock.lockedAt,foundComplete:true,checkId:randomUUID(),checkedAt:lock.lockedAt,checked:[],tracked:[],assessments:[]},supplier:{reason:"No supplier derivation",balances:[]},withheld:{reason:"No withheld derivation",balances:[]}});
+ const saved={...raw,account:{...raw.account,lock},value:{version:"job-value.v3",environment:"synthetic_demo",jobId,status:"mapped",receipt}};
+ expect(parseShadowReport(saved,jobId).value).toEqual(saved.value);
+ receipt.sources.base.lockId=randomUUID();expect(()=>parseShadowReport(saved,jobId)).toThrow("Wrong value report");
+});

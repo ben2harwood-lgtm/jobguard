@@ -44,7 +44,7 @@ Each row is a capability the application login holds **today**. Recording it doe
 | `x-scope-proposal-writes` | Runtime INSERT, UPDATE and DELETE on proposal review tables; INSERT and column UPDATE on proposal, scope and finding tables | 28 | LP-6d, LP-13 | review_at_card: LP-6d classifies and converts; LP-13 covers the scope-progress actor |
 | `x-prevention-fact-writes` | Runtime INSERT on prevention, watchdog, inbox and capture tables | 13 | LP-8b | review_at_card: LP-8b actor on prevention facts |
 | `x-exec-transition-job` | Runtime EXECUTE on app.transition_job | 1 | LP-2 | revoke: LP-2 withdraws the runtime grant; a narrowed start-quote replacement serves draft-to-quoting |
-| `x-exec-legacy-activation-acceptance` | Runtime EXECUTE on the v1 signatures switch_job_live, record_simulated_settlement, record_builder_attested_acceptance, record_quote_disposition | 4 | LP-3 | replace_with_checked_routine: LP-3 adds hardened signatures with command and authorization ids and revokes these |
+| `x-exec-legacy-activation-acceptance` | Historical v1 signatures (owner fixture access only after LP-3) | 0 | LP-3 | Runtime EXECUTE withdrawn by 0404; checked overloads are classified under `a-exec-activation-v3`. |
 | `x-exec-practice-actorless` | Runtime EXECUTE on actor-less or caller-actor practice routes | 7 | LP-2, LP-8a | restrict_to_owner: LP-2 restricts the named routes to the trusted practice database |
 | `x-exec-invoice-number` | Runtime EXECUTE on reserve_customer_invoice_number | 1 | LP-8a, LP-13 | review_at_card: LP-13 traces number-burning impact; LP-8a covers its callers |
 | `x-exec-invoker-follow-up-engine` | Runtime EXECUTE on evaluate_recovery_follow_ups (invoker, no fixed search path) | 1 | LP-4, LP-6d | review_at_card: LP-4 moves its audit append inside the database; LP-6d reviews it |
@@ -83,7 +83,7 @@ Downstream effect of each exception (why none is called harmless):
 | Group | Capability | Entries | Target |
 |---|---|---:|---|
 | `a-party-and-simulation-writes` | Runtime INSERT on customer, site and practice or sandbox simulation tables | 13 | rebind_at_card (LP-11): working data inside the caller tenant, rebound with the tenant at LP-11 |
-| `a-exec-activation-v3` | Runtime EXECUTE on switch_job_live_v3 | 1 | rebind_at_card (LP-3, LP-6c): kept; actor and tenant compared with the binding at LP-6c |
+| `a-exec-activation-v3` | Runtime EXECUTE on switch_job_live_v3 | 5 | rebind_at_card (LP-3, LP-6c): kept; actor and tenant compared with the binding at LP-6c |
 | `a-exec-checked-billing-money` | Runtime EXECUTE on checked invoice, credit, receipt, reversal and journal routines | 8 | rebind_at_card (LP-6c, LP-8a): kept as checked routines; actor and tenant bound at LP-6c; legacy signatures withdrawn at LP-8a |
 | `a-exec-final-account` | Runtime EXECUTE on final-account lock, disposition, terms and advance routines | 8 | rebind_at_card (LP-6c, LP-8a): kept; LP-8a checks advance_final_account_draft; actor and tenant bound at LP-6c |
 | `a-exec-recovery-money` | Runtime EXECUTE on recovery terms, payer mark, fee, landing and allocation routines | 5 | rebind_at_card (LP-6c, LP-8a): kept as checked routines; actor and tenant bound at LP-6c; no fee rule changed |
@@ -465,3 +465,41 @@ The replay branch of the thirteen-argument adopt_in_flight_job (0095_job_parties
 ## Rollback
 
 Remove the LP-0 guard, inventory and design note through the ordinary reviewed code process. No migration, grant, role, routine, policy or trigger is installed, so there is no data rollback.
+
+## LP-5c cutover (0557; after 0522)
+
+Direct command creation and completion ACLs are withdrawn, including the separate receipt column UPDATE grants. No new runtime grants or routine changes. Land after LP-5b and rerun the complete PostgreSQL suite and independent RED review at the exact head. Shared overlaps with LP-5a/b are this LP-0 inventory and its exception assertions; serialize their landing. Forward fixes repair checked writers rather than restoring the direct grants.
+
+The whole-track gate in section 11.8 still requires every remaining authority path to close through its assigned checked path. LP-5c does not implement LP-6/8/10. In particular authorization revocation is still direct, one-way under the immutable revocation trigger, and assigned to LP-6d. LP-5 does not resist forged actor claims before LP-6 binding.
+
+Remaining runtime column UPDATE inventory (catalogue comparison remains LP-0):
+
+| Column | Existing LP closure cards |
+|---|---|
+| app.account.created_at | LP-1, LP-7 |
+| app.action_attempt.error_code | LP-8b, LP-10 |
+| app.action_attempt.finished_at | LP-8b, LP-10 |
+| app.action_attempt.outcome | LP-8b, LP-10 |
+| app.action_attempt.provider_reference | LP-8b, LP-10 |
+| app.action_authorization.revoked_at | LP-6d |
+| app.action_outbox.claimed_at | LP-8b, LP-10 |
+| app.action_outbox.completed_at | LP-8b, LP-10 |
+| app.action_outbox.next_attempt_at | LP-8b, LP-10 |
+| app.action_outbox.status | LP-8b, LP-10 |
+| app.action_outbox.updated_at | LP-8b, LP-10 |
+| app.evidence_upload.id | LP-8b |
+| app.evidence_upload.object_version_id | LP-8b |
+| app.evidence_upload.rejection_code | LP-8b |
+| app.evidence_upload.server_verified_at | LP-8b |
+| app.evidence_upload.state | LP-8b |
+| app.membership.created_at | LP-1, LP-7 |
+| app.proposal_line.dismissal_reason | LP-6d, LP-13 |
+| app.proposal_line.state | LP-6d, LP-13 |
+| app.provider_event_inbox.processed_at | LP-8b, LP-10 |
+| app.provider_event_inbox.processing_status | LP-8b, LP-10 |
+| app.quote_draft.current_revision_id | LP-5c, LP-6d |
+| app.quote_draft.revision | LP-5c, LP-6d |
+| app.quote_draft.updated_at | LP-5c, LP-6d |
+| app.scope_identity.state | LP-6d, LP-13 |
+| app.variation.current_revision_id | LP-5c, LP-6d |
+| app.variation.state | LP-5c, LP-6d |

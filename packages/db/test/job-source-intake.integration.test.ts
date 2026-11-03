@@ -61,9 +61,11 @@ describe("SV-7A checked intake writer",()=>{
   expect(Number((await f.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2",[auth.context.tenantId,input.commandId])).rows[0].n)).toBe(0);
   expect(await repo.intake(auth.context,jobId,auth.digest,kind,input)).toEqual(first);
  });
- it("on-site notes wait for place admission and malformed input is refused, with no effects",async()=>{
-  const {auth,jobId}=f.practice,before=await counts(f);
-  await expect(repo.intake(auth.context,jobId,auth.digest,"diary",diary("On site today.",true))).rejects.toEqual(new JobSourceError("JOB_SOURCE_UNAVAILABLE"));
+ it("a practice on-site note takes no place; malformed input is refused with no effects",async()=>{
+  const {auth,jobId}=f.practice;
+  // Company on-site notes still compete for a place: see onsite-diary-admission.
+  expect((await repo.intake(auth.context,jobId,auth.digest,"diary",diary("On site today.",true))).record).toMatchObject({onSite:true});
+  const before=await counts(f);
   for(const bad of [{...diary(),extra:1},{...diary(),text:"   "},{...diary(),version:"job-diary-input.v0"},{...message(),fictionalCustomer:{kind:"named_fictional_customer",name:" "}}])
    await expect(repo.intake(auth.context,jobId,auth.digest,"version" in bad&&String(bad.version).startsWith("customer")?"customer_message":"diary",bad)).rejects.toEqual(new JobSourceError("INVALID_JOB_SOURCE_INPUT"));
   expect(await counts(f)).toEqual(before);

@@ -1,13 +1,13 @@
+import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import { randomUUID } from "node:crypto";
-import { proofEvidenceTypeSchema } from "@jobguard/core";
+import { proofEvidenceTypeSchema } from "../../core/src/proof.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
-import { migrate } from "../src/migrate.js";
-import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { freePort, closeTestDatabase, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 export const CH4_HASH = "a".repeat(64);
@@ -15,17 +15,20 @@ export const CH4_HASH = "a".repeat(64);
 export async function createWorkFixture(install = true, database = "jobguard_synthetic_demo") {
  const directory = await mkdtemp(join(tmpdir(), "ch4-pg16-")), port = await freePort(59000, 400), credential = randomUUID();
  const connection = { host: "127.0.0.1", port, database, user: "postgres", password: credential };
- const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
+ const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); if (database !== "postgres") await postgres.createDatabase(database);
  const admin = new Pool(connection), login = `ch4_${randomUUID().replaceAll("-", "")}`;
- if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
+ await installAuditCommandWriterRoles(admin);
+ if (install) {
+  const { migrate } = await import("../src/migrate.js");
+  await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
+ }
  if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO ${login}`);
  const runtime = new Pool({ ...connection, user: install ? login : "postgres", max: 4 });
  return { postgres, directory, admin, runtime };
 }
 export type WorkFixture = Awaited<ReturnType<typeof createWorkFixture>>;
-/** Preserve the temporary cluster for dispatcher inspection; no deletion by this piece. */
-export async function closeWorkFixture(f?: WorkFixture) { if (f) { await closeTestPools(f.runtime, f.admin); await f.postgres.stop(); } }
+export async function closeWorkFixture(f?: WorkFixture) { if (f) await closeTestDatabase(f.postgres, f.directory, f.runtime, f.admin); }
 export async function workTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>) {
  const db = await pool.connect();
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
@@ -50,13 +53,15 @@ export async function seedWorkJob(f: WorkFixture, tenantId: string = randomUUID(
  return { tenantId, actorId, jobId, scopeId, context: testTenantContext(tenantId) };
 }
 export type WorkJob = Awaited<ReturnType<typeof seedWorkJob>>;
-export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo) {
+export async function insertPhoto(f: WorkFixture, a: WorkJob, receivedAt = "2026-10-13T10:00:00.000001Z", type: string = proofEvidenceTypeSchema.enum.pre_cover_photo, capturedAt: string | null = null, historicalImportFixture = false) {
  const id = randomUUID(), version = randomUUID();
  await workTenant(f.admin, a.tenantId, async db => {
-  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp())`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt]);
-  await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp())`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt]);
+  // Owner-only historical import setup; ordinary site evidence still runs every guard.
+  if (historicalImportFixture) await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at,device_captured_at)
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,$8,clock_timestamp(),$9)`, [id,a.tenantId,a.jobId,a.scopeId,`synthetic/ch4/${id}`,CH4_HASH,version,receivedAt,capturedAt]);
+  await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at)
+   VALUES($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,80,'image/png','standard_evidence',$9,clock_timestamp(),$10)`,[id,a.tenantId,a.jobId,a.scopeId,type,`synthetic/ch4/${id}`,version,CH4_HASH,receivedAt,capturedAt]);
  }); return id;
 }
 export async function workEvents(f: WorkFixture, a: WorkJob) {

@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { preventionViewV1, type PreventionViewV1, type PreventionResultV1 } from "@jobguard/core";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { preventionViewV1, EXPOSURE_CURVE_ENABLED, type PreventionViewV1, type PreventionResultV1 } from "@jobguard/core";
+import { JobExposureCurve } from "./job-exposure-curve";
 import styles from "./prevention-checks.module.css";
 
 const names: Record<PreventionResultV1["kind"],string> = { listed_building:"Listed building",conservation_area:"Conservation area",article_4:"Article 4",planning_history:"Planning history",flood:"Flood",company:"Free company register card",companies_house_feed:"Company register feed",gazette_feed:"Gazette feed" };
@@ -25,7 +26,7 @@ export function PreventionChecks({jobId}:{jobId:string}) {
   const load=useCallback(async()=>{
     const requestGeneration=++generation.current;
     try { const response=await fetch(`/api/jobs/${jobId}/prevention-checks`,{cache:"no-store"});if(!response.ok)throw new Error("Prevention facts could not load. Try again.");
-      const value=preventionViewV1.parse(await response.json());if(requestGeneration===generation.current)setView(value);
+      const value=preventionViewV1.parse(await response.json());if(value.jobId!==jobId)throw new Error("Unexpected job response");if(requestGeneration===generation.current)setView(value);
     } catch { if(requestGeneration===generation.current){setView(null);setError("Prevention facts could not load. Try again.");} }
   },[jobId]);
   useEffect(()=>{setView(null);setError("");void load();const changed=()=>{setView(null);void load();};window.addEventListener("job-parties-saved",changed);return()=>{generation.current++;window.removeEventListener("job-parties-saved",changed);};},[load]);
@@ -46,6 +47,7 @@ export function PreventionChecks({jobId}:{jobId:string}) {
   return <section className={styles.panel} data-testid="prevention-panel" aria-busy={busy} aria-label="Prevention checks">
     <p className="eyebrow">Generated registers · reference only</p><h2>Prevention checks</h2>
     <p>Fictional register records only. Live sources need approval. Checks are advisory and fee-free.</p>
+    {view?.jobId === jobId && EXPOSURE_CURVE_ENABLED(view.environment) && <JobExposureCurve key={jobId} jobId={jobId}/>}
     {error&&<p ref={errorRef} tabIndex={-1} role="alert">{error}</p>}
     {!view?<button onClick={()=>{setError("");void load();}}>Reload prevention facts</button>:<>
       <h3>Who actually pays?</h3><p data-testid="prevention-paying-party">{view.payingParty?.name??"unknown"}</p>

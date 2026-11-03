@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { beforeEach, expect, it, vi } from "vitest";
 import { mapValueReceipt } from "@jobguard/core";
 import { heldJobValueV3 } from "./value/value-v3.application.js";
-import { ShadowDemoApplication } from "./shadow-demo.application.js";
+import { ShadowDemoApplication, shadowJourneyComplete } from "./shadow-demo.application.js";
 const ports = vi.hoisted(() => ({ approvals: vi.fn(), job: vi.fn(), account: vi.fn(), check: vi.fn(), history: vi.fn(), invoices: vi.fn(), value: vi.fn(), packs: vi.fn() }));
 vi.mock("./practice-access.js", () => ({ PracticeAccess: class { job = ports.job; } }));
 vi.mock("./final-account-lock.application.js", () => ({ FinalAccountLockApplication: class { get = ports.account; } }));
@@ -126,4 +126,74 @@ it("foreign tenant authorization exposes no approval entries", async () => {
  ports.job.mockRejectedValue(new Error("NOT_FOUND"));
  await expect(app().read(jobId)).rejects.toThrow("NOT_FOUND");
  expect(ports.approvals).not.toHaveBeenCalled();
+});
+
+// A full saved shadow-30000 read, then one saved fact removed at a time.
+async function savedJourney() {
+ const a = await assessment(), b = { ...structuredClone(a), caseId: randomUUID(), assessmentId: randomUUID(), remainingPrincipal: { numerator: "30000", denominator: "1" } };
+ a.remainingPrincipal = { numerator: "50000", denominator: "1" };
+ const accountId = randomUUID();
+ const pack = (doc: typeof a) => ({ caseId: doc.caseId, result: { packs: [{ attachmentApprovalRecorded: true, contentMatches: true, manifest: { sections: [{ status: "present" }] },
+  sources: [{ sourceId: "supplier_document_version:s" }, { sourceId: `recovery_attribution_revision:${doc.assessmentId}` }] }] } });
+ return {
+  read: {
+   account: { captures: [{ origin: "builder_logged", state: "approved", netPence: 320000 }, { origin: "final_review", state: "approved", netPence: 40000 }],
+    lock: { id: lockId, snapshot: { lines: [{ netPence: 3000000 }, { netPence: 360000 }] } },
+    account: { id: accountId, lines: [{ kind: "baseline", netPence: 3000000 }, { kind: "variation", netPence: 440000 }] } },
+   invoices: { invoices: [{ finalAccountRevisionId: accountId, netPence: 3440000, totalPence: 4128000, balancePence: 0 }] },
+   value: { status: "mapped", receipt: { sources: { foundComplete: true, assessments: [{ current: true }, { current: true }] },
+    found: { state: "mapped", recovered: { pence: 80000 }, fee: { pence: 8000 }, yoursBeforeVatAndTax: { pence: 72000 } }, tracked: { pence: 360000 }, trackedFee: { pence: 0 } } },
+   customerApproval: { state: "approved", approvals: [{}, {}] },
+  },
+  posted: {
+   finalCheck: { state: "completed", lockId, items: [
+    { disposition: "confirmed_extra", evidence: [{ source: "job_diary_text", evidenceAfterLock: false }] },
+    { disposition: "confirmed_extra", evidence: [{ source: "electrical_certificate", evidenceAfterLock: false }] }] },
+   assessments: [{ assessment: a }, { assessment: b }], packs: [pack(a), pack(b)],
+  },
+ };
+}
+type Saved = Awaited<ReturnType<typeof savedJourney>>;
+const complete = (saved: Saved) => shadowJourneyComplete(saved.read as never, saved.posted as never);
+it("says complete for the exact saved nine steps", async () => { expect(complete(await savedJourney())).toBe(true); });
+it.each<[string, (saved: Saved) => void]>([
+ ["1 baseline is not £30,000", s => { s.read.account.account.lines[0]!.netPence = 2900000; }],
+ ["2 logged extras are not £3,200", s => { s.read.account.captures[0]!.netPence = 310000; }],
+ ["2 logged extras are unapproved", s => { s.read.account.captures[0]!.state = "priced"; }],
+ ["3 a signal arrived after lock", s => { s.posted.finalCheck.items[0]!.evidence[0]!.evidenceAfterLock = true; }],
+ ["3 no diary signal", s => { s.posted.finalCheck.items[0]!.evidence[0]!.source = "electrical_certificate"; }],
+ ["3 no supplier document", s => { for (const row of s.posted.packs) row.result.packs[0]!.sources.shift(); }],
+ ["4 review extra is not £400", s => { s.read.account.captures[1]!.netPence = 30000; }],
+ ["5 not locked", s => { (s.read.account as { lock: unknown }).lock = null; }],
+ ["5 locked bill is not £33,600", s => { s.read.account.lock.snapshot.lines[1]!.netPence = 1; }],
+ ["6 awaiting the customer", s => { s.read.customerApproval.state = "awaiting_customer"; }],
+ ["6 one approval only", s => { s.read.customerApproval.approvals.pop(); }],
+ ["6 a catch was not confirmed", s => { s.posted.finalCheck.items[1]!.disposition = "not_chargeable"; }],
+ ["6 extras are not £500 and £300", s => { s.posted.assessments[1]!.assessment.remainingPrincipal.numerator = "30001"; }],
+ ["7 no invoice", s => { s.read.invoices.invoices.pop(); }],
+ ["7 two invoices", s => { s.read.invoices.invoices.push(s.read.invoices.invoices[0]!); }],
+ ["7 invoice on an older bill", s => { s.read.invoices.invoices[0]!.finalAccountRevisionId = randomUUID(); }],
+ ["7 wrong net", s => { s.read.invoices.invoices[0]!.netPence = 3360000; }],
+ ["7 wrong gross", s => { s.read.invoices.invoices[0]!.totalPence = 4032000; }],
+ ["7 unpaid balance", s => { s.read.invoices.invoices[0]!.balancePence = 1; }],
+ ["7 settlement not verified", s => { s.posted.assessments[0]!.assessment.facts.facts.customer_payment_settled_and_allocated_to_that_line!.holds = false; }],
+ ["8 value held", s => { s.read.value.status = "incomplete"; }],
+ ["8 stale assessment", s => { s.read.value.receipt.sources.assessments[0]!.current = false; }],
+ ["8 wrong Q", s => { s.read.value.receipt.found.recovered.pence = 50000; }],
+ ["8 wrong fee", s => { s.read.value.receipt.found.fee.pence = 5000; }],
+ ["8 wrong retained", s => { s.read.value.receipt.found.yoursBeforeVatAndTax.pence = 1; }],
+ ["9 captures are not £3,600", s => { s.read.value.receipt.tracked.pence = 320000; }],
+ ["9 captures carry a fee", s => { s.read.value.receipt.trackedFee.pence = 1; }],
+ ["9 pack not approved", s => { s.posted.packs[0]!.result.packs[0]!.attachmentApprovalRecorded = false; }],
+ ["9 pack content mismatch", s => { s.posted.packs[1]!.result.packs[0]!.contentMatches = false; }],
+ ["9 pack missing a section", s => { s.posted.packs[0]!.result.packs[0]!.manifest.sections[0]!.status = "absent"; }],
+ ["9 pack proves another assessment", s => { s.posted.packs[0]!.result.packs[0]!.sources.pop(); }],
+ ["9 no pack for a catch", s => { s.posted.packs.pop(); }],
+])("stays incomplete when step %s", async (_name, change) => {
+ const saved = await savedJourney(); change(saved); expect(complete(saved)).toBe(false);
+});
+it("reads incomplete from the report while approval is the only saved progress", async () => {
+ ports.account.mockResolvedValue({ jobId, lock: { id: lockId }, captures: [] });
+ ports.approvals.mockResolvedValue({ complete: true, approvals: [{ variationId: randomUUID(), approvedAt: "2026-10-31T08:00:00.000Z", method: "customer_portal" }] });
+ expect((await app().read(jobId)).status).toBe("incomplete");
 });

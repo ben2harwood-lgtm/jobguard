@@ -1,3 +1,5 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
+import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
@@ -34,7 +36,7 @@ async function insertVariation(client:Pick<PoolClient,"query">,id:string,jobId:s
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=await freePort(59600,100);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+ await pg.initialise();await pg.start();admin = await syntheticOwnerPool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL))) {
   await admin.query(await readFile(url,"utf8"));
@@ -48,7 +50,14 @@ beforeAll(async()=>{
  await admin.query("UPDATE app.variation SET state='priced',current_revision_id=$1 WHERE tenant_id=$2 AND id=$3",[R,T,V]);
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query("CREATE ROLE sh1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO sh1_login");
- runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sh1_login",password:"synthetic",max:4});
+ await withTenant(admin,ctx(),async db=>{
+  const assignment=randomUUID();
+  await db.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,'operations:sh1-fixture')",[T,assignment,`synthetic-agreement:${T}`]);
+  const { appendAuditBatch } = await import("../src/index.js");
+  await appendAuditBatch(db,[{id:assignment,version:"audit.v1",actorRef:"operations:sh1-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:T,payload:{references:{environment:"synthetic_demo"}}}]);
+ });
+ await seedActiveContractorAgreement(admin,T);
+ runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"sh1_login",password:"synthetic",max:4});
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 async function commandOrigin(db:PoolClient,jobId:string,id:string,kind="site_user",commandType="LogSiteExtra",overrides:Record<string,unknown>={},finalize=true) {
@@ -113,7 +122,7 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
   for(const [jobId,track,kind,code] of [[J,"small_builder","site_user","23514"],[contractor,"contractor","builder_logged","23514"],[J,"contractor","site_user","23503"],[missing,"small_builder","builder_logged","23503"]] as const)
    await expect(withTenant(runtime,ctx(),db=>insertVariation(db.$client,randomUUID(),jobId,track,kind))).rejects.toMatchObject({code});
   await expect(withTenant(runtime,ctx(),db=>insertVariation(db.$client,randomUUID(),J,null,null,OTHER))).rejects.toMatchObject({code:"42501"});
-  const id=randomUUID();await expect(withTenant(runtime,ctx(),async db=>{await insertVariation(db.$client,id,contractor,"contractor","site_user");await commandOrigin(db.$client,J,id);})).rejects.toBeTruthy();
+  const id=randomUUID();await expect(withTenant(admin,ctx(),async db=>{await insertVariation(db.$client,id,contractor,"contractor","site_user");await commandOrigin(db.$client,J,id);})).rejects.toBeTruthy();
   const otherJob=await job(randomUUID(),"live",OTHER);
   await expect(withTenant(runtime,ctx(),async db=>{await insertVariation(db.$client,randomUUID(),otherJob,"small_builder","builder_logged");})).rejects.toBeTruthy();
   expect((await admin.query("SELECT * FROM app.variation WHERE id=$1",[id])).rowCount).toBe(0);
@@ -123,18 +132,18 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
   const absent=randomUUID();await expect(withTenant(runtime,ctx(),db=>insertVariation(db.$client,absent,contractor,"contractor","site_user"))).rejects.toMatchObject({code:"23503"});
   expect((await admin.query("SELECT * FROM app.variation WHERE id=$1",[absent])).rowCount).toBe(0);
   for(const overrides of [{actor:OTHER_M},{role:"operative"},{kind:"office_entry"},{job:J},{tenant:OTHER}]) {
-   await expect(withTenant(runtime,ctx(),async db=>{const id=randomUUID();await insertVariation(db.$client,id,contractor,"contractor","site_user");await commandOrigin(db.$client,contractor,id,"site_user","LogSiteExtra",overrides);})).rejects.toBeTruthy();
+   await expect(withTenant(admin,ctx(),async db=>{const id=randomUUID();await insertVariation(db.$client,id,contractor,"contractor","site_user");await commandOrigin(db.$client,contractor,id,"site_user","LogSiteExtra",overrides);})).rejects.toBeTruthy();
   }
-  await expect(withTenant(runtime,ctx(),async db=>{
+  await expect(withTenant(admin,ctx(),async db=>{
    const duplicate=randomUUID();await insertVariation(db.$client,duplicate,contractor,"contractor","site_user");
    await commandOrigin(db.$client,contractor,duplicate,"site_user","LogSiteExtra",{},false);
    await db.$client.query("INSERT INTO app.extra_origin SELECT * FROM app.extra_origin WHERE variation_id=$1",[duplicate]);
   })).rejects.toMatchObject({code:"23505"});
-  const id=randomUUID(),command=await withTenant(runtime,ctx(),async db=>{await insertVariation(db.$client,id,contractor,"contractor","site_user");return commandOrigin(db.$client,contractor,id);});
+  const id=randomUUID(),command=await withTenant(admin,ctx(),async db=>{await insertVariation(db.$client,id,contractor,"contractor","site_user");return commandOrigin(db.$client,contractor,id);});
   const row=(await admin.query("SELECT o.*,c.created_at command_time FROM app.extra_origin o JOIN app.command_receipt c ON (c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.variation_id=$1",[id])).rows[0];
   expect(row.server_recorded_at).toEqual(row.command_time);expect(row.device_captured_at).toEqual(new Date("1901-01-01T00:00:00Z"));expect(row.raising_membership_id).toBe(M);expect(row.command_id).toBe(command);
   expect(row.source_capture_hash).not.toBe(H);
-  await expect(withTenant(runtime,ctx(),db=>commandOrigin(db.$client,contractor,id))).rejects.toMatchObject({code:"23505"});
+  await expect(withTenant(admin,ctx(),db=>commandOrigin(db.$client,contractor,id))).rejects.toMatchObject({code:"23505"});
  });
  it("maps every raising command to exactly one allowed origin, including command-backed builder capture",async()=>{
   const contractor=await contractorJob();
@@ -143,7 +152,7 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
    ["contractor","site_user","LogSiteExtra"],["contractor","jobguard_surfaced_confirmed","ConfirmPrompt"],["contractor","office_entry","RecordOfficeExtra"],["contractor","client_instruction","RecordClientInstruction"],
   ] as const) {
    const id=randomUUID(),command=randomUUID(),target=track==="small_builder"?J:contractor;
-   await withTenant(runtime,ctx(),async db=>{
+   await withTenant(admin,ctx(),async db=>{
     await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$4,$5,'processing',$6)",[T,command,type,`extra-origin:${target}:${id}`,H,M]);
     await insertVariation(db.$client,id,target,track,kind);
     await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance)
@@ -159,15 +168,16 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
   const signal=randomUUID();
   await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band)
    VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low')`,[T,J,signal,randomUUID()]);
-  const catchOrigin=async(db:Pick<PoolClient,"query">,id:string,command:string,source:string|null,type="ConfirmJobGuardCatch")=>{
+  const catchOrigin=async(db:Pick<PoolClient,"query">,id:string,command:string,source:string|null,type="ConfirmJobGuardCatch",runtimeAttempt=false)=>{
    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$4,$5,'processing',$6)",[T,command,type,`extra-origin:${J}:${id}`,H,M]);
+   if(runtimeAttempt)await db.query("SET LOCAL ROLE jobguard_runtime");
    await insertVariation(db,id,J,"small_builder","jobguard_catch");
    await db.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id)
     VALUES($1,$2,$3,'small_builder','jobguard_catch',$4,$5,'owner','command',$6)`,[T,J,id,command,M,source]);
    await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[T,command]);
   };
   const runtimeRefusal=async(source:string|null)=>{
-   try{await withTenant(runtime,ctx(),db=>catchOrigin(db.$client,randomUUID(),randomUUID(),source));throw new Error("runtime catch succeeded")}
+   try{await withTenant(admin,ctx(),db=>catchOrigin(db.$client,randomUUID(),randomUUID(),source,"ConfirmJobGuardCatch",true));throw new Error("runtime catch succeeded")}
    catch(e){const p=e as {code:string;message:string;detail?:string;constraint?:string};return {code:p.code,message:p.message,detail:p.detail,constraint:p.constraint}}
   };
   const refusedReal=await runtimeRefusal(signal);

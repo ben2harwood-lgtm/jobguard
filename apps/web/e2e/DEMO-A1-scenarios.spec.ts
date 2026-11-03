@@ -235,3 +235,28 @@ test("DEMO-S stale authority: revoked session cannot replay a successful command
     expect((await admin.query("SELECT id FROM app.stage_completion WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows).toEqual([]);
   } finally { await admin.end(); }
 });
+
+test("DEMO-S stale authority: a superseded approval target cannot be replayed onto a newer price", async ({ page }) => {
+  const jobId = await live(page), url = path(jobId, "variations");
+  const form = page.locator(".variation-entry");
+  await form.getByLabel("Description", { exact: true }).fill("Fictional extra");
+  await form.getByLabel("Change type").selectOption("addition");
+  await form.getByLabel("Variation price (£, optional)").fill("100.00");
+  await form.getByRole("button", { name: "Add proposed variation", exact: true }).click();
+  await expect(form.getByLabel("Description", { exact: true })).toHaveValue("");
+  const added = (await get(page, url)).variations[0], variationId = added.id as string, first = { revisionId: added.currentRevisionId as string };
+  const second = { version: "variation-command.v1", action: "revise", variationId, revisionId: randomUUID(), expectedRevisionId: first.revisionId,
+    description: "Fictional extra", price: { quantity: "1", unit: "item", unitRatePence: 20000, direction: "addition" } };
+  await post(page, url, second);
+  const approve = (revisionId: string) => ({ version: "variation-command.v1", action: "approve", variationId, revisionId, approvalId: randomUUID(),
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  await refuses(await page.request.post(url, { data: approve(first.revisionId) }), 409, "EXACT_CURRENT_PRICED_REVISION_REQUIRED");
+  const saved = (await get(page, url)).variations.find((row: { id: string }) => row.id === variationId);
+  expect(saved.revisions.every((row: { approved: boolean }) => !row.approved)).toBe(true);
+  expect(saved.currentRevisionId).toBe(second.revisionId);
+  // Only the exact current revision can be approved, and that approval replays once.
+  const current = approve(second.revisionId), approved = await post(page, url, current);
+  expect(await post(page, url, current)).toEqual(approved);
+  expect(approved.approvedAdditionsPence).toBe(20000);
+  await noMoney(page, jobId);
+});

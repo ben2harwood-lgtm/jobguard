@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { simulationFeeCollectionCommandV1, simulationFeeCollectionViewV1, simulationFeeCollectionResultV1, SuccessFeeError } from "@jobguard/core";
+import { simulationFeeCollectionCommandV1, simulationFeeCollectionViewV1, simulationFeeCollectionResultV1, simulationFeeDemoSettleCommandV1, SuccessFeeError } from "@jobguard/core";
 import { practiceMaterialPool } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -17,7 +17,7 @@ export class SimulationFeeCollectionRepository {
     catch(error) {
       if(error instanceof Error && "code" in error) {
         if(error.code==="42501") throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
-        if(["23514","40001","0A000"].includes(String(error.code)) && ["INVALID_SUCCESS_FEE_COMMAND","SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_DEPENDENCY_BOUND","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))
+        if(["23514","40001","0A000"].includes(String(error.code)) && ["PAYMENT_FEE_AUTHORITY_REVOKED","PAYMENT_FEE_AUTHORITY_STALE","PAYMENT_FEE_AUTHORITY_DISPUTED","PAYMENT_FEE_AUTHORITY_CAP_EXCEEDED","PAYMENT_FEE_SOURCE_REQUIRED","INVALID_SUCCESS_FEE_COMMAND","SUCCESS_FEE_STALE","SUCCESS_FEE_SOURCE_CHANGED","SUCCESS_FEE_DEPENDENCY_BOUND","SUCCESS_FEE_IDEMPOTENCY_CONFLICT"].includes(error.message))
           throw new SuccessFeeError(error.message as import("@jobguard/core").SuccessFeeErrorCode);
       }
       throw error;
@@ -42,6 +42,19 @@ export class SimulationFeeCollectionRepository {
       const result=simulationFeeCollectionResultV1.parse(row?.result);
       if(result.commandId!==command.commandId || ("attemptId" in command && result.attemptId!==command.attemptId))
         throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
+      return result;
+    });
+  }
+  /** Demo-only fake-rail outcome. `settle` itself stays refused in command() above. */
+  async demoSettle(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown) {
+    if(process.env.JOBGUARD_ENV!=="synthetic_demo") throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
+    const parsed=simulationFeeDemoSettleCommandV1.safeParse(raw);
+    if(!parsed.success) throw new SuccessFeeError();
+    const command=parsed.data,job=parseId(jobId);
+    return this.run(context,digest,async db=>{
+      const row=(await db.$client.query<{result:unknown}>("SELECT app.simulation_fee_demo_settle($1,$2,$3::jsonb) result",[job,digest,command])).rows[0];
+      const result=simulationFeeCollectionResultV1.parse(row?.result);
+      if(result.commandId!==command.commandId || result.attemptId!==command.attemptId) throw new SuccessFeeError("SUCCESS_FEE_FORBIDDEN");
       return result;
     });
   }
