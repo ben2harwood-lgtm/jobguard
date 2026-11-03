@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { migrate } from "../src/migrate.js";
 const own="0502_customer_variation_approval.sql";
 let c:Cluster;
@@ -28,7 +28,7 @@ it("preserves every historical approval field, privileges and policy and exact r
  expect(await snapshot(c.admin)).toEqual(expected);expect((await catalogue()).rows).toEqual(privileges);
  // Freeze main's predecessor set and add the exact LP-5 successor objects.
  await migrate(c.admin);
- const registry=(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data;
+ const registry=(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data;
  const successors={...expected,"app.command_lifecycle_claim":[],"app.command_type_registry":registry,"app.repository_operational_record":[]};
  expect(await snapshot(c.admin,Object.keys(successors))).toEqual(successors);
  await migrate(c.admin);expect(await snapshot(c.admin,Object.keys(successors))).toEqual(successors);

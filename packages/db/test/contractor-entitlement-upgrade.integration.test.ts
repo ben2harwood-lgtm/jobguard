@@ -1,4 +1,4 @@
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { own,startBeforeMigration,applyMigration,startSession,status,snapshot,predecessorCatalogue,unchanged,type Cluster } from "./contractor-entitlement-fixtures.js";
@@ -38,7 +38,7 @@ it("repeat migration and later successors succeed",async()=>{const before=await 
  "app.lp_job_insert_permit":[],
  "app.command_lifecycle_claim":[],
  "app.repository_operational_record":[],
- "app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(lp5RegistryRows)])).rows[0].data,
+ "app.command_type_registry":(await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data,
  "identity.oidc_assertion_use":[],
  "identity.oidc_request":[],
  "app.demo_trial_binding":[],

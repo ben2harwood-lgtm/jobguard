@@ -83,3 +83,28 @@ No positive persistence tests, migration, repository or error mapper are authore
 against a fabricated upstream API. No browser spec is applicable to this leaf:
 there is no route or page. CI and independent exact-head verdicts followed by
 separate acceptance remain mandatory before technical completion.
+
+## SV-5 historical evidence import (0613)
+
+`late-source-import.v1` is a separate owner command at
+`POST /jobs/:id/historical-evidence` (and the corresponding Next `/api` route).
+It requires an already locked, synthetic small-builder job owned by the current
+practice session. The fictional sender, exact message and stated historical date
+are input; tenant, actor, receive time, object version and SHA-256 are server-owned.
+The stated date must precede the lock. It never substitutes for receive time.
+
+The checked writer stores immutable original bytes and a command receipt, appends
+an audit event with identifiers/hashes only, and queues the existing practice
+source worker in the same transaction. The worker reads the SV-7A observation
+binding and alone persists/coalesces signals. Evidence received after lock carries
+permanent `evidence_after_lock` and can be shown at once, with no fee entitlement.
+Only the reviewed fictional message `Fitted outside tap.` has a deterministic
+practice decoder; other originals remain evidence without invented structured facts.
+
+This command creates no work-state event, place or site activity. The ordinary
+diary/customer-message intake and Q-03 post-lock refusals are unchanged. A command
+replay returns its original receipt; changed content under the same ID conflicts.
+No shadow grants are added. Forward repair must preserve original bytes, receipts,
+lock and receive times; do not roll back by deleting imported evidence. Database,
+browser CI and independent RED review remain required before merge; all production,
+provider and human/legal release gates remain open.

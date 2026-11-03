@@ -1972,6 +1972,94 @@
         ]
       }
     },
+    "/jobs/{id}/historical-evidence": {
+      "get": {
+        "operationId": "JobSourceController_historical",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read imported fictional historical messages and their original receive times",
+        "tags": [
+          "JobSource"
+        ]
+      },
+      "post": {
+        "operationId": "JobSourceController_importHistorical",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "fictionalCustomer",
+                  "text",
+                  "statedSentAt"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "late-source-import.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "fictionalCustomer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "named_fictional_customer"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  },
+                  "statedSentAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an old fictional message as evidence on a locked job; no site activity or fee eligibility",
+        "tags": [
+          "JobSource"
+        ]
+      }
+    },
     "/contractor/practice/acting-as": {
       "get": {
         "operationId": "PracticeWorkerSwitchController_read",

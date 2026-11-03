@@ -583,6 +583,12 @@ export const lp5bRegistryRows = [
   }
 ];
 export const lp5RegistryRows = [...lp5aRegistryRows, ...lp5bRegistryRows];
+// Exact successor introduced by SV-5; keep the historical LP-5 catalogues unchanged.
+export const lateSourceRegistryRow = {
+  command_type: "LateSource.import", version: "repository-command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "source_intake", audit_class: "operational", outbox_class: null,
+};
+export const currentCommandRegistryRows = [...lp5RegistryRows, lateSourceRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",
