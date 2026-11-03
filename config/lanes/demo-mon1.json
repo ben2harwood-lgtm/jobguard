@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-mon1": {
+      "branches": ["codex/sandbox/demo-mon1"],
+      "note": "RED MON-1 CI repair 1: skip optional meter requests without a company cookie and consume refused response bodies. SV-3 drain unchanged; browser and database checks remain in CI.",
+      "allow": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/app/meter/meter-screen.test.tsx"
+      ]
+    }
+  }
+}

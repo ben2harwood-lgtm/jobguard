@@ -43,6 +43,20 @@ it.each([401, 403, 503])("finishes rejected count and drill-down response bodies
     expect(fetcher).toHaveBeenCalledTimes(2);
   }
 });
+it.each([401, 503])("preserves the intended error when a rejected body cannot be read (%s)", async status => {
+  for (const load of [loadMeter, loadMeterJobs]) {
+    for (const failedSession of [true, false]) {
+      const response = Response.json({}, { status });
+      const read = vi.spyOn(response, "text").mockRejectedValue(new Error("Interrupted body"));
+      const fetcher = vi.fn<typeof fetch>();
+      if (!failedSession) fetcher.mockResolvedValueOnce(Response.json(session));
+      fetcher.mockResolvedValueOnce(response);
+      await expect(load(fetcher)).rejects.toThrow(status === 401 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
+      expect(read).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledTimes(failedSession ? 1 : 2);
+    }
+  }
+});
 it("shows a loading state without company numbers before authentication", () => {
   const html = renderToStaticMarkup(<MeterScreen />);
   expect(html).toContain('role="status"'); expect(html).toContain("hypothetical"); expect(html).not.toContain("of 7 jobs");

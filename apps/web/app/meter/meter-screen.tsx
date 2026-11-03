@@ -6,7 +6,7 @@ async function loadMeterResponse(fetcher: typeof fetch, endpoint: string) {
   const sessionResponse = await fetcher("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
   if (!sessionResponse.ok) {
     // Finish the fetch before hiding the optional meter on a refused read.
-    await sessionResponse.text();
+    await sessionResponse.text().catch(() => "");
     throw new Error(sessionResponse.status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
   }
   const session = await sessionResponse.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
@@ -15,7 +15,7 @@ async function loadMeterResponse(fetcher: typeof fetch, endpoint: string) {
   const response = await fetcher(endpoint, { cache: "no-store", credentials: "same-origin",
     headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId } });
   if (!response.ok) {
-    await response.text();
+    await response.text().catch(() => "");
     throw new Error(response.status === 401 || response.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
   }
   return response.json() as Promise<unknown>;
@@ -34,13 +34,14 @@ export function MeterJobs({ view }: { view: MeterTodayJobsRead }) {
     </li>)}</ul>
   </section>;
 }
-export function JobsOnTheGoLine() {
+export function JobsOnTheGoLine({ hasCompanySession = false }: { hasCompanySession?: boolean }) {
   const [view, setView] = useState<MeterTodayRead | null>(null);
   useEffect(() => {
+    if (!hasCompanySession) return;
     let active = true;
     void loadMeter().then(value => { if (active) setView(value); }).catch(() => { if (active) setView(null); });
     return () => { active = false; };
-  }, []);
+  }, [hasCompanySession]);
   if (!view) return null;
   const labels = meterTodayLabels(view);
   return <p><a data-testid="jobs-on-the-go-line" href="/meter">{labels.count}</a> · {labels.next}</p>;
