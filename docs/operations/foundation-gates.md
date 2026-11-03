@@ -78,20 +78,31 @@ therefore fails at the commit checked by CI, rather than being accepted as a lin
 future work. The validator is offline only and is not imported by a runtime gate.
 No server authorization or deployment configuration is changed.
 
-Local validation results: 77 tests passed across the foundation, release-inventory
-and enterprise-real-data Vitest files with `--maxWorkers=2`; both root inventory
-checks passed. Package typecheck and TypeScript build passed. Core purity, money,
-commercial, AI-provider and PL/pgSQL boundary checks passed. Lane policy loads and
-permits all six changed paths (its own lane file is implicitly allowed). The full
-`node tools/lint.mjs` command stopped at the lane checker because uncommitted HEAD
-equals the comparison base; no committed-change lane result is claimed.
+Catch-up validation (3 November 2026): the launcher merged `origin/main`
+`111865cf65f5e68a28ce1891bd52aad0ac7a0f10` into this branch. The working tree
+had no unresolved conflicts. The diff against that main contains only this piece's
+five evidence/validator files and its own lane file; no earlier stacked piece,
+migration or database routine remains in the diff. Main's plan excerpts still match
+the checklist exactly. No implementation or test expectation needed changing.
 
-Focused local checks:
+Local validation results: 77 tests passed across the foundation, release-inventory
+and enterprise-real-data Vitest files with `--maxWorkers=2`; all six root foundation
+and release-inventory tests passed. Package typecheck passed. `node tools/lint.mjs`
+passed, including the lane boundary against the merged main and the core purity,
+money, commercial, AI-provider and PL/pgSQL checks. Core purity reported ten existing
+computed-import warnings outside this piece. `git diff --check origin/main HEAD`
+passed. These are deterministic checks, not independent acceptance.
+
+Commands run from the repository root unless the package directory is specified:
 
 ```sh
-./packages/config/node_modules/.bin/vitest run --root packages/config --maxWorkers=2 src/foundation-gates.test.ts
+# From packages/config:
+./node_modules/.bin/vitest run --maxWorkers=2 src/foundation-gates.test.ts src/release-inventory.test.ts src/enterprise-real-data.test.ts
+./node_modules/.bin/tsc -p tsconfig.json --noEmit
+# From the repository root:
 node --test tools/foundation-gates.test.mjs tools/release-inventory.test.mjs
-./packages/config/node_modules/.bin/tsc -p packages/config/tsconfig.json --noEmit
+node tools/lint.mjs
+git diff --check origin/main HEAD
 ```
 
 PostgreSQL and browser suites did not run: this sandbox cannot start PostgreSQL or
