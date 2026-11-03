@@ -106,7 +106,7 @@ beforeAll(async()=>{
  await owner.query(`CREATE ROLE sv3_isolation_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  await owner.query("ALTER ROLE sv3_isolation_runtime SET log_statement='all'");
  await owner.query("CREATE DATABASE jobguard_synthetic_demo");const p=pool("postgres","jobguard_synthetic_demo");try{
- for(const role of ["jobguard_audit_writer","jobguard_command_writer"])await p.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
+ for(const role of ["jobguard_audit_writer","jobguard_command_writer", "jobguard_binding_owner"])await p.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
  await migrate(p);await installLegacySyntheticPartyFixtures(p);
  await p.query("GRANT jobguard_runtime TO sv3_isolation_runtime");
  await p.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await p.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
