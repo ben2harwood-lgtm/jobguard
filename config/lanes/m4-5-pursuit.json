@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-5-pursuit": {
+      "branches": ["codex/sandbox/m4-5-pursuit"],
+      "note": "RED M4-5 dark synthetic pursuit drafting; existing M4-5-S approval/outbox retained. No migration or live route.",
+      "allow": [
+        "apps/api/src/recovery-message.application.ts",
+        "apps/api/src/recovery-message.application.test.ts",
+        "apps/web/app/ui/recovery-messages.tsx",
+        "packages/ai/src/index.ts",
+        "packages/ai/src/pursuit-draft.ts",
+        "packages/ai/src/pursuit-draft.test.ts"
+      ]
+    }
+  }
+}
