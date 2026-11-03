@@ -6,17 +6,16 @@ import type { IdentityApplication } from "./auth/identity.application.js";
 
 export class DunningApplication {
   constructor(private readonly identity: IdentityApplication, private readonly repository: Pick<DunningRepository, "read" | "command">) {}
-  private async scope(credentials: TenantRequestCredentials) {
+  async read(credentials: TenantRequestCredentials, jobId: string) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new DunningError("DUNNING_DARK");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
-    return { context, digest: this.identity.provider.digest(`session:${credentials.sessionToken}`) };
-  }
-  async read(credentials: TenantRequestCredentials, jobId: string) {
-    const { context, digest } = await this.scope(credentials);
+    const digest = this.identity.provider.digest(`session:${credentials.sessionToken}`);
     return this.repository.read(context, digest, { jobId, nowTick: Date.now() });
   }
   async command(credentials: TenantRequestCredentials, jobId: string, operation: "request" | "approve", raw: unknown) {
-    const { context, digest } = await this.scope(credentials);
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new DunningError("DUNNING_DARK");
+    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
+    const digest = this.identity.provider.digest(`session:${credentials.sessionToken}`);
     return this.repository.command(context, digest, jobId, operation, raw);
   }
 }

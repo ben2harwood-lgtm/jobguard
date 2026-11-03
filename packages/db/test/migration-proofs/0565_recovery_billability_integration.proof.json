@@ -82,22 +82,6 @@
       "section": "entries",
       "before": null,
       "after": {
-        "key": "owner|rel:table|app.recovery_billability_command|jobguard_migration",
-        "group": "a-owner-tables-views"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.billability_snapshot(uuid,uuid,uuid,uuid,uuid,uuid)|jobguard_migration",
-        "group": "a-owner-routines"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
         "key": "owner|routine|function:app.recovery_billability(uuid,text,jsonb,jsonb)|jobguard_migration",
         "group": "a-owner-routines"
       }
@@ -108,14 +92,6 @@
       "after": {
         "key": "acl|routine|function:app.recovery_billability(uuid,text,jsonb,jsonb)|jobguard_runtime|EXECUTE|-",
         "group": "a-exec-recovery-money"
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "owner|routine|function:app.guard_billability_allocation()|jobguard_migration",
-        "group": "a-owner-routines"
       }
     },
     {
@@ -254,7 +230,7 @@
       "after": {
         "nspname": "app",
         "proname": "recovery_billability",
-        "args": "j uuid, digest text, p jsonb, document jsonb",
+        "args": "j uuid, digest text, p jsonb, document jsonb DEFAULT NULL::jsonb",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
