@@ -173,4 +173,65 @@ describe("ENT-13a RED dark connector PostgreSQL authority and durability", () =>
     expect(JSON.stringify(audit)).not.toContain(token);
     expect(JSON.stringify(audit)).not.toContain('paid');
   });
+  it("0743 preserves populated predecessor rows and privileges while widening staging only", async () => {
+    const upgrade = await createWorkFixture(false);
+    try {
+      const index = MIGRATION_URLS.findIndex(u => u.pathname.endsWith("0743_connector_materials_stage.sql"));
+      expect(index).toBeGreaterThan(0);
+      for (const url of MIGRATION_URLS.slice(0, index)) await upgrade.admin.query(await readFile(url, "utf8"));
+      const tenant = randomUUID(), id = randomUUID();
+      await upgrade.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
+      await upgrade.admin.query(`INSERT INTO connector.binding(tenant_id,id,namespace,environment,endpoint_kind,token_sha256,expires_at)
+        VALUES($1,$2,'fixture:upgrade','synthetic_demo','fake',$3,clock_timestamp()+interval '1 hour')`, [tenant, id, tokenHash(token)]);
+      for (const input of [work, billing]) await upgrade.admin.query("SELECT connector.intake($1,$2,$3::jsonb)", [id, token, JSON.stringify(input)]);
+      const catalog = async () => (await upgrade.admin.query(`SELECT n.nspname,c.relname,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('connector','app','identity','control_plane','audit_control')
+        AND c.relkind='r' ORDER BY n.nspname,c.relname`)).rows;
+      const grants = async () => (await upgrade.admin.query(`SELECT proacl::text,proowner,prosecdef,proconfig FROM pg_proc WHERE oid='connector.intake(uuid,text,jsonb)'::regprocedure`)).rows;
+      const rows = (await upgrade.admin.query("SELECT * FROM connector.input_event ORDER BY event_id")).rows;
+      const before = await catalog(), beforeGrants = await grants();
+      await upgrade.admin.query(await readFile(MIGRATION_URLS[index]!, "utf8"));
+      expect(await catalog()).toEqual(before); expect(await grants()).toEqual(beforeGrants);
+      expect((await upgrade.admin.query("SELECT * FROM connector.input_event ORDER BY event_id")).rows).toEqual(rows);
+      const material = { ...work, kind: "materials_issue", eventId: "fixture:materials" };
+      expect((await upgrade.admin.query("SELECT connector.intake($1,$2,$3::jsonb) receipt", [id, token, JSON.stringify(material)])).rows[0].receipt)
+        .toEqual({ version: "connector-receipt.v1", eventId: material.eventId, state: "staged", domainEffects: 0 });
+    } finally { await closeWorkFixture(upgrade); }
+  }, 120_000);
+
+  it("stages materials reordered/replayed facts, isolates tenants and refuses expired or revoked replays", async () => {
+    const a = await binding(), b = await binding();
+    const material = { ...work, kind: "materials_issue", eventId: "fixture:materials" };
+    const domainCounts = async () => (await f.admin.query(`SELECT
+      (SELECT count(*)::int FROM app.materials_issue_fact WHERE tenant_id=$1) materials,
+      (SELECT count(*)::int FROM app.extra_prompt WHERE tenant_id=$1) prompts`, [a.tenant])).rows;
+    const beforeDomain = await domainCounts();
+    const first = await intake(a.id, material);
+    expect(first).toEqual({ version: "connector-receipt.v1", eventId: material.eventId, state: "staged", domainEffects: 0 });
+    expect(await intake(a.id, Object.fromEntries(Object.entries(material).reverse()))).toEqual(first);
+    await expect(intake(a.id, { ...material, document: "fixture:changed" })).rejects.toThrow("CONNECTOR_INPUT_REFUSED");
+    for (const revision of [3, 2]) expect(await intake(a.id, { ...material, eventId: `fixture:materials_${revision}`, revision })).toMatchObject({ state: "staged", domainEffects: 0 });
+    expect(await domainCounts()).toEqual(beforeDomain);
+    expect(await intake(b.id, material)).toEqual(first);
+    expect((await f.admin.query("SELECT tenant_id FROM connector.input_event WHERE event_id=$1 AND tenant_id IN($2,$3) ORDER BY tenant_id", [material.eventId, a.tenant, b.tenant])).rows).toHaveLength(2);
+    await f.admin.query("UPDATE connector.binding SET revoked_at=clock_timestamp() WHERE id=$1", [a.id]);
+    await expect(intake(a.id, material)).rejects.toThrow("CONNECTOR_INPUT_REFUSED");
+    await f.admin.query("UPDATE connector.binding SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [b.id]);
+    await expect(intake(b.id, material)).rejects.toThrow("CONNECTOR_INPUT_REFUSED");
+  });
+
+  it("refuses materials authority, money and raw content at the SQL boundary without staging", async () => {
+    const b = await binding(), material = { ...work, kind: "materials_issue" };
+    for (const patch of [{ amount: 1 }, { price: 1 }, { allocation: [] }, { tenant: randomUUID() }, { job: randomUUID() },
+      { bill: randomUUID() }, { statement: randomUUID() }, { origin: "site" }, { approval: true }, { status: "paid" },
+      { document: null }, { document: 'fixture:{"resident":"raw"}' }, { document: "fixture:x\n" }, { document: "x".repeat(17000) }]) {
+      await expect(intake(b.id, { ...material, ...patch })).rejects.toThrow("CONNECTOR_INPUT_REFUSED");
+    }
+    expect((await f.admin.query("SELECT * FROM connector.input_event WHERE tenant_id=$1", [b.tenant])).rows).toEqual([]);
+    for (const kind of ["work_order", "materials_issue", "billing_status"]) {
+      const input = kind === "billing_status" ? billing : { ...material, kind, eventId: `fixture:${kind}` };
+      expect(await intake(b.id, input)).toMatchObject({ state: "staged", domainEffects: 0 });
+    }
+  });
+
 });

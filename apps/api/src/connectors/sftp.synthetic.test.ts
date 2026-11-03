@@ -1,3 +1,6 @@
+import { createHmac } from "node:crypto";
+import { stageSftpFixturePull } from "./sftp.stage.js";
+import { SyntheticConnectorInbound, type ConnectorIntake, type ConnectorReceipt } from "./inbound.js";
 import { describe, expect, it, vi } from "vitest";
 import { renderBillingExport } from "@jobguard/core";
 import type { OutboundAction } from "@jobguard/db";
@@ -36,6 +39,73 @@ function file(operation = "materials_issues", payload: unknown = material) {
 }
 
 describe("dark SFTP transport seam (no machine principal or domain writes)", () => {
+  it("stages each pulled kind through intake with labels only, sharing webhook replay identity", async () => {
+    const server = createInMemorySftpServer(), client = server.connect(environment, scope);
+    const rows = new Map<string, { canonical: string; receipt: ConnectorReceipt }>();
+    const stage = vi.fn<ConnectorIntake["stage"]>(async (_id, _token, input) => {
+      const canonical = JSON.stringify(Object.entries(input).sort());
+      const old = rows.get(input.eventId);
+      if (old && old.canonical !== canonical) throw new Error("conflict");
+      if (old) return old.receipt;
+      const receipt: ConnectorReceipt = { version: "connector-receipt.v1", eventId: input.eventId, state: "staged", domainEffects: 0 };
+      rows.set(input.eventId, { canonical, receipt }); return receipt;
+    });
+    const binding = { bindingId: id(90), databaseToken: "fictional-token" }, key = Buffer.alloc(32, 42);
+    const inbound = new SyntheticConnectorInbound(environment, { read: async () => ({ ...binding, signingKeys: { current: key } }) }, { stage }, () => 1798000000000);
+    const descriptor = { version: "sftp-stage-descriptor.v1", subject: "fixture:subject", revision: 1, document: "fixture:document" };
+    for (const [op, payload, kind] of [["materials_issues", material, "materials_issue"], ["work_orders", order, "work_order"],
+      ["billing_status", { version: "billing-import.v1", transport: "api", events: [billing] }, "billing_status"]] as const) {
+      server.seed("fixture:stage", JSON.stringify({ ...file(op, payload), eventId: `fixture:${op}` }));
+      const pull = await client.pull("fixture:stage", op);
+      const first = await stageSftpFixturePull(pull, descriptor, binding, { stage });
+      expect(first).toMatchObject({ state: "staged", domainEffects: 0 });
+      expect(await stageSftpFixturePull(pull, descriptor, binding, { stage })).toEqual(first);
+      const input = stage.mock.calls.at(-1)![2];
+      expect(input).toEqual({ version: "connector-input.v1", eventId: `fixture:${op}`, subject: descriptor.subject,
+        revision: 1, kind, ...(kind === "billing_status" ? { status: "billed" } : { document: descriptor.document }) });
+      const bytes = Buffer.from(JSON.stringify(input));
+      const signature = createHmac("sha256", key).update(`connector-signature.v1\nwebhook\ncurrent\n${binding.bindingId}\n1798000000\n`).update(bytes).digest("hex");
+      expect(await inbound.receive("webhook", { version: "connector-signature.v1", keyId: "current", timestamp: "1798000000", signature }, bytes)).toEqual(first);
+      const changedBytes = Buffer.from(JSON.stringify({ ...input, ...(kind === "billing_status" ? { status: "paid" } : { document: "fixture:changed" }) }));
+      const changedSignature = createHmac("sha256", key).update(`connector-signature.v1\nwebhook\ncurrent\n${binding.bindingId}\n1798000000\n`).update(changedBytes).digest("hex");
+      await expect(inbound.receive("webhook", { version: "connector-signature.v1", keyId: "current", timestamp: "1798000000", signature: changedSignature }, changedBytes))
+        .rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+      await expect(stageSftpFixturePull(pull, { ...descriptor, revision: 2 }, binding, { stage })).rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+      const calls = stage.mock.calls.length;
+      for (const patch of [{ document: 'fixture:{"resident":"raw"}' }, { amount: 1 }, { tenantId: id(99) }, { origin: "site" }]) {
+        await expect(stageSftpFixturePull(pull, { ...descriptor, ...patch }, binding, { stage })).rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+      }
+      expect(stage).toHaveBeenCalledTimes(calls);
+    }
+    expect(rows.size).toBe(3);
+    stage.mockRejectedValue(new Error("revoked or expired binding"));
+    server.seed("fixture:denied", JSON.stringify(file()));
+    await expect(stageSftpFixturePull(await client.pull("fixture:denied", "materials_issues"), descriptor, binding, { stage })).rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+  });
+
+  it("projects exactly one supported billing observation, refusing ambiguous and unsupported facts unstaged", async () => {
+    const server = createInMemorySftpServer(), client = server.connect(environment, scope);
+    const stage = vi.fn<ConnectorIntake["stage"]>(async (_id, _token, input) => ({ version: "connector-receipt.v1", eventId: input.eventId, state: "staged", domainEffects: 0 }));
+    const descriptor = { version: "sftp-stage-descriptor.v1", subject: "fixture:invoice", revision: 1, document: "fixture:document" };
+    const binding = { bindingId: id(90), databaseToken: "fictional-token" };
+    for (const [factType, expected] of [["invoiced", "billed"], ["paid", "paid"], ["payment_reversed", "reversed"], ["credited", null], ["rejected", null]] as const) {
+      const event = { ...billing, factType };
+      server.seed(`fixture:${factType}`, JSON.stringify({ ...file("billing_status", { version: "billing-import.v1", transport: "api", events: [event] }), eventId: `fixture:${factType}` }));
+      const pull = await client.pull(`fixture:${factType}`, "billing_status"), calls = stage.mock.calls.length;
+      if (expected) {
+        await stageSftpFixturePull(pull, descriptor, binding, { stage });
+        expect(stage.mock.calls.at(-1)![2]).toMatchObject({ status: expected });
+      } else {
+        await expect(stageSftpFixturePull(pull, descriptor, binding, { stage })).rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+        expect(stage).toHaveBeenCalledTimes(calls);
+      }
+    }
+    server.seed("fixture:multiple", JSON.stringify({ ...file("billing_status", { version: "billing-import.v1", transport: "api", events: [billing, { ...billing, sourceEventId: "second" }] }), eventId: "fixture:multiple" }));
+    const calls = stage.mock.calls.length;
+    await expect(stageSftpFixturePull(await client.pull("fixture:multiple", "billing_status"), descriptor, binding, { stage })).rejects.toMatchObject({ code: "CONNECTOR_INPUT_REFUSED" });
+    expect(stage).toHaveBeenCalledTimes(calls);
+  });
+
   it("refuses live configuration, credentials, paths and capability escalation", async () => {
     const server = createInMemorySftpServer(new Map([[id(2), id(1)]]));
     for (const patch of [{ JOBGUARD_ENV: "production" }, { CONNECTOR_ENDPOINT_KIND: "sftp" },
