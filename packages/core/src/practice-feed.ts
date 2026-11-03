@@ -13,12 +13,14 @@ const MOVEMENT_KEYS = [
   "receipt-384", "receipt-3000", "receipt-41280", "receipt-24000", "receipt-17280", "receipt-960", "supplier-refund-540",
 ] as const;
 export const practiceMovementKeyV1 = z.enum(MOVEMENT_KEYS);
-export type PracticeMovementKey = z.infer<typeof practiceMovementKeyV1>;
+// Keep the issued M4-7 catalogue; SV-6 adds two synthetic settlement identities.
+export const syntheticPracticeMovementKeyV1 = z.enum([...MOVEMENT_KEYS, "receipt-480-a", "receipt-480-b"]);
+export type PracticeMovementKey = z.infer<typeof syntheticPracticeMovementKeyV1>;
 /** Only customer-receipt movements can verify a builder-attested customer receipt; a supplier refund never can. */
-export const practiceReceiptMovementKeyV1 = z.enum(["receipt-384", "receipt-3000", "receipt-41280", "receipt-24000", "receipt-17280", "receipt-960"]);
+export const practiceReceiptMovementKeyV1 = z.enum(["receipt-384", "receipt-3000", "receipt-41280", "receipt-24000", "receipt-17280", "receipt-960", "receipt-480-a", "receipt-480-b"]);
 
 export type PracticeMovementKind = "customer_receipt" | "supplier_refund";
-export type PracticeMovementFixture = "recovery-18800" | "shadow-30000" | "test-m" | "test-n" | "supplier-refund";
+export type PracticeMovementFixture = "recovery-18800" | "shadow-30000" | "test-m" | "test-n" | "supplier-refund" | "test-g";
 export type PracticeMovementDefinition = Readonly<{
   movement: PracticeMovementKey; grossPence: number; kind: PracticeMovementKind; fixture: PracticeMovementFixture; label: string;
 }>;
@@ -34,13 +36,20 @@ export const practiceMovementCatalogueV1: readonly PracticeMovementDefinition[] 
   { movement: "supplier-refund-540", grossPence: 54_000, kind: "supplier_refund", fixture: "supplier-refund", label: "£540.00 supplier refund" },
 ].map((entry) => Object.freeze(entry as PracticeMovementDefinition)));
 
-const definitions = new Map<PracticeMovementKey, PracticeMovementDefinition>(practiceMovementCatalogueV1.map((entry) => [entry.movement, entry]));
+export const syntheticPracticeMovementCatalogueV1: readonly PracticeMovementDefinition[] = Object.freeze([
+  ...practiceMovementCatalogueV1,
+  ...(["receipt-480-a", "receipt-480-b"] as const).map((movement) => Object.freeze({
+    movement, grossPence: 48_000, kind: "customer_receipt" as const, fixture: "test-g" as const,
+    label: `£480.00 customer receipt (${movement.endsWith("a") ? "first" : "second"} Test G settlement, synthetic)`,
+  })),
+]);
+const definitions = new Map<PracticeMovementKey, PracticeMovementDefinition>(syntheticPracticeMovementCatalogueV1.map((entry) => [entry.movement, entry]));
 export function practiceMovementDefinition(key: PracticeMovementKey): PracticeMovementDefinition {
   const found = definitions.get(key);
   if (!found) throw new Error(`Unknown practice movement ${String(key)}`);
   return found;
 }
-const catalogueIndex = (key: PracticeMovementKey) => practiceMovementCatalogueV1.findIndex((entry) => entry.movement === key);
+const catalogueIndex = (key: PracticeMovementKey) => syntheticPracticeMovementCatalogueV1.findIndex((entry) => entry.movement === key);
 
 export const practiceFeedStepV1 = z.enum(["pending", "settled", "replay", "page_overlap", "alternate_representation", "unknown_duplicate"]);
 export type PracticeFeedStep = z.infer<typeof practiceFeedStepV1>;
@@ -51,8 +60,8 @@ const commandBase = {
 };
 export const practiceFeedCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...commandBase, action: z.literal("connect") }).strict(),
-  z.object({ ...commandBase, action: z.literal("advance"), movement: practiceMovementKeyV1, step: practiceFeedStepV1 }).strict(),
-  z.object({ ...commandBase, action: z.literal("reconcile_duplicate"), movement: practiceMovementKeyV1 }).strict(),
+  z.object({ ...commandBase, action: z.literal("advance"), movement: syntheticPracticeMovementKeyV1, step: practiceFeedStepV1 }).strict(),
+  z.object({ ...commandBase, action: z.literal("reconcile_duplicate"), movement: syntheticPracticeMovementKeyV1 }).strict(),
   z.object({ ...commandBase, action: z.literal("match_receipt"), movement: practiceReceiptMovementKeyV1, paymentId: z.guid({ error: "Invalid uuid" }) }).strict(),
   z.object({ ...commandBase, action: z.literal("disconnect") }).strict(),
 ]);
@@ -76,7 +85,7 @@ const kindRules = {
 /** What the internal deterministic adapter emits. Strict: every field is cross-checked against the fixed catalogue. */
 export const practiceFeedAdapterEventV1 = z.object({
   version: z.literal("practice-feed-event.v1"), environment: z.literal("synthetic_demo"),
-  eventId: z.string().min(1).max(64), eventKind: z.enum(eventKinds), movementKey: practiceMovementKeyV1,
+  eventId: z.string().min(1).max(64), eventKind: z.enum(eventKinds), movementKey: syntheticPracticeMovementKeyV1,
   identity: z.enum(["identified", "unidentified"]), representationId: z.enum(["feed", "statement-line", "unidentified-line"]),
   grossPence: z.number().int().safe(), currency: z.literal("GBP"),
   state: z.enum(["pending", "settled", "possible_duplicate"]),
@@ -198,7 +207,9 @@ export function assessAttestedReceipt(
     return why ? done("attested_only", why, recorded.movementKey) : done("qualifies", "matched", recorded.movementKey);
   }
   const candidate = receipt.currency === "GBP"
-    ? practiceMovementCatalogueV1.find((entry) => entry.kind === "customer_receipt" && entry.grossPence === receipt.amountPence) ?? null
+    ? syntheticPracticeMovementCatalogueV1.find((entry) => entry.kind === "customer_receipt" && entry.grossPence === receipt.amountPence
+      && !matches.some(match => match.movementKey === entry.movement))
+      ?? syntheticPracticeMovementCatalogueV1.find((entry) => entry.kind === "customer_receipt" && entry.grossPence === receipt.amountPence) ?? null
     : null;
   if (!candidate) return done("attested_only", "no_generated_amount", null);
   const holder = matches.find((match) => match.movementKey === candidate.movement);

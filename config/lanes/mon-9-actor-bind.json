@@ -5,19 +5,26 @@
       "branches": [
         "codex/sandbox/mon-9-actor-bind"
       ],
-      "note": "RED MON-9 session-bound database election; NOPR=1. Router handles commit and push.",
+      "note": "RED MON-9 catch-up to main 111865cf6; NOPR. Router stages the resolved merge, commits and pushes.",
       "allow": [
         "packages/core/src/index.ts",
-        "packages/db/migration-notes/0602_managed_recovery_actor_bind.md",
-        "packages/db/migrations/0602_managed_recovery_actor_bind.sql",
+        "packages/db/migration-notes/0582_managed_recovery_election.md",
+        "packages/db/migration-notes/0583_managed_recovery_actor_bind.md",
+        "packages/db/migrations/0582_managed_recovery_election.sql",
+        "packages/db/migrations/0583_managed_recovery_actor_bind.sql",
+        "packages/db/src/index.ts",
         "packages/db/src/managed-recovery-repository.ts",
-        "packages/db/test/managed-recovery-repository.test.ts",
-        "packages/db/test/managed-recovery.integration.test.ts",
-        "packages/db/test/managed-recovery-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/managed-recovery-actor-bind-upgrade.integration.test.ts",
-        "packages/db/test/migration-proofs/0602_managed_recovery_actor_bind.proof.json",
-        "packages/db/test/migration-proof-loader.ts",
-        "packages/db/test/migration-proof-loader.test.ts"
+        "packages/db/test/managed-recovery-fixtures.ts",
+        "packages/db/test/managed-recovery-migration.test.ts",
+        "packages/db/test/managed-recovery-repository.test.ts",
+        "packages/db/test/managed-recovery-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery.integration.test.ts",
+        "packages/db/test/migration-proof-loader.test.ts",
+        "packages/db/test/migration-proofs/0582_managed_recovery_election.proof.json",
+        "packages/db/test/migration-proofs/0583_managed_recovery_actor_bind.proof.json"
       ]
     }
   }

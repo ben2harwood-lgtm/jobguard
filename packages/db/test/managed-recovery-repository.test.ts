@@ -14,7 +14,7 @@ function pool(elected=false,principal='80000') {
  const statements: string[]=[],parameters: unknown[][]=[];
  const client={release:()=>undefined,query:async (sql:string, values: unknown[] = [])=>{
   statements.push(sql); parameters.push(values);
-  if (sql.startsWith('SELECT role FROM app.membership')) return {rows:[{role:'owner'}],rowCount:1};
+  if (sql.startsWith('SELECT 1 FROM app.membership')) return {rows:[{role:'owner'}],rowCount:1};
   if (sql.startsWith('SELECT app.mon9_session')) return {rows:[{identity_user_id:identityUserId}],rowCount:1};
   if (sql.startsWith('SELECT id FROM app.membership') || sql.startsWith('SELECT c.id FROM app.recovery_case')) return {rows:[{id:membershipId}],rowCount:1};
   if (sql.startsWith('SELECT\n')) return {rows:[{principal,started_at:null,election:elected?{
