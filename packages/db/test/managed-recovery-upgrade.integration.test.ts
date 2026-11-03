@@ -5,7 +5,7 @@ import { startBeforeMigration, applyMigration } from "./contractor-practice-sess
 import { fixture, newCase, start, command, type Cluster } from "./managed-recovery-fixtures.js";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { ManagedRecoveryRepository } from "../src/managed-recovery-repository.js";
-const own='0567_managed_recovery_election.sql';
+const own='0581_managed_recovery_election.sql';
 let c: Cluster;
 afterAll(async()=>{await c?.close();});
 it('backfills a permanent start, preserves exact history and replays migration safely',async()=>{

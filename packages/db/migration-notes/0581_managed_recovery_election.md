@@ -6,7 +6,7 @@ source triggers serialize on the existing case advisory lock. Historical pursuit
 messages/events and progressed legacy cases backfill start markers. No earlier migration is edited. The latest installed LP-5 result routine is
 extended with one checked election adapter; all earlier branches are retained. Direct runtime writes are revoked. Existing
 LP-0, tenancy and SERIOUS-B5 expectations are unioned through the explicit
-0567_managed_recovery_election.proof.json fragment; the entitlement upgrade
+0581_managed_recovery_election.proof.json fragment; the entitlement upgrade
 retains its two exact empty-table additions.
 
 The repository requires the server's opaque session digest alongside the verified
@@ -46,7 +46,7 @@ and reviewed source expectations, never from a database catalogue.
 
 Catch-up on 3 November 2026: retained main's complete contractor entitlement
 upgrade proof and added only the two exact empty MON-9 successor tables.
-Renamed the full migration stem to 0567_managed_recovery_election. Main already
+Renamed the full migration stem to 0581_managed_recovery_election. Main already
 contains the MON-9 pure core implementation from batch 1; this piece retains its
 barrel export and adds only persistence. No earlier migration, fee calculation,
 entitlement rule, browser surface or live offering is changed.

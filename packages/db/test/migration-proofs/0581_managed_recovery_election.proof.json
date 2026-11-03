@@ -1,5 +1,5 @@
 {
-  "migration": "0567_managed_recovery_election.sql",
+  "migration": "0581_managed_recovery_election.sql",
   "lp0": [
     {
       "section": "groups",
@@ -26,7 +26,8 @@
           "packages/db/migrations/0134_recovery_case_terms.sql:61",
           "packages/db/migrations/0018_recovery_outcomes.sql:41",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
-          "packages/db/migrations/0359_payment_fee_statements.sql"
+          "packages/db/migrations/0359_payment_fee_statements.sql",
+          "packages/db/migrations/0580_recovery_billability_integration.sql"
         ],
         "tests": [
           "packages/db/test/recovery-allocation.integration.test.ts",
@@ -34,7 +35,8 @@
           "packages/db/test/recovery-cases.integration.test.ts",
           "packages/db/test/recovery-insurer-money.integration.test.ts",
           "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
-          "packages/db/test/payment-fee-statements.integration.test.ts"
+          "packages/db/test/payment-fee-statements.integration.test.ts",
+          "packages/db/test/recovery-billability.integration.test.ts"
         ],
         "gaps": [],
         "path": "ap-recovery-money"
@@ -63,7 +65,8 @@
           "packages/db/migrations/0018_recovery_outcomes.sql:41",
           "packages/db/migrations/0335_stored_receipt_case_allocation.sql",
           "packages/db/migrations/0359_payment_fee_statements.sql",
-          "packages/db/migrations/0567_managed_recovery_election.sql",
+          "packages/db/migrations/0580_recovery_billability_integration.sql",
+          "packages/db/migrations/0581_managed_recovery_election.sql",
           "packages/db/src/managed-recovery-repository.ts"
         ],
         "tests": [
@@ -73,7 +76,8 @@
           "packages/db/test/recovery-cases.integration.test.ts",
           "packages/db/test/recovery-insurer-money.integration.test.ts",
           "packages/db/test/stored-receipt-case-allocation.integration.test.ts",
-          "packages/db/test/payment-fee-statements.integration.test.ts"
+          "packages/db/test/payment-fee-statements.integration.test.ts",
+          "packages/db/test/recovery-billability.integration.test.ts"
         ],
         "gaps": [],
         "path": "ap-recovery-money"

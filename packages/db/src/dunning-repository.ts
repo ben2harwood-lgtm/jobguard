@@ -9,9 +9,10 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const locator = z.object({ jobId: id, nowTick: tick }).strict();
 const command = z.object({ version: z.literal("dunning-persist-command.v1"), commandId: id,
  invoiceId: id, snapshotHash: hash, nowTick: tick, decisionId: id.optional() }).strict();
-const storedRow = z.object({ invoiceId: id, projection: z.unknown(), snapshotHash: hash }).strict();
 const resultSchema = z.object({ decisionId: id, snapshotHash: hash, expiresAt: z.iso.datetime({ offset: true }),
  status: z.enum(["pending", "approved"]), executable: z.literal(false) }).strict();
+const storedRow = z.object({ invoiceId: id, projection: z.unknown(), snapshotHash: hash,
+ decision: resultSchema.nullable().optional() }).strict();
 
 /** Persisted synthetic preview only. The DB entry point authenticates the company
  * session on every read/command; callers never submit invoice or balance facts. */
@@ -51,6 +52,9 @@ export class DunningRepository {
     const stored = parsed[index]!;
     if (!stored.success) throw new DunningError("DUNNING_UNAVAILABLE");
     return { ...row, snapshotHash: stored.data.snapshotHash,
+     decision: !row.suppression && stored.data.decision
+      && stored.data.decision.snapshotHash === stored.data.snapshotHash
+      && Date.parse(stored.data.decision.expiresAt) > nowTick ? stored.data.decision : null,
      reminder: row.suppression ? null : buildDunningReminder(scope, invoices[index], nowTick) };
    }) };
   }));

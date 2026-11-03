@@ -5,7 +5,7 @@ import { meterCompany } from "./meter-persistence-fixtures.js";
 import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { DunningRepository } from "../src/dunning-repository.js";
 import { migrate } from "../src/migrate.js";
-import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
+import { auditEventTrust, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 
 describe("M4-16 durable synthetic dunning",()=>{
  let c:Cluster;
@@ -65,6 +65,7 @@ describe("M4-16 durable synthetic dunning",()=>{
   for(const event of dunningEvents){
    expect(event.version).toBe("audit.v2");
    expect(event.payload).toMatchObject({references:{auditTrust:"checked_operation"}});
+   expect(auditEventTrust(event)).toBe("checked_operation");
   }
   await migrate(c.admin);expect((await read(a)).invoices[0]!.snapshotHash).toBe(row.snapshotHash);
  });

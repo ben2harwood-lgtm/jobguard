@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-8": {
+      "branches": [
+        "codex/sandbox/batch-8"
+      ],
+      "note": "Built ahead NOPR: m4-16-persist, m4-16-workbench, m4-2-integrate and mon-9-persist. RED; exact-head independent review and CI required.",
+      "allow": [
+        "apps/api/src/dunning.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/dunning/[operation]/route.ts",
+        "apps/web/app/api/jobs/[id]/dunning/route.test.ts",
+        "apps/web/app/api/jobs/[id]/dunning/route.ts",
+        "apps/web/app/jobs/[id]/dunning/page.tsx",
+        "apps/web/app/jobs/[id]/dunning/screen.tsx",
+        "apps/web/app/lib/dunning-server.ts",
+        "apps/web/e2e/m4-16-workbench.spec.mts",
+        "docs/contracts/dunning-dark-v1.md",
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/recovery-billability-policy.test.ts",
+        "packages/core/src/recovery-billability-policy.ts",
+        "packages/db/migration-notes/0581_managed_recovery_election.md",
+        "packages/db/migrations/0578_dunning_workbench.sql",
+        "packages/db/migrations/0579_dunning_workbench_preview.sql",
+        "packages/db/migrations/0580_recovery_billability_integration.sql",
+        "packages/db/migrations/0581_managed_recovery_election.sql",
+        "packages/db/src/dunning-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/managed-recovery-repository.ts",
+        "packages/db/src/recovery-billability-repository.test.ts",
+        "packages/db/src/recovery-billability-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/dunning-repository.test.ts",
+        "packages/db/test/dunning-upgrade.integration.test.ts",
+        "packages/db/test/dunning-workbench-upgrade.integration.test.ts",
+        "packages/db/test/dunning.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/managed-recovery-fixtures.ts",
+        "packages/db/test/managed-recovery-repository.test.ts",
+        "packages/db/test/managed-recovery-upgrade.integration.test.ts",
+        "packages/db/test/managed-recovery.integration.test.ts",
+        "packages/db/test/migration-proofs/0578_dunning_workbench.proof.json",
+        "packages/db/test/migration-proofs/0579_dunning_workbench_preview.proof.json",
+        "packages/db/test/migration-proofs/0580_recovery_billability_integration.proof.json",
+        "packages/db/test/migration-proofs/0581_managed_recovery_election.proof.json",
+        "packages/db/test/recovery-billability-upgrade.integration.test.ts",
+        "packages/db/test/recovery-billability.integration.test.ts"
+      ]
+    }
+  }
+}
