@@ -1,0 +1,6 @@
+{
+  "migration": "0560_merchant_ingestion_hardening.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
