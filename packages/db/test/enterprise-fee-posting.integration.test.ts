@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { EnterpriseFeeRepository, withTenant, migrate } from "../src/index.js";
@@ -53,6 +54,7 @@ it("upgrades populated fee books without changing journals, receipts, audit or f
   await applyMigration(c, migration); await migrate(c.admin); await migrate(c.admin);
   expect(await proofDifferences(c.admin, before)).toEqual({ rows: [], types: [] });
   expect(await metadata()).toEqual(security);
+  await seedActiveContractorAgreement(c.admin,t.w.w.p.tenantId);
   expect(await t.post(first.statementId, first.authorizationId)).toMatchObject({ replayed: true, journals: 1 });
 });
 
@@ -264,7 +266,7 @@ it("fresh-key accrual replays append one bound audit per command; same-key retri
   for (const command of commands) {
     expect(after.slice(1).filter(event => event.payload.references.command === command)).toEqual([
       expect.objectContaining({ event_type: "enterprise_fee.statement_post_replayed", actor_ref: original[0]!.actor_ref,
-        payload: { references: { statement: approved.statementId, command, authorization: approved.authorizationId, environment: "synthetic_demo" },
+        payload: { references: { auditTrust: "checked_operation", statement: approved.statementId, command, authorization: approved.authorizationId, environment: "synthetic_demo" },
           hashes: { content: approved.statement.contentHash } } }),
     ]);
     expect(await t.post(approved.statementId, approved.authorizationId, command)).toMatchObject({ replayed: true, journals: 1 });

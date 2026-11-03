@@ -239,11 +239,11 @@ it.each(["revoked", "expired"] as const)("a %s attribution review stops previous
   await x.executor.execute(x.ctx, x.collection.commandId); expect(submit).toHaveBeenCalledTimes(1);
 });
 
-it("0601 upgrades the latest writer in place, preserves approvals and is rerunnable", async () => {
+it("0584 upgrades the latest writer in place, preserves approvals and is rerunnable", async () => {
   const x = await fixture();
-  const previous = (await readFile(new URL("../migrations/0561_payment_fee_collect_review.sql", import.meta.url), "utf8"))
+  const previous = (await readFile(new URL("../migrations/0527_payment_fee_collect_review.sql", import.meta.url), "utf8"))
     .replace(/^BEGIN;\n/u, "").replace(/COMMIT;\n$/u, "");
-  const upgrade = (await readFile(new URL("../migrations/0601_payment_fee_collect_recheck.sql", import.meta.url), "utf8"))
+  const upgrade = (await readFile(new URL("../migrations/0584_payment_fee_collect_recheck.sql", import.meta.url), "utf8"))
     .replace(/^BEGIN;\n/u, "").replace(/COMMIT;\n$/u, "");
   await rolledBack(f.admin, async db => {
     await db.query("SELECT set_config('app.tenant_id',$1,true)", [x.context.tenantId]);
