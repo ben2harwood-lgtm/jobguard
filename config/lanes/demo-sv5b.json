@@ -32,6 +32,7 @@
         "packages/db/src/late-source-import.ts",
         "packages/db/src/shadow-detection-repository.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
         "packages/db/test/customer-variation-upgrade.integration.test.ts",
         "packages/db/test/job-source-fixtures.test.ts",
         "packages/db/test/late-source-import-migration.test.ts",
