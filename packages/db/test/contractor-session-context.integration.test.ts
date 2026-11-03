@@ -1,3 +1,4 @@
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ContractorRepository } from "../src/contractor-repository.js";
@@ -15,6 +16,7 @@ afterAll(async () => { await database?.close(); vi.unstubAllEnvs(); });
 async function practice() {
   const session = randomUUID();
   const member = await new ContractorRepository(database.runtime).startPractice(session);
+  await seedActiveContractorAgreement(database.admin,member.tenantId);
   return { session, member };
 }
 describe("contractor session PostgreSQL boundary tests", () => {

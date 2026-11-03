@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "plan6-sv-7a": {
+      "branches": [
+        "codex/sandbox/demo-sv7a"
+      ],
+      "note": "RED SV-7A repair: practice on-site diary admission at the two diary call sites only; repair migration preserves latest main routines.",
+      "allow": [
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/job-sources.test.tsx",
+        "apps/web/e2e/SV-7A.spec.ts",
+        "packages/db/migrations/0539_practice_onsite_diary_admission.sql",
+        "packages/db/migration-notes/0539_practice_onsite_diary_admission.md",
+        "packages/db/test/migration-proofs/0539_practice_onsite_diary_admission.proof.json",
+        "packages/db/src/onsite-diary-admission.test.ts",
+        "docs/verdicts/SV-7A/BUILDER_RECEIPT.md",
+        "packages/db/test/job-source-intake.integration.test.ts"
+      ]
+    }
+  }
+}

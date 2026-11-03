@@ -1,3 +1,4 @@
+import { serverEntitlement } from "./plan-entitlement-service.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -51,21 +52,24 @@ function rowRefusal(error: unknown): WorkOrderRowErrorCode | null {
   return isWorkOrderRowErrorCode(failure.code) ? failure.code : null;
 }
 
-export type ContractorGateKind = "import" | "sor" | "member";
+export type ContractorGateKind = "import" | "sor" | "member" | "retained_import" | "retained_member";
 /**
  * The ENT-1 membership gate shared by every ENT-2 command and read: an active membership of this identity (else the ENT-1 not-found), a
- * contractor-track tenant (else the typed TRACK_FORBIDDEN, Q5), and the permission for the kind of call (else the same not-found).
+ * server entitlement for new work (else TRACK_FORBIDDEN), and the existing scoped permission (else not-found).
+ * Retained reads bypass commercial eligibility only; all identity and resource checks remain.
  * Import = organisation.manage or data.import; sor = contract.manage (Ben, 9 Oct 2026, "Existing roles").
  */
-export async function assertContractorGate(db: TenantTransaction, principal: AuthenticatedMembership, kind: ContractorGateKind): Promise<void> {
-  const row = (await db.$client.query<{ track: string | null; active: boolean; allowed: boolean }>(
-    `SELECT (SELECT commercial_track FROM app.commercial_track_assignment ORDER BY revision DESC LIMIT 1) track, coalesce(app.contractor_member_active(m.id),false) active,
+export async function assertContractorGate(db: TenantTransaction, principal: AuthenticatedMembership, kind: ContractorGateKind, feature: "work_orders" | "site_origin_capture" = "work_orders"): Promise<void> {
+  const retained = kind.startsWith("retained_");
+  const row = (await db.$client.query<{ active: boolean; allowed: boolean }>(
+    `SELECT coalesce(app.contractor_member_active(m.id),false) active,
      CASE $4::text WHEN 'import' THEN coalesce(app.work_order_import_permitted(m.id),false) WHEN 'sor' THEN coalesce(app.sor_import_permitted(m.id),false) ELSE true END allowed
      FROM app.membership m WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>statement_timestamp())`,
-    [principal.tenantId, principal.membershipId, principal.identityUserId, kind])).rows[0];
+    [principal.tenantId, principal.membershipId, principal.identityUserId, kind === "retained_import" ? "import" : kind])).rows[0];
   if (!row) throw new WorkOrderError("NOT_FOUND");
-  if (row.track !== "contractor") throw new WorkOrderError("TRACK_FORBIDDEN");
   if (!row.active || !row.allowed) throw new WorkOrderError("NOT_FOUND");
+  const decision = await serverEntitlement(db, principal.membershipId, feature, retained ? "retained_read" : "new_work");
+  if (!decision.executable) throw new WorkOrderError("TRACK_FORBIDDEN");
 }
 
 type ContractDocument = { sorVersionIds: string[]; tenderedAdjustment: { numerator: string; denominator: string } };
@@ -300,7 +304,7 @@ export class WorkOrderRepository {
   async overview(principal: AuthenticatedMembership) {
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
-        await assertContractorGate(db, principal, "import");
+        await assertContractorGate(db, principal, "retained_import");
         const c = db.$client;
         // Only what this member may import for: orders of clients they cover, and batches holding a receipt for such an order (or recorded by them),
         // counted from the receipts they may see. Tenant-wide import authority (owner, tenant-wide admin, finance) sees everything.
@@ -327,7 +331,7 @@ export class WorkOrderRepository {
     if (!uuidSchema.safeParse(batchId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
-        await assertContractorGate(db, principal, "import");
+        await assertContractorGate(db, principal, "retained_import");
         const { result, createdAt } = await this.batchResult(db, principal, batchId);
         return workOrderBatchDetailV1.parse({ ...result, version: "work-order-batch.v1", createdAt });
       });
@@ -339,7 +343,7 @@ export class WorkOrderRepository {
     if (!uuidSchema.safeParse(workOrderId).success) throw new WorkOrderError("NOT_FOUND");
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
-        await assertContractorGate(db, principal, "member");
+        await assertContractorGate(db, principal, "retained_member");
         const c = db.$client;
         const order = (await c.query<{ id: string; reference: string; job_id: string; job_status: string; allowed: boolean }>(
           `SELECT w.id,w.reference,w.job_id,j.status job_status,(coalesce(app.work_order_client_permitted($2,w.client_id),false) OR coalesce(app.contractor_job_allowed($2,'job.read',w.job_id),false)) allowed
