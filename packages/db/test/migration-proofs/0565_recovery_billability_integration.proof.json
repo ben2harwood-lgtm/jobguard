@@ -230,7 +230,7 @@
       "after": {
         "nspname": "app",
         "proname": "recovery_billability",
-        "args": "j uuid, digest text, p jsonb, document jsonb DEFAULT NULL::jsonb",
+        "args": "j uuid, digest text, p jsonb, document jsonb",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
