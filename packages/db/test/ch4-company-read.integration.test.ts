@@ -6,7 +6,7 @@ import { jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures
 import { seedWorkJob, seedWorkPractice, type WorkFixture } from "./job-work-state-fixtures.js";
 
 let db: JobDoorsDatabase;
-beforeAll(async () => { db = await jobDoorsDatabase(true, "0560_"); }, 300_000);
+beforeAll(async () => { db = await jobDoorsDatabase(true, "0523_ch4_company_workspace_read"); }, 300_000);
 afterAll(async () => { await db?.close(); });
 
 it("0560 upgrades the existing read without changing facts, ACL, practice access or company isolation", async () => {
@@ -20,7 +20,7 @@ it("0560 upgrades the existing read without changing facts, ACL, practice access
   const facts = () => db.owner.query("SELECT tenant_id,job_id,id,sequence,kind,fact_at,recorded_at FROM app.job_work_state_event ORDER BY tenant_id,job_id,sequence");
   const saved = (await facts()).rows;
   await expect(repo.read(company.context, company.jobId, company.actorId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
-  const sql = await readFile(new URL("../migrations/0560_ch4_company_workspace_read.sql", import.meta.url), "utf8");
+  const sql = await readFile(new URL("../migrations/0523_ch4_company_workspace_read.sql", import.meta.url), "utf8");
   await db.owner.query(sql);
   expect((await catalogue()).rows).toEqual(permissions);
   expect((await facts()).rows).toEqual(saved);

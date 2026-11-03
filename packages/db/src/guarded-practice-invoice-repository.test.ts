@@ -29,7 +29,7 @@ it("replaces only the latest invoice routine, guarding new commands after replay
  const priorMigration = readFileSync(new URL("../migrations/0237_final_check_prerequisites.sql", import.meta.url), "utf8");
  const start = priorMigration.indexOf("CREATE OR REPLACE FUNCTION app.issue_practice_customer_invoice(");
  const prior = priorMigration.slice(start, priorMigration.indexOf("END $$;", start) + "END $$;".length);
- const migration = readFileSync(new URL("../migrations/0561_practice_invoice_closed_job.sql", import.meta.url), "utf8");
+ const migration = readFileSync(new URL("../migrations/0524_practice_invoice_closed_job.sql", import.meta.url), "utf8");
  const replacementStart = migration.indexOf("CREATE OR REPLACE FUNCTION");
  const replacement = migration.slice(replacementStart, migration.indexOf("END $$;", replacementStart) + "END $$;".length);
  const guard = " PERFORM app.ch4_require_open(p_tenant,p_job);\n";

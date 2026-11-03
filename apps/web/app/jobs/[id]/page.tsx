@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { jobRecordProposalV1 } from "@jobguard/core";
-import { CaptureRepository } from "@jobguard/db";
+import { CaptureRepository, JobWorkStateRepository } from "@jobguard/db";
+import { createIdentityApplication } from "@jobguard/api/identity";
+import { MeterWorkStateApplication } from "@jobguard/api/workspace";
 import { WorkspaceShell } from "../../ui/workspace-shell";
 import { JobWorkState } from "../../ui/job-work-state";
-import { identityApplication } from "../../lib/identity-server";
-import { meterWorkApplication } from "../../lib/meter-server";
 import { syntheticPool } from "../../lib/synthetic-server";
 
 export default async function JobPage({ params, searchParams }: {
@@ -15,11 +15,14 @@ export default async function JobPage({ params, searchParams }: {
   if (!company) return <WorkspaceShell jobId={id}/>;
   // A tenant selection is never authority. Reauthenticate the company session,
   // then let the same CH-4 owner/job/track boundary authorize this saved job.
+  // A server component has its own copy of these modules, so it must not create or reuse
+  // the route handlers' process-wide identity application: contexts it stamps fail there.
+  const identity = createIdentityApplication(process.env, { max: 1, maxUses: 1 });
   try {
-    const identity = identityApplication(), sessionToken = (await cookies()).get("jobguard_session")?.value;
+    const sessionToken = (await cookies()).get("jobguard_session")?.value;
     const session = await identity.session(sessionToken);
     const credentials = { sessionToken, csrfToken: session.csrfToken, tenantHeader: company, origin: identity.allowedOrigin };
-    await meterWorkApplication().read(credentials, id);
+    await new MeterWorkStateApplication(identity, new JobWorkStateRepository(syntheticPool())).read(credentials, id);
     const context = await identity.context(credentials);
     const capture = await new CaptureRepository(syntheticPool()).readByJob(context, id);
     if (!capture) throw new Error("NOT_FOUND");
@@ -32,5 +35,7 @@ export default async function JobPage({ params, searchParams }: {
     </main>;
   } catch {
     return <main className="workspace-page"><h1>You cannot open this job</h1><p>Use a saved job available to your company session.</p></main>;
+  } finally {
+    await identity.provider.repository.pool.end();
   }
 }

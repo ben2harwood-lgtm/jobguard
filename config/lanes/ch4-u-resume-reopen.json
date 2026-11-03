@@ -18,15 +18,15 @@
         "apps/web/e2e/CH-4.spec.ts",
         "apps/web/e2e/helpers/ch4-company-fixture.ts",
         "packages/core/src/final-account-lock.ts",
-        "packages/db/migrations/0560_ch4_company_workspace_read.sql",
-        "packages/db/migrations/0561_practice_invoice_closed_job.sql",
+        "packages/db/migrations/0523_ch4_company_workspace_read.sql",
+        "packages/db/migrations/0524_practice_invoice_closed_job.sql",
         "packages/db/src/guarded-practice-invoice-repository.test.ts",
         "packages/db/src/guarded-practice-invoice-repository.ts",
         "packages/db/src/job-work-state-repository.ts",
         "packages/db/test/ch4-company-read.integration.test.ts",
         "packages/db/test/job-work-state-fixtures.ts",
-        "packages/db/test/migration-proofs/0560_ch4_company_workspace_read.proof.json",
-        "packages/db/test/migration-proofs/0561_practice_invoice_closed_job.proof.json"
+        "packages/db/test/migration-proofs/0523_ch4_company_workspace_read.proof.json",
+        "packages/db/test/migration-proofs/0524_practice_invoice_closed_job.proof.json"
       ]
     }
   }

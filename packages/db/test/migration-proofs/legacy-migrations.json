@@ -178,5 +178,8 @@
   "0514_withheld_payment_statement_source.sql",
   "0515_fee_compensation_gate_and_demo_settle.sql",
   "0518_shadow_demo_guide.sql",
-  "0519_lp3_activation_acceptance.sql"
+  "0519_lp3_activation_acceptance.sql",
+  "0520_lp4_database_audit.sql",
+  "0521_lp5a_commands.sql",
+  "0522_lp5b_writers.sql"
 ]

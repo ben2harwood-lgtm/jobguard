@@ -384,7 +384,7 @@ describe("ENT-2 DW6 personal data and origin", () => {
       // The audit payload allowlist: identifiers, hashes and the operational classification only.
       for (const event of (await admin.query("SELECT event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'contractor.work_order%'", [p.tenantId])).rows) {
         expect(Object.keys(event.payload).sort()).toEqual(["classifications", "hashes", "references"]); expect(Object.keys(event.payload.hashes)).toEqual(["document"]);
-        expect(Object.keys(event.payload.references).sort()).toEqual(event.event_type === "contractor.work_order_import.recorded" ? ["batchId", "commandId", "environment"] : ["commandId", "environment", "revisionId", "workOrderId"]);
+        expect(Object.keys(event.payload.references).sort()).toEqual(event.event_type === "contractor.work_order_import.recorded" ? ["auditTrust", "batchId", "commandId", "environment"] : ["auditTrust", "commandId", "environment", "revisionId", "workOrderId"]);
       }
     } finally { spies.forEach(s => s.mockRestore()); }
   });
