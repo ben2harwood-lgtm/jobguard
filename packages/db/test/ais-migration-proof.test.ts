@@ -5,8 +5,8 @@ import { parseInventory, pathCompleteness, repoFileExists, staticScan } from "./
 import { applyTenancyProofs, applyUpgradeProofs, combineLp0, proofSchema, type MigrationProofSnapshot } from "./migration-proof-loader.js";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const migration = read("../migrations/0427_dark_ais.sql");
-const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0427_dark_ais.proof.json")));
+const migration = read("../migrations/0579_dark_ais.sql");
+const proof = proofSchema.parse(JSON.parse(read("./migration-proofs/0579_dark_ais.proof.json")));
 const baseline = parseInventory(JSON.parse(read("../../../docs/contracts/lp-0-effective-privileges-v1.json")));
 const tables = ["ais_connection", "ais_lifecycle", "ais_observation", "ais_page"];
 

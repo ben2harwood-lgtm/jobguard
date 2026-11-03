@@ -21,8 +21,9 @@ import {pngBytes} from "./site-extra-evidence-fixtures.js";
 const hash="a".repeat(64);
 // Preserve protocol callers from the producer lane and numeric-baseline callers from CH-8.
 export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7",protocolOrBaseline:string|number=3360000,mixedFinalCheck=false,collectionOrProtocol:boolean|string=false,
- // Keep both the source-time attack callback and the two-catch fixture callers.
- beforeLockOrTwoCatches?: boolean | ((source: {context: ReturnType<typeof testTenantContext>; jobId: string; signalId: string; digest: string}) => Promise<void>)){
+ // Preserve source-time attacks, two-catch callers and main's combined/partial options.
+ beforeLockOrTwoCatches?: boolean | ((source: {context: ReturnType<typeof testTenantContext>; jobId: string; signalId: string; digest: string}) => Promise<void>),
+ sv6?: {combined?: boolean; partial?: boolean}){
  const beforeLock=typeof beforeLockOrTwoCatches==="function"?beforeLockOrTwoCatches:undefined;
  const twoCatches=beforeLockOrTwoCatches===true;
  const collection282=typeof collectionOrProtocol==="boolean"?collectionOrProtocol:false;
@@ -57,13 +58,13 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const feed=new PracticeFeedRepository(f.runtime,"synthetic_demo");
  let feedRevision=(await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action:"connect",commandId:randomUUID(),expectedRevision:0})).revision;
  // The additive facts catalogue owns F5's deposit and later receipt.
- const feedCommand=async(action:"advance"|"match_receipt",movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000",paymentId?:string)=>{
+ const feedCommand=async(action:"advance"|"match_receipt",movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000"|"receipt-480-a"|"receipt-480-b",paymentId?:string)=>{
   const coreMovement=movement!=="receipt-12000"&&movement!=="receipt-14640";
   const raw={version:coreMovement?"practice-feed-command.v1":"practice-facts-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement,...(action==="advance"?{step:"settled"}:{paymentId})};
   const view=coreMovement?await feed.command(context,actor,auth.digest,jobId,raw):await feed.factsCommand(context,actor,auth.digest,jobId,raw);
   feedRevision=view.revision;
  };
- const advance=(movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000")=>feedCommand("advance",movement);
+ const advance=(movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000"|"receipt-480-a"|"receipt-480-b")=>feedCommand("advance",movement);
  if(kind==="F5")await advance("receipt-12000");
  const assembly=new FinalAccountCommandService(scoped),locks=new FinalAccountLockRepository(scoped),variations=new VariationRepository(scoped);
  let variationId:string=randomUUID();const variationScope=randomUUID(),workId=randomUUID();
@@ -99,7 +100,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  // Reconciliation makes the result available; publication authorizes invoicing.
  await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
- const main=await issue("final");let invoiceId=main.invoiceId;
+ let main=sv6?.combined?null:await issue("final");let invoiceId=main?.invoiceId??"";
  if(kind==="F7"){
   const confirm=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:signal,expectedSignalRevision:1}) as {variationId:string};
   variationId=confirm.variationId;await price(variationId,"Fictional catch");
@@ -108,7 +109,8 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
    await price(other.variationId,"Fictional second confirmed catch");
   }
   drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
-  invoiceId=(await issue("supplementary")).invoiceId;
+  if(sv6?.combined){main=await issue("final");invoiceId=main.invoiceId;}
+  else invoiceId=(await issue("supplementary")).invoiceId;
   if(mixedFinalCheck){
    const other=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId:otherCatchSignal,expectedSignalRevision:1}) as {variationId:string};
    await price(other.variationId,"Fictional second confirmed catch");
@@ -116,7 +118,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  }
  const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation' AND commercial_revision_id IN(SELECT id FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$4)",[DEMO_TENANT_ID,jobId,drafted.id,variationId])).rows[0].id as string;
  const invoices=new PracticeInvoiceRepository(scoped);
- const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000",alreadySettled=false)=>{
+ const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000"|"receipt-480-a"|"receipt-480-b",alreadySettled=false)=>{
   const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:"Fictional matched receipt"});
   if(!alreadySettled)await advance(movement);
   await feedCommand("match_receipt",movement,payment.paymentId);return payment.paymentId;
@@ -131,10 +133,10 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  if(kind==="F5"){deposit=await receipt(1200000,"receipt-12000",true);await produce(deposit);}
  const firstPaymentId=collection282?await receipt(38400,"receipt-384"):null;
  if(firstPaymentId)await produce(firstPaymentId);
- const paymentId=await receipt(collection282?300000:kind==="F5"?1464000:96000,collection282?"receipt-3000":kind==="F5"?"receipt-14640":"receipt-960"),produced=await produce(paymentId);
+ const paymentId=sv6?.partial?await receipt(48000,"receipt-480-a"):await receipt(collection282?300000:kind==="F5"?1464000:96000,collection282?"receipt-3000":kind==="F5"?"receipt-14640":"receipt-960"),produced=await produce(paymentId);
  let caseId:string;
  if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
  const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId}),fact=snapshot.rows.find(r=>r.paymentId===paymentId&&r.lineId===line)!;
- return {f,context,actor,auth,session,jobId,scope,evidence,lock,main,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
+ return {f,context,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
 }

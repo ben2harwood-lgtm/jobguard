@@ -1,3 +1,5 @@
+import { lp5RelationAcl } from "./lp5-catalog-fixture.js";
+import {lp4AuditEventAcl} from "./lp4-catalog-fixture.js";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
@@ -27,14 +29,19 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
   await f.admin.query("GRANT CREATE ON SCHEMA app TO jobguard_meter_owner");
   await f.admin.query("ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner; ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) SECURITY DEFINER");
   await f.admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
-  const grants=(await f.admin.query("SELECT oid,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows;
+  const grants=(await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows;
   await migrate(f.admin); await migrate(f.admin);
   // 0399 must retire the old signature on an already meter-owned installation,
   // before the administrative finalizer has another chance to revoke it.
   expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_counted_meter_today(uuid,text)','EXECUTE') allowed")).rows).toEqual([{allowed:false}]);
   expect((await f.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0399_meter_reader_revoke.sql'")).rows).toEqual([{migration_name:"0399_meter_reader_revoke.sql"}]);
   expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
-  expect((await f.admin.query("SELECT oid,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY($1::oid[]) ORDER BY oid",[grants.map(row=>row.oid)])).rows).toEqual(grants);
+  const auditOid=(await f.admin.query("SELECT 'app.audit_event'::regclass::oid oid")).rows[0].oid;
+  const expectedGrants=await Promise.all(grants.map(async row=>{
+    const acl=row.oid===auditOid ? await lp4AuditEventAcl(f.admin,row.relacl) : row.relacl;
+    return {...row,relacl:await lp5RelationAcl(f.admin,row.relname,acl)};
+  }));
+  expect((await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY($1::oid[]) ORDER BY oid",[grants.map(row=>row.oid)])).rows).toEqual(expectedGrants);
   const admin=await f.admin.connect();
   try { await finalizeMeterLifecycleOwnership(admin); await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   expect((await f.admin.query(`SELECT proname,pg_get_userbyid(proowner) owner,prosecdef,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime

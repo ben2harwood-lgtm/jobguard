@@ -1,18 +1,18 @@
 import { z } from "zod";
-import { practiceMovementKeyV1 } from "@jobguard/core";
+import { syntheticPracticeMovementKeyV1 } from "@jobguard/core";
 export { practiceFeedCommandV1, practiceFeedQueryV1 } from "@jobguard/core";
 
 const safePence = z.number().int().safe().min(0).max(1_000_000_000_000);
 const kind = z.enum(["customer_receipt", "supplier_refund"]);
-const fixture = z.enum(["recovery-18800", "shadow-30000", "test-m", "test-n", "supplier-refund"]);
+const fixture = z.enum(["recovery-18800", "shadow-30000", "test-m", "test-n", "supplier-refund", "test-g"]);
 
 export const practiceFeedCatalogueEntryV1 = z.object({
-  movement: practiceMovementKeyV1, grossPence: safePence, kind, fixture, label: z.string().min(1).max(120),
+  movement: syntheticPracticeMovementKeyV1, grossPence: safePence, kind, fixture, label: z.string().min(1).max(120),
 }).strict();
 
 /** A settled movement is a fact only. `allocatedEligibleNetPence` is the literal 0: this leaf can never allocate. */
 export const practiceFeedMovementViewV1 = z.object({
-  id: z.string().min(1), movementKey: practiceMovementKeyV1, underlyingMovementId: z.string().min(1), kind, fixture,
+  id: z.string().min(1), movementKey: syntheticPracticeMovementKeyV1, underlyingMovementId: z.string().min(1), kind, fixture,
   label: z.string().min(1).max(120), grossPence: safePence, currency: z.literal("GBP"),
   state: z.enum(["pending", "settled", "possible_duplicate"]),
   allocatedEligibleNetPence: z.literal(0), eligibleForAllocation: z.boolean(),
@@ -22,7 +22,7 @@ export const practiceFeedMovementViewV1 = z.object({
 export const practiceFeedReceiptAssessmentV1 = z.object({
   status: z.enum(["attested_only", "qualifies", "reversed"]),
   reason: z.enum(["no_generated_amount", "no_movement_yet", "pending", "duplicate_held", "movement_already_matched", "movement_used_by_reversed_receipt", "ready_to_match", "matched", "reversed"]),
-  canMatch: z.boolean(), candidateMovementKey: practiceMovementKeyV1.nullable(), matchedMovementKey: practiceMovementKeyV1.nullable(),
+  canMatch: z.boolean(), candidateMovementKey: syntheticPracticeMovementKeyV1.nullable(), matchedMovementKey: syntheticPracticeMovementKeyV1.nullable(),
 }).strict();
 
 export const practiceFeedReceiptViewV1 = z.object({

@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 import {expect,it} from "vitest";
 import {loadReviewedInventory,staticScan} from "./lp-0-catalog.js";
 import {loadMigrationProofs} from "./migration-proof-loader.js";
-const name="0590_success_fee_production_safety.sql";
+const name="0580_success_fee_production_safety.sql";
 const sql=readFileSync(new URL(`../migrations/${name}`,import.meta.url),"utf8");
 const body=(name:string)=>sql.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION app\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)END \\$\\$;`))![1]!;
 it("records every new production-safety routine and trigger in the explicit proof",async()=>{
@@ -32,4 +32,13 @@ it("independently rebuilds the writer's complete catch and withheld-payment sour
  expect(writer.indexOf("'success-fee-job:'")).toBeLessThan(writer.indexOf(" FOR c IN SELECT id FROM app.recovery_case"));
  expect(writer).toContain("IF invalid_reduction AND delta>0 THEN");
  expect(body("success_fee_derivation_integrity")).toContain("OR stored IS DISTINCT FROM expected_sources");
+});
+
+it("preserves main's reversal-netted caps and invalid-proof compensation rules",()=>{
+ const main=readFileSync(new URL("../migrations/0537_fee_invalid_proof_reduction.sql",import.meta.url),"utf8");
+ const withheld=(source:string)=>source.slice(source.indexOf("  remaining:=landing.eligible_net_pence-reversed_net;"),source.indexOf("\n END LOOP;",source.indexOf("  remaining:=landing.eligible_net_pence-reversed_net;")));
+ expect(withheld(body("write_success_fee_v3"))).toBe(withheld(main));
+ expect(withheld(body("success_fee_inputs"))).toBe(withheld(main).replaceAll("p_job","j"));
+ expect(body("write_success_fee_v3")).toContain("IF invalid_reduction AND delta=0 THEN RAISE EXCEPTION 'SUCCESS_FEE_SOURCE_CHANGED'");
+ expect(body("success_fee_derivation_integrity")).toContain("((inputs->>'invalidReduction')::boolean AND NEW.delta_pence>=0)");
 });
