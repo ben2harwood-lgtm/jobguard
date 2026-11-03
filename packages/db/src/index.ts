@@ -174,4 +174,5 @@ export * from "./simulation-money-run-repository.js";
 export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
+export * from "./shadow-pilot-financial-reader.js";
 export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";

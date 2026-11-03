@@ -161,5 +161,6 @@ export * from "./exposure-curve.js";
 export * from "./pay-now-synthetic.js";
 export * from "./contractor-mandate.js";
 
+export * from "./shadow-pilot-financial-record.js";
 export * from "./cancellation-kit.js";
 export * from "./value-source-receipt-v2.js";
