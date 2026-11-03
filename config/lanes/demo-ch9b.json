@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/demo-ch9b"
       ],
-      "note": "CH-9 RED: versioned recovery receipt, read-only 0615, business sections and saved-data window tests.",
+      "note": "CH-9 RED: versioned recovery receipt, read-only 0546_value_recovery_receipt, business sections and saved-data window tests.",
       "allow": [
         "apps/api/src/shadow-demo.application.ts",
         "apps/api/src/value/company-value.application.test.ts",
@@ -23,11 +23,11 @@
         "packages/core/src/index.ts",
         "packages/core/src/value-source-receipt-v2.test.ts",
         "packages/core/src/value-source-receipt-v2.ts",
-        "packages/db/migrations/0615_value_recovery_receipt.sql",
+        "packages/db/migrations/0546_value_recovery_receipt.sql",
         "packages/db/src/value-business-reader.test.ts",
         "packages/db/src/value-business-reader.ts",
         "packages/db/src/value-v3-reader.ts",
-        "packages/db/test/migration-proofs/0615_value_recovery_receipt.proof.json",
+        "packages/db/test/migration-proofs/0546_value_recovery_receipt.proof.json",
         "packages/db/test/value-recovery-receipt.integration.test.ts",
         "packages/db/test/value-recovery-receipt.test.ts"
       ]

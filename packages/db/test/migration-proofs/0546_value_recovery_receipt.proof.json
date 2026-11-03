@@ -1,5 +1,5 @@
 {
-  "migration": "0615_value_recovery_receipt.sql",
+  "migration": "0546_value_recovery_receipt.sql",
   "lp0": [
     {
       "section": "entries",
