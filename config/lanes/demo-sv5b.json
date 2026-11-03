@@ -25,13 +25,12 @@
         "packages/core/src/job-sources.ts",
         "packages/core/src/late-source-import.test.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migrations/0613_late_source_import.sql",
+        "packages/db/migrations/0541_late_source_import.sql",
         "packages/db/src/index.ts",
         "packages/db/src/job-source-fixtures.ts",
         "packages/db/src/late-source-import.test.ts",
         "packages/db/src/late-source-import.ts",
         "packages/db/src/shadow-detection-repository.ts",
-        "packages/db/test/commercial-integrity-v3-fixtures.ts",
         "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
         "packages/db/test/customer-signin.integration.test.ts",
         "packages/db/test/customer-variation-upgrade.integration.test.ts",
@@ -39,7 +38,7 @@
         "packages/db/test/late-source-import-migration.test.ts",
         "packages/db/test/late-source-import.integration.test.ts",
         "packages/db/test/lp5-command-catalog.ts",
-        "packages/db/test/migration-proofs/0613_late_source_import.proof.json"
+        "packages/db/test/migration-proofs/0541_late_source_import.proof.json"
       ]
     }
   }

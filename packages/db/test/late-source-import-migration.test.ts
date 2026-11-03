@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {expect,it} from "vitest";
 import {lateSourceRegistryRow,currentCommandRegistryRows,lp5RegistryRows} from "./lp5-command-catalog.js";
-const sql=readFileSync(new URL("../migrations/0613_late_source_import.sql",import.meta.url),"utf8");
+const sql=readFileSync(new URL("../migrations/0541_late_source_import.sql",import.meta.url),"utf8");
 it("0613 preserves the latest command-result body apart from its new source proof",()=>{
  const original=readFileSync(new URL("../migrations/0522_lp5b_writers.sql",import.meta.url),"utf8");
  const body=(s:string)=>s.slice(s.indexOf("CREATE OR REPLACE FUNCTION app.lp5_command_result("),s.indexOf("END $$;",s.indexOf("CREATE OR REPLACE FUNCTION app.lp5_command_result("))+8).trim();

@@ -97,8 +97,6 @@ export async function addIntegrityPayment(f:IntegrityFixture,job:string) {
 }
 export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<typeof seedIntegrityJob>>) {
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
- const {FinalAccountLockRepository}=await import("../src/final-account-lock-repository.js");
- await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context,{actorMembershipId:member,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  const id=randomUUID(),command=randomUUID(),event=randomUUID();
  await withTenant(f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)

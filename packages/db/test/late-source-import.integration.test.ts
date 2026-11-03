@@ -10,7 +10,7 @@ import {ShadowDetectionRepository} from "../src/shadow-detection-repository.js";
 import {detectShadowObservations} from "@jobguard/core";
 import {testTenantContext} from "./tenant-context-test-utils.js";
 let f:FinalCheckFixture,a:FinalCheckJob,before:unknown;
-const own="0613_late_source_import.sql";
+const own="0541_late_source_import.sql";
 const input=()=>({version:"late-source-import.v1",commandId:randomUUID(),fictionalCustomer:{kind:"named_fictional_customer",name:"Fictional Alex"},text:"Fitted outside tap.",statedSentAt:"2020-01-01T00:00:00Z"});
 async function fixedState(){
  const result:Record<string,unknown>={};
