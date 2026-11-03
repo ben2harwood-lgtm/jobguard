@@ -15,7 +15,7 @@ import { MIGRATION_URLS } from "../src/migrate.js";
 
 const tenant="10000000-0000-4000-8000-000000000001",other="10000000-0000-4000-8000-000000000002";
 const context=testTenantContext(tenant),foreign=testTenantContext(other);
-const own="0437_deepgram_fixture_transcripts.sql";
+const own="0601_deepgram_fixture_transcripts.sql";
 const bytes=syntheticSpeechAudio(),hash=createHash("sha256").update(bytes).digest("hex");
 const objects=new Map<string,StoredObject>();
 const storage:PrivateVersionedStorage={

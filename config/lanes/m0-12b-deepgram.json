@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/m0-12b-deepgram"
       ],
-      "note": "M0-12b dark deterministic speech capture. Migration 0437 claimed by Ben. No live endpoint, credentials, transport, controller registration, deployment or commercial effect. Own lane file is implicitly permitted by lanePathAllowed.",
+      "note": "M0-12b dark deterministic speech capture. Migration 0601 reserved by the router for this catch-up. No live endpoint, credentials, transport, controller registration, deployment or commercial effect. Own lane file is implicitly permitted by lanePathAllowed.",
       "allow": [
         "apps/api/src/capture/contracts.ts",
         "apps/api/src/capture/deepgram-fixture.service.test.ts",
@@ -18,15 +18,15 @@
         "packages/core/src/deepgram-transcript.test.ts",
         "packages/core/src/deepgram-transcript.ts",
         "packages/core/src/index.ts",
-        "packages/db/migration-notes/0437_deepgram_fixture_transcripts.md",
-        "packages/db/migrations/0437_deepgram_fixture_transcripts.sql",
+        "packages/db/migration-notes/0601_deepgram_fixture_transcripts.md",
+        "packages/db/migrations/0601_deepgram_fixture_transcripts.sql",
         "packages/db/src/capture-repository.ts",
         "packages/db/src/evidence.ts",
         "packages/db/src/index.ts",
         "packages/db/src/speech-audio.test.ts",
         "packages/db/src/speech-audio.ts",
         "packages/db/test/deepgram.integration.test.ts",
-        "packages/db/test/migration-proofs/0437_deepgram_fixture_transcripts.proof.json"
+        "packages/db/test/migration-proofs/0601_deepgram_fixture_transcripts.proof.json"
       ]
     }
   }

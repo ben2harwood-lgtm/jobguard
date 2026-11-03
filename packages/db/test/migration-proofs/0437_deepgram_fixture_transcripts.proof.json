@@ -1,6 +1,0 @@
-{
-  "migration": "0437_deepgram_fixture_transcripts.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

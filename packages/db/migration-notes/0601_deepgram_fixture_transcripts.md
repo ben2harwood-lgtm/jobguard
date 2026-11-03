@@ -1,4 +1,4 @@
-# 0437 — dark M0-12b fixture transcripts
+# 0601 — dark M0-12b fixture transcripts
 
 Add `deepgram_transcript` with fixture-only metadata and exactly 46 audio bytes;
 all pre-existing kinds retain the zero-byte rule. Audio bytes remain in verified,
@@ -17,7 +17,7 @@ requires first archiving/exporting new fixture-kind rows; do not delete evidence
 or edit this or earlier migrations. D04, route verification and live evaluation
 remain separate gates; no real audio, endpoint, key or network transport exists.
 
-Migration proof: `test/migration-proofs/0437_deepgram_fixture_transcripts.proof.json`
+Migration proof: `test/migration-proofs/0601_deepgram_fixture_transcripts.proof.json`
 has empty LP-0, upgrade and tenancy changes. The SQL only replaces/adds CHECK
 constraints on existing tables: it creates no routines, relations (including
 indexes), policies or rows, and changes no capability, owner, ACL or RLS posture.
