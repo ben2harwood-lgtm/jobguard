@@ -24,7 +24,10 @@ test("human confirmation binds exact bytes; stale approval fails; fake retries a
   const { FakeCodatAdapter } = await nativeImport<typeof import("../../api/src/accounting-export.fake.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.fake.js")).href);
   const { FakeAccountingExportInbox, pushStoredAccountingExport } = await nativeImport<typeof import("../../api/src/accounting-export.persisted.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.persisted.js")).href);
   const { ctx, source, scope, consent } = await nativeImport<typeof import("../../api/src/accounting-export.test-fixtures.js")>(pathToFileURL(join(process.cwd(), "../api/dist/accounting-export.test-fixtures.js")).href);
+  const { verifiedTenantContextForQueuedJob } = await nativeImport<typeof import("@jobguard/db")>(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href);
   const a = await meterCompany(f), token = randomUUID();
+  // Keep the fake executor context in the same ESM module as its database driver.
+  const exportContext = verifiedTenantContextForQueuedJob(a.tenantId);
   const digest = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
   await f.admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, a.sessionId]);
   await context.addCookies([{ name: "jobguard_session", value: token, url: baseURL! }]);
@@ -43,7 +46,7 @@ test("human confirmation binds exact bytes; stale approval fails; fake retries a
   artifact.source.revision++; artifact.scope.sourceRevision++; artifact.target.sourceRevision++;
   await f.admin.query("UPDATE app.accounting_export_fixture SET artifact=$2 WHERE tenant_id=$1", [a.tenantId, artifact]);
   await page.getByRole("checkbox").check(); await approve.click();
-  await expect(page.getByRole("alert")).toContainText("EXPORT_APPROVAL_REQUIRED");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("EXPORT_APPROVAL_REQUIRED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.accounting_export_decision WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
   await load.click();
   await expect(page.getByTestId("preview-hash")).not.toHaveText(oldHash!);
@@ -57,7 +60,7 @@ test("human confirmation binds exact bytes; stale approval fails; fake retries a
   expect(replay.status()).toBe(200);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.accounting_export_decision WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
   const repo = new AccountingExportRepository(f.runtime), inbox = new FakeAccountingExportInbox(f.admin, adapter);
-  const push = () => pushStoredAccountingExport(repo, a.context, digest, source.sourceId, inbox);
+  const push = () => pushStoredAccountingExport(repo, exportContext, digest, source.sourceId, inbox);
   adapter.next = "unknown_after";
   expect(await push()).toMatchObject({ status: "outcome_unknown" });
   const show = async (state: string) => {
@@ -68,9 +71,9 @@ test("human confirmation binds exact bytes; stale approval fails; fake retries a
   await show("outcome_unknown"); expect(await push()).toMatchObject({ status: "pushed" });
   adapter.objects[0]!.paid = true;
   const reconcile = async () => {
-    const entry = storedAccountingExportV1.parse(await repo.execute(a.context, digest, "read", source.sourceId));
-    await inbox.observe(a.context, entry);
-    return repo.execute(a.context, digest, "reconcile", source.sourceId, { version: 1, attemptId: entry.attemptId });
+    const entry = storedAccountingExportV1.parse(await repo.execute(exportContext, digest, "read", source.sourceId));
+    await inbox.observe(exportContext, entry);
+    return repo.execute(exportContext, digest, "reconcile", source.sourceId, { version: 1, attemptId: entry.attemptId });
   };
   expect(await reconcile()).toMatchObject({ qualifyingRecoveryProof: false }); await show("pushed");
   await expect(page.getByText("Qualifying recovery proof: false.", { exact: true })).toBeVisible();
@@ -101,7 +104,7 @@ test("human confirmation binds exact bytes; stale approval fails; fake retries a
     else (invalid.target as { objectType: string }).objectType = "supplier_bill";
     await f.admin.query("INSERT INTO app.accounting_export_fixture(tenant_id,source_id,artifact,consent_expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [a.tenantId, id, invalid]);
     await page.goto(`/accounting-exports/${id}`); await page.getByRole("button", { name: "Load current preview" }).click();
-    await expect(page.getByRole("alert")).toContainText("EXPORT_UNSUPPORTED_MAPPING");
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("EXPORT_UNSUPPORTED_MAPPING");
     await expect(page.getByRole("button", { name: "Approve this preview" })).toHaveCount(0);
   }
 });
