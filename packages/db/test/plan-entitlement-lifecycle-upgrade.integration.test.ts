@@ -1,3 +1,4 @@
+import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { firstTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
@@ -25,12 +26,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(await service(f, trial).require(request("final_check", trial.jobId))).toMatchObject({ executable: true });
   expect(await service(f, paid).require(request("invoices", paid.jobId))).toMatchObject({ executable: true });
   await migrate(c.admin); await migrate(c.admin);
-  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables });
+  expect(await snapshot(c.admin)).toEqual({ ...before, ...laterEmptyTables, "app.command_type_registry": (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data });
   // Successor migrations have their own exact reviewed routine ACL additions.
   // Keep the 0556-only assertion above, and retain every predecessor definition.
   const live = await catalogue();
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // 0566 extends exactly this result dispatcher for managed_recovery.elect.
+    if (prior.nspname === "app" && prior.proname === "lp5_command_result" && prior.args === "p_command_id uuid, p_outcome jsonb") continue;
     expect(current?.definition).toEqual(prior.definition);
   }
   const privileges = (rows: typeof security) => rows.map(({ oid: _oid, definition: _definition, ...row }) => row)

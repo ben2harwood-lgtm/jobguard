@@ -143,6 +143,12 @@ it("#346 allocation writer refuses a receipt/feed event from another job of the 
   const movement = (await f.admin.query("SELECT movement_id,movement_hash FROM app.receipt_allocation_fact_source WHERE tenant_id=$1 AND job_id=$2 LIMIT 1", [x.context.tenantId, other.jobId])).rows[0];
   await expect(cloneAllocation(x, `ALTER TABLE app.receipt_allocation_fact_source DISABLE TRIGGER USER;
     UPDATE app.receipt_allocation_fact_source SET movement_id='${movement.movement_id}',movement_hash='${movement.movement_hash}' WHERE job_id='${x.jobId}';
+    ALTER TABLE app.receipt_allocation_fact_source ENABLE TRIGGER USER`)).rejects.toMatchObject({ code: "23503" });
+});
+it("#346 allocation writer refuses a receipt/feed event with a mismatched movement hash", async () => {
+  const { x } = await ready();
+  await expect(cloneAllocation(x, `ALTER TABLE app.receipt_allocation_fact_source DISABLE TRIGGER USER;
+    UPDATE app.receipt_allocation_fact_source SET movement_hash=repeat('0',64) WHERE job_id='${x.jobId}';
     ALTER TABLE app.receipt_allocation_fact_source ENABLE TRIGGER USER`)).rejects.toThrow("BILLABILITY_ALLOCATION_JOB_REQUIRED");
 });
 it("#356 allocation writer refuses cumulative principal over line net", async () => {
