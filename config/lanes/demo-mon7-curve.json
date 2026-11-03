@@ -23,7 +23,13 @@
         "packages/db/src/prevention-check-repository.ts",
         "packages/db/test/migration-proofs/0550_practice_exposure_schedule.proof.json",
         "packages/db/test/prevention-checks.integration.test.ts",
-        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts"
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/test/customer-portal-message.integration.test.ts",
+        "packages/db/test/operative-entitlements-upgrade.integration.test.ts",
+        "packages/db/test/customer-stage-acknowledgement.integration.test.ts",
+        "packages/db/test/customer-quote-acceptance.integration.test.ts",
+        "packages/db/test/server-entitlement-upgrade.integration.test.ts"
       ]
     }
   }

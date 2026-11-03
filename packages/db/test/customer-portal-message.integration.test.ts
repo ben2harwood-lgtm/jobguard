@@ -98,7 +98,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
 });
 it("0391 upgrade adds only two routines, keeps populated rows/ACLs and supports rerun",async()=>{
  const c=await startBeforeMigration("0547_customer_portal_message.sql");
- try{const before=await snapshot(c.admin);await applyMigration(c,"0547_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual(before);
+ try{const before=await snapshot(c.admin);await applyMigration(c,"0547_customer_portal_message.sql");expect(await snapshot(c.admin)).toEqual(before);await migrate(c.admin);expect(await snapshot(c.admin)).toEqual({...before,"app.practice_exposure_schedule":[]});
   for(const fn of ["app.sv7a_require_source_owner(uuid,uuid,text,text)","identity.customer_portal_message(uuid,uuid,uuid,text,jsonb)"]){for(const role of ["jobguard_runtime","jobguard_infrastructure"]){expect((await c.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,fn])).rows[0].allowed).toBe(false);}}
  }finally{await c.close();}
 },120000);
