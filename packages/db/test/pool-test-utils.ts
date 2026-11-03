@@ -2,6 +2,13 @@ import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { Pool } from "pg";
 
+/** Administrative prerequisites for LP-4/LP-5; application roles never create these. */
+export async function installAuditCommandWriterRoles(admin: Pick<Pool, "query">): Promise<void> {
+  for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) {
+    await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
+  }
+}
+
 const canListen = (host: string, port: number) => new Promise<boolean>(resolve => {
   const server = createServer();
   // A host with no IPv6 loopback cannot bind ::1 at all, which is not a conflict.
