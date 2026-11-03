@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-5-capture-states": {
+      "branches": ["codex/sandbox/m3-5-capture-states"],
+      "allow": [
+        "packages/core/src/offline-capture.ts",
+        "packages/core/src/offline-capture.test.ts",
+        "packages/core/src/index.ts",
+        "docs/contracts/resumable-evidence-v1.md"
+      ]
+    }
+  }
+}
