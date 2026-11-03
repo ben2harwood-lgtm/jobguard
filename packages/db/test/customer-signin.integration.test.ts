@@ -1,4 +1,4 @@
-import { lp5RegistryRows } from "./lp5-command-catalog.js";
+import { currentCommandRegistryRows, lp5RegistryRows } from "./lp5-command-catalog.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -63,6 +63,7 @@ beforeAll(async () => {
     const rows = beforeUpgrade[table] as Record<string,unknown>[];
     if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,revoked_at:expect.any(String)} : row));
     else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:redactedContent,content_hash:redactedHash,status:"cancelled",updated_at:expect.any(String)} : row));
+    else if (table === "app.command_type_registry") expect(after[table]).toEqual((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data);
     else if (table === "app.audit_event") {
       expect(after[table]).toEqual(expect.arrayContaining(rows));
       expect((after[table] as unknown[]).length).toBe(rows.length+2);

@@ -85,6 +85,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/customer-messages": "watchdog_live_only",
   "nest:/jobs/:id/customer-messages": "watchdog_live_only",
   "command:JobSource.customer_message": "watchdog_live_only",
+  "command:LateSource.import": "post_live_billing",
+  "/api/jobs/[id]/historical-evidence": "post_live_billing",
+  "nest:/jobs/:id/historical-evidence": "post_live_billing",
   // ENT-8A-P: contractor mutations enforce their own authority-first live-job guard.
   "command:ImportMaterialsIssue": "pre_live_allowed",
   "command:RegisterCompletionObservation": "pre_live_allowed",
